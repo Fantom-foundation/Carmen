@@ -26,9 +26,35 @@ TEST(HashTest, TypeProperties) {
     EXPECT_TRUE(std::is_trivially_move_assignable_v<Hash>);
 }
 
-TEST(DISABLED_HashTest, CanBePrinted) { 
-    Hash hash;
-    EXPECT_THAT(Print(hash), StrEq("abc"));
+TEST(HashTest, CanBePrinted) {
+    // Test to ensure that hashes are printable in hex format with "0x" prefix
+    Hash hash((std::array<std::uint8_t, 32>{0x12, 0xab}));
+    EXPECT_THAT(Print(hash), StrEq("0x12ab000000000000000000000000000000000000000000000000000000000000"));
+}
+
+TEST(HashTest, CanBeCompared) {
+    // Test to ensure that hashes can be compared
+    Hash hashA((std::array<std::uint8_t, 32>{0x12, 0xab}));
+    Hash hashB((std::array<std::uint8_t, 32>{0x12, 0xab}));
+    Hash hashC((std::array<std::uint8_t, 32>{0x01, 0xab}));
+    EXPECT_EQ(hashA, hashB);
+    EXPECT_NE(hashA, hashC);
+}
+
+TEST(HashTest, AllZerosBinary) {
+    // Test to ensure that hashes can contain only zero binary values
+    std::array<std::uint8_t, 32> data;
+    data.fill(0);
+    Hash hash((data));
+    EXPECT_THAT(Print(hash), StrEq("0x0000000000000000000000000000000000000000000000000000000000000000"));
+}
+
+TEST(HashTest, AllOnesBinary) {
+    // Test to ensure that hashes can contain only one values
+    std::array<std::uint8_t, 32> data;
+    data.fill(255);
+    Hash hash((data));
+    EXPECT_THAT(Print(hash), StrEq("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
 }
 
 } // namespace
