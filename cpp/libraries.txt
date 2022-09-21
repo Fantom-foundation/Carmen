@@ -1,0 +1,5 @@
+The following libraries are included in the build:
+
+googletest
+ - source: https://github.com/google/googletest
+ - license: BSD 3-Clause - https://github.com/google/googletest/blob/main/LICENSE
