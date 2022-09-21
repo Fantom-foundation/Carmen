@@ -9,9 +9,3 @@ type Identifier interface {
 }
 
 type Hash [32]byte
-
-type StringSerializable string
-
-func (str StringSerializable) ToBytes() []byte {
-	return str.ToBytes()
-}
