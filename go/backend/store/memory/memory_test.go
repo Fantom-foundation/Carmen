@@ -7,8 +7,8 @@ import (
 )
 
 func TestImplements(t *testing.T) {
-	var s Memory[state.Value]
-	var _ store.Store[uint64, state.Value] = &s
+	var s Memory[*state.Value]
+	var _ store.Store[uint64, *state.Value] = &s
 }
 
 var (
@@ -19,34 +19,36 @@ var (
 )
 
 func TestStoringIntoMemoryIndex(t *testing.T) {
-	memory := NewMemory[state.Value](empty)
+	memory := NewMemory[*state.Value](&empty) // only the pointer type implements Serializable
 	defer memory.Close()
 
-	err := memory.Set(0, A)
+	err := memory.Set(0, &A)
 	if err != nil {
 		t.Fatalf("failed to set A; %s", err)
 	}
-	err = memory.Set(1, B)
+	err = memory.Set(1, &B)
 	if err != nil {
 		t.Fatalf("failed to set B; %s", err)
 	}
-	err = memory.Set(2, C)
+	err = memory.Set(2, &C)
 	if err != nil {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	notExisting := memory.Get(5)
-	if notExisting != empty {
-		t.Fatalf("not-existing value is not empty value")
+	outItem := state.Value{}
+
+	exists := memory.Get(5, &outItem)
+	if exists {
+		t.Fatalf("not-existing value is not reported as not-existing")
 	}
 
-	readA := memory.Get(0)
-	if readA != A {
+	exists = memory.Get(0, &outItem)
+	if !exists || outItem != A {
 		t.Fatalf("reading written A returned different value")
 	}
 
-	readB := memory.Get(1)
-	if readB != B {
+	exists = memory.Get(1, &outItem)
+	if !exists || outItem != B {
 		t.Fatalf("reading written B returned different value")
 	}
 }

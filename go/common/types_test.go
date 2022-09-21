@@ -7,6 +7,6 @@ import (
 )
 
 func TestImplements(t *testing.T) {
-	var str state.Address
+	var str *state.Address
 	var _ common.Serializable = str
 }

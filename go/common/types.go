@@ -2,6 +2,8 @@ package common
 
 type Serializable interface {
 	ToBytes() []byte
+	SetBytes([]byte) bool
+	Size() int // size in bytes when serialized
 }
 
 type Identifier interface {
