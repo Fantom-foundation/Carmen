@@ -2,6 +2,7 @@ package memory
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"testing"
 )
@@ -66,5 +67,33 @@ func TestStoringIntoMemoryIndex(t *testing.T) {
 	if indexB != indexB2 {
 		t.Errorf("assigned two different indexes for the same address")
 		return
+	}
+}
+
+func TestHash(t *testing.T) {
+	memory := NewMemory[state.Address]()
+	defer memory.Close()
+
+	// the hash is the default one first
+	h0 := memory.GetStateHash()
+
+	if (h0 != common.Hash{}) {
+		t.Errorf("The hash does not match the default one")
+	}
+
+	// the hash must change when adding a new item
+	_, _ = memory.GetOrAdd(A)
+	h1 := memory.GetStateHash()
+
+	if h0 == h1 {
+		t.Errorf("The hash has not changed")
+	}
+
+	// the hash remains the same when getting an existing item
+	_, _ = memory.GetOrAdd(A)
+	h2 := memory.GetStateHash()
+
+	if h1 != h2 {
+		t.Errorf("The hash has changed")
 	}
 }
