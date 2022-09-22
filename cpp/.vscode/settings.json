@@ -1,0 +1,5 @@
+{
+    "bsv.cc.compdb.targets": [
+        "//...",
+    ]
+}
