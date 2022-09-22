@@ -9,9 +9,9 @@ import (
 //
 // The type I is the type used for the ordinal numbers,
 // the type V for the store values - needs to be serializable.
-type Store[I common.Identifier, V common.Serializable] interface {
+type Store[I common.Identifier, V any] interface {
 	Set(id I, value V) error
-	Get(id I, itemToOverride V) bool
+	Get(id I) *V
 
 	GetStateHash() common.Hash
 	Close() error

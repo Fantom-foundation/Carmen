@@ -5,16 +5,19 @@ const (
 	HashLength = 32
 )
 
-type Serializable interface {
-	comparable
-	ToBytes() []byte
-	SetBytes([]byte) bool
+type Serializer[T any] interface {
+	ToBytes(T) []byte
+	SetBytes([]byte) T
 	Size() int // size in bytes when serialized
 }
 
 type Identifier interface {
 	uint64 | uint32
 }
+
+type Address [20]byte
+type Key [32]byte
+type Value [32]byte
 
 type Hash [32]byte
 

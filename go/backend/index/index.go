@@ -8,7 +8,7 @@ import "github.com/Fantom-foundation/Carmen/go/common"
 // The type parameter K, the key type, can be any type that can
 // be hashed and compared. The type I is the type used for the
 // ordinal numbers.
-type Index[K common.Serializable, I common.Identifier] interface {
+type Index[K comparable, I common.Identifier] interface {
 	GetOrAdd(key K) (I, error)
 	Contains(key K) bool
 

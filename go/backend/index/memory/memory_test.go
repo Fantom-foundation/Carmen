@@ -3,22 +3,21 @@ package memory
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state"
 	"testing"
 )
 
 var (
-	A = state.Address{0x01}
-	B = state.Address{0x02}
+	A = common.Address{0x01}
+	B = common.Address{0x02}
 )
 
 func TestImplements(t *testing.T) {
-	var memory Memory[*state.Address]
-	var _ index.Index[*state.Address, uint64] = &memory
+	var memory Memory[*common.Address]
+	var _ index.Index[*common.Address, uint64] = &memory
 }
 
 func TestStoringIntoMemoryIndex(t *testing.T) {
-	memory := NewMemory[state.Address]()
+	memory := NewMemory[common.Address](common.AddressSerializer{})
 	defer memory.Close()
 
 	indexA, err := memory.GetOrAdd(A)
@@ -71,7 +70,7 @@ func TestStoringIntoMemoryIndex(t *testing.T) {
 }
 
 func TestHash(t *testing.T) {
-	memory := NewMemory[state.Address]()
+	memory := NewMemory[common.Address](common.AddressSerializer{})
 	defer memory.Close()
 
 	// the hash is the default one first
