@@ -8,12 +8,51 @@ namespace carmen {
 namespace {
 
 using ::testing::StrEq;
+using ::testing::StrNe;
 
 template<typename T>
 std::string Print(const T& value) {
     std::stringstream out;
     out << value;
     return out.str();
+}
+
+TEST(HexContainerTest, CanBePrinted) {
+  // Test to ensure that hex containers are printable in hex format.
+  HexContainer<2> container{0x12, 0xab};
+
+  EXPECT_THAT(Print(container), StrEq("0x12ab"));
+}
+
+TEST(HexContainerTest, CanBeCompared) {
+  // Test to ensure that hex containers can be compared.
+  HexContainer<2> containerA{0x12, 0xab};
+  HexContainer<2> containerB{0x12, 0xab};
+  HexContainer<2> containerC{0x01, 0xab};
+
+  EXPECT_EQ(Print(containerA), Print(containerB));
+  EXPECT_NE(Print(containerA), Print(containerC));
+}
+
+TEST(HexContainerTest, CanBeEmpty) {
+  // Test to ensure that container can be empty.
+  HexContainer<0> container{};
+
+  EXPECT_THAT(Print(container), StrEq("0x"));
+}
+
+TEST(HexContainerTest, CanBeInitializedEmpty) {
+  // Test to ensure that container can be initialized empty.
+  HexContainer<1> container{};
+
+  EXPECT_THAT(Print(container), StrEq("0x00"));
+}
+
+TEST(HexContainerTest, CannotHoldMoreValues) {
+  // Test to ensure that container cannot be fed with more values.
+  HexContainer<2> container{0x12, 0xab, 0xef};
+
+  EXPECT_THAT(Print(container), StrNe("0x12abef"));
 }
 
 TEST(HashTest, SizeIsCompact) { 
@@ -24,37 +63,6 @@ TEST(HashTest, SizeIsCompact) {
 TEST(HashTest, TypeProperties) {
     EXPECT_TRUE(std::is_trivially_copyable_v<Hash>);
     EXPECT_TRUE(std::is_trivially_move_assignable_v<Hash>);
-}
-
-TEST(HashTest, CanBePrinted) {
-    // Test to ensure that hashes are printable in hex format with "0x" prefix
-    Hash hash((std::array<std::uint8_t, 32>{0x12, 0xab}));
-    EXPECT_THAT(Print(hash), StrEq("0x12ab000000000000000000000000000000000000000000000000000000000000"));
-}
-
-TEST(HashTest, CanBeCompared) {
-    // Test to ensure that hashes can be compared
-    Hash hashA((std::array<std::uint8_t, 32>{0x12, 0xab}));
-    Hash hashB((std::array<std::uint8_t, 32>{0x12, 0xab}));
-    Hash hashC((std::array<std::uint8_t, 32>{0x01, 0xab}));
-    EXPECT_EQ(hashA, hashB);
-    EXPECT_NE(hashA, hashC);
-}
-
-TEST(HashTest, AllZerosBinary) {
-    // Test to ensure that hashes can contain only zero binary values
-    std::array<std::uint8_t, 32> data;
-    data.fill(0);
-    Hash hash((data));
-    EXPECT_THAT(Print(hash), StrEq("0x0000000000000000000000000000000000000000000000000000000000000000"));
-}
-
-TEST(HashTest, AllOnesBinary) {
-    // Test to ensure that hashes can contain only one values
-    std::array<std::uint8_t, 32> data;
-    data.fill(255);
-    Hash hash((data));
-    EXPECT_THAT(Print(hash), StrEq("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
 }
 
 } // namespace
