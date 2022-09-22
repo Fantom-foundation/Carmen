@@ -8,7 +8,7 @@ import (
 func TestHashtreeOneCommit(t *testing.T) {
 	tree := HashTree{
 		tree:       [][][]byte{{}},
-		dirtyNodes: [][]bool{{}},
+		dirtyNodes: [][]bool{{}, {}},
 	}
 
 	for i := 0; i < 4; i++ {
@@ -22,7 +22,7 @@ func TestHashtreeOneCommit(t *testing.T) {
 func TestHashtreeMultipleCommits(t *testing.T) {
 	tree := HashTree{
 		tree:       [][][]byte{{}},
-		dirtyNodes: [][]bool{{}},
+		dirtyNodes: [][]bool{{}, {}},
 	}
 
 	for i := 0; i < 4; i++ {

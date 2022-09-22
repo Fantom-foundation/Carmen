@@ -19,66 +19,53 @@ type HashTree struct {
 	dirtyNodes [][]bool   // layer - node
 }
 
-func (ht *HashTree) MarkUpdated(page int, content []byte) {
+func (ht *HashTree) calculateHash(childrenHashes [][]byte) []byte {
 	h := sha256.New()
-	h.Write(content)
-	pageHash := h.Sum(nil)
-
-	if len(ht.tree[0]) == page {
-		ht.tree[0] = append(ht.tree[0], pageHash)
-	} else {
-		ht.tree[0][page] = pageHash
+	for i := 0; i < len(childrenHashes); i++ {
+		h.Write(childrenHashes[i])
 	}
+	return h.Sum(nil)
+}
 
-	parent := parentOf(page)
-	if len(ht.dirtyNodes[0]) == parent {
-		ht.dirtyNodes[0] = append(ht.dirtyNodes[0], true)
-	} else {
-		ht.dirtyNodes[0][parent] = true
-	}
+func (ht *HashTree) MarkUpdated(page int, content []byte) {
+	pageHash := ht.calculateHash([][]byte{content})
+	ht.updateNodeHash(0, page, pageHash)
 }
 
 func (ht *HashTree) Commit() {
-	for parentLayer := 1; parentLayer < len(ht.tree); parentLayer++ {
-		for node := 0; node < len(ht.tree[parentLayer]); node++ {
-			if ht.dirtyNodes[parentLayer-1][node] {
-
-				h := sha256.New()
+	for layer := 1; layer < len(ht.tree); layer++ {
+		for node := 0; node < len(ht.tree[layer]); node++ {
+			if ht.dirtyNodes[layer][node] {
 				firstChild := firstChildrenOf(node)
-				for child := firstChild; child < firstChild+NODE_LEN; child++ {
-					h.Write(ht.tree[parentLayer-1][child])
-				}
-				nodeHash := h.Sum(nil)
-
-				if len(ht.tree[parentLayer]) == node {
-					ht.tree[parentLayer] = append(ht.tree[0], nodeHash)
-				} else {
-					ht.tree[parentLayer][node] = nodeHash
-				}
-				ht.dirtyNodes[parentLayer-1][node] = false
-
-				parent := parentOf(node)
-				if len(ht.dirtyNodes[parentLayer]) == parent {
-					ht.dirtyNodes[parentLayer] = append(ht.dirtyNodes[parentLayer], true)
-				} else {
-					ht.dirtyNodes[parentLayer][parent] = true
-				}
-
+				nodeHash := ht.calculateHash(ht.tree[layer-1][firstChild : firstChild+NODE_LEN])
+				ht.updateNodeHash(layer, node, nodeHash)
 			}
-
 		}
 	}
 
 	lastLayer := len(ht.tree) - 1
 	if len(ht.tree[lastLayer]) > 1 {
-		h := sha256.New()
-		for child := 0; child < len(ht.tree[lastLayer]); child++ {
-			h.Write(ht.tree[lastLayer][child])
-		}
-		nodeHash := h.Sum(nil)
-
+		nodeHash := ht.calculateHash(ht.tree[lastLayer])
 		ht.tree = append(ht.tree, [][]byte{nodeHash})
 		ht.dirtyNodes = append(ht.dirtyNodes, []bool{false})
+	}
+}
+
+func (ht *HashTree) updateNodeHash(layer int, node int, nodeHash []byte) {
+	if len(ht.tree[layer]) == node {
+		ht.tree[layer] = append(ht.tree[0], nodeHash)
+	} else {
+		ht.tree[layer][node] = nodeHash
+	}
+	if layer != 0 {
+		ht.dirtyNodes[layer][node] = false
+	}
+
+	parent := parentOf(node)
+	if len(ht.dirtyNodes[layer+1]) == parent {
+		ht.dirtyNodes[layer+1] = append(ht.dirtyNodes[layer+1], true)
+	} else {
+		ht.dirtyNodes[layer+1][parent] = true
 	}
 }
 
