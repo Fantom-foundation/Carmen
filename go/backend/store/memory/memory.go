@@ -8,7 +8,7 @@ import (
 // Memory is in-memory Store implementations - it maps IDs to values
 type Memory[V any] struct {
 	data        []byte
-	hashes      []byte
+	hashTree    HashTree
 	serializer  common.Serializer[V]
 	itemSize    int
 	itemDefault V

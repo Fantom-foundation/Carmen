@@ -8,11 +8,14 @@ import (
 func TestHashtreeOneCommit(t *testing.T) {
 	tree := HashTree{
 		tree:       [][][]byte{{}},
-		dirtyNodes: [][]bool{{}, {}},
+		dirtyNodes: []map[int]bool{{}},
+		pageObtainer: func(i int) []byte {
+			return []byte{byte(i)}
+		},
 	}
 
 	for i := 0; i < 4; i++ {
-		tree.MarkUpdated(i, []byte{byte(i)})
+		tree.MarkUpdated(i)
 	}
 	tree.Commit()
 
@@ -22,11 +25,14 @@ func TestHashtreeOneCommit(t *testing.T) {
 func TestHashtreeMultipleCommits(t *testing.T) {
 	tree := HashTree{
 		tree:       [][][]byte{{}},
-		dirtyNodes: [][]bool{{}, {}},
+		dirtyNodes: []map[int]bool{{}},
+		pageObtainer: func(i int) []byte {
+			return []byte{byte(i)}
+		},
 	}
 
 	for i := 0; i < 4; i++ {
-		tree.MarkUpdated(i, []byte{byte(i)})
+		tree.MarkUpdated(i)
 		tree.Commit()
 	}
 
