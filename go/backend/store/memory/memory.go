@@ -5,40 +5,48 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+// Memory is in-memory Store implementations - it maps IDs to values
 type Memory[V common.Serializable] struct {
-	data        []V
+	data        []byte
 	notExisting V
+	itemSize    int
 }
 
 func NewMemory[V common.Serializable](notExisting V) *Memory[V] {
+	var helper V
 	memory := Memory[V]{
-		data:        make([]V, 0),
+		data:        make([]byte, 0),
 		notExisting: notExisting,
+		itemSize:    helper.Size(),
 	}
 	return &memory
 }
 
+func (m *Memory[V]) itemStart(id uint64) int {
+	return int(id) * m.itemSize
+}
+
 func (m *Memory[V]) Set(id uint64, value V) error {
-	if id == uint64(len(m.data)) {
-		m.data = append(m.data, value)
+	itemStart := m.itemStart(id)
+	if itemStart == len(m.data) {
+		m.data = append(m.data, value.ToBytes()...)
+		return nil
 	}
-	if id > uint64(len(m.data)) {
+	if itemStart > len(m.data) {
 		return fmt.Errorf("index too high")
 	}
-	m.data[id] = value
+	copy(m.data[itemStart:itemStart+m.itemSize], value.ToBytes())
 	return nil
 }
 
-func (m *Memory[V]) Get(id uint64) V {
-	if m.Contains(id) {
-		return m.data[id]
+func (m *Memory[V]) Get(id uint64, itemToOverride V) bool {
+	itemStart := m.itemStart(id)
+	if itemStart < len(m.data) {
+		itemToOverride.SetBytes(m.data[itemStart : itemStart+m.itemSize])
+		return true
 	} else {
-		return m.notExisting
+		return false
 	}
-}
-
-func (m *Memory[V]) Contains(id uint64) bool {
-	return int(id) < len(m.data)
 }
 
 func (m *Memory[V]) GetStateHash() common.Hash {

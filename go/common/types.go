@@ -8,6 +8,8 @@ const (
 type Serializable interface {
 	comparable
 	ToBytes() []byte
+	SetBytes([]byte) bool
+	Size() int // size in bytes when serialized
 }
 
 type Identifier interface {

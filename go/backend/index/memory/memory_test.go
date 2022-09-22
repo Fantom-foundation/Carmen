@@ -13,8 +13,8 @@ var (
 )
 
 func TestImplements(t *testing.T) {
-	var memory Memory[state.Address]
-	var _ index.Index[state.Address, uint64] = &memory
+	var memory Memory[*state.Address]
+	var _ index.Index[*state.Address, uint64] = &memory
 }
 
 func TestStoringIntoMemoryIndex(t *testing.T) {

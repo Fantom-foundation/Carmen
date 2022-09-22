@@ -45,5 +45,6 @@ func (m *Memory[K]) hashKey(key K) {
 	h := sha256.New()
 	h.Write(m.hash.Bytes())
 	h.Write(key.ToBytes())
+	// TODO measure performance of copying byte array every time
 	m.hash = common.BytesToHash(h.Sum(nil))
 }
