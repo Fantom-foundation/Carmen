@@ -44,5 +44,33 @@ TEST(InMemoryStoreTest, DefaultValueIsEnforced) {
     EXPECT_EQ(12, store.Get(10));
 }
 
+TEST(InMemoryStoreTest, HashesChangeWithUpdates) {
+    Store store;
+    auto empty_hash = store.GetHash();
+    store.Set(1, 2);
+    auto hash_a = store.GetHash();
+    EXPECT_NE(empty_hash, hash_a);
+    store.Set(2, 4);
+    auto hash_b = store.GetHash();
+    EXPECT_NE(empty_hash, hash_a);
+    EXPECT_NE(empty_hash, hash_b);
+    EXPECT_NE(hash_a, hash_b);
+}
+
+TEST(InMemoryStoreTest, HashesCoverMultiplePages) {
+    Store store;
+    auto empty_hash = store.GetHash();
+    for (int i=0; i<1000000; i++) {
+        store.Set(i, i+1);
+    }
+    auto hash_a = store.GetHash();
+    EXPECT_NE(empty_hash, hash_a);
+    store.Set(500000, 0);
+    auto hash_b = store.GetHash();
+    EXPECT_NE(empty_hash, hash_a);
+    EXPECT_NE(empty_hash, hash_b);
+    EXPECT_NE(hash_a, hash_b);
+}
+
 }
 }  // namespace carmen::backend::store
