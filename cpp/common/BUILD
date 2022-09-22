@@ -23,6 +23,7 @@ cc_library(
     deps=[
         ":hex_util"
     ],
+    visibility = ["//visibility:public"],
 )
 
 cc_test(
