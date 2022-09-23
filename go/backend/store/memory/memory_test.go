@@ -3,12 +3,14 @@ package memory
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"io"
 	"testing"
 )
 
-func TestImplements(t *testing.T) {
+func TestMemoryStoreImplements(t *testing.T) {
 	var s Memory[common.Value]
 	var _ store.Store[uint64, common.Value] = &s
+	var _ io.Closer = &s
 }
 
 var (

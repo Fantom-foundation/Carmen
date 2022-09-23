@@ -2,32 +2,49 @@ package memory
 
 import (
 	"crypto/sha256"
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-const NODE_LEN = 3
+// BranchingFactor is the amount of child nodes per one parent node
+const BranchingFactor = 3
 
-// parentOf provides an index of a parent node, by the child index
-func parentOf(childIdx int) int {
-	return childIdx / NODE_LEN
-}
-
-// firstChildrenOf provides an index of the first child, by the index of the parent node
-func firstChildrenOf(parentIdx int) int {
-	return parentIdx * NODE_LEN
-}
-
+// HashTree is a structure allowing to make a hash of the whole state.
+// It obtains hashes of individual data pages and reduce them to a hash of the whole state.
 type HashTree struct {
 	tree         [][][]byte       // tree of hashes [layer][node][byte of hash]
 	dirtyNodes   []map[int]bool   // set of dirty flags of the tree nodes [layer][node]
 	pageObtainer func(int) []byte // callback for obtaining data pages
 }
 
-func (ht *HashTree) calculateHash(childrenHashes [][]byte) []byte {
+// NewHashTree constructs a new HashTree
+func NewHashTree(pageObtainer func(i int) []byte) HashTree {
+	return HashTree{
+		tree:         [][][]byte{{}},
+		dirtyNodes:   []map[int]bool{{}},
+		pageObtainer: pageObtainer,
+	}
+}
+
+// parentOf provides an index of a parent node, by the child index
+func parentOf(childIdx int) int {
+	return childIdx / BranchingFactor
+}
+
+// firstChildrenOf provides an index of the first child, by the index of the parent node
+func firstChildrenOf(parentIdx int) int {
+	return parentIdx * BranchingFactor
+}
+
+// calculateHash computes the hash of given data
+func calculateHash(childrenHashes [][]byte) (hash []byte, err error) {
 	h := sha256.New()
 	for i := 0; i < len(childrenHashes); i++ {
-		h.Write(childrenHashes[i])
+		_, err = h.Write(childrenHashes[i])
+		if err != nil {
+			return nil, err
+		}
 	}
-	return h.Sum(nil)
+	return h.Sum(nil), nil
 }
 
 // MarkUpdated marks a page as changed - to be included into the hash recalculation on Commit
@@ -36,51 +53,61 @@ func (ht *HashTree) MarkUpdated(page int) {
 }
 
 // Commit updates the necessary parts of the hashing tree
-func (ht *HashTree) Commit() {
+func (ht *HashTree) Commit() (err error) {
 	for layer := 0; layer < len(ht.tree); layer++ {
-		for node, _ := range ht.dirtyNodes {
+		for node, _ := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
 			if layer == 0 {
 				content := ht.pageObtainer(node)
-				nodeHash = ht.calculateHash([][]byte{content})
+				nodeHash, err = calculateHash([][]byte{content})
 			} else {
 				childrenStart := firstChildrenOf(node)
-				childrenEnd := childrenStart + NODE_LEN
-				if childrenEnd >= len(ht.tree[layer-1]) {
-					childrenEnd = len(ht.tree[layer-1])
-				}
-				nodeHash = ht.calculateHash(ht.tree[layer-1][childrenStart:childrenEnd])
+				childrenEnd := childrenStart + BranchingFactor
+				nodeHash, err = calculateHash(ht.tree[layer-1][childrenStart:childrenEnd])
 			}
-			ht.updateNodeHash(layer, node, nodeHash)
+			if err != nil {
+				return err
+			}
+			err = ht.updateNode(layer, node, nodeHash)
+			if err != nil {
+				return err
+			}
+		}
+		// if the last layer has more than one node, need to add a new layer
+		lastLayer := len(ht.tree) - 1
+		if layer == lastLayer && len(ht.tree[lastLayer]) > 1 {
+			ht.tree = append(ht.tree, [][]byte{{}})
 		}
 	}
-
-	lastLayer := len(ht.tree) - 1
-	if len(ht.tree[lastLayer]) > 1 { // need to add new layer
-		nodeHash := ht.calculateHash(ht.tree[lastLayer])
-		ht.tree = append(ht.tree, [][]byte{nodeHash})
-		ht.dirtyNodes = append(ht.dirtyNodes, make(map[int]bool))
-	}
+	return nil
 }
 
-// updateNodeHash updates the hash-node value to the given value and marks its parent as dirty (needing a recalculation)
-func (ht *HashTree) updateNodeHash(layer int, node int, nodeHash []byte) {
-	if len(ht.tree[layer]) == node {
-		ht.tree[layer] = append(ht.tree[0], nodeHash)
-	} else {
-		ht.tree[layer][node] = nodeHash
+// updateNode updates the hash-node value to the given value and marks its parent as dirty (needing a recalculation)
+func (ht *HashTree) updateNode(layer int, node int, nodeHash []byte) error {
+	// extend the layer size if necessary
+	if node >= len(ht.tree[layer]) {
+		newLayerSize := (node/BranchingFactor + 1) * BranchingFactor
+		ht.tree[layer] = append(ht.tree[layer], make([][]byte, newLayerSize-len(ht.tree[layer]))...)
 	}
 
+	ht.tree[layer][node] = nodeHash
 	delete(ht.dirtyNodes[layer], node) // node hash updated, no longer dirty
 
-	if len(ht.dirtyNodes) > layer+1 {
-		parent := parentOf(node)
-		ht.dirtyNodes[layer+1][parent] = true // parent of this updated node needs to be updated
+	// parent of the updated node needs to be updated - mark dirty
+	parent := parentOf(node)
+	if len(ht.dirtyNodes) <= layer+1 {
+		ht.dirtyNodes = append(ht.dirtyNodes, map[int]bool{})
 	}
+	ht.dirtyNodes[layer+1][parent] = true
+	return nil
 }
 
 // GetHash provides the hash in the root of the hashing tree
-func (ht *HashTree) GetHash() []byte {
+func (ht *HashTree) GetHash() (out common.Hash) {
 	lastLayer := len(ht.tree) - 1
-	return ht.tree[lastLayer][0]
+	if len(ht.tree[lastLayer]) == 0 {
+		return common.Hash{}
+	}
+	copy(out[:], ht.tree[lastLayer][0])
+	return
 }
