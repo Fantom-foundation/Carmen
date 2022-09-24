@@ -10,6 +10,7 @@ cc_library(
 cc_library(
     name="hex_util",
     hdrs=["hex_util.h"],
+    srcs=["hex_util.cc"],
     deps=[],
 )
 
@@ -27,6 +28,7 @@ cc_test(
     srcs = ["hex_util_test.cc"],
     deps = [
         ":hex_util",
+        ":type",
         "@com_google_googletest//:gtest_main",
     ],
 )
