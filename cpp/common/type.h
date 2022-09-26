@@ -12,8 +12,9 @@ constexpr int kHashLength = 32;
 constexpr int kAddressLength = 20;
 
 // Class template for all types based on byte array value.
-template <std::size_t N> class ByteValue {
-public:
+template <std::size_t N>
+class ByteValue {
+ public:
   ByteValue() = default;
 
   // Class constructor populating data with given list of values.
@@ -22,10 +23,10 @@ public:
   }
 
   // Overload of << operator to make class printable.
-  friend std::ostream &operator<<(std::ostream& out,
+  friend std::ostream& operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {
-    hex_util::WriteTo(out, *const_cast<std::array<std::uint8_t, N>*>
-                      (&hexContainer._data));
+    hex_util::WriteTo(
+        out, *const_cast<std::array<std::uint8_t, N>*>(&hexContainer._data));
     return out;
   }
 
@@ -33,19 +34,19 @@ public:
   friend auto operator<=>(const ByteValue<N>& containerA,
                           const ByteValue<N>& containerB) = default;
 
-private:
+ private:
   std::array<std::uint8_t, N> _data{};
 };
 
 // Hash represents the 32 byte hash of data
 class Hash : public ByteValue<kHashLength> {
-public:
- using ByteValue::ByteValue;
+ public:
+  using ByteValue::ByteValue;
 };
 
 // Address represents the 20 byte address of an account.
 class Address : public ByteValue<kAddressLength> {
-public:
- using ByteValue::ByteValue;
+ public:
+  using ByteValue::ByteValue;
 };
-}
+}  // namespace carmen
