@@ -11,17 +11,17 @@ const BranchingFactor = 3
 // HashTree is a structure allowing to make a hash of the whole state.
 // It obtains hashes of individual data pages and reduce them to a hash of the whole state.
 type HashTree struct {
-	tree         [][][]byte       // tree of hashes [layer][node][byte of hash]
-	dirtyNodes   []map[int]bool   // set of dirty flags of the tree nodes [layer][node]
-	pageObtainer func(int) []byte // callback for obtaining data pages
+	tree       [][][]byte       // tree of hashes [layer][node][byte of hash]
+	dirtyNodes []map[int]bool   // set of dirty flags of the tree nodes [layer][node]
+	getPage    func(int) []byte // callback for obtaining data pages
 }
 
 // NewHashTree constructs a new HashTree
 func NewHashTree(pageObtainer func(i int) []byte) HashTree {
 	return HashTree{
-		tree:         [][][]byte{{}},
-		dirtyNodes:   []map[int]bool{{}},
-		pageObtainer: pageObtainer,
+		tree:       [][][]byte{{}},
+		dirtyNodes: []map[int]bool{{}},
+		getPage:    pageObtainer,
 	}
 }
 
@@ -59,7 +59,7 @@ func (ht *HashTree) Commit() (err error) {
 			var nodeHash []byte
 			if layer == 0 {
 				// hash the data of the page, which comes from the outside
-				content := ht.pageObtainer(node)
+				content := ht.getPage(node)
 				nodeHash, err = calculateHash([][]byte{content})
 			} else {
 				// hash children of current node
