@@ -49,6 +49,9 @@ class InMemoryStore {
   InMemoryStore(V default_value = {})
       : _default_value(std::move(default_value)) {}
 
+  // Instances can not be copied.
+  InMemoryStore(const InMemoryStore&) = delete;
+
   // Updates the value associated to the given key.
   void Set(const K& key, V value) {
     auto page_number = key / page_size;
@@ -75,7 +78,7 @@ class InMemoryStore {
  private:
   using Page = Page<V, page_size>;
 
-  const K _default_value;
+  const V _default_value;
 
   // An indexed list of pages containing the actual values.
   std::deque<std::unique_ptr<Page>> _pages;
@@ -120,7 +123,13 @@ Hash InMemoryStore<K, V, page_size>::GetHash() const {
 
   Sha256Hasher hasher;
   std::vector<Hash> hashes;
-  hashes.reserve(_pages.size());
+
+  // Reserver maximum padded size.
+  const auto padded_size =
+      (_pages.size() % branch_width == 0)
+          ? _pages.size()
+          : (_pages.size() / branch_width + 1) * branch_width;
+  hashes.reserve(padded_size);
 
   // Hash individual pages, forming the leaf level.
   for (const auto& page : _pages) {
