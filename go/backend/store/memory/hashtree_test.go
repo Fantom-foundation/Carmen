@@ -16,7 +16,7 @@ func TestHashtreeInitialState(t *testing.T) {
 		return pages[i]
 	})
 
-	if tree.GetHash() != zeroHash {
+	if tree.HashRoot() != zeroHash {
 		t.Errorf("Initial hash is not zero")
 	}
 
@@ -24,8 +24,8 @@ func TestHashtreeInitialState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	if tree.GetHash() != zeroHash {
-		t.Errorf("Initial hash after commit is not zero, but %x", tree.GetHash())
+	if tree.HashRoot() != zeroHash {
+		t.Errorf("Initial hash after commit is not zero, but %x", tree.HashRoot())
 	}
 
 	pages = [][]byte{{0xFA}}
@@ -34,7 +34,7 @@ func TestHashtreeInitialState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	if tree.GetHash() == zeroHash {
+	if tree.HashRoot() == zeroHash {
 		t.Errorf("Hash of modified state must not be zero")
 	}
 }
@@ -56,7 +56,7 @@ func TestHashtreeUnchangedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	hashBefore := tree.GetHash()
+	hashBefore := tree.HashRoot()
 
 	tree.MarkUpdated(5)
 	tree.MarkUpdated(3)
@@ -65,7 +65,7 @@ func TestHashtreeUnchangedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	hashAfter := tree.GetHash()
+	hashAfter := tree.HashRoot()
 
 	if hashBefore != hashAfter {
 		t.Errorf("Hash for the same unchanged state is different")
@@ -89,7 +89,7 @@ func TestHashtreeChangedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	hashBefore := tree.GetHash()
+	hashBefore := tree.HashRoot()
 
 	pages[5] = []byte{42}
 	tree.MarkUpdated(5)
@@ -98,7 +98,7 @@ func TestHashtreeChangedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	hashAfter := tree.GetHash()
+	hashAfter := tree.HashRoot()
 
 	if hashBefore == hashAfter {
 		t.Errorf("Hash for the changed state is the same")
@@ -129,8 +129,8 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	firstHashA := treeA.GetHash()
-	firstHashB := treeB.GetHash()
+	firstHashA := treeA.HashRoot()
+	firstHashB := treeB.HashRoot()
 	if firstHashA == firstHashB {
 		t.Errorf("different starting states provides the same hash")
 	}
@@ -151,13 +151,13 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 		t.Fatalf("failed to commit; %s", err)
 	}
 
-	if firstHashA != treeA.GetHash() {
+	if firstHashA != treeA.HashRoot() {
 		t.Errorf("the unchanged tree A provides a different hash")
 	}
-	if firstHashB == treeB.GetHash() {
+	if firstHashB == treeB.HashRoot() {
 		t.Errorf("the changed tree B provides the same hash")
 	}
-	if treeA.GetHash() != treeB.GetHash() {
+	if treeA.HashRoot() != treeB.HashRoot() {
 		t.Errorf("the trees changed to be identical provides different hashes")
 	}
 }

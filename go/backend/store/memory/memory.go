@@ -64,7 +64,7 @@ func (m *Memory[V]) Get(id uint64) *V {
 
 func (m *Memory[V]) GetStateHash() common.Hash {
 	m.hashTree.Commit()
-	return m.hashTree.GetHash()
+	return m.hashTree.HashRoot()
 }
 
 func (m *Memory[V]) Close() error {

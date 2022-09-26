@@ -30,8 +30,8 @@ func parentOf(childIdx int) int {
 	return childIdx / BranchingFactor
 }
 
-// firstChildrenOf provides an index of the first child, by the index of the parent node
-func firstChildrenOf(parentIdx int) int {
+// firstChildOf provides an index of the first child, by the index of the parent node
+func firstChildOf(parentIdx int) int {
 	return parentIdx * BranchingFactor
 }
 
@@ -58,16 +58,19 @@ func (ht *HashTree) Commit() (err error) {
 		for node, _ := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
 			if layer == 0 {
+				// hash the data of the page, which comes from the outside
 				content := ht.pageObtainer(node)
 				nodeHash, err = calculateHash([][]byte{content})
 			} else {
-				childrenStart := firstChildrenOf(node)
+				// hash children of current node
+				childrenStart := firstChildOf(node)
 				childrenEnd := childrenStart + BranchingFactor
 				nodeHash, err = calculateHash(ht.tree[layer-1][childrenStart:childrenEnd])
 			}
 			if err != nil {
 				return err
 			}
+			// update the hash of this node, and extend the tree if needed
 			err = ht.updateNode(layer, node, nodeHash)
 			if err != nil {
 				return err
@@ -102,8 +105,8 @@ func (ht *HashTree) updateNode(layer int, node int, nodeHash []byte) error {
 	return nil
 }
 
-// GetHash provides the hash in the root of the hashing tree
-func (ht *HashTree) GetHash() (out common.Hash) {
+// HashRoot provides the hash in the root of the hashing tree
+func (ht *HashTree) HashRoot() (out common.Hash) {
 	lastLayer := len(ht.tree) - 1
 	if len(ht.tree[lastLayer]) == 0 {
 		return common.Hash{}
