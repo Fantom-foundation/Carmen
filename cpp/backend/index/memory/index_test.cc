@@ -10,6 +10,8 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::Optional;
+
 using TestIndex = InMemoryIndex<int, int>;
 
 TEST(InMemoryIndexTest, TypeProperties) {
@@ -47,6 +49,18 @@ TEST(InMemoryIndexTest, ContainsIdentifiesIndexedElements) {
   EXPECT_TRUE(index.Contains(1));
   EXPECT_TRUE(index.Contains(2));
   EXPECT_FALSE(index.Contains(3));
+}
+
+TEST(InMemoryIndexTest, GetRetrievesPresentKeys) {
+    TestIndex index;
+    EXPECT_EQ(index.Get(1), std::nullopt);
+    EXPECT_EQ(index.Get(2), std::nullopt);
+    auto id1 = index.GetOrAdd(1);
+    EXPECT_THAT(index.Get(1), Optional(id1));
+    EXPECT_EQ(index.Get(2), std::nullopt);
+    auto id2 = index.GetOrAdd(2);
+    EXPECT_THAT(index.Get(1), Optional(id1));
+    EXPECT_THAT(index.Get(2), Optional(id2));
 }
 
 TEST(InMemoryIndexTest, EmptyIndexHasHashEqualsZero) {

@@ -13,11 +13,8 @@
 namespace carmen::backend::store {
 
 // A page of the InMemory storage holding a fixed length array of values.
-template <typename V, std::size_t size>
+template <Trivial V, std::size_t size>
 class Page {
-  static_assert(std::is_trivial_v<V>,
-                "Only trivial types can be stored in pages.");
-
  public:
   // Provides read only access to individual elements. No bounds are checked.
   const V& operator[](int pos) const { return _data[pos]; }
@@ -39,7 +36,7 @@ class Page {
 // store. It maps provided mutation and lookup support, as well as global
 // state hashing support enabling to obtain a quick hash for the entire
 // content.
-template <typename K, typename V, std::size_t page_size = 32>
+template <typename K, Trivial V, std::size_t page_size = 32>
 class InMemoryStore {
  public:
   // Creates a new InMemoryStore using the provided value as the
@@ -63,7 +60,7 @@ class InMemoryStore {
   // Retrieves the value associated to the given key. If no values has
   // been previously set using a the Set(..) function above, the default
   // value defined during the construction of a store instance is returned.
-  const V& Get(const K& key) {
+  const V& Get(const K& key) const {
     auto page_number = key / page_size;
     if (page_number >= _pages.size()) {
       return _default_value;
@@ -83,7 +80,7 @@ class InMemoryStore {
   std::deque<std::unique_ptr<Page>> _pages;
 };
 
-template <typename K, typename V, std::size_t page_size>
+template <typename K, Trivial V, std::size_t page_size>
 Hash InMemoryStore<K, V, page_size>::GetHash() const {
   // The computation of the full store hash is comprising two
   // steps:
