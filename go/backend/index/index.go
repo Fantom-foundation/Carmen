@@ -17,7 +17,7 @@ type Index[K comparable, I common.Identifier] interface {
 	Contains(key K) bool
 
 	// GetStateHash returns the index hash.
-	GetStateHash() common.Hash
+	GetStateHash() (common.Hash, error)
 
 	// Close closes the storage and clean-ups all possible dirty values
 	Close() error

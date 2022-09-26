@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
@@ -9,6 +10,11 @@ import (
 var (
 	A = common.Address{0x01}
 	B = common.Address{0x02}
+)
+
+const (
+	HashA  = "21fc3f955c14305ed66b2f6064de082e8447f29048da3ab7c5c01090c1b722ab"
+	HashAB = "e2f6dad46dbab4a98b5f5502b171c63780b94cade5d38badce241c9eecea4573"
 )
 
 func TestImplements(t *testing.T) {
@@ -74,7 +80,7 @@ func TestHash(t *testing.T) {
 	defer memory.Close()
 
 	// the hash is the default one first
-	h0 := memory.GetStateHash()
+	h0, _ := memory.GetStateHash()
 
 	if (h0 != common.Hash{}) {
 		t.Errorf("The hash does not match the default one")
@@ -82,17 +88,37 @@ func TestHash(t *testing.T) {
 
 	// the hash must change when adding a new item
 	_, _ = memory.GetOrAdd(A)
-	h1 := memory.GetStateHash()
+	ha1, _ := memory.GetStateHash()
 
-	if h0 == h1 {
+	if h0 == ha1 {
 		t.Errorf("The hash has not changed")
 	}
 
 	// the hash remains the same when getting an existing item
 	_, _ = memory.GetOrAdd(A)
-	h2 := memory.GetStateHash()
+	ha2, _ := memory.GetStateHash()
 
-	if h1 != h2 {
+	if ha1 != ha2 {
+		t.Errorf("The hash has changed")
+	}
+
+	if fmt.Sprintf("%x\n", ha1) != fmt.Sprintf("%s\n", HashA) {
+		t.Errorf("Hash is %x and not %s", ha1, HashA)
+	}
+
+	// try recursive hash with B and already indexed A
+	_, _ = memory.GetOrAdd(B)
+	hb1, _ := memory.GetStateHash()
+
+	if fmt.Sprintf("%x\n", hb1) != fmt.Sprintf("%s\n", HashAB) {
+		t.Errorf("Hash is %x and not %s", hb1, HashAB)
+	}
+
+	// The hash must remain the same when adding still the same key
+	_, _ = memory.GetOrAdd(B)
+	hb2, _ := memory.GetStateHash()
+
+	if hb1 != hb2 {
 		t.Errorf("The hash has changed")
 	}
 }

@@ -19,7 +19,7 @@ type Address [20]byte
 type Key [32]byte
 type Value [32]byte
 
-type Hash [32]byte
+type Hash [HashLength]byte
 
 // BytesToHash sets b to hash.
 // If b is larger than len(h), b will be cropped from the left.
