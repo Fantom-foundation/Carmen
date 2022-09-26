@@ -11,7 +11,11 @@ namespace {
 using Store = InMemoryStore<int, int>;
 
 TEST(InMemoryStoreTest, TypeTraits) {
-
+    EXPECT_TRUE(std::is_default_constructible_v<Store>);
+    EXPECT_FALSE(std::is_copy_constructible_v<Store>);
+    EXPECT_FALSE(std::is_move_constructible_v<Store>);
+    EXPECT_FALSE(std::is_copy_assignable_v<Store>);
+    EXPECT_FALSE(std::is_move_assignable_v<Store>);
 }
 
 TEST(InMemoryStoreTest, DataCanBeAddedAndRetrieved) {
@@ -42,6 +46,11 @@ TEST(InMemoryStoreTest, DefaultValueIsEnforced) {
     EXPECT_EQ(8, store.Get(10));
     store.Set(10, 12);
     EXPECT_EQ(12, store.Get(10));
+}
+
+TEST(InMemoryStoreTest, EmptyStoreHasZeroValueHash) {
+    Store store;
+    EXPECT_EQ(store.GetHash(), Hash());
 }
 
 TEST(InMemoryStoreTest, HashesChangeWithUpdates) {
