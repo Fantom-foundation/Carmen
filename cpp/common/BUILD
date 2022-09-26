@@ -5,13 +5,7 @@ cc_library(
     deps=[
         ":hex_util"
     ],
-)
-
-cc_library(
-    name="hex_util",
-    hdrs=["hex_util.h"],
-    srcs=["hex_util.cc"],
-    deps=[],
+    visibility = ["//visibility:public"],
 )
 
 cc_test(
@@ -20,7 +14,15 @@ cc_test(
     deps = [
         ":type",
         "@com_google_googletest//:gtest_main",
+        "@com_google_absl//absl/container:flat_hash_set",
     ],
+)
+
+cc_library(
+    name="hex_util",
+    hdrs=["hex_util.h"],
+    srcs=["hex_util.cc"],
+    deps=[],
 )
 
 cc_test(

@@ -21,14 +21,14 @@ class ByteValue {
 
   // Class constructor populating data with given list of values.
   ByteValue(std::initializer_list<std::uint8_t> il) {
-    std::copy(il.begin(), il.end(), std::begin(_data));
+    std::copy(il.begin(), il.end(), std::begin(data_));
   }
 
   // Overload of << operator to make class printable.
   friend std::ostream& operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {
     hex_util::WriteTo(
-        out, *const_cast<std::array<std::uint8_t, N>*>(&hexContainer._data));
+        out, *const_cast<std::array<std::uint8_t, N>*>(&hexContainer.data_));
     return out;
   }
 
@@ -36,8 +36,14 @@ class ByteValue {
   friend auto operator<=>(const ByteValue<N>& containerA,
                           const ByteValue<N>& containerB) = default;
 
+  // Support the usage of ByteValues in hash based absl containers.
+  template <typename H>
+  friend H AbslHashValue(H h, const ByteValue& v) {
+    return H::combine(std::move(h), v.data_);
+  }
+
  private:
-  std::array<std::uint8_t, N> _data{};
+  std::array<std::uint8_t, N> data_{};
 };
 
 // Hash represents the 32 byte hash of data
