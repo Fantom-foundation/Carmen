@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"crypto/sha256"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -44,11 +43,4 @@ func (m *Memory[K]) GetStateHash() (common.Hash, error) {
 
 func (m *Memory[K]) Close() error {
 	return nil
-}
-
-func (m *Memory[K]) hashKey(key K) {
-	h := sha256.New()
-	h.Write(m.hash)
-	h.Write(m.serializer.ToBytes(key))
-	m.hash = h.Sum(nil)
 }
