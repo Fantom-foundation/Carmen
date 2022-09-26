@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
 http_archive(
   name = "com_google_googletest",
@@ -30,3 +31,9 @@ http_archive(
 )
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
 bazel_skylib_workspace()
+
+git_repository(
+    name = "boringssl",
+    commit = "d345d68d5c4b5471290ebe13f090f1fd5b7e8f58",
+    remote = "https://boringssl.googlesource.com/boringssl",
+)
