@@ -40,15 +40,12 @@ private:
 // Hash represents the 32 byte hash of data
 class Hash : public ByteValue<kHashLength> {
 public:
-  Hash(): ByteValue<kHashLength>() {};
-  Hash(std::initializer_list<std::uint8_t> il): ByteValue<kHashLength>(il) {}
+ using ByteValue::ByteValue;
 };
 
 // Address represents the 20 byte address of an account.
 class Address : public ByteValue<kAddressLength> {
 public:
-    Address(): ByteValue<kAddressLength>() {};
-    Address(std::initializer_list<std::uint8_t> il)
-        : ByteValue<kAddressLength>(il) {}
+ using ByteValue::ByteValue;
 };
 }
