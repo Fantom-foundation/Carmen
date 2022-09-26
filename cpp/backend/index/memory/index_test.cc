@@ -2,51 +2,72 @@
 
 #include <type_traits>
 
+#include "common/hash.h"
+#include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {
 namespace {
 
-using TestIndex = InMemoryIndex<std::string, int>;
+using TestIndex = InMemoryIndex<int, int>;
 
-TEST(InMemoryIndexTest, TypeProperties) { 
-    EXPECT_TRUE(std::is_default_constructible_v<TestIndex>);
-    EXPECT_TRUE(std::is_move_constructible_v<TestIndex>);
+TEST(InMemoryIndexTest, TypeProperties) {
+  EXPECT_TRUE(std::is_default_constructible_v<TestIndex>);
+  EXPECT_TRUE(std::is_move_constructible_v<TestIndex>);
 }
 
-TEST(InMemoryIndexTest, IdentifiersAreAssignedInorder) { 
-    TestIndex index;
-    EXPECT_EQ(0, index.GetOrAdd("a"));
-    EXPECT_EQ(1, index.GetOrAdd("b"));
-    EXPECT_EQ(2, index.GetOrAdd("c"));
+TEST(InMemoryIndexTest, IdentifiersAreAssignedInorder) {
+  TestIndex index;
+  EXPECT_EQ(0, index.GetOrAdd(1));
+  EXPECT_EQ(1, index.GetOrAdd(2));
+  EXPECT_EQ(2, index.GetOrAdd(3));
 }
 
-TEST(InMemoryIndexTest, SameKeyLeadsToSameIdentifier) { 
-    TestIndex index;
-    EXPECT_EQ(0, index.GetOrAdd("a"));
-    EXPECT_EQ(1, index.GetOrAdd("b"));
-    EXPECT_EQ(0, index.GetOrAdd("a"));
-    EXPECT_EQ(1, index.GetOrAdd("b"));
+TEST(InMemoryIndexTest, SameKeyLeadsToSameIdentifier) {
+  TestIndex index;
+  EXPECT_EQ(0, index.GetOrAdd(1));
+  EXPECT_EQ(1, index.GetOrAdd(2));
+  EXPECT_EQ(0, index.GetOrAdd(1));
+  EXPECT_EQ(1, index.GetOrAdd(2));
 }
 
-TEST(InMemoryIndexTest, ContainsIdentifiesIndexedElements) { 
-    TestIndex index;
-    EXPECT_FALSE(index.Contains("a"));
-    EXPECT_FALSE(index.Contains("b"));
-    EXPECT_FALSE(index.Contains("c"));
+TEST(InMemoryIndexTest, ContainsIdentifiesIndexedElements) {
+  TestIndex index;
+  EXPECT_FALSE(index.Contains(1));
+  EXPECT_FALSE(index.Contains(2));
+  EXPECT_FALSE(index.Contains(3));
 
-    EXPECT_EQ(0, index.GetOrAdd("a"));
-    EXPECT_TRUE(index.Contains("a"));
-    EXPECT_FALSE(index.Contains("b"));
-    EXPECT_FALSE(index.Contains("c"));
+  EXPECT_EQ(0, index.GetOrAdd(1));
+  EXPECT_TRUE(index.Contains(1));
+  EXPECT_FALSE(index.Contains(2));
+  EXPECT_FALSE(index.Contains(3));
 
-
-    EXPECT_EQ(1, index.GetOrAdd("b"));
-    EXPECT_TRUE(index.Contains("a"));
-    EXPECT_TRUE(index.Contains("b"));
-    EXPECT_FALSE(index.Contains("c"));
+  EXPECT_EQ(1, index.GetOrAdd(2));
+  EXPECT_TRUE(index.Contains(1));
+  EXPECT_TRUE(index.Contains(2));
+  EXPECT_FALSE(index.Contains(3));
 }
 
-} // namespace
-} // namespace carmen::baclend::index
+TEST(InMemoryIndexTest, EmptyIndexHasHashEqualsZero) {
+  TestIndex index;
+  EXPECT_EQ(Hash{}, index.GetHash());
+}
+
+TEST(InMemoryIndexTest, IndexHashIsEqualToInsertionOrder) {
+  Hash hash;
+  TestIndex index;
+  EXPECT_EQ(hash, index.GetHash());
+  index.GetOrAdd(12);
+  hash = GetSha256Hash(hash, 12);
+  EXPECT_EQ(hash, index.GetHash());
+  index.GetOrAdd(14);
+  hash = GetSha256Hash(hash, 14);
+  EXPECT_EQ(hash, index.GetHash());
+  index.GetOrAdd(16);
+  hash = GetSha256Hash(hash, 16);
+  EXPECT_EQ(hash, index.GetHash());
+}
+
+}  // namespace
+}  // namespace carmen::backend::index
