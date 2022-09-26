@@ -32,7 +32,7 @@ absl::flat_hash_map<std::string, std::string> GetKnownHashes() {
   return res;
 }
 
-TEST(Sha256Hash, TestKnownHashes) {
+TEST(Sha256HashTest, TestKnownHashes) {
   for (auto [text, hash] : GetKnownHashes()) {
     Sha256Hasher hasher;
     hasher.Ingest(text);
@@ -40,13 +40,37 @@ TEST(Sha256Hash, TestKnownHashes) {
   }
 }
 
-TEST(Sha256Hash, HasherCanBeReset) {
+TEST(Sha256HashTest, HasherCanBeReset) {
   Sha256Hasher hasher;
   for (auto [text, hash] : GetKnownHashes()) {
     hasher.Reset();
     hasher.Ingest(text);
     EXPECT_THAT(Print(hasher.GetHash()), StrEq(hash));
   }
+}
+
+TEST(Sha256HashTest, ListOfTrivialObjectsCanBeIngested) {
+  Sha256Hasher hasher;
+
+  hasher.Ingest('a');
+  EXPECT_THAT(Print(hasher.GetHash()), StrEq(GetKnownHashes()["a"]));
+
+  hasher.Reset();
+  hasher.Ingest('a', 'b', 'c');
+  EXPECT_THAT(Print(hasher.GetHash()), StrEq(GetKnownHashes()["abc"]));
+}
+
+TEST(GetSha256Test, ComputesHashCorrectly) {
+  auto hashes = GetKnownHashes();
+  EXPECT_THAT(Print(GetSha256Hash()), StrEq(hashes[""]));
+  EXPECT_THAT(Print(GetSha256Hash('a')), StrEq(hashes["a"]));
+  EXPECT_THAT(Print(GetSha256Hash('a', 'b', 'c')), StrEq(hashes["abc"]));
+}
+
+TEST(Sha256HashTest, HashesCanBeHashed) {
+  // The test passes if it compiles.
+  Sha256Hasher hasher;
+  hasher.Ingest(Hash{});
 }
 
 }  // namespace
