@@ -7,14 +7,14 @@ import (
 
 type Memory[K comparable] struct {
 	data       map[K]uint64
-	hash       common.Hash
+	hash       []byte
 	serializer common.Serializer[K]
 }
 
 func NewMemory[K comparable](serializer common.Serializer[K]) *Memory[K] {
 	memory := Memory[K]{
 		data:       make(map[K]uint64),
-		hash:       common.Hash{},
+		hash:       []byte{},
 		serializer: serializer,
 	}
 	return &memory
@@ -36,7 +36,7 @@ func (m *Memory[K]) Contains(key K) bool {
 }
 
 func (m *Memory[K]) GetStateHash() common.Hash {
-	return m.hash
+	return common.BytesToHash(m.hash)
 }
 
 func (m *Memory[K]) Close() error {
@@ -45,8 +45,7 @@ func (m *Memory[K]) Close() error {
 
 func (m *Memory[K]) hashKey(key K) {
 	h := sha256.New()
-	h.Write(m.hash.Bytes())
+	h.Write(m.hash)
 	h.Write(m.serializer.ToBytes(key))
-	// TODO measure performance of copying byte array every time
-	m.hash = common.BytesToHash(h.Sum(nil))
+	m.hash = h.Sum(nil)
 }
