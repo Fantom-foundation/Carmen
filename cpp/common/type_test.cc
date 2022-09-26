@@ -56,5 +56,22 @@ TEST(AddressTest, TypeProperties) {
   EXPECT_TRUE(std::is_default_constructible_v<Address>);
 }
 
+TEST(KeyTest, SizeIsCompact) { EXPECT_EQ(kKeyLength, sizeof(Key)); }
+
+TEST(KeyTest, TypeProperties) {
+  EXPECT_TRUE(std::is_trivially_copyable_v<Key>);
+  EXPECT_TRUE(std::is_trivially_move_assignable_v<Key>);
+  EXPECT_TRUE(std::equality_comparable<Key>);
+  EXPECT_TRUE(std::is_default_constructible_v<Key>);
+}
+
+TEST(ValueTest, SizeIsCompact) { EXPECT_EQ(kValueLength, sizeof(Value)); }
+
+TEST(ValueTest, TypeProperties) {
+  EXPECT_TRUE(std::is_trivially_copyable_v<Value>);
+  EXPECT_TRUE(std::is_trivially_move_assignable_v<Value>);
+  EXPECT_TRUE(std::equality_comparable<Value>);
+  EXPECT_TRUE(std::is_default_constructible_v<Value>);
+}
 }  // namespace
 }  // namespace carmen
