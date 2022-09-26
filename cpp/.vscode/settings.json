@@ -1,5 +1,15 @@
 {
     "bsv.cc.compdb.targets": [
         "//...",
-    ]
+    ],
+    "[c]": {
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        "files.insertFinalNewline": true,
+        "files.trimFinalNewlines": true,
+    },
+    "[cpp]": {
+        "editor.defaultFormatter": "xaver.clang-format",
+        "files.insertFinalNewline": true,
+        "files.trimFinalNewlines": true,
+    },
 }
