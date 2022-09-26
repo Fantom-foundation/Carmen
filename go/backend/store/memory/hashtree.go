@@ -16,7 +16,7 @@ type HashTree struct {
 
 // PageProvider is a source of pages for the HashTree
 type PageProvider interface {
-	GetPage(page int) []byte
+	GetPage(page int) ([]byte, error)
 }
 
 // NewHashTree constructs a new HashTree
@@ -63,7 +63,11 @@ func (ht *HashTree) commit() (err error) {
 			var nodeHash []byte
 			if layer == 0 {
 				// hash the data of the page, which comes from the outside
-				content := ht.pageProvider.GetPage(node)
+				var content []byte
+				content, err = ht.pageProvider.GetPage(node)
+				if err != nil {
+					return err
+				}
 				nodeHash, err = calculateHash([][]byte{content})
 			} else {
 				// hash children of current node
