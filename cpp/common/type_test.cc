@@ -39,7 +39,7 @@ TEST(ByteValueTest, CannotHoldMoreValues) {
 }
 
 TEST(HashTest, SizeIsCompact) {
-    EXPECT_EQ(HASH_LENGTH, sizeof(Hash));
+    EXPECT_EQ(kHashLength, sizeof(Hash));
 }
 
 TEST(HashTest, TypeProperties) {
@@ -50,7 +50,7 @@ TEST(HashTest, TypeProperties) {
 }
 
 TEST(AddressTest, SizeIsCompact) {
-    EXPECT_EQ(ADDRESS_LENGTH, sizeof(Address));
+    EXPECT_EQ(kAddressLength, sizeof(Address));
 }
 
 TEST(AddressTest, TypeProperties) {

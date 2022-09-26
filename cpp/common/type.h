@@ -8,8 +8,8 @@
 
 namespace carmen {
 
-const int HASH_LENGTH = 32;
-const int ADDRESS_LENGTH = 20;
+constexpr int kHashLength = 32;
+constexpr int kAddressLength = 20;
 
 // Class template for all types based on byte array value.
 template <std::size_t N> class ByteValue {
@@ -38,17 +38,17 @@ private:
 };
 
 // Hash represents the 32 byte hash of data
-class Hash : public ByteValue<HASH_LENGTH> {
+class Hash : public ByteValue<kHashLength> {
 public:
-  Hash(): ByteValue<HASH_LENGTH>() {};
-  Hash(std::initializer_list<std::uint8_t> il): ByteValue<HASH_LENGTH>(il) {}
+  Hash(): ByteValue<kHashLength>() {};
+  Hash(std::initializer_list<std::uint8_t> il): ByteValue<kHashLength>(il) {}
 };
 
 // Address represents the 20 byte address of an account.
-class Address : public ByteValue<ADDRESS_LENGTH> {
+class Address : public ByteValue<kAddressLength> {
 public:
-    Address(): ByteValue<ADDRESS_LENGTH>() {};
+    Address(): ByteValue<kAddressLength>() {};
     Address(std::initializer_list<std::uint8_t> il)
-        : ByteValue<ADDRESS_LENGTH>(il) {}
+        : ByteValue<kAddressLength>(il) {}
 };
 }
