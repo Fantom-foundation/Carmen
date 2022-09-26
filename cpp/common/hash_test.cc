@@ -20,6 +20,8 @@ std::string Print(const T& value) {
 }
 
 absl::flat_hash_map<std::string, std::string> GetKnownHashes() {
+  // The following hashes have been obtained from a third-party SHA256
+  // implementation.
   absl::flat_hash_map<std::string, std::string> res;
   res[""] =
       "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";

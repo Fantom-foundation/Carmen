@@ -26,8 +26,7 @@ class Page {
   V& operator[](int pos) { return _data[pos]; }
 
   // Appends the content of this page to the provided hasher instance.
-  template <typename Hasher>
-  void AppendTo(Hasher& hasher) {
+  void AppendTo(Sha256Hasher& hasher) {
     hasher.Ingest(reinterpret_cast<const std::byte*>(&_data[0]),
                   sizeof(V) * size);
   }
@@ -36,7 +35,7 @@ class Page {
   std::array<V, size> _data;
 };
 
-// The InMemoryStore is a in-memory implementation of a mutable key/value
+// The InMemoryStore is an in-memory implementation of a mutable key/value
 // store. It maps provided mutation and lookup support, as well as global
 // state hashing support enabling to obtain a quick hash for the entire
 // content.
@@ -89,21 +88,22 @@ Hash InMemoryStore<K, V, page_size>::GetHash() const {
   // The computation of the full store hash is comprising two
   // steps:
   //   - step 1: hashing of individual pages
-  //   - step 2: a iterative, tree-shaped reduction to a single value
+  //   - step 2: an iterative, tree-shaped reduction to a single value
   //
   // Step 1: The content of each page is hashed and the result stored
-  // a vector of hashes. This vector provides the input layer of the
+  // as a vector of hashes. This vector provides the input layer of the
   // second step.
   //
   // Step 2: To aggregate the vector of hashes into a single hash, the
-  // following steps are executed K number of times:
-  //   - the hashes of the previous iteration are grouped into 
+  // following steps are executed:
+  //   - the hashes of the previous iteration are grouped into
   //     fixed-size buckets, the last one padded with zero hashes as needed
   //   - a hash is computed for the content of each bucket
   // Thus, in every step the number of hashes is reduced by a factor of
   // size of the buckets (=branch_width).
-  // This process is repeated K times, where K a maximum upper boundary
-  // for the hight of any potential storage tree (see computation below).
+  // This process is repeated until the number of hashes produced in one
+  // iteration is reduced to one. This hash is then the resulting overall
+  // hash of the store.
   //
   // Future improvements:
   //  - track access to pages and maintain list of dirty pages
@@ -111,11 +111,7 @@ Hash InMemoryStore<K, V, page_size>::GetHash() const {
   //  - when computing state hashes, only re-compute hashes affected
   //    by dirty pages.
 
-
   constexpr int branch_width = 32;
-  constexpr long max_storage = 16ull << 40;  // = 16 TiB
-  constexpr auto max_pages = max_storage / sizeof(Page);
-  const auto max_height = int(std::log(max_pages) / std::log(branch_width)) + 1;
 
   if (_pages.empty()) {
     return Hash();
@@ -139,18 +135,18 @@ Hash InMemoryStore<K, V, page_size>::GetHash() const {
   }
 
   // Perform a reduction on the tree.
-  for (int i = 0; i < max_height; i++) {
+  while (hashes.size() > 1) {
     // Add padding to the current input level.
     if (hashes.size() % branch_width != 0) {
       hashes.resize(((hashes.size() / branch_width) + 1) * branch_width);
     }
     // Perform one round of hashing in the tree.
-    for (int j = 0; j < hashes.size() / branch_width; j++) {
+    for (std::size_t i = 0; i < hashes.size() / branch_width; i++) {
       hasher.Reset();
       hasher.Ingest(
-          reinterpret_cast<const std::byte*>(&hashes[j * branch_width]),
+          reinterpret_cast<const std::byte*>(&hashes[i * branch_width]),
           sizeof(Hash) * branch_width);
-      hashes[j] = hasher.GetHash();
+      hashes[i] = hasher.GetHash();
     }
     hashes.resize(hashes.size() / branch_width);
   }
