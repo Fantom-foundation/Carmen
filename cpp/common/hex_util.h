@@ -6,7 +6,7 @@
 
 namespace carmen::hex_util {
 
-// Returns hex representation of given array prefixed with "0x"
-void WriteTo(std::span<std::uint8_t> data, std::ostream& out);
+// Write hex representation of given sequence prefixed with "0x" into ostream.
+void WriteTo(std::ostream& out, std::span<std::uint8_t> data);
 
 } // namespace carmen::hex_util

@@ -21,8 +21,8 @@ public:
   // Overload of << operator to make class printable.
   friend std::ostream &operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {
-    hex_util::WriteTo(*const_cast<std::array<std::uint8_t, N>*>
-                      (&hexContainer._data),out);
+    hex_util::WriteTo(out, *const_cast<std::array<std::uint8_t, N>*>
+                      (&hexContainer._data));
     return out;
   }
 

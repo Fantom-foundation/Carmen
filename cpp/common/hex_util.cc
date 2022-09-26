@@ -12,7 +12,7 @@ const std::array<char, 16> HEX_MAP = {'0', '1', '2', '3', '4', '5', '6', '7',
 } // namespace
 
 // Write hex representation of given sequence prefixed with "0x" into ostream.
-void WriteTo(std::span<std::uint8_t> data, std::ostream& out) {
+void WriteTo(std::ostream& out, std::span<std::uint8_t> data) {
   out << "0x";
   for (const auto& i : data) {
     out << HEX_MAP[i >> 4];
