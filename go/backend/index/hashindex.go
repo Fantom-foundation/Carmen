@@ -11,9 +11,19 @@ type HashIndex[K comparable] struct {
 	serializer common.Serializer[K]
 }
 
+// NewHashIndex creates a new instance with the serializer only
 func NewHashIndex[K comparable](serializer common.Serializer[K]) *HashIndex[K] {
 	return &HashIndex[K]{
 		hash:       []byte{},
+		keys:       []K{},
+		serializer: serializer,
+	}
+}
+
+// InitHashIndex creates a new instance with the initial hash
+func InitHashIndex[K comparable](hash []byte, serializer common.Serializer[K]) *HashIndex[K] {
+	return &HashIndex[K]{
+		hash:       hash,
 		keys:       []K{},
 		serializer: serializer,
 	}
