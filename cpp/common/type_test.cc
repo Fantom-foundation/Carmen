@@ -39,7 +39,7 @@ TEST(ByteValueTest, CannotHoldMoreValues) {
 }
 
 TEST(HashTest, SizeIsCompact) {
-    EXPECT_EQ(32, sizeof(Hash));
+    EXPECT_EQ(kHashLength, sizeof(Hash));
 }
 
 TEST(HashTest, TypeProperties) {
@@ -47,6 +47,17 @@ TEST(HashTest, TypeProperties) {
     EXPECT_TRUE(std::is_trivially_move_assignable_v<Hash>);
     EXPECT_TRUE(std::equality_comparable<Hash>);
     EXPECT_TRUE(std::is_default_constructible_v<Hash>);
+}
+
+TEST(AddressTest, SizeIsCompact) {
+    EXPECT_EQ(kAddressLength, sizeof(Address));
+}
+
+TEST(AddressTest, TypeProperties) {
+    EXPECT_TRUE(std::is_trivially_copyable_v<Address>);
+    EXPECT_TRUE(std::is_trivially_move_assignable_v<Address>);
+    EXPECT_TRUE(std::equality_comparable<Address>);
+    EXPECT_TRUE(std::is_default_constructible_v<Address>);
 }
 
 } // namespace
