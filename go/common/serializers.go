@@ -1,5 +1,7 @@
 package common
 
+import "encoding/binary"
+
 // AddressSerializer is a Serializer of the Address type
 type AddressSerializer struct{}
 
@@ -88,4 +90,22 @@ func (a NonceSerializer) FromBytes(bytes []byte) Nonce {
 }
 func (a NonceSerializer) Size() int {
 	return 32
+}
+
+// SlotIdxSerializer32 is a Serializer of the Value type
+type SlotIdxSerializer32 struct{}
+
+func (a SlotIdxSerializer32) ToBytes(value SlotIdx[uint32]) []byte {
+	b := binary.LittleEndian.AppendUint32([]byte{}, value.AddressIdx)
+	return binary.LittleEndian.AppendUint32(b, value.KeyIdx)
+}
+func (a SlotIdxSerializer32) FromBytes(bytes []byte) SlotIdx[uint32] {
+	value := SlotIdx[uint32]{
+		AddressIdx: binary.LittleEndian.Uint32(bytes[0:4]),
+		KeyIdx:     binary.LittleEndian.Uint32(bytes[4:8]),
+	}
+	return value
+}
+func (a SlotIdxSerializer32) Size() int {
+	return 8 // two 32bit integers
 }

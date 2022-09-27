@@ -9,7 +9,7 @@ import (
 
 func TestMemoryStoreImplements(t *testing.T) {
 	var s Memory[common.Value]
-	var _ store.Store[uint64, common.Value] = &s
+	var _ store.Store[uint32, common.Value] = &s
 	var _ io.Closer = &s
 }
 
