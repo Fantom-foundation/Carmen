@@ -15,3 +15,22 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "file",
+    hdrs = ["file.h"],
+    srcs = ["file.cc"],
+    deps = [
+        ":page",
+    ]
+)
+
+cc_test(
+    name = "file_test",
+    srcs = ["file_test.cc"],
+    deps = [
+        ":file",
+        "//common:file_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
