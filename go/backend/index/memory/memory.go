@@ -7,7 +7,7 @@ import (
 
 // Memory is an in-memory implementation of index.Index.
 type Memory[K comparable] struct {
-	data       map[K]uint64
+	data       map[K]uint32
 	hash       []byte
 	serializer common.Serializer[K]
 }
@@ -15,7 +15,7 @@ type Memory[K comparable] struct {
 // NewMemory constructs a new Memory instance.
 func NewMemory[K comparable](serializer common.Serializer[K]) *Memory[K] {
 	memory := Memory[K]{
-		data:       make(map[K]uint64),
+		data:       make(map[K]uint32),
 		hash:       []byte{},
 		serializer: serializer,
 	}
@@ -23,10 +23,10 @@ func NewMemory[K comparable](serializer common.Serializer[K]) *Memory[K] {
 }
 
 // GetOrAdd returns an index mapping for the key, or creates the new index
-func (m *Memory[K]) GetOrAdd(key K) (uint64, error) {
+func (m *Memory[K]) GetOrAdd(key K) (uint32, error) {
 	index, exists := m.data[key]
 	if !exists {
-		index = uint64(len(m.data))
+		index = uint32(len(m.data))
 		m.data[key] = index
 		m.addKeyIntoHash(key) // recursive hash for each new key
 	}

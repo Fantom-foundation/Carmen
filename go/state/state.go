@@ -37,16 +37,28 @@ type Service[I common.Identifier] struct {
 	addressIndex   index.Index[common.Address, I]
 	keyIndex       index.Index[common.Key, I]
 	slotIndex      index.Index[common.SlotIdx[I], I]
-	nonces         store.Store[I, common.Nonce]
-	balances       store.Store[I, common.Balance]
-	values         store.Store[I, common.Value]
+	noncesStore    store.Store[I, common.Nonce]
+	balancesStore  store.Store[I, common.Balance]
+	valuesStore    store.Store[I, common.Value]
 	hashSerializer common.HashSerializer
+}
+
+// New creates a new instance of this service
+func New[I common.Identifier](
+	addressIndex index.Index[common.Address, I],
+	keyIndex index.Index[common.Key, I],
+	slotIndex index.Index[common.SlotIdx[I], I],
+	noncesStore store.Store[I, common.Nonce],
+	balancesStore store.Store[I, common.Balance],
+	valuesStore store.Store[I, common.Value]) *Service[I] {
+
+	return &Service[I]{addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore, common.HashSerializer{}}
 }
 
 func (s *Service[I]) GetBalance(address common.Address) (balance common.Balance, err error) {
 	var idx I
 	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
-		balance = s.balances.Get(idx)
+		balance = s.balancesStore.Get(idx)
 	}
 	return
 }
@@ -54,7 +66,7 @@ func (s *Service[I]) GetBalance(address common.Address) (balance common.Balance,
 func (s *Service[I]) SetBalance(address common.Address, balance common.Balance) (err error) {
 	var idx I
 	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
-		err = s.balances.Set(idx, balance)
+		err = s.balancesStore.Set(idx, balance)
 	}
 	return
 }
@@ -62,7 +74,7 @@ func (s *Service[I]) SetBalance(address common.Address, balance common.Balance) 
 func (s *Service[I]) GetNonce(address common.Address) (nonce common.Nonce, err error) {
 	var idx I
 	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
-		nonce = s.nonces.Get(idx)
+		nonce = s.noncesStore.Get(idx)
 	}
 	return
 }
@@ -70,7 +82,7 @@ func (s *Service[I]) GetNonce(address common.Address) (nonce common.Nonce, err e
 func (s *Service[I]) SetNonce(address common.Address, nonce common.Nonce) (err error) {
 	var idx I
 	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
-		err = s.nonces.Set(idx, nonce)
+		err = s.noncesStore.Set(idx, nonce)
 	}
 	return
 }
@@ -78,7 +90,7 @@ func (s *Service[I]) SetNonce(address common.Address, nonce common.Nonce) (err e
 func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
 	var slotIdx I
 	if slotIdx, err = s.mapStorage(address, key); err != nil {
-		value = s.values.Get(slotIdx)
+		value = s.valuesStore.Get(slotIdx)
 	}
 	return
 }
@@ -86,7 +98,7 @@ func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value c
 func (s *Service[I]) SetStorage(address common.Address, key common.Key, value common.Value) (err error) {
 	var slotIdx I
 	if slotIdx, err = s.mapStorage(address, key); err != nil {
-		err = s.values.Set(slotIdx, value)
+		err = s.valuesStore.Set(slotIdx, value)
 	}
 	return
 }
@@ -104,21 +116,21 @@ func (s *Service[I]) GetHash() (hash common.Hash, err error) {
 		return
 	}
 
-	if hash, err = s.balances.GetStateHash(); err != nil {
+	if hash, err = s.balancesStore.GetStateHash(); err != nil {
 		return
 	}
 	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
 		return
 	}
 
-	if hash, err = s.nonces.GetStateHash(); err != nil {
+	if hash, err = s.noncesStore.GetStateHash(); err != nil {
 		return
 	}
 	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
 		return
 	}
 
-	if hash, err = s.values.GetStateHash(); err != nil {
+	if hash, err = s.valuesStore.GetStateHash(); err != nil {
 		return
 	}
 
