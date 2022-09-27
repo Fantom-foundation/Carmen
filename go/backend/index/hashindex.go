@@ -42,13 +42,11 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 	for _, key := range hi.keys {
 		h.Reset()
 
-		_, err := h.Write(hashTmp)
-		if err != nil {
+		if _, err := h.Write(hashTmp); err != nil {
 			return common.Hash{}, err
 		}
 
-		_, err = h.Write(hi.serializer.ToBytes(key))
-		if err != nil {
+		if _, err := h.Write(hi.serializer.ToBytes(key)); err != nil {
 			return common.Hash{}, err
 		}
 
