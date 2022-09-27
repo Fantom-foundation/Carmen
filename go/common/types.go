@@ -32,3 +32,8 @@ type Nonce [32]byte
 
 // Value is an Ethereum-like smart contract memory slot
 type Value [32]byte
+
+type SlotIdx[I Identifier] struct {
+	AddressIdx I
+	KeyIdx     I
+}
