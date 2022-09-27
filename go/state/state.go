@@ -1,11 +1,9 @@
 package state
 
-type Address [20]byte
-type Key [32]byte
-type Value [32]byte
+import "github.com/Fantom-foundation/Carmen/go/common"
 
 type State interface {
-	GetBalance(Address)
-	GetNonce(address Address) uint64
-	GetStorage(address Address, key Key) Value
+	GetBalance(common.Address)
+	GetNonce(address common.Address) uint64
+	GetStorage(address common.Address, key common.Key) common.Value
 }
