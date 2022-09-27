@@ -56,3 +56,22 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name="file_util",
+    hdrs=["file_util.h"],
+    srcs=["file_util.cc"],
+    deps=[
+    ],
+    visibility = ["//visibility:public"],
+    testonly = True,
+)
+
+cc_test(
+    name = "file_util_test",
+    srcs = ["file_util_test.cc"],
+    deps = [
+        ":file_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
