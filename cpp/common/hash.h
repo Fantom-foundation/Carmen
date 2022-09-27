@@ -12,6 +12,9 @@ namespace internal {
 class Sha256Impl;
 }
 
+template <typename T>
+concept Trivial = std::is_trivially_copyable_v<T>;
+
 // A utility class to compute the SHA256 hash of data.
 //
 // To hash data, create an instance, feed in data using the class's Ingest(..)
@@ -33,6 +36,24 @@ class Sha256Hasher {
   // strings through a single parameter.
   void Ingest(std::string_view str);
 
+  // A no-op serving as the base case for ingesting lists of trivial types.
+  void Ingest() {}
+
+  // A convenience variant of the fuction above, supporting the hashing of
+  // all trivial types.
+  template <Trivial T>
+  void Ingest(const T& value) {
+    Ingest(reinterpret_cast<const std::byte*>(&value), sizeof(T));
+  }
+
+  // An extension of the fuction above, supporting the ingestion of a list
+  // of trival objects.
+  template <Trivial First, Trivial... Rest>
+  void Ingest(const First& first, const Rest&... rest) {
+    Ingest(first);
+    Ingest(rest...);
+  }
+
   // Finalises the hashing and consumes the resulting hash.
   Hash GetHash() const;
 
@@ -47,5 +68,25 @@ class Sha256Hasher {
   // import in other files.
   std::unique_ptr<internal::Sha256Impl> _impl;
 };
+
+// A utility fuiction to hash a list of trivial elements using the given hasher
+// instance. The state of the handed in hasher is reset before ingesting the
+// provided list of elements.
+template <Trivial... Elements>
+Hash GetHash(Sha256Hasher& hasher, const Elements&... elements) {
+  hasher.Reset();
+  hasher.Ingest(elements...);
+  return hasher.GetHash();
+}
+
+// A utility function to compute the SHA256 hash of a list of trivial elements.
+// It iternally creats a Sha256Hasher instance for computing the hash. If
+// multiple hashes are to be computed, consider creating such an instance in the
+// caller scope and reusing the instance for all invocations.
+template <Trivial... Elements>
+Hash GetSha256Hash(const Elements&... elements) {
+  Sha256Hasher hasher;
+  return GetHash(hasher, elements...);
+}
 
 }  // namespace carmen
