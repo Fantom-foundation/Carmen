@@ -34,3 +34,24 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+
+cc_library(
+    name = "page_pool",
+    hdrs = ["page_pool.h"],
+    deps = [
+        ":page",
+        ":file",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ]
+)
+
+cc_test(
+    name = "page_pool_test",
+    srcs = ["page_pool_test.cc"],
+    deps = [
+        ":page_pool",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
