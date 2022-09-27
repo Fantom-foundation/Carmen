@@ -1,8 +1,11 @@
 #pragma once
 
+#include <optional>
+
 #include "absl/container/flat_hash_map.h"
 #include "common/hash.h"
 #include "common/type.h"
+
 
 namespace carmen::backend::index {
 
@@ -24,23 +27,33 @@ class InMemoryIndex {
   // internally such that future lookups will return the same
   // value.
   I GetOrAdd(const K& key) {
-    auto [pos, is_new] = _data.insert({key, I{}});
+    auto [pos, is_new] = data_.insert({key, I{}});
     if (is_new) {
-      pos->second = _data.size() - 1;
-      _hash = GetSha256Hash(_hash, key);
+      pos->second = data_.size() - 1;
+      hash_ = GetSha256Hash(hash_, key);
+    }
+    return pos->second;
+  }
+
+  // Retrieves the ordinal number for the given key if previously registered.
+  // Otherwise std::nullopt is returned.
+  std::optional<I> Get(const K& key) const {
+    auto pos = data_.find(key);
+    if (pos == data_.end()) {
+        return std::nullopt;
     }
     return pos->second;
   }
 
   // Tests whether the given key is indexed by this container.
-  bool Contains(const K& key) const { return _data.contains(key); }
+  bool Contains(const K& key) const { return data_.contains(key); }
 
   // Computes a hash over the full content of this store.
-  Hash GetHash() const { return _hash; }
+  Hash GetHash() const { return hash_; }
 
  private:
-  absl::flat_hash_map<K, I> _data;
-  Hash _hash;
+  absl::flat_hash_map<K, I> data_;
+  Hash hash_;
 };
 
 }  // namespace carmen::backend::index

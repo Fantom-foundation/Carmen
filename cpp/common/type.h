@@ -69,4 +69,5 @@ class Value : public ByteValue<kValueLength> {
  public:
   using ByteValue::ByteValue;
 };
+
 }  // namespace carmen

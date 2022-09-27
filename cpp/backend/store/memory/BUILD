@@ -2,9 +2,10 @@ cc_library(
     name = "store",
     hdrs = ["store.h"],
     deps = [
-      "//common:type",
-      "//common:hash",
+        "//common:type",
+        "//common:hash",
     ],
+    visibility = ["//visibility:public"],
 )
 
 cc_test(
