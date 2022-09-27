@@ -24,3 +24,12 @@ func TestHashSerializer(t *testing.T) {
 	var s common.HashSerializer
 	var _ common.Serializer[common.Hash] = s
 }
+
+func TestNonceSerializer(t *testing.T) {
+	var s common.NonceSerializer
+	var _ common.Serializer[common.Nonce] = s
+}
+func TestBalanceSerializer(t *testing.T) {
+	var s common.BalanceSerializer
+	var _ common.Serializer[common.Balance] = s
+}
