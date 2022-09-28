@@ -1,13 +1,14 @@
 package memory
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // Memory is an in-memory store.Store implementation - it maps IDs to values
 type Memory[V any] struct {
 	data        [][]byte // data of pages [page][byte of page]
-	hashTree    HashTree
+	hashTree    store.HashTree
 	serializer  common.Serializer[V]
 	pageSize    uint64 // the amount of items stored in one database page
 	itemSize    int    // the amount of bytes per one value
@@ -17,14 +18,15 @@ type Memory[V any] struct {
 // NewMemory constructs a new instance of Memory.
 // It needs a serializer of data items and the default value for a not-set item.
 func NewMemory[V any](serializer common.Serializer[V], itemDefault V, pageSize uint64, hashTreeFactor int) *Memory[V] {
+	hashTree := NewHashTree(hashTreeFactor)
 	memory := Memory[V]{
 		data:        [][]byte{make([]byte, 0, pageSize*uint64(serializer.Size()))},
+		hashTree:    &hashTree,
 		serializer:  serializer,
 		pageSize:    pageSize,
 		itemSize:    serializer.Size(),
 		itemDefault: itemDefault,
 	}
-	memory.hashTree = NewHashTree(hashTreeFactor, &memory)
 	return &memory
 }
 
@@ -60,7 +62,7 @@ func (m *Memory[V]) Get(id uint64) (V, error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Memory[V]) GetStateHash() (common.Hash, error) {
-	return m.hashTree.HashRoot()
+	return m.hashTree.HashRoot(m)
 }
 
 // Close the store

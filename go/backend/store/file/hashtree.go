@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"os"
@@ -14,24 +15,17 @@ const HashLength = 32
 // HashTree is a structure allowing to make a hash of the whole database state.
 // It obtains hashes of individual data pages and reduce them to a hash of the entire state.
 type HashTree struct {
-	path         string
-	factor       int          // the branching factor - amount of child nodes per one parent node
-	dirtyPages   map[int]bool // set of dirty flags of the tree nodes
-	pageProvider PageProvider // callback for obtaining data pages
-}
-
-// PageProvider is a source of pages for the HashTree
-type PageProvider interface {
-	GetPage(page int) ([]byte, error)
+	path       string
+	factor     int          // the branching factor - amount of child nodes per one parent node
+	dirtyPages map[int]bool // set of dirty flags of the tree nodes
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(path string, branchingFactor int, pageProvider PageProvider) HashTree {
+func NewHashTree(path string, branchingFactor int) HashTree {
 	return HashTree{
-		path:         path,
-		factor:       branchingFactor,
-		dirtyPages:   map[int]bool{},
-		pageProvider: pageProvider,
+		path:       path,
+		factor:     branchingFactor,
+		dirtyPages: map[int]bool{},
 	}
 }
 
@@ -98,7 +92,7 @@ func (ht *HashTree) getLayersCount() (count int, err error) {
 }
 
 // commit updates the necessary parts of the hashing tree
-func (ht *HashTree) commit() (hash []byte, err error) {
+func (ht *HashTree) commit(pageProvider store.PageProvider) (hash []byte, err error) {
 	var childrenLayer, parentsLayer *os.File
 	defer func() {
 		if childrenLayer != nil {
@@ -123,7 +117,7 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 		}
 
 		// hash children nodes into (dirty) parent nodes
-		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes)
+		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes, pageProvider)
 		if err != nil {
 			return nil, err
 		}
@@ -148,13 +142,13 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 }
 
 // updateDirtyNodes updates parent nodes marked as dirty with a hash of its children
-func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool) (newDirtyNodes map[int]bool, err error) {
+func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool, pageProvider store.PageProvider) (newDirtyNodes map[int]bool, err error) {
 	newDirtyNodes = make(map[int]bool)
 	for node, _ := range dirtyNodes {
 		var content, nodeHash []byte
 		if layerId == 0 {
 			// hash the data of the page
-			content, err = ht.pageProvider.GetPage(node)
+			content, err = pageProvider.GetPage(node)
 		} else {
 			// hash children of the current node
 			content, err = ht.childrenOfNode(childrenLayer, node)
@@ -188,8 +182,8 @@ func (ht *HashTree) updateNode(layerFile *os.File, node int, nodeHash []byte) er
 }
 
 // HashRoot provides the hash in the root of the hashing tree
-func (ht *HashTree) HashRoot() (out common.Hash, err error) {
-	hash, err := ht.commit()
+func (ht *HashTree) HashRoot(pageProvider store.PageProvider) (out common.Hash, err error) {
+	hash, err := ht.commit(pageProvider)
 	if err != nil {
 		return common.Hash{}, err
 	}

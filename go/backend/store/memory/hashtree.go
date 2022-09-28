@@ -2,30 +2,24 @@ package memory
 
 import (
 	"crypto/sha256"
+	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // HashTree is a structure allowing to make a hash of the whole database state.
 // It obtains hashes of individual data pages and reduce them to a hash of the entire state.
 type HashTree struct {
-	factor       int            // the branching factor - amount of child nodes per one parent node
-	tree         [][][]byte     // tree of hashes [layer][node][byte of hash]
-	dirtyNodes   []map[int]bool // set of dirty flags of the tree nodes [layer][node]
-	pageProvider PageProvider   // callback for obtaining data pages
-}
-
-// PageProvider is a source of pages for the HashTree
-type PageProvider interface {
-	GetPage(page int) ([]byte, error)
+	factor     int            // the branching factor - amount of child nodes per one parent node
+	tree       [][][]byte     // tree of hashes [layer][node][byte of hash]
+	dirtyNodes []map[int]bool // set of dirty flags of the tree nodes [layer][node]
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(branchingFactor int, pageProvider PageProvider) HashTree {
+func NewHashTree(branchingFactor int) HashTree {
 	return HashTree{
-		factor:       branchingFactor,
-		tree:         [][][]byte{{}},
-		dirtyNodes:   []map[int]bool{{}},
-		pageProvider: pageProvider,
+		factor:     branchingFactor,
+		tree:       [][][]byte{{}},
+		dirtyNodes: []map[int]bool{{}},
 	}
 }
 
@@ -57,14 +51,14 @@ func (ht *HashTree) MarkUpdated(page int) {
 }
 
 // commit updates the necessary parts of the hashing tree
-func (ht *HashTree) commit() (err error) {
+func (ht *HashTree) commit(pageProvider store.PageProvider) (err error) {
 	for layer := 0; layer < len(ht.tree); layer++ {
 		for node, _ := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
 			if layer == 0 {
 				// hash the data of the page, which comes from the outside
 				var content []byte
-				content, err = ht.pageProvider.GetPage(node)
+				content, err = pageProvider.GetPage(node)
 				if err != nil {
 					return err
 				}
@@ -110,8 +104,8 @@ func (ht *HashTree) updateNode(layer int, node int, nodeHash []byte) {
 }
 
 // HashRoot provides the hash in the root of the hashing tree
-func (ht *HashTree) HashRoot() (out common.Hash, err error) {
-	err = ht.commit()
+func (ht *HashTree) HashRoot(pageProvider store.PageProvider) (out common.Hash, err error) {
+	err = ht.commit(pageProvider)
 	if err != nil {
 		return common.Hash{}, err
 	}

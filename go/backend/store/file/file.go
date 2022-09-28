@@ -3,6 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"io/fs"
@@ -12,7 +13,7 @@ import (
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[V any] struct {
 	path        string
-	hashTree    HashTree
+	hashTree    store.HashTree
 	serializer  common.Serializer[V]
 	pageSize    uint64 // the amount of items stored in one database page
 	itemSize    int    // the amount of bytes per one value
@@ -30,15 +31,16 @@ func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V
 	if err != nil {
 		return nil, err
 	}
-	store := Store[V]{
+	hashTree := NewHashTree(path+"/hashes", hashTreeFactor)
+	s := Store[V]{
 		path:        path,
+		hashTree:    &hashTree,
 		serializer:  serializer,
 		pageSize:    pageSize,
 		itemSize:    serializer.Size(),
 		itemDefault: itemDefault,
 	}
-	store.hashTree = NewHashTree(path+"/hashes", hashTreeFactor, &store)
-	return &store, nil
+	return &s, nil
 }
 
 // itemPosition provides the position of an item in data pages
@@ -113,7 +115,7 @@ func (m *Store[V]) Get(id uint64) (V, error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[V]) GetStateHash() (common.Hash, error) {
-	return m.hashTree.HashRoot()
+	return m.hashTree.HashRoot(m)
 }
 
 // Close the store
