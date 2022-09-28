@@ -1,3 +1,1 @@
-namespace carmen {
-
-}  // namespace carmen
+namespace carmen {}  // namespace carmen

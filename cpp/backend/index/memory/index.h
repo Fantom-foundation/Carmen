@@ -6,7 +6,6 @@
 #include "common/hash.h"
 #include "common/type.h"
 
-
 namespace carmen::backend::index {
 
 // The InMemoryIndex implementation implements an append-only
@@ -40,7 +39,7 @@ class InMemoryIndex {
   std::optional<I> Get(const K& key) const {
     auto pos = data_.find(key);
     if (pos == data_.end()) {
-        return std::nullopt;
+      return std::nullopt;
     }
     return pos->second;
   }
