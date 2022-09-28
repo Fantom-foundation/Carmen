@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string_view>
 
 #include "common/type.h"
@@ -31,6 +32,9 @@ class Sha256Hasher {
 
   // Adds the given byte array to the sequence of bytes to hashed.
   void Ingest(const std::byte* data, std::size_t length);
+
+  // Same as above, but using a span to represent a sequence of bytes.
+  void Ingest(const std::span<const std::byte> span);
 
   // A convenience variant of the function above, supporting the hashing of
   // strings through a single parameter.
