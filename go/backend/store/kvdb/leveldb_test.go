@@ -61,3 +61,29 @@ func TestBasicOperations(t *testing.T) {
 		t.Errorf("Result is incorrect. Res: %s, Err: %s", val, err)
 	}
 }
+
+func TestPages(t *testing.T) {
+	if err := os.RemoveAll(DbPath); err != nil {
+		t.Errorf("IO Error: %s", err)
+	}
+
+	hashTree := memory.NewHashTree(BranchingFactor)
+	s, _ := NewStore[common.Value](DbPath, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+
+	// fill-in three pages
+	_ = s.Set(2, A) // page 1
+	_ = s.Set(3, A)
+	_ = s.Set(5, A) // page 2
+	_ = s.Set(6, A)
+	_ = s.Set(12, A) // page 3
+	_ = s.Set(13, A)
+	_ = s.Set(14, A)
+
+	hashTree.HashRoot(s)
+
+}
+
+type MockHashTree struct {
+}
+
+

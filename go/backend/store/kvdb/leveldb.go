@@ -35,8 +35,8 @@ func NewStore[V any](path string, serializer common.Serializer[V], hashTree stor
 }
 
 // itemPosition provides the position of an item in the page as well as the page number
-func (m *KVStore[V]) itemPosition(id uint32) uint32 {
-	return id % m.pageSize * uint32(m.itemSize)
+func (m *KVStore[V]) itemPosition(id uint32) (page int, position int) {
+	return int(id / m.pageSize), int(id%m.pageSize) * m.serializer.Size()
 }
 
 func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
@@ -51,7 +51,7 @@ func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
 	// inject values at the right positions
 	for iter.Next() {
 		key := fromBytes(iter.Key())
-		position := m.itemPosition(key)
+		_, position := m.itemPosition(key)
 		copy(pageData[position:], iter.Value())
 	}
 
@@ -60,9 +60,13 @@ func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
 	return
 }
 
-func (m *KVStore[V]) Set(id uint32, value V) error {
+func (m *KVStore[V]) Set(id uint32, value V) (err error) {
 	// index is mapped in the database directly
-	return m.db.Put(toBytes(id), m.serializer.ToBytes(value), nil)
+	if err = m.db.Put(toBytes(id), m.serializer.ToBytes(value), nil); err != nil {
+		page, _ := m.itemPosition(id)
+		m.hashTree.MarkUpdated(page)
+	}
+	return
 }
 
 func (m *KVStore[V]) Get(id uint32) (v V, err error) {
