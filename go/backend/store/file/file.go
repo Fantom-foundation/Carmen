@@ -3,6 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"io/fs"
@@ -12,7 +13,7 @@ import (
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[I common.Identifier, V any] struct {
 	path        string
-	hashTree    HashTree
+	hashTree    hashtree.HashTree
 	serializer  common.Serializer[V]
 	pageSize    int // the amount of items stored in one database page
 	itemSize    int // the amount of bytes per one value
@@ -21,7 +22,7 @@ type Store[I common.Identifier, V any] struct {
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int, hashTreeFactor int) (*Store[I, V], error) {
+func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) (*Store[I, V], error) {
 	err := os.MkdirAll(path+"/pages", 0700)
 	if err != nil {
 		return nil, err
@@ -30,15 +31,15 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 	if err != nil {
 		return nil, err
 	}
-	store := Store[I, V]{
+	s := &Store[I, V]{
 		path:        path,
 		serializer:  serializer,
 		pageSize:    pageSize,
 		itemSize:    serializer.Size(),
 		itemDefault: itemDefault,
 	}
-	store.hashTree = NewHashTree(path+"/hashes", hashTreeFactor, &store)
-	return &store, nil
+	s.hashTree = CreateHashTreeFactory(path+"/hashes", branchingFactor).Create(s)
+	return s, nil
 }
 
 // itemPosition provides the position of an item in data pages

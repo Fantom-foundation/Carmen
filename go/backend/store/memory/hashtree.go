@@ -2,6 +2,7 @@ package memory
 
 import (
 	"crypto/sha256"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
 )
@@ -12,17 +13,27 @@ type HashTree struct {
 	factor       int            // the branching factor - amount of child nodes per one parent node
 	tree         [][][]byte     // tree of hashes [layer][node][byte of hash]
 	dirtyNodes   []map[int]bool // set of dirty flags of the tree nodes [layer][node]
-	pageProvider PageProvider   // callback for obtaining data pages
+	pageProvider hashtree.PageProvider
 }
 
-// PageProvider is a source of pages for the HashTree
-type PageProvider interface {
-	GetPage(page int) ([]byte, error)
+// hashTreeFactory is used for implementation of hashTreeFactory method
+type hashTreeFactory struct {
+	branchingFactor int
+}
+
+// CreateHashTreeFactory creates a new instance of the hashTreeFactory
+func CreateHashTreeFactory(branchingFactor int) *hashTreeFactory {
+	return &hashTreeFactory{branchingFactor: branchingFactor}
+}
+
+// Create creates a new instance of the HashTree, this will be a singleton
+func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.HashTree {
+	return NewHashTree(f.branchingFactor, pageProvider)
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(branchingFactor int, pageProvider PageProvider) HashTree {
-	return HashTree{
+func NewHashTree(branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
+	return &HashTree{
 		factor:       branchingFactor,
 		tree:         [][][]byte{{}},
 		dirtyNodes:   []map[int]bool{{}},
