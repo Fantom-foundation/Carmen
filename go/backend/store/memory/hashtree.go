@@ -43,8 +43,8 @@ func (ht *HashTree) firstChildOf(parentIdx int) int {
 // calculateHash computes the hash of given data
 func calculateHash(h hash.Hash, childrenHashes [][]byte) (hash []byte, err error) {
 	h.Reset()
-	for i := 0; i < len(childrenHashes); i++ {
-		_, err = h.Write(childrenHashes[i])
+	for _, childHash := range childrenHashes {
+		_, err = h.Write(childHash)
 		if err != nil {
 			return nil, err
 		}
@@ -61,6 +61,7 @@ func (ht *HashTree) MarkUpdated(page int) {
 func (ht *HashTree) commit() (err error) {
 	h := sha256.New() // the hasher is created once for the whole block as it hashes the fastest
 	for layer := 0; layer < len(ht.tree); layer++ {
+		needNextLayer := false
 		for node, _ := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
 			if layer == 0 {
@@ -82,10 +83,13 @@ func (ht *HashTree) commit() (err error) {
 			}
 			// update the hash of this node, and extend the tree if needed
 			ht.updateNode(layer, node, nodeHash)
+			if node > 0 {
+				needNextLayer = true
+			}
 		}
 		// if the last layer has more than one node, need to add a new layer
 		lastLayer := len(ht.tree) - 1
-		if layer == lastLayer && len(ht.tree[lastLayer]) > 1 {
+		if layer == lastLayer && needNextLayer {
 			ht.tree = append(ht.tree, [][]byte{{}})
 		}
 	}
@@ -97,7 +101,9 @@ func (ht *HashTree) updateNode(layer int, node int, nodeHash []byte) {
 	// extend the layer size if necessary
 	if node >= len(ht.tree[layer]) {
 		newLayerSize := (node/ht.factor + 1) * ht.factor
-		ht.tree[layer] = append(ht.tree[layer], make([][]byte, newLayerSize-len(ht.tree[layer]))...)
+		for newLayerSize > len(ht.tree[layer]) {
+			ht.tree[layer] = append(ht.tree[layer], make([]byte, common.HashSerializer{}.Size()))
+		}
 	}
 
 	ht.tree[layer][node] = nodeHash
