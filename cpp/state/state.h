@@ -22,7 +22,6 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType>
 class State {
  public:
-
   Balance GetBalance(const Address& address) const {
     auto addr_id = address_index_.Get(address);
     if (!addr_id.has_value()) return 0;

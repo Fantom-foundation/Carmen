@@ -41,19 +41,19 @@ TEST(StateTest, BalancesCanBeUpdated) {
 }
 
 TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
-    InMemoryState state;
-    auto base_hash = state.GetHash();
-    state.SetBalance({}, 12);
-    auto value_12_hash = state.GetHash();
-    EXPECT_NE(base_hash, value_12_hash);
-    state.SetBalance({}, 14);
-    auto value_14_hash = state.GetHash();
-    EXPECT_NE(base_hash, value_14_hash);
+  InMemoryState state;
+  auto base_hash = state.GetHash();
+  state.SetBalance({}, 12);
+  auto value_12_hash = state.GetHash();
+  EXPECT_NE(base_hash, value_12_hash);
+  state.SetBalance({}, 14);
+  auto value_14_hash = state.GetHash();
+  EXPECT_NE(base_hash, value_14_hash);
 
-    // Resetting value gets us original hash.
-    state.SetBalance({}, 12);
-    auto value_12_hash_again = state.GetHash();
-    EXPECT_EQ(value_12_hash, value_12_hash_again);
+  // Resetting value gets us original hash.
+  state.SetBalance({}, 12);
+  auto value_12_hash_again = state.GetHash();
+  EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
 TEST(StateTest, DefaultNonceIsZero) {
@@ -83,19 +83,19 @@ TEST(StateTest, NoncesCanBeUpdated) {
 }
 
 TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
-    InMemoryState state;
-    auto base_hash = state.GetHash();
-    state.SetNonce({}, 12);
-    auto value_12_hash = state.GetHash();
-    EXPECT_NE(base_hash, value_12_hash);
-    state.SetNonce({}, 14);
-    auto value_14_hash = state.GetHash();
-    EXPECT_NE(base_hash, value_14_hash);
+  InMemoryState state;
+  auto base_hash = state.GetHash();
+  state.SetNonce({}, 12);
+  auto value_12_hash = state.GetHash();
+  EXPECT_NE(base_hash, value_12_hash);
+  state.SetNonce({}, 14);
+  auto value_14_hash = state.GetHash();
+  EXPECT_NE(base_hash, value_14_hash);
 
-    // Resetting value gets us original hash.
-    state.SetNonce({}, 12);
-    auto value_12_hash_again = state.GetHash();
-    EXPECT_EQ(value_12_hash, value_12_hash_again);
+  // Resetting value gets us original hash.
+  state.SetNonce({}, 12);
+  auto value_12_hash_again = state.GetHash();
+  EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
 TEST(StateTest, ValuesAddedCanBeRetrieved) {

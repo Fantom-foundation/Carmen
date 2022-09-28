@@ -52,15 +52,15 @@ TEST(InMemoryIndexTest, ContainsIdentifiesIndexedElements) {
 }
 
 TEST(InMemoryIndexTest, GetRetrievesPresentKeys) {
-    TestIndex index;
-    EXPECT_EQ(index.Get(1), std::nullopt);
-    EXPECT_EQ(index.Get(2), std::nullopt);
-    auto id1 = index.GetOrAdd(1);
-    EXPECT_THAT(index.Get(1), Optional(id1));
-    EXPECT_EQ(index.Get(2), std::nullopt);
-    auto id2 = index.GetOrAdd(2);
-    EXPECT_THAT(index.Get(1), Optional(id1));
-    EXPECT_THAT(index.Get(2), Optional(id2));
+  TestIndex index;
+  EXPECT_EQ(index.Get(1), std::nullopt);
+  EXPECT_EQ(index.Get(2), std::nullopt);
+  auto id1 = index.GetOrAdd(1);
+  EXPECT_THAT(index.Get(1), Optional(id1));
+  EXPECT_EQ(index.Get(2), std::nullopt);
+  auto id2 = index.GetOrAdd(2);
+  EXPECT_THAT(index.Get(1), Optional(id1));
+  EXPECT_THAT(index.Get(2), Optional(id2));
 }
 
 TEST(InMemoryIndexTest, EmptyIndexHasHashEqualsZero) {
