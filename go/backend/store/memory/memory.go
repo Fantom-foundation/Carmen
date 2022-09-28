@@ -33,8 +33,8 @@ func (m *Memory[V]) itemPosition(id uint64) (page int, position int) {
 	return int(id / m.pageSize), int(id%m.pageSize) * m.serializer.Size()
 }
 
-func (m *Memory[V]) GetPage(page int) []byte {
-	return m.data[page]
+func (m *Memory[V]) GetPage(page int) ([]byte, error) {
+	return m.data[page], nil
 }
 
 // Set a value of an item
@@ -49,13 +49,13 @@ func (m *Memory[V]) Set(id uint64, value V) error {
 }
 
 // Get a value of the item (or the itemDefault, if not defined)
-func (m *Memory[V]) Get(id uint64) V {
+func (m *Memory[V]) Get(id uint64) (V, error) {
 	page, itemPosition := m.itemPosition(id)
 	item := m.itemDefault
 	if page < len(m.data) {
 		item = m.serializer.FromBytes(m.data[page][itemPosition : itemPosition+m.itemSize])
 	}
-	return item
+	return item, nil
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data

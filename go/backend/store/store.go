@@ -14,7 +14,7 @@ type Store[I common.Identifier, V any] interface {
 	Set(id I, value V) error
 
 	// Get a value associated with the index (or a default value if not defined)
-	Get(id I) V
+	Get(id I) (V, error)
 
 	// GetStateHash computes and returns a cryptographical hash of the stored data
 	GetStateHash() (common.Hash, error)
