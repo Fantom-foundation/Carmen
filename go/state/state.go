@@ -89,7 +89,7 @@ func (s *Service[I]) SetNonce(address common.Address, nonce common.Nonce) (err e
 
 func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
 	var slotIdx I
-	if slotIdx, err = s.mapStorage(address, key); err != nil {
+	if slotIdx, err = s.mapStorage(address, key); err == nil {
 		value = s.valuesStore.Get(slotIdx)
 	}
 	return
@@ -97,7 +97,7 @@ func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value c
 
 func (s *Service[I]) SetStorage(address common.Address, key common.Key, value common.Value) (err error) {
 	var slotIdx I
-	if slotIdx, err = s.mapStorage(address, key); err != nil {
+	if slotIdx, err = s.mapStorage(address, key); err == nil {
 		err = s.valuesStore.Set(slotIdx, value)
 	}
 	return
