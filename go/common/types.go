@@ -1,5 +1,10 @@
 package common
 
+const (
+	// HashLength is the expected length of the hash
+	HashLength = 32
+)
+
 // Serializer allows to convert the type to a slice of bytes and back
 type Serializer[T any] interface {
 	// ToBytes serialize the type to bytes
@@ -25,4 +30,4 @@ type Key [32]byte
 type Value [32]byte
 
 // Hash is an Ethereum-compatible hash of a state.
-type Hash [32]byte
+type Hash [HashLength]byte

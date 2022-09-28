@@ -3,6 +3,7 @@ package memory
 import (
 	"crypto/sha256"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"hash"
 )
 
 // HashTree is a structure allowing to make a hash of the whole database state.
@@ -40,10 +41,10 @@ func (ht *HashTree) firstChildOf(parentIdx int) int {
 }
 
 // calculateHash computes the hash of given data
-func calculateHash(childrenHashes [][]byte) (hash []byte, err error) {
-	h := sha256.New()
-	for _, childHash := range childrenHashes {
-		_, err = h.Write(childHash)
+func calculateHash(h hash.Hash, childrenHashes [][]byte) (hash []byte, err error) {
+	h.Reset()
+	for i := 0; i < len(childrenHashes); i++ {
+		_, err = h.Write(childrenHashes[i])
 		if err != nil {
 			return nil, err
 		}
@@ -58,6 +59,7 @@ func (ht *HashTree) MarkUpdated(page int) {
 
 // commit updates the necessary parts of the hashing tree
 func (ht *HashTree) commit() (err error) {
+	h := sha256.New() // the hasher is created once for the whole block as it hashes the fastest
 	for layer := 0; layer < len(ht.tree); layer++ {
 		for node, _ := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
@@ -68,12 +70,12 @@ func (ht *HashTree) commit() (err error) {
 				if err != nil {
 					return err
 				}
-				nodeHash, err = calculateHash([][]byte{content})
+				nodeHash, err = calculateHash(h, [][]byte{content})
 			} else {
 				// hash children of current node
 				childrenStart := ht.firstChildOf(node)
 				childrenEnd := childrenStart + ht.factor
-				nodeHash, err = calculateHash(ht.tree[layer-1][childrenStart:childrenEnd])
+				nodeHash, err = calculateHash(h, ht.tree[layer-1][childrenStart:childrenEnd])
 			}
 			if err != nil {
 				return err
