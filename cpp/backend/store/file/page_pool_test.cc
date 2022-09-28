@@ -4,12 +4,18 @@
 #include <sstream>
 
 #include "backend/store/file/file.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::store {
 namespace {
 
+using ::testing::_;
+using ::testing::NiceMock;
+using ::testing::Sequence;
+
 using TestPool = PagePool<int, InMemoryFile, 40>;
+using TestPoolListener = PagePoolListener<int, 40>;
 
 TEST(PagePoolTest, PoolSizeCanBeDefined) {
   TestPool pool_a(12);
@@ -52,6 +58,56 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
     EXPECT_EQ(i, page[0]);
     EXPECT_EQ(i + 1, page[1]);
   }
+}
+
+class MockListener : public TestPoolListener {
+ public:
+  MOCK_METHOD(void, AfterLoad, (PageId id, const Page& page), (override));
+  MOCK_METHOD(void, BeforeEvict, (PageId id, const Page& page, bool is_dirty),
+              (override));
+};
+
+TEST(PagePoolTest, ListenersAreNotifiedOnLoad) {
+  TestPool pool(1);  // single slot pool
+  auto listener = std::make_unique<NiceMock<MockListener>>();
+  MockListener& mock = *listener.get();
+  pool.AddListener(std::move(listener));
+
+  // We expect to be notified about loaded pages in order.
+  Sequence s;
+  EXPECT_CALL(mock, AfterLoad(0, _)).InSequence(s);
+  EXPECT_CALL(mock, AfterLoad(1, _)).InSequence(s);
+  EXPECT_CALL(mock, AfterLoad(0, _)).InSequence(s);
+
+  // Loads page 0 into pool, no eviction.
+  pool.Get(0);
+
+  // Loads page 1 into pool, evicts page 0, which is not dirty.
+  pool.Get(1);
+
+  // Loads page 0 into pool, evicts page 1, which is not dirty.
+  pool.Get(0);
+}
+
+TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
+  TestPool pool(1);  // single slot pool
+  auto listener = std::make_unique<NiceMock<MockListener>>();
+  MockListener& mock = *listener.get();
+  pool.AddListener(std::move(listener));
+
+  // We expect to be notified on the eviction of pages 0 and 1 in order.
+  Sequence s;
+  EXPECT_CALL(mock, BeforeEvict(0, _, false)).InSequence(s);
+  EXPECT_CALL(mock, BeforeEvict(1, _, false)).InSequence(s);
+
+  // Loads page 0 into pool, no eviction.
+  pool.Get(0);
+
+  // Loads page 1 into pool, evicts page 0, which is not dirty.
+  pool.Get(1);
+
+  // Loads page 0 into pool, evicts page 1, which is not dirty.
+  pool.Get(0);
 }
 
 }  // namespace
