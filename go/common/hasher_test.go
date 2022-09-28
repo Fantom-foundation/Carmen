@@ -5,12 +5,6 @@ import (
 	"testing"
 )
 
-const (
-	LOOPS = 100000000
-)
-
-// run with e.g.  "-test.count 3" not tu run forever
-
 var (
 	globalHash = sha256.New()
 )
@@ -18,7 +12,7 @@ var (
 func BenchmarkNewHashEveryLoop(t *testing.B) {
 	// Create a new hasher every time
 	var hash1 []byte
-	for i := 1; i <= LOOPS; i++ {
+	for i := 1; i <= t.N; i++ {
 		h := sha256.New()
 		h.Write(hash1)
 		h.Write([]byte{byte(i)})
@@ -30,7 +24,7 @@ func BenchmarkOneHashAllLoops(t *testing.B) {
 	// Create a hasher once
 	var hash2 []byte
 	localHash := sha256.New()
-	for i := 1; i <= LOOPS; i++ {
+	for i := 1; i <= t.N; i++ {
 		localHash.Reset()
 		localHash.Write(hash2)
 		localHash.Write([]byte{byte(i)})
@@ -41,7 +35,7 @@ func BenchmarkOneHashAllLoops(t *testing.B) {
 func BenchmarkOneGlobalHash(t *testing.B) {
 	// Create a hasher once
 	var hash3 []byte
-	for i := 1; i <= LOOPS; i++ {
+	for i := 1; i <= t.N; i++ {
 		globalHash.Reset()
 		globalHash.Write(hash3)
 		globalHash.Write([]byte{byte(i)})
