@@ -58,7 +58,7 @@ func New[I common.Identifier](
 func (s *Service[I]) GetBalance(address common.Address) (balance common.Balance, err error) {
 	var idx I
 	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
-		balance = s.balancesStore.Get(idx)
+		balance, err = s.balancesStore.Get(idx)
 	}
 	return
 }
@@ -74,7 +74,7 @@ func (s *Service[I]) SetBalance(address common.Address, balance common.Balance) 
 func (s *Service[I]) GetNonce(address common.Address) (nonce common.Nonce, err error) {
 	var idx I
 	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
-		nonce = s.noncesStore.Get(idx)
+		nonce, err = s.noncesStore.Get(idx)
 	}
 	return
 }
@@ -90,7 +90,7 @@ func (s *Service[I]) SetNonce(address common.Address, nonce common.Nonce) (err e
 func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
 	var slotIdx I
 	if slotIdx, err = s.mapStorage(address, key); err == nil {
-		value = s.valuesStore.Get(slotIdx)
+		value, err = s.valuesStore.Get(slotIdx)
 	}
 	return
 }
