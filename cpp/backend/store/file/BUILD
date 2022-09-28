@@ -84,6 +84,7 @@ cc_library(
     deps = [
         ":file",
         ":page_pool",
+        ":hash_tree",
         "//common:type",
         "//common:hash",
     ],

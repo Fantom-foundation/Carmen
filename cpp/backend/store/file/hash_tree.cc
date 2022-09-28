@@ -11,6 +11,11 @@
 
 namespace carmen::backend::store {
 
+void HashTree::RegisterPage(PageId id) {
+  // Make sure the data structure is aware of the existence of this page.
+  TrackNumPages(id);
+}
+
 void HashTree::UpdateHash(PageId id, std::span<const std::byte> page) {
   UpdateHash(id, carmen::GetHash(hasher_, page));
 }

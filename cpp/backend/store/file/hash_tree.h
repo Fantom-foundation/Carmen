@@ -35,6 +35,11 @@ class HashTree {
   HashTree(std::unique_ptr<PageSource> source, int branching_factor = 32)
       : branching_factor_(branching_factor), page_source_(std::move(source)) {}
 
+  // Informs the HashTree about the existence of the given page. This may lead
+  // to and adaptation of the internal hash data structures and dirty pages.
+  // Note: registration is implicit for all other operations on pages.
+  void RegisterPage(PageId id);
+
   // Updates the hash of a single page. Use this if hash computation has been
   // performed for some reason, and the result can be used by the HashTree.
   // After the call, the hash of the given page is considered up to date.

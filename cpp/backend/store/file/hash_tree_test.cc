@@ -142,6 +142,23 @@ TEST(HashTreeTest, UpdateingHashesOfDirtyPagesResetsDirtyFlag) {
   tree.GetHash();
 }
 
+TEST(HashTreeTest, RegistrationLeadsToTheIdentificationOfMissingPages) {
+  auto source = std::make_unique<MockPageSource>();
+  auto& mock = *source.get();
+  HashTree tree(std::move(source));
+
+  EXPECT_CALL(mock, GetPageData(0));
+  EXPECT_CALL(mock, GetPageData(1));
+  EXPECT_CALL(mock, GetPageData(2));
+  EXPECT_CALL(mock, GetPageData(3));
+
+  // After this, pages 0-3 are registered.
+  tree.RegisterPage(3);
+
+  // At this point, pages 0-3 should be 'dirty' and all are fetched.
+  tree.GetHash();
+}
+
 TEST(HashTreeTest, MissingPagesAreFetched) {
   auto source = std::make_unique<MockPageSource>();
   auto& mock = *source.get();

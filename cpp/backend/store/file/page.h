@@ -50,7 +50,7 @@ class Page final {
   std::span<std::byte, page_size_in_byte> AsRawData() { return data_; }
 
  private:
-  // Stores the hash and the element data in serialized form.
+  // Stores element's data in serialized form.
   std::array<std::byte, page_size_in_byte> data_;
 };
 
