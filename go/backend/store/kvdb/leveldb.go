@@ -40,9 +40,9 @@ func (m *KVStore[V]) itemPosition(id uint32) (page int, position int) {
 }
 
 func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
-	pageStartKey := uint32(page)
-	//pageEndKey := pageStartKey + m.pageSize	// TODO check if needed for the limit
-	r := util.Range{Start: toBytes(pageStartKey), Limit: toBytes(m.pageSize)}
+	pageStartKey := uint32(page) * m.pageSize
+	pageEndKey := pageStartKey + m.pageSize
+	r := util.Range{Start: toBytes(pageStartKey), Limit: toBytes(pageEndKey)}
 	iter := m.db.NewIterator(&r, nil)
 	defer iter.Release()
 
