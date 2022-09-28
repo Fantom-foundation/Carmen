@@ -1,6 +1,7 @@
 #include "backend/store/file/hash_tree.h"
 
 #include <cstddef>
+#include <fstream>
 #include <span>
 #include <vector>
 
@@ -57,7 +58,7 @@ Hash HashTree::GetHash() {
   dirty_level_one_positions_.clear();
 
   // Perform hash aggregation.
-  for (int level = 1;; level++) {
+  for (std::size_t level = 1;; level++) {
     // Gets the parent before the children because the fetching of the parent
     // may resize the hash list while the fetch for the children will not.
     std::vector<Hash>& parent = GetHashes(level);
@@ -90,14 +91,14 @@ std::size_t GetPaddedSize(std::size_t min_size, std::size_t block_size) {
 
 }  // namespace
 
-std::vector<Hash>& HashTree::GetHashes(int level) {
+std::vector<Hash>& HashTree::GetHashes(std::size_t level) {
   if (level >= hashes_.size()) {
     hashes_.resize(level + 1);
   }
   return hashes_[level];
 }
 
-Hash& HashTree::GetHash(int level, int pos) {
+Hash& HashTree::GetHash(std::size_t level, std::size_t pos) {
   auto& level_hashes = GetHashes(level);
   if (pos >= level_hashes.size()) {
     level_hashes.resize(GetPaddedSize(pos + 1, branching_factor_));
@@ -114,7 +115,100 @@ void HashTree::TrackNumPages(PageId page) {
   for (auto cur = num_pages_; cur <= page; cur++) {
     dirty_pages_.insert(cur);
   }
-  num_pages_ = page+1;
+  num_pages_ = page + 1;
+}
+
+void HashTree::SaveToFile(std::filesystem::path file) {
+  // The following information is stored in the file:
+  //  - the branching factor (4 byte, little endian)
+  //  - the number of pages (4 byte, little endian)
+  //  - the aggregated hash
+  //  - the hash of each page
+  static_assert(std::endian::native == std::endian::little,
+                "Big endian architectures not yet supported.");
+
+  std::uint32_t branching_factor = branching_factor_;
+  std::uint32_t num_pages = num_pages_;
+  auto hash = GetHash();
+
+  std::fstream out(file, std::ios::binary | std::ios::out);
+  out.write(reinterpret_cast<const char*>(&branching_factor),
+            sizeof(branching_factor));
+  out.write(reinterpret_cast<const char*>(&num_pages), sizeof(num_pages));
+  out.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
+  for (std::size_t i = 0; i < num_pages_; i++) {
+    const auto& hash = hashes_[0][i];
+    out.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
+  }
+}
+
+bool HashTree::LoadFromFile(std::filesystem::path file) {
+  // TODO: introduce absl::Status to report errors
+  std::fstream in(file, std::ios::binary | std::ios::in);
+
+  // Fail if the file could not be opened.
+  if (!in) return false;
+
+  // Check the minimum file length of 4 + 4 + 32 byte.
+  in.seekg(0, std::ios::end);
+  auto size = in.tellg();
+  if (size < 40) {
+    std::cout << "File to short - needed 40, got " << size << " byte\n";
+    return false;
+  }
+
+  // Load the branching factor.
+  in.seekg(0, std::ios::beg);
+  std::uint32_t branching_factor;
+  in.read(reinterpret_cast<char*>(&branching_factor), sizeof(branching_factor));
+  if (branching_factor_ != branching_factor) {
+    std::cout << "File has wrong branching factor - expected "
+              << branching_factor_ << ", got " << branching_factor << "\n";
+    return false;
+  }
+
+  // Load the number of pages.
+  std::uint32_t num_pages;
+  in.read(reinterpret_cast<char*>(&num_pages), sizeof(num_pages));
+  if (size != 40 + num_pages * 32) {
+    std::cout << "File has wrong size - for " << num_pages << " a size of "
+              << (40 + num_pages * 32) << " would be needed, but it has "
+              << size << " byte\n";
+    return false;
+  }
+  num_pages_ = num_pages;
+
+  // Load the global hash.
+  Hash file_hash;
+  in.read(reinterpret_cast<char*>(&file_hash), sizeof(file_hash));
+
+  // Read the page hashes.
+  hashes_.clear();
+  if (num_pages > 0) {
+    std::vector<Hash> page_hashes;
+    page_hashes.resize(GetPaddedSize(num_pages, branching_factor));
+    in.read(reinterpret_cast<char*>(page_hashes.data()),
+            sizeof(Hash) * num_pages);
+    hashes_.push_back(std::move(page_hashes));
+  }
+
+  // Update hash information.
+  dirty_pages_.clear();
+  dirty_level_one_positions_.clear();
+  for (std::size_t i = 0; i < num_pages; i += branching_factor_) {
+    dirty_level_one_positions_.insert(i / branching_factor);
+  }
+
+  // Recompute hashes.
+  auto hash = GetHash();
+
+  if (hash != file_hash) {
+    std::cout << "Unable to verify hash:\n - in file:  " << file_hash
+              << "\n - restored: " << hash << "\n";
+    return false;
+  }
+
+  return true;
 }
 
 }  // namespace carmen::backend::store

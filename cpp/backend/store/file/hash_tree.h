@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <filesystem>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -54,22 +55,33 @@ class HashTree {
   // for fetching dirty pages.
   Hash GetHash();
 
+  // Saves the hashes of this tree into the given file. Before saving them, all
+  // outdated hashes are implicitely refreshed.
+  void SaveToFile(std::filesystem::path file);
+
+  // Discards the current content of this HashTree and loads all hashes from the
+  // given file. Loaded hashes are considered up-to-date. After loading, the
+  // internal tree structure is updated, and the file verified for consistency.
+  // Returns true if the loading was successful, false otherwise.
+  // TODO(herbertjordan): introduce absl::Status for error reporting.
+  bool LoadFromFile(std::filesystem::path file);
+
  private:
   // Fetches the hashes of a given layer of the reduction tree. If the layer
   // does not exist, it is created.
-  std::vector<Hash>& GetHashes(int level);
+  std::vector<Hash>& GetHashes(std::size_t level);
 
   // Fetches the hash value for a given level / position in the reduction tree.
   // If the position does not exist, it is created.
-  Hash& GetHash(int level, int pos);
+  Hash& GetHash(std::size_t level, std::size_t pos);
 
   // Keeps track of the total number of managed pages. Used internally whenever
   // new pages may be added.
   void TrackNumPages(PageId page);
 
   // The branching factor used by the recursive hash aggregation algorithm.
-  const int branching_factor_;
-  
+  const std::size_t branching_factor_;
+
   Sha256Hasher hasher_;
   std::vector<std::vector<Hash>> hashes_;
   std::size_t num_pages_ = 0;

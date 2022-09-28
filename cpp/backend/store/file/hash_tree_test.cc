@@ -160,5 +160,92 @@ TEST(HashTreeTest, MissingPagesAreFetched) {
   tree.GetHash();
 }
 
+TEST(HashTreeTest, EmptyTreeCanBeSavedToFile) {
+  auto source = std::make_unique<MockPageSource>();
+  HashTree tree(std::move(source));
+
+  TempFile file;
+  std::filesystem::remove(file);
+  tree.SaveToFile(file);
+  EXPECT_TRUE(std::filesystem::exists(file));
+}
+
+TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestored) {
+  TempFile file;
+  std::filesystem::remove(file);
+  Hash hash;
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    tree.SaveToFile(file);
+    EXPECT_TRUE(std::filesystem::exists(file));
+
+    hash = tree.GetHash();
+  }
+
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    EXPECT_TRUE(tree.LoadFromFile(file));
+    EXPECT_EQ(hash, tree.GetHash());
+  }
+}
+
+TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestored) {
+  TempFile file;
+  std::filesystem::remove(file);
+  Hash hash;
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    tree.UpdateHash(0, Hash{0x01, 0x02});
+    tree.UpdateHash(1, Hash{0x03, 0x04});
+    tree.UpdateHash(2, Hash{0x05, 0x06});
+
+    tree.SaveToFile(file);
+    EXPECT_TRUE(std::filesystem::exists(file));
+
+    hash = tree.GetHash();
+  }
+
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    EXPECT_TRUE(tree.LoadFromFile(file));
+    EXPECT_EQ(hash, tree.GetHash());
+  }
+}
+
+TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestored) {
+  TempFile file;
+  std::filesystem::remove(file);
+  Hash hash;
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source), /*branching_factor=*/2);
+
+    tree.UpdateHash(0, Hash{0x01, 0x02});
+    tree.UpdateHash(1, Hash{0x03, 0x04});
+    tree.UpdateHash(2, Hash{0x05, 0x06});
+
+    tree.SaveToFile(file);
+    EXPECT_TRUE(std::filesystem::exists(file));
+
+    hash = tree.GetHash();
+  }
+
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source), /*branching_factor=*/2);
+
+    EXPECT_TRUE(tree.LoadFromFile(file));
+    EXPECT_EQ(hash, tree.GetHash());
+  }
+}
+
 }  // namespace
 }  // namespace carmen::backend::store

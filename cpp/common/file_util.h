@@ -20,6 +20,9 @@ class TempFile {
   // Obtains the path of the owned temporary file.
   const std::filesystem::path& GetPath() const;
 
+  // Support implicit conversion to a std::filesystem::path.
+  operator std::filesystem::path() const { return GetPath(); }
+
  private:
   std::filesystem::path path_;
 };
