@@ -25,10 +25,10 @@ type Key [32]byte
 type Hash [32]byte
 
 // Balance is an Ethereum-like account balance
-type Balance [32]byte
+type Balance [16]byte
 
 // Nonce is an Ethereum-like nonce
-type Nonce [32]byte
+type Nonce [4]byte
 
 // Value is an Ethereum-like smart contract memory slot
 type Value [32]byte
