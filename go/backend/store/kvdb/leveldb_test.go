@@ -37,6 +37,8 @@ func TestEmpty(t *testing.T) {
 
 	hashTree := memory.NewHashTree(BranchingFactor)
 	s, err := NewStore[common.Value](DbPath, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	defer s.Close()
+
 	if err != nil {
 		t.Errorf("Error: %s", err)
 	}
@@ -53,6 +55,7 @@ func TestBasicOperations(t *testing.T) {
 
 	hashTree := memory.NewHashTree(BranchingFactor)
 	s, _ := NewStore[common.Value](DbPath, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	defer s.Close()
 
 	if err := s.Set(10, A); err != nil {
 		t.Errorf("Error: %s", err)
@@ -71,6 +74,7 @@ func TestPages(t *testing.T) {
 	hashTree := memory.NewHashTree(BranchingFactor)
 	serializer := common.ValueSerializer{}
 	s, _ := NewStore[common.Value](DbPath, serializer, &hashTree, defaultItem, PageSize)
+	defer s.Close()
 
 	// fill-in three pages
 	_ = s.Set(2, A) // page 1
@@ -122,4 +126,64 @@ func TestPages(t *testing.T) {
 		t.Errorf("Page is incorrect")
 	}
 
+}
+
+func TestDataPersisted(t *testing.T) {
+	if err := os.RemoveAll(DbPath); err != nil {
+		t.Errorf("IO Error: %s", err)
+	}
+
+	hashTree := memory.NewHashTree(BranchingFactor)
+	s, _ := NewStore[common.Value](DbPath, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+
+	if err := s.Set(10, A); err != nil {
+		t.Errorf("Error: %s", err)
+	}
+
+	s.Close()
+	s, _ = NewStore[common.Value](DbPath, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	defer s.Close()
+
+	if val, err := s.Get(10); err != nil || val != A {
+		t.Errorf("Result is incorrect. Res: %s, Err: %s", val, err)
+	}
+}
+
+func TestBasicHashing(t *testing.T) {
+	if err := os.RemoveAll(DbPath); err != nil {
+		t.Errorf("IO Error: %s", err)
+	}
+
+	hashTree := memory.NewHashTree(BranchingFactor)
+	s, _ := NewStore[common.Value](DbPath, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	defer s.Close()
+
+	if hash, err := s.GetStateHash(); (err != nil || hash != common.Hash{}) {
+		t.Errorf("Hash does not much. Hash: %s, Err: %s", hash, err)
+	}
+
+	_ = s.Set(2, A) // page 1
+	_ = s.Set(3, B)
+
+	hashP1, err := s.GetStateHash()
+	if (hashP1 == common.Hash{}) {
+		t.Errorf("Hash does not change. Hash: %s, err %s", hashP1, err)
+	}
+
+	_ = s.Set(5, C) // page 2
+	_ = s.Set(6, A)
+
+	hashP2, err := s.GetStateHash()
+	if hashP1 == hashP2 {
+		t.Errorf("Hash does not change. Hash: %s, err %s", hashP2, err)
+	}
+
+	_ = s.Set(12, B) // page 3
+	_ = s.Set(13, C)
+	_ = s.Set(14, A)
+
+	hashP3, _ := s.GetStateHash()
+	if hashP2 == hashP3 {
+		t.Errorf("Hash does not change. Hash: %s, err %s", hashP3, err)
+	}
 }

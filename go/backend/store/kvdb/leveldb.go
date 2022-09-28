@@ -62,7 +62,7 @@ func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
 
 func (m *KVStore[V]) Set(id uint32, value V) (err error) {
 	// index is mapped in the database directly
-	if err = m.db.Put(toBytes(id), m.serializer.ToBytes(value), nil); err != nil {
+	if err = m.db.Put(toBytes(id), m.serializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
 		m.hashTree.MarkUpdated(page)
 	}
