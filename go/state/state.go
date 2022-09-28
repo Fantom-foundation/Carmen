@@ -56,48 +56,42 @@ func New[I common.Identifier](
 }
 
 func (s *Service[I]) GetBalance(address common.Address) (balance common.Balance, err error) {
-	var idx I
-	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
+	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
 		balance, err = s.balancesStore.Get(idx)
 	}
 	return
 }
 
 func (s *Service[I]) SetBalance(address common.Address, balance common.Balance) (err error) {
-	var idx I
-	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
+	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
 		err = s.balancesStore.Set(idx, balance)
 	}
 	return
 }
 
 func (s *Service[I]) GetNonce(address common.Address) (nonce common.Nonce, err error) {
-	var idx I
-	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
+	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
 		nonce, err = s.noncesStore.Get(idx)
 	}
 	return
 }
 
 func (s *Service[I]) SetNonce(address common.Address, nonce common.Nonce) (err error) {
-	var idx I
-	if idx, err = s.addressIndex.GetOrAdd(address); err == nil {
+	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
 		err = s.noncesStore.Set(idx, nonce)
 	}
 	return
 }
 
 func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
-	var slotIdx I
-	if slotIdx, err = s.mapStorage(address, key); err == nil {
+	if slotIdx, err := s.mapStorage(address, key); err == nil {
 		value, err = s.valuesStore.Get(slotIdx)
 	}
 	return
 }
 
 func (s *Service[I]) SetStorage(address common.Address, key common.Key, value common.Value) (err error) {
-	var slotIdx I
-	if slotIdx, err = s.mapStorage(address, key); err == nil {
+	if slotIdx, err := s.mapStorage(address, key); err == nil {
 		err = s.valuesStore.Set(slotIdx, value)
 	}
 	return
@@ -140,16 +134,10 @@ func (s *Service[I]) GetHash() (hash common.Hash, err error) {
 
 // mapStorage finds mapping from address and the values key to the values slot
 func (s *Service[I]) mapStorage(address common.Address, key common.Key) (slotIdx I, err error) {
-	var addressIdx I
-	if addressIdx, err = s.addressIndex.GetOrAdd(address); err != nil {
-		return
-	}
-	var keyIdx I
-	if keyIdx, err = s.keyIndex.GetOrAdd(key); err != nil {
-		return
-	}
-	if slotIdx, err = s.slotIndex.GetOrAdd(common.SlotIdx[I]{addressIdx, keyIdx}); err != nil {
-		return
+	if addressIdx, err := s.addressIndex.GetOrAdd(address); err == nil {
+		if keyIdx, err := s.keyIndex.GetOrAdd(key); err == nil {
+			slotIdx, err = s.slotIndex.GetOrAdd(common.SlotIdx[I]{addressIdx, keyIdx})
+		}
 	}
 
 	return
