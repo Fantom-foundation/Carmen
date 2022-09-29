@@ -1,4 +1,4 @@
-package kvdb
+package ldb
 
 import (
 	"fmt"
