@@ -1,9 +1,12 @@
 cc_library(
     name = "index",
     hdrs = ["index.h"],
-   deps = [
-    "@com_google_absl//absl/container:flat_hash_map",
-   ],
+    deps = [
+        "//common:type",
+        "//common:hash",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+    visibility = ["//visibility:public"],
 )
 
 cc_test(

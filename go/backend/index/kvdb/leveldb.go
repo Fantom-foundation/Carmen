@@ -15,11 +15,12 @@ const (
 
 // KVIndex represents a key-value store for holding the index data.
 type KVIndex[K comparable] struct {
-	db         *leveldb.DB
-	table      []byte
-	serializer common.Serializer[K]
-	hashIndex  *index.HashIndex[K]
-	lastIndex  uint32
+	db             *leveldb.DB
+	table          []byte
+	serializer     common.Serializer[K]
+	hashIndex      *index.HashIndex[K]
+	lastIndex      uint32
+	hashSerializer common.HashSerializer
 }
 
 // New creates a new instance of the index backed by a persisted database
@@ -44,12 +45,14 @@ func New[K comparable](db *leveldb.DB, table []byte, serializer common.Serialize
 		}
 	}
 
+	hashSerializer := common.HashSerializer{}
 	p = &KVIndex[K]{
-		db:         db,
-		table:      table,
-		serializer: serializer,
-		hashIndex:  index.InitHashIndex[K](hash, serializer),
-		lastIndex:  binary.LittleEndian.Uint32(last),
+		db:             db,
+		table:          table,
+		serializer:     serializer,
+		hashIndex:      index.InitHashIndex[K](hashSerializer.FromBytes(hash), serializer),
+		lastIndex:      binary.LittleEndian.Uint32(last),
+		hashSerializer: hashSerializer,
 	}
 
 	return p, nil
@@ -98,7 +101,7 @@ func (m *KVIndex[K]) GetStateHash() (hash common.Hash, err error) {
 		return
 	}
 
-	if err = m.db.Put(m.appendKeyStr(HashKey), hash.Bytes(), nil); err != nil {
+	if err = m.db.Put(m.appendKeyStr(HashKey), m.hashSerializer.ToBytes(hash), nil); err != nil {
 		return
 	}
 

@@ -5,33 +5,29 @@ const (
 	HashLength = 32
 )
 
+// Serializer allows to convert the type to a slice of bytes and back
 type Serializer[T any] interface {
+	// ToBytes serialize the type to bytes
 	ToBytes(T) []byte
-	SetBytes([]byte) T
+	// FromBytes deserialize the type from bytes
+	FromBytes([]byte) T
+	// Size provides the size of the type when serialized (bytes)
 	Size() int // size in bytes when serialized
 }
 
+// Identifier is a type allowing to address an item in the Store.
 type Identifier interface {
 	uint64 | uint32
 }
 
+// Address is an EVM-compatible account address.
 type Address [20]byte
+
+// Key is an EVM-compatible key of a storage slot.
 type Key [32]byte
+
+// Value is an EVM-compatible value of a storage slot.
 type Value [32]byte
 
+// Hash is an Ethereum-compatible hash of a state.
 type Hash [HashLength]byte
-
-// BytesToHash sets b to hash.
-// If b is larger than len(h), b will be cropped from the left.
-func BytesToHash(b []byte) Hash {
-	var h Hash
-	h.SetBytes(b)
-	return h
-}
-
-func (h *Hash) SetBytes(b []byte) {
-	copy(h[HashLength-len(b):], b)
-}
-
-// Bytes gets the byte representation of the underlying hash.
-func (h Hash) Bytes() []byte { return h[:] }

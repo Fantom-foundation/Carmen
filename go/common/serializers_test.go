@@ -19,3 +19,8 @@ func TestValueSerializer(t *testing.T) {
 	var s common.ValueSerializer
 	var _ common.Serializer[common.Value] = s
 }
+
+func TestHashSerializer(t *testing.T) {
+	var s common.HashSerializer
+	var _ common.Serializer[common.Hash] = s
+}

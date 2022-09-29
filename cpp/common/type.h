@@ -8,21 +8,27 @@
 
 namespace carmen {
 
+constexpr int kHashLength = 32;
+constexpr int kAddressLength = 20;
+constexpr int kKeyLength = 32;
+constexpr int kValueLength = 32;
+
 // Class template for all types based on byte array value.
-template <std::size_t N> class ByteValue {
-public:
+template <std::size_t N>
+class ByteValue {
+ public:
   ByteValue() = default;
 
   // Class constructor populating data with given list of values.
   ByteValue(std::initializer_list<std::uint8_t> il) {
-    std::copy(il.begin(), il.end(), std::begin(_data));
+    std::copy(il.begin(), il.end(), std::begin(data_));
   }
 
   // Overload of << operator to make class printable.
-  friend std::ostream &operator<<(std::ostream& out,
+  friend std::ostream& operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {
-    hex_util::WriteTo(out, *const_cast<std::array<std::uint8_t, N>*>
-                      (&hexContainer._data));
+    hex_util::WriteTo(
+        out, *const_cast<std::array<std::uint8_t, N>*>(&hexContainer.data_));
     return out;
   }
 
@@ -30,13 +36,38 @@ public:
   friend auto operator<=>(const ByteValue<N>& containerA,
                           const ByteValue<N>& containerB) = default;
 
-private:
-  std::array<std::uint8_t, N> _data{};
+  // Support the usage of ByteValues in hash based absl containers.
+  template <typename H>
+  friend H AbslHashValue(H h, const ByteValue& v) {
+    return H::combine(std::move(h), v.data_);
+  }
+
+ private:
+  std::array<std::uint8_t, N> data_{};
 };
 
-class Hash : public ByteValue<32> {
-public:
-  Hash(): ByteValue<32>() {};
-  Hash(std::initializer_list<std::uint8_t> il): ByteValue<32>(il) {}
+// Hash represents the 32 byte hash of data
+class Hash : public ByteValue<kHashLength> {
+ public:
+  using ByteValue::ByteValue;
 };
-}
+
+// Address represents the 20 byte address of an account.
+class Address : public ByteValue<kAddressLength> {
+ public:
+  using ByteValue::ByteValue;
+};
+
+// Key represents the 32 byte key into index.
+class Key : public ByteValue<kKeyLength> {
+ public:
+  using ByteValue::ByteValue;
+};
+
+// Value represents the 32 byte value in store.
+class Value : public ByteValue<kValueLength> {
+ public:
+  using ByteValue::ByteValue;
+};
+
+}  // namespace carmen

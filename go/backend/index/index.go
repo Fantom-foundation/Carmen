@@ -13,7 +13,7 @@ type Index[K comparable, I common.Identifier] interface {
 	// GetOrAdd returns an index mapping for the key, or creates the new index
 	GetOrAdd(key K) (I, error)
 
-	// Contains returns a bool flag to test existence of the key in the mapping
+	// Contains returns whether the key exists in the mapping or not.
 	Contains(key K) bool
 
 	// GetStateHash returns the index hash.

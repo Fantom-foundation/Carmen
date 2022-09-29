@@ -1,14 +1,15 @@
-package memory
+package file
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
+	"os"
 	"testing"
 )
 
-func TestMemoryStoreImplements(t *testing.T) {
-	var s Memory[common.Value]
+func TestFileStoreImplements(t *testing.T) {
+	var s Store[common.Value]
 	var _ store.Store[uint64, common.Value] = &s
 	var _ io.Closer = &s
 }
@@ -19,12 +20,20 @@ var (
 	C = common.Value{0xCC}
 )
 
-func TestStoringIntoMemoryStore(t *testing.T) {
+func TestStoringIntoFileStore(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
+	}
+
 	defaultItem := common.Value{}
-	memory := NewMemory[common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory, err := NewStore[common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	if err != nil {
+		t.Fatalf("unable to create store; %s", err)
+	}
 	defer memory.Close()
 
-	err := memory.Set(0, A)
+	err = memory.Set(0, A)
 	if err != nil {
 		t.Fatalf("failed to set A; %s", err)
 	}
@@ -37,26 +46,34 @@ func TestStoringIntoMemoryStore(t *testing.T) {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	if value, _ := memory.Get(5); value != defaultItem {
-		t.Errorf("not-existing value is not reported as not-existing")
+	if value, err := memory.Get(5); err != nil || value != defaultItem {
+		t.Errorf("not-existing value is not reported as not-existing; err=%s", err)
 	}
-	if value, _ := memory.Get(0); value != A {
+	if value, err := memory.Get(0); err != nil || value != A {
 		t.Errorf("reading written A returned different value")
 	}
-	if value, _ := memory.Get(1); value != B {
+	if value, err := memory.Get(1); err != nil || value != B {
 		t.Errorf("reading written B returned different value")
 	}
-	if value, _ := memory.Get(2); value != C {
+	if value, err := memory.Get(2); err != nil || value != C {
 		t.Errorf("reading written C returned different value")
 	}
 }
 
 func TestStoringToArbitraryPosition(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
+	}
+
 	defaultItem := common.Value{}
-	memory := NewMemory[common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory, err := NewStore[common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	if err != nil {
+		t.Fatalf("unable to create store; %s", err)
+	}
 	defer memory.Close()
 
-	err := memory.Set(5, A)
+	err = memory.Set(5, A)
 	if err != nil {
 		t.Fatalf("failed to set A; %s", err)
 	}
@@ -69,23 +86,31 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	if value, _ := memory.Get(1); value != defaultItem {
+	if value, err := memory.Get(1); err != nil || value != defaultItem {
 		t.Errorf("not-existing value is not reported as not-existing")
 	}
-	if value, _ := memory.Get(5); value != A {
+	if value, err := memory.Get(5); err != nil || value != A {
 		t.Errorf("reading written A returned different value")
 	}
-	if value, _ := memory.Get(4); value != B {
+	if value, err := memory.Get(4); err != nil || value != B {
 		t.Errorf("reading written B returned different value")
 	}
-	if value, _ := memory.Get(9); value != C {
+	if value, err := memory.Get(9); err != nil || value != C {
 		t.Errorf("reading written C returned different value")
 	}
 }
 
-func TestHashingInMemoryStore(t *testing.T) {
+func TestHashingInFileStore(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
+	}
+
 	defaultItem := common.Value{}
-	memory := NewMemory[common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory, err := NewStore[common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	if err != nil {
+		t.Fatalf("unable to create store; %s", err)
+	}
 	defer memory.Close()
 
 	initialHast, err := memory.GetStateHash()

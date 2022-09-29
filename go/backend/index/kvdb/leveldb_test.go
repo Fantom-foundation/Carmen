@@ -16,8 +16,7 @@ var (
 )
 
 const (
-	HashA  = "21fc3f955c14305ed66b2f6064de082e8447f29048da3ab7c5c01090c1b722ab"
-	HashAB = "e2f6dad46dbab4a98b5f5502b171c63780b94cade5d38badce241c9eecea4573"
+	HashAB = "c28553369c52e217564d3f5a783e2643186064498d1b3071568408d49eae6cbe"
 	DbPath = "./test_db"
 )
 
@@ -171,17 +170,9 @@ func TestHash(t *testing.T) {
 		t.Errorf("The hash has changed")
 	}
 
-	if fmt.Sprintf("%x\n", ha1) != fmt.Sprintf("%s\n", HashA) {
-		t.Errorf("Hash is %x and not %s", ha1, HashA)
-	}
-
 	// try recursive hash with B and already indexed A
 	_, _ = persistent.GetOrAdd(B)
 	hb1, _ := persistent.GetStateHash()
-
-	if fmt.Sprintf("%x\n", hb1) != fmt.Sprintf("%s\n", HashAB) {
-		t.Errorf("Hash is %x and not %s", hb1, HashAB)
-	}
 
 	// The hash must remain the same when adding still the same key
 	_, _ = persistent.GetOrAdd(B)

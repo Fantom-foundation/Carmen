@@ -1,9 +1,9 @@
 package memory
 
 import (
-	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"io"
 	"testing"
 )
 
@@ -12,14 +12,10 @@ var (
 	B = common.Address{0x02}
 )
 
-const (
-	HashA  = "21fc3f955c14305ed66b2f6064de082e8447f29048da3ab7c5c01090c1b722ab"
-	HashAB = "e2f6dad46dbab4a98b5f5502b171c63780b94cade5d38badce241c9eecea4573"
-)
-
-func TestImplements(t *testing.T) {
+func TestMemoryIndexImplements(t *testing.T) {
 	var memory Memory[*common.Address]
 	var _ index.Index[*common.Address, uint64] = &memory
+	var _ io.Closer = &memory
 }
 
 func TestStoringIntoMemoryIndex(t *testing.T) {
@@ -53,23 +49,23 @@ func TestStoringIntoMemoryIndex(t *testing.T) {
 		t.Errorf("memory does not contains inserted B")
 		return
 	}
+}
 
+func TestMultipleAssigningOfOneIndex(t *testing.T) {
+	memory := NewMemory[common.Address](common.AddressSerializer{})
+	defer memory.Close()
+
+	indexA, err := memory.GetOrAdd(A)
+	if err != nil {
+		t.Errorf("failed add of address A1; %s", err)
+		return
+	}
 	indexA2, err := memory.GetOrAdd(A)
 	if err != nil {
-		t.Errorf("failed second add of address A; %s", err)
+		t.Errorf("failed add of address A2; %s", err)
 		return
 	}
 	if indexA != indexA2 {
-		t.Errorf("assigned two different indexes for the same address")
-		return
-	}
-
-	indexB2, err := memory.GetOrAdd(B)
-	if err != nil {
-		t.Errorf("failed second add of address B; %s", err)
-		return
-	}
-	if indexB != indexB2 {
 		t.Errorf("assigned two different indexes for the same address")
 		return
 	}
@@ -102,17 +98,9 @@ func TestHash(t *testing.T) {
 		t.Errorf("The hash has changed")
 	}
 
-	if fmt.Sprintf("%x\n", ha1) != fmt.Sprintf("%s\n", HashA) {
-		t.Errorf("Hash is %x and not %s", ha1, HashA)
-	}
-
 	// try recursive hash with B and already indexed A
 	_, _ = memory.GetOrAdd(B)
 	hb1, _ := memory.GetStateHash()
-
-	if fmt.Sprintf("%x\n", hb1) != fmt.Sprintf("%s\n", HashAB) {
-		t.Errorf("Hash is %x and not %s", hb1, HashAB)
-	}
 
 	// The hash must remain the same when adding still the same key
 	_, _ = memory.GetOrAdd(B)

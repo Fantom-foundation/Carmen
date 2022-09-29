@@ -12,8 +12,8 @@ var (
 )
 
 const (
-	HashA  = "21fc3f955c14305ed66b2f6064de082e8447f29048da3ab7c5c01090c1b722ab"
-	HashAB = "e2f6dad46dbab4a98b5f5502b171c63780b94cade5d38badce241c9eecea4573"
+	HashA  = "ff9226e320b1deb7fabecff9ac800cd8eb1e3fb7709c003e2effcce37eec68ed"
+	HashAB = "c28553369c52e217564d3f5a783e2643186064498d1b3071568408d49eae6cbe"
 )
 
 func TestCommit(t *testing.T) {
