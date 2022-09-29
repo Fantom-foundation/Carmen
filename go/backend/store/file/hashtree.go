@@ -87,9 +87,13 @@ func (ht *HashTree) readLayer(layer *os.File, from int64, length int) ([]byte, e
 	return bytes, nil
 }
 
-// getLayerLength provides the length (in bytes) of a hashtree layer
-func (ht *HashTree) getLayerLength(layer *os.File) (length int64, err error) {
-	return layer.Seek(0, io.SeekEnd)
+// getLayerSize provides the size of a hashtree layer in bytes
+func (ht *HashTree) getLayerSize(layer *os.File) (size int64, err error) {
+	info, err := layer.Stat()
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
 }
 
 // getLayersCount provides the amount of hashtree layers
@@ -130,18 +134,18 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 			return nil, err
 		}
 
-		layerLen, err := ht.getLayerLength(parentsLayer)
+		layerSize, err := ht.getLayerSize(parentsLayer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get layer length; %s", err)
 		}
-		if layerLen < HashLength {
+		if layerSize < HashLength { // the layer is empty
 			if layerId == 0 {
 				return nil, nil // no data in the db - should return zero hash
 			} else {
-				return nil, fmt.Errorf("unexpected size %d of a hashtree layer %d", layerLen, layerId)
+				return nil, fmt.Errorf("unexpected size %d of a hashtree layer %d", layerSize, layerId)
 			}
 		}
-		if layerLen == HashLength {
+		if layerSize == HashLength {
 			// this layer has only one hash - it is the root
 			return ht.readLayer(parentsLayer, 0, HashLength)
 		}
@@ -181,11 +185,7 @@ func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layer
 
 // updateNode updates the hash-node value to the given value
 func (ht *HashTree) updateNode(layerFile *os.File, node int, nodeHash []byte) error {
-	_, err := layerFile.Seek(int64(node*HashLength), io.SeekStart)
-	if err != nil {
-		return err
-	}
-	_, err = layerFile.Write(nodeHash)
+	_, err := layerFile.WriteAt(nodeHash, int64(node*HashLength))
 	return err
 }
 
