@@ -17,7 +17,6 @@ var (
 
 const (
 	HashAB = "c28553369c52e217564d3f5a783e2643186064498d1b3071568408d49eae6cbe"
-	DbPath = "./test_db"
 )
 
 func TestImplements(t *testing.T) {
@@ -26,11 +25,12 @@ func TestImplements(t *testing.T) {
 }
 
 func TestBasicOperation(t *testing.T) {
-	if err := os.RemoveAll(DbPath); err != nil {
-		t.Errorf("IO Error: %s", err)
+	tmpDir, err := os.MkdirTemp("", "leveldb-based-index-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
 	}
 
-	db := openDb(t)
+	db := openDb(t, tmpDir)
 	persistent, _ := New[common.Address](db, common.BalanceKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -86,11 +86,12 @@ func TestBasicOperation(t *testing.T) {
 }
 
 func TestDataPersisted(t *testing.T) {
-	if err := os.RemoveAll(DbPath); err != nil {
-		t.Errorf("IO Error: %s", err)
+	tmpDir, err := os.MkdirTemp("", "leveldb-based-index-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
 	}
 
-	db := openDb(t)
+	db := openDb(t, tmpDir)
 	persistent, _ := New[common.Address](db, common.NonceKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -108,7 +109,7 @@ func TestDataPersisted(t *testing.T) {
 
 	// close and reopen
 	closeDb(t, db, persistent)
-	db = openDb(t)
+	db = openDb(t, tmpDir)
 	persistent, _ = New[common.Address](db, common.NonceKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -137,11 +138,12 @@ func TestDataPersisted(t *testing.T) {
 }
 
 func TestHash(t *testing.T) {
-	if err := os.RemoveAll(DbPath); err != nil {
-		t.Errorf("IO Error: %s", err)
+	tmpDir, err := os.MkdirTemp("", "leveldb-based-index-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
 	}
 
-	db := openDb(t)
+	db := openDb(t, tmpDir)
 	persistent, _ := New[common.Address](db, common.SlotKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -184,11 +186,12 @@ func TestHash(t *testing.T) {
 }
 
 func TestHashPersisted(t *testing.T) {
-	if err := os.RemoveAll(DbPath); err != nil {
-		t.Errorf("IO Error: %s", err)
+	tmpDir, err := os.MkdirTemp("", "leveldb-based-index-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
 	}
 
-	db := openDb(t)
+	db := openDb(t, tmpDir)
 	persistent, _ := New[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -199,7 +202,7 @@ func TestHashPersisted(t *testing.T) {
 	// reopen
 	closeDb(t, db, persistent)
 
-	db = openDb(t)
+	db = openDb(t, tmpDir)
 	persistent, _ = New[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -214,11 +217,12 @@ func TestHashPersisted(t *testing.T) {
 }
 
 func TestHashPersistedAndAdded(t *testing.T) {
-	if err := os.RemoveAll(DbPath); err != nil {
-		t.Errorf("IO Error: %s", err)
+	tmpDir, err := os.MkdirTemp("", "leveldb-based-index-test")
+	if err != nil {
+		t.Fatalf("unable to create testing db directory")
 	}
 
-	db := openDb(t)
+	db := openDb(t, tmpDir)
 	persistent, _ := New[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -227,7 +231,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 
 	// reopen
 	closeDb(t, db, persistent)
-	db = openDb(t)
+	db = openDb(t, tmpDir)
 	persistent, _ = New[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
@@ -242,8 +246,8 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	}
 }
 
-func openDb(t *testing.T) (db *leveldb.DB) {
-	db, err := leveldb.OpenFile(DbPath, nil)
+func openDb(t *testing.T, path string) (db *leveldb.DB) {
+	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		t.Errorf("Cannot open DB, err: %s", err)
 	}
