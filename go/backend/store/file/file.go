@@ -12,12 +12,12 @@ import (
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[I common.Identifier, V any] struct {
-	path            string
-	hashTreeFactory hashtree.HashTreeFactory
-	serializer      common.Serializer[V]
-	pageSize        int // the amount of items stored in one database page
-	itemSize        int // the amount of bytes per one value
-	itemDefault     V
+	path        string
+	hashTree    hashtree.HashTree
+	serializer  common.Serializer[V]
+	pageSize    int // the amount of items stored in one database page
+	itemSize    int // the amount of bytes per one value
+	itemDefault V
 }
 
 // NewStore constructs a new instance of FileStore.
@@ -31,15 +31,15 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 	if err != nil {
 		return nil, err
 	}
-	s := Store[I, V]{
-		path:            path,
-		hashTreeFactory: CreateHashTreeFactory(path+"/hashes", branchingFactor),
-		serializer:      serializer,
-		pageSize:        pageSize,
-		itemSize:        serializer.Size(),
-		itemDefault:     itemDefault,
+	s := &Store[I, V]{
+		path:        path,
+		serializer:  serializer,
+		pageSize:    pageSize,
+		itemSize:    serializer.Size(),
+		itemDefault: itemDefault,
 	}
-	return &s, nil
+	s.hashTree = CreateHashTreeFactory(path+"/hashes", branchingFactor).Create(s)
+	return s, nil
 }
 
 // itemPosition provides the position of an item in data pages
@@ -83,7 +83,7 @@ func (m *Store[I, V]) Set(id I, value V) error {
 		return fmt.Errorf("failed to write into page file %d; %s", page, err)
 	}
 
-	m.hashTreeFactory.Create(m).MarkUpdated(page)
+	m.hashTree.MarkUpdated(page)
 	return nil
 }
 
@@ -121,7 +121,7 @@ func (m *Store[I, V]) Get(id I) (V, error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
-	return m.hashTreeFactory.Create(m).HashRoot()
+	return m.hashTree.HashRoot()
 }
 
 // Close the store

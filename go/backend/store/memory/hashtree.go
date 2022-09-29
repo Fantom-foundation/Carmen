@@ -18,7 +18,6 @@ type HashTree struct {
 
 // hashTreeFactory is used for implementation of hashTreeFactory method
 type hashTreeFactory struct {
-	instance        *HashTree
 	branchingFactor int
 }
 
@@ -29,10 +28,7 @@ func CreateHashTreeFactory(branchingFactor int) *hashTreeFactory {
 
 // Create creates a new instance of the HashTree, this will be a singleton
 func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.HashTree {
-	if f.instance == nil {
-		f.instance = NewHashTree(f.branchingFactor, pageProvider)
-	}
-	return f.instance
+	return NewHashTree(f.branchingFactor, pageProvider)
 }
 
 // NewHashTree constructs a new HashTree
