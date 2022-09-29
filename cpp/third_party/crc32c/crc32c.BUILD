@@ -17,7 +17,7 @@ cc_library(
     name = "crc32c",
     srcs = [
         "src/crc32c.cc",
-	    "src/crc32c_portable.cc",
+        "src/crc32c_portable.cc",
     ],
     hdrs = [
         "include/crc32c/crc32c.h",
