@@ -31,7 +31,7 @@ func TestBasicOperation(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	persistent, _ := New[common.Address](db, common.BalanceKey, common.AddressSerializer{})
+	persistent, _ := NewKVIndex[common.Address](db, common.BalanceKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -92,7 +92,7 @@ func TestDataPersisted(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	persistent, _ := New[common.Address](db, common.NonceKey, common.AddressSerializer{})
+	persistent, _ := NewKVIndex[common.Address](db, common.NonceKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -110,7 +110,7 @@ func TestDataPersisted(t *testing.T) {
 	// close and reopen
 	closeDb(t, db, persistent)
 	db = openDb(t, tmpDir)
-	persistent, _ = New[common.Address](db, common.NonceKey, common.AddressSerializer{})
+	persistent, _ = NewKVIndex[common.Address](db, common.NonceKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -144,7 +144,7 @@ func TestHash(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	persistent, _ := New[common.Address](db, common.SlotKey, common.AddressSerializer{})
+	persistent, _ := NewKVIndex[common.Address](db, common.SlotKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -192,7 +192,7 @@ func TestHashPersisted(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	persistent, _ := New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	persistent, _ := NewKVIndex[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -203,7 +203,7 @@ func TestHashPersisted(t *testing.T) {
 	closeDb(t, db, persistent)
 
 	db = openDb(t, tmpDir)
-	persistent, _ = New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	persistent, _ = NewKVIndex[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -223,7 +223,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	persistent, _ := New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	persistent, _ := NewKVIndex[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -232,7 +232,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	// reopen
 	closeDb(t, db, persistent)
 	db = openDb(t, tmpDir)
-	persistent, _ = New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	persistent, _ = NewKVIndex[common.Address](db, common.ValueKey, common.AddressSerializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()

@@ -23,8 +23,8 @@ type KVIndex[K comparable] struct {
 	hashSerializer common.HashSerializer
 }
 
-// New creates a new instance of the index backed by a persisted database
-func New[K comparable](db *leveldb.DB, table []byte, serializer common.Serializer[K]) (p *KVIndex[K], err error) {
+// NewKVIndex creates a new instance of the index backed by a persisted database
+func NewKVIndex[K comparable](db *leveldb.DB, table []byte, serializer common.Serializer[K]) (p *KVIndex[K], err error) {
 	// read the last hash from the database
 	var hash []byte
 	if hash, err = db.Get(common.AppendKeyStr(table, HashKey), nil); err != nil {
