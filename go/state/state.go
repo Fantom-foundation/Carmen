@@ -100,13 +100,22 @@ func (s *Service[I]) SetStorage(address common.Address, key common.Key, value co
 func (s *Service[I]) GetHash() (hash common.Hash, err error) {
 	h := sha256.New()
 
-	if _, err = h.Write(s.hashSerializer.ToBytes(s.addressIndex.GetStateHash())); err != nil {
+	if hash, err = s.addressIndex.GetStateHash(); err != nil {
 		return
 	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(s.keyIndex.GetStateHash())); err != nil {
+	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
 		return
 	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(s.slotIndex.GetStateHash())); err != nil {
+	if hash, err = s.keyIndex.GetStateHash(); err != nil {
+		return
+	}
+	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
+		return
+	}
+	if hash, err = s.slotIndex.GetStateHash(); err != nil {
+		return
+	}
+	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
 		return
 	}
 
