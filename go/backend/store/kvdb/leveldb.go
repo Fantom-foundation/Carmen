@@ -10,25 +10,25 @@ import (
 
 // KVStore is a database-based store.Store implementation. It stores items in a key-value databse.
 type KVStore[V any] struct {
-	db          *leveldb.DB
-	hashTree    store.HashTree
-	serializer  common.Serializer[V]
-	pageSize    uint32 // the amount of items stored in one database page
-	itemSize    int    // the amount of bytes per one value
-	table       []byte
-	itemDefault V
+	db              *leveldb.DB
+	hashTreeFactory store.HashTreeFactory
+	serializer      common.Serializer[V]
+	pageSize        uint32 // the amount of items stored in one database page
+	itemSize        int    // the amount of bytes per one value
+	table           []byte
+	itemDefault     V
 }
 
 // NewStore constructs a new instance of the KVStore.
-func NewStore[V any](db *leveldb.DB, table []byte, serializer common.Serializer[V], hashTree store.HashTree, itemDefault V, pageSize uint32) (store *KVStore[V], err error) {
+func NewStore[V any](db *leveldb.DB, table []byte, serializer common.Serializer[V], hashTreeFactory store.HashTreeFactory, itemDefault V, pageSize uint32) (store *KVStore[V], err error) {
 	store = &KVStore[V]{
-		db:          db,
-		hashTree:    hashTree,
-		serializer:  serializer,
-		pageSize:    pageSize,
-		itemSize:    serializer.Size(),
-		table:       table,
-		itemDefault: itemDefault,
+		db:              db,
+		hashTreeFactory: hashTreeFactory,
+		serializer:      serializer,
+		pageSize:        pageSize,
+		itemSize:        serializer.Size(),
+		table:           table,
+		itemDefault:     itemDefault,
 	}
 	return
 }
@@ -63,7 +63,7 @@ func (m *KVStore[V]) Set(id uint32, value V) (err error) {
 	// index is mapped in the database directly
 	if err = m.db.Put(m.appendKey(id), m.serializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
-		m.hashTree.MarkUpdated(page)
+		m.hashTreeFactory.Create(m).MarkUpdated(page)
 	}
 	return
 }
@@ -83,12 +83,12 @@ func (m *KVStore[V]) Get(id uint32) (v V, err error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *KVStore[V]) GetStateHash() (common.Hash, error) {
-	return m.hashTree.HashRoot(m)
+	return m.hashTreeFactory.Create(m).HashRoot()
 }
 
 func (m *KVStore[V]) Close() error {
 	// commit state hash root before closing
-	_, err := m.hashTree.HashRoot(m)
+	_, err := m.GetStateHash()
 	return err
 }
 

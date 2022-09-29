@@ -39,8 +39,8 @@ func TestEmpty(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	hashTree := memory.NewHashTree(BranchingFactor)
-	s, err := NewStore[common.Value](db, table, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
+	s, err := NewStore[common.Value](db, table, common.ValueSerializer{}, hashTree, defaultItem, PageSize)
 	defer closeDb(db, s)
 
 	if err != nil {
@@ -59,8 +59,8 @@ func TestBasicOperations(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	hashTree := memory.NewHashTree(BranchingFactor)
-	s, _ := NewStore[common.Value](db, table, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
+	s, _ := NewStore[common.Value](db, table, common.ValueSerializer{}, hashTree, defaultItem, PageSize)
 	defer closeDb(db, s)
 
 	if err := s.Set(10, A); err != nil {
@@ -79,9 +79,9 @@ func TestPages(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	hashTree := memory.NewHashTree(BranchingFactor)
+	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
 	serializer := common.ValueSerializer{}
-	s, _ := NewStore[common.Value](db, table, serializer, &hashTree, defaultItem, PageSize)
+	s, _ := NewStore[common.Value](db, table, serializer, hashTree, defaultItem, PageSize)
 	defer closeDb(db, s)
 
 	// fill-in three pages
@@ -160,8 +160,8 @@ func TestDataPersisted(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	hashTree := memory.NewHashTree(BranchingFactor)
-	s, _ := NewStore[common.Value](db, table, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
+	s, _ := NewStore[common.Value](db, table, common.ValueSerializer{}, hashTree, defaultItem, PageSize)
 	defer closeDb(db, s)
 
 	if err := s.Set(10, A); err != nil {
@@ -170,7 +170,8 @@ func TestDataPersisted(t *testing.T) {
 
 	closeDb(db, s)
 	db = openDb(t, tmpDir)
-	s, _ = NewStore[common.Value](db, table, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	hashTree = memory.CreateHashTreeFactory(BranchingFactor)
+	s, _ = NewStore[common.Value](db, table, common.ValueSerializer{}, hashTree, defaultItem, PageSize)
 	defer closeDb(db, s)
 
 	if val, err := s.Get(10); err != nil || val != A {
@@ -185,8 +186,8 @@ func TestBasicHashing(t *testing.T) {
 	}
 
 	db := openDb(t, tmpDir)
-	hashTree := memory.NewHashTree(BranchingFactor)
-	s, _ := NewStore[common.Value](db, table, common.ValueSerializer{}, &hashTree, defaultItem, PageSize)
+	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
+	s, _ := NewStore[common.Value](db, table, common.ValueSerializer{}, hashTree, defaultItem, PageSize)
 	defer closeDb(db, s)
 
 	if hash, err := s.GetStateHash(); (err != nil || hash != common.Hash{}) {

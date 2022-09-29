@@ -15,17 +15,39 @@ const HashLength = 32
 // HashTree is a structure allowing to make a hash of the whole database state.
 // It obtains hashes of individual data pages and reduce them to a hash of the entire state.
 type HashTree struct {
-	path       string
-	factor     int          // the branching factor - amount of child nodes per one parent node
-	dirtyPages map[int]bool // set of dirty flags of the tree nodes
+	path         string
+	factor       int          // the branching factor - amount of child nodes per one parent node
+	dirtyPages   map[int]bool // set of dirty flags of the tree nodes
+	pageProvider store.PageProvider
+}
+
+// hashTreeFactory is used for implementation of hashTreeFactory method
+type hashTreeFactory struct {
+	instance        *HashTree
+	path            string
+	branchingFactor int
+}
+
+// CreateHashTreeFactory creates a new instance of the hashTreeFactory
+func CreateHashTreeFactory(path string, branchingFactor int) *hashTreeFactory {
+	return &hashTreeFactory{path: path, branchingFactor: branchingFactor}
+}
+
+// Create creates a new instance of the HashTree, this will be a singleton
+func (f *hashTreeFactory) Create(pageProvider store.PageProvider) store.HashTree {
+	if f.instance == nil {
+		f.instance = NewHashTree(f.path, f.branchingFactor, pageProvider)
+	}
+	return f.instance
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(path string, branchingFactor int) HashTree {
-	return HashTree{
-		path:       path,
-		factor:     branchingFactor,
-		dirtyPages: map[int]bool{},
+func NewHashTree(path string, branchingFactor int, pageProvider store.PageProvider) *HashTree {
+	return &HashTree{
+		path:         path,
+		factor:       branchingFactor,
+		dirtyPages:   map[int]bool{},
+		pageProvider: pageProvider,
 	}
 }
 
@@ -92,7 +114,7 @@ func (ht *HashTree) getLayersCount() (count int, err error) {
 }
 
 // commit updates the necessary parts of the hashing tree
-func (ht *HashTree) commit(pageProvider store.PageProvider) (hash []byte, err error) {
+func (ht *HashTree) commit() (hash []byte, err error) {
 	var childrenLayer, parentsLayer *os.File
 	defer func() {
 		if childrenLayer != nil {
@@ -117,7 +139,7 @@ func (ht *HashTree) commit(pageProvider store.PageProvider) (hash []byte, err er
 		}
 
 		// hash children nodes into (dirty) parent nodes
-		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes, pageProvider)
+		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes, ht.pageProvider)
 		if err != nil {
 			return nil, err
 		}
@@ -182,8 +204,8 @@ func (ht *HashTree) updateNode(layerFile *os.File, node int, nodeHash []byte) er
 }
 
 // HashRoot provides the hash in the root of the hashing tree
-func (ht *HashTree) HashRoot(pageProvider store.PageProvider) (out common.Hash, err error) {
-	hash, err := ht.commit(pageProvider)
+func (ht *HashTree) HashRoot() (out common.Hash, err error) {
+	hash, err := ht.commit()
 	if err != nil {
 		return common.Hash{}, err
 	}

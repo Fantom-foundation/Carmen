@@ -7,25 +7,26 @@ import (
 
 // Memory is an in-memory store.Store implementation - it maps IDs to values
 type Memory[V any] struct {
-	data        [][]byte // data of pages [page][byte of page]
-	hashTree    store.HashTree
-	serializer  common.Serializer[V]
-	pageSize    uint64 // the amount of items stored in one database page
-	itemSize    int    // the amount of bytes per one value
-	itemDefault V
+	data            [][]byte // data of pages [page][byte of page]
+	hashTreeFactory store.HashTreeFactory
+	serializer      common.Serializer[V]
+	pageSize        uint64 // the amount of items stored in one database page
+	itemSize        int    // the amount of bytes per one value
+	branchingFactor int
+	itemDefault     V
 }
 
 // NewMemory constructs a new instance of Memory.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewMemory[V any](serializer common.Serializer[V], itemDefault V, pageSize uint64, hashTreeFactor int) *Memory[V] {
-	hashTree := NewHashTree(hashTreeFactor)
+func NewMemory[V any](serializer common.Serializer[V], itemDefault V, pageSize uint64, branchingFactor int) *Memory[V] {
 	memory := Memory[V]{
-		data:        [][]byte{make([]byte, 0, pageSize*uint64(serializer.Size()))},
-		hashTree:    &hashTree,
-		serializer:  serializer,
-		pageSize:    pageSize,
-		itemSize:    serializer.Size(),
-		itemDefault: itemDefault,
+		data:            [][]byte{make([]byte, 0, pageSize*uint64(serializer.Size()))},
+		hashTreeFactory: CreateHashTreeFactory(branchingFactor),
+		serializer:      serializer,
+		pageSize:        pageSize,
+		itemSize:        serializer.Size(),
+		branchingFactor: branchingFactor,
+		itemDefault:     itemDefault,
 	}
 	return &memory
 }
@@ -46,7 +47,7 @@ func (m *Memory[V]) Set(id uint64, value V) error {
 		m.data = append(m.data, make([]byte, m.pageSize*uint64(m.itemSize)))
 	}
 	copy(m.data[page][itemPosition:itemPosition+m.itemSize], m.serializer.ToBytes(value))
-	m.hashTree.MarkUpdated(page)
+	m.hashTreeFactory.Create(m).MarkUpdated(page)
 	return nil
 }
 
@@ -62,7 +63,7 @@ func (m *Memory[V]) Get(id uint64) (V, error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Memory[V]) GetStateHash() (common.Hash, error) {
-	return m.hashTree.HashRoot(m)
+	return m.hashTreeFactory.Create(m).HashRoot()
 }
 
 // Close the store

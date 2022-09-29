@@ -12,17 +12,17 @@ import (
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[V any] struct {
-	path        string
-	hashTree    store.HashTree
-	serializer  common.Serializer[V]
-	pageSize    uint64 // the amount of items stored in one database page
-	itemSize    int    // the amount of bytes per one value
-	itemDefault V
+	path            string
+	hashTreeFactory store.HashTreeFactory
+	serializer      common.Serializer[V]
+	pageSize        uint64 // the amount of items stored in one database page
+	itemSize        int    // the amount of bytes per one value
+	itemDefault     V
 }
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V, pageSize uint64, hashTreeFactor int) (*Store[V], error) {
+func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V, pageSize uint64, branchingFactor int) (*Store[V], error) {
 	err := os.MkdirAll(path+"/pages", 0700)
 	if err != nil {
 		return nil, err
@@ -31,14 +31,13 @@ func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V
 	if err != nil {
 		return nil, err
 	}
-	hashTree := NewHashTree(path+"/hashes", hashTreeFactor)
 	s := Store[V]{
-		path:        path,
-		hashTree:    &hashTree,
-		serializer:  serializer,
-		pageSize:    pageSize,
-		itemSize:    serializer.Size(),
-		itemDefault: itemDefault,
+		path:            path,
+		hashTreeFactory: CreateHashTreeFactory(path+"/hashes", branchingFactor),
+		serializer:      serializer,
+		pageSize:        pageSize,
+		itemSize:        serializer.Size(),
+		itemDefault:     itemDefault,
 	}
 	return &s, nil
 }
@@ -77,7 +76,7 @@ func (m *Store[V]) Set(id uint64, value V) error {
 		return fmt.Errorf("failed to write into page file %d; %s", page, err)
 	}
 
-	m.hashTree.MarkUpdated(page)
+	m.hashTreeFactory.Create(m).MarkUpdated(page)
 	return nil
 }
 
@@ -115,7 +114,7 @@ func (m *Store[V]) Get(id uint64) (V, error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[V]) GetStateHash() (common.Hash, error) {
-	return m.hashTree.HashRoot(m)
+	return m.hashTreeFactory.Create(m).HashRoot()
 }
 
 // Close the store

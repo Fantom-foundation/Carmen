@@ -10,9 +10,9 @@ var zeroHash = common.Hash{}
 // Test initial and modified state to have different hashes
 func TestHashtreeInitialState(t *testing.T) {
 	pages := [][]byte{}
-	tree := NewHashTree(3)
+	tree := NewHashTree(3, testingPageProvider{pages: pages})
 
-	hash, err := tree.HashRoot(testingPageProvider{pages: pages})
+	hash, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -22,7 +22,7 @@ func TestHashtreeInitialState(t *testing.T) {
 
 	pages = [][]byte{{0xFA}}
 	tree.MarkUpdated(0)
-	hash, err = tree.HashRoot(testingPageProvider{pages: pages})
+	hash, err = tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -34,13 +34,13 @@ func TestHashtreeInitialState(t *testing.T) {
 // Test that without actual change, the hash does not change
 func TestHashtreeUnchangedState(t *testing.T) {
 	pages := make([][]byte, 10)
-	tree := NewHashTree(3)
+	tree := NewHashTree(3, testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
 		tree.MarkUpdated(i)
 	}
-	hashBefore, err := tree.HashRoot(testingPageProvider{pages: pages})
+	hashBefore, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -48,7 +48,7 @@ func TestHashtreeUnchangedState(t *testing.T) {
 	tree.MarkUpdated(5)
 	tree.MarkUpdated(3)
 
-	hashAfter, err := tree.HashRoot(testingPageProvider{pages: pages})
+	hashAfter, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -61,14 +61,14 @@ func TestHashtreeUnchangedState(t *testing.T) {
 // Test that a change changes the hash
 func TestHashtreeChangedState(t *testing.T) {
 	pages := make([][]byte, 10)
-	tree := NewHashTree(3)
+	tree := NewHashTree(3, testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
 		tree.MarkUpdated(i)
 	}
 
-	hashBefore, err := tree.HashRoot(testingPageProvider{pages: pages})
+	hashBefore, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -76,7 +76,7 @@ func TestHashtreeChangedState(t *testing.T) {
 	pages[5] = []byte{42}
 	tree.MarkUpdated(5)
 
-	hashAfter, err := tree.HashRoot(testingPageProvider{pages: pages})
+	hashAfter, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -91,19 +91,19 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 	// initialize two different states
 	pagesA := [][]byte{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {0}, {0}}
 	pagesB := [][]byte{{0}, {42}, {2}, {3}, {4}, {5}, {6}, {7}, {0}, {0}, {0}, {0}}
-	treeA := NewHashTree(3)
-	treeB := NewHashTree(3)
+	treeA := NewHashTree(3, testingPageProvider{pages: pagesA})
+	treeB := NewHashTree(3, testingPageProvider{pages: pagesB})
 	for i := 0; i < 8; i++ {
 		treeA.MarkUpdated(i)
 		treeB.MarkUpdated(i)
 	}
 	treeA.MarkUpdated(8)
 	treeA.MarkUpdated(9)
-	firstHashA, err := treeA.HashRoot(testingPageProvider{pages: pagesA})
+	firstHashA, err := treeA.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
-	firstHashB, err := treeB.HashRoot(testingPageProvider{pages: pagesB})
+	firstHashB, err := treeB.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -118,11 +118,11 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 	treeB.MarkUpdated(1)
 	treeB.MarkUpdated(8)
 	treeB.MarkUpdated(9)
-	firstHashA, err = treeA.HashRoot(testingPageProvider{pages: pagesA})
+	firstHashA, err = treeA.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
-	firstHashB, err = treeB.HashRoot(testingPageProvider{pages: pagesB})
+	firstHashB, err = treeB.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to commit; %s", err)
 	}
@@ -136,14 +136,14 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 func TestAmountOfLevels(t *testing.T) {
 	branchingFactor := 3
 	pages := make([][]byte, branchingFactor*branchingFactor+1)
-	tree := NewHashTree(branchingFactor)
+	tree := NewHashTree(branchingFactor, testingPageProvider{pages: pages})
 
 	var i int
 	for ; i < branchingFactor*branchingFactor; i++ {
 		pages[i] = []byte{byte(i)}
 		tree.MarkUpdated(i)
 	}
-	_, err := tree.HashRoot(testingPageProvider{pages: pages})
+	_, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
@@ -153,7 +153,7 @@ func TestAmountOfLevels(t *testing.T) {
 
 	pages[i] = []byte{byte(i)}
 	tree.MarkUpdated(i)
-	_, err = tree.HashRoot(testingPageProvider{pages: pages})
+	_, err = tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
