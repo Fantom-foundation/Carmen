@@ -14,7 +14,7 @@ var (
 
 func TestMemoryIndexImplements(t *testing.T) {
 	var memory Memory[*common.Address]
-	var _ index.Index[*common.Address, uint64] = &memory
+	var _ index.Index[*common.Address, uint32] = &memory
 	var _ io.Closer = &memory
 }
 
@@ -76,7 +76,7 @@ func TestHash(t *testing.T) {
 	defer memory.Close()
 
 	// the hash is the default one first
-	h0 := memory.GetStateHash()
+	h0, _ := memory.GetStateHash()
 
 	if (h0 != common.Hash{}) {
 		t.Errorf("The hash does not match the default one")
@@ -84,17 +84,29 @@ func TestHash(t *testing.T) {
 
 	// the hash must change when adding a new item
 	_, _ = memory.GetOrAdd(A)
-	h1 := memory.GetStateHash()
+	ha1, _ := memory.GetStateHash()
 
-	if h0 == h1 {
+	if h0 == ha1 {
 		t.Errorf("The hash has not changed")
 	}
 
 	// the hash remains the same when getting an existing item
 	_, _ = memory.GetOrAdd(A)
-	h2 := memory.GetStateHash()
+	ha2, _ := memory.GetStateHash()
 
-	if h1 != h2 {
+	if ha1 != ha2 {
+		t.Errorf("The hash has changed")
+	}
+
+	// try recursive hash with B and already indexed A
+	_, _ = memory.GetOrAdd(B)
+	hb1, _ := memory.GetStateHash()
+
+	// The hash must remain the same when adding still the same key
+	_, _ = memory.GetOrAdd(B)
+	hb2, _ := memory.GetStateHash()
+
+	if hb1 != hb2 {
 		t.Errorf("The hash has changed")
 	}
 }

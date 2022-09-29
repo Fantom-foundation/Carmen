@@ -24,3 +24,29 @@ func TestHashSerializer(t *testing.T) {
 	var s common.HashSerializer
 	var _ common.Serializer[common.Hash] = s
 }
+
+func TestNonceSerializer(t *testing.T) {
+	var s common.NonceSerializer
+	var _ common.Serializer[common.Nonce] = s
+}
+func TestBalanceSerializer(t *testing.T) {
+	var s common.BalanceSerializer
+	var _ common.Serializer[common.Balance] = s
+}
+
+func TestSlotIdxSerializer32(t *testing.T) {
+	var s common.SlotIdxSerializer32
+	var _ common.Serializer[common.SlotIdx[uint32]] = s
+
+	// convert back and forth
+	slotIdx := common.SlotIdx[uint32]{
+		AddressIdx: 123,
+		KeyIdx:     456,
+	}
+	b := s.ToBytes(slotIdx)
+	slotIdx2 := s.FromBytes(b)
+
+	if slotIdx != slotIdx2 {
+		t.Errorf("Conversion fails: %x := %x", slotIdx, slotIdx2)
+	}
+}

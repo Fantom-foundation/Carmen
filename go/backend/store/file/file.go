@@ -11,18 +11,18 @@ import (
 )
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
-type Store[V any] struct {
+type Store[I common.Identifier, V any] struct {
 	path            string
 	hashTreeFactory store.HashTreeFactory
 	serializer      common.Serializer[V]
-	pageSize        uint64 // the amount of items stored in one database page
-	itemSize        int    // the amount of bytes per one value
+	pageSize        int // the amount of items stored in one database page
+	itemSize        int // the amount of bytes per one value
 	itemDefault     V
 }
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V, pageSize uint64, branchingFactor int) (*Store[V], error) {
+func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) (*Store[I, V], error) {
 	err := os.MkdirAll(path+"/pages", 0700)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V
 	if err != nil {
 		return nil, err
 	}
-	s := Store[V]{
+	s := Store[I, V]{
 		path:            path,
 		hashTreeFactory: CreateHashTreeFactory(path+"/hashes", branchingFactor),
 		serializer:      serializer,
@@ -43,21 +43,28 @@ func NewStore[V any](path string, serializer common.Serializer[V], itemDefault V
 }
 
 // itemPosition provides the position of an item in data pages
-func (m *Store[V]) itemPosition(id uint64) (page int, position int64) {
-	return int(id / m.pageSize), int64(id%m.pageSize) * int64(m.serializer.Size())
+func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
+	return int(id) / m.pageSize, int64(int(id)%m.pageSize) * int64(m.itemSize)
 }
 
-func (m *Store[V]) pageFile(page int) (path string) {
+func (m *Store[I, V]) pageFile(page int) (path string) {
 	return fmt.Sprintf("%s/pages/%X", m.path, page)
 }
 
 // GetPage provides a page bytes for needs of the hash obtaining
-func (m *Store[V]) GetPage(page int) ([]byte, error) {
-	return os.ReadFile(m.pageFile(page))
+func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
+	data, err := os.ReadFile(m.pageFile(page))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) < int(m.pageSize)*m.itemSize {
+		data = append(data, make([]byte, int(m.pageSize)*m.itemSize-len(data))...)
+	}
+	return data, err
 }
 
 // Set a value of an item
-func (m *Store[V]) Set(id uint64, value V) error {
+func (m *Store[I, V]) Set(id I, value V) error {
 	page, itemPosition := m.itemPosition(id)
 
 	file, err := os.OpenFile(m.pageFile(page), os.O_RDWR|os.O_CREATE, 0600)
@@ -81,7 +88,7 @@ func (m *Store[V]) Set(id uint64, value V) error {
 }
 
 // Get a value of the item (or the itemDefault, if not defined)
-func (m *Store[V]) Get(id uint64) (V, error) {
+func (m *Store[I, V]) Get(id I) (V, error) {
 	page, itemPosition := m.itemPosition(id)
 
 	file, err := os.OpenFile(m.pageFile(page), os.O_RDONLY, 0600)
@@ -113,11 +120,11 @@ func (m *Store[V]) Get(id uint64) (V, error) {
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
-func (m *Store[V]) GetStateHash() (common.Hash, error) {
+func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	return m.hashTreeFactory.Create(m).HashRoot()
 }
 
 // Close the store
-func (m *Store[V]) Close() error {
+func (m *Store[I, V]) Close() error {
 	return nil // no-op - we are not keeping any files open
 }

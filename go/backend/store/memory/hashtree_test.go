@@ -17,7 +17,7 @@ func TestHashtreeInitialState(t *testing.T) {
 		t.Fatalf("failed to hash; %s", err)
 	}
 	if hash != zeroHash {
-		t.Errorf("Initial hash is not zero")
+		t.Errorf("Initial hash after commit is not zero, but %x", hash)
 	}
 
 	pages = [][]byte{{0xFA}}

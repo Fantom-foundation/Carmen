@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"hash"
 	"io"
 	"os"
 )
@@ -66,13 +67,13 @@ func (ht *HashTree) layerFile(layer int) (path string) {
 }
 
 // calculateHash computes the hash of given data
-func calculateHash(childrenHashes []byte) (hash []byte, err error) {
-	h := sha256.New()
-	_, err = h.Write(childrenHashes)
+func (ht *HashTree) calculateHash(hasher hash.Hash, content []byte) (hash []byte, err error) {
+	hasher.Reset()
+	_, err = hasher.Write(content)
 	if err != nil {
 		return nil, err
 	}
-	return h.Sum(nil), nil
+	return hasher.Sum(nil), nil
 }
 
 // MarkUpdated marks a page as changed - to be included into the hash recalculation on commit
@@ -125,6 +126,7 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 		}
 	}()
 
+	hasher := sha256.New()
 	dirtyNodes := ht.dirtyPages // nodes at level 0 are 1:1 to pages
 	ht.dirtyPages = make(map[int]bool)
 
@@ -139,7 +141,7 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 		}
 
 		// hash children nodes into (dirty) parent nodes
-		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes, ht.pageProvider)
+		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes, hasher)
 		if err != nil {
 			return nil, err
 		}
@@ -164,13 +166,13 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 }
 
 // updateDirtyNodes updates parent nodes marked as dirty with a hash of its children
-func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool, pageProvider store.PageProvider) (newDirtyNodes map[int]bool, err error) {
+func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool, hasher hash.Hash) (newDirtyNodes map[int]bool, err error) {
 	newDirtyNodes = make(map[int]bool)
 	for node, _ := range dirtyNodes {
 		var content, nodeHash []byte
 		if layerId == 0 {
 			// hash the data of the page
-			content, err = pageProvider.GetPage(node)
+			content, err = ht.pageProvider.GetPage(node)
 		} else {
 			// hash children of the current node
 			content, err = ht.childrenOfNode(childrenLayer, node)
@@ -178,7 +180,7 @@ func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layer
 		if err != nil {
 			return nil, err
 		}
-		nodeHash, err = calculateHash(content)
+		nodeHash, err = ht.calculateHash(hasher, content)
 		if err != nil {
 			return nil, err
 		}

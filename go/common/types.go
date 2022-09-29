@@ -15,14 +15,25 @@ type Identifier interface {
 	uint64 | uint32
 }
 
-// Address is an EVM-compatible account address.
+// Address is an EVM-like account address.
 type Address [20]byte
 
-// Key is an EVM-compatible key of a storage slot.
+// Key is an EVM-like key of a storage slot.
 type Key [32]byte
 
-// Value is an EVM-compatible value of a storage slot.
+// Hash is an Ethereum-like hash of a state.
+type Hash [32]byte
+
+// Balance is an Ethereum-like account balance
+type Balance [16]byte
+
+// Nonce is an Ethereum-like nonce
+type Nonce [4]byte
+
+// Value is an Ethereum-like smart contract memory slot
 type Value [32]byte
 
-// Hash is an Ethereum-compatible hash of a state.
-type Hash [32]byte
+type SlotIdx[I Identifier] struct {
+	AddressIdx I
+	KeyIdx     I
+}

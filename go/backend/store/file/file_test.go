@@ -9,7 +9,7 @@ import (
 )
 
 func TestFileStoreImplements(t *testing.T) {
-	var s Store[common.Value]
+	var s Store[uint64, common.Value]
 	var _ store.Store[uint64, common.Value] = &s
 	var _ io.Closer = &s
 }
@@ -27,7 +27,7 @@ func TestStoringIntoFileStore(t *testing.T) {
 	}
 
 	defaultItem := common.Value{}
-	memory, err := NewStore[common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	memory, err := NewStore[uint64, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
 	if err != nil {
 		t.Fatalf("unable to create store; %s", err)
 	}
@@ -67,7 +67,7 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 	}
 
 	defaultItem := common.Value{}
-	memory, err := NewStore[common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	memory, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
 	if err != nil {
 		t.Fatalf("unable to create store; %s", err)
 	}
@@ -107,7 +107,7 @@ func TestHashingInFileStore(t *testing.T) {
 	}
 
 	defaultItem := common.Value{}
-	memory, err := NewStore[common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	memory, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
 	if err != nil {
 		t.Fatalf("unable to create store; %s", err)
 	}
