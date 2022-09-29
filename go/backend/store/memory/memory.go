@@ -1,17 +1,17 @@
 package memory
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // Store is an in-memory store.Store implementation - it maps IDs to values
-type Store[I common.Identifier,V any] struct {
+type Store[I common.Identifier, V any] struct {
 	data            [][]byte // data of pages [page][byte of page]
-	hashTreeFactory store.HashTreeFactory
+	hashTreeFactory hashtree.HashTreeFactory
 	serializer      common.Serializer[V]
 	pageSize        int // the amount of items stored in one database page
-	itemSize        int    // the amount of bytes per one value
+	itemSize        int // the amount of bytes per one value
 	branchingFactor int
 	itemDefault     V
 }

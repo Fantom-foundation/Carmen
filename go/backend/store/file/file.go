@@ -3,7 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"io/fs"
@@ -13,7 +13,7 @@ import (
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[I common.Identifier, V any] struct {
 	path            string
-	hashTreeFactory store.HashTreeFactory
+	hashTreeFactory hashtree.HashTreeFactory
 	serializer      common.Serializer[V]
 	pageSize        int // the amount of items stored in one database page
 	itemSize        int // the amount of bytes per one value

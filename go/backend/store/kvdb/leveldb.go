@@ -2,7 +2,7 @@ package kvdb
 
 import (
 	"encoding/binary"
-	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -11,7 +11,7 @@ import (
 // KVStore is a database-based store.Store implementation. It stores items in a key-value databse.
 type KVStore[V any] struct {
 	db              *leveldb.DB
-	hashTreeFactory store.HashTreeFactory
+	hashTreeFactory hashtree.HashTreeFactory
 	serializer      common.Serializer[V]
 	pageSize        uint32 // the amount of items stored in one database page
 	itemSize        int    // the amount of bytes per one value
@@ -20,7 +20,7 @@ type KVStore[V any] struct {
 }
 
 // NewStore constructs a new instance of the KVStore.
-func NewStore[V any](db *leveldb.DB, table []byte, serializer common.Serializer[V], hashTreeFactory store.HashTreeFactory, itemDefault V, pageSize uint32) (store *KVStore[V], err error) {
+func NewStore[V any](db *leveldb.DB, table []byte, serializer common.Serializer[V], hashTreeFactory hashtree.HashTreeFactory, itemDefault V, pageSize uint32) (store *KVStore[V], err error) {
 	store = &KVStore[V]{
 		db:              db,
 		hashTreeFactory: hashTreeFactory,
