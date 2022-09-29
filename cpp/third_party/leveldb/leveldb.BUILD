@@ -37,7 +37,8 @@ cc_library(
         exclude = [
             "doc/**",
             "util/*windows*",
-            "util/testutil.h"
+            "util/testutil.h",
+            "port/port.h"
         ],
     ) + [
         ":port_h",
