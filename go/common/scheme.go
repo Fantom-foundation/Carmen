@@ -1,11 +1,11 @@
 package common
 
-// TableSpaces divide key-value storage into spaces by adding a prefix to the key.
-type TableSpaces byte
+// TableSpace divide key-value storage into spaces by adding a prefix to the key.
+type TableSpace byte
 
 const (
 	// BalanceKey is a respective "table space"
-	BalanceKey TableSpaces = 'B'
+	BalanceKey TableSpace = 'B'
 	// NonceKey is a respective "table space"
 	NonceKey = 'N'
 	// SlotKey is a respective "table space"
@@ -15,13 +15,13 @@ const (
 )
 
 // AppendKey converts the input key to its respective table space
-func AppendKey(prefix TableSpaces, key []byte) []byte {
-	b := []byte{byte(prefix)}
+func (t TableSpace) AppendKey(key []byte) []byte {
+	b := []byte{byte(t)}
 	return append(b, key...)
 }
 
 // AppendKeyStr converts the input key to its respective table space
-func AppendKeyStr(prefix TableSpaces, key string) []byte {
-	b := []byte{byte(prefix)}
+func (t TableSpace) AppendKeyStr(key string) []byte {
+	b := []byte{byte(t)}
 	return append(b, key...)
 }
