@@ -8,7 +8,7 @@ import (
 )
 
 func TestMemoryStoreImplements(t *testing.T) {
-	var s Memory[common.Value]
+	var s Store[uint32, common.Value]
 	var _ store.Store[uint32, common.Value] = &s
 	var _ io.Closer = &s
 }
@@ -21,7 +21,7 @@ var (
 
 func TestStoringIntoMemoryStore(t *testing.T) {
 	defaultItem := common.Value{}
-	memory := NewMemory[common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
 	defer memory.Close()
 
 	err := memory.Set(0, A)
@@ -53,7 +53,7 @@ func TestStoringIntoMemoryStore(t *testing.T) {
 
 func TestStoringToArbitraryPosition(t *testing.T) {
 	defaultItem := common.Value{}
-	memory := NewMemory[common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
 	defer memory.Close()
 
 	err := memory.Set(5, A)
@@ -85,7 +85,7 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 
 func TestHashingInMemoryStore(t *testing.T) {
 	defaultItem := common.Value{}
-	memory := NewMemory[common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
 	defer memory.Close()
 
 	initialHast, err := memory.GetStateHash()
