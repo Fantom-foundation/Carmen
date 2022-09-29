@@ -95,12 +95,12 @@ func (m *KVStore[V]) Close() error {
 // TODO move this to serializer and use elsewhere (when other PRs are merged)
 func toBytes(idx uint32) (b []byte) {
 	b = make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, idx)
+	binary.BigEndian.PutUint32(b, idx)
 	return
 }
 
 func fromBytes(b []byte) uint32 {
-	return binary.LittleEndian.Uint32(b)
+	return binary.BigEndian.Uint32(b)
 }
 
 func (m *KVStore[V]) appendKey(key uint32) []byte {
