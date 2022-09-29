@@ -21,7 +21,8 @@ class ByteValue {
 
   // Class constructor populating data with given list of values.
   ByteValue(std::initializer_list<std::uint8_t> il) {
-    std::copy(il.begin(), il.end(), std::begin(data_));
+    std::copy(il.begin(), il.begin() + std::min(il.size(), data_.size()),
+              std::begin(data_));
   }
 
   // Overload of << operator to make class printable.
