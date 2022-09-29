@@ -15,21 +15,20 @@ type KVStore[V any] struct {
 	serializer  common.Serializer[V]
 	pageSize    uint32 // the amount of items stored in one database page
 	itemSize    int    // the amount of bytes per one value
+	table       []byte
 	itemDefault V
 }
 
 // NewStore constructs a new instance of the KVStore.
-func NewStore[V any](path string, serializer common.Serializer[V], hashTree store.HashTree, itemDefault V, pageSize uint32) (store *KVStore[V], err error) {
-	var db *leveldb.DB
-	if db, err = leveldb.OpenFile(path, nil); err == nil {
-		store = &KVStore[V]{
-			db:          db,
-			hashTree:    hashTree,
-			serializer:  serializer,
-			pageSize:    pageSize,
-			itemSize:    serializer.Size(),
-			itemDefault: itemDefault,
-		}
+func NewStore[V any](db *leveldb.DB, table []byte, serializer common.Serializer[V], hashTree store.HashTree, itemDefault V, pageSize uint32) (store *KVStore[V], err error) {
+	store = &KVStore[V]{
+		db:          db,
+		hashTree:    hashTree,
+		serializer:  serializer,
+		pageSize:    pageSize,
+		itemSize:    serializer.Size(),
+		table:       table,
+		itemDefault: itemDefault,
 	}
 	return
 }
@@ -42,7 +41,7 @@ func (m *KVStore[V]) itemPosition(id uint32) (page int, position int) {
 func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
 	pageStartKey := uint32(page) * m.pageSize
 	pageEndKey := pageStartKey + m.pageSize
-	r := util.Range{Start: toBytes(pageStartKey), Limit: toBytes(pageEndKey)}
+	r := util.Range{Start: m.appendKey(pageStartKey), Limit: m.appendKey(pageEndKey)}
 	iter := m.db.NewIterator(&r, nil)
 	defer iter.Release()
 
@@ -50,7 +49,7 @@ func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
 	pageData = make([]byte, m.pageSize*uint32(m.itemSize))
 	// inject values at the right positions
 	for iter.Next() {
-		key := fromBytes(iter.Key())
+		key := fromBytes(iter.Key()[len(m.table):]) // strip first byte (table space) and get the idx only
 		_, position := m.itemPosition(key)
 		copy(pageData[position:], iter.Value())
 	}
@@ -62,7 +61,7 @@ func (m *KVStore[V]) GetPage(page int) (pageData []byte, err error) {
 
 func (m *KVStore[V]) Set(id uint32, value V) (err error) {
 	// index is mapped in the database directly
-	if err = m.db.Put(toBytes(id), m.serializer.ToBytes(value), nil); err == nil {
+	if err = m.db.Put(m.appendKey(id), m.serializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
 		m.hashTree.MarkUpdated(page)
 	}
@@ -72,7 +71,7 @@ func (m *KVStore[V]) Set(id uint32, value V) (err error) {
 func (m *KVStore[V]) Get(id uint32) (v V, err error) {
 	// index is mapped in the database directly
 	var val []byte
-	if val, err = m.db.Get(toBytes(id), nil); err != nil {
+	if val, err = m.db.Get(m.appendKey(id), nil); err != nil {
 		if err == leveldb.ErrNotFound {
 			return m.itemDefault, nil
 		}
@@ -88,7 +87,9 @@ func (m *KVStore[V]) GetStateHash() (common.Hash, error) {
 }
 
 func (m *KVStore[V]) Close() error {
-	return m.db.Close()
+	// commit state hash root before closing
+	_, err := m.hashTree.HashRoot(m)
+	return err
 }
 
 // TODO move this to serializer and use elsewhere (when other PRs are merged)
@@ -100,4 +101,12 @@ func toBytes(idx uint32) (b []byte) {
 
 func fromBytes(b []byte) uint32 {
 	return binary.LittleEndian.Uint32(b)
+}
+
+func (m *KVStore[V]) appendKey(key uint32) []byte {
+	return append(m.table, toBytes(key)...)
+}
+
+func (m *KVStore[V]) appendKeyStr(key string) []byte {
+	return append(m.table, key...)
 }
