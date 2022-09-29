@@ -16,7 +16,7 @@ const (
 // KVIndex represents a key-value store for holding the index data.
 type KVIndex[K comparable] struct {
 	db             *leveldb.DB
-	table          []byte
+	table          common.TableSpaces
 	serializer     common.Serializer[K]
 	hashIndex      *index.HashIndex[K]
 	lastIndex      uint32
@@ -24,7 +24,7 @@ type KVIndex[K comparable] struct {
 }
 
 // NewKVIndex creates a new instance of the index backed by a persisted database
-func NewKVIndex[K comparable](db *leveldb.DB, table []byte, serializer common.Serializer[K]) (p *KVIndex[K], err error) {
+func NewKVIndex[K comparable](db *leveldb.DB, table common.TableSpaces, serializer common.Serializer[K]) (p *KVIndex[K], err error) {
 	// read the last hash from the database
 	var hash []byte
 	if hash, err = db.Get(common.AppendKeyStr(table, HashKey), nil); err != nil {
