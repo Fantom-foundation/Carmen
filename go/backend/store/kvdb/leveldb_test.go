@@ -95,10 +95,6 @@ func TestPages(t *testing.T) {
 	_ = s.Set(13, C)
 	_ = s.Set(14, A)
 
-	_ = s.Set(1500, B) // page 300
-	_ = s.Set(1501, C)
-	_ = s.Set(1504, A)
-
 	p1, _ := s.GetPage(0)
 
 	p1Expected := make([]byte, 0)
@@ -138,13 +134,21 @@ func TestPages(t *testing.T) {
 		t.Errorf("Page is incorrect")
 	}
 
-	p4, _ := s.GetPage(300)
+	// test correct lexicografical order
+	_ = s.Set(1500, A) // page 300   key hex: Little-Endian: DC 05,  Big-Endian: 05 DC
+	_ = s.Set(1501, A)
+	_ = s.Set(1502, A)
+	_ = s.Set(1503, A)
+	_ = s.Set(1504, A)
 
+	_ = s.Set(1756, B) // page 351   key hex: Little-Endian: DC 06,  Big-Endian: DC 06
+
+	p4, _ := s.GetPage(300)
 	p4Expected := make([]byte, 0)
-	p4Expected = append(p4Expected, serializer.ToBytes(B)...) // position 1 in page
-	p4Expected = append(p4Expected, serializer.ToBytes(C)...) // position 2 in page
-	p4Expected = append(p4Expected, make([]byte, 32)...)      // position 3 in page
-	p4Expected = append(p4Expected, make([]byte, 32)...)      // position 4 in page
+	p4Expected = append(p4Expected, serializer.ToBytes(A)...) // position 1 in page
+	p4Expected = append(p4Expected, serializer.ToBytes(A)...) // position 2 in page
+	p4Expected = append(p4Expected, serializer.ToBytes(A)...) // position 3 in page
+	p4Expected = append(p4Expected, serializer.ToBytes(A)...) // position 4 in page
 	p4Expected = append(p4Expected, serializer.ToBytes(A)...) // position 5 in page
 
 	if bytes.Compare(p4, p4Expected) != 0 {
