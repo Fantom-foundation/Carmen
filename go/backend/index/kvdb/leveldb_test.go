@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/syndtr/goleveldb/leveldb"
 	"os"
 	"testing"
 )
@@ -21,7 +22,7 @@ const (
 )
 
 func TestImplements(t *testing.T) {
-	var persistent Persistent[*common.Address]
+	var persistent KVIndex[*common.Address]
 	var _ index.Index[*common.Address, uint32] = &persistent
 }
 
@@ -30,8 +31,11 @@ func TestBasicOperation(t *testing.T) {
 		t.Errorf("IO Error: %s", err)
 	}
 
-	persistent, _ := New[common.Address](DbPath, common.AddressSerializer{})
-	defer persistent.Close()
+	db := openDb(t)
+	persistent, _ := New[common.Address](db, common.BalanceKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 
 	indexA, err := persistent.GetOrAdd(A)
 	if err != nil {
@@ -87,8 +91,11 @@ func TestDataPersisted(t *testing.T) {
 		t.Errorf("IO Error: %s", err)
 	}
 
-	persistent, _ := New[common.Address](DbPath, common.AddressSerializer{})
-
+	db := openDb(t)
+	persistent, _ := New[common.Address](db, common.NonceKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 	_, _ = persistent.GetOrAdd(A)
 	_, _ = persistent.GetOrAdd(B)
 	if !persistent.Contains(A) {
@@ -101,9 +108,12 @@ func TestDataPersisted(t *testing.T) {
 	}
 
 	// close and reopen
-	persistent.Close()
-	persistent, _ = New[common.Address](DbPath, common.AddressSerializer{})
-	defer persistent.Close()
+	closeDb(t, db, persistent)
+	db = openDb(t)
+	persistent, _ = New[common.Address](db, common.NonceKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 
 	// check the values are still there
 	if !persistent.Contains(A) {
@@ -132,8 +142,11 @@ func TestHash(t *testing.T) {
 		t.Errorf("IO Error: %s", err)
 	}
 
-	persistent, _ := New[common.Address](DbPath, common.AddressSerializer{})
-	defer persistent.Close()
+	db := openDb(t)
+	persistent, _ := New[common.Address](db, common.SlotKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 
 	// the hash is the default one first
 	h0, _ := persistent.GetStateHash()
@@ -184,14 +197,22 @@ func TestHashPersisted(t *testing.T) {
 		t.Errorf("IO Error: %s", err)
 	}
 
-	persistent, _ := New[common.Address](DbPath, common.AddressSerializer{})
-
+	db := openDb(t)
+	persistent, _ := New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 	_, _ = persistent.GetOrAdd(A)
 	_, _ = persistent.GetOrAdd(B)
 
 	// reopen
-	persistent.Close()
-	persistent, _ = New[common.Address](DbPath, common.AddressSerializer{})
+	closeDb(t, db, persistent)
+
+	db = openDb(t)
+	persistent, _ = New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 
 	// hash must be still there
 	h, _ := persistent.GetStateHash()
@@ -206,13 +227,20 @@ func TestHashPersistedAndAdded(t *testing.T) {
 		t.Errorf("IO Error: %s", err)
 	}
 
-	persistent, _ := New[common.Address](DbPath, common.AddressSerializer{})
-
+	db := openDb(t)
+	persistent, _ := New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 	_, _ = persistent.GetOrAdd(A)
 
 	// reopen
-	persistent.Close()
-	persistent, _ = New[common.Address](DbPath, common.AddressSerializer{})
+	closeDb(t, db, persistent)
+	db = openDb(t)
+	persistent, _ = New[common.Address](db, common.ValueKey, common.AddressSerializer{})
+	defer func() {
+		closeDb(t, db, persistent)
+	}()
 
 	// hash must be still there even when adding A and B in different sessions
 	_, _ = persistent.GetOrAdd(B)
@@ -221,4 +249,18 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	if fmt.Sprintf("%x\n", h) != fmt.Sprintf("%s\n", HashAB) {
 		t.Errorf("Hash is %x and not %s", h, HashAB)
 	}
+}
+
+func openDb(t *testing.T) (db *leveldb.DB) {
+	db, err := leveldb.OpenFile(DbPath, nil)
+	if err != nil {
+		t.Errorf("Cannot open DB, err: %s", err)
+	}
+
+	return
+}
+
+func closeDb[K common.Address](t *testing.T, db *leveldb.DB, p *KVIndex[K]) {
+	_ = p.Close()
+	_ = db.Close()
 }
