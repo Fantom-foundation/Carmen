@@ -27,6 +27,16 @@ func NewHashIndex[K comparable](serializer common.Serializer[K]) *HashIndex[K] {
 	}
 }
 
+// InitHashIndex creates a new instance with the initial hash
+func InitHashIndex[K comparable](hash common.Hash, serializer common.Serializer[K]) *HashIndex[K] {
+	return &HashIndex[K]{
+		hash:           hash,
+		keys:           []K{},
+		serializer:     serializer,
+		hashSerializer: common.HashSerializer{},
+	}
+}
+
 // AddKey accumulates a key to be hashed as part of the commit.
 func (hi *HashIndex[K]) AddKey(key K) {
 	hi.keys = append(hi.keys, key)
