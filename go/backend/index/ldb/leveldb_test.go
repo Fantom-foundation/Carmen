@@ -211,7 +211,7 @@ func TestHashPersisted(t *testing.T) {
 	// hash must be still there
 	h, _ := persistent.GetStateHash()
 
-	if fmt.Sprintf("%x\n", h) != fmt.Sprintf("%s\n", HashAB) {
+	if fmt.Sprintf("%x", h) != HashAB {
 		t.Errorf("Hash is %x and not %s", h, HashAB)
 	}
 }
@@ -241,7 +241,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	_, _ = persistent.GetOrAdd(B)
 	h, _ := persistent.GetStateHash()
 
-	if fmt.Sprintf("%x\n", h) != fmt.Sprintf("%s\n", HashAB) {
+	if fmt.Sprintf("%x", h) != HashAB {
 		t.Errorf("Hash is %x and not %s", h, HashAB)
 	}
 }
