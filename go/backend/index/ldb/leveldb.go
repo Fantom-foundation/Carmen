@@ -1,7 +1,6 @@
 package ldb
 
 import (
-	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -14,17 +13,23 @@ const (
 )
 
 // KVIndex represents a key-value store for holding the index data.
-type KVIndex[K comparable] struct {
-	db             *leveldb.DB
-	table          common.TableSpace
-	serializer     common.Serializer[K]
-	hashIndex      *index.HashIndex[K]
-	lastIndex      uint32
-	hashSerializer common.HashSerializer
+type KVIndex[K comparable, I common.Identifier] struct {
+	db              *leveldb.DB
+	table           common.TableSpace
+	keySerializer   common.Serializer[K]
+	indexSerializer common.Serializer[I]
+	hashIndex       *index.HashIndex[K]
+	lastIndex       I
+	hashSerializer  common.HashSerializer
 }
 
 // NewKVIndex creates a new instance of the index backed by a persisted database
-func NewKVIndex[K comparable](db *leveldb.DB, table common.TableSpace, serializer common.Serializer[K]) (p *KVIndex[K], err error) {
+func NewKVIndex[K comparable, I common.Identifier](
+	db *leveldb.DB,
+	table common.TableSpace,
+	keySerializer common.Serializer[K],
+	indexSerializer common.Serializer[I]) (p *KVIndex[K, I], err error) {
+
 	// read the last hash from the database
 	var hash []byte
 	if hash, err = db.Get(table.AppendKeyStr(HashKey), nil); err != nil {
@@ -46,19 +51,20 @@ func NewKVIndex[K comparable](db *leveldb.DB, table common.TableSpace, serialize
 	}
 
 	hashSerializer := common.HashSerializer{}
-	p = &KVIndex[K]{
-		db:             db,
-		table:          table,
-		serializer:     serializer,
-		hashIndex:      index.InitHashIndex[K](hashSerializer.FromBytes(hash), serializer),
-		lastIndex:      binary.LittleEndian.Uint32(last),
-		hashSerializer: hashSerializer,
+	p = &KVIndex[K, I]{
+		db:              db,
+		table:           table,
+		keySerializer:   keySerializer,
+		indexSerializer: indexSerializer,
+		hashIndex:       index.InitHashIndex[K](hashSerializer.FromBytes(hash), keySerializer),
+		lastIndex:       indexSerializer.FromBytes(last),
+		hashSerializer:  hashSerializer,
 	}
 
 	return p, nil
 }
 
-func (m *KVIndex[K]) GetOrAdd(key K) (idx uint32, err error) {
+func (m *KVIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
 	if val, err = m.db.Get(m.appendKey(key), nil); err != nil {
 		// if the error is actually a non-existing key, we assign a new index
@@ -66,12 +72,10 @@ func (m *KVIndex[K]) GetOrAdd(key K) (idx uint32, err error) {
 
 			// map the input key to the next level as well as storing the next index
 			idx = m.lastIndex
-			idxArr := make([]byte, 4)
-			binary.LittleEndian.PutUint32(idxArr, m.lastIndex)
+			idxArr := m.indexSerializer.ToBytes(m.lastIndex)
 
 			m.lastIndex = m.lastIndex + 1
-			nextIdxArr := make([]byte, 4)
-			binary.LittleEndian.PutUint32(nextIdxArr, m.lastIndex)
+			nextIdxArr := m.indexSerializer.ToBytes(m.lastIndex)
 
 			batch := new(leveldb.Batch)
 			batch.Put(m.appendKeyStr(LastIndexKey), nextIdxArr)
@@ -84,18 +88,18 @@ func (m *KVIndex[K]) GetOrAdd(key K) (idx uint32, err error) {
 			return
 		}
 	} else {
-		idx = binary.LittleEndian.Uint32(val)
+		idx = m.indexSerializer.FromBytes(val)
 	}
 
 	return idx, nil
 }
 
-func (m *KVIndex[K]) Contains(key K) bool {
+func (m *KVIndex[K, I]) Contains(key K) bool {
 	exists, _ := m.db.Has(m.appendKey(key), nil)
 	return exists
 }
 
-func (m *KVIndex[K]) GetStateHash() (hash common.Hash, err error) {
+func (m *KVIndex[K, I]) GetStateHash() (hash common.Hash, err error) {
 	// compute and persist new hash
 	if hash, err = m.hashIndex.Commit(); err != nil {
 		return
@@ -108,16 +112,16 @@ func (m *KVIndex[K]) GetStateHash() (hash common.Hash, err error) {
 	return
 }
 
-func (m *KVIndex[K]) Close() (err error) {
+func (m *KVIndex[K, I]) Close() (err error) {
 	// commit the state
 	_, err = m.GetStateHash()
 	return
 }
 
-func (m *KVIndex[K]) appendKey(key K) []byte {
-	return m.table.AppendKey(m.serializer.ToBytes(key))
+func (m *KVIndex[K, I]) appendKey(key K) []byte {
+	return m.table.AppendKey(m.keySerializer.ToBytes(key))
 }
 
-func (m *KVIndex[K]) appendKeyStr(key string) []byte {
+func (m *KVIndex[K, I]) appendKeyStr(key string) []byte {
 	return m.table.AppendKeyStr(key)
 }
