@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
@@ -115,5 +116,67 @@ func NewInMemoryComposition() State {
 	var balancesStore store.Store[uint32, common.Balance] = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
 	var valuesStore store.Store[uint32, common.Value] = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
 
-	return New(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
+	return NewService(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
+}
+
+var testingErr = fmt.Errorf("testing error")
+
+type failingStore[I common.Identifier, V any] struct {
+	store.Store[I, V]
+}
+
+func (m failingStore[I, V]) Get(id I) (value V, err error) {
+	err = testingErr
+	return
+}
+
+type failingIndex[K comparable, I common.Identifier] struct {
+	index.Index[K, I]
+}
+
+func (m failingIndex[K, I]) GetOrAdd(key K) (id I, err error) {
+	err = testingErr
+	return
+}
+
+func TestFailingStore(t *testing.T) {
+	state := NewInMemoryComposition().(*Service[uint32])
+	state.balancesStore = failingStore[uint32, common.Balance]{state.balancesStore}
+	state.noncesStore = failingStore[uint32, common.Nonce]{state.noncesStore}
+	state.valuesStore = failingStore[uint32, common.Value]{state.valuesStore}
+
+	_, err := state.GetBalance(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the store err; returned %s", err)
+	}
+
+	_, err = state.GetNonce(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the store err; returned %s", err)
+	}
+
+	_, err = state.GetStorage(address1, key1)
+	if err != testingErr {
+		t.Errorf("State service does not return the store err; returned %s", err)
+	}
+}
+
+func TestFailingIndex(t *testing.T) {
+	state := NewInMemoryComposition().(*Service[uint32])
+	state.addressIndex = failingIndex[common.Address, uint32]{state.addressIndex}
+
+	_, err := state.GetBalance(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the index err; returned %s", err)
+	}
+
+	_, err = state.GetNonce(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the index err; returned %s", err)
+	}
+
+	_, err = state.GetStorage(address1, key1)
+	if err != testingErr {
+		t.Errorf("State service does not return the index err; returned %s", err)
+	}
 }
