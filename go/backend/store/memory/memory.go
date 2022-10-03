@@ -1,31 +1,34 @@
 package memory
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // Store is an in-memory store.Store implementation - it maps IDs to values
 type Store[I common.Identifier, V any] struct {
-	data        [][]byte // data of pages [page][byte of page]
-	hashTree    HashTree
-	serializer  common.Serializer[V]
-	pageSize    int // the amount of items stored in one database page
-	itemSize    int // the amount of bytes per one value
-	itemDefault V
+	data            [][]byte // data of pages [page][byte of page]
+	hashTree        hashtree.HashTree
+	serializer      common.Serializer[V]
+	pageSize        int // the amount of items stored in one database page
+	itemSize        int // the amount of bytes per one value
+	branchingFactor int
+	itemDefault     V
 }
 
 // NewStore constructs a new instance of Store.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[I common.Identifier, V any](serializer common.Serializer[V], itemDefault V, pageSize int, hashTreeFactor int) *Store[I, V] {
-	memory := Store[I, V]{
-		data:        [][]byte{},
-		serializer:  serializer,
-		pageSize:    pageSize,
-		itemSize:    serializer.Size(),
-		itemDefault: itemDefault,
+func NewStore[I common.Identifier, V any](serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) *Store[I, V] {
+	memory := &Store[I, V]{
+		data:            [][]byte{},
+		serializer:      serializer,
+		pageSize:        pageSize,
+		itemSize:        serializer.Size(),
+		branchingFactor: branchingFactor,
+		itemDefault:     itemDefault,
 	}
-	memory.hashTree = NewHashTree(hashTreeFactor, &memory)
-	return &memory
+	memory.hashTree = CreateHashTreeFactory(branchingFactor).Create(memory)
+	return memory
 }
 
 // itemPosition provides the position of an item in data pages
