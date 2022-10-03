@@ -34,6 +34,8 @@ func TestStoresHashingByComparison(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
+
 	defaultItem := common.Value{}
 	serializer := common.ValueSerializer{}
 

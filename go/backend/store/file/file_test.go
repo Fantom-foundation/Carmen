@@ -25,6 +25,7 @@ func TestStoringIntoFileStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	defaultItem := common.Value{}
 	memory, err := NewStore[uint64, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
@@ -65,6 +66,7 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	defaultItem := common.Value{}
 	memory, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
@@ -105,6 +107,7 @@ func TestHashingInFileStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	defaultItem := common.Value{}
 	memory, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)

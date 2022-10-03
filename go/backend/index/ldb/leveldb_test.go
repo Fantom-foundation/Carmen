@@ -29,6 +29,7 @@ func TestBasicOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address](db, common.BalanceKey, common.AddressSerializer{})
@@ -90,6 +91,7 @@ func TestDataPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address](db, common.NonceKey, common.AddressSerializer{})
@@ -142,6 +144,7 @@ func TestHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address](db, common.SlotKey, common.AddressSerializer{})
@@ -190,6 +193,7 @@ func TestHashPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address](db, common.ValueKey, common.AddressSerializer{})
@@ -221,6 +225,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address](db, common.ValueKey, common.AddressSerializer{})
