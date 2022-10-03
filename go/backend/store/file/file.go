@@ -53,14 +53,15 @@ func (m *Store[I, V]) pageFile(page int) (path string) {
 
 // GetPage provides a page bytes for needs of the hash obtaining
 func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
-	data, err := os.ReadFile(m.pageFile(page))
+	buffer := make([]byte, m.pageSize*m.itemSize)
+	file, err := os.Open(m.pageFile(page))
 	if err != nil {
 		return nil, err
 	}
-	if len(data) < int(m.pageSize)*m.itemSize {
-		data = append(data, make([]byte, int(m.pageSize)*m.itemSize-len(data))...)
-	}
-	return data, err
+	defer file.Close()
+
+	_, err = file.Read(buffer)
+	return buffer, err
 }
 
 // Set a value of an item
