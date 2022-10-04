@@ -29,6 +29,7 @@ func TestBasicOperation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
@@ -90,6 +91,7 @@ func TestDataPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
@@ -142,6 +144,7 @@ func TestHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
@@ -190,6 +193,7 @@ func TestHashPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
@@ -221,6 +225,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
 	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})

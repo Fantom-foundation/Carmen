@@ -14,6 +14,7 @@ func TestHashtreeInitialState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	pages := [][]byte{}
 	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
@@ -43,6 +44,7 @@ func TestHashtreeUnchangedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	pages := make([][]byte, 10)
 	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
@@ -75,6 +77,7 @@ func TestHashtreeChangedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	pages := make([][]byte, 10)
 	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
@@ -112,6 +115,8 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDirA)
+	defer os.RemoveAll(tmpDirB)
 
 	// initialize two different states
 	pagesA := [][]byte{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {0}, {0}}
@@ -163,6 +168,7 @@ func TestAmountOfLevels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable to create testing db directory")
 	}
+	defer os.RemoveAll(tmpDir)
 
 	branchingFactor := 3
 	pages := make([][]byte, branchingFactor*branchingFactor+1)
