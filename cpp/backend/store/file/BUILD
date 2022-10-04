@@ -42,6 +42,7 @@ cc_binary(
         ":file",
         "//common:file_util",
         "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
     ],
     testonly = True,
 )
