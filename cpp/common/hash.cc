@@ -47,6 +47,10 @@ void Sha256Hasher::Ingest(const std::byte* data, std::size_t length) {
   _impl->Ingest(data, length);
 }
 
+void Sha256Hasher::Ingest(std::span<const std::byte> data) {
+  _impl->Ingest(data.data(), data.size());
+}
+
 void Sha256Hasher::Ingest(std::string_view str) {
   Ingest(reinterpret_cast<const std::byte*>(str.data()), str.size());
 }
