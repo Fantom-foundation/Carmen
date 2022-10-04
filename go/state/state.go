@@ -43,8 +43,8 @@ type Service[I common.Identifier] struct {
 	hashSerializer common.HashSerializer
 }
 
-// New creates a new instance of this service
-func New[I common.Identifier](
+// NewService creates a new instance of this service
+func NewService[I common.Identifier](
 	addressIndex index.Index[common.Address, I],
 	keyIndex index.Index[common.Key, I],
 	slotIndex index.Index[common.SlotIdx[I], I],
@@ -56,45 +56,51 @@ func New[I common.Identifier](
 }
 
 func (s *Service[I]) GetBalance(address common.Address) (balance common.Balance, err error) {
-	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
-		balance, err = s.balancesStore.Get(idx)
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
 	}
-	return
+	return s.balancesStore.Get(idx)
 }
 
 func (s *Service[I]) SetBalance(address common.Address, balance common.Balance) (err error) {
-	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
-		err = s.balancesStore.Set(idx, balance)
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
 	}
-	return
+	return s.balancesStore.Set(idx, balance)
 }
 
 func (s *Service[I]) GetNonce(address common.Address) (nonce common.Nonce, err error) {
-	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
-		nonce, err = s.noncesStore.Get(idx)
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
 	}
-	return
+	return s.noncesStore.Get(idx)
 }
 
 func (s *Service[I]) SetNonce(address common.Address, nonce common.Nonce) (err error) {
-	if idx, err := s.addressIndex.GetOrAdd(address); err == nil {
-		err = s.noncesStore.Set(idx, nonce)
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
 	}
-	return
+	return s.noncesStore.Set(idx, nonce)
 }
 
 func (s *Service[I]) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
-	if slotIdx, err := s.mapStorage(address, key); err == nil {
-		value, err = s.valuesStore.Get(slotIdx)
+	slotIdx, err := s.mapStorage(address, key)
+	if err != nil {
+		return
 	}
-	return
+	return s.valuesStore.Get(slotIdx)
 }
 
 func (s *Service[I]) SetStorage(address common.Address, key common.Key, value common.Value) (err error) {
-	if slotIdx, err := s.mapStorage(address, key); err == nil {
-		err = s.valuesStore.Set(slotIdx, value)
+	slotIdx, err := s.mapStorage(address, key)
+	if err != nil {
+		return
 	}
-	return
+	return s.valuesStore.Set(slotIdx, value)
 }
 
 func (s *Service[I]) GetHash() (hash common.Hash, err error) {
@@ -143,11 +149,13 @@ func (s *Service[I]) GetHash() (hash common.Hash, err error) {
 
 // mapStorage finds mapping from address and the values key to the values slot
 func (s *Service[I]) mapStorage(address common.Address, key common.Key) (slotIdx I, err error) {
-	if addressIdx, err := s.addressIndex.GetOrAdd(address); err == nil {
-		if keyIdx, err := s.keyIndex.GetOrAdd(key); err == nil {
-			slotIdx, err = s.slotIndex.GetOrAdd(common.SlotIdx[I]{addressIdx, keyIdx})
-		}
+	addressIdx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
 	}
-
-	return
+	keyIdx, err := s.keyIndex.GetOrAdd(key)
+	if err != nil {
+		return
+	}
+	return s.slotIndex.GetOrAdd(common.SlotIdx[I]{addressIdx, keyIdx})
 }
