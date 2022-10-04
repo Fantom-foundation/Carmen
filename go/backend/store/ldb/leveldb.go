@@ -50,7 +50,7 @@ func (m *KVStore[I, V]) itemPosition(id I) (page int, position int) {
 func (m *KVStore[I, V]) GetPage(page int) (pageData []byte, err error) {
 	pageStartKey := page * m.pageSize
 	pageEndKey := pageStartKey + m.pageSize
-	r := util.Range{Start: m.appendKey(I(pageStartKey)), Limit: m.appendKey(I(pageEndKey))}
+	r := util.Range{Start: m.convertKey(I(pageStartKey)), Limit: m.convertKey(I(pageEndKey))}
 	iter := m.db.NewIterator(&r, nil)
 	defer iter.Release()
 
@@ -70,7 +70,7 @@ func (m *KVStore[I, V]) GetPage(page int) (pageData []byte, err error) {
 
 func (m *KVStore[I, V]) Set(id I, value V) (err error) {
 	// index is mapped in the database directly
-	if err = m.db.Put(m.appendKey(id), m.valueSerializer.ToBytes(value), nil); err == nil {
+	if err = m.db.Put(m.convertKey(id), m.valueSerializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
 		m.hashTree.MarkUpdated(page)
 	}
@@ -80,7 +80,7 @@ func (m *KVStore[I, V]) Set(id I, value V) (err error) {
 func (m *KVStore[I, V]) Get(id I) (v V, err error) {
 	// index is mapped in the database directly
 	var val []byte
-	if val, err = m.db.Get(m.appendKey(id), nil); err != nil {
+	if val, err = m.db.Get(m.convertKey(id), nil); err != nil {
 		if err == leveldb.ErrNotFound {
 			return m.itemDefault, nil
 		}
@@ -101,6 +101,9 @@ func (m *KVStore[I, V]) Close() error {
 	return err
 }
 
-func (m *KVStore[I, V]) appendKey(idx I) []byte {
+// convertKey translates the Index representation of the key into a database key.
+// The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
+// by the key serializer
+func (m *KVStore[I, V]) convertKey(idx I) []byte {
 	return m.table.AppendKey(m.indexSerializer.ToBytes(idx))
 }

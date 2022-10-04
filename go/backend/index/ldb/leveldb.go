@@ -66,7 +66,7 @@ func NewKVIndex[K comparable, I common.Identifier](
 
 func (m *KVIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
-	if val, err = m.db.Get(m.appendKey(key), nil); err != nil {
+	if val, err = m.db.Get(m.convertKey(key), nil); err != nil {
 		// if the error is actually a non-existing key, we assign a new index
 		if err == errors.ErrNotFound {
 
@@ -78,8 +78,8 @@ func (m *KVIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
 			nextIdxArr := m.indexSerializer.ToBytes(m.lastIndex)
 
 			batch := new(leveldb.Batch)
-			batch.Put(m.appendKeyStr(LastIndexKey), nextIdxArr)
-			batch.Put(m.appendKey(key), idxArr)
+			batch.Put(m.convertKeyStr(LastIndexKey), nextIdxArr)
+			batch.Put(m.convertKey(key), idxArr)
 			if err = m.db.Write(batch, nil); err != nil {
 				return
 			}
@@ -95,7 +95,7 @@ func (m *KVIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
 }
 
 func (m *KVIndex[K, I]) Contains(key K) bool {
-	exists, _ := m.db.Has(m.appendKey(key), nil)
+	exists, _ := m.db.Has(m.convertKey(key), nil)
 	return exists
 }
 
@@ -105,7 +105,7 @@ func (m *KVIndex[K, I]) GetStateHash() (hash common.Hash, err error) {
 		return
 	}
 
-	if err = m.db.Put(m.appendKeyStr(HashKey), m.hashSerializer.ToBytes(hash), nil); err != nil {
+	if err = m.db.Put(m.convertKeyStr(HashKey), m.hashSerializer.ToBytes(hash), nil); err != nil {
 		return
 	}
 
@@ -118,10 +118,16 @@ func (m *KVIndex[K, I]) Close() (err error) {
 	return
 }
 
-func (m *KVIndex[K, I]) appendKey(key K) []byte {
+// convertKey translates the Index representation of the key into a database key.
+// The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
+// by the key serializer
+func (m *KVIndex[K, I]) convertKey(key K) []byte {
 	return m.table.AppendKey(m.keySerializer.ToBytes(key))
 }
 
-func (m *KVIndex[K, I]) appendKeyStr(key string) []byte {
+// convertKeyStr translates the Index representation of the key into a database key.
+// The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
+// from string
+func (m *KVIndex[K, I]) convertKeyStr(key string) []byte {
 	return m.table.AppendKeyStr(key)
 }
