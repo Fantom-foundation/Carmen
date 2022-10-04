@@ -108,9 +108,9 @@ func TestMoreInserts(t *testing.T) {
 }
 
 func NewInMemoryComposition() State {
-	var addressIndex index.Index[common.Address, uint32] = indexmem.NewMemory[common.Address](common.AddressSerializer{})
-	var keyIndex index.Index[common.Key, uint32] = indexmem.NewMemory[common.Key](common.KeySerializer{})
-	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewMemory[common.SlotIdx[uint32]](common.SlotIdxSerializer32{})
+	var addressIndex index.Index[common.Address, uint32] = indexmem.NewMemory[common.Address, uint32](common.AddressSerializer{})
+	var keyIndex index.Index[common.Key, uint32] = indexmem.NewMemory[common.Key, uint32](common.KeySerializer{})
+	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewMemory[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	var noncesStore store.Store[uint32, common.Nonce] = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, common.Nonce{}, PageSize, HashTreeFactor)
 	var balancesStore store.Store[uint32, common.Balance] = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
 	var valuesStore store.Store[uint32, common.Value] = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
