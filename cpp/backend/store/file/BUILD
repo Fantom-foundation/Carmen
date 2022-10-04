@@ -35,6 +35,17 @@ cc_test(
     ],
 )
 
+cc_binary(
+    name = "file_benchmark",
+    srcs = ["file_benchmark.cc"],
+    deps = [
+        ":file",
+        "//common:file_util",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+    testonly = True,
+)
+
 cc_library(
     name = "page_pool",
     hdrs = ["page_pool.h"],
