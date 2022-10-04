@@ -35,13 +35,17 @@ void RawFile::Write(std::size_t pos, std::span<const std::byte> span) {
 void RawFile::Flush() { std::flush(data_); }
 
 void RawFile::GrowFileIfNeeded(std::size_t needed) {
+  // Retain a 256 KiB buffer of zeros for initializing disk space.
+  constexpr static std::size_t kStepSize = 1 << 18;
+  static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
     return;
   }
   data_.seekp(0, std::ios::end);
   while (file_size_ < needed) {
-    data_.put(0);
-    file_size_++;
+    auto step = std::min(kStepSize, needed - file_size_);
+    data_.write(kZeros->data(), step);
+    file_size_ += step;
   }
 }
 
