@@ -26,7 +26,7 @@ func CreateHashTreeFactory(branchingFactor int) *hashTreeFactory {
 	return &hashTreeFactory{branchingFactor: branchingFactor}
 }
 
-// Create creates a new instance of the HashTree, this will be a singleton
+// Create creates a new instance of the HashTree
 func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.HashTree {
 	return NewHashTree(f.branchingFactor, pageProvider)
 }

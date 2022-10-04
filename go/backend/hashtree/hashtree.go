@@ -17,8 +17,8 @@ type PageProvider interface {
 	GetPage(page int) ([]byte, error)
 }
 
-// HashTreeFactory creates a new instance of the HashTree
-type HashTreeFactory interface {
+// Factory creates a new instance of the HashTree
+type Factory interface {
 
 	// Create creates a new instance of hash tree with given branching factor and page provider
 	Create(pageProvider PageProvider) HashTree

@@ -7,11 +7,13 @@ const (
 	// BalanceKey is a respective "table space"
 	BalanceKey TableSpace = 'B'
 	// NonceKey is a respective "table space"
-	NonceKey = 'N'
+	NonceKey TableSpace = 'N'
 	// SlotKey is a respective "table space"
-	SlotKey = 'S'
+	SlotKey TableSpace = 'S'
 	// ValueKey is a respective "table space"
-	ValueKey = 'V'
+	ValueKey TableSpace = 'V'
+	// HashKey is a respective "table space" for the hash tree
+	HashKey TableSpace = 'H'
 )
 
 // AppendKey converts the input key to its respective table space

@@ -25,7 +25,7 @@ func NewStore[I common.Identifier, V any](
 	table common.TableSpace,
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],
-	hashTreeFactory hashtree.HashTreeFactory,
+	hashTreeFactory hashtree.Factory,
 	itemDefault V,
 	pageSize int) (store *KVStore[I, V], err error) {
 

@@ -33,7 +33,7 @@ func CreateHashTreeFactory(path string, branchingFactor int) *hashTreeFactory {
 	return &hashTreeFactory{path: path, branchingFactor: branchingFactor}
 }
 
-// Create creates a new instance of the HashTree, this will be a singleton
+// Create creates a new instance of the HashTree
 func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.HashTree {
 	return NewHashTree(f.path, f.branchingFactor, pageProvider)
 }
