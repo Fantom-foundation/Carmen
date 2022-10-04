@@ -78,7 +78,7 @@ class HashTree {
 
   // Fetches the hash value for a given level / position in the reduction tree.
   // If the position does not exist, it is created.
-  Hash& GetHash(std::size_t level, std::size_t pos);
+  Hash& GetMutableHash(std::size_t level, std::size_t pos);
 
   // Keeps track of the total number of managed pages. Used internally whenever
   // new pages may be added.

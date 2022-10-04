@@ -81,7 +81,7 @@ class PagePool {
   std::vector<std::unique_ptr<Listener>> listeners_;
 };
 
-// A PagePoolListener provides a observer interface to the activities within a
+// A PagePoolListener provides an observer interface to the activities within a
 // PagePool. It is intended to be used for injecting operations on page load
 // and/or evict operations.
 template <Trivial V, std::size_t page_size>

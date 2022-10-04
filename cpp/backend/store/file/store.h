@@ -22,8 +22,8 @@ class FileStore {
   void Set(const K& key, V value);
 
   // Retrieves the value associated to the given key. If no values has
-  // been previously set using a the Set(..) function above, a zero-initialized
-  // value is returned. The returned reference is only valued until the next
+  // been previously set using the Set(..) function above, a zero-initialized
+  // value is returned. The returned reference is only valid until the next
   // operation on the store.
   const V& Get(const K& key) const;
 

@@ -5,7 +5,7 @@ namespace carmen::backend::store {
 namespace internal {
 
 RawFile::RawFile(std::filesystem::path file) {
-  // Opening the file read-only first creates the file in case it does not
+  // Opening the file write-only first creates the file in case it does not
   // exist.
   data_.open(file, std::ios::binary | std::ios::out);
   data_.close();

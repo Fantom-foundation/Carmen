@@ -22,7 +22,7 @@ void HashTree::UpdateHash(PageId id, std::span<const std::byte> page) {
 
 void HashTree::UpdateHash(PageId id, const Hash& hash) {
   TrackNumPages(id);
-  GetHash(0, id) = hash;
+  GetMutableHash(0, id) = hash;
   dirty_pages_.erase(id);
   dirty_level_one_positions_.insert(id / branching_factor_);
 }
@@ -47,14 +47,14 @@ Hash HashTree::GetHash() {
   absl::flat_hash_set<int> dirty_parent;
   for (PageId i : dirty_pages_) {
     auto data = page_source_->GetPageData(i);
-    GetHash(0, i) = carmen::GetHash(hasher_, data);
+    GetMutableHash(0, i) = carmen::GetHash(hasher_, data);
     dirty_parent.insert(i / branching_factor_);
   }
   dirty_pages_.clear();
 
   // If there is only one page, the full hash is that page's hash.
   if (num_pages_ == 1) {
-    return GetHash(0, 0);
+    return GetMutableHash(0, 0);
   }
 
   // Complete list of level-1 nodes that are dirty.
@@ -73,7 +73,7 @@ Hash HashTree::GetHash() {
     for (int parent_pos : dirty_parent) {
       auto data = std::as_bytes(std::span<const Hash>(children).subspan(
           parent_pos * branching_factor_, branching_factor_));
-      GetHash(level, parent_pos) = carmen::GetHash(hasher_, data);
+      GetMutableHash(level, parent_pos) = carmen::GetHash(hasher_, data);
       new_dirty.insert(parent_pos / branching_factor_);
     }
 
@@ -103,7 +103,7 @@ std::vector<Hash>& HashTree::GetHashes(std::size_t level) {
   return hashes_[level];
 }
 
-Hash& HashTree::GetHash(std::size_t level, std::size_t pos) {
+Hash& HashTree::GetMutableHash(std::size_t level, std::size_t pos) {
   auto& level_hashes = GetHashes(level);
   if (pos >= level_hashes.size()) {
     level_hashes.resize(GetPaddedSize(pos + 1, branching_factor_));
