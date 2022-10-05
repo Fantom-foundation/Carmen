@@ -4,6 +4,7 @@ cc_test(
     deps = [
         "//backend/store/memory:store",
         "//backend/store/file:store",
+        "//common:file_util",
         "//common:test_util",
         "//common:type", 
         "@com_google_googletest//:gtest_main",
