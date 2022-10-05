@@ -32,7 +32,7 @@ func TestBasicOperation(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
-	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -94,7 +94,7 @@ func TestDataPersisted(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
-	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -112,7 +112,7 @@ func TestDataPersisted(t *testing.T) {
 	// close and reopen
 	closeDb(t, db, persistent)
 	db = openDb(t, tmpDir)
-	persistent, _ = NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ = NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -147,7 +147,7 @@ func TestHash(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
-	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -196,7 +196,7 @@ func TestHashPersisted(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
-	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -207,7 +207,7 @@ func TestHashPersisted(t *testing.T) {
 	closeDb(t, db, persistent)
 
 	db = openDb(t, tmpDir)
-	persistent, _ = NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ = NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -228,7 +228,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	db := openDb(t, tmpDir)
-	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
@@ -237,7 +237,7 @@ func TestHashPersistedAndAdded(t *testing.T) {
 	// reopen
 	closeDb(t, db, persistent)
 	db = openDb(t, tmpDir)
-	persistent, _ = NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.IdentifierSerializer32[uint32]{})
+	persistent, _ = NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	defer func() {
 		closeDb(t, db, persistent)
 	}()
