@@ -62,6 +62,36 @@ class FileWrapper<SingleFile<page_size>> {
   std::unique_ptr<SingleFile<page_size>> file_;
 };
 
+// Test the creation of files between 1 and 64 MiB.
+constexpr long kMinSize = 1 << 20;
+constexpr long kMaxSize = 1 << 26;
+
+// A benchmark testing the initialization of an empty file with a given size.
+template <typename F>
+void BM_FileInit(benchmark::State& state) {
+  constexpr static auto kPageSize = F::kPageSize;
+  const auto target_size = state.range(0);
+  using Page = std::array<std::byte, kPageSize>;
+
+  for (auto _ : state) {
+    // We create a file and only load the final page. This implicitly creates
+    // the rest of the file.
+    FileWrapper<F> wrapper;
+    F& file = wrapper.GetFile();
+    Page trg;
+    file.LoadPage(target_size / kPageSize - 1, trg);
+    benchmark::DoNotOptimize(trg[0]);
+  }
+}
+
+BENCHMARK(BM_FileInit<InMemoryFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<InMemoryFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<InMemoryFile<16384>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_FileInit<SingleFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<SingleFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<SingleFile<16384>>)->Range(kMinSize, kMaxSize);
+
 // A benchmark testing the filling of a file with zeros by starting from an
 // empty file and loading new pages in sequence.
 template <typename F>
@@ -81,10 +111,6 @@ void BM_SequentialFileFilling(benchmark::State& state) {
     }
   }
 }
-
-// Test the creation of files between 1 and 64 MiB.
-constexpr int kMinSize = 1 << 20;
-constexpr int kMaxSize = 1 << 26;
 
 BENCHMARK(BM_SequentialFileFilling<InMemoryFile<256>>)
     ->Range(kMinSize, kMaxSize);
