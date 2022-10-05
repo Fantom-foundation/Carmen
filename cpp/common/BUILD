@@ -1,4 +1,11 @@
 cc_library(
+    name = "test_util",
+    hdrs = ["test_util.h"],
+    testonly = True,
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name="hex_util",
     hdrs=["hex_util.h"],
     srcs=["hex_util.cc"],
@@ -30,6 +37,7 @@ cc_test(
     name = "type_test",
     srcs = ["type_test.cc"],
     deps = [
+        ":test_util",
         ":type",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_googletest//:gtest_main",

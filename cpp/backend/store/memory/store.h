@@ -12,26 +12,6 @@
 
 namespace carmen::backend::store {
 
-// A page of the InMemory storage holding a fixed length array of values.
-template <Trivial V, std::size_t size>
-class Page {
- public:
-  // Provides read only access to individual elements. No bounds are checked.
-  const V& operator[](int pos) const { return _data[pos]; }
-
-  // Provides mutable access to individual elements. No bounds are checked.
-  V& operator[](int pos) { return _data[pos]; }
-
-  // Appends the content of this page to the provided hasher instance.
-  void AppendTo(Sha256Hasher& hasher) {
-    hasher.Ingest(reinterpret_cast<const std::byte*>(&_data[0]),
-                  sizeof(V) * size);
-  }
-
- private:
-  std::array<V, size> _data;
-};
-
 // The InMemoryStore is an in-memory implementation of a mutable key/value
 // store. It maps provided mutation and lookup support, as well as global
 // state hashing support enabling to obtain a quick hash for the entire
@@ -50,29 +30,44 @@ class InMemoryStore {
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value) {
-    auto page_number = key / page_size;
+    auto page_number = key / elements_per_page;
     while (_pages.size() <= page_number) {
       _pages.push_back(std::make_unique<Page>());
     }
-    (*_pages[page_number])[key % page_size] = value;
+    (*_pages[page_number])[key % elements_per_page] = value;
   }
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using a the Set(..) function above, the default
   // value defined during the construction of a store instance is returned.
   const V& Get(const K& key) const {
-    auto page_number = key / page_size;
+    auto page_number = key / elements_per_page;
     if (page_number >= _pages.size()) {
       return _default_value;
     }
-    return (*_pages[page_number])[key % page_size];
+    return (*_pages[page_number])[key % elements_per_page];
   }
 
   // Computes a hash over the full content of this store.
   Hash GetHash() const;
 
  private:
-  using Page = Page<V, page_size>;
+  constexpr static auto elements_per_page = page_size / sizeof(V);
+  // A page of the InMemory storage holding a fixed length array of values.
+  class Page {
+   public:
+    // Provides read only access to individual elements. No bounds are checked.
+    const V& operator[](int pos) const { return data_[pos]; }
+
+    // Provides mutable access to individual elements. No bounds are checked.
+    V& operator[](int pos) { return data_[pos]; }
+
+    // Appends the content of this page to the provided hasher instance.
+    void AppendTo(Sha256Hasher& hasher) { hasher.Ingest(data_); }
+
+   private:
+    std::array<V, elements_per_page> data_;
+  };
 
   const V _default_value;
 
