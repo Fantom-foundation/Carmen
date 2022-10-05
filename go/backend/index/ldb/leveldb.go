@@ -61,6 +61,7 @@ func NewKVIndex[K comparable, I common.Identifier](
 		hashSerializer:  hashSerializer,
 	}
 
+	// set err to nil as it can contain an ErrNotFound, which we want to suppress
 	return p, nil
 }
 

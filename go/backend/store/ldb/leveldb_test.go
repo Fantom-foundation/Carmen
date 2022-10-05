@@ -7,7 +7,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"io"
-	"os"
 	"testing"
 )
 
@@ -32,19 +31,9 @@ const (
 )
 
 func TestEmpty(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "leveldb-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create directory")
-	}
-
-	db := openDb(t, tmpDir)
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
-	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
-	defer closeDb(db, s)
-
-	if err != nil {
-		t.Errorf("Error: %s", err)
-	}
+	tmpDir := t.TempDir()
+	db := openStoreDb(t, tmpDir)
+	s := createNewStore(t, db)
 
 	if val, err := s.Get(10); err != nil || val != defaultItem {
 		t.Errorf("Result is incorrect. Res: %s, Err: %s", val, err)
@@ -52,15 +41,9 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestBasicOperations(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "leveldb-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create directory")
-	}
-
-	db := openDb(t, tmpDir)
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
-	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
-	defer closeDb(db, s)
+	tmpDir := t.TempDir()
+	db := openStoreDb(t, tmpDir)
+	s := createNewStore(t, db)
 
 	if err := s.Set(10, A); err != nil {
 		t.Errorf("Error: %s", err)
@@ -72,16 +55,11 @@ func TestBasicOperations(t *testing.T) {
 }
 
 func TestPages(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "leveldb-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create directory")
-	}
+	tmpDir := t.TempDir()
+	db := openStoreDb(t, tmpDir)
+	s := createNewStore(t, db)
 
-	db := openDb(t, tmpDir)
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
 	serializer := common.ValueSerializer{}
-	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
-	defer closeDb(db, s)
 
 	// fill-in three pages
 	_ = s.Set(2, A) // page 1
@@ -157,25 +135,17 @@ func TestPages(t *testing.T) {
 }
 
 func TestDataPersisted(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "leveldb-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create directory")
-	}
-
-	db := openDb(t, tmpDir)
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
-	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
-	defer closeDb(db, s)
+	tmpDir := t.TempDir()
+	db := openStoreDb(t, tmpDir)
+	s := createNewStore(t, db)
 
 	if err := s.Set(10, A); err != nil {
 		t.Errorf("Error: %s", err)
 	}
 
 	closeDb(db, s)
-	db = openDb(t, tmpDir)
-	hashTree = memory.CreateHashTreeFactory(BranchingFactor)
-	s, _ = NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
-	defer closeDb(db, s)
+	db = openStoreDb(t, tmpDir)
+	s = createNewStore(t, db)
 
 	if val, err := s.Get(10); err != nil || val != A {
 		t.Errorf("Result is incorrect. Res: %s, Err: %s", val, err)
@@ -183,15 +153,9 @@ func TestDataPersisted(t *testing.T) {
 }
 
 func TestBasicHashing(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "leveldb-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create directory")
-	}
-
-	db := openDb(t, tmpDir)
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
-	s, _ := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
-	defer closeDb(db, s)
+	tmpDir := t.TempDir()
+	db := openStoreDb(t, tmpDir)
+	s := createNewStore(t, db)
 
 	if hash, err := s.GetStateHash(); (err != nil || hash != common.Hash{}) {
 		t.Errorf("Hash does not much. Hash: %s, Err: %s", hash, err)
@@ -223,11 +187,15 @@ func TestBasicHashing(t *testing.T) {
 	}
 }
 
-func openDb(t *testing.T, path string) (db *leveldb.DB) {
+func openStoreDb(t *testing.T, path string) (db *leveldb.DB) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		t.Errorf("Cannot open DB, err: %s", err)
+		t.Fatalf("Cannot open DB, err: %s", err)
 	}
+
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
 
 	return
 }
@@ -235,4 +203,19 @@ func openDb(t *testing.T, path string) (db *leveldb.DB) {
 func closeDb[I common.Identifier, K common.Value](db *leveldb.DB, p *KVStore[I, K]) {
 	_ = p.Close()
 	_ = db.Close()
+}
+
+func createNewStore(t *testing.T, db *leveldb.DB) *KVStore[uint32, common.Value] {
+	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
+	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
+
+	if err != nil {
+		t.Fatalf("unable to create Store")
+	}
+
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
+
+	return s
 }
