@@ -1,8 +1,7 @@
 #include "common/type.h"
 
-#include <sstream>
-
 #include "absl/container/flat_hash_set.h"
+#include "common/test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -11,13 +10,6 @@ namespace {
 
 using ::testing::StrEq;
 using ::testing::StrNe;
-
-template <typename T>
-std::string Print(const T& value) {
-  std::stringstream out;
-  out << value;
-  return out.str();
-}
 
 TEST(ByteValueTest, CanBePrinted) {
   ByteValue<2> container{0x12, 0xab};

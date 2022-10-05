@@ -19,7 +19,7 @@ using PageId = std::size_t;
 // array. The provided pages_size_in_byte is the number of bytes each page is
 // comprising. Note that, if page_size_in_byte is not a multiple of sizeof(V)
 // some extra bytes per page may be kept in memory and on disk.
-template <Trivial V, unsigned page_size_in_byte>
+template <Trivial V, std::size_t page_size_in_byte>
 class Page final {
  public:
   // A constant defining the number of elements stored in each page of this
@@ -56,7 +56,7 @@ class Page final {
 
 // A utility constant to get the number of elements of a given type in a page of
 // a given size.
-template <Trivial V, unsigned page_size_in_byte>
+template <Trivial V, std::size_t page_size_in_byte>
 constexpr std::size_t kNumElementsPerPage =
     Page<V, page_size_in_byte>::kNumElementsPerPage;
 
