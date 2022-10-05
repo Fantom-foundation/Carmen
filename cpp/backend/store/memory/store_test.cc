@@ -41,13 +41,6 @@ TEST(InMemoryStoreTest, EntriesCanBeUpdated) {
   EXPECT_EQ(14, store.Get(10));
 }
 
-TEST(InMemoryStoreTest, DefaultValueIsEnforced) {
-  Store store(/*default_value=*/8);
-  EXPECT_EQ(8, store.Get(10));
-  store.Set(10, 12);
-  EXPECT_EQ(12, store.Get(10));
-}
-
 TEST(InMemoryStoreTest, EmptyStoreHasZeroValueHash) {
   Store store;
   EXPECT_EQ(store.GetHash(), Hash());

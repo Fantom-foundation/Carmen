@@ -15,8 +15,16 @@ template <typename K, Trivial V, template <std::size_t> class F,
 requires File<F<page_size>, page_size>
 class FileStore {
  public:
-  // Creates a new, empty FileStore.
-  FileStore();
+  // The page size in byte used by this store.
+  constexpr static std::size_t kPageSize = page_size;
+
+  // Creates a new, empty FileStore using the given branching factor for its
+  // hash computation.
+  FileStore(std::size_t hash_branching_factor = 32);
+
+  // Creates a new FileStore based on the given file.
+  FileStore(std::size_t hash_branching_factor,
+            std::unique_ptr<F<page_size>> file);
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value);
@@ -84,9 +92,16 @@ class FileStore {
 
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size>
-requires File<F<page_size>, page_size>
-FileStore<K, V, F, page_size>::FileStore()
-    : hashes_(std::make_unique<PageProvider>(*this)) {
+requires File<F<page_size>, page_size> FileStore<K, V, F, page_size>::FileStore(
+    std::size_t hash_branching_factor)
+    : FileStore(hash_branching_factor, std::make_unique<F<page_size>>()) {}
+
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size>
+requires File<F<page_size>, page_size> FileStore<K, V, F, page_size>::FileStore(
+    std::size_t hash_branching_factor, std::unique_ptr<F<page_size>> file)
+    : pool_(std::move(file)),
+      hashes_(std::make_unique<PageProvider>(*this), hash_branching_factor) {
   pool_.AddListener(std::make_unique<PoolListener>(*this));
 }
 
