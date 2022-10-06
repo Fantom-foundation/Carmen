@@ -4,10 +4,12 @@ on:
   push:
     branches: [ "master" ]
     paths:
+      - '.github/workflow/cpp-test.yml'
       - 'cpp/**'
   pull_request:
     branches: [ "master" ]
     paths:
+      - '.github/workflow/cpp-test.yml'
       - 'cpp/**'
 
 jobs:
@@ -24,4 +26,4 @@ jobs:
           key: bazel
       - name: Run tests
         working-directory: ./cpp
-        run: bazel test //...
+        run: bazel test --config asan //...
