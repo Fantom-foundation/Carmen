@@ -1,6 +1,6 @@
 #include <random>
 
-#include "backend/store/store_wrapper.h"
+#include "backend/store/store_handler.h"
 #include "benchmark/benchmark.h"
 
 namespace carmen::backend::store {
@@ -13,11 +13,11 @@ constexpr const std::size_t kBranchFactor = 32;
 //    bazel run -c opt //backend/store:store_benchmark
 
 // Benchmarks the sequential insertion of keys into stores.
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_SequentialInsert(benchmark::State& state) {
   auto num_elements = state.range(0);
   for (auto _ : state) {
-    StoreWrapper wrapper;
+    StoreHandler wrapper;
     auto& store = wrapper.GetStore();
     for (int i = 0; i < num_elements; i++) {
       store.Set(i, Value{});
@@ -26,25 +26,25 @@ void BM_SequentialInsert(benchmark::State& state) {
 }
 
 BENCHMARK(
-    BM_SequentialInsert<StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+    BM_SequentialInsert<StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_SequentialInsert<StoreWrapper<
+BENCHMARK(BM_SequentialInsert<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_SequentialInsert<StoreWrapper<
+BENCHMARK(BM_SequentialInsert<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
 // Benchmarks sequential read of read of keys.
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_SequentialRead(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -58,25 +58,25 @@ void BM_SequentialRead(benchmark::State& state) {
 }
 
 BENCHMARK(
-    BM_SequentialRead<StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+    BM_SequentialRead<StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_SequentialRead<StoreWrapper<
+BENCHMARK(BM_SequentialRead<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_SequentialRead<StoreWrapper<
+BENCHMARK(BM_SequentialRead<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
 // Benchmarks random, uniformely distributed reads
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_UniformRandomRead(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -92,25 +92,25 @@ void BM_UniformRandomRead(benchmark::State& state) {
 }
 
 BENCHMARK(BM_UniformRandomRead<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_UniformRandomRead<StoreWrapper<
+BENCHMARK(BM_UniformRandomRead<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_UniformRandomRead<StoreWrapper<
+BENCHMARK(BM_UniformRandomRead<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
 // Benchmarks random, exponentially distributed reads
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -126,25 +126,25 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
 }
 
 BENCHMARK(BM_ExponentialRandomRead<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_ExponentialRandomRead<StoreWrapper<
+BENCHMARK(BM_ExponentialRandomRead<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_ExponentialRandomRead<StoreWrapper<
+BENCHMARK(BM_ExponentialRandomRead<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
 // Benchmarks sequential writes of keys.
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_SequentialWrite(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -158,25 +158,25 @@ void BM_SequentialWrite(benchmark::State& state) {
 }
 
 BENCHMARK(
-    BM_SequentialWrite<StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+    BM_SequentialWrite<StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_SequentialWrite<StoreWrapper<
+BENCHMARK(BM_SequentialWrite<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_SequentialWrite<StoreWrapper<
+BENCHMARK(BM_SequentialWrite<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
 // Benchmarks random, uniformely distributed writes.
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_UniformRandomWrite(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -193,25 +193,25 @@ void BM_UniformRandomWrite(benchmark::State& state) {
 }
 
 BENCHMARK(BM_UniformRandomWrite<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_UniformRandomWrite<StoreWrapper<
+BENCHMARK(BM_UniformRandomWrite<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_UniformRandomWrite<StoreWrapper<
+BENCHMARK(BM_UniformRandomWrite<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
 // Benchmarks sequential read of read of keys.
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_ExponentialRandomWrite(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -228,24 +228,24 @@ void BM_ExponentialRandomWrite(benchmark::State& state) {
 }
 
 BENCHMARK(BM_ExponentialRandomWrite<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_ExponentialRandomWrite<StoreWrapper<
+BENCHMARK(BM_ExponentialRandomWrite<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_ExponentialRandomWrite<StoreWrapper<
+BENCHMARK(BM_ExponentialRandomWrite<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_HashSequentialUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -271,24 +271,24 @@ void BM_HashSequentialUpdates(benchmark::State& state) {
 }
 
 BENCHMARK(BM_HashSequentialUpdates<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_HashSequentialUpdates<StoreWrapper<
+BENCHMARK(BM_HashSequentialUpdates<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_HashSequentialUpdates<StoreWrapper<
+BENCHMARK(BM_HashSequentialUpdates<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_HashUniformUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -318,24 +318,24 @@ void BM_HashUniformUpdates(benchmark::State& state) {
 }
 
 BENCHMARK(BM_HashUniformUpdates<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_HashUniformUpdates<StoreWrapper<
+BENCHMARK(BM_HashUniformUpdates<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_HashUniformUpdates<StoreWrapper<
+BENCHMARK(BM_HashUniformUpdates<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
-template <typename StoreWrapper>
+template <typename StoreHandler>
 void BM_HashExponentialUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
-  StoreWrapper wrapper;
+  StoreHandler wrapper;
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
@@ -365,16 +365,16 @@ void BM_HashExponentialUpdates(benchmark::State& state) {
 }
 
 BENCHMARK(BM_HashExponentialUpdates<
-              StoreWrapper<ReferenceStore<kPageSize>, kBranchFactor>>)
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_HashExponentialUpdates<StoreWrapper<
+BENCHMARK(BM_HashExponentialUpdates<StoreHandler<
               FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
-BENCHMARK(BM_HashExponentialUpdates<StoreWrapper<
+BENCHMARK(BM_HashExponentialUpdates<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run

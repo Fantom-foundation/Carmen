@@ -6,7 +6,7 @@
 
 #include "backend/store/file/file.h"
 #include "backend/store/file/store.h"
-#include "backend/store/store_wrapper.h"
+#include "backend/store/store_handler.h"
 #include "common/hash.h"
 #include "common/test_util.h"
 #include "common/type.h"
@@ -19,7 +19,7 @@ namespace {
 using ::testing::StrEq;
 
 // A test suite testing generic store implementations.
-template <typename StoreWrapper>
+template <typename StoreHandler>
 class StoreTest : public testing::Test {};
 
 TYPED_TEST_SUITE_P(StoreTest);
@@ -188,28 +188,28 @@ REGISTER_TYPED_TEST_SUITE_P(StoreTest, UninitializedValuesAreZero,
 
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.
-    StoreWrapper<ReferenceStore<32>, 32>,
-    StoreWrapper<InMemoryStore<int, Value, 32>, 32>,
-    StoreWrapper<FileStore<int, Value, InMemoryFile, 32>, 32>,
-    StoreWrapper<FileStore<int, Value, SingleFile, 32>, 32>,
+    StoreHandler<ReferenceStore<32>, 32>,
+    StoreHandler<InMemoryStore<int, Value, 32>, 32>,
+    StoreHandler<FileStore<int, Value, InMemoryFile, 32>, 32>,
+    StoreHandler<FileStore<int, Value, SingleFile, 32>, 32>,
 
     // Page size 64, branching size 3.
-    StoreWrapper<ReferenceStore<64>, 3>,
-    StoreWrapper<InMemoryStore<int, Value, 64>, 3>,
-    StoreWrapper<FileStore<int, Value, InMemoryFile, 64>, 3>,
-    StoreWrapper<FileStore<int, Value, SingleFile, 64>, 3>,
+    StoreHandler<ReferenceStore<64>, 3>,
+    StoreHandler<InMemoryStore<int, Value, 64>, 3>,
+    StoreHandler<FileStore<int, Value, InMemoryFile, 64>, 3>,
+    StoreHandler<FileStore<int, Value, SingleFile, 64>, 3>,
 
     // Page size 64, branching size 8.
-    StoreWrapper<ReferenceStore<64>, 8>,
-    StoreWrapper<InMemoryStore<int, Value, 64>, 8>,
-    StoreWrapper<FileStore<int, Value, InMemoryFile, 64>, 8>,
-    StoreWrapper<FileStore<int, Value, SingleFile, 64>, 8>,
+    StoreHandler<ReferenceStore<64>, 8>,
+    StoreHandler<InMemoryStore<int, Value, 64>, 8>,
+    StoreHandler<FileStore<int, Value, InMemoryFile, 64>, 8>,
+    StoreHandler<FileStore<int, Value, SingleFile, 64>, 8>,
 
     // Page size 128, branching size 4.
-    StoreWrapper<ReferenceStore<128>, 4>,
-    StoreWrapper<InMemoryStore<int, Value, 128>, 4>,
-    StoreWrapper<FileStore<int, Value, InMemoryFile, 128>, 4>,
-    StoreWrapper<FileStore<int, Value, SingleFile, 128>, 4>>;
+    StoreHandler<ReferenceStore<128>, 4>,
+    StoreHandler<InMemoryStore<int, Value, 128>, 4>,
+    StoreHandler<FileStore<int, Value, InMemoryFile, 128>, 4>,
+    StoreHandler<FileStore<int, Value, SingleFile, 128>, 4>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, StoreTest, StoreTypes);
 
