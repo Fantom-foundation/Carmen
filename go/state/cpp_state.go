@@ -10,7 +10,6 @@ package state
 */
 import "C"
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -34,19 +33,25 @@ func (cs *CppState) Release() {
 }
 
 func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
-	return common.Balance{}, fmt.Errorf("Not implemented")
+	var balance common.Balance
+	C.Carmen_GetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))
+	return balance, nil
 }
 
 func (cs *CppState) SetBalance(address common.Address, balance common.Balance) error {
-	return fmt.Errorf("Not implemented")
+	C.Carmen_SetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))
+	return nil
 }
 
 func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
-	return common.Nonce{}, fmt.Errorf("Not implemented")
+	var nonce common.Nonce
+	C.Carmen_GetNonce(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&nonce[0]))
+	return nonce, nil
 }
 
 func (cs *CppState) SetNonce(address common.Address, nonce common.Nonce) error {
-	return fmt.Errorf("Not implemented")
+	C.Carmen_SetNonce(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&nonce[0]))
+	return nil
 }
 
 func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.Value, error) {

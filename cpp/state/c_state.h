@@ -20,6 +20,8 @@ extern "C" {
 #define C_Address void*
 #define C_Key void*
 #define C_Value void*
+#define C_Balance void*
+#define C_Nonce void*
 
 #define C_Hash void*
 
@@ -33,6 +35,22 @@ C_State Carmen_CreateState();
 // Releases a state object, thereby causing its destruction. After releasing it,
 // no more operations may be applied on it.
 void Carmen_ReleaseState(C_State state);
+
+// -------------------------------- Balance -----------------------------------
+
+// Retrieves the balance of the given account.
+void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance);
+
+// Updates the balance of the given account.
+void Carmen_SetBalance(C_State state, C_Address addr, C_Balance balance);
+
+// --------------------------------- Nonce ------------------------------------
+
+// Retrieves the nonce of the given account.
+void Carmen_GetNonce(C_State state, C_Address addr, C_Nonce out_nonce);
+
+// Updates the nonce of the given account.
+void Carmen_SetNonce(C_State state, C_Address addr, C_Nonce nonce);
 
 // -------------------------------- Storage -----------------------------------
 

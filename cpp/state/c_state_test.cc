@@ -12,6 +12,66 @@ TEST(CStateTest, StateCanBeCreatedAndReleased) {
   Carmen_ReleaseState(state);
 }
 
+TEST(CStateTest, BalancesAreInitiallyZero) {
+  auto state = Carmen_CreateState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  Balance balance{0x02};
+  Carmen_GetBalance(state, &addr, &balance);
+  EXPECT_EQ(Balance{}, balance);
+
+  Carmen_ReleaseState(state);
+}
+
+TEST(CStateTest, BalancesCanBeUpdated) {
+  auto state = Carmen_CreateState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  Balance balance{0x02};
+  Carmen_GetBalance(state, &addr, &balance);
+  EXPECT_EQ(Balance{}, balance);
+
+  balance = Balance{0x03};
+  Carmen_SetBalance(state, &addr, &balance);
+  balance = Balance{};
+  Carmen_GetBalance(state, &addr, &balance);
+  EXPECT_EQ(Balance{0x03}, balance);
+
+  Carmen_ReleaseState(state);
+}
+
+TEST(CStateTest, NoncesAreInitiallyZero) {
+  auto state = Carmen_CreateState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  Nonce nonce{0x02};
+  Carmen_GetNonce(state, &addr, &nonce);
+  EXPECT_EQ(Nonce{}, nonce);
+
+  Carmen_ReleaseState(state);
+}
+
+TEST(CStateTest, NoncesCanBeUpdated) {
+  auto state = Carmen_CreateState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  Nonce nonce{0x02};
+  Carmen_GetNonce(state, &addr, &nonce);
+  EXPECT_EQ(Nonce{}, nonce);
+
+  nonce = Nonce{0x03};
+  Carmen_SetNonce(state, &addr, &nonce);
+  nonce = Nonce{};
+  Carmen_GetNonce(state, &addr, &nonce);
+  EXPECT_EQ(Nonce{0x03}, nonce);
+
+  Carmen_ReleaseState(state);
+}
+
 TEST(CStateTest, StorageLocationsAreInitiallyZero) {
   auto state = Carmen_CreateState();
   ASSERT_NE(state, nullptr);
