@@ -3,7 +3,6 @@ package ldb
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
-	"os"
 	"testing"
 )
 
@@ -11,11 +10,8 @@ var zeroHash = common.Hash{}
 
 // Test initial and modified state to have different hashes
 func TestHashTreeInitialState(t *testing.T) {
-	tmpDir := createHashTreeTmp(t)
-	defer removeHashTreeTmp(tmpDir)
-
-	db := openHashTreeDb(t, tmpDir)
-	defer closeHashTreeDb(t, db)
+	tmpDir := t.TempDir()
+	db := openDb(t, tmpDir)
 
 	pages := [][]byte{}
 	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
@@ -40,11 +36,8 @@ func TestHashTreeInitialState(t *testing.T) {
 
 // Test that without actual change, the hash does not change
 func TestHashTreeUnchangedState(t *testing.T) {
-	tmpDir := createHashTreeTmp(t)
-	defer removeHashTreeTmp(tmpDir)
-
-	db := openHashTreeDb(t, tmpDir)
-	defer closeHashTreeDb(t, db)
+	tmpDir := t.TempDir()
+	db := openDb(t, tmpDir)
 
 	pages := make([][]byte, 10)
 	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
@@ -73,11 +66,8 @@ func TestHashTreeUnchangedState(t *testing.T) {
 
 // Test that a change changes the hash
 func TestHashTreeChangedState(t *testing.T) {
-	tmpDir := createHashTreeTmp(t)
-	defer removeHashTreeTmp(tmpDir)
-
-	db := openHashTreeDb(t, tmpDir)
-	defer closeHashTreeDb(t, db)
+	tmpDir := t.TempDir()
+	db := openDb(t, tmpDir)
 
 	pages := make([][]byte, 10)
 	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
@@ -107,16 +97,11 @@ func TestHashTreeChangedState(t *testing.T) {
 
 // Test that two ways of building the same state leads to the same hash
 func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
-	tmpDirA := createNamedHashTreeTmp(t, "file-based-store-test-a")
-	defer removeHashTreeTmp(tmpDirA)
-	tmpDirB := createNamedHashTreeTmp(t, "file-based-store-test-b")
-	defer removeHashTreeTmp(tmpDirB)
+	tmpDirA := t.TempDir()
+	tmpDirB := t.TempDir()
 
-	db1 := openHashTreeDb(t, tmpDirA)
-	defer closeHashTreeDb(t, db1)
-
-	db2 := openHashTreeDb(t, tmpDirB)
-	defer closeHashTreeDb(t, db2)
+	db1 := openDb(t, tmpDirA)
+	db2 := openDb(t, tmpDirB)
 
 	// initialize two different states
 	pagesA := [][]byte{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {0}, {0}}
@@ -164,10 +149,8 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 
 // TestTreePersisted tests tree is persisted and returns still correct hashes after recovery
 func TestTreePersisted(t *testing.T) {
-	tmpDir := createHashTreeTmp(t)
-	defer removeHashTreeTmp(tmpDir)
-
-	db := openHashTreeDb(t, tmpDir)
+	tmpDir := t.TempDir()
+	db := openDb(t, tmpDir)
 
 	pages := make([][]byte, 10)
 	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
@@ -183,7 +166,7 @@ func TestTreePersisted(t *testing.T) {
 
 	// reopen and check the hash is still there
 	closeHashTreeDb(t, db)
-	db = openHashTreeDb(t, tmpDir)
+	db = openDb(t, tmpDir)
 	tree = CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
 
 	hashReopen, err := tree.HashRoot()
@@ -206,11 +189,14 @@ func (pp testingPageProvider) GetPage(page int) ([]byte, error) {
 	return pp.pages[page], nil
 }
 
-func openHashTreeDb(t *testing.T, path string) (db *leveldb.DB) {
+func openDb(t *testing.T, path string) (db *leveldb.DB) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		t.Errorf("Cannot open DB, err: %s", err)
+		t.Fatalf("Cannot open DB, err: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
 	return
 }
 
@@ -218,24 +204,4 @@ func closeHashTreeDb(t *testing.T, db *leveldb.DB) {
 	if err := db.Close(); err != nil {
 		t.Errorf("Cannot close DB")
 	}
-}
-
-func createHashTreeTmp(t *testing.T) (tmpDir string) {
-	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
-	if err != nil {
-		t.Errorf("unable to create testing db directory")
-	}
-	return
-}
-
-func createNamedHashTreeTmp(t *testing.T, name string) (tmpDir string) {
-	tmpDir, err := os.MkdirTemp("", name)
-	if err != nil {
-		t.Errorf("unable to create testing db directory")
-	}
-	return
-}
-
-func removeHashTreeTmp(tmpDir string) {
-	_ = os.RemoveAll(tmpDir)
 }

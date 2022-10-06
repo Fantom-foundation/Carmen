@@ -67,7 +67,7 @@ func initFileStore(b *testing.B) (idx Store[uint32, common.Value]) {
 func initLevelDbStore(b *testing.B) (store Store[uint32, common.Value], closer io.Closer) {
 	db, err := leveldb.OpenFile(b.TempDir(), nil)
 	if err != nil {
-		b.Errorf("failed to init leveldb; %s", err)
+		b.Fatalf("failed to init leveldb; %s", err)
 	}
 	hashTree := memory.CreateHashTreeFactory(Factor)
 	store, err = ldb.NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, common.Value{}, PageSize)
