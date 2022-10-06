@@ -65,6 +65,7 @@ TEST(HashTest, CanBeUsedInFlatHashSet) {
 TEST(AddressTest, SizeIsCompact) { EXPECT_EQ(kAddressLength, sizeof(Address)); }
 
 TEST(AddressTest, TypeProperties) {
+  EXPECT_TRUE(Trivial<Address>);
   EXPECT_TRUE(std::is_trivially_copyable_v<Address>);
   EXPECT_TRUE(std::is_trivially_move_assignable_v<Address>);
   EXPECT_TRUE(std::equality_comparable<Address>);
@@ -74,6 +75,7 @@ TEST(AddressTest, TypeProperties) {
 TEST(KeyTest, SizeIsCompact) { EXPECT_EQ(kKeyLength, sizeof(Key)); }
 
 TEST(KeyTest, TypeProperties) {
+  EXPECT_TRUE(Trivial<Key>);
   EXPECT_TRUE(std::is_trivially_copyable_v<Key>);
   EXPECT_TRUE(std::is_trivially_move_assignable_v<Key>);
   EXPECT_TRUE(std::equality_comparable<Key>);
@@ -83,10 +85,31 @@ TEST(KeyTest, TypeProperties) {
 TEST(ValueTest, SizeIsCompact) { EXPECT_EQ(kValueLength, sizeof(Value)); }
 
 TEST(ValueTest, TypeProperties) {
+  EXPECT_TRUE(Trivial<Value>);
   EXPECT_TRUE(std::is_trivially_copyable_v<Value>);
   EXPECT_TRUE(std::is_trivially_move_assignable_v<Value>);
   EXPECT_TRUE(std::equality_comparable<Value>);
   EXPECT_TRUE(std::is_default_constructible_v<Value>);
+}
+
+TEST(BalanceTest, SizeIsCompact) { EXPECT_EQ(kBalanceLength, sizeof(Balance)); }
+
+TEST(BalanceTest, TypeProperties) {
+  EXPECT_TRUE(Trivial<Balance>);
+  EXPECT_TRUE(std::is_trivially_copyable_v<Balance>);
+  EXPECT_TRUE(std::is_trivially_move_assignable_v<Balance>);
+  EXPECT_TRUE(std::equality_comparable<Balance>);
+  EXPECT_TRUE(std::is_default_constructible_v<Balance>);
+}
+
+TEST(NonceTest, SizeIsCompact) { EXPECT_EQ(kNonceLength, sizeof(Nonce)); }
+
+TEST(NonceTest, TypeProperties) {
+  EXPECT_TRUE(Trivial<Nonce>);
+  EXPECT_TRUE(std::is_trivially_copyable_v<Nonce>);
+  EXPECT_TRUE(std::is_trivially_move_assignable_v<Nonce>);
+  EXPECT_TRUE(std::equality_comparable<Nonce>);
+  EXPECT_TRUE(std::is_default_constructible_v<Nonce>);
 }
 
 }  // namespace

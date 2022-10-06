@@ -13,9 +13,6 @@ namespace internal {
 class Sha256Impl;
 }
 
-template <typename T>
-concept Trivial = std::is_trivially_copyable_v<T>;
-
 // A utility class to compute the SHA256 hash of data.
 //
 // To hash data, create an instance, feed in data using the class's Ingest(..)
