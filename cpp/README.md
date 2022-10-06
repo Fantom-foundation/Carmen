@@ -1,6 +1,37 @@
 # Project Carmen
 This directory contains a C++ implementation of the Carmen storage system.
 
+# Needed Tools
+To build the C++ implementation you need the following tools:
+ - a C++ compiler supporting C++20 (recommended clang 14+)
+ - the bazel build tool
+
+## Installing bazel
+We recommend the usage of `Bazelisk` which can be installed as a Go tool using
+```
+go install github.com/bazelbuild/bazelisk@latest
+```
+Once installed, the `bazelisk` binary can be found in your go tool folder. If
+`$GOPATH` is set, the binary should be located at `$GOPATH/bin/bazelisk`. If
+not, it will default to `~/go/bin/bazelisk`.
+
+The `bazelisk` binary is a drop-in replacement for the `bazel` command which
+automatically fetches a `bazel` version according to the target project's
+requirements for you. However, to make it accessible as a `bazel` command, a
+symbolic link must be created.
+
+To do so, pick a directory that is listed in your `$PATH` environment variable
+and add a symbolic named `bazel` in this directory using
+```
+ln -s <path_to_bazelisk> bazel
+```
+For instance, if `~/go/bin` is in your `$PATH` environment variable any
+`bazelisk` has been installed there, run
+```
+ln -s ~/go/bin/bazelisk ~/go/bin/bazel
+```
+to get access to `bazel` in your command line.
+
 # Build and Test
 To build the full project, use the following commands:
 ```
