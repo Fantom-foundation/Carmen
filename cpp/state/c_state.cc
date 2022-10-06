@@ -27,6 +27,34 @@ void Carmen_ReleaseState(C_State state) {
   delete reinterpret_cast<carmen::WorldState*>(state);
 }
 
+void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto& b = *reinterpret_cast<carmen::Balance*>(out_balance);
+  b = s.GetBalance(a);
+}
+
+void Carmen_SetBalance(C_State state, C_Address addr, C_Balance balance) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto& b = *reinterpret_cast<carmen::Balance*>(balance);
+  s.SetBalance(a, b);
+}
+
+void Carmen_GetNonce(C_State state, C_Address addr, C_Nonce out_nonce) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto& n = *reinterpret_cast<carmen::Nonce*>(out_nonce);
+  n = s.GetNonce(a);
+}
+
+void Carmen_SetNonce(C_State state, C_Address addr, C_Nonce nonce) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto& n = *reinterpret_cast<carmen::Nonce*>(nonce);
+  s.SetNonce(a, n);
+}
+
 void Carmen_GetStorageValue(C_State state, C_Address addr, C_Key key,
                             C_Value out_value) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);

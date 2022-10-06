@@ -2,12 +2,13 @@ package state
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 const (
@@ -27,6 +28,10 @@ var (
 	val1 = common.Value{0x01}
 	val2 = common.Value{0x02}
 	val3 = common.Value{0x03}
+
+	balance1 = common.Balance{0x01}
+
+	nonce1 = common.Nonce{0x01}
 )
 
 func TestInMemoryComposition(t *testing.T) {

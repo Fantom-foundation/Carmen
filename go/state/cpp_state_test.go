@@ -12,6 +12,78 @@ func TestCppStateIsState(t *testing.T) {
 	var _ State = cpp_state
 }
 
+func TestReadUninitializedBalance(t *testing.T) {
+	state, err := NewCppState()
+	if err != nil {
+		t.Fatalf("Failed to create C++ state instance: %v", err)
+	}
+	defer state.Release()
+
+	balance, err := state.GetBalance(address1)
+	if err != nil {
+		t.Fatalf("Error fetching balance: %v", err)
+	}
+	if (balance != common.Balance{}) {
+		t.Errorf("Initial balance is not zero, got %v", balance)
+	}
+}
+
+func TestWriteAndReadBalance(t *testing.T) {
+	state, err := NewCppState()
+	if err != nil {
+		t.Fatalf("Failed to create C++ state instance: %v", err)
+	}
+	defer state.Release()
+
+	err = state.SetBalance(address1, balance1)
+	if err != nil {
+		t.Fatalf("Error updating balance: %v", err)
+	}
+	balance, err := state.GetBalance(address1)
+	if err != nil {
+		t.Fatalf("Error fetching balance: %v", err)
+	}
+	if balance != balance1 {
+		t.Errorf("Invalid balance read, got %v, wanted %v", balance, balance1)
+	}
+}
+
+func TestReadUninitializedNonce(t *testing.T) {
+	state, err := NewCppState()
+	if err != nil {
+		t.Fatalf("Failed to create C++ state instance: %v", err)
+	}
+	defer state.Release()
+
+	nonce, err := state.GetNonce(address1)
+	if err != nil {
+		t.Fatalf("Error fetching nonce: %v", err)
+	}
+	if (nonce != common.Nonce{}) {
+		t.Errorf("Initial nonce is not zero, got %v", nonce)
+	}
+}
+
+func TestWriteAndReadNonce(t *testing.T) {
+	state, err := NewCppState()
+	if err != nil {
+		t.Fatalf("Failed to create C++ state instance: %v", err)
+	}
+	defer state.Release()
+
+	err = state.SetNonce(address1, nonce1)
+	if err != nil {
+		t.Fatalf("Error updating nonce: %v", err)
+	}
+	nonce, err := state.GetNonce(address1)
+	if err != nil {
+		t.Fatalf("Error fetching nonce: %v", err)
+	}
+	if nonce != nonce1 {
+		t.Errorf("Invalid nonce read, got %v, wanted %v", nonce, nonce1)
+	}
+}
+
 func TestReadUninitializedSlot(t *testing.T) {
 	state, err := NewCppState()
 	if err != nil {
