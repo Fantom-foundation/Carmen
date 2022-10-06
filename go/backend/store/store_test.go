@@ -7,7 +7,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
-	"os"
 	"testing"
 )
 
@@ -16,72 +15,112 @@ const (
 	Factor   = 3
 )
 
-func compareHashes(storeA Store[uint32, common.Value], storeB Store[uint32, common.Value], storeC Store[uint32, common.Value]) error {
-	hashA, err := storeA.GetStateHash()
-	if err != nil {
-		return err
-	}
-	hashB, err := storeB.GetStateHash()
-	if err != nil {
-		return err
-	}
-	hashC, err := storeC.GetStateHash()
-	if err != nil {
-		return err
-	}
-	if hashA != hashB {
-		return fmt.Errorf("different hashes: %x != %x", hashA, hashB)
-	}
-	if hashA != hashC {
-		return fmt.Errorf("different hashes: %x != %x", hashA, hashC)
-	}
-	return nil
-}
-
-func TestStoresHashingByComparison(t *testing.T) {
-	tmpFileDir, err := os.MkdirTemp("", "file-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
-	defer os.RemoveAll(tmpFileDir)
-	tmpLdbDir, err := os.MkdirTemp("", "leveldb-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
-	defer os.RemoveAll(tmpLdbDir)
-	db, err := leveldb.OpenFile(tmpLdbDir, nil)
+func initStores(t *testing.T) (stores []Store[uint32, common.Value]) {
+	db, err := leveldb.OpenFile(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("failed to init leveldb; %s", err)
 	}
-	defer db.Close()
 
 	defaultItem := common.Value{}
-	serializer := common.ValueSerializer{}
-	indexSerializer := common.Identifier32Serializer{}
+	valSerializer := common.ValueSerializer{}
+	idSerializer := common.Identifier32Serializer{}
 
-	memstore := memory.NewStore[uint32, common.Value](serializer, defaultItem, PageSize, Factor)
-	defer memstore.Close()
-	filestore, err := file.NewStore[uint32, common.Value](tmpFileDir, serializer, defaultItem, PageSize, Factor)
-	defer filestore.Close()
-	levelStore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, serializer, indexSerializer, ldb.CreateHashTreeFactory(db, common.ValueKey, Factor), defaultItem, PageSize)
-	defer func() { _ = levelStore.Close() }()
+	memstore := memory.NewStore[uint32, common.Value](valSerializer, defaultItem, PageSize, Factor)
+	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, Factor)
+	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, Factor)
+	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, treeFac, defaultItem, PageSize)
 
-	if err := compareHashes(memstore, filestore, levelStore); err != nil {
-		t.Errorf("initial hash: %s", err)
+	t.Cleanup(func() {
+		memstore.Close()
+		filestore.Close()
+		ldbstore.Close()
+		db.Close()
+	})
+	return []Store[uint32, common.Value]{memstore, filestore, ldbstore}
+}
+
+func TestStoresInitialHash(t *testing.T) {
+	stores := initStores(t)
+
+	for _, store := range stores {
+		hash, err := store.GetStateHash()
+		if err != nil {
+			t.Fatalf("failed to hash empty store; %s", err)
+		}
+		if hash != (common.Hash{}) {
+			t.Errorf("invalid hash of empty store: %x (expected zeros)", hash)
+		}
 	}
+}
+
+func TestStoresHashingByComparison(t *testing.T) {
+	stores := initStores(t)
 
 	for i := 0; i < 10; i++ {
-		if err := memstore.Set(uint32(i), common.Value{byte(0x10 + i)}); err != nil {
-			t.Fatalf("failed to set memstore item %d; %s", i, err)
+		for _, store := range stores {
+			if err := store.Set(uint32(i), common.Value{byte(0x10 + i)}); err != nil {
+				t.Fatalf("failed to set store item %d; %s", i, err)
+			}
 		}
-		if err := filestore.Set(uint32(i), common.Value{byte(0x10 + i)}); err != nil {
-			t.Fatalf("failed to set filestore item %d; %s", i, err)
-		}
-		if err := levelStore.Set(uint32(i), common.Value{byte(0x10 + i)}); err != nil {
-			t.Fatalf("failed to set levelStore item %d; %s", i, err)
-		}
-		if err := compareHashes(memstore, filestore, levelStore); err != nil {
-			t.Errorf("hash does not match after inserting item %d: %s", i, err)
+		if err := compareHashes(stores); err != nil {
+			t.Errorf("stores hashes does not match after inserting item %d: %s", i, err)
 		}
 	}
+}
+
+func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
+	stores := initStores(t)
+
+	// Tests the hashes for values 0x00, 0x11 ... 0xFF inserted in sequence.
+	// reference hashes from the C++ implementation
+	expectedHashes := []string{
+		"f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+		"967293ee9d7ba679c3ef076bef139e2ceb96d45d19a624cc59bb5a3c1649ce38",
+		"37617dfcbf34b6bd41ef1ba985de1e68b69bf4e42815981868abde09e9e09f0e",
+		"735e056698bd4b4953a9838c4526c4d2138efd1aee9a94ff36ca100f16a77581",
+		"c1e116b85f59f2ef61d6a64e61947e33c383f0adf252a3249b6172286ca244aa",
+		"6001791dfa74121b9d177091606ebcd352e784ecfab05563c40b7ce8346c6f98",
+		"57aee44f007524162c86d8ab0b1c67ed481c44d248c5f9c48fca5a5368d3a705",
+		"dd29afc37e669458a3f4509023bf5a362f0c0cdc9bb206a6955a8f5124d26086",
+		"0ab5ad3ab4f3efb90994cdfd72b2aa0532cc0f9708ea8fb8555677053583e161",
+		"901d25766654678c6fe19c3364f34f9ed7b649514b9b5b25389de3bbfa346957",
+		"50743156d6a4967c165a340166d31ca986ceebbb1812aebb3ce744ce7cffaa99",
+		"592fd0da56dbc41e7ae8d4572c47fe12492eca9ae68b8786ebc322c2e2d61de2",
+		"bc57674bfa2b806927af318a51025d833f5950ed6cdab5af3c8a876dac5ba1c4",
+		"6523527158ccde9ed47932da61fed960019843f31f1fdbab3d18958450a00e0f",
+		"e1bf187a4cd645c7adae643070f070dcb9c4aa8bbc0aded07b99dda3bac6b0ea",
+		"9a5be401e5aa0b2b31a3b055811b15041f4842be6cd4cb146f3c2b48e2081e19",
+		"6f060e465bb1b155a6b4822a13b704d3986ab43d7928c14b178e07a8f7673951",
+	}
+
+	for i, expectedHash := range expectedHashes {
+		for _, store := range stores {
+			if err := store.Set(uint32(i), common.Value{byte(i<<4 | i)}); err != nil {
+				t.Fatalf("failed to set store item %d; %s", i, err)
+			}
+			hash, err := store.GetStateHash()
+			if err != nil {
+				t.Fatalf("failed to hash store with %d values; %s", i+1, err)
+			}
+			if expectedHash != fmt.Sprintf("%x", hash) {
+				t.Fatalf("invalid hash: %x (expected %s)", hash, expectedHash)
+			}
+		}
+	}
+}
+
+func compareHashes(stores []Store[uint32, common.Value]) error {
+	var firstHash common.Hash
+	for i, store := range stores {
+		hash, err := store.GetStateHash()
+		if err != nil {
+			return err
+		}
+		if i == 0 {
+			firstHash = hash
+		} else if firstHash != hash {
+			return fmt.Errorf("different hashes: %x != %x", firstHash, hash)
+		}
+	}
+	return nil
 }
