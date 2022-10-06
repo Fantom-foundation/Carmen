@@ -46,8 +46,8 @@ func BenchmarkRead(b *testing.B) {
 		for _, dbSize := range dbSizes {
 			s := fac.getStore(b)
 			initStoreContent(b, s, dbSize)
-			for _, dist := range getDistributions(dbSize) {
-				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+			for _, dist := range common.GetDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.Label, fac.label, dbSize), func(b *testing.B) {
 					benchmarkRead(b, dist, s)
 				})
 			}
@@ -56,9 +56,9 @@ func BenchmarkRead(b *testing.B) {
 	}
 }
 
-func benchmarkRead(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
+func benchmarkRead(b *testing.B, dist common.Distribution, store store.Store[uint32, common.Value]) {
 	for i := 0; i < b.N; i++ {
-		value, err := store.Get(dist.getId())
+		value, err := store.Get(dist.GetNext())
 		if err != nil {
 			b.Fatalf("failed to read item from store; %s", err)
 		}
@@ -71,8 +71,8 @@ func BenchmarkWrite(b *testing.B) {
 		for _, dbSize := range dbSizes {
 			s := fac.getStore(b)
 			initStoreContent(b, s, dbSize)
-			for _, dist := range getDistributions(dbSize) {
-				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+			for _, dist := range common.GetDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.Label, fac.label, dbSize), func(b *testing.B) {
 					benchmarkWrite(b, dist, s)
 				})
 			}
@@ -81,10 +81,10 @@ func BenchmarkWrite(b *testing.B) {
 	}
 }
 
-func benchmarkWrite(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
+func benchmarkWrite(b *testing.B, dist common.Distribution, store store.Store[uint32, common.Value]) {
 	for i := 0; i < b.N; i++ {
 		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
-		err := store.Set(dist.getId(), common.Value{value[0], value[1], value[2], value[3]})
+		err := store.Set(dist.GetNext(), common.Value{value[0], value[1], value[2], value[3]})
 		if err != nil {
 			b.Fatalf("failed to set store item; %s", err)
 		}
@@ -96,8 +96,8 @@ func BenchmarkHash(b *testing.B) {
 		for _, dbSize := range dbSizes {
 			s := fac.getStore(b)
 			initStoreContent(b, s, dbSize)
-			for _, dist := range getDistributions(dbSize) {
-				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+			for _, dist := range common.GetDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.Label, fac.label, dbSize), func(b *testing.B) {
 					benchmarkHash(b, dist, s)
 				})
 			}
@@ -106,12 +106,12 @@ func BenchmarkHash(b *testing.B) {
 	}
 }
 
-func benchmarkHash(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
+func benchmarkHash(b *testing.B, dist common.Distribution, store store.Store[uint32, common.Value]) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer() // don't measure the update
 		for ii := 0; ii < 100; ii++ {
 			value := binary.BigEndian.AppendUint32([]byte{}, rand.Uint32())
-			err := store.Set(dist.getId(), common.Value{value[0], value[1], value[2], value[3]})
+			err := store.Set(dist.GetNext(), common.Value{value[0], value[1], value[2], value[3]})
 			if err != nil {
 				b.Fatalf("failed to set store item; %s", err)
 			}
@@ -144,37 +144,6 @@ func getStoresFactories() (stores []StoreFactory) {
 		{
 			label:    "leveldb",
 			getStore: initLevelDbStore,
-		},
-	}
-}
-
-type Distribution struct {
-	label string
-	getId func() uint32
-}
-
-func getDistributions(items int) []Distribution {
-	expRate := float64(10) / float64(items)
-	it := 0
-	return []Distribution{
-		{
-			label: "Sequential",
-			getId: func() uint32 {
-				it = (it + 1) % items
-				return uint32(it)
-			},
-		},
-		{
-			label: "Uniform",
-			getId: func() uint32 {
-				return uint32(rand.Intn(items))
-			},
-		},
-		{
-			label: "Exponential",
-			getId: func() uint32 {
-				return uint32(rand.ExpFloat64() / expRate)
-			},
 		},
 	}
 }

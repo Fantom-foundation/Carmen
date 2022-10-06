@@ -1,7 +1,8 @@
-package index
+package index_test
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -9,7 +10,7 @@ import (
 	"testing"
 )
 
-func initIndexes(t *testing.T) (indexes []Index[common.Address, uint32]) {
+func initIndexes(t *testing.T) (indexes []index.Index[common.Address, uint32]) {
 	db, err := leveldb.OpenFile(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("failed to init leveldb; %s", err)
@@ -27,7 +28,7 @@ func initIndexes(t *testing.T) (indexes []Index[common.Address, uint32]) {
 		db.Close()
 	})
 
-	return []Index[common.Address, uint32]{memindex, ldbindex}
+	return []index.Index[common.Address, uint32]{memindex, ldbindex}
 }
 
 func TestIndexesInitialHash(t *testing.T) {
@@ -92,7 +93,7 @@ func TestIndexesHashesAgainstReferenceOutput(t *testing.T) {
 	}
 }
 
-func compareHashes(indexes []Index[common.Address, uint32]) error {
+func compareHashes(indexes []index.Index[common.Address, uint32]) error {
 	var firstHash common.Hash
 	for i, index := range indexes {
 		hash, err := index.GetStateHash()

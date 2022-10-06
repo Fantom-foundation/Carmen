@@ -1,6 +1,7 @@
 package ldb
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -28,7 +29,7 @@ func NewKVIndex[K comparable, I common.Identifier](
 	db *leveldb.DB,
 	table common.TableSpace,
 	keySerializer common.Serializer[K],
-	indexSerializer common.Serializer[I]) (p *KVIndex[K, I], err error) {
+	indexSerializer common.Serializer[I]) (p index.Index[K, I], err error) {
 
 	// read the last hash from the database
 	var hash []byte

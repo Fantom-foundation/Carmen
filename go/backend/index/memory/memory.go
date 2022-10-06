@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -13,7 +14,7 @@ type Memory[K comparable, I common.Identifier] struct {
 }
 
 // NewMemory constructs a new Memory instance.
-func NewMemory[K comparable, I common.Identifier](serializer common.Serializer[K]) *Memory[K, I] {
+func NewMemory[K comparable, I common.Identifier](serializer common.Serializer[K]) index.Index[K, I] {
 	memory := Memory[K, I]{
 		data:          make(map[K]I),
 		keySerializer: serializer,
