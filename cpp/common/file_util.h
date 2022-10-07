@@ -27,4 +27,25 @@ class TempFile {
   std::filesystem::path path_;
 };
 
+// Provides a test utility to create a unique temporary directory in the file
+// system. The directory is automatically deleted when the TempDir instance goes
+// out of scope.
+class TempDir {
+ public:
+  // Creates a temporary directory with a random name prefixed by the provided
+  // prefix.
+  TempDir(std::string_view prefix = "temp");
+  TempDir(TempDir&&) = delete;
+  ~TempDir();
+
+  // Obtains the path of the owned temporary file.
+  const std::filesystem::path& GetPath() const;
+
+  // Support implicit conversion to a std::filesystem::path.
+  operator std::filesystem::path() const { return GetPath(); }
+
+ private:
+  std::filesystem::path path_;
+};
+
 }  // namespace carmen
