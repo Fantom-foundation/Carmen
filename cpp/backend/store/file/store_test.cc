@@ -11,6 +11,10 @@ namespace {
 
 using Store = FileStore<int, int, InMemoryFile, 40>;
 
+TEST(FileStoreTest, TypeProperties) {
+  EXPECT_TRUE(std::is_move_constructible_v<Store>);
+}
+
 TEST(FileStoreTest, DataCanBeAddedAndRetrieved) {
   Store store;
   EXPECT_EQ(0, store.Get(10));

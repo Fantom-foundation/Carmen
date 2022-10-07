@@ -21,6 +21,7 @@ cc_library(
     deps = [
         ":state",
         "//backend/index/memory:index",
+        "//backend/store/file:store",
         "//backend/store/memory:store",
     ],
     alwayslink = True,
@@ -31,6 +32,7 @@ cc_test(
     srcs = ["c_state_test.cc"],
     deps = [
         ":c_state",
+        "//common:file_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

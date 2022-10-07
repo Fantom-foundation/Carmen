@@ -17,6 +17,11 @@ using ::testing::Sequence;
 using TestPool = PagePool<int, InMemoryFile, 40>;
 using TestPoolListener = PagePoolListener<int, 40>;
 
+TEST(PagePoolTest, TypeProperties) {
+  EXPECT_TRUE(std::is_move_constructible_v<TestPool>);
+  EXPECT_TRUE(std::is_move_assignable_v<TestPool>);
+}
+
 TEST(PagePoolTest, PoolSizeCanBeDefined) {
   TestPool pool_a(12);
   EXPECT_EQ(12, pool_a.GetPoolSize());

@@ -1,6 +1,7 @@
 #include "common/hash.h"
 
 #include <sstream>
+#include <type_traits>
 
 #include "absl/container/flat_hash_map.h"
 #include "common/type.h"
@@ -30,6 +31,10 @@ absl::flat_hash_map<std::string, std::string> GetKnownHashes() {
   res["abc"] =
       "0xba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
   return res;
+}
+
+TEST(Sha256HashTest, TypeTraits) {
+  EXPECT_TRUE(std::is_move_constructible_v<Sha256Hasher>);
 }
 
 TEST(Sha256HashTest, TestKnownHashes) {

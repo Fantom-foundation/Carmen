@@ -17,6 +17,10 @@ class MockPageSource : public PageSource {
   MOCK_METHOD(std::span<const std::byte>, GetPageData, (PageId id), (override));
 };
 
+TEST(HashTreeTest, TypeTraits) {
+  EXPECT_TRUE(std::is_move_constructible_v<HashTree>);
+}
+
 TEST(HashTreeTest, EmptyHashIsZero) {
   auto source = std::make_unique<MockPageSource>();
   HashTree tree(std::move(source));

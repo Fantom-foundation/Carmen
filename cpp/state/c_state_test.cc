@@ -1,31 +1,72 @@
 #include "state/c_state.h"
 
+#include "common/file_util.h"
 #include "common/type.h"
 #include "gtest/gtest.h"
 
 namespace carmen {
 namespace {
 
-TEST(CStateTest, StateCanBeCreatedAndReleased) {
-  auto state = Carmen_CreateState();
-  EXPECT_NE(state, nullptr);
-  Carmen_ReleaseState(state);
+enum class Config {
+  kInMemory,
+  kFileBased,
+};
+
+std::string ToString(Config c) {
+  switch (c) {
+    case Config::kInMemory:
+      return "InMemory";
+    case Config::kFileBased:
+      return "FileBased";
+  }
+  return "Unknown";
 }
 
-TEST(CStateTest, BalancesAreInitiallyZero) {
-  auto state = Carmen_CreateState();
+class CStateTest : public testing::TestWithParam<Config> {
+ public:
+  void SetUp() override {
+    switch (GetParam()) {
+      case Config::kInMemory:
+        state_ = Carmen_CreateInMemoryState();
+        return;
+      case Config::kFileBased:
+        dir_ = std::make_unique<TempDir>();
+        auto path = dir_->GetPath().string();
+        state_ = Carmen_CreateFileBasedState(path.c_str(), path.size());
+        return;
+    }
+    FAIL() << "Unknown configuration: " << ToString(GetParam());
+  }
+
+  void TearDown() override {
+    Carmen_ReleaseState(state_);
+    state_ = nullptr;
+  }
+
+  C_State GetState() { return state_; }
+
+ private:
+  std::unique_ptr<TempDir> dir_;
+  C_State state_;
+};
+
+TEST_P(CStateTest, StateCanBeCreatedAndReleased) {
+  auto state = GetState();
+  EXPECT_NE(state, nullptr);
+}
+
+TEST_P(CStateTest, BalancesAreInitiallyZero) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
   Balance balance{0x02};
   Carmen_GetBalance(state, &addr, &balance);
   EXPECT_EQ(Balance{}, balance);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, BalancesCanBeUpdated) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, BalancesCanBeUpdated) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
@@ -38,24 +79,20 @@ TEST(CStateTest, BalancesCanBeUpdated) {
   balance = Balance{};
   Carmen_GetBalance(state, &addr, &balance);
   EXPECT_EQ(Balance{0x03}, balance);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, NoncesAreInitiallyZero) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, NoncesAreInitiallyZero) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
   Nonce nonce{0x02};
   Carmen_GetNonce(state, &addr, &nonce);
   EXPECT_EQ(Nonce{}, nonce);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, NoncesCanBeUpdated) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, NoncesCanBeUpdated) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
@@ -68,12 +105,10 @@ TEST(CStateTest, NoncesCanBeUpdated) {
   nonce = Nonce{};
   Carmen_GetNonce(state, &addr, &nonce);
   EXPECT_EQ(Nonce{0x03}, nonce);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, StorageLocationsAreInitiallyZero) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, StorageLocationsAreInitiallyZero) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
@@ -81,12 +116,10 @@ TEST(CStateTest, StorageLocationsAreInitiallyZero) {
   Value value{0x03};
   Carmen_GetStorageValue(state, &addr, &key, &value);
   EXPECT_EQ(Value{}, value);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, StorageLocationsCanBeUpdated) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, StorageLocationsCanBeUpdated) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
@@ -100,23 +133,19 @@ TEST(CStateTest, StorageLocationsCanBeUpdated) {
   value = Value{};
   Carmen_GetStorageValue(state, &addr, &key, &value);
   EXPECT_EQ(Value{0x04}, value);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, StateHashesCanBeObtained) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, StateHashesCanBeObtained) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Hash hash;
   Carmen_GetHash(state, &hash);
   EXPECT_NE(Hash{}, hash);
-
-  Carmen_ReleaseState(state);
 }
 
-TEST(CStateTest, HashesChangeOnUpdates) {
-  auto state = Carmen_CreateState();
+TEST_P(CStateTest, HashesChangeOnUpdates) {
+  auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Hash initial_hash;
@@ -131,9 +160,13 @@ TEST(CStateTest, HashesChangeOnUpdates) {
   Carmen_GetHash(state, &new_hash);
 
   EXPECT_NE(initial_hash, new_hash);
-
-  Carmen_ReleaseState(state);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    All, CStateTest, testing::Values(Config::kInMemory, Config::kFileBased),
+    [](const testing::TestParamInfo<CStateTest::ParamType>& info) {
+      return ToString(info.param);
+    });
 
 }  // namespace
 }  // namespace carmen
