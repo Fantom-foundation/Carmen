@@ -1,7 +1,8 @@
-package store
+package store_test
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
@@ -15,7 +16,7 @@ const (
 	Factor   = 3
 )
 
-func initStores(t *testing.T) (stores []Store[uint32, common.Value]) {
+func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	db, err := leveldb.OpenFile(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("failed to init leveldb; %s", err)
@@ -36,7 +37,7 @@ func initStores(t *testing.T) (stores []Store[uint32, common.Value]) {
 		ldbstore.Close()
 		db.Close()
 	})
-	return []Store[uint32, common.Value]{memstore, filestore, ldbstore}
+	return []store.Store[uint32, common.Value]{memstore, filestore, ldbstore}
 }
 
 func TestStoresInitialHash(t *testing.T) {
@@ -109,7 +110,7 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 	}
 }
 
-func compareHashes(stores []Store[uint32, common.Value]) error {
+func compareHashes(stores []store.Store[uint32, common.Value]) error {
 	var firstHash common.Hash
 	for i, store := range stores {
 		hash, err := store.GetStateHash()

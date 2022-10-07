@@ -1,62 +1,189 @@
-package store
+package store_test
 
 import (
 	"encoding/binary"
+	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
-	"io"
+	"math/rand"
 	"testing"
 )
 
-func BenchmarkWriteMemStore(b *testing.B) {
-	var store = memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, Factor)
-	benchmarkWriteStore(b, store)
+// initial sizes of databases in the amount of items to benchmark
+var dbSizes = []int{1 << 5, 1 << 10}
+
+var sink interface{}
+
+func BenchmarkInsert(b *testing.B) {
+	for _, fac := range getStoresFactories() {
+		for _, dbSize := range dbSizes {
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			b.Run(fmt.Sprintf("%s", fac.label), func(b *testing.B) {
+				benchmarkInsert(b, s)
+			})
+			_ = s.Close()
+		}
+	}
 }
 
-func BenchmarkWriteFileStore(b *testing.B) {
-	benchmarkWriteStore(b, initFileStore(b))
+func benchmarkInsert(b *testing.B, store store.Store[uint32, common.Value]) {
+	for i := 0; i < b.N; i++ {
+		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
+		err := store.Set(uint32(i), common.Value{value[0], value[1], value[2], value[3]})
+		if err != nil {
+			b.Fatalf("failed to set store item; %s", err)
+		}
+	}
 }
 
-func BenchmarkWriteLevelDbStore(b *testing.B) {
-	store, closer := initLevelDbStore(b)
-	defer closer.Close()
-	benchmarkWriteStore(b, store)
+func BenchmarkRead(b *testing.B) {
+	for _, fac := range getStoresFactories() {
+		for _, dbSize := range dbSizes {
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			for _, dist := range getDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+					benchmarkRead(b, dist, s)
+				})
+			}
+			_ = s.Close()
+		}
+	}
 }
 
-func BenchmarkReadMemStore(b *testing.B) {
-	var store = memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, Factor)
-	benchmarkReadStore(b, store)
+func benchmarkRead(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
+	for i := 0; i < b.N; i++ {
+		value, err := store.Get(dist.getId())
+		if err != nil {
+			b.Fatalf("failed to read item from store; %s", err)
+		}
+		sink = value // prevent compiler to optimize it out
+	}
 }
 
-func BenchmarkReadFileStore(b *testing.B) {
-	benchmarkReadStore(b, initFileStore(b))
+func BenchmarkWrite(b *testing.B) {
+	for _, fac := range getStoresFactories() {
+		for _, dbSize := range dbSizes {
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			for _, dist := range getDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+					benchmarkWrite(b, dist, s)
+				})
+			}
+			_ = s.Close()
+		}
+	}
 }
 
-func BenchmarkReadLevelDbStore(b *testing.B) {
-	store, closer := initLevelDbStore(b)
-	defer closer.Close()
-	benchmarkReadStore(b, store)
+func benchmarkWrite(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
+	for i := 0; i < b.N; i++ {
+		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
+		err := store.Set(dist.getId(), common.Value{value[0], value[1], value[2], value[3]})
+		if err != nil {
+			b.Fatalf("failed to set store item; %s", err)
+		}
+	}
 }
 
-func BenchmarkHashMemStore(b *testing.B) {
-	var store = memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, Factor)
-	benchmarkHashStore(b, store)
+func BenchmarkHash(b *testing.B) {
+	for _, fac := range getStoresFactories() {
+		for _, dbSize := range dbSizes {
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			for _, dist := range getDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+					benchmarkHash(b, dist, s)
+				})
+			}
+			_ = s.Close()
+		}
+	}
 }
 
-func BenchmarkHashFileStore(b *testing.B) {
-	benchmarkHashStore(b, initFileStore(b))
+func benchmarkHash(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
+	for i := 0; i < b.N; i++ {
+		b.StopTimer() // don't measure the update
+		for ii := 0; ii < 100; ii++ {
+			value := binary.BigEndian.AppendUint32([]byte{}, rand.Uint32())
+			err := store.Set(dist.getId(), common.Value{value[0], value[1], value[2], value[3]})
+			if err != nil {
+				b.Fatalf("failed to set store item; %s", err)
+			}
+		}
+		b.StartTimer()
+
+		hash, err := store.GetStateHash()
+		if err != nil {
+			b.Fatalf("failed to hash store; %s", err)
+		}
+		sink = hash // prevent compiler to optimize it out
+	}
 }
 
-func BenchmarkHashLevelDbStore(b *testing.B) {
-	store, closer := initLevelDbStore(b)
-	defer closer.Close()
-	benchmarkHashStore(b, store)
+type StoreFactory struct {
+	label    string
+	getStore func(b *testing.B) store.Store[uint32, common.Value]
 }
 
-func initFileStore(b *testing.B) (idx Store[uint32, common.Value]) {
+func getStoresFactories() (stores []StoreFactory) {
+	return []StoreFactory{
+		{
+			label:    "memory",
+			getStore: initMemStore,
+		},
+		{
+			label:    "file",
+			getStore: initFileStore,
+		},
+		{
+			label:    "leveldb",
+			getStore: initLevelDbStore,
+		},
+	}
+}
+
+type Distribution struct {
+	label string
+	getId func() uint32
+}
+
+func getDistributions(items int) []Distribution {
+	expRate := float64(10) / float64(items)
+	it := 0
+	return []Distribution{
+		{
+			label: "Sequential",
+			getId: func() uint32 {
+				it = (it + 1) % items
+				return uint32(it)
+			},
+		},
+		{
+			label: "Uniform",
+			getId: func() uint32 {
+				return uint32(rand.Intn(items))
+			},
+		},
+		{
+			label: "Exponential",
+			getId: func() uint32 {
+				return uint32(rand.ExpFloat64() / expRate)
+			},
+		},
+	}
+}
+
+func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
+	return memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, Factor)
+}
+
+func initFileStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	store, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, common.Value{}, PageSize, Factor)
 	if err != nil {
 		b.Fatalf("failed to init file store; %s", err)
@@ -64,7 +191,7 @@ func initFileStore(b *testing.B) (idx Store[uint32, common.Value]) {
 	return store
 }
 
-func initLevelDbStore(b *testing.B) (store Store[uint32, common.Value], closer io.Closer) {
+func initLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	db, err := leveldb.OpenFile(b.TempDir(), nil)
 	if err != nil {
 		b.Fatalf("failed to init leveldb; %s", err)
@@ -74,60 +201,20 @@ func initLevelDbStore(b *testing.B) (store Store[uint32, common.Value], closer i
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
 	}
-	return store, db
+	b.Cleanup(func() {
+		db.Close()
+	})
+	return store
 }
 
-var sink interface{}
-
-func benchmarkWriteStore(b *testing.B, store Store[uint32, common.Value]) {
-	for i := 0; i < b.N; i++ {
-		// TODO: write at randomly selected index
-		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
-		err := store.Set(uint32(i), common.Value{value[0], value[1], value[2], value[3]})
-		if err != nil {
-			b.Fatalf("failed to set store item; %s", err)
-		}
-	}
-}
-
-func benchmarkReadStore(b *testing.B, store Store[uint32, common.Value]) {
+func initStoreContent(b *testing.B, store store.Store[uint32, common.Value], dbSize int) {
 	b.StopTimer() // dont measure initialization
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < dbSize; i++ {
 		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
 		err := store.Set(uint32(i), common.Value{value[0], value[1], value[2], value[3]})
 		if err != nil {
 			b.Fatalf("failed to set store item; %s", err)
 		}
 	}
-	b.StartTimer() // end of initialization
-
-	for i := 0; i < b.N; i++ {
-		// TODO: read randomly selected items
-		value, err := store.Get(uint32(i))
-		if err != nil {
-			b.Fatalf("failed to read item from store; %s", err)
-		}
-		sink = value // prevent compiler to optimize it out
-	}
-}
-
-func benchmarkHashStore(b *testing.B, store Store[uint32, common.Value]) {
-	b.StopTimer() // dont measure initialization
-	for i := 0; i < b.N; i++ {
-		// TODO: change batches of randomly selected items
-		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
-		err := store.Set(uint32(i), common.Value{value[0], value[1], value[2], value[3]})
-		if err != nil {
-			b.Fatalf("failed to set store item; %s", err)
-		}
-		b.StartTimer()
-
-		hash, err := store.GetStateHash()
-		if err != nil {
-			b.Fatalf("failed to hash store; %s", err)
-		}
-		sink = hash // prevent compiler to optimize it out
-
-		b.StopTimer()
-	}
+	b.StartTimer()
 }
