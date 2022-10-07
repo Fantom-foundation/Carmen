@@ -39,6 +39,9 @@ class Sha256Impl {
 
 Sha256Hasher::Sha256Hasher()
     : _impl(std::make_unique<internal::Sha256Impl>()) {}
+
+Sha256Hasher::Sha256Hasher(Sha256Hasher&&) = default;
+
 Sha256Hasher::~Sha256Hasher() {}
 
 void Sha256Hasher::Reset() { _impl->Reset(); }

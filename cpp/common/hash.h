@@ -25,6 +25,7 @@ class Sha256Impl;
 class Sha256Hasher {
  public:
   Sha256Hasher();
+  Sha256Hasher(Sha256Hasher&&);
   ~Sha256Hasher();
 
   // Adds the given byte array to the sequence of bytes to hashed.

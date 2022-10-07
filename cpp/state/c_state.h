@@ -27,10 +27,15 @@ extern "C" {
 
 // ------------------------------ Life Cycle ----------------------------------
 
-// Create a new state object and returns an opaque pointer to it. Ownership of
-// the state is transfered to the caller, which is required to release it
-// eventually.
-C_State Carmen_CreateState();
+// Creates a new state retaining all data in memory and returns an opaque
+// pointer to it. Ownership of the state is transfered to the caller, which is
+// required to release it eventually.
+C_State Carmen_CreateInMemoryState();
+
+// Creates a new state object maintaining data in files of the given directory
+// and returns an opaque pointer to it. Ownership of the state is transfered to
+// the caller, which is required to release it eventually.
+C_State Carmen_CreateFileBasedState(const char* directory, int length);
 
 // Releases a state object, thereby causing its destruction. After releasing it,
 // no more operations may be applied on it.

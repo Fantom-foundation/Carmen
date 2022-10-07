@@ -20,7 +20,13 @@ namespace carmen::backend::store {
 // size parameter defines the size of each page in bytes.
 template <typename T, std::size_t page_size>
 concept File = requires(T a) {
+  // Files must expose a page size (=number of bytes per page).
   T::kPageSize;
+
+  // Files must be movable.
+  std::is_move_constructible_v<T>;
+  std::is_move_assignable_v<T>;
+
   // Each file implementation must support the extraction of the number of
   // pages.
   { a.GetNumPages() } -> std::same_as<std::size_t>;

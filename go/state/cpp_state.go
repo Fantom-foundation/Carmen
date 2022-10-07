@@ -6,6 +6,7 @@ package state
 #cgo CFLAGS: -I${SRCDIR}/../../cpp
 #cgo LDFLAGS: -L${SRCDIR}/../lib -lstate
 #cgo LDFLAGS: -Wl,-rpath,${SRCDIR}/../lib
+#include <stdlib.h>
 #include "state/c_state.h"
 */
 import "C"
@@ -21,8 +22,14 @@ type CppState struct {
 	state unsafe.Pointer
 }
 
-func NewCppState() (*CppState, error) {
-	return &CppState{state: C.Carmen_CreateState()}, nil
+func NewCppInMemoryState() (*CppState, error) {
+	return &CppState{state: C.Carmen_CreateInMemoryState()}, nil
+}
+
+func NewCppFileBasedState(directory string) (*CppState, error) {
+	dir := C.CString(directory)
+	defer C.free(unsafe.Pointer(dir))
+	return &CppState{state: C.Carmen_CreateFileBasedState(dir, C.int(len(directory)))}, nil
 }
 
 func (cs *CppState) Release() {
