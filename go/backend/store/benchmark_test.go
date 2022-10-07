@@ -13,12 +13,21 @@ import (
 	"testing"
 )
 
+// initial sizes of databases in the amount of items to benchmark
+var dbSizes = []int{1 << 5, 1 << 10}
+
+var sink interface{}
+
 func BenchmarkInsert(b *testing.B) {
-	stores := getLabeledStores(b)
-	for _, s := range stores {
-		b.Run(fmt.Sprintf("%s", s.label), func(b *testing.B) {
-			benchmarkInsert(b, s.store)
-		})
+	for _, fac := range getStoresFactories() {
+		for _, dbSize := range dbSizes {
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			b.Run(fmt.Sprintf("%s", fac.label), func(b *testing.B) {
+				benchmarkInsert(b, s)
+			})
+			_ = s.Close()
+		}
 	}
 }
 
@@ -33,24 +42,23 @@ func benchmarkInsert(b *testing.B, store store.Store[uint32, common.Value]) {
 }
 
 func BenchmarkRead(b *testing.B) {
-	stores := getLabeledStores(b)
-	dbSizes := []int{1 << 5, 1 << 10}
-
-	for _, s := range stores {
+	for _, fac := range getStoresFactories() {
 		for _, dbSize := range dbSizes {
-			initStoreContent(b, s.store, dbSize)
-			for _, selector := range getSelectors(dbSize) {
-				b.Run(fmt.Sprintf("%s_%s_%d", selector.name, s.label, dbSize), func(b *testing.B) {
-					benchmarkRead(b, selector, s.store)
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			for _, dist := range getDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+					benchmarkRead(b, dist, s)
 				})
 			}
+			_ = s.Close()
 		}
 	}
 }
 
-func benchmarkRead(b *testing.B, selector Selector, store store.Store[uint32, common.Value]) {
+func benchmarkRead(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
 	for i := 0; i < b.N; i++ {
-		value, err := store.Get(selector.selector(i))
+		value, err := store.Get(dist.getId())
 		if err != nil {
 			b.Fatalf("failed to read item from store; %s", err)
 		}
@@ -59,25 +67,24 @@ func benchmarkRead(b *testing.B, selector Selector, store store.Store[uint32, co
 }
 
 func BenchmarkWrite(b *testing.B) {
-	stores := getLabeledStores(b)
-	dbSizes := []int{1 << 5, 1 << 10}
-
-	for _, s := range stores {
+	for _, fac := range getStoresFactories() {
 		for _, dbSize := range dbSizes {
-			initStoreContent(b, s.store, dbSize)
-			for _, selector := range getSelectors(dbSize) {
-				b.Run(fmt.Sprintf("%s_%s_%d", selector.name, s.label, dbSize), func(b *testing.B) {
-					benchmarkWrite(b, selector, s.store)
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			for _, dist := range getDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+					benchmarkWrite(b, dist, s)
 				})
 			}
+			_ = s.Close()
 		}
 	}
 }
 
-func benchmarkWrite(b *testing.B, selector Selector, store store.Store[uint32, common.Value]) {
+func benchmarkWrite(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
 	for i := 0; i < b.N; i++ {
 		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
-		err := store.Set(selector.selector(i), common.Value{value[0], value[1], value[2], value[3]})
+		err := store.Set(dist.getId(), common.Value{value[0], value[1], value[2], value[3]})
 		if err != nil {
 			b.Fatalf("failed to set store item; %s", err)
 		}
@@ -85,27 +92,26 @@ func benchmarkWrite(b *testing.B, selector Selector, store store.Store[uint32, c
 }
 
 func BenchmarkHash(b *testing.B) {
-	stores := getLabeledStores(b)
-	dbSizes := []int{1 << 5, 1 << 10}
-
-	for _, s := range stores {
+	for _, fac := range getStoresFactories() {
 		for _, dbSize := range dbSizes {
-			initStoreContent(b, s.store, dbSize)
-			for _, selector := range getSelectors(dbSize) {
-				b.Run(fmt.Sprintf("%s_%s_%d", selector.name, s.label, dbSize), func(b *testing.B) {
-					benchmarkHash(b, selector, s.store)
+			s := fac.getStore(b)
+			initStoreContent(b, s, dbSize)
+			for _, dist := range getDistributions(dbSize) {
+				b.Run(fmt.Sprintf("%s_%s_%d", dist.label, fac.label, dbSize), func(b *testing.B) {
+					benchmarkHash(b, dist, s)
 				})
 			}
+			_ = s.Close()
 		}
 	}
 }
 
-func benchmarkHash(b *testing.B, selector Selector, store store.Store[uint32, common.Value]) {
+func benchmarkHash(b *testing.B, dist Distribution, store store.Store[uint32, common.Value]) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer() // don't measure the update
 		for ii := 0; ii < 100; ii++ {
 			value := binary.BigEndian.AppendUint32([]byte{}, rand.Uint32())
-			err := store.Set(selector.selector(i), common.Value{value[0], value[1], value[2], value[3]})
+			err := store.Set(dist.getId(), common.Value{value[0], value[1], value[2], value[3]})
 			if err != nil {
 				b.Fatalf("failed to set store item; %s", err)
 			}
@@ -120,58 +126,60 @@ func benchmarkHash(b *testing.B, selector Selector, store store.Store[uint32, co
 	}
 }
 
-type Selector struct {
-	name     string
-	selector func(i int) uint32
+type StoreFactory struct {
+	label    string
+	getStore func(b *testing.B) store.Store[uint32, common.Value]
 }
 
-func getSelectors(items int) []Selector {
-	expRate := float64(10) / float64(items)
-	return []Selector{
+func getStoresFactories() (stores []StoreFactory) {
+	return []StoreFactory{
 		{
-			name: "Sequential",
-			selector: func(i int) uint32 {
-				return uint32(i % items)
+			label:    "memory",
+			getStore: initMemStore,
+		},
+		{
+			label:    "file",
+			getStore: initFileStore,
+		},
+		{
+			label:    "leveldb",
+			getStore: initLevelDbStore,
+		},
+	}
+}
+
+type Distribution struct {
+	label string
+	getId func() uint32
+}
+
+func getDistributions(items int) []Distribution {
+	expRate := float64(10) / float64(items)
+	it := 0
+	return []Distribution{
+		{
+			label: "Sequential",
+			getId: func() uint32 {
+				it = (it + 1) % items
+				return uint32(it)
 			},
 		},
 		{
-			name: "Uniform",
-			selector: func(i int) uint32 {
+			label: "Uniform",
+			getId: func() uint32 {
 				return uint32(rand.Intn(items))
 			},
 		},
 		{
-			name: "Sequential",
-			selector: func(i int) uint32 {
+			label: "Exponential",
+			getId: func() uint32 {
 				return uint32(rand.ExpFloat64() / expRate)
 			},
 		},
 	}
 }
 
-type LabeledStore struct {
-	label string
-	store store.Store[uint32, common.Value]
-}
-
-func getLabeledStores(b *testing.B) (stores []LabeledStore) {
-	return []LabeledStore{
-		{
-			label: "memory",
-			store: initMemStore(),
-		},
-		{
-			label: "file",
-			store: initFileStore(b),
-		},
-		{
-			label: "leveldb",
-			store: initLevelDbStore(b),
-		},
-	}
-}
-
-func initMemStore() (store store.Store[uint32, common.Value]) {
+func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	return memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, Factor)
 }
 
@@ -210,5 +218,3 @@ func initStoreContent(b *testing.B, store store.Store[uint32, common.Value], dbS
 	}
 	b.StartTimer()
 }
-
-var sink interface{}
