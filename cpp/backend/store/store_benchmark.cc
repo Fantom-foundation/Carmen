@@ -40,6 +40,38 @@ BENCHMARK(BM_SequentialInsert<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+// Benchmarks the appending of new elements to the store.
+template <typename StoreHandler>
+void BM_Insert(benchmark::State& state) {
+  // The size of the store before the inserts.
+  auto num_elements = state.range(0);
+
+  // Initialize the store with the initial number of elements.
+  StoreHandler wrapper;
+  auto& store = wrapper.GetStore();
+  store.Get(num_elements - 1);
+
+  // Append additional elements to the end of the store.
+  auto i = num_elements;
+  for (auto _ : state) {
+    store.Set(i++, Value{});
+  }
+}
+
+BENCHMARK(BM_Insert<StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_Insert<StoreHandler<FileStore<int, Value, InMemoryFile, kPageSize>,
+                                 kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_Insert<StoreHandler<FileStore<int, Value, SingleFile, kPageSize>,
+                                 kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 // Benchmarks sequential read of read of keys.
 template <typename StoreHandler>
 void BM_SequentialRead(benchmark::State& state) {
