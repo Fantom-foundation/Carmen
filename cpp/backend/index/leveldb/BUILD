@@ -6,6 +6,7 @@ cc_library(
         "//common:type",
         "//common:hash",
         "@com_github_google_leveldb//:leveldb",
+        "@com_google_absl//absl/status:statusor"
     ],
     visibility = ["//visibility:public"],
 )

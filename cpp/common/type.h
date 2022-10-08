@@ -13,6 +13,9 @@ constexpr int kAddressLength = 20;
 constexpr int kKeyLength = 32;
 constexpr int kValueLength = 32;
 
+template <class T>
+concept Integral = std::is_integral_v<T>;
+
 // Class template for all types based on byte array value.
 template <std::size_t N>
 class ByteValue {
