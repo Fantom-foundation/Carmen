@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"hash"
 	"io"
 	"os"
 )
@@ -17,17 +19,28 @@ type HashTree struct {
 	path         string
 	factor       int          // the branching factor - amount of child nodes per one parent node
 	dirtyPages   map[int]bool // set of dirty flags of the tree nodes
-	pageProvider PageProvider // callback for obtaining data pages
+	pageProvider hashtree.PageProvider
 }
 
-// PageProvider is a source of pages for the HashTree
-type PageProvider interface {
-	GetPage(page int) ([]byte, error)
+// hashTreeFactory is used for implementation of hashTreeFactory method
+type hashTreeFactory struct {
+	path            string
+	branchingFactor int
+}
+
+// CreateHashTreeFactory creates a new instance of the hashTreeFactory
+func CreateHashTreeFactory(path string, branchingFactor int) *hashTreeFactory {
+	return &hashTreeFactory{path: path, branchingFactor: branchingFactor}
+}
+
+// Create creates a new instance of the HashTree
+func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.HashTree {
+	return NewHashTree(f.path, f.branchingFactor, pageProvider)
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(path string, branchingFactor int, pageProvider PageProvider) HashTree {
-	return HashTree{
+func NewHashTree(path string, branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
+	return &HashTree{
 		path:         path,
 		factor:       branchingFactor,
 		dirtyPages:   map[int]bool{},
@@ -50,13 +63,13 @@ func (ht *HashTree) layerFile(layer int) (path string) {
 }
 
 // calculateHash computes the hash of given data
-func calculateHash(childrenHashes []byte) (hash []byte, err error) {
-	h := sha256.New()
-	_, err = h.Write(childrenHashes)
+func (ht *HashTree) calculateHash(hasher hash.Hash, content []byte) (hash []byte, err error) {
+	hasher.Reset()
+	_, err = hasher.Write(content)
 	if err != nil {
 		return nil, err
 	}
-	return h.Sum(nil), nil
+	return hasher.Sum(nil), nil
 }
 
 // MarkUpdated marks a page as changed - to be included into the hash recalculation on commit
@@ -86,9 +99,13 @@ func (ht *HashTree) readLayer(layer *os.File, from int64, length int) ([]byte, e
 	return bytes, nil
 }
 
-// getLayerLength provides the length (in bytes) of a hashtree layer
-func (ht *HashTree) getLayerLength(layer *os.File) (length int64, err error) {
-	return layer.Seek(0, io.SeekEnd)
+// getLayerSize provides the size of a hashtree layer in bytes
+func (ht *HashTree) getLayerSize(layer *os.File) (size int64, err error) {
+	info, err := layer.Stat()
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
 }
 
 // getLayersCount provides the amount of hashtree layers
@@ -109,6 +126,7 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 		}
 	}()
 
+	hasher := sha256.New()
 	dirtyNodes := ht.dirtyPages // nodes at level 0 are 1:1 to pages
 	ht.dirtyPages = make(map[int]bool)
 
@@ -123,23 +141,23 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 		}
 
 		// hash children nodes into (dirty) parent nodes
-		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes)
+		dirtyNodes, err = ht.updateDirtyNodes(childrenLayer, parentsLayer, layerId, dirtyNodes, hasher)
 		if err != nil {
 			return nil, err
 		}
 
-		layerLen, err := ht.getLayerLength(parentsLayer)
+		layerSize, err := ht.getLayerSize(parentsLayer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get layer length; %s", err)
 		}
-		if layerLen < HashLength {
+		if layerSize < HashLength { // the layer is empty
 			if layerId == 0 {
 				return nil, nil // no data in the db - should return zero hash
 			} else {
-				return nil, fmt.Errorf("unexpected size %d of a hashtree layer %d", layerLen, layerId)
+				return nil, fmt.Errorf("unexpected size %d of a hashtree layer %d", layerSize, layerId)
 			}
 		}
-		if layerLen == HashLength {
+		if layerSize == HashLength {
 			// this layer has only one hash - it is the root
 			return ht.readLayer(parentsLayer, 0, HashLength)
 		}
@@ -148,7 +166,7 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 }
 
 // updateDirtyNodes updates parent nodes marked as dirty with a hash of its children
-func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool) (newDirtyNodes map[int]bool, err error) {
+func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool, hasher hash.Hash) (newDirtyNodes map[int]bool, err error) {
 	newDirtyNodes = make(map[int]bool)
 	for node, _ := range dirtyNodes {
 		var content, nodeHash []byte
@@ -162,7 +180,7 @@ func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layer
 		if err != nil {
 			return nil, err
 		}
-		nodeHash, err = calculateHash(content)
+		nodeHash, err = ht.calculateHash(hasher, content)
 		if err != nil {
 			return nil, err
 		}
@@ -179,11 +197,7 @@ func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layer
 
 // updateNode updates the hash-node value to the given value
 func (ht *HashTree) updateNode(layerFile *os.File, node int, nodeHash []byte) error {
-	_, err := layerFile.Seek(int64(node*HashLength), io.SeekStart)
-	if err != nil {
-		return err
-	}
-	_, err = layerFile.Write(nodeHash)
+	_, err := layerFile.WriteAt(nodeHash, int64(node*HashLength))
 	return err
 }
 

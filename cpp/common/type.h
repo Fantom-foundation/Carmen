@@ -8,10 +8,15 @@
 
 namespace carmen {
 
+template <typename T>
+concept Trivial = std::is_trivially_copyable_v<T>;
+
 constexpr int kHashLength = 32;
 constexpr int kAddressLength = 20;
 constexpr int kKeyLength = 32;
 constexpr int kValueLength = 32;
+constexpr int kBalanceLength = 16;
+constexpr int kNonceLength = 8;
 
 // Class template for all types based on byte array value.
 template <std::size_t N>
@@ -21,7 +26,8 @@ class ByteValue {
 
   // Class constructor populating data with given list of values.
   ByteValue(std::initializer_list<std::uint8_t> il) {
-    std::copy(il.begin(), il.end(), std::begin(data_));
+    std::copy(il.begin(), il.begin() + std::min(il.size(), data_.size()),
+              std::begin(data_));
   }
 
   // Overload of << operator to make class printable.
@@ -66,6 +72,18 @@ class Key : public ByteValue<kKeyLength> {
 
 // Value represents the 32 byte value in store.
 class Value : public ByteValue<kValueLength> {
+ public:
+  using ByteValue::ByteValue;
+};
+
+// Balance represents the 16 byte balance of accounts.
+class Balance : public ByteValue<kBalanceLength> {
+ public:
+  using ByteValue::ByteValue;
+};
+
+// Balance represents the 8 byte nonce of accounts.
+class Nonce : public ByteValue<kNonceLength> {
  public:
   using ByteValue::ByteValue;
 };

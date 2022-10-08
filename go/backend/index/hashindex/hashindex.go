@@ -1,4 +1,4 @@
-package index
+package hashindex
 
 import (
 	"crypto/sha256"
@@ -21,6 +21,16 @@ type HashIndex[K comparable] struct {
 func NewHashIndex[K comparable](serializer common.Serializer[K]) *HashIndex[K] {
 	return &HashIndex[K]{
 		hash:           common.Hash{},
+		keys:           []K{},
+		serializer:     serializer,
+		hashSerializer: common.HashSerializer{},
+	}
+}
+
+// InitHashIndex creates a new instance with the initial hash
+func InitHashIndex[K comparable](hash common.Hash, serializer common.Serializer[K]) *HashIndex[K] {
+	return &HashIndex[K]{
+		hash:           hash,
 		keys:           []K{},
 		serializer:     serializer,
 		hashSerializer: common.HashSerializer{},

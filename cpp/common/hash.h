@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string_view>
 
 #include "common/type.h"
@@ -11,9 +12,6 @@ namespace carmen {
 namespace internal {
 class Sha256Impl;
 }
-
-template <typename T>
-concept Trivial = std::is_trivially_copyable_v<T>;
 
 // A utility class to compute the SHA256 hash of data.
 //
@@ -31,6 +29,9 @@ class Sha256Hasher {
 
   // Adds the given byte array to the sequence of bytes to hashed.
   void Ingest(const std::byte* data, std::size_t length);
+
+  // Same as above, but using a span to represent a sequence of bytes.
+  void Ingest(const std::span<const std::byte> span);
 
   // A convenience variant of the function above, supporting the hashing of
   // strings through a single parameter.

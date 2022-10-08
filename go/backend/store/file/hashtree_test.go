@@ -2,7 +2,6 @@ package file
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"os"
 	"testing"
 )
 
@@ -10,10 +9,7 @@ var zeroHash = common.Hash{}
 
 // Test initial and modified state to have different hashes
 func TestHashtreeInitialState(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
+	tmpDir := t.TempDir()
 
 	pages := [][]byte{}
 	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
@@ -39,10 +35,7 @@ func TestHashtreeInitialState(t *testing.T) {
 
 // Test that without actual change, the hash does not change
 func TestHashtreeUnchangedState(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
+	tmpDir := t.TempDir()
 
 	pages := make([][]byte, 10)
 	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
@@ -71,10 +64,7 @@ func TestHashtreeUnchangedState(t *testing.T) {
 
 // Test that a change changes the hash
 func TestHashtreeChangedState(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
+	tmpDir := t.TempDir()
 
 	pages := make([][]byte, 10)
 	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
@@ -104,14 +94,8 @@ func TestHashtreeChangedState(t *testing.T) {
 
 // Test that two ways of building the same state leads to the same hash
 func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
-	tmpDirA, err := os.MkdirTemp("", "file-based-store-test-a")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
-	tmpDirB, err := os.MkdirTemp("", "file-based-store-test-b")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
+	tmpDirA := t.TempDir()
+	tmpDirB := t.TempDir()
 
 	// initialize two different states
 	pagesA := [][]byte{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {0}, {0}}
@@ -159,10 +143,7 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 
 // Whitebox test of the amount of hash layers produced by different amounts of pages
 func TestAmountOfLevels(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "file-based-store-test")
-	if err != nil {
-		t.Fatalf("unable to create testing db directory")
-	}
+	tmpDir := t.TempDir()
 
 	branchingFactor := 3
 	pages := make([][]byte, branchingFactor*branchingFactor+1)
@@ -173,7 +154,7 @@ func TestAmountOfLevels(t *testing.T) {
 		pages[i] = []byte{byte(i)}
 		tree.MarkUpdated(i)
 	}
-	_, err = tree.HashRoot()
+	_, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}

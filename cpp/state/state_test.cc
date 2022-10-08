@@ -19,39 +19,40 @@ TEST(StateTest, DefaultBalanceIsZero) {
   Address b{0x02};
 
   InMemoryState state;
-  EXPECT_EQ(0, state.GetBalance(a));
-  EXPECT_EQ(0, state.GetBalance(b));
+  EXPECT_EQ(Balance{}, state.GetBalance(a));
+  EXPECT_EQ(Balance{}, state.GetBalance(b));
 }
 
 TEST(StateTest, BalancesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
+  Balance zero{};
 
   InMemoryState state;
-  EXPECT_EQ(0, state.GetBalance(a));
-  EXPECT_EQ(0, state.GetBalance(b));
+  EXPECT_EQ(zero, state.GetBalance(a));
+  EXPECT_EQ(zero, state.GetBalance(b));
 
-  state.SetBalance(a, 12);
-  EXPECT_EQ(12, state.GetBalance(a));
-  EXPECT_EQ(0, state.GetBalance(b));
+  state.SetBalance(a, Balance{0x12});
+  EXPECT_EQ(Balance{0x12}, state.GetBalance(a));
+  EXPECT_EQ(zero, state.GetBalance(b));
 
-  state.SetBalance(b, 14);
-  EXPECT_EQ(12, state.GetBalance(a));
-  EXPECT_EQ(14, state.GetBalance(b));
+  state.SetBalance(b, Balance{0x14});
+  EXPECT_EQ(Balance{0x12}, state.GetBalance(a));
+  EXPECT_EQ(Balance{0x14}, state.GetBalance(b));
 }
 
 TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
   InMemoryState state;
   auto base_hash = state.GetHash();
-  state.SetBalance({}, 12);
+  state.SetBalance({}, Balance{0x12});
   auto value_12_hash = state.GetHash();
   EXPECT_NE(base_hash, value_12_hash);
-  state.SetBalance({}, 14);
+  state.SetBalance({}, Balance{0x14});
   auto value_14_hash = state.GetHash();
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  state.SetBalance({}, 12);
+  state.SetBalance({}, Balance{0x12});
   auto value_12_hash_again = state.GetHash();
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
@@ -59,41 +60,43 @@ TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
 TEST(StateTest, DefaultNonceIsZero) {
   Address a{0x01};
   Address b{0x02};
+  Nonce zero;
 
   InMemoryState state;
-  EXPECT_EQ(0, state.GetNonce(a));
-  EXPECT_EQ(0, state.GetNonce(b));
+  EXPECT_EQ(zero, state.GetNonce(a));
+  EXPECT_EQ(zero, state.GetNonce(b));
 }
 
 TEST(StateTest, NoncesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
+  Nonce zero;
 
   InMemoryState state;
-  EXPECT_EQ(0, state.GetNonce(a));
-  EXPECT_EQ(0, state.GetNonce(b));
+  EXPECT_EQ(zero, state.GetNonce(a));
+  EXPECT_EQ(zero, state.GetNonce(b));
 
-  state.SetNonce(a, 12);
-  EXPECT_EQ(12, state.GetNonce(a));
-  EXPECT_EQ(0, state.GetNonce(b));
+  state.SetNonce(a, Nonce{0x12});
+  EXPECT_EQ(Nonce{0x12}, state.GetNonce(a));
+  EXPECT_EQ(zero, state.GetNonce(b));
 
-  state.SetNonce(b, 14);
-  EXPECT_EQ(12, state.GetNonce(a));
-  EXPECT_EQ(14, state.GetNonce(b));
+  state.SetNonce(b, Nonce{0x14});
+  EXPECT_EQ(Nonce{0x12}, state.GetNonce(a));
+  EXPECT_EQ(Nonce{0x14}, state.GetNonce(b));
 }
 
 TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
   InMemoryState state;
   auto base_hash = state.GetHash();
-  state.SetNonce({}, 12);
+  state.SetNonce({}, Nonce{0x12});
   auto value_12_hash = state.GetHash();
   EXPECT_NE(base_hash, value_12_hash);
-  state.SetNonce({}, 14);
+  state.SetNonce({}, Nonce{0x14});
   auto value_14_hash = state.GetHash();
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  state.SetNonce({}, 12);
+  state.SetNonce({}, Nonce{0x12});
   auto value_12_hash_again = state.GetHash();
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }

@@ -1,4 +1,11 @@
 cc_library(
+    name = "test_util",
+    hdrs = ["test_util.h"],
+    testonly = True,
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name="hex_util",
     hdrs=["hex_util.h"],
     srcs=["hex_util.cc"],
@@ -30,6 +37,7 @@ cc_test(
     name = "type_test",
     srcs = ["type_test.cc"],
     deps = [
+        ":test_util",
         ":type",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_googletest//:gtest_main",
@@ -53,6 +61,25 @@ cc_test(
     deps = [
         ":hash",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="file_util",
+    hdrs=["file_util.h"],
+    srcs=["file_util.cc"],
+    deps=[
+    ],
+    visibility = ["//visibility:public"],
+    testonly = True,
+)
+
+cc_test(
+    name = "file_util_test",
+    srcs = ["file_util_test.cc"],
+    deps = [
+        ":file_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

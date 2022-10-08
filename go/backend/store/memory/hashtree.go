@@ -2,6 +2,7 @@ package memory
 
 import (
 	"crypto/sha256"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
 )
@@ -12,17 +13,27 @@ type HashTree struct {
 	factor       int            // the branching factor - amount of child nodes per one parent node
 	tree         [][][]byte     // tree of hashes [layer][node][byte of hash]
 	dirtyNodes   []map[int]bool // set of dirty flags of the tree nodes [layer][node]
-	pageProvider PageProvider   // callback for obtaining data pages
+	pageProvider hashtree.PageProvider
 }
 
-// PageProvider is a source of pages for the HashTree
-type PageProvider interface {
-	GetPage(page int) ([]byte, error)
+// hashTreeFactory is used for implementation of hashTreeFactory method
+type hashTreeFactory struct {
+	branchingFactor int
+}
+
+// CreateHashTreeFactory creates a new instance of the hashTreeFactory
+func CreateHashTreeFactory(branchingFactor int) *hashTreeFactory {
+	return &hashTreeFactory{branchingFactor: branchingFactor}
+}
+
+// Create creates a new instance of the HashTree
+func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.HashTree {
+	return NewHashTree(f.branchingFactor, pageProvider)
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(branchingFactor int, pageProvider PageProvider) HashTree {
-	return HashTree{
+func NewHashTree(branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
+	return &HashTree{
 		factor:       branchingFactor,
 		tree:         [][][]byte{{}},
 		dirtyNodes:   []map[int]bool{{}},
@@ -43,8 +54,8 @@ func (ht *HashTree) firstChildOf(parentIdx int) int {
 // calculateHash computes the hash of given data
 func calculateHash(h hash.Hash, childrenHashes [][]byte) (hash []byte, err error) {
 	h.Reset()
-	for i := 0; i < len(childrenHashes); i++ {
-		_, err = h.Write(childrenHashes[i])
+	for _, childHash := range childrenHashes {
+		_, err = h.Write(childHash)
 		if err != nil {
 			return nil, err
 		}
@@ -61,6 +72,7 @@ func (ht *HashTree) MarkUpdated(page int) {
 func (ht *HashTree) commit() (err error) {
 	h := sha256.New() // the hasher is created once for the whole block as it hashes the fastest
 	for layer := 0; layer < len(ht.tree); layer++ {
+		needNextLayer := false
 		for node, _ := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
 			if layer == 0 {
@@ -82,10 +94,13 @@ func (ht *HashTree) commit() (err error) {
 			}
 			// update the hash of this node, and extend the tree if needed
 			ht.updateNode(layer, node, nodeHash)
+			if node > 0 {
+				needNextLayer = true
+			}
 		}
 		// if the last layer has more than one node, need to add a new layer
 		lastLayer := len(ht.tree) - 1
-		if layer == lastLayer && len(ht.tree[lastLayer]) > 1 {
+		if layer == lastLayer && needNextLayer {
 			ht.tree = append(ht.tree, [][]byte{{}})
 		}
 	}
@@ -97,7 +112,9 @@ func (ht *HashTree) updateNode(layer int, node int, nodeHash []byte) {
 	// extend the layer size if necessary
 	if node >= len(ht.tree[layer]) {
 		newLayerSize := (node/ht.factor + 1) * ht.factor
-		ht.tree[layer] = append(ht.tree[layer], make([][]byte, newLayerSize-len(ht.tree[layer]))...)
+		for newLayerSize > len(ht.tree[layer]) {
+			ht.tree[layer] = append(ht.tree[layer], make([]byte, common.HashSerializer{}.Size()))
+		}
 	}
 
 	ht.tree[layer][node] = nodeHash

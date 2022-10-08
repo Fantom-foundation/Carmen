@@ -93,19 +93,35 @@ func (a NonceSerializer) Size() int {
 }
 
 // SlotIdxSerializer32 is a Serializer of the Value type
-type SlotIdxSerializer32 struct{}
+type SlotIdxSerializer32 struct {
+	identifierSerializer32 Identifier32Serializer
+}
 
 func (a SlotIdxSerializer32) ToBytes(value SlotIdx[uint32]) []byte {
-	b := binary.LittleEndian.AppendUint32([]byte{}, value.AddressIdx)
-	return binary.LittleEndian.AppendUint32(b, value.KeyIdx)
+	b1 := a.identifierSerializer32.ToBytes(value.AddressIdx)
+	b2 := a.identifierSerializer32.ToBytes(value.KeyIdx)
+	return append(b1, b2...)
 }
 func (a SlotIdxSerializer32) FromBytes(bytes []byte) SlotIdx[uint32] {
 	value := SlotIdx[uint32]{
-		AddressIdx: binary.LittleEndian.Uint32(bytes[0:4]),
-		KeyIdx:     binary.LittleEndian.Uint32(bytes[4:8]),
+		AddressIdx: a.identifierSerializer32.FromBytes(bytes[0:4]),
+		KeyIdx:     a.identifierSerializer32.FromBytes(bytes[4:8]),
 	}
 	return value
 }
 func (a SlotIdxSerializer32) Size() int {
 	return 8 // two 32bit integers
+}
+
+// Identifier32Serializer is a Serializer of the uint32 Identifier type
+type Identifier32Serializer struct{}
+
+func (a Identifier32Serializer) ToBytes(value uint32) []byte {
+	return binary.BigEndian.AppendUint32([]byte{}, value)
+}
+func (a Identifier32Serializer) FromBytes(bytes []byte) uint32 {
+	return binary.BigEndian.Uint32(bytes)
+}
+func (a Identifier32Serializer) Size() int {
+	return 4
 }

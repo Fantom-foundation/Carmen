@@ -12,26 +12,6 @@
 
 namespace carmen::backend::store {
 
-// A page of the InMemory storage holding a fixed length array of values.
-template <Trivial V, std::size_t size>
-class Page {
- public:
-  // Provides read only access to individual elements. No bounds are checked.
-  const V& operator[](int pos) const { return _data[pos]; }
-
-  // Provides mutable access to individual elements. No bounds are checked.
-  V& operator[](int pos) { return _data[pos]; }
-
-  // Appends the content of this page to the provided hasher instance.
-  void AppendTo(Sha256Hasher& hasher) {
-    hasher.Ingest(reinterpret_cast<const std::byte*>(&_data[0]),
-                  sizeof(V) * size);
-  }
-
- private:
-  std::array<V, size> _data;
-};
-
 // The InMemoryStore is an in-memory implementation of a mutable key/value
 // store. It maps provided mutation and lookup support, as well as global
 // state hashing support enabling to obtain a quick hash for the entire
@@ -39,45 +19,64 @@ class Page {
 template <typename K, Trivial V, std::size_t page_size = 32>
 class InMemoryStore {
  public:
+  // The page size in byte used by this store.
+  constexpr static std::size_t kPageSize = page_size;
+
   // Creates a new InMemoryStore using the provided value as the
-  // default value for all its storage cells. Any get for an uninitialized
-  // key will return the provided default value.
-  InMemoryStore(V default_value = {})
-      : _default_value(std::move(default_value)) {}
+  // branching factor for hash computation.
+  InMemoryStore(std::size_t hash_branching_factor = 32)
+      : hash_branching_factor_(hash_branching_factor) {}
 
   // Instances can not be copied.
   InMemoryStore(const InMemoryStore&) = delete;
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value) {
-    auto page_number = key / page_size;
-    while (_pages.size() <= page_number) {
-      _pages.push_back(std::make_unique<Page>());
+    auto page_number = key / elements_per_page;
+    while (pages_.size() <= page_number) {
+      pages_.push_back(std::make_unique<Page>());
     }
-    (*_pages[page_number])[key % page_size] = value;
+    (*pages_[page_number])[key % elements_per_page] = value;
   }
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using a the Set(..) function above, the default
   // value defined during the construction of a store instance is returned.
   const V& Get(const K& key) const {
-    auto page_number = key / page_size;
-    if (page_number >= _pages.size()) {
-      return _default_value;
+    static const V default_value{};
+    auto page_number = key / elements_per_page;
+    if (page_number >= pages_.size()) {
+      return default_value;
     }
-    return (*_pages[page_number])[key % page_size];
+    return (*pages_[page_number])[key % elements_per_page];
   }
 
   // Computes a hash over the full content of this store.
   Hash GetHash() const;
 
  private:
-  using Page = Page<V, page_size>;
+  constexpr static auto elements_per_page = page_size / sizeof(V);
+  // A page of the InMemory storage holding a fixed length array of values.
+  class Page {
+   public:
+    // Provides read only access to individual elements. No bounds are checked.
+    const V& operator[](int pos) const { return data_[pos]; }
 
-  const V _default_value;
+    // Provides mutable access to individual elements. No bounds are checked.
+    V& operator[](int pos) { return data_[pos]; }
+
+    // Appends the content of this page to the provided hasher instance.
+    void AppendTo(Sha256Hasher& hasher) { hasher.Ingest(data_); }
+
+   private:
+    std::array<V, elements_per_page> data_;
+  };
 
   // An indexed list of pages containing the actual values.
-  std::deque<std::unique_ptr<Page>> _pages;
+  std::deque<std::unique_ptr<Page>> pages_;
+
+  // The branching factor used for aggregating hashes.
+  const std::size_t hash_branching_factor_;
 };
 
 template <typename K, Trivial V, std::size_t page_size>
@@ -108,9 +107,9 @@ Hash InMemoryStore<K, V, page_size>::GetHash() const {
   //  - when computing state hashes, only re-compute hashes affected
   //    by dirty pages.
 
-  constexpr int branch_width = 32;
+  const std::size_t branch_width = hash_branching_factor_;
 
-  if (_pages.empty()) {
+  if (pages_.empty()) {
     return Hash();
   }
 
@@ -119,13 +118,13 @@ Hash InMemoryStore<K, V, page_size>::GetHash() const {
 
   // Reserver maximum padded size.
   const auto padded_size =
-      (_pages.size() % branch_width == 0)
-          ? _pages.size()
-          : (_pages.size() / branch_width + 1) * branch_width;
+      (pages_.size() % branch_width == 0)
+          ? pages_.size()
+          : (pages_.size() / branch_width + 1) * branch_width;
   hashes.reserve(padded_size);
 
   // Hash individual pages, forming the leaf level.
-  for (const auto& page : _pages) {
+  for (const auto& page : pages_) {
     hasher.Reset();
     page->AppendTo(hasher);
     hashes.push_back(hasher.GetHash());
