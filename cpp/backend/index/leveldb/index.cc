@@ -1,10 +1,10 @@
 #include "index.h"
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "leveldb/db.h"
 #include "leveldb/slice.h"
 #include "leveldb/write_batch.h"
-#include "absl/status/statusor.h"
-#include "absl/status/status.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -12,7 +12,7 @@ constexpr std::string_view kHashKey = "hash";
 constexpr std::string_view kLastIndexKey = "last";
 constexpr leveldb::WriteOptions kWriteOptions = leveldb::WriteOptions();
 constexpr leveldb::ReadOptions kReadOptions = leveldb::ReadOptions();
-}
+}  // namespace
 
 namespace internal {
 
@@ -23,7 +23,8 @@ class LevelDBIndexImpl {
     leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = true;
-    leveldb::Status status = leveldb::DB::Open(options, {path.data(), path.size()}, &db);
+    leveldb::Status status =
+        leveldb::DB::Open(options, {path.data(), path.size()}, &db);
     assert(status.ok());
     db_.reset(db);
   }
@@ -31,7 +32,8 @@ class LevelDBIndexImpl {
   // Get value for given key.
   absl::StatusOr<std::string> Get(std::string_view key) {
     std::string value;
-    leveldb::Status status = db_->Get(kReadOptions, {key.data(), key.size()}, &value);
+    leveldb::Status status =
+        db_->Get(kReadOptions, {key.data(), key.size()}, &value);
 
     if (status.IsNotFound()) {
       return absl::NotFoundError("Key not found");
@@ -44,14 +46,26 @@ class LevelDBIndexImpl {
     return value;
   }
 
+  // Add single value for given key.
+  absl::Status Add(std::string_view key, std::string_view value) {
+    leveldb::Status status = db_->Put(kWriteOptions, {key.data(), key.size()}, {value.data(), value.size()});
+
+    if (!status.ok()) {
+      return absl::InternalError(status.ToString());
+    }
+
+    return absl::OkStatus();
+  }
+
   // Add batch of values. Input is a span of pairs of key and value.
-  absl::Status AddBatch(std::span<std::pair<std::string_view, std::string_view>> batch) {
+  absl::Status AddBatch(
+      std::span<std::pair<std::string_view, std::string_view>> batch) {
     leveldb::WriteBatch write_batch;
 
     for (const auto& [key, value] : batch) {
       write_batch.Put({key.data(), key.size()}, {value.data(), value.size()});
-
     }
+
     leveldb::Status status = db_->Write(kWriteOptions, &write_batch);
 
     if (!status.ok()) {
@@ -76,20 +90,32 @@ absl::StatusOr<std::string> LevelDBKeySpaceBase::GetLastIndexRaw() {
 }
 
 // Get latest index value.
-absl::StatusOr<std::string> LevelDBKeySpaceBase::GetHashRaw() {
-  return impl_->Get(internal::ToLevelDBKey(key_space_, kHashKey));
+absl::StatusOr<Hash> LevelDBKeySpaceBase::GetHashRaw() {
+  auto result = impl_->Get(internal::ToLevelDBKey(key_space_, kHashKey));
+  if (result.ok()) {
+    return *reinterpret_cast<Hash*>(result->data());
+  }
+  return result.status();
 }
 
-absl::Status LevelDBKeySpaceBase::AddIndexRaw(std::string_view key, std::string_view value) {
+// Add last index value.
+absl::Status LevelDBKeySpaceBase::AddIndexRaw(std::string_view key,
+                                              std::string_view value) {
   std::array<std::pair<std::string_view, std::string_view>, 2> batch{
       std::pair{key, value},
       std::pair{internal::ToLevelDBKey(key_space_, kLastIndexKey), value},
   };
   return impl_->AddBatch(batch);
 }
-} // namespace internal
+
+// Add hash value.
+absl::Status LevelDBKeySpaceBase::AddHashRaw(const Hash& hash) {
+  return impl_->Add(internal::ToLevelDBKey(key_space_, kHashKey),
+                    {reinterpret_cast<const char*>(&hash), sizeof(hash)});
+}
+}  // namespace internal
 
 // LevelDBIndex constructor.
-LevelDBIndex::LevelDBIndex(std::string_view path) : impl_(std::make_shared<internal::LevelDBIndexImpl>(path)) {}
-} // namespace carmen::backend::index
-
+LevelDBIndex::LevelDBIndex(std::string_view path)
+    : impl_(std::make_shared<internal::LevelDBIndexImpl>(path)) {}
+}  // namespace carmen::backend::index

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <string>
-#include <sstream>
 #include <iostream>
+#include <queue>
+#include <sstream>
+#include <string>
 #include <utility>
 
-#include "absl/status/statusor.h"
 #include "absl/status/status.h"
-
+#include "absl/status/statusor.h"
 #include "common/hash.h"
 #include "common/type.h"
 
@@ -54,14 +54,17 @@ class LevelDBKeySpaceBase {
   // Get raw result for given key without key space transformation.
   absl::StatusOr<std::string> GetRaw(std::string_view key);
 
-  // Get latest index value.
+  // Get last index value.
   absl::StatusOr<std::string> GetLastIndexRaw();
 
   // Get actual hash value.
-  absl::StatusOr<std::string> GetHashRaw();
+  absl::StatusOr<Hash> GetHashRaw();
 
-  // Get latest index value.
+  // Add last index value.
   absl::Status AddIndexRaw(std::string_view key, std::string_view value);
+
+  // Add hash value.
+  absl::Status AddHashRaw(const Hash& hash);
 
  protected:
   std::shared_ptr<internal::LevelDBIndexImpl> impl_;
@@ -104,9 +107,38 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
     return GetRaw(internal::ToLevelDBKey(key_space_, key)).ok();
   }
 
+  // Commit state of the key space. This will update the hash value. This is
+  // required to be called after all the operations are done.
+  absl::Status Commit() {
+    if (keys_.empty()) return absl::OkStatus();
+
+    auto hash = GetLastHash();
+    if (!hash.ok()) return hash.status();
+
+    // calculate new hash
+    while (!keys_.empty()) {
+      hash_ = GetSha256Hash(hash, keys_.front());
+      keys_.pop();
+    }
+
+    // add new hash
+    return AddHashRaw(hash_);
+  }
+
+  // Computes a hash over the full content of this index.
+  absl::StatusOr<Hash> GetHash() const {
+    auto status = Commit();
+    if (!status.ok()) return status;
+    return GetLastHash();
+  }
+
  private:
   // Last index value. This is used to generate new index.
   std::optional<I> last_index_;
+  // Current hash value.
+  std::optional<Hash> hash_;
+  // Cached keys to compute hash from.
+  std::queue<K> keys_;
 
   // Get last index value. If it is not cached, it will be fetched from database.
   absl::StatusOr<I> GetLastIndex() {
@@ -118,6 +150,25 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
       last_index_ = internal::ParseLevelDBResult<I>(result.value());
     }
     return last_index_.value();
+  }
+
+  // Get last hash value. If it is not cached, it will be fetched from database.
+  // If there is no hash value in database, it will return empty hash.
+  absl::StatusOr<Hash> GetLastHash() {
+    if (!hash_.has_value()) {
+      auto result = GetHashRaw();
+      switch (result.status().code()) {
+        case absl::StatusCode::kNotFound:
+          hash_ = Hash{};
+          break;
+        case absl::StatusCode::kOk:
+          hash_ = result.value();
+          break;
+        default:
+          return result.status();
+      }
+    }
+    return hash_.value();
   }
 
   // Generate new index for given key. This will also update last index value.
@@ -141,6 +192,9 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
     if (! write_result.ok()) {
       return write_result;
     }
+
+    // Append key into queue.
+    keys_.push(key);
 
     return last_index_.value();
   }
