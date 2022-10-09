@@ -49,6 +49,20 @@ TEST(Sha256HashTest, HasherCanBeReset) {
   }
 }
 
+TEST(Sha256HashTest, SpansCanBeHashed) {
+  Sha256Hasher hasher;
+
+  std::array<std::byte, 1> data_a{std::byte{'a'}};
+  hasher.Ingest(std::span<const std::byte>(data_a));
+  EXPECT_THAT(Print(hasher.GetHash()), StrEq(GetKnownHashes()["a"]));
+
+  hasher.Reset();
+  std::array<std::byte, 3> data_b{std::byte{'a'}, std::byte{'b'},
+                                  std::byte{'c'}};
+  hasher.Ingest(std::span<const std::byte>(data_b));
+  EXPECT_THAT(Print(hasher.GetHash()), StrEq(GetKnownHashes()["abc"]));
+}
+
 TEST(Sha256HashTest, ListOfTrivialObjectsCanBeIngested) {
   Sha256Hasher hasher;
 

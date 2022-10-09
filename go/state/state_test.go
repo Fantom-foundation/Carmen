@@ -1,12 +1,14 @@
 package state
 
 import (
+	"fmt"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 const (
@@ -26,6 +28,10 @@ var (
 	val1 = common.Value{0x01}
 	val2 = common.Value{0x02}
 	val3 = common.Value{0x03}
+
+	balance1 = common.Balance{0x01}
+
+	nonce1 = common.Nonce{0x01}
 )
 
 func TestInMemoryComposition(t *testing.T) {
@@ -108,12 +114,74 @@ func TestMoreInserts(t *testing.T) {
 }
 
 func NewInMemoryComposition() State {
-	var addressIndex index.Index[common.Address, uint32] = indexmem.NewMemory[common.Address](common.AddressSerializer{})
-	var keyIndex index.Index[common.Key, uint32] = indexmem.NewMemory[common.Key](common.KeySerializer{})
-	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewMemory[common.SlotIdx[uint32]](common.SlotIdxSerializer32{})
-	var noncesStore store.Store[uint32, common.Nonce] = storemem.NewMemory[common.Nonce](common.NonceSerializer{}, common.Nonce{}, PageSize, HashTreeFactor)
-	var balancesStore store.Store[uint32, common.Balance] = storemem.NewMemory[common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
-	var valuesStore store.Store[uint32, common.Value] = storemem.NewMemory[common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
+	var addressIndex index.Index[common.Address, uint32] = indexmem.NewMemory[common.Address, uint32](common.AddressSerializer{})
+	var keyIndex index.Index[common.Key, uint32] = indexmem.NewMemory[common.Key, uint32](common.KeySerializer{})
+	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewMemory[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
+	var noncesStore store.Store[uint32, common.Nonce] = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, common.Nonce{}, PageSize, HashTreeFactor)
+	var balancesStore store.Store[uint32, common.Balance] = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
+	var valuesStore store.Store[uint32, common.Value] = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
 
-	return New(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
+	return NewService(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
+}
+
+var testingErr = fmt.Errorf("testing error")
+
+type failingStore[I common.Identifier, V any] struct {
+	store.Store[I, V]
+}
+
+func (m failingStore[I, V]) Get(id I) (value V, err error) {
+	err = testingErr
+	return
+}
+
+type failingIndex[K comparable, I common.Identifier] struct {
+	index.Index[K, I]
+}
+
+func (m failingIndex[K, I]) GetOrAdd(key K) (id I, err error) {
+	err = testingErr
+	return
+}
+
+func TestFailingStore(t *testing.T) {
+	state := NewInMemoryComposition().(*Service[uint32])
+	state.balancesStore = failingStore[uint32, common.Balance]{state.balancesStore}
+	state.noncesStore = failingStore[uint32, common.Nonce]{state.noncesStore}
+	state.valuesStore = failingStore[uint32, common.Value]{state.valuesStore}
+
+	_, err := state.GetBalance(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the store err; returned %s", err)
+	}
+
+	_, err = state.GetNonce(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the store err; returned %s", err)
+	}
+
+	_, err = state.GetStorage(address1, key1)
+	if err != testingErr {
+		t.Errorf("State service does not return the store err; returned %s", err)
+	}
+}
+
+func TestFailingIndex(t *testing.T) {
+	state := NewInMemoryComposition().(*Service[uint32])
+	state.addressIndex = failingIndex[common.Address, uint32]{state.addressIndex}
+
+	_, err := state.GetBalance(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the index err; returned %s", err)
+	}
+
+	_, err = state.GetNonce(address1)
+	if err != testingErr {
+		t.Errorf("State service does not return the index err; returned %s", err)
+	}
+
+	_, err = state.GetStorage(address1, key1)
+	if err != testingErr {
+		t.Errorf("State service does not return the index err; returned %s", err)
+	}
 }

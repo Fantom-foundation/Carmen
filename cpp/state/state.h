@@ -9,9 +9,6 @@
 
 namespace carmen {
 
-using Balance = std::uint64_t;
-using Nonce = std::uint64_t;
-
 // A state maintains all persistent state of the block chain. In particular
 // it maintains the balance of accounts, accounts nonces, and storage.
 //
@@ -24,7 +21,7 @@ class State {
  public:
   Balance GetBalance(const Address& address) const {
     auto addr_id = address_index_.Get(address);
-    if (!addr_id.has_value()) return 0;
+    if (!addr_id.has_value()) return {};
     return balances_.Get(*addr_id);
   }
 
@@ -35,7 +32,7 @@ class State {
 
   Nonce GetNonce(const Address& address) const {
     auto addr_id = address_index_.Get(address);
-    if (!addr_id.has_value()) return 0;
+    if (!addr_id.has_value()) return {};
     return nonces_.Get(*addr_id);
   }
 
