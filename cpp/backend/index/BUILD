@@ -38,3 +38,26 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "index_handler",
+    hdrs = ["index_handler.h"],
+    deps = [
+        ":index",
+        "//common:type",
+    ],
+    testonly = True,
+)
+
+cc_binary(
+    name = "index_benchmark",
+    srcs = ["index_benchmark.cc"],
+    deps = [
+        ":index_handler",
+        "//backend/index/cache",
+        "//backend/index/memory:index",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+    testonly = True,
+)

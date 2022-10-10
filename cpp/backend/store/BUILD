@@ -28,6 +28,8 @@ cc_binary(
     srcs = ["store_benchmark.cc"],
     deps = [
         ":store_handler",
+        "//backend/store/memory:store",
+        "//backend/store/file:store",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
