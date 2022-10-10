@@ -16,30 +16,27 @@ namespace internal {
 // Forward declaration of LevelDB implementation class using PIMPL pattern.
 class LevelDBIndexImpl;
 
-enum class KeySpace : char {
-  kBalance = 'B',
-  kNonce = 'N',
-  kSlot = 'S',
-  kValue = 'V'
-};
-
 // Converts given key space and key into leveldb key.
 template <Trivial K>
-std::string ToDBKey(const internal::KeySpace& key_space, const K& key) {
+std::string ToDBKey(char key_space, const K& key) {
   std::stringstream ss;
-  ss << static_cast<char>(key_space) << key;
+  ss << key_space;
+  ss.write(reinterpret_cast<const char*>(&key), sizeof(key));
   return ss.str();
 }
 
 // Converts given value into leveldb value.
-template <Integral I>
+template <std::integral I>
 std::string ToDBValue(const I& value) {
   return {reinterpret_cast<const char*>(&value), sizeof(value)};
 }
 
 // Parse result from leveldb.
-template <Integral I>
-I ParseDBResult(std::string_view value) {
+template <std::integral I>
+absl::StatusOr<I> ParseDBResult(std::string_view value) {
+  if (value.size() != sizeof(I)) {
+    return absl::InvalidArgumentError("Invalid value size.");
+  }
   return *reinterpret_cast<const I*>(value.data());
 }
 
@@ -50,7 +47,7 @@ I ParseDBResult(std::string_view value) {
 class LevelDBKeySpaceBase {
  public:
   LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDBIndexImpl> db,
-                      const internal::KeySpace& key_space)
+                      char key_space)
       : impl_(std::move(db)), key_space_(key_space) {}
 
   // Get raw result for given key without key space transformation.
@@ -71,11 +68,11 @@ class LevelDBKeySpaceBase {
 
  protected:
   std::shared_ptr<internal::LevelDBIndexImpl> impl_;
-  internal::KeySpace key_space_;
+  char key_space_;
 };
 }  // namespace internal
 
-template <Trivial K, Integral I>
+template <Trivial K, std::integral I>
 class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
  public:
   using LevelDBKeySpaceBase::LevelDBKeySpaceBase;
@@ -135,43 +132,41 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   }
 
  private:
-  // Last index value. This is used to generate new index.
-  std::optional<I> last_index_;
-  // Current hash value.
-  std::optional<Hash> hash_;
-  // Cached keys to compute hash from.
-  std::queue<K> keys_;
-
   // Get last index value. If it is not cached, it will be fetched from
   // database.
   absl::StatusOr<I> GetLastIndex() {
-    if (!last_index_.has_value()) {
-      auto result = GetLastIndexFromDB();
-      if (!result.ok()) {
-        return result.status();
-      }
-      last_index_ = internal::ParseDBResult<I>(result.value());
+    if (last_index_.has_value()) {
+      return last_index_.value();
     }
-    return last_index_.value();
+    auto result = GetLastIndexFromDB();
+    if (result.ok()) {
+      auto index = internal::ParseDBResult<I>(result.value());
+      if (index.ok()) {
+        last_index_ = *index;
+        return last_index_.value();
+      }
+      return index.status();
+    }
+    return result.status();
   }
 
   // Get last hash value. If it is not cached, it will be fetched from database.
   // If there is no hash value in database, it will return empty hash.
   absl::StatusOr<Hash> GetLastHash() {
-    if (!hash_.has_value()) {
-      auto result = GetHashFromDB();
-      switch (result.status().code()) {
-        case absl::StatusCode::kNotFound:
-          hash_ = Hash{};
-          break;
-        case absl::StatusCode::kOk:
-          hash_ = result.value();
-          break;
-        default:
-          return result.status();
-      }
+    if (hash_.has_value()) {
+      return hash_.value();
     }
-    return hash_.value();
+    auto result = GetHashFromDB();
+    switch (result.status().code()) {
+      case absl::StatusCode::kNotFound:
+        hash_ = Hash{};
+        return hash_.value();
+      case absl::StatusCode::kOk:
+        hash_ = result.value();
+        return hash_.value();
+      default:
+        return result.status();
+    }
   }
 
   // Generate new index for given key. This will also update last index value.
@@ -202,34 +197,23 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
     return last_index_.value();
   }
+
+  // Last index value. This is used to generate new index.
+  std::optional<I> last_index_;
+  // Current hash value.
+  std::optional<Hash> hash_;
+  // Cached keys to compute hash from.
+  std::queue<K> keys_;
 };
 
 class LevelDBIndex {
  public:
   explicit LevelDBIndex(std::string_view path);
 
-  // Returns Balance index.
-  template <Trivial K, Integral I>
-  LevelDBKeySpace<K, I> Balance() {
-    return {impl_, internal::KeySpace::kBalance};
-  }
-
-  // Returns Nonce index.
-  template <Trivial K, Integral I>
-  LevelDBKeySpace<K, I> Nonce() {
-    return {impl_, internal::KeySpace::kNonce};
-  }
-
-  // Returns Slot index.
-  template <Trivial K, Integral I>
-  LevelDBKeySpace<K, I> Slot() {
-    return {impl_, internal::KeySpace::kSlot};
-  }
-
-  // Returns Value index.
-  template <Trivial K, Integral I>
-  LevelDBKeySpace<K, I> Value() {
-    return {impl_, internal::KeySpace::kValue};
+  // Returns index for given key space.
+  template <Trivial K, std::integral I>
+  LevelDBKeySpace<K, I> KeySpace(char key_space) {
+    return {impl_, key_space};
   }
 
  private:

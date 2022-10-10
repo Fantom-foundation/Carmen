@@ -77,7 +77,7 @@ class LevelDBIndexImpl {
   }
 
  private:
-  std::shared_ptr<leveldb::DB> db_;
+  std::unique_ptr<leveldb::DB> db_;
 };
 
 // Get raw result for given key without key space transformation.
@@ -95,6 +95,9 @@ absl::StatusOr<std::string> LevelDBKeySpaceBase::GetLastIndexFromDB() {
 absl::StatusOr<Hash> LevelDBKeySpaceBase::GetHashFromDB() {
   auto result = impl_->Get(internal::ToDBKey(key_space_, kHashKey));
   if (result.ok()) {
+    if (result->size() != sizeof(Hash)) {
+      return absl::InvalidArgumentError("Invalid hash size.");
+    }
     return *reinterpret_cast<Hash*>(result->data());
   }
   return result.status();
