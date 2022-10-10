@@ -48,7 +48,8 @@ class LevelDBIndexImpl {
 
   // Add single value for given key.
   absl::Status Add(std::string_view key, std::string_view value) {
-    leveldb::Status status = db_->Put(kWriteOptions, {key.data(), key.size()}, {value.data(), value.size()});
+    leveldb::Status status = db_->Put(kWriteOptions, {key.data(), key.size()},
+                                      {value.data(), value.size()});
 
     if (!status.ok()) {
       return absl::InternalError(status.ToString());
@@ -80,37 +81,41 @@ class LevelDBIndexImpl {
 };
 
 // Get raw result for given key without key space transformation.
-absl::StatusOr<std::string> LevelDBKeySpaceBase::GetRaw(std::string_view key) {
+absl::StatusOr<std::string> LevelDBKeySpaceBase::GetFromDB(
+    std::string_view key) {
   return impl_->Get(key);
 }
 
-// Get latest index value.
-absl::StatusOr<std::string> LevelDBKeySpaceBase::GetLastIndexRaw() {
-  return impl_->Get(internal::ToLevelDBKey(key_space_, kLastIndexKey));
+// Get latest index value from database for current key space.
+absl::StatusOr<std::string> LevelDBKeySpaceBase::GetLastIndexFromDB() {
+  return impl_->Get(internal::ToDBKey(key_space_, kLastIndexKey));
 }
 
-// Get latest index value.
-absl::StatusOr<Hash> LevelDBKeySpaceBase::GetHashRaw() {
-  auto result = impl_->Get(internal::ToLevelDBKey(key_space_, kHashKey));
+// Get current hash value from database for current key space.
+absl::StatusOr<Hash> LevelDBKeySpaceBase::GetHashFromDB() {
+  auto result = impl_->Get(internal::ToDBKey(key_space_, kHashKey));
   if (result.ok()) {
     return *reinterpret_cast<Hash*>(result->data());
   }
   return result.status();
 }
 
-// Add last index value.
-absl::Status LevelDBKeySpaceBase::AddIndexRaw(std::string_view key,
-                                              std::string_view value) {
+// Add index value for given key. This method also updates last index value.
+absl::Status LevelDBKeySpaceBase::AddIndexAndUpdateLatestIntoDB(
+    std::string_view key, std::string_view value) {
+  auto last_index_key = internal::ToDBKey(key_space_, kLastIndexKey);
+
   std::array<std::pair<std::string_view, std::string_view>, 2> batch{
       std::pair{key, value},
-      std::pair{internal::ToLevelDBKey(key_space_, kLastIndexKey), value},
+      std::pair{last_index_key, value},
   };
+
   return impl_->AddBatch(batch);
 }
 
 // Add hash value.
-absl::Status LevelDBKeySpaceBase::AddHashRaw(const Hash& hash) {
-  return impl_->Add(internal::ToLevelDBKey(key_space_, kHashKey),
+absl::Status LevelDBKeySpaceBase::AddHashIntoDB(const Hash& hash) {
+  return impl_->Add(internal::ToDBKey(key_space_, kHashKey),
                     {reinterpret_cast<const char*>(&hash), sizeof(hash)});
 }
 }  // namespace internal

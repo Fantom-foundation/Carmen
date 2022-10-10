@@ -11,15 +11,15 @@ namespace carmen {
 template <typename T>
 concept Trivial = std::is_trivially_copyable_v<T>;
 
+template <class T>
+concept Integral = std::is_integral_v<T>;
+
 constexpr int kHashLength = 32;
 constexpr int kAddressLength = 20;
 constexpr int kKeyLength = 32;
 constexpr int kValueLength = 32;
 constexpr int kBalanceLength = 16;
 constexpr int kNonceLength = 8;
-
-template <class T>
-concept Integral = std::is_integral_v<T>;
 
 // Class template for all types based on byte array value.
 template <std::size_t N>

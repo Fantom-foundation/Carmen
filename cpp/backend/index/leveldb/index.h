@@ -24,8 +24,8 @@ enum class KeySpace : char {
 };
 
 // Converts given key space and key into leveldb key.
-template<Trivial K>
-std::string ToLevelDBKey(const internal::KeySpace& key_space, const K& key) {
+template <Trivial K>
+std::string ToDBKey(const internal::KeySpace& key_space, const K& key) {
   std::stringstream ss;
   ss << static_cast<char>(key_space) << key;
   return ss.str();
@@ -33,13 +33,13 @@ std::string ToLevelDBKey(const internal::KeySpace& key_space, const K& key) {
 
 // Converts given value into leveldb value.
 template <Integral I>
-std::string ToLevelDBValue(const I& value) {
+std::string ToDBValue(const I& value) {
   return {reinterpret_cast<const char*>(&value), sizeof(value)};
 }
 
 // Parse result from leveldb.
 template <Integral I>
-I ParseLevelDBResult(const std::string& value) {
+I ParseDBResult(std::string_view value) {
   return *reinterpret_cast<const I*>(value.data());
 }
 
@@ -49,29 +49,31 @@ I ParseLevelDBResult(const std::string& value) {
 // over leveldb like get, add, get last index, etc.
 class LevelDBKeySpaceBase {
  public:
-  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDBIndexImpl> db, const internal::KeySpace& key_space) : impl_(std::move(db)), key_space_(key_space) {}
+  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDBIndexImpl> db,
+                      const internal::KeySpace& key_space)
+      : impl_(std::move(db)), key_space_(key_space) {}
 
   // Get raw result for given key without key space transformation.
-  absl::StatusOr<std::string> GetRaw(std::string_view key);
+  absl::StatusOr<std::string> GetFromDB(std::string_view key);
 
   // Get last index value.
-  absl::StatusOr<std::string> GetLastIndexRaw();
+  absl::StatusOr<std::string> GetLastIndexFromDB();
 
   // Get actual hash value.
-  absl::StatusOr<Hash> GetHashRaw();
+  absl::StatusOr<Hash> GetHashFromDB();
 
   // Add last index value.
-  absl::Status AddIndexRaw(std::string_view key, std::string_view value);
+  absl::Status AddIndexAndUpdateLatestIntoDB(std::string_view key,
+                                             std::string_view value);
 
   // Add hash value.
-  absl::Status AddHashRaw(const Hash& hash);
+  absl::Status AddHashIntoDB(const Hash& hash);
 
  protected:
   std::shared_ptr<internal::LevelDBIndexImpl> impl_;
   internal::KeySpace key_space_;
 };
 }  // namespace internal
-
 
 template <Trivial K, Integral I>
 class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
@@ -80,9 +82,9 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
   // Get index for given key.
   absl::StatusOr<I> Get(const K& key) {
-    auto result = GetRaw(internal::ToLevelDBKey(key_space_, key));
+    auto result = GetFromDB(internal::ToDBKey(key_space_, key));
     if (result.ok()) {
-      return internal::ParseLevelDBResult<I>(result.value());
+      return internal::ParseDBResult<I>(result.value());
     }
     return result.status();
   }
@@ -104,7 +106,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
   // Check index for given key exists. Returns true if index exists.
   bool Contains(const K& key) {
-    return GetRaw(internal::ToLevelDBKey(key_space_, key)).ok();
+    return GetFromDB(internal::ToDBKey(key_space_, key)).ok();
   }
 
   // Commit state of the key space. This will update the hash value. This is
@@ -117,16 +119,16 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
     // calculate new hash
     while (!keys_.empty()) {
-      hash_ = GetSha256Hash(hash, keys_.front());
+      hash_ = GetSha256Hash(hash.value(), keys_.front());
       keys_.pop();
     }
 
     // add new hash
-    return AddHashRaw(hash_);
+    return AddHashIntoDB(hash_.value());
   }
 
   // Computes a hash over the full content of this index.
-  absl::StatusOr<Hash> GetHash() const {
+  absl::StatusOr<Hash> GetHash() {
     auto status = Commit();
     if (!status.ok()) return status;
     return GetLastHash();
@@ -140,14 +142,15 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // Cached keys to compute hash from.
   std::queue<K> keys_;
 
-  // Get last index value. If it is not cached, it will be fetched from database.
+  // Get last index value. If it is not cached, it will be fetched from
+  // database.
   absl::StatusOr<I> GetLastIndex() {
     if (!last_index_.has_value()) {
-      auto result = GetLastIndexRaw();
+      auto result = GetLastIndexFromDB();
       if (!result.ok()) {
         return result.status();
       }
-      last_index_ = internal::ParseLevelDBResult<I>(result.value());
+      last_index_ = internal::ParseDBResult<I>(result.value());
     }
     return last_index_.value();
   }
@@ -156,7 +159,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // If there is no hash value in database, it will return empty hash.
   absl::StatusOr<Hash> GetLastHash() {
     if (!hash_.has_value()) {
-      auto result = GetHashRaw();
+      auto result = GetHashFromDB();
       switch (result.status().code()) {
         case absl::StatusCode::kNotFound:
           hash_ = Hash{};
@@ -186,10 +189,11 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
         return result.status();
     }
 
-    auto write_value = internal::ToLevelDBValue(last_index_.value());
-    auto write_result = AddIndexRaw(internal::ToLevelDBKey(key_space_, key), write_value);
+    auto write_value = internal::ToDBValue(last_index_.value());
+    auto write_result = AddIndexAndUpdateLatestIntoDB(
+        internal::ToDBKey(key_space_, key), write_value);
 
-    if (! write_result.ok()) {
+    if (!write_result.ok()) {
       return write_result;
     }
 
