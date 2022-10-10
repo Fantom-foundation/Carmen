@@ -1,5 +1,7 @@
 package state
 
+//go generate mockgen -source state.go -destination mock_state.go -package state State
+
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
