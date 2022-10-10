@@ -31,9 +31,10 @@ class StoreHandlerBase {
 };
 
 // A generic store handler enclosing the setup and tear down of various store
-// implementations for the generic unit tests below. A handler holds an instance
-// of a store configured with a given page size and branching factor, as well as
-// a reference store configured with the same parameters.
+// implementations for the generic unit tests in store_test.cc and benchmarks in
+// store_benchmark.cc. A handler holds an instance of a store configured with a
+// given page size and branching factor, as well as a reference store configured
+// with the same parameters.
 //
 // This generic StoreHandler is a mere wrapper on a store reference, while
 // specializations may add additional setup and tear-down operations.
