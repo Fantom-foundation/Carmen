@@ -1,3 +1,9 @@
+cc_library(
+    name = "index",
+    hdrs = ["index.h"],
+    visibility = ["//visibility:public"],
+)
+
 cc_test(
     name = "index_test",
     srcs = ["index_test.cc"],

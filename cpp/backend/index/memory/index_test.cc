@@ -2,6 +2,7 @@
 
 #include <type_traits>
 
+#include "backend/index/index.h"
 #include "common/hash.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
@@ -19,19 +20,21 @@ TEST(InMemoryIndexTest, TypeProperties) {
   EXPECT_TRUE(std::is_move_constructible_v<TestIndex>);
 }
 
+TEST(InMemoryIndexTest, IsIndex) { EXPECT_TRUE((Index<TestIndex>)); }
+
 TEST(InMemoryIndexTest, IdentifiersAreAssignedInorder) {
   TestIndex index;
-  EXPECT_EQ(0, index.GetOrAdd(1));
-  EXPECT_EQ(1, index.GetOrAdd(2));
-  EXPECT_EQ(2, index.GetOrAdd(3));
+  EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
+  EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
+  EXPECT_EQ(std::pair(2, true), index.GetOrAdd(3));
 }
 
 TEST(InMemoryIndexTest, SameKeyLeadsToSameIdentifier) {
   TestIndex index;
-  EXPECT_EQ(0, index.GetOrAdd(1));
-  EXPECT_EQ(1, index.GetOrAdd(2));
-  EXPECT_EQ(0, index.GetOrAdd(1));
-  EXPECT_EQ(1, index.GetOrAdd(2));
+  EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
+  EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
+  EXPECT_EQ(std::pair(0, false), index.GetOrAdd(1));
+  EXPECT_EQ(std::pair(1, false), index.GetOrAdd(2));
 }
 
 TEST(InMemoryIndexTest, ContainsIdentifiesIndexedElements) {
@@ -40,12 +43,12 @@ TEST(InMemoryIndexTest, ContainsIdentifiesIndexedElements) {
   EXPECT_FALSE(index.Contains(2));
   EXPECT_FALSE(index.Contains(3));
 
-  EXPECT_EQ(0, index.GetOrAdd(1));
+  EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
   EXPECT_TRUE(index.Contains(1));
   EXPECT_FALSE(index.Contains(2));
   EXPECT_FALSE(index.Contains(3));
 
-  EXPECT_EQ(1, index.GetOrAdd(2));
+  EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
   EXPECT_TRUE(index.Contains(1));
   EXPECT_TRUE(index.Contains(2));
   EXPECT_FALSE(index.Contains(3));
@@ -55,10 +58,10 @@ TEST(InMemoryIndexTest, GetRetrievesPresentKeys) {
   TestIndex index;
   EXPECT_EQ(index.Get(1), std::nullopt);
   EXPECT_EQ(index.Get(2), std::nullopt);
-  auto id1 = index.GetOrAdd(1);
+  auto id1 = index.GetOrAdd(1).first;
   EXPECT_THAT(index.Get(1), Optional(id1));
   EXPECT_EQ(index.Get(2), std::nullopt);
-  auto id2 = index.GetOrAdd(2);
+  auto id2 = index.GetOrAdd(2).first;
   EXPECT_THAT(index.Get(1), Optional(id1));
   EXPECT_THAT(index.Get(2), Optional(id2));
 }
