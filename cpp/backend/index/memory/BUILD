@@ -15,6 +15,7 @@ cc_test(
     deps = [
         ":index", 
         "//backend/index",
+        "//backend/index:test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
