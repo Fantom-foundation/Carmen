@@ -59,7 +59,7 @@ class State {
   }
 
   void SetBalance(const Address& address, Balance value) {
-    auto addr_id = address_index_.GetOrAdd(address);
+    auto addr_id = address_index_.GetOrAdd(address).first;
     balances_.Set(addr_id, value);
   }
 
@@ -71,7 +71,7 @@ class State {
   }
 
   void SetNonce(const Address& address, Nonce value) {
-    auto addr_id = address_index_.GetOrAdd(address);
+    auto addr_id = address_index_.GetOrAdd(address).first;
     nonces_.Set(addr_id, value);
   }
 
@@ -91,10 +91,10 @@ class State {
   // Updates the current value of the given storage slot.
   void SetStorageValue(const Address& address, const Key& key,
                        const Value& value) {
-    auto addr_id = address_index_.GetOrAdd(address);
-    auto key_id = key_index_.GetOrAdd(key);
+    auto addr_id = address_index_.GetOrAdd(address).first;
+    auto key_id = key_index_.GetOrAdd(key).first;
     Slot slot{addr_id, key_id};
-    auto slot_id = slot_index_.GetOrAdd(slot);
+    auto slot_id = slot_index_.GetOrAdd(slot).first;
     value_store_.Set(slot_id, value);
   }
 

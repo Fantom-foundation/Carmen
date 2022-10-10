@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <optional>
 
 #include "absl/container/flat_hash_map.h"
@@ -16,22 +17,27 @@ namespace carmen::backend::index {
 // be hashed and compared. The type I is the type used for the
 // ordinal numbers and must be implicitly constructable from a
 // std::size_t.
-template <Trivial K, typename I>
+template <Trivial K, std::integral I>
 class InMemoryIndex {
  public:
+  // The type of the indexed key.
+  using key_type = K;
+  // The value type of ordinal values mapped to keys.
+  using value_type = I;
+
   // Retrieves the ordinal number for the given key. If the key
   // is known, it it will return a previously established value
   // for the key. If the key has not been encountered before,
   // a new ordinal value is assigned to the key and stored
   // internally such that future lookups will return the same
   // value.
-  I GetOrAdd(const K& key) {
+  std::pair<I, bool> GetOrAdd(const K& key) {
     auto [pos, is_new] = data_.insert({key, I{}});
     if (is_new) {
       pos->second = data_.size() - 1;
       hash_ = GetSha256Hash(hash_, key);
     }
-    return pos->second;
+    return {pos->second, is_new};
   }
 
   // Retrieves the ordinal number for the given key if previously registered.
@@ -47,7 +53,7 @@ class InMemoryIndex {
   // Tests whether the given key is indexed by this container.
   bool Contains(const K& key) const { return data_.contains(key); }
 
-  // Computes a hash over the full content of this store.
+  // Computes a hash over the full content of this index.
   Hash GetHash() const { return hash_; }
 
  private:
