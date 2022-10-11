@@ -22,6 +22,7 @@ cc_library(
     name = "test_util",
     hdrs = ["test_util.h"],
     deps = [
+        ":index",
         "//common:hash",
         "@com_google_googletest//:gtest",
     ],
@@ -56,6 +57,7 @@ cc_binary(
         ":index_handler",
         "//backend/index/cache",
         "//backend/index/memory:index",
+        "//backend/index/memory:linear_hash_index",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
