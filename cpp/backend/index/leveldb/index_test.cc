@@ -12,7 +12,7 @@ namespace {
 
 using ::testing::StrEq;
 
-LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir = TempDir()) {
+LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
   return LevelDBIndex(dir.GetPath().string()).KeySpace<int, int>('t');
 }
 
@@ -32,14 +32,14 @@ TEST(LevelDBIndexTest, ConvertAndParseLevelDBValue) {
 }
 
 TEST(LevelDBIndexTest, IdentifiersAreAssignedInorder) {
-  auto index = GetTestIndex();
+  auto index = GetTestIndex(TempDir());
   EXPECT_EQ(0, *index.GetOrAdd(1));
   EXPECT_EQ(1, *index.GetOrAdd(2));
   EXPECT_EQ(2, *index.GetOrAdd(3));
 }
 
 TEST(LevelDBIndexTest, SameKeyLeadsToSameIdentifier) {
-  auto index = GetTestIndex();
+  auto index = GetTestIndex(TempDir());
   EXPECT_EQ(0, *index.GetOrAdd(1));
   EXPECT_EQ(1, *index.GetOrAdd(2));
   EXPECT_EQ(0, *index.GetOrAdd(1));
@@ -47,7 +47,7 @@ TEST(LevelDBIndexTest, SameKeyLeadsToSameIdentifier) {
 }
 
 TEST(LevelDBIndexTest, ContainsIdentifiesIndexedElements) {
-  auto index = GetTestIndex();
+  auto index = GetTestIndex(TempDir());
   EXPECT_FALSE(index.Contains(1));
   EXPECT_FALSE(index.Contains(2));
   EXPECT_FALSE(index.Contains(3));
@@ -64,7 +64,7 @@ TEST(LevelDBIndexTest, ContainsIdentifiesIndexedElements) {
 }
 
 TEST(LevelDBIndexTest, GetRetrievesPresentKeys) {
-  auto index = GetTestIndex();
+  auto index = GetTestIndex(TempDir());
   EXPECT_EQ(index.Get(1).status().code(), absl::StatusCode::kNotFound);
   EXPECT_EQ(index.Get(2).status().code(), absl::StatusCode::kNotFound);
   auto id1 = index.GetOrAdd(1);
@@ -76,13 +76,13 @@ TEST(LevelDBIndexTest, GetRetrievesPresentKeys) {
 }
 
 TEST(LevelDBIndexTest, EmptyIndexHasHashEqualsZero) {
-  auto index = GetTestIndex();
+  auto index = GetTestIndex(TempDir());
   EXPECT_EQ(Hash{}, *index.GetHash());
 }
 
 TEST(LevelDBIndexTest, IndexHashIsEqualToInsertionOrder) {
   Hash hash;
-  auto index = GetTestIndex();
+  auto index = GetTestIndex(TempDir());
   EXPECT_EQ(hash, *index.GetHash());
   *index.GetOrAdd(12);
   hash = GetSha256Hash(hash, 12);
