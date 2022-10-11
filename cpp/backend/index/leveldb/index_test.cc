@@ -84,13 +84,13 @@ TEST(LevelDBIndexTest, IndexHashIsEqualToInsertionOrder) {
   Hash hash;
   auto index = GetTestIndex();
   EXPECT_EQ(hash, *index.GetHash());
-  index.GetOrAdd(12);
+  *index.GetOrAdd(12);
   hash = GetSha256Hash(hash, 12);
   EXPECT_EQ(hash, *index.GetHash());
-  index.GetOrAdd(14);
+  *index.GetOrAdd(14);
   hash = GetSha256Hash(hash, 14);
   EXPECT_EQ(hash, *index.GetHash());
-  index.GetOrAdd(16);
+  *index.GetOrAdd(16);
   hash = GetSha256Hash(hash, 16);
   EXPECT_EQ(hash, *index.GetHash());
 }

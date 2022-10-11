@@ -106,24 +106,6 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
     return GetFromDB(internal::ToDBKey(key_space_, key)).ok();
   }
 
-  // Commit state of the key space. This will update the hash value. This is
-  // required to be called after all the operations are done.
-  absl::Status Commit() {
-    if (keys_.empty()) return absl::OkStatus();
-
-    auto hash = GetLastHash();
-    if (!hash.ok()) return hash.status();
-
-    // calculate new hash
-    while (!keys_.empty()) {
-      hash_ = GetSha256Hash(hash.value(), keys_.front());
-      keys_.pop();
-    }
-
-    // add new hash
-    return AddHashIntoDB(hash_.value());
-  }
-
   // Computes a hash over the full content of this index.
   absl::StatusOr<Hash> GetHash() {
     auto status = Commit();
@@ -196,6 +178,23 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
     keys_.push(key);
 
     return last_index_.value();
+  }
+
+  // Commit state of the key space. This will update the hash value.
+  absl::Status Commit() {
+    if (keys_.empty()) return absl::OkStatus();
+
+    auto hash = GetLastHash();
+    if (!hash.ok()) return hash.status();
+
+    // calculate new hash
+    while (!keys_.empty()) {
+      hash_ = GetSha256Hash(hash.value(), keys_.front());
+      keys_.pop();
+    }
+
+    // add new hash
+    return AddHashIntoDB(hash_.value());
   }
 
   // Last index value. This is used to generate new index.
