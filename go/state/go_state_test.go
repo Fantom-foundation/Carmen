@@ -121,7 +121,7 @@ func NewInMemoryComposition() State {
 	var balancesStore store.Store[uint32, common.Balance] = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
 	var valuesStore store.Store[uint32, common.Value] = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
 
-	return NewService(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
+	return NewGoState(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
 }
 
 var testingErr = fmt.Errorf("testing error")
@@ -145,7 +145,7 @@ func (m failingIndex[K, I]) GetOrAdd(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state := NewInMemoryComposition().(*Service[uint32])
+	state := NewInMemoryComposition().(*GoState)
 	state.balancesStore = failingStore[uint32, common.Balance]{state.balancesStore}
 	state.noncesStore = failingStore[uint32, common.Nonce]{state.noncesStore}
 	state.valuesStore = failingStore[uint32, common.Value]{state.valuesStore}
@@ -167,7 +167,7 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state := NewInMemoryComposition().(*Service[uint32])
+	state := NewInMemoryComposition().(*GoState)
 	state.addressIndex = failingIndex[common.Address, uint32]{state.addressIndex}
 
 	_, err := state.GetBalance(address1)
