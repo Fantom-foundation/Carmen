@@ -102,22 +102,16 @@ func (m *KVIndex[K, I]) Contains(key K) bool {
 }
 
 func (m *KVIndex[K, I]) GetStateHash() (hash common.Hash, err error) {
-	// compute and persist new hash
-	if hash, err = m.hashIndex.Commit(); err != nil {
-		return
-	}
-
-	if err = m.db.Put(m.convertKeyStr(HashKey), m.hashSerializer.ToBytes(hash), nil); err != nil {
-		return
-	}
-
-	return
+	return m.hashIndex.Commit()
 }
 
-func (m *KVIndex[K, I]) Close() (err error) {
-	// commit the state
-	_, err = m.GetStateHash()
-	return
+func (m *KVIndex[K, I]) Close() error {
+	// commit and persist the state
+	hash, err := m.GetStateHash()
+	if err != nil {
+		return err
+	}
+	return m.db.Put(m.convertKeyStr(HashKey), m.hashSerializer.ToBytes(hash), nil)
 }
 
 // convertKey translates the Index representation of the key into a database key.
