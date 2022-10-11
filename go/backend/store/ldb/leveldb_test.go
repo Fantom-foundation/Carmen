@@ -11,7 +11,7 @@ import (
 )
 
 func TestFileStoreImplements(t *testing.T) {
-	var s KVStore[uint32, common.Value]
+	var s Store[uint32, common.Value]
 	var _ store.Store[uint32, common.Value] = &s
 	var _ io.Closer = &s
 }
@@ -200,12 +200,12 @@ func openStoreDb(t *testing.T, path string) (db *leveldb.DB) {
 	return
 }
 
-func closeDb[I common.Identifier, K common.Value](db *leveldb.DB, p *KVStore[I, K]) {
+func closeDb[I common.Identifier, K common.Value](db *leveldb.DB, p *Store[I, K]) {
 	_ = p.Close()
 	_ = db.Close()
 }
 
-func createNewStore(t *testing.T, db *leveldb.DB) *KVStore[uint32, common.Value] {
+func createNewStore(t *testing.T, db *leveldb.DB) *Store[uint32, common.Value] {
 	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
 	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
 

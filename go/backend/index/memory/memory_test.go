@@ -13,13 +13,13 @@ var (
 )
 
 func TestMemoryIndexImplements(t *testing.T) {
-	var memory Memory[*common.Address, uint32]
+	var memory Index[*common.Address, uint32]
 	var _ index.Index[*common.Address, uint32] = &memory
 	var _ io.Closer = &memory
 }
 
 func TestStoringIntoMemoryIndex(t *testing.T) {
-	memory := NewMemory[common.Address, uint32](common.AddressSerializer{})
+	memory := NewIndex[common.Address, uint32](common.AddressSerializer{})
 	defer memory.Close()
 
 	indexA, err := memory.GetOrAdd(A)
@@ -52,7 +52,7 @@ func TestStoringIntoMemoryIndex(t *testing.T) {
 }
 
 func TestMultipleAssigningOfOneIndex(t *testing.T) {
-	memory := NewMemory[common.Address, uint32](common.AddressSerializer{})
+	memory := NewIndex[common.Address, uint32](common.AddressSerializer{})
 	defer memory.Close()
 
 	indexA, err := memory.GetOrAdd(A)
@@ -72,7 +72,7 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 }
 
 func TestHash(t *testing.T) {
-	memory := NewMemory[common.Address, uint32](common.AddressSerializer{})
+	memory := NewIndex[common.Address, uint32](common.AddressSerializer{})
 	defer memory.Close()
 
 	// the hash is the default one first

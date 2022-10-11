@@ -140,7 +140,7 @@ func (iw *indexWrapper[K, I]) insertKeys(b *testing.B, N uint32) {
 
 // createMemoryIndex create instance of memory index
 func createMemoryIndex[K comparable, I common.Identifier](keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
-	return indexWrapper[K, I]{keySerializer, indexSerializer, memory.NewMemory[K, I](keySerializer)}
+	return indexWrapper[K, I]{keySerializer, indexSerializer, memory.NewIndex[K, I](keySerializer)}
 }
 
 // createLevelDbIndex create instance of LevelDB index
@@ -154,7 +154,7 @@ func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySeri
 		_ = db.Close()
 	})
 
-	idx, err := ldb.NewKVIndex[K, I](db, common.SlotKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](db, common.SlotKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
