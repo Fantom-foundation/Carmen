@@ -109,8 +109,8 @@ absl::Status LevelDBKeySpaceBase::AddIndexAndUpdateLatestIntoDB(
   auto last_index_key = internal::ToDBKey(key_space_, kLastIndexKey);
 
   std::array<std::pair<std::string_view, std::string_view>, 2> batch{
-      std::pair{key, value},
-      std::pair{last_index_key, value},
+      std::pair<std::string_view, std::string_view>{key, value},
+      std::pair<std::string_view, std::string_view>{last_index_key, value},
   };
 
   return impl_->AddBatch(batch);
