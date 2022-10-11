@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
 	"io"

@@ -2,7 +2,7 @@ package memory
 
 import (
 	"crypto/sha256"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
 )

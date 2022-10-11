@@ -3,7 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"io/fs"
