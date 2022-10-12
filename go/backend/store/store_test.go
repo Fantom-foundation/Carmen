@@ -11,11 +11,6 @@ import (
 	"testing"
 )
 
-const (
-	PageSize = 2
-	Factor   = 3
-)
-
 func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	db, err := leveldb.OpenFile(t.TempDir(), nil)
 	if err != nil {
@@ -26,9 +21,9 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	valSerializer := common.ValueSerializer{}
 	idSerializer := common.Identifier32Serializer{}
 
-	memstore := memory.NewStore[uint32, common.Value](valSerializer, defaultItem, PageSize, Factor)
-	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, Factor)
-	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, Factor)
+	memstore := memory.NewStore[uint32, common.Value](valSerializer, defaultItem, PageSize, BranchingFactor)
+	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, BranchingFactor)
+	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
 	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, treeFac, defaultItem, PageSize)
 
 	t.Cleanup(func() {
