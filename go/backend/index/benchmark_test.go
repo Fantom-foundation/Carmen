@@ -20,23 +20,23 @@ type indexWrapper[K comparable, I common.Identifier] struct {
 
 // testConfig parametrise each benchmark
 type testConfig[K comparable, I common.Identifier] struct {
-	name        string
-	numElements []uint32                  // numbers of elements to insert.
-	numUpdates  []uint32                  // numbers of extra elements to update.
-	getIndex    func() indexWrapper[K, I] // create index implementation under test
+	name         string
+	initialSizes []uint32                  // initial number of keys inserted into the Index before the benchmark
+	updateSizes  []uint32                  // numbers of extra elements to update.
+	getIndex     func() indexWrapper[K, I] // create index implementation under test
 }
 
 // BenchmarkInsert benchmark inserts N keys into index implementations and measures addition of a sample .
 func BenchmarkInsert(b *testing.B) {
 	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{})
-	for _, d := range config {
-		for _, n := range d.numElements {
-			idx := d.getIndex() // create the Index instance
+	for _, c := range config {
+		for _, initialSize := range c.initialSizes {
+			idx := c.getIndex() // create the Index instance
 			// insert 0...N-1 elements before benchmark starts
-			idx.insertKeys(b, n)
-			keyShift := n // use keyShift to make sure the keys are inserted after already inserted keys during the benchmark
+			idx.insertKeys(b, initialSize)
+			keyShift := initialSize // use keyShift to make sure the keys are inserted after already inserted keys during the benchmark
 			// Execute benchmark!
-			b.Run(fmt.Sprintf("Index %s numElements %d n %d", d.name, d.numElements, n), func(b *testing.B) {
+			b.Run(fmt.Sprintf("Index %s initialSize %d", c.name, initialSize), func(b *testing.B) {
 				idx.benchmarkInsert(b, keyShift)
 				keyShift += uint32(b.N)
 			})
@@ -47,14 +47,14 @@ func BenchmarkInsert(b *testing.B) {
 // BenchmarkRead benchmark inserts N keys into index implementations and measures read of a sample .
 func BenchmarkRead(b *testing.B) {
 	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{})
-	for _, d := range config {
-		for _, n := range d.numElements {
-			idx := d.getIndex() // create the Index instance
+	for _, c := range config {
+		for _, initialSize := range c.initialSizes {
+			idx := c.getIndex() // create the Index instance
 			// insert 0...N-1 keys before benchmark starts
-			idx.insertKeys(b, n)
+			idx.insertKeys(b, initialSize)
 			// Execute benchmark for each distribution
-			for _, dist := range common.GetDistributions(int(n)) {
-				b.Run(fmt.Sprintf("Index %s numElements %d n %d dist %s", d.name, d.numElements, n, dist.Label), func(b *testing.B) {
+			for _, dist := range common.GetDistributions(int(initialSize)) {
+				b.Run(fmt.Sprintf("Index %s initialSize %d dist %s", c.name, initialSize, dist.Label), func(b *testing.B) {
 					idx.benchmarkRead(b, dist)
 				})
 			}
@@ -65,18 +65,18 @@ func BenchmarkRead(b *testing.B) {
 // BenchmarkHash benchmark inserts N keys into index implementations and measures hashing of addition sample.
 func BenchmarkHash(b *testing.B) {
 	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{})
-	for _, d := range config {
-		for _, n := range d.numElements {
-			idx := d.getIndex() // create the Index instance
+	for _, c := range config {
+		for _, initialSize := range c.initialSizes {
+			idx := c.getIndex() // create the Index instance
 			// insert 0...N-1 elements before benchmark starts
-			idx.insertKeys(b, n)
+			idx.insertKeys(b, initialSize)
 			_, _ = idx.idx.GetStateHash() // flush hash for initial keys
-			keyShift := n                 // use keyShift to make sure the keys are inserted after already inserted keys during the benchmark
+			keyShift := initialSize       // use keyShift to make sure the keys are inserted after already inserted keys during the benchmark
 			// Execute benchmark!
-			for _, m := range d.numUpdates {
-				b.Run(fmt.Sprintf("Index %s numElements %d numUpdates %d n %d m %d", d.name, d.numElements, d.numUpdates, n, m), func(b *testing.B) {
-					idx.benchmarkHash(b, m, keyShift)
-					keyShift += uint32(b.N) * m // increase by the number of iterations and the number of extra inserted elements
+			for _, updateSize := range c.updateSizes {
+				b.Run(fmt.Sprintf("Index %s initialSize %d updateSize %d", c.name, initialSize, updateSize), func(b *testing.B) {
+					idx.benchmarkHash(b, updateSize, keyShift)
+					keyShift += uint32(b.N) * updateSize // increase by the number of iterations and the number of extra inserted elements
 				})
 			}
 		}
@@ -108,16 +108,16 @@ func (iw *indexWrapper[K, I]) benchmarkRead(b *testing.B, dist common.Distributi
 
 // benchmarkHash insert sample keys and measure time to compute hash.
 // The inserted keys are shifted by the input offset.
-func (iw *indexWrapper[K, I]) benchmarkHash(b *testing.B, inserts, keyShift uint32) {
+func (iw *indexWrapper[K, I]) benchmarkHash(b *testing.B, updateSize, keyShift uint32) {
 	for i := 0; i < b.N; i++ {
 
 		b.StopTimer()
-		for n := uint32(0); n < inserts; n++ {
+		for n := uint32(0); n < updateSize; n++ {
 			if _, err := iw.idx.GetOrAdd(iw.toKey(n + keyShift)); err != nil {
-				b.Fatalf("Error to insert eleent %d, %s", n, err)
+				b.Fatalf("failed to add item %d, %s", n, err)
 			}
 		}
-		keyShift += inserts
+		keyShift += updateSize
 		b.StartTimer()
 
 		// this we measure
@@ -175,14 +175,14 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 	memoryIndexFunc := func() indexWrapper[K, I] { return createMemoryIndex[K, I](keySerializer, indexSerializer) }
 	levelDbIndexFunc := func() indexWrapper[K, I] { return createLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
 
-	numElements := []uint32{0x1p20, 0x1p24, 0x1p30}
-	numUpdates := []uint32{100}
+	initialSizes := []uint32{0x1p20, 0x1p24, 0x1p30}
+	updateSizes := []uint32{100}
 
-	//numElements := []int{1 << 5, 1 << 10} // debug Ns
-	//numUpdates := []int{1, 2}            // debug Ms
+	//initialSizes := []uint32{1 << 5, 1 << 10} // debug Ns
+	//updateSizes := []uint32{1, 2}             // debug Ms
 
 	return []testConfig[K, I]{
-		{"MemoryIndex", numElements, numUpdates, memoryIndexFunc},
-		{"LevelDbIndex", numElements, numUpdates, levelDbIndexFunc},
+		{"Memory", initialSizes, updateSizes, memoryIndexFunc},
+		{"LevelDb", initialSizes, updateSizes, levelDbIndexFunc},
 	}
 }
