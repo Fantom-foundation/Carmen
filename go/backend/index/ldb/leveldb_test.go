@@ -19,7 +19,7 @@ const (
 )
 
 func TestImplements(t *testing.T) {
-	var persistent KVIndex[*common.Address, uint32]
+	var persistent Index[*common.Address, uint32]
 	var _ index.Index[*common.Address, uint32] = &persistent
 }
 
@@ -227,7 +227,7 @@ func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *le
 
 // createIndex creates a new instance of the index using the input database
 func createIndex(t *testing.T, db *leveldb.DB) index.Index[common.Address, uint32] {
-	idx, err := NewKVIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	idx, err := NewIndex[common.Address, uint32](db, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)
 	}

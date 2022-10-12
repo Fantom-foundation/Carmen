@@ -19,8 +19,8 @@ func initIndexes(t *testing.T) (indexes []index.Index[common.Address, uint32]) {
 	keySerializer := common.AddressSerializer{}
 	idSerializer := common.Identifier32Serializer{}
 
-	memindex := memory.NewMemory[common.Address, uint32](keySerializer)
-	ldbindex, _ := ldb.NewKVIndex[common.Address, uint32](db, common.BalanceKey, keySerializer, idSerializer)
+	memindex := memory.NewIndex[common.Address, uint32](keySerializer)
+	ldbindex, _ := ldb.NewIndex[common.Address, uint32](db, common.BalanceKey, keySerializer, idSerializer)
 
 	t.Cleanup(func() {
 		memindex.Close()

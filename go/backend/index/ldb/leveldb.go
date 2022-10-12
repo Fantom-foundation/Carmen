@@ -1,7 +1,6 @@
 package ldb
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -13,8 +12,8 @@ const (
 	LastIndexKey = "last"
 )
 
-// KVIndex represents a key-value store for holding the index data.
-type KVIndex[K comparable, I common.Identifier] struct {
+// Index represents a key-value store for holding the index data.
+type Index[K comparable, I common.Identifier] struct {
 	db              *leveldb.DB
 	table           common.TableSpace
 	keySerializer   common.Serializer[K]
@@ -24,12 +23,12 @@ type KVIndex[K comparable, I common.Identifier] struct {
 	hashSerializer  common.HashSerializer
 }
 
-// NewKVIndex creates a new instance of the index backed by a persisted database
-func NewKVIndex[K comparable, I common.Identifier](
+// NewIndex creates a new instance of the index backed by a persisted database
+func NewIndex[K comparable, I common.Identifier](
 	db *leveldb.DB,
 	table common.TableSpace,
 	keySerializer common.Serializer[K],
-	indexSerializer common.Serializer[I]) (p index.Index[K, I], err error) {
+	indexSerializer common.Serializer[I]) (p *Index[K, I], err error) {
 
 	// read the last hash from the database
 	var hash []byte
@@ -52,7 +51,7 @@ func NewKVIndex[K comparable, I common.Identifier](
 	}
 
 	hashSerializer := common.HashSerializer{}
-	p = &KVIndex[K, I]{
+	p = &Index[K, I]{
 		db:              db,
 		table:           table,
 		keySerializer:   keySerializer,
@@ -66,7 +65,7 @@ func NewKVIndex[K comparable, I common.Identifier](
 	return p, nil
 }
 
-func (m *KVIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
+func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
 	if val, err = m.db.Get(m.convertKey(key), nil); err != nil {
 		// if the error is actually a non-existing key, we assign a new index
@@ -96,16 +95,16 @@ func (m *KVIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
 	return idx, nil
 }
 
-func (m *KVIndex[K, I]) Contains(key K) bool {
+func (m *Index[K, I]) Contains(key K) bool {
 	exists, _ := m.db.Has(m.convertKey(key), nil)
 	return exists
 }
 
-func (m *KVIndex[K, I]) GetStateHash() (hash common.Hash, err error) {
+func (m *Index[K, I]) GetStateHash() (hash common.Hash, err error) {
 	return m.hashIndex.Commit()
 }
 
-func (m *KVIndex[K, I]) Close() error {
+func (m *Index[K, I]) Close() error {
 	// commit and persist the state
 	hash, err := m.GetStateHash()
 	if err != nil {
@@ -117,13 +116,13 @@ func (m *KVIndex[K, I]) Close() error {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *KVIndex[K, I]) convertKey(key K) []byte {
+func (m *Index[K, I]) convertKey(key K) []byte {
 	return m.table.AppendKey(m.keySerializer.ToBytes(key))
 }
 
 // convertKeyStr translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // from string
-func (m *KVIndex[K, I]) convertKeyStr(key string) []byte {
+func (m *Index[K, I]) convertKeyStr(key string) []byte {
 	return m.table.AppendKeyStr(key)
 }
