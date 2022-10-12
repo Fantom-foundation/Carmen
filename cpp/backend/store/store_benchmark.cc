@@ -387,7 +387,7 @@ void BM_HashExponentialUpdates(benchmark::State& state) {
                   static_cast<std::uint8_t>(i >> 8),
                   static_cast<std::uint8_t>(i)};
       i++;
-      store.Set(dist(gen), value);
+      store.Set(std::size_t(dist(gen)) % num_elements, value);
     }
     state.ResumeTiming();
 
