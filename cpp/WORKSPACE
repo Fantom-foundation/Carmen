@@ -38,6 +38,7 @@ git_repository(
     name = "boringssl",
     commit = "d345d68d5c4b5471290ebe13f090f1fd5b7e8f58",
     remote = "https://boringssl.googlesource.com/boringssl",
+    shallow_since = "1663197646 +0000",
 )
 
 http_archive(
