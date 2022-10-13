@@ -39,6 +39,18 @@ func (cs *CppState) Release() {
 	}
 }
 
+func (s *CppState) CreateAccount(address common.Address) error {
+	panic("Not implemented")
+}
+
+func (s *CppState) GetAccountState(address common.Address) common.AccountState {
+	panic("Not implemented")
+}
+
+func (s *CppState) DeleteAccount(address common.Address) error {
+	panic("Not implemented")
+}
+
 func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
 	var balance common.Balance
 	C.Carmen_GetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))

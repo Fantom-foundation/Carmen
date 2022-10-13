@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -28,6 +29,18 @@ func NewGoState(
 	valuesStore store.Store[uint32, common.Value]) *GoState {
 
 	return &GoState{addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore, common.HashSerializer{}}
+}
+
+func (s *GoState) CreateAccount(address common.Address) error {
+	panic("Not implemented")
+}
+
+func (s *GoState) GetAccountState(address common.Address) common.AccountState {
+	panic("Not implemented")
+}
+
+func (s *GoState) DeleteAccount(address common.Address) error {
+	panic("Not implemented")
 }
 
 func (s *GoState) GetBalance(address common.Address) (balance common.Balance, err error) {
