@@ -1,5 +1,6 @@
 #include "state/c_state.h"
 
+#include "common/account_state.h"
 #include "common/file_util.h"
 #include "common/type.h"
 #include "gtest/gtest.h"
@@ -53,6 +54,37 @@ class CStateTest : public testing::TestWithParam<Config> {
 TEST_P(CStateTest, StateCanBeCreatedAndReleased) {
   auto state = GetState();
   EXPECT_NE(state, nullptr);
+}
+
+TEST_P(CStateTest, AccountsInitiallyDoNotExist) {
+  auto state = GetState();
+  Address addr{0x01};
+  AccountState as = AccountState::kExists;
+  Carmen_GetAccountState(state, &addr, &as);
+  EXPECT_EQ(as, AccountState::kUnknown);
+}
+
+TEST_P(CStateTest, AccountsCanBeCreated) {
+  auto state = GetState();
+  Address addr{0x01};
+  AccountState as = AccountState::kExists;
+  Carmen_GetAccountState(state, &addr, &as);
+  EXPECT_EQ(as, AccountState::kUnknown);
+  Carmen_CreateAccount(state, &addr);
+  Carmen_GetAccountState(state, &addr, &as);
+  EXPECT_EQ(as, AccountState::kExists);
+}
+
+TEST_P(CStateTest, AccountsCanBeDeleted) {
+  auto state = GetState();
+  Address addr{0x01};
+  AccountState as = AccountState::kExists;
+  Carmen_GetAccountState(state, &addr, &as);
+  EXPECT_EQ(as, AccountState::kUnknown);
+  Carmen_CreateAccount(state, &addr);
+  Carmen_DeleteAccount(state, &addr);
+  Carmen_GetAccountState(state, &addr, &as);
+  EXPECT_EQ(as, AccountState::kDeleted);
 }
 
 TEST_P(CStateTest, BalancesAreInitiallyZero) {

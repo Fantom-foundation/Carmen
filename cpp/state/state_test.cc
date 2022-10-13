@@ -2,6 +2,8 @@
 
 #include "backend/index/memory/index.h"
 #include "backend/store/memory/store.h"
+#include "common/account_state.h"
+#include "common/type.h"
 #include "gtest/gtest.h"
 
 namespace carmen {
@@ -13,6 +15,67 @@ template <typename K, typename V>
 using InMemoryStore = backend::store::InMemoryStore<K, V>;
 
 using InMemoryState = State<InMemoryIndex, InMemoryStore>;
+
+TEST(StateTest, DefaultAccountStateIsUnknown) {
+  Address a{0x01};
+  Address b{0x02};
+
+  InMemoryState state;
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(b));
+}
+
+TEST(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
+  Address a{0x01};
+  Address b{0x02};
+
+  InMemoryState state;
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(b));
+
+  state.CreateAccount(a);
+  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(b));
+
+  state.CreateAccount(b);
+  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
+  EXPECT_EQ(AccountState::kExists, state.GetAccountState(b));
+}
+
+TEST(StateTest, AccountsCanBeDeleted) {
+  Address a{0x01};
+
+  InMemoryState state;
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+
+  state.CreateAccount(a);
+  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
+
+  state.DeleteAccount(a);
+  EXPECT_EQ(AccountState::kDeleted, state.GetAccountState(a));
+}
+
+TEST(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
+  Address a{0x01};
+
+  InMemoryState state;
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+
+  state.DeleteAccount(a);
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+}
+
+TEST(StateTest, DeletedAccountsCanBeRecreated) {
+  Address a{0x01};
+
+  InMemoryState state;
+  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+  state.CreateAccount(a);
+  state.DeleteAccount(a);
+  EXPECT_EQ(AccountState::kDeleted, state.GetAccountState(a));
+  state.CreateAccount(a);
+  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
+}
 
 TEST(StateTest, DefaultBalanceIsZero) {
   Address a{0x01};

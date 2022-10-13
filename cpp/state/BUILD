@@ -1,6 +1,10 @@
 cc_library(
     name = "state",
     hdrs = ["state.h"],
+    deps = [
+        "//common:account_state",
+        "//common:type",
+    ]
 )
 
 cc_test(
@@ -32,7 +36,9 @@ cc_test(
     srcs = ["c_state_test.cc"],
     deps = [
         ":c_state",
+        "//common:account_state",
         "//common:file_util",
+        "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
 )
