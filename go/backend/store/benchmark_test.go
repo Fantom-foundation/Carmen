@@ -178,7 +178,7 @@ func initLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	if err != nil {
 		b.Fatalf("failed to init leveldb; %s", err)
 	}
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
+	hashTree := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
 	store, err = ldb.NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, common.Value{}, PageSize)
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
