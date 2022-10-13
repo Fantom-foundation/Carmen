@@ -34,6 +34,48 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
+// CreateAccount mocks base method.
+func (m *MockState) CreateAccount(address common.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAccount", address)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateAccount indicates an expected call of CreateAccount.
+func (mr *MockStateMockRecorder) CreateAccount(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockState)(nil).CreateAccount), address)
+}
+
+// DeleteAccount mocks base method.
+func (m *MockState) DeleteAccount(address common.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAccount", address)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAccount indicates an expected call of DeleteAccount.
+func (mr *MockStateMockRecorder) DeleteAccount(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAccount", reflect.TypeOf((*MockState)(nil).DeleteAccount), address)
+}
+
+// GetAccountState mocks base method.
+func (m *MockState) GetAccountState(address common.Address) common.AccountState {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAccountState", address)
+	ret0, _ := ret[0].(common.AccountState)
+	return ret0
+}
+
+// GetAccountState indicates an expected call of GetAccountState.
+func (mr *MockStateMockRecorder) GetAccountState(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountState", reflect.TypeOf((*MockState)(nil).GetAccountState), address)
+}
+
 // GetBalance mocks base method.
 func (m *MockState) GetBalance(address common.Address) (common.Balance, error) {
 	m.ctrl.T.Helper()
