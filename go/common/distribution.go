@@ -29,7 +29,7 @@ func GetDistributions(size int) []Distribution {
 		{
 			Label: "Exponential",
 			GetNext: func() uint32 {
-				return uint32(rand.ExpFloat64() / expRate)
+				return uint32(rand.ExpFloat64()/expRate) % uint32(size)
 			},
 		},
 	}
