@@ -6,13 +6,12 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
-	"io/fs"
 	"os"
 )
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[I common.Identifier, V any] struct {
-	path        string
+	file        *os.File
 	hashTree    hashtree.HashTree
 	serializer  common.Serializer[V]
 	pageSize    int // the amount of bytes of one page
@@ -28,17 +27,18 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		return nil, fmt.Errorf("file store pageSize too small (minimum %d)", serializer.Size())
 	}
 
-	err := os.MkdirAll(path+"/pages", 0700)
-	if err != nil {
-		return nil, err
-	}
-	err = os.MkdirAll(path+"/hashes", 0700)
+	err := os.MkdirAll(path+"/hashes", 0700)
 	if err != nil {
 		return nil, err
 	}
 
+	file, err := os.OpenFile(path+"/data", os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open/create data file; %s", err)
+	}
+
 	s := &Store[I, V]{
-		path:        path,
+		file:        file,
 		serializer:  serializer,
 		pageSize:    pageSize,
 		pageItems:   pageSize / serializer.Size(),
@@ -51,45 +51,41 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 
 // itemPosition provides the position of an item in data pages
 func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
-	// casting to I for division in proper bit width
-	return int(id / I(m.pageItems)), (int64(id) % int64(m.pageItems)) * int64(m.itemSize)
-}
-
-func (m *Store[I, V]) pageFile(page int) (path string) {
-	return fmt.Sprintf("%s/pages/%X", m.path, page)
+	page = int(id / I(m.pageItems)) // casting to I for division in proper bit width
+	pageStart := int64(page) * int64(m.pageSize)
+	inPageStart := (int64(id) % int64(m.pageItems)) * int64(m.itemSize)
+	position = pageStart + inPageStart
+	return
 }
 
 // GetPage provides a page bytes for needs of the hash obtaining
 func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
 	buffer := make([]byte, m.pageSize)
-	file, err := os.Open(m.pageFile(page))
+
+	_, err := m.file.Seek(int64(page)*int64(m.pageSize), io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	_, err = file.Read(buffer)
-	return buffer, err
+	_, err = m.file.Read(buffer)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err // the page does not exist in the data file yet
+	}
+	return buffer, nil
 }
 
 // Set a value of an item
 func (m *Store[I, V]) Set(id I, value V) error {
 	page, itemPosition := m.itemPosition(id)
 
-	file, err := os.OpenFile(m.pageFile(page), os.O_RDWR|os.O_CREATE, 0600)
+	_, err := m.file.Seek(itemPosition, io.SeekStart)
 	if err != nil {
-		return fmt.Errorf("failed to open page file %d; %s", page, err)
-	}
-	defer file.Close()
-
-	_, err = file.Seek(itemPosition, io.SeekStart)
-	if err != nil {
-		return fmt.Errorf("failed to seek in page file %d to %d; %s", page, itemPosition, err)
+		return fmt.Errorf("failed to seek in data file to %d; %s", itemPosition, err)
 	}
 
-	_, err = file.Write(m.serializer.ToBytes(value))
+	_, err = m.file.Write(m.serializer.ToBytes(value))
 	if err != nil {
-		return fmt.Errorf("failed to write into page file %d; %s", page, err)
+		return fmt.Errorf("failed to write into data file; %s", err)
 	}
 
 	m.hashTree.MarkUpdated(page)
@@ -98,24 +94,15 @@ func (m *Store[I, V]) Set(id I, value V) error {
 
 // Get a value of the item (or the itemDefault, if not defined)
 func (m *Store[I, V]) Get(id I) (V, error) {
-	page, itemPosition := m.itemPosition(id)
+	_, itemPosition := m.itemPosition(id)
 
-	file, err := os.OpenFile(m.pageFile(page), os.O_RDONLY, 0600)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return m.itemDefault, nil // page file does not exist
-		}
-		return m.itemDefault, fmt.Errorf("failed to open page file %d; %s", id, err)
-	}
-	defer file.Close()
-
-	_, err = file.Seek(itemPosition, io.SeekStart)
+	_, err := m.file.Seek(itemPosition, io.SeekStart)
 	if err != nil {
 		return m.itemDefault, err
 	}
 
 	bytes := make([]byte, m.itemSize)
-	n, err := file.Read(bytes)
+	n, err := m.file.Read(bytes)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return m.itemDefault, nil // the item does not exist in the page file (the file is shorter)
