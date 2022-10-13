@@ -13,6 +13,7 @@ type GoState struct {
 	addressIndex   index.Index[common.Address, uint32]
 	keyIndex       index.Index[common.Key, uint32]
 	slotIndex      index.Index[common.SlotIdx[uint32], uint32]
+	accountsStore  store.Store[uint32, common.AccountState]
 	noncesStore    store.Store[uint32, common.Nonce]
 	balancesStore  store.Store[uint32, common.Balance]
 	valuesStore    store.Store[uint32, common.Value]
@@ -24,23 +25,36 @@ func NewGoState(
 	addressIndex index.Index[common.Address, uint32],
 	keyIndex index.Index[common.Key, uint32],
 	slotIndex index.Index[common.SlotIdx[uint32], uint32],
+	accountsStore store.Store[uint32, common.AccountState],
 	noncesStore store.Store[uint32, common.Nonce],
 	balancesStore store.Store[uint32, common.Balance],
 	valuesStore store.Store[uint32, common.Value]) *GoState {
 
-	return &GoState{addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore, common.HashSerializer{}}
+	return &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, common.HashSerializer{}}
 }
 
-func (s *GoState) CreateAccount(address common.Address) error {
-	panic("Not implemented")
+func (s *GoState) CreateAccount(address common.Address) (err error) {
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
+	}
+	return s.accountsStore.Set(idx, common.Exists)
 }
 
-func (s *GoState) GetAccountState(address common.Address) common.AccountState {
-	panic("Not implemented")
+func (s *GoState) GetAccountState(address common.Address) (state common.AccountState, err error) {
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
+	}
+	return s.accountsStore.Get(idx)
 }
 
-func (s *GoState) DeleteAccount(address common.Address) error {
-	panic("Not implemented")
+func (s *GoState) DeleteAccount(address common.Address) (err error) {
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
+	}
+	return s.accountsStore.Set(idx, common.Deleted)
 }
 
 func (s *GoState) GetBalance(address common.Address) (balance common.Balance, err error) {

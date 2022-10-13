@@ -12,7 +12,7 @@ type State interface {
 	CreateAccount(address common.Address) error
 
 	// GetAccountState obtains the current state of the provided account.
-	GetAccountState(address common.Address) common.AccountState
+	GetAccountState(address common.Address) (common.AccountState, error)
 
 	// DeleteAccount deletes the account with the given address.
 	DeleteAccount(address common.Address) error

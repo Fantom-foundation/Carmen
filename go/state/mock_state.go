@@ -63,11 +63,12 @@ func (mr *MockStateMockRecorder) DeleteAccount(address interface{}) *gomock.Call
 }
 
 // GetAccountState mocks base method.
-func (m *MockState) GetAccountState(address common.Address) common.AccountState {
+func (m *MockState) GetAccountState(address common.Address) (common.AccountState, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAccountState", address)
 	ret0, _ := ret[0].(common.AccountState)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetAccountState indicates an expected call of GetAccountState.
