@@ -83,3 +83,23 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name="account_state",
+    hdrs=["account_state.h"],
+    srcs=["account_state.cc"],
+    deps=[
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "account_state_test",
+    srcs = ["account_state_test.cc"],
+    deps = [
+        ":account_state",
+        ":test_util",
+        ":type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
