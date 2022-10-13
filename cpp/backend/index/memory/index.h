@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <optional>
+#include <queue>
 
 #include "absl/container/flat_hash_map.h"
 #include "common/hash.h"
@@ -35,7 +36,7 @@ class InMemoryIndex {
     auto [pos, is_new] = data_.insert({key, I{}});
     if (is_new) {
       pos->second = data_.size() - 1;
-      hash_ = GetSha256Hash(hash_, key);
+      unhashed_keys_.push(key);
     }
     return {pos->second, is_new};
   }
@@ -54,11 +55,19 @@ class InMemoryIndex {
   bool Contains(const K& key) const { return data_.contains(key); }
 
   // Computes a hash over the full content of this index.
-  Hash GetHash() const { return hash_; }
+  Hash GetHash() const {
+    while (!unhashed_keys_.empty()) {
+      hash_ = carmen::GetHash(hasher_, hash_, unhashed_keys_.front());
+      unhashed_keys_.pop();
+    }
+    return hash_;
+  }
 
  private:
   absl::flat_hash_map<K, I> data_;
-  Hash hash_;
+  mutable std::queue<K> unhashed_keys_;
+  mutable Sha256Hasher hasher_;
+  mutable Hash hash_;
 };
 
 }  // namespace carmen::backend::index
