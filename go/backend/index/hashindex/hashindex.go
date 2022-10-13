@@ -5,6 +5,9 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+// KeysBufferCap is a capacity of dirty keys list to prevent frequent allocations
+const KeysBufferCap = 1000
+
 // HashIndex is a cache of accumulated keys and their recursive hash. It is expected that it stores the keys that are
 // not yet included in the hash. The keys shall be cleared and the hash updated once in a while. The hash is set to
 // 32 byte empty array 0x0...0 at first. Then the keys are being added into the structure. Upon a request, the keys are
@@ -21,7 +24,7 @@ type HashIndex[K comparable] struct {
 func NewHashIndex[K comparable](serializer common.Serializer[K]) *HashIndex[K] {
 	return &HashIndex[K]{
 		hash:           common.Hash{},
-		keys:           []K{},
+		keys:           make([]K, 0, KeysBufferCap),
 		serializer:     serializer,
 		hashSerializer: common.HashSerializer{},
 	}
@@ -31,7 +34,7 @@ func NewHashIndex[K comparable](serializer common.Serializer[K]) *HashIndex[K] {
 func InitHashIndex[K comparable](hash common.Hash, serializer common.Serializer[K]) *HashIndex[K] {
 	return &HashIndex[K]{
 		hash:           hash,
-		keys:           []K{},
+		keys:           make([]K, 0, KeysBufferCap),
 		serializer:     serializer,
 		hashSerializer: common.HashSerializer{},
 	}
@@ -64,7 +67,7 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 	}
 
 	hi.hash = hi.hashSerializer.FromBytes(hashTmp)
-	hi.keys = []K{}
+	hi.keys = make([]K, 0, KeysBufferCap)
 
 	return hi.hash, nil
 }
