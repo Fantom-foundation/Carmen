@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	PageSize        = 2
-	BranchingFactor = 3
+	PageSize        = 128 * 32
+	BranchingFactor = 8
 )
 
 // initial number of values inserted into the Store before the benchmark
@@ -162,7 +162,11 @@ func toValue(i uint32) common.Value {
 }
 
 func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
-	return memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, BranchingFactor)
+	str, err := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, BranchingFactor)
+	if err != nil {
+		b.Fatalf("failed to init memory store; %s", err)
+	}
+	return str
 }
 
 func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
@@ -176,7 +180,7 @@ func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
 func initLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	db, err := leveldb.OpenFile(b.TempDir(), nil)
 	if err != nil {
-		b.Fatalf("failed to init leveldb; %s", err)
+		b.Fatalf("failed to init leveldb store; %s", err)
 	}
 	hashTree := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
 	store, err = ldb.NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, common.Value{}, PageSize)

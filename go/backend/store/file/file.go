@@ -15,7 +15,8 @@ type Store[I common.Identifier, V any] struct {
 	path        string
 	hashTree    hashtree.HashTree
 	serializer  common.Serializer[V]
-	pageSize    int // the amount of items stored in one database page
+	pageSize    int // the amount of bytes of one page
+	pageItems   int // the amount of items stored in one page
 	itemSize    int // the amount of bytes per one value
 	itemDefault V
 }
@@ -23,6 +24,10 @@ type Store[I common.Identifier, V any] struct {
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
 func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) (*Store[I, V], error) {
+	if pageSize < serializer.Size() {
+		return nil, fmt.Errorf("file store pageSize too small (minimum %d)", serializer.Size())
+	}
+
 	err := os.MkdirAll(path+"/pages", 0700)
 	if err != nil {
 		return nil, err
@@ -31,10 +36,12 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 	if err != nil {
 		return nil, err
 	}
+
 	s := &Store[I, V]{
 		path:        path,
 		serializer:  serializer,
 		pageSize:    pageSize,
+		pageItems:   pageSize / serializer.Size(),
 		itemSize:    serializer.Size(),
 		itemDefault: itemDefault,
 	}
@@ -44,7 +51,8 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 
 // itemPosition provides the position of an item in data pages
 func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
-	return int(id) / m.pageSize, int64(int(id)%m.pageSize) * int64(m.itemSize)
+	// casting to I for division in proper bit width
+	return int(id / I(m.pageItems)), (int64(id) % int64(m.pageItems)) * int64(m.itemSize)
 }
 
 func (m *Store[I, V]) pageFile(page int) (path string) {
@@ -53,7 +61,7 @@ func (m *Store[I, V]) pageFile(page int) (path string) {
 
 // GetPage provides a page bytes for needs of the hash obtaining
 func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
-	buffer := make([]byte, m.pageSize*m.itemSize)
+	buffer := make([]byte, m.pageSize)
 	file, err := os.Open(m.pageFile(page))
 	if err != nil {
 		return nil, err

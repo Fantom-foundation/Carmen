@@ -12,6 +12,11 @@ import (
 )
 
 func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
+	const (
+		PageSize        = 2 * 32
+		BranchingFactor = 3
+	)
+
 	db, err := leveldb.OpenFile(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("failed to init leveldb; %s", err)
@@ -21,10 +26,19 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	valSerializer := common.ValueSerializer{}
 	idSerializer := common.Identifier32Serializer{}
 
-	memstore := memory.NewStore[uint32, common.Value](valSerializer, defaultItem, PageSize, BranchingFactor)
+	memstore, err := memory.NewStore[uint32, common.Value](valSerializer, defaultItem, PageSize, BranchingFactor)
+	if err != nil {
+		t.Fatalf("failed to init memory store; %s", err)
+	}
 	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, BranchingFactor)
+	if err != nil {
+		t.Fatalf("failed to init file store; %s", err)
+	}
 	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
 	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, treeFac, defaultItem, PageSize)
+	if err != nil {
+		t.Fatalf("failed to init leveldb store; %s", err)
+	}
 
 	t.Cleanup(func() {
 		memstore.Close()
@@ -99,7 +113,7 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 				t.Fatalf("failed to hash store with %d values; %s", i+1, err)
 			}
 			if expectedHash != fmt.Sprintf("%x", hash) {
-				t.Fatalf("invalid hash: %x (expected %s)", hash, expectedHash)
+				t.Errorf("invalid hash: %x (expected %s)", hash, expectedHash)
 			}
 		}
 	}
