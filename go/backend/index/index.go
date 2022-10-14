@@ -1,6 +1,9 @@
 package index
 
-import "github.com/Fantom-foundation/Carmen/go/common"
+import (
+	"errors"
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
 
 // Index is an append-only index for a set of values, mapping each added
 // new element to a unique ordinal number.
@@ -13,6 +16,9 @@ type Index[K comparable, I common.Identifier] interface {
 	// GetOrAdd returns an index mapping for the key, or creates the new index
 	GetOrAdd(key K) (I, error)
 
+	// Get returns an index mapping for the key, returns ErrNotFound if not exists
+	Get(key K) (I, error)
+
 	// Contains returns whether the key exists in the mapping or not.
 	Contains(key K) bool
 
@@ -22,3 +28,7 @@ type Index[K comparable, I common.Identifier] interface {
 	// Close closes the storage and clean-ups all possible dirty values
 	Close() error
 }
+
+var (
+	ErrNotFound = errors.New("index: key not found")
+)

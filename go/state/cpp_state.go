@@ -44,10 +44,10 @@ func (s *CppState) CreateAccount(address common.Address) error {
 	return nil
 }
 
-func (s *CppState) GetAccountState(address common.Address) common.AccountState {
+func (s *CppState) GetAccountState(address common.Address) (common.AccountState, error) {
 	var res common.AccountState
 	C.Carmen_GetAccountState(s.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&res))
-	return res
+	return res, nil
 }
 
 func (s *CppState) DeleteAccount(address common.Address) error {

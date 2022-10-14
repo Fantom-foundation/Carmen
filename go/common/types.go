@@ -16,6 +16,10 @@ type Serializer[T any] interface {
 	Size() int // size in bytes when serialized
 }
 
+type HashProvider interface {
+	GetStateHash() (Hash, error)
+}
+
 // Identifier is a type allowing to address an item in the Store.
 type Identifier interface {
 	uint64 | uint32
@@ -81,9 +85,9 @@ func getMaxBalance() *big.Int {
 }
 
 // ToBalance converts the provided integer value into balance. The function fails with an error if
-//  - the provided integer value is nil
-//  - the provided integer value is negative
-//  - the provided integer value is > MAX_BALANCE = 2^128-1
+//   - the provided integer value is nil
+//   - the provided integer value is negative
+//   - the provided integer value is > MAX_BALANCE = 2^128-1
 func ToBalance(value *big.Int) (res Balance, err error) {
 	if value == nil {
 		return res, fmt.Errorf("unable to convert nil to a balance")
