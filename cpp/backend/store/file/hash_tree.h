@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "backend/store/file/page.h"
+#include "backend/common/page_id.h"
 #include "common/hash.h"
 #include "common/type.h"
 

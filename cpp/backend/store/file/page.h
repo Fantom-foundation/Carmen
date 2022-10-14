@@ -6,11 +6,6 @@
 
 namespace carmen::backend::store {
 
-// A PageId is used to identify a page within a file. Pages are to be indexed in
-// sequence starting with 0. Thus, a page ID of 5 present in a file implicitly
-// asserts the existence of pages 0-4 in the same file.
-using PageId = std::size_t;
-
 // The in-memory, typed version of a page in a file. It retains an in-memory
 // copy of the binary data stored in the corresponding page of a file.
 // Furthermore, it provides index based access to the contained data.

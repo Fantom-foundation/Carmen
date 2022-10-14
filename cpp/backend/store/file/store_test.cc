@@ -2,7 +2,7 @@
 
 #include <type_traits>
 
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 

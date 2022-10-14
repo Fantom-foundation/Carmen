@@ -3,8 +3,8 @@
 #include <filesystem>
 #include <string_view>
 
+#include "backend/common/file.h"
 #include "backend/index/memory/index.h"
-#include "backend/store/file/file.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
@@ -25,7 +25,7 @@ using InMemoryStore = backend::store::InMemoryStore<K, V>;
 
 template <typename K, typename V>
 using FileBasedStore =
-    backend::store::FileStore<K, V, backend::store::SingleFile, kPageSize>;
+    backend::store::FileStore<K, V, backend::SingleFile, kPageSize>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
@@ -103,7 +103,7 @@ class InMemoryWorldState
     : public WorldStateBase<State<InMemoryIndex, InMemoryStore>> {};
 
 auto Open(std::filesystem::path file) {
-  return std::make_unique<backend::store::SingleFile<kPageSize>>(file);
+  return std::make_unique<backend::SingleFile<kPageSize>>(file);
 }
 
 class FileBasedWorldState

@@ -2,7 +2,7 @@
 #include <random>
 #include <sstream>
 
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "benchmark/benchmark.h"
 #include "common/file_util.h"
 
@@ -11,13 +11,13 @@ namespace {
 
 // Contains a range of benchmarks for the File concept implementations.
 // To run benchmarks, use the following command:
-//    bazel run -c opt //backend/store/file:file_benchmark
+//    bazel run -c opt //backend/common:file_benchmark
 //
 // To run subsets of benchmarks, add the filter flag --benchmark_filter=<regex>
 // to the command line. Note that executable parameters must be separated from
 // bazel parameters using a -- parameter. For instance, to only run Read
 // benchmarks on the InMemoryFile implementation us
-//    bazel run -c opt //backend/store/file:file_benchmark --
+//    bazel run -c opt //backend/common:file_benchmark --
 //    --benchmark_filter=Read.*InMemory
 //
 // The user Guide for the used benchmark infrastructure can be found here:
