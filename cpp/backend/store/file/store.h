@@ -1,8 +1,9 @@
 #pragma once
 
 #include "backend/common/file.h"
+#include "backend/common/page.h"
+#include "backend/common/page_pool.h"
 #include "backend/store/file/hash_tree.h"
-#include "backend/store/file/page_pool.h"
 #include "common/hash.h"
 #include "common/type.h"
 
@@ -39,21 +40,21 @@ class FileStore {
   Hash GetHash() const;
 
  private:
-  using PagePool = PagePool<V, F, page_size>;
+  using Page = ArrayPage<V, page_size>;
+  using PagePool = PagePool<Page, F>;
 
   // A listener to pool activities to react to loaded and evicted pages and
   // perform necessary hashing steps.
-  class PoolListener : public PagePoolListener<V, page_size> {
+  class PoolListener : public PagePoolListener<Page> {
    public:
     PoolListener(HashTree& hashes) : hashes_(hashes) {}
 
-    void AfterLoad(PageId id, const Page<V, page_size>&) override {
+    void AfterLoad(PageId id, const Page&) override {
       // When a page is loaded, make sure the HashTree is aware of it.
       hashes_.RegisterPage(id);
     }
 
-    void BeforeEvict(PageId id, const Page<V, page_size>& page,
-                     bool is_dirty) override {
+    void BeforeEvict(PageId id, const Page& page, bool is_dirty) override {
       // Before we throw away a dirty page to make space for something else we
       // update the hash to avoid having to reload it again later.
       if (is_dirty) {

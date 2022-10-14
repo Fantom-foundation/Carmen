@@ -1,21 +1,23 @@
-#include "backend/store/file/page_pool.h"
+#include "backend/common/page_pool.h"
 
 #include <filesystem>
 #include <sstream>
 
 #include "backend/common/file.h"
+#include "backend/common/page.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 namespace {
 
 using ::testing::_;
 using ::testing::NiceMock;
 using ::testing::Sequence;
 
-using TestPool = PagePool<int, InMemoryFile, 40>;
-using TestPoolListener = PagePoolListener<int, 40>;
+using Page = ArrayPage<int, 40>;
+using TestPool = PagePool<Page, InMemoryFile>;
+using TestPoolListener = PagePoolListener<Page>;
 
 TEST(PagePoolTest, TypeProperties) {
   EXPECT_TRUE(std::is_move_constructible_v<TestPool>);
@@ -116,4 +118,4 @@ TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
 }
 
 }  // namespace
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend
