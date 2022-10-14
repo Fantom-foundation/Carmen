@@ -144,6 +144,45 @@ func TestMoreInserts(t *testing.T) {
 	}
 }
 
+func TestHashing(t *testing.T) {
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
+
+	initialHash, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+
+	_ = state.SetStorage(address1, key1, val1)
+	hash1, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash1 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
+
+	_ = state.SetBalance(address1, balance1)
+	hash2, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash2 || hash1 == hash2 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
+
+	_ = state.CreateAccount(address1)
+	hash3, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash3 || hash1 == hash3 || hash2 == hash3 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
+}
+
 func NewInMemoryComposition() (State, error) {
 	var addressIndex index.Index[common.Address, uint32] = indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	var keyIndex index.Index[common.Key, uint32] = indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})

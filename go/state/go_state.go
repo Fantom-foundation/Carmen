@@ -139,45 +139,24 @@ func (s *GoState) SetStorage(address common.Address, key common.Key, value commo
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {
+	sources := [7]common.HashProvider{
+		s.addressIndex,
+		s.keyIndex,
+		s.slotIndex,
+		s.balancesStore,
+		s.noncesStore,
+		s.valuesStore,
+		s.accountsStore,
+	}
+
 	h := sha256.New()
-
-	if hash, err = s.addressIndex.GetStateHash(); err != nil {
-		return
+	for _, source := range sources {
+		if hash, err = source.GetStateHash(); err != nil {
+			return
+		}
+		if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
+			return
+		}
 	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
-		return
-	}
-	if hash, err = s.keyIndex.GetStateHash(); err != nil {
-		return
-	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
-		return
-	}
-	if hash, err = s.slotIndex.GetStateHash(); err != nil {
-		return
-	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
-		return
-	}
-
-	if hash, err = s.balancesStore.GetStateHash(); err != nil {
-		return
-	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
-		return
-	}
-
-	if hash, err = s.noncesStore.GetStateHash(); err != nil {
-		return
-	}
-	if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
-		return
-	}
-
-	if hash, err = s.valuesStore.GetStateHash(); err != nil {
-		return
-	}
-
-	hash = s.hashSerializer.FromBytes(h.Sum(nil))
-	return
+	return s.hashSerializer.FromBytes(h.Sum(nil)), nil
 }
