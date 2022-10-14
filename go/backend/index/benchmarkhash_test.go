@@ -8,8 +8,7 @@ import (
 	"testing"
 )
 
-// var updateKeysSizes = []int{0x1p20, 0x1p24, 0x1p30}
-var updateKeysSizes = []int{0x1p20, 0x1p24}
+var updateKeysSizes = []int{100}
 
 var hashSink interface{}
 
@@ -31,17 +30,19 @@ func BenchmarkHashIndex(b *testing.B) {
 }
 
 func (hw hashWrapper[K]) benchmarkHash(b *testing.B, updateKeys int) {
-	b.StopTimer()
-	for i := 0; i < updateKeys; i++ {
-		hw.hashIdx.AddKey(hw.toKey(uint32(i)))
-	}
-	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for ii := 0; ii < updateKeys; ii++ {
+			hw.hashIdx.AddKey(hw.toKey(uint32(ii)))
+		}
+		b.StartTimer()
 
-	h, err := hw.hashIdx.Commit()
-	if err != nil {
-		b.Fatalf("Error to hash %s", err)
+		h, err := hw.hashIdx.Commit()
+		if err != nil {
+			b.Fatalf("Error to hash %s", err)
+		}
+		hashSink = h
 	}
-	hashSink = h
 }
 
 // toKey converts the key from an input uint32 to the generic Key

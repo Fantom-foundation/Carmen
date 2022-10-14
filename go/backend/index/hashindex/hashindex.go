@@ -67,7 +67,7 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 	}
 
 	hi.hash = hi.hashSerializer.FromBytes(hashTmp)
-	hi.keys = make([]K, 0, KeyBufferInitialCapacity)
+	hi.keys = hi.keys[0:0]
 
 	return hi.hash, nil
 }
