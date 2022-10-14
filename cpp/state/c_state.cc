@@ -102,8 +102,10 @@ class WorldStateBase : public WorldState {
 class InMemoryWorldState
     : public WorldStateBase<State<InMemoryIndex, InMemoryStore>> {};
 
+template <Trivial V>
 auto Open(std::filesystem::path file) {
-  return std::make_unique<backend::SingleFile<kPageSize>>(file);
+  return std::make_unique<
+      backend::SingleFile<backend::ArrayPage<V, kPageSize>>>(file);
 }
 
 class FileBasedWorldState
@@ -111,10 +113,12 @@ class FileBasedWorldState
  public:
   FileBasedWorldState(std::filesystem::path directory)
       : WorldStateBase(State<InMemoryIndex, FileBasedStore>(
-            {}, {}, {}, {kHashBranchFactor, Open(directory / "balances.dat")},
-            {kHashBranchFactor, Open(directory / "nonces.dat")},
-            {kHashBranchFactor, Open(directory / "values.dat")},
-            {kHashBranchFactor, Open(directory / "account_states.dat")})) {}
+            {}, {}, {},
+            {kHashBranchFactor, Open<Balance>(directory / "balances.dat")},
+            {kHashBranchFactor, Open<Nonce>(directory / "nonces.dat")},
+            {kHashBranchFactor, Open<Value>(directory / "values.dat")},
+            {kHashBranchFactor,
+             Open<AccountState>(directory / "account_states.dat")})) {}
 };
 
 }  // namespace

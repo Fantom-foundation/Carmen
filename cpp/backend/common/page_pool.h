@@ -22,11 +22,12 @@ class PagePoolListener;
 // which it writes modifications to. Furthermore, listeners may be registered,
 // enabling the incjection of extra operations during page load and eviction
 // steps.
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>) class PagePool {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+class PagePool {
  public:
-  using File = F<sizeof(P)>;
   using Page = P;
+  using File = F<Page>;
   using Listener = PagePoolListener<P>;
 
   // Creates a pool backed by a default instance of the pools File
@@ -95,23 +96,22 @@ class PagePoolListener {
 
 // ------------------------------- Definitions --------------------------------
 
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>) PagePool<P, F>::PagePool(
-    std::size_t pool_size)
+template <typename P, template <typename> class F>
+requires File<F<P>> PagePool<P, F>::PagePool(std::size_t pool_size)
     : PagePool(std::make_unique<File>(), pool_size) {}
 
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>) PagePool<P, F>::PagePool(
-    std::unique_ptr<File> file, std::size_t pool_size)
+template <typename P, template <typename> class F>
+requires File<F<P>> PagePool<P, F>::PagePool(std::unique_ptr<File> file,
+                                             std::size_t pool_size)
     : file_(std::move(file)) {
   pool_.resize(pool_size);
   dirty_.resize(pool_size);
   index_to_pages_.resize(pool_size);
 }
 
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>)
-    typename PagePool<P, F>::Page& PagePool<P, F>::Get(PageId id) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+typename PagePool<P, F>::Page& PagePool<P, F>::Get(PageId id) {
   // Try to locate the page in the pool first.
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
@@ -121,7 +121,7 @@ requires(File<F<sizeof(P)>, sizeof(P)>)
   // The page is missing, so we need to load it from disk.
   auto idx = GetFreeSlot();
   Page& page = pool_[idx];
-  file_->LoadPage(id, page.AsRawData());
+  file_->LoadPage(id, page);
   pages_to_index_[id] = idx;
   index_to_pages_[idx] = id;
 
@@ -133,26 +133,25 @@ requires(File<F<sizeof(P)>, sizeof(P)>)
   return page;
 }
 
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>) void PagePool<P, F>::MarkAsDirty(
-    PageId id) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::MarkAsDirty(PageId id) {
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
     dirty_[pos->second] = true;
   }
 }
 
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>) void PagePool<P, F>::AddListener(
-    std::unique_ptr<Listener> listener) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::AddListener(std::unique_ptr<Listener> listener) {
   if (listener != nullptr) {
     listeners_.push_back(std::move(listener));
   }
 }
 
-template <typename P, template <std::size_t> class F>
-requires(
-    File<F<sizeof(P)>, sizeof(P)>) std::size_t PagePool<P, F>::GetFreeSlot() {
+template <typename P, template <typename> class F>
+requires File<F<P>> std::size_t PagePool<P, F>::GetFreeSlot() {
   // TODO: make this more efficient.
 
   // Look for a free slot.
@@ -176,9 +175,9 @@ requires(
   return trg;
 }
 
-template <typename P, template <std::size_t> class F>
-requires(File<F<sizeof(P)>, sizeof(P)>) void PagePool<P, F>::EvictSlot(
-    int pos) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::EvictSlot(int pos) {
   // Test whether slot is actually occupied.
   auto page_id = index_to_pages_[pos];
   if (page_id == std::nullopt) {
@@ -193,7 +192,7 @@ requires(File<F<sizeof(P)>, sizeof(P)>) void PagePool<P, F>::EvictSlot(
 
   // Write to file if dirty.
   if (is_dirty) {
-    file_->StorePage(*page_id, pool_[pos].AsRawData());
+    file_->StorePage(*page_id, pool_[pos]);
     dirty_[pos] = false;
   }
 

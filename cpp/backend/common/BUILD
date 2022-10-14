@@ -27,7 +27,10 @@ cc_library(
     name = "file",
     hdrs = ["file.h"],
     srcs = ["file.cc"],
-    deps = [":page_id"],
+    deps = [
+        ":page_id",
+        ":page",
+    ],
     visibility = ["//backend:__subpackages__"],
 )
 
