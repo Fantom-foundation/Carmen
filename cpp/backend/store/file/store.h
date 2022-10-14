@@ -11,13 +11,16 @@ namespace carmen::backend::store {
 
 // The FileStore is a file-backed implementation of a mutable key/value store.
 // It provides mutation, lookup, and global state hashing support.
-template <typename K, Trivial V, template <std::size_t> class F,
+template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size = 32>
-requires File<F<page_size>, page_size>
+requires File<F<ArrayPage<V, page_size>>>
 class FileStore {
  public:
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
+
+  // The page type used by this store.
+  using page_type = ArrayPage<V, page_size>;
 
   // Creates a new, empty FileStore using the given branching factor for its
   // hash computation.
@@ -25,7 +28,7 @@ class FileStore {
 
   // Creates a new FileStore based on the given file.
   FileStore(std::size_t hash_branching_factor,
-            std::unique_ptr<F<page_size>> file);
+            std::unique_ptr<F<page_type>> file);
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value);
@@ -94,25 +97,26 @@ class FileStore {
   mutable std::unique_ptr<HashTree> hashes_;
 };
 
-template <typename K, Trivial V, template <std::size_t> class F,
+template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
-requires File<F<page_size>, page_size> FileStore<K, V, F, page_size>::FileStore(
-    std::size_t hash_branching_factor)
-    : FileStore(hash_branching_factor, std::make_unique<F<page_size>>()) {}
+requires File<F<ArrayPage<V, page_size>>>
+FileStore<K, V, F, page_size>::FileStore(std::size_t hash_branching_factor)
+    : FileStore(hash_branching_factor, std::make_unique<F<page_type>>()) {}
 
-template <typename K, Trivial V, template <std::size_t> class F,
+template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
-requires File<F<page_size>, page_size> FileStore<K, V, F, page_size>::FileStore(
-    std::size_t hash_branching_factor, std::unique_ptr<F<page_size>> file)
+requires File<F<ArrayPage<V, page_size>>>
+FileStore<K, V, F, page_size>::FileStore(std::size_t hash_branching_factor,
+                                         std::unique_ptr<F<page_type>> file)
     : pool_(std::make_unique<PagePool>(std::move(file))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)) {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
+template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
-requires File<F<page_size>, page_size>
+requires File<F<ArrayPage<V, page_size>>>
 void FileStore<K, V, F, page_size>::Set(const K& key, V value) {
   auto& trg = pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
   if (trg != value) {
@@ -122,16 +126,16 @@ void FileStore<K, V, F, page_size>::Set(const K& key, V value) {
   }
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
+template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
-requires File<F<page_size>, page_size>
+requires File<F<ArrayPage<V, page_size>>>
 const V& FileStore<K, V, F, page_size>::Get(const K& key) const {
   return pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
+template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
-requires File<F<page_size>, page_size> Hash
+requires File<F<ArrayPage<V, page_size>>> Hash
 FileStore<K, V, F, page_size>::GetHash()
 const { return hashes_->GetHash(); }
 

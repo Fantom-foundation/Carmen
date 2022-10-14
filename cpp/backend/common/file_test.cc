@@ -3,22 +3,33 @@
 #include <filesystem>
 #include <sstream>
 
+#include "backend/common/page.h"
 #include "common/file_util.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::store {
 namespace {
 
-TEST(InMemoryFileTest, IsFile) { EXPECT_TRUE((File<InMemoryFile<32>, 32>)); }
+// A page format used for the tests.
+template <std::size_t page_size>
+class Page : public std::array<std::byte, page_size> {
+ public:
+  std::span<const std::byte, page_size> AsRawData() const { return *this; };
+  std::span<std::byte, page_size> AsRawData() { return *this; };
+};
+
+TEST(TestPageTest, IsPage) { EXPECT_TRUE(carmen::backend::Page<Page<12>>); }
+
+TEST(InMemoryFileTest, IsFile) { EXPECT_TRUE((File<InMemoryFile<Page<32>>>)); }
 
 TEST(InMemoryFileTest, InitialFileIsEmpty) {
-  InMemoryFile<32> file;
+  InMemoryFile<Page<32>> file;
   EXPECT_EQ(0, file.GetNumPages());
 }
 
 TEST(InMemoryFileTest, PagesCanBeWrittenAndRead) {
-  using Page = std::array<std::byte, 8>;
-  InMemoryFile<8> file;
+  using Page = Page<8>;
+  InMemoryFile<Page> file;
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   file.StorePage(0, page_a);
@@ -30,8 +41,8 @@ TEST(InMemoryFileTest, PagesCanBeWrittenAndRead) {
 }
 
 TEST(InMemoryFileTest, PagesAreDifferentiated) {
-  using Page = std::array<std::byte, 4>;
-  InMemoryFile<4> file;
+  using Page = Page<4>;
+  InMemoryFile<Page> file;
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   Page page_b{std::byte{0x03}, std::byte{0x04}};
@@ -48,8 +59,8 @@ TEST(InMemoryFileTest, PagesAreDifferentiated) {
 }
 
 TEST(InMemoryFileTest, WritingPagesCreatesImplicitEmptyPages) {
-  using Page = std::array<std::byte, 8>;
-  InMemoryFile<8> file;
+  using Page = Page<8>;
+  InMemoryFile<Page> file;
 
   // Storing a page at position 2 implicitly creates pages 0 and 1.
   Page page_a{std::byte{0x01}, std::byte{0x02}};
@@ -67,8 +78,8 @@ TEST(InMemoryFileTest, WritingPagesCreatesImplicitEmptyPages) {
 }
 
 TEST(InMemoryFileTest, LoadingUninitializedPagesLeadsToZeros) {
-  using Page = std::array<std::byte, 4>;
-  InMemoryFile<4> file;
+  using Page = Page<4>;
+  InMemoryFile<Page> file;
   Page zero{};
   Page loaded;
   loaded.fill(std::byte{1});
@@ -77,21 +88,20 @@ TEST(InMemoryFileTest, LoadingUninitializedPagesLeadsToZeros) {
 }
 
 TEST(SingleFileTest, IsFile) {
-  EXPECT_TRUE((File<SingleFile<8>, 8>));
-  EXPECT_TRUE((File<SingleFile<32>, 32>));
-  EXPECT_FALSE((File<SingleFile<8>, 32>));
+  EXPECT_TRUE(File<SingleFile<Page<8>>>);
+  EXPECT_TRUE(File<SingleFile<Page<32>>>);
 }
 
 TEST(SingleFileTest, InitialFileIsEmpty) {
   TempFile temp_file;
-  SingleFile<32> file(temp_file.GetPath());
+  SingleFile<Page<32>> file(temp_file.GetPath());
   EXPECT_EQ(0, file.GetNumPages());
 }
 
 TEST(SingleFileTest, PagesCanBeWrittenAndRead) {
-  using Page = std::array<std::byte, 8>;
+  using Page = Page<8>;
   TempFile temp_file;
-  SingleFile<8> file(temp_file.GetPath());
+  SingleFile<Page> file(temp_file.GetPath());
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   file.StorePage(0, page_a);
@@ -104,8 +114,8 @@ TEST(SingleFileTest, PagesCanBeWrittenAndRead) {
 
 TEST(SingleFileTest, PagesAreDifferentiated) {
   TempFile temp_file;
-  using Page = std::array<std::byte, 4>;
-  SingleFile<4> file(temp_file.GetPath());
+  using Page = Page<4>;
+  SingleFile<Page> file(temp_file.GetPath());
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   Page page_b{std::byte{0x03}, std::byte{0x04}};
@@ -123,8 +133,8 @@ TEST(SingleFileTest, PagesAreDifferentiated) {
 
 TEST(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
   TempFile temp_file;
-  using Page = std::array<std::byte, 8>;
-  SingleFile<8> file(temp_file.GetPath());
+  using Page = Page<8>;
+  SingleFile<Page> file(temp_file.GetPath());
 
   // Storing a page at position 2 implicitly creates pages 0 and 1.
   Page page_a{std::byte{0x01}, std::byte{0x02}};
@@ -143,8 +153,8 @@ TEST(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
 
 TEST(SingleFileTest, LoadingUninitializedPagesLeadsToZeros) {
   TempFile temp_file;
-  using Page = std::array<std::byte, 4>;
-  SingleFile<4> file(temp_file.GetPath());
+  using Page = Page<4>;
+  SingleFile<Page> file(temp_file.GetPath());
   Page zero{};
   Page loaded;
   loaded.fill(std::byte{1});
