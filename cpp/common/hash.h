@@ -34,6 +34,9 @@ class Sha256Hasher {
   // Same as above, but using a span to represent a sequence of bytes.
   void Ingest(const std::span<const std::byte> span);
 
+  // Same as above, but for a span of mutable bytes.
+  void Ingest(const std::span<std::byte> span);
+
   // A convenience variant of the function above, supporting the hashing of
   // strings through a single parameter.
   void Ingest(std::string_view str);

@@ -103,3 +103,13 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_binary(
+    name = "hash_benchmark",
+    srcs = ["hash_benchmark.cc"],
+    deps = [
+        ":hash",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+)
