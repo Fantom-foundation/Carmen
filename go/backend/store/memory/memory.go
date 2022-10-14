@@ -21,16 +21,15 @@ type Store[I common.Identifier, V any] struct {
 // NewStore constructs a new instance of Store.
 // It needs a serializer of data items and the default value for a not-set item.
 func NewStore[I common.Identifier, V any](serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) (*Store[I, V], error) {
-	pageItems := pageSize / serializer.Size()
-	if pageItems <= 0 {
-		return nil, fmt.Errorf("FileStore pageSize too small (minimum %d)", serializer.Size())
+	if pageSize < serializer.Size() {
+		return nil, fmt.Errorf("memory store pageSize too small (minimum %d)", serializer.Size())
 	}
 
 	memory := &Store[I, V]{
 		data:            [][]byte{},
 		serializer:      serializer,
 		pageSize:        pageSize,
-		pageItems:       pageItems,
+		pageItems:       pageSize / serializer.Size(),
 		itemSize:        serializer.Size(),
 		branchingFactor: branchingFactor,
 		itemDefault:     itemDefault,

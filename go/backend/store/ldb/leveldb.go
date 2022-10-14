@@ -1,6 +1,7 @@
 package ldb
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -28,6 +29,10 @@ func NewStore[I common.Identifier, V any](
 	hashTreeFactory hashtree.Factory,
 	itemDefault V,
 	pageSize int) (store *Store[I, V], err error) {
+
+	if pageSize < serializer.Size() {
+		return nil, fmt.Errorf("leveldb store pageSize too small (minimum %d)", serializer.Size())
+	}
 
 	store = &Store[I, V]{
 		db:              db,

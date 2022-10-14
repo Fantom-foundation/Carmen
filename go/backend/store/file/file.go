@@ -24,6 +24,10 @@ type Store[I common.Identifier, V any] struct {
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
 func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) (*Store[I, V], error) {
+	if pageSize < serializer.Size() {
+		return nil, fmt.Errorf("file store pageSize too small (minimum %d)", serializer.Size())
+	}
+
 	err := os.MkdirAll(path+"/pages", 0700)
 	if err != nil {
 		return nil, err
@@ -33,16 +37,11 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		return nil, err
 	}
 
-	pageItems := pageSize / serializer.Size()
-	if pageItems <= 0 {
-		return nil, fmt.Errorf("FileStore pageSize too small (minimum %d)", serializer.Size())
-	}
-
 	s := &Store[I, V]{
 		path:        path,
 		serializer:  serializer,
 		pageSize:    pageSize,
-		pageItems:   pageItems,
+		pageItems:   pageSize / serializer.Size(),
 		itemSize:    serializer.Size(),
 		itemDefault: itemDefault,
 	}
