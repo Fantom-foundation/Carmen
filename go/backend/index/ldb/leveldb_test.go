@@ -54,10 +54,29 @@ func TestBasicOperation(t *testing.T) {
 		t.Errorf("persistent does not contains inserted B")
 		return
 	}
+	if idx.Contains(C) {
+		t.Errorf("persistent claims it contains non-existing C")
+		return
+	}
+	if _, err := idx.Get(C); err != index.ErrNotFound {
+		t.Errorf("persistent returns wrong error when getting non-existing")
+		return
+	}
+}
+
+func TestMultipleAssigningOfOneIndex(t *testing.T) {
+	db, _ := openIndexTempDb(t)
+	idx := createIndex(t, db)
+
+	indexA, err := idx.GetOrAdd(A)
+	if err != nil {
+		t.Errorf("failed adding of address A1; %s", err)
+		return
+	}
 
 	indexA2, err := idx.GetOrAdd(A)
 	if err != nil {
-		t.Errorf("failed second add of address A; %s", err)
+		t.Errorf("failed adding of address A2; %s", err)
 		return
 	}
 	if indexA != indexA2 {
@@ -65,13 +84,13 @@ func TestBasicOperation(t *testing.T) {
 		return
 	}
 
-	indexB2, err := idx.GetOrAdd(B)
+	indexA3, err := idx.Get(A)
 	if err != nil {
-		t.Errorf("failed second add of address B; %s", err)
+		t.Errorf("failed get id of address A3; %s", err)
 		return
 	}
-	if indexB != indexB2 {
-		t.Errorf("assigned two different indexes for the same address")
+	if indexA2 != indexA3 {
+		t.Errorf("Get returns different value than GetOrAdd")
 		return
 	}
 }

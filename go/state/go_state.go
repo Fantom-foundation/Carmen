@@ -2,7 +2,6 @@ package state
 
 import (
 	"crypto/sha256"
-
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -42,15 +41,18 @@ func (s *GoState) CreateAccount(address common.Address) (err error) {
 }
 
 func (s *GoState) GetAccountState(address common.Address) (state common.AccountState, err error) {
-	idx, err := s.addressIndex.GetOrAdd(address)
+	idx, err := s.addressIndex.Get(address)
 	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Unknown, nil
+		}
 		return
 	}
 	return s.accountsStore.Get(idx)
 }
 
 func (s *GoState) DeleteAccount(address common.Address) (err error) {
-	idx, err := s.addressIndex.GetOrAdd(address)
+	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		return
 	}
@@ -58,8 +60,11 @@ func (s *GoState) DeleteAccount(address common.Address) (err error) {
 }
 
 func (s *GoState) GetBalance(address common.Address) (balance common.Balance, err error) {
-	idx, err := s.addressIndex.GetOrAdd(address)
+	idx, err := s.addressIndex.Get(address)
 	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Balance{}, nil
+		}
 		return
 	}
 	return s.balancesStore.Get(idx)
@@ -74,8 +79,11 @@ func (s *GoState) SetBalance(address common.Address, balance common.Balance) (er
 }
 
 func (s *GoState) GetNonce(address common.Address) (nonce common.Nonce, err error) {
-	idx, err := s.addressIndex.GetOrAdd(address)
+	idx, err := s.addressIndex.Get(address)
 	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Nonce{}, nil
+		}
 		return
 	}
 	return s.noncesStore.Get(idx)
@@ -90,15 +98,40 @@ func (s *GoState) SetNonce(address common.Address, nonce common.Nonce) (err erro
 }
 
 func (s *GoState) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
-	slotIdx, err := s.mapStorage(address, key)
+	addressIdx, err := s.addressIndex.Get(address)
 	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Value{}, nil
+		}
+		return
+	}
+	keyIdx, err := s.keyIndex.Get(key)
+	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Value{}, nil
+		}
+		return
+	}
+	slotIdx, err := s.slotIndex.Get(common.SlotIdx[uint32]{addressIdx, keyIdx})
+	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Value{}, nil
+		}
 		return
 	}
 	return s.valuesStore.Get(slotIdx)
 }
 
 func (s *GoState) SetStorage(address common.Address, key common.Key, value common.Value) (err error) {
-	slotIdx, err := s.mapStorage(address, key)
+	addressIdx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
+	}
+	keyIdx, err := s.keyIndex.GetOrAdd(key)
+	if err != nil {
+		return
+	}
+	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
 	if err != nil {
 		return
 	}
@@ -147,17 +180,4 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 
 	hash = s.hashSerializer.FromBytes(h.Sum(nil))
 	return
-}
-
-// mapStorage finds mapping from address and the values key to the values slot
-func (s *GoState) mapStorage(address common.Address, key common.Key) (slotIdx uint32, err error) {
-	addressIdx, err := s.addressIndex.GetOrAdd(address)
-	if err != nil {
-		return
-	}
-	keyIdx, err := s.keyIndex.GetOrAdd(key)
-	if err != nil {
-		return
-	}
-	return s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
 }

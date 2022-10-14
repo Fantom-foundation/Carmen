@@ -186,7 +186,7 @@ type failingIndex[K comparable, I common.Identifier] struct {
 	index.Index[K, I]
 }
 
-func (m failingIndex[K, I]) GetOrAdd(key K) (id I, err error) {
+func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 	err = testingErr
 	return
 }
@@ -200,6 +200,10 @@ func TestFailingStore(t *testing.T) {
 	goState.balancesStore = failingStore[uint32, common.Balance]{goState.balancesStore}
 	goState.noncesStore = failingStore[uint32, common.Nonce]{goState.noncesStore}
 	goState.valuesStore = failingStore[uint32, common.Value]{goState.valuesStore}
+
+	_ = state.SetBalance(address1, common.Balance{})
+	_ = state.SetNonce(address1, common.Nonce{})
+	_ = state.SetStorage(address1, key1, common.Value{})
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {
