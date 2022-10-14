@@ -6,9 +6,9 @@
 #include <fstream>
 #include <span>
 
-#include "backend/store/file/page.h"
+#include "backend/common/page_id.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 
 // ------------------------------- Declarations -------------------------------
 
@@ -156,4 +156,4 @@ void InMemoryFile<page_size>::StorePage(
   }
 }
 
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

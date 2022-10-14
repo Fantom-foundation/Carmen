@@ -1,6 +1,6 @@
 #include <cstddef>
 
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
 #include "common/file_util.h"

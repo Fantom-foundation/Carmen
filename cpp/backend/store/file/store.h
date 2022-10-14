@@ -1,6 +1,6 @@
 #pragma once
 
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "backend/store/file/hash_tree.h"
 #include "backend/store/file/page_pool.h"
 #include "common/hash.h"

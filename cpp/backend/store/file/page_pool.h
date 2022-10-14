@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "backend/store/file/page.h"
 
 namespace carmen::backend::store {
