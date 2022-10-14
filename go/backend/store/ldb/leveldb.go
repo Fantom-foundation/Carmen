@@ -33,7 +33,7 @@ func NewStore[I common.Identifier, V any](
 		db:              db,
 		valueSerializer: serializer,
 		indexSerializer: indexSerializer,
-		pageSize:        pageSize,
+		pageSize:        pageSize / serializer.Size(),
 		itemSize:        serializer.Size(),
 		table:           table,
 		itemDefault:     itemDefault,

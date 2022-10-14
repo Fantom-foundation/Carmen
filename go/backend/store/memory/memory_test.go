@@ -21,10 +21,13 @@ var (
 
 func TestStoringIntoMemoryStore(t *testing.T) {
 	defaultItem := common.Value{}
-	memory := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory, err := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 64, 3)
+	if err != nil {
+		t.Fatalf("failed to create memory store; %s", err)
+	}
 	defer memory.Close()
 
-	err := memory.Set(0, A)
+	err = memory.Set(0, A)
 	if err != nil {
 		t.Fatalf("failed to set A; %s", err)
 	}
@@ -53,10 +56,13 @@ func TestStoringIntoMemoryStore(t *testing.T) {
 
 func TestStoringToArbitraryPosition(t *testing.T) {
 	defaultItem := common.Value{}
-	memory := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory, err := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 64, 3)
+	if err != nil {
+		t.Fatalf("failed to create memory store; %s", err)
+	}
 	defer memory.Close()
 
-	err := memory.Set(5, A)
+	err = memory.Set(5, A)
 	if err != nil {
 		t.Fatalf("failed to set A; %s", err)
 	}
@@ -85,7 +91,10 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 
 func TestHashingInMemoryStore(t *testing.T) {
 	defaultItem := common.Value{}
-	memory := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 32, 3)
+	memory, err := NewStore[uint64, common.Value](common.ValueSerializer{}, defaultItem, 64, 3)
+	if err != nil {
+		t.Fatalf("failed to create memory store; %s", err)
+	}
 	defer memory.Close()
 
 	initialHast, err := memory.GetStateHash()

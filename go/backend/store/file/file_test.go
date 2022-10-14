@@ -107,7 +107,7 @@ func TestHashingInFileStore(t *testing.T) {
 }
 
 func createStore(t *testing.T, tmpDir string) store.Store[uint32, common.Value] {
-	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8, 3)
+	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8*32, 3)
 	if err != nil {
 		t.Fatalf("unable to create st; %s", err)
 	}

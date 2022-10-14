@@ -27,7 +27,7 @@ var (
 
 const (
 	BranchingFactor = 3
-	PageSize        = 5
+	PageSize        = 5 * 32
 )
 
 func TestEmpty(t *testing.T) {
