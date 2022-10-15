@@ -178,7 +178,7 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 	initialSizes := []uint32{0x1p20, 0x1p24, 0x1p30}
 	updateSizes := []uint32{100}
 
-	//initialSizes := []uint32{1 << 5, 1 << 10} // debug Ns
+	//initialSizes := []uint32{1 << 20, 1 << 24} // debug Ns
 	//updateSizes := []uint32{1, 2}             // debug Ms
 
 	return []testConfig[K, I]{
