@@ -19,7 +19,8 @@ const (
 )
 
 // initial number of values inserted into the Store before the benchmark
-var initialSizes = []int{1 << 20, 1 << 24, 1 << 30}
+// var initialSizes = []int{1 << 20, 1 << 24, 1 << 30}
+var initialSizes = []int{1 << 20, 1 << 24}
 
 // number of values updated before each measured hash recalculation
 var updateSizes = []int{100}
