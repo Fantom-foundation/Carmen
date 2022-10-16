@@ -14,10 +14,10 @@ using ::testing::StartsWith;
 
 TEST(TempFile, TypeTraits) {
   EXPECT_TRUE(std::is_default_constructible_v<TempFile>);
-  EXPECT_FALSE(std::is_copy_constructible_v<TempFile>);
-  EXPECT_FALSE(std::is_move_constructible_v<TempFile>);
-  EXPECT_FALSE(std::is_copy_assignable_v<TempFile>);
+  EXPECT_TRUE(std::is_move_constructible_v<TempFile>);
   EXPECT_FALSE(std::is_move_assignable_v<TempFile>);
+  EXPECT_FALSE(std::is_copy_constructible_v<TempFile>);
+  EXPECT_FALSE(std::is_copy_assignable_v<TempFile>);
 }
 
 TEST(TempFile, MultipleTempFilesHaveDifferentPaths) {
@@ -64,10 +64,10 @@ TEST(TempFile, TheTemporaryFileCanBeRemovedAndRecreatedManually) {
 
 TEST(TempDir, TypeTraits) {
   EXPECT_TRUE(std::is_default_constructible_v<TempDir>);
-  EXPECT_FALSE(std::is_copy_constructible_v<TempDir>);
-  EXPECT_FALSE(std::is_move_constructible_v<TempDir>);
-  EXPECT_FALSE(std::is_copy_assignable_v<TempDir>);
+  EXPECT_TRUE(std::is_move_constructible_v<TempDir>);
   EXPECT_FALSE(std::is_move_assignable_v<TempDir>);
+  EXPECT_FALSE(std::is_copy_constructible_v<TempDir>);
+  EXPECT_FALSE(std::is_copy_assignable_v<TempDir>);
 }
 
 TEST(TempDir, TheTemporaryDirectoryExistsAfterCreation) {
