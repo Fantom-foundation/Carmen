@@ -1,6 +1,7 @@
 #include "backend/index/leveldb/index.h"
 
 #include "absl/status/statusor.h"
+#include "backend/index/leveldb/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"
@@ -12,30 +13,7 @@ namespace {
 
 using ::testing::StrEq;
 
-// LevelDB index type definition for the generic index tests.
-template <Trivial K, std::integral I>
-class LevelDBIndexTestType {
- public:
-  using key_type [[maybe_unused]] = K;
-  using value_type [[maybe_unused]] = I;
-  LevelDBIndexTestType()
-      : dir_{},
-        adapter_(
-            LevelDBIndex(dir_.GetPath().string()).KeySpace<int, int>('t')) {}
-  LevelDBIndexTestType(LevelDBIndexTestType&&) noexcept {
-      // fake move constructor to make test suite pass (TempDir is not movable)
-      // instead test the real move constructor in TypeProperties test
-  };
-  decltype(auto) GetOrAdd(auto key) { return adapter_.GetOrAdd(key); }
-  decltype(auto) Get(auto key) { return adapter_.Get(key); }
-  decltype(auto) GetHash() { return adapter_.GetHash(); }
-
- private:
-  TempDir dir_;
-  LevelDBKeySpaceAdapter<K, I> adapter_;
-};
-
-using TestIndex = LevelDBIndexTestType<int, int>;
+using TestIndex = LevelDBKeySpaceTestAdapter<int, int, 't'>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);

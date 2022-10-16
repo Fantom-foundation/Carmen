@@ -199,42 +199,6 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   std::queue<K> keys_;
 };
 
-// LevelDBKeySpaceAdapter is a wrapper around LevelDBKeySpace. It exposes
-// LevelDBKeySpace methods to be compatible with tests.
-template <Trivial K, std::integral I>
-class LevelDBKeySpaceAdapter {
- public:
-  // The type of the indexed key.
-  using key_type [[maybe_unused]] = K;
-  // The value type of ordinal values mapped to keys.
-  using value_type [[maybe_unused]] = I;
-
-  explicit LevelDBKeySpaceAdapter(LevelDBKeySpace<K, I>&& key_space)
-      : key_space_(std::move(key_space)) {}
-
-  std::pair<I, bool> GetOrAdd(const K& key) {
-    auto result = key_space_.GetOrAdd(key);
-    if (result.ok()) return {(*result).first, (*result).second};
-    // no way to handle error
-    return {0, false};
-  }
-
-  std::optional<I> Get(const K& key) {
-    auto result = key_space_.Get(key);
-    if (result.ok()) return *result;
-    return std::nullopt;
-  }
-
-  Hash GetHash() {
-    auto result = key_space_.GetHash();
-    if (result.ok()) return *result;
-    return Hash{};
-  }
-
- private:
-  LevelDBKeySpace<K, I> key_space_;
-};
-
 class LevelDBIndex {
  public:
   explicit LevelDBIndex(std::string_view path);
