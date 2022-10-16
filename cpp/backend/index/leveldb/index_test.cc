@@ -1,8 +1,8 @@
 #include "backend/index/leveldb/index.h"
 
 #include "absl/status/statusor.h"
+#include "backend/index/test_util.h"
 #include "common/file_util.h"
-#include "common/hash.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -12,12 +12,45 @@ namespace {
 
 using ::testing::StrEq;
 
+// LevelDB index type definition for the generic index tests.
+template <Trivial K, std::integral I>
+class LevelDBIndexTestType {
+ public:
+  using key_type [[maybe_unused]] = K;
+  using value_type [[maybe_unused]] = I;
+  LevelDBIndexTestType()
+      : dir_{},
+        adapter_(
+            LevelDBIndex(dir_.GetPath().string()).KeySpace<int, int>('t')) {}
+  LevelDBIndexTestType(LevelDBIndexTestType&&) noexcept {
+      // fake move constructor to make test suite pass (TempDir is not movable)
+      // instead test the real move constructor in TypeProperties test
+  };
+  decltype(auto) GetOrAdd(auto key) { return adapter_.GetOrAdd(key); }
+  decltype(auto) Get(auto key) { return adapter_.Get(key); }
+  decltype(auto) GetHash() { return adapter_.GetHash(); }
+
+ private:
+  TempDir dir_;
+  LevelDBKeySpaceAdapter<K, I> adapter_;
+};
+
+using TestIndex = LevelDBIndexTestType<int, int>;
+
+// Instantiates common index tests for the Cached index type.
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
+
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
   return LevelDBIndex(dir.GetPath().string()).KeySpace<int, int>('t');
 }
 
+TEST(LevelDBIndexTest, TypeProperties) {
+  using LevelDBKeySpace = LevelDBKeySpace<int, int>;
+  EXPECT_TRUE(std::is_move_constructible_v<LevelDBKeySpace>);
+}
+
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {
-  int key = 1;
+  int key = 21;
   auto res = internal::ToDBKey('A', key);
   std::stringstream ss;
   ss << 'A';
@@ -31,92 +64,23 @@ TEST(LevelDBIndexTest, ConvertAndParseLevelDBValue) {
   EXPECT_EQ(input, *internal::ParseDBResult<std::uint8_t>(value));
 }
 
-TEST(LevelDBIndexTest, IdentifiersAreAssignedInorder) {
-  TempDir dir = TempDir();
-  auto index = GetTestIndex(dir);
-  EXPECT_EQ(0, *index.GetOrAdd(1));
-  EXPECT_EQ(1, *index.GetOrAdd(2));
-  EXPECT_EQ(2, *index.GetOrAdd(3));
-}
-
-TEST(LevelDBIndexTest, SameKeyLeadsToSameIdentifier) {
-  TempDir dir = TempDir();
-  auto index = GetTestIndex(dir);
-  EXPECT_EQ(0, *index.GetOrAdd(1));
-  EXPECT_EQ(1, *index.GetOrAdd(2));
-  EXPECT_EQ(0, *index.GetOrAdd(1));
-  EXPECT_EQ(1, *index.GetOrAdd(2));
-}
-
-TEST(LevelDBIndexTest, ContainsIdentifiesIndexedElements) {
-  TempDir dir = TempDir();
-  auto index = GetTestIndex(dir);
-  EXPECT_FALSE(index.Contains(1));
-  EXPECT_FALSE(index.Contains(2));
-  EXPECT_FALSE(index.Contains(3));
-
-  EXPECT_EQ(0, *index.GetOrAdd(1));
-  EXPECT_TRUE(index.Contains(1));
-  EXPECT_FALSE(index.Contains(2));
-  EXPECT_FALSE(index.Contains(3));
-
-  EXPECT_EQ(1, *index.GetOrAdd(2));
-  EXPECT_TRUE(index.Contains(1));
-  EXPECT_TRUE(index.Contains(2));
-  EXPECT_FALSE(index.Contains(3));
-}
-
-TEST(LevelDBIndexTest, GetRetrievesPresentKeys) {
-  TempDir dir = TempDir();
-  auto index = GetTestIndex(dir);
-  EXPECT_EQ(index.Get(1).status().code(), absl::StatusCode::kNotFound);
-  EXPECT_EQ(index.Get(2).status().code(), absl::StatusCode::kNotFound);
-  auto id1 = index.GetOrAdd(1);
-  EXPECT_THAT(index.Get(1).value(), *id1);
-  EXPECT_EQ(index.Get(2).status().code(), absl::StatusCode::kNotFound);
-  auto id2 = index.GetOrAdd(2);
-  EXPECT_THAT(index.Get(1).value(), *id1);
-  EXPECT_THAT(index.Get(2).value(), *id2);
-}
-
-TEST(LevelDBIndexTest, EmptyIndexHasHashEqualsZero) {
-  TempDir dir = TempDir();
-  auto index = GetTestIndex(dir);
-  EXPECT_EQ(Hash{}, *index.GetHash());
-}
-
-TEST(LevelDBIndexTest, IndexHashIsEqualToInsertionOrder) {
-  Hash hash;
-  TempDir dir = TempDir();
-  auto index = GetTestIndex(dir);
-  EXPECT_EQ(hash, *index.GetHash());
-  *index.GetOrAdd(12);
-  hash = GetSha256Hash(hash, 12);
-  EXPECT_EQ(hash, *index.GetHash());
-  *index.GetOrAdd(14);
-  hash = GetSha256Hash(hash, 14);
-  EXPECT_EQ(hash, *index.GetHash());
-  *index.GetOrAdd(16);
-  hash = GetSha256Hash(hash, 16);
-  EXPECT_EQ(hash, *index.GetHash());
-}
-
 TEST(LevelDBIndexTest, IndexIsPersistent) {
   TempDir dir = TempDir();
-  absl::StatusOr<int> id1;
+  absl::StatusOr<std::pair<int, bool>> result;
 
   // Insert value in a separate block to ensure that the index is closed.
   {
     auto index = GetTestIndex(dir);
     EXPECT_THAT(index.Get(1).status().code(), absl::StatusCode::kNotFound);
-    id1 = index.GetOrAdd(1);
-    EXPECT_THAT(index.Get(1), id1);
+    result = index.GetOrAdd(1);
+    EXPECT_EQ((*result).second, true);
+    EXPECT_THAT(*index.Get(1), (*result).first);
   }
 
   // Reopen index and check that the value is still present.
   {
     auto index = GetTestIndex(dir);
-    EXPECT_THAT(index.Get(1), id1);
+    EXPECT_THAT(*index.Get(1), (*result).first);
   }
 }
 

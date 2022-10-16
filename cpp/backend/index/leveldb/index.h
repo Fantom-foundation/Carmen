@@ -80,22 +80,20 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // Get index for given key.
   absl::StatusOr<I> Get(const K& key) {
     auto result = GetFromDB(internal::ToDBKey(key_space_, key));
-    if (result.ok()) {
-      return internal::ParseDBResult<I>(result.value());
-    }
+    if (result.ok()) return internal::ParseDBResult<I>(*result);
     return result.status();
   }
 
   // Get index for given key. If key is not found, add it and return new index.
-  absl::StatusOr<I> GetOrAdd(const K& key) {
+  absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key) {
     auto result = Get(key);
-    if (result.ok()) {
-      return result.value();
-    }
+    if (result.ok()) return std::make_pair(*result, false);
 
     // If key is not found, add it and return new index.
     if (result.status().code() == absl::StatusCode::kNotFound) {
-      return GenerateNewIndex(key);
+      auto new_index = GenerateNewIndex(key);
+      if (new_index.ok()) return std::make_pair(*new_index, true);
+      return new_index.status();
     }
 
     return result.status();
@@ -117,9 +115,8 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // Get last index value. If it is not cached, it will be fetched from
   // database.
   absl::StatusOr<I> GetLastIndex() {
-    if (last_index_.has_value()) {
-      return last_index_.value();
-    }
+    if (last_index_.has_value()) return *last_index_;
+
     auto result = GetLastIndexFromDB();
     if (result.ok()) {
       auto index = internal::ParseDBResult<I>(result.value());
@@ -135,9 +132,8 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // Get last hash value. If it is not cached, it will be fetched from database.
   // If there is no hash value in database, it will return empty hash.
   absl::StatusOr<Hash> GetLastHash() {
-    if (hash_.has_value()) {
-      return hash_.value();
-    }
+    if (hash_.has_value()) return *hash_;
+
     auto result = GetHashFromDB();
     switch (result.status().code()) {
       case absl::StatusCode::kNotFound:
@@ -160,24 +156,22 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
         last_index_ = 0;
         break;
       case absl::StatusCode::kOk:
-        last_index_ = result.value() + 1;
+        last_index_ = *result + 1;
         break;
       default:
         return result.status();
     }
 
-    auto write_value = internal::ToDBValue(last_index_.value());
+    auto write_value = internal::ToDBValue(*last_index_);
     auto write_result = AddIndexAndUpdateLatestIntoDB(
         internal::ToDBKey(key_space_, key), write_value);
 
-    if (!write_result.ok()) {
-      return write_result;
-    }
+    if (!write_result.ok()) return write_result;
 
     // Append key into queue.
     keys_.push(key);
 
-    return last_index_.value();
+    return *last_index_;
   }
 
   // Commit state of the key space. This will update the hash value.
@@ -189,12 +183,12 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
     // calculate new hash
     while (!keys_.empty()) {
-      hash_ = GetSha256Hash(hash.value(), keys_.front());
+      hash_ = GetSha256Hash(*hash, keys_.front());
       keys_.pop();
     }
 
     // add new hash
-    return AddHashIntoDB(hash_.value());
+    return AddHashIntoDB(*hash_);
   }
 
   // Last index value. This is used to generate new index.
@@ -203,6 +197,42 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   std::optional<Hash> hash_;
   // Cached keys to compute hash from.
   std::queue<K> keys_;
+};
+
+// LevelDBKeySpaceAdapter is a wrapper around LevelDBKeySpace. It exposes
+// LevelDBKeySpace methods to be compatible with tests.
+template <Trivial K, std::integral I>
+class LevelDBKeySpaceAdapter {
+ public:
+  // The type of the indexed key.
+  using key_type [[maybe_unused]] = K;
+  // The value type of ordinal values mapped to keys.
+  using value_type [[maybe_unused]] = I;
+
+  explicit LevelDBKeySpaceAdapter(LevelDBKeySpace<K, I>&& key_space)
+      : key_space_(std::move(key_space)) {}
+
+  std::pair<I, bool> GetOrAdd(const K& key) {
+    auto result = key_space_.GetOrAdd(key);
+    if (result.ok()) return {(*result).first, (*result).second};
+    // no way to handle error
+    return {0, false};
+  }
+
+  std::optional<I> Get(const K& key) {
+    auto result = key_space_.Get(key);
+    if (result.ok()) return *result;
+    return std::nullopt;
+  }
+
+  Hash GetHash() {
+    auto result = key_space_.GetHash();
+    if (result.ok()) return *result;
+    return Hash{};
+  }
+
+ private:
+  LevelDBKeySpace<K, I> key_space_;
 };
 
 class LevelDBIndex {
