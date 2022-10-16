@@ -15,7 +15,7 @@ class LevelDBKeySpaceTestAdapter {
   using key_type [[maybe_unused]] = K;
   using value_type [[maybe_unused]] = I;
 
-  explicit LevelDBKeySpaceTestAdapter()
+  LevelDBKeySpaceTestAdapter()
       : dir_{},
         key_space_(LevelDBIndex(dir_.GetPath().string()).KeySpace<K, I>(S)) {}
   LevelDBKeySpaceTestAdapter(LevelDBKeySpaceTestAdapter&&) noexcept {

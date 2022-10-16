@@ -55,9 +55,11 @@ cc_binary(
     deps = [
         ":index_handler",
         "//backend/index/cache",
+        "//backend/index/leveldb:test_util",
         "//backend/index/memory:index",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
+        "@com_github_google_leveldb//:leveldb"
     ],
     testonly = True,
 )

@@ -17,6 +17,7 @@ cc_library(
     deps = [
         "//common:hash",
         "//common:file_util",
+        "//backend/index/leveldb:index",
         "@com_google_absl//absl/status:statusor"
     ],
     visibility = ["//backend/index:__subpackages__"],
