@@ -14,8 +14,7 @@ class TempFile {
   // Creates a temporary file with a random name prefixed by the provided
   // prefix.
   TempFile(std::string_view prefix = "temp");
-  TempFile(const TempFile&) = delete;
-  TempFile(TempFile&&) = default;
+  TempFile(TempFile&&) = delete;
   ~TempFile();
 
   // Obtains the path of the owned temporary file.
@@ -36,8 +35,7 @@ class TempDir {
   // Creates a temporary directory with a random name prefixed by the provided
   // prefix.
   TempDir(std::string_view prefix = "temp");
-  TempDir(const TempDir&) = delete;
-  TempDir(TempDir&&) = default;
+  TempDir(TempDir&&) = delete;
   ~TempDir();
 
   // Obtains the path of the owned temporary file.
