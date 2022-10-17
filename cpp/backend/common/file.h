@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -50,7 +51,7 @@ class InMemoryFile {
  public:
   using page_type = Page;
 
-  std::size_t GetNumPages() const { return data_.size() / sizeof(Page); }
+  std::size_t GetNumPages() const { return data_.size(); }
 
   void LoadPage(PageId id, Page& trg) const;
 
@@ -61,7 +62,8 @@ class InMemoryFile {
   }
 
  private:
-  std::deque<std::byte> data_;
+  using Block = std::array<std::byte, sizeof(Page)>;
+  std::deque<Block> data_;
 };
 
 namespace internal {
@@ -132,29 +134,17 @@ class SingleFile {
 
 template <typename Page>
 void InMemoryFile<Page>::LoadPage(PageId id, Page& trg) const {
-  const auto page_size = sizeof(Page);
-  const auto offset = id * page_size;
-  std::size_t i = 0;
-  auto data = trg.AsRawData();
-  for (; i < page_size && offset + i < data_.size(); i++) {
-    data[i] = data_[offset + i];
-  }
-  for (; i < page_size; i++) {
-    data[i] = std::byte{0};
-  }
+  static const Block zero{};
+  auto src = id >= data_.size() ? &zero : &data_[id];
+  std::memcpy(&trg, src, sizeof(Page));
 }
 
 template <typename Page>
 void InMemoryFile<Page>::StorePage(PageId id, const Page& src) {
-  const auto page_size = sizeof(Page);
-  const auto offset = id * page_size;
-  if (data_.size() < offset + page_size) {
-    data_.resize(offset + page_size);
+  while (data_.size() <= id) {
+    data_.resize(id + 1);
   }
-  auto data = src.AsRawData();
-  for (std::size_t i = 0; i < page_size; i++) {
-    data_[offset + i] = data[i];
-  }
+  std::memcpy(&data_[id], &src, sizeof(Page));
 }
 
 }  // namespace carmen::backend
