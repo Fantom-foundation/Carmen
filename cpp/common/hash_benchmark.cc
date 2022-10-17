@@ -22,7 +22,7 @@ void BM_Sha256Hash(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_Sha256Hash)->Range(1, 1 << 20);
+BENCHMARK(BM_Sha256Hash)->Range(1, 1 << 21);
 
 // Same as above, but uses a new Sha256 context every time.
 void BM_Sha256HashNoReuse(benchmark::State& state) {
@@ -35,7 +35,7 @@ void BM_Sha256HashNoReuse(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_Sha256HashNoReuse)->Range(1, 1 << 20);
+BENCHMARK(BM_Sha256HashNoReuse)->Range(1, 1 << 21);
 
 // Benchmarks the computation of a chain of hashes from 32 byte keys.
 void BM_Sha256HashKeyChain(benchmark::State& state) {
@@ -51,7 +51,7 @@ void BM_Sha256HashKeyChain(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_Sha256HashKeyChain)->Range(1, 1 << 10)->Arg(100);
+BENCHMARK(BM_Sha256HashKeyChain)->Range(1, 1 << 12)->Arg(100);
 
 }  // namespace
 }  // namespace carmen::backend::store
