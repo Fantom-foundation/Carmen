@@ -30,7 +30,7 @@ class LevelDBIndexImpl {
   }
 
   // Get value for given key.
-  absl::StatusOr<std::string> Get(std::string_view key) {
+  absl::StatusOr<std::string> Get(std::string_view key) const {
     std::string value;
     leveldb::Status status =
         db_->Get(kReadOptions, {key.data(), key.size()}, &value);
@@ -82,7 +82,7 @@ class LevelDBIndexImpl {
 
 // Get raw result for given key without key space transformation.
 absl::StatusOr<std::string> LevelDBKeySpaceBase::GetFromDB(
-    std::string_view key) {
+    std::string_view key) const {
   return impl_->Get(key);
 }
 

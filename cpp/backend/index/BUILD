@@ -46,6 +46,7 @@ cc_library(
     deps = [
         ":index",
         "//common:type",
+        "//common:file_util",
     ],
     testonly = True,
 )
@@ -55,7 +56,9 @@ cc_binary(
     srcs = ["index_benchmark.cc"],
     deps = [
         ":index_handler",
+        "//backend/common:file",
         "//backend/index/cache",
+        "//backend/index/file:index",
         "//backend/index/memory:index",
         "//backend/index/memory:linear_hash_index",
         "@com_github_google_benchmark//:benchmark_main",
