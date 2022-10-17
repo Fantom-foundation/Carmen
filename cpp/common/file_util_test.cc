@@ -63,11 +63,17 @@ TEST(TempFile, TheTemporaryFileCanBeRemovedAndRecreatedManually) {
 }
 
 TEST(TempFile, TempFilePersistsMoveConstruction) {
-  auto* file = new TempFile;
-  auto path = file->GetPath();
-  TempFile moved(std::move(*file));
-  delete file;
-  EXPECT_TRUE(std::filesystem::exists(path));
+  std::filesystem::path path;
+  {
+    auto file = std::make_unique<TempFile>();
+    path = file->GetPath();
+    EXPECT_TRUE(std::filesystem::exists(path));
+    TempFile new_owner(std::move(*file));
+    EXPECT_EQ(path, new_owner.GetPath());
+    file.reset(nullptr);
+    EXPECT_TRUE(std::filesystem::exists(path));
+  }
+  EXPECT_FALSE(std::filesystem::exists(path));
 }
 
 TEST(TempDir, TypeTraits) {
@@ -132,11 +138,17 @@ TEST(TempDir, ContentOfTemporaryDirectoryIsAutomaticallyRemoved) {
 }
 
 TEST(TempDir, TempDirPersistsMoveConstruction) {
-  auto* dir = new TempDir;
-  auto path = dir->GetPath();
-  TempDir moved(std::move(*dir));
-  delete dir;
-  EXPECT_TRUE(std::filesystem::exists(path));
+  std::filesystem::path path;
+  {
+    auto dir = std::make_unique<TempDir>();
+    path = dir->GetPath();
+    EXPECT_TRUE(std::filesystem::exists(path));
+    TempDir new_owner(std::move(*dir));
+    EXPECT_EQ(path, new_owner.GetPath());
+    dir.reset(nullptr);
+    EXPECT_TRUE(std::filesystem::exists(path));
+  }
+  EXPECT_FALSE(std::filesystem::exists(path));
 }
 
 }  // namespace
