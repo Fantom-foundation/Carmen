@@ -25,7 +25,7 @@ class InMemoryLinearHashIndex {
     return {entry->second, new_entry};
   }
 
-  std::optional<I> Get(const K& key) {
+  std::optional<I> Get(const K& key) const {
     auto pos = data_.Find(key);
     if (pos == nullptr) {
       return std::nullopt;

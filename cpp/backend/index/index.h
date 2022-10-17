@@ -11,7 +11,7 @@ namespace carmen::backend::index {
 // Defines the interface expected for a Index I mapping keys of type K to
 // integral values of type V.
 template <typename I>
-concept Index = requires(I a) {
+concept Index = requires(I a, const I b) {
   // An index must expose a key type.
   typename I::key_type;
   // An index must expose a value type.
@@ -24,7 +24,7 @@ concept Index = requires(I a) {
     } -> std::same_as<std::pair<typename I::value_type, bool>>;
   // Retrieves the key from the index if present, nullopt otherwise.
   {
-    a.Get(std::declval<typename I::key_type>())
+    b.Get(std::declval<typename I::key_type>())
     } -> std::same_as<std::optional<typename I::value_type>>;
   // Computes a hash over the full content of this index. The hash of an empty
   // index is defined to be zero. For every element added, the new hash is to be

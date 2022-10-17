@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <memory>
 #include <optional>
 #include <queue>
 #include <vector>
@@ -41,8 +42,18 @@ class FileIndex {
   using key_type = K;
   using value_type = I;
 
+  // The page type used by this index.
+  using Page = HashPage<hash_t, K, I, page_size>;
+
+  // The file-type used by instances for primiary and overflow pages.
+  using File = F<Page>;
+
   // Creates a new, empty index backed by a default-constructed file.
   FileIndex();
+
+  // Creates an index based on the given files.
+  FileIndex(std::unique_ptr<File> primary_page_file,
+            std::unique_ptr<File> overflow_page_file);
 
   // Retrieves the ordinal number for the given key. If the key
   // is known, it it will return a previously established value
@@ -54,7 +65,7 @@ class FileIndex {
 
   // Retrieves the ordinal number for the given key if previously registered.
   // Otherwise std::nullopt is returned.
-  std::optional<I> Get(const K& key);
+  std::optional<I> Get(const K& key) const;
 
   // Computes a hash over the full content of this index.
   Hash GetHash() const;
@@ -64,8 +75,6 @@ class FileIndex {
   void Dump() const;
 
  private:
-  // The page type used by this index.
-  using Page = HashPage<hash_t, K, I, page_size>;
   // A type used to index buckets.
   using bucket_id_t = std::size_t;
   // The type of one entry within a page (=one key/value pair).
@@ -186,7 +195,16 @@ class FileIndex {
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
 FileIndex<K, I, F, page_size>::FileIndex()
-    : low_mask_((1 << kInitialHashLength) - 1),
+    : FileIndex(std::make_unique<File>(), std::make_unique<File>()) {}
+
+template <Trivial K, std::integral I, template <typename> class F,
+          std::size_t page_size>
+FileIndex<K, I, F, page_size>::FileIndex(
+    std::unique_ptr<File> primary_page_file,
+    std::unique_ptr<File> overflow_page_file)
+    : primary_pool_(std::move(primary_page_file)),
+      overflow_pool_(std::move(overflow_page_file)),
+      low_mask_((1 << kInitialHashLength) - 1),
       high_mask_((low_mask_ << 1) | 0x1),
       num_buckets_(1 << kInitialHashLength) {}
 
@@ -236,7 +254,7 @@ std::pair<I, bool> FileIndex<K, I, F, page_size>::GetOrAdd(const K& key) {
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-std::optional<I> FileIndex<K, I, F, page_size>::Get(const K& key) {
+std::optional<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
   auto [hash, bucket, entry] = FindInternal(key);
   if (entry == nullptr) {
     return std::nullopt;

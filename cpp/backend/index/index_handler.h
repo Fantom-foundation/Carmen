@@ -1,6 +1,9 @@
 #include <cstddef>
 
+#include "backend/index/cache/cache.h"
+#include "backend/index/file/index.h"
 #include "backend/index/index.h"
+#include "common/file_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -20,6 +23,35 @@ class IndexHandler {
 
  private:
   Index index_;
+};
+
+// A specialization of the generic IndexHandler for cached index
+// implementations.
+template <Index Index>
+class IndexHandler<Cached<Index>> {
+ public:
+  IndexHandler() : index_(std::move(nested_.GetIndex())) {}
+  Cached<Index>& GetIndex() { return index_; }
+
+ private:
+  IndexHandler<Index> nested_;
+  Cached<Index> index_;
+};
+
+// A specialization of the generic IndexHandler for file-based implementations.
+template <Trivial K, std::integral I, std::size_t page_size>
+class IndexHandler<FileIndex<K, I, SingleFile, page_size>> {
+ public:
+  using File = typename FileIndex<K, I, SingleFile, page_size>::File;
+  IndexHandler()
+      : index_(std::make_unique<File>(dir_.GetPath() / "primary.dat"),
+               std::make_unique<File>(dir_.GetPath() / "overflow.dat")) {}
+
+  FileIndex<K, I, SingleFile, page_size>& GetIndex() { return index_; }
+
+ private:
+  TempDir dir_;
+  FileIndex<K, I, SingleFile, page_size> index_;
 };
 
 }  // namespace
