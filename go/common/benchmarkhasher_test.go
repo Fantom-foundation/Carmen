@@ -23,14 +23,13 @@ const step = 3
 // BenchmarkNewHashEveryLoop hashes a number of bytes and creates a new hash every loop
 func BenchmarkNewHashEveryLoop(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
-		hash := make([]byte, i)
+		data := make([]byte, i)
 		b.Run(fmt.Sprintf("NewHashEveryLoop n %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				h := sha256.New()
-				h.Write(hash)
-				hash = h.Sum(nil)
+				h.Write(data)
+				sink = h.Sum(nil)
 			}
-			sink = hash
 		})
 	}
 }
@@ -38,15 +37,14 @@ func BenchmarkNewHashEveryLoop(b *testing.B) {
 // BenchmarkOneHashAllLoops hashes a number of bytes and creates one local hasher for all loops
 func BenchmarkOneHashAllLoops(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
-		hash := make([]byte, i)
+		data := make([]byte, i)
 		localHash := sha256.New()
 		b.Run(fmt.Sprintf("OneHashAllLoops n %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				localHash.Reset()
-				localHash.Write(hash)
-				hash = localHash.Sum(nil)
+				localHash.Write(data)
+				sink = localHash.Sum(nil)
 			}
-			sink = hash
 		})
 	}
 }
@@ -54,14 +52,13 @@ func BenchmarkOneHashAllLoops(b *testing.B) {
 // BenchmarkOneGlobalHash hashes a number of bytes and uses a global variable hasher
 func BenchmarkOneGlobalHash(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
-		hash := make([]byte, i)
+		data := make([]byte, i)
 		b.Run(fmt.Sprintf("OneGlobalHash n %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				globalHash.Reset()
-				globalHash.Write(hash)
-				hash = globalHash.Sum(nil)
+				globalHash.Write(data)
+				sink = globalHash.Sum(nil)
 			}
-			sink = hash
 		})
 	}
 }
