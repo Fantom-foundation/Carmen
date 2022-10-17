@@ -14,8 +14,8 @@ using ::testing::StartsWith;
 
 TEST(TempFile, TypeTraits) {
   EXPECT_TRUE(std::is_default_constructible_v<TempFile>);
+  EXPECT_TRUE(std::is_move_constructible_v<TempFile>);
   EXPECT_FALSE(std::is_copy_constructible_v<TempFile>);
-  EXPECT_FALSE(std::is_move_constructible_v<TempFile>);
   EXPECT_FALSE(std::is_copy_assignable_v<TempFile>);
   EXPECT_FALSE(std::is_move_assignable_v<TempFile>);
 }
@@ -62,10 +62,18 @@ TEST(TempFile, TheTemporaryFileCanBeRemovedAndRecreatedManually) {
   EXPECT_TRUE(std::filesystem::exists(a.GetPath()));
 }
 
+TEST(TempFile, TempFilePersistsMoveConstruction) {
+  auto* file = new TempFile;
+  auto path = file->GetPath();
+  TempFile moved(std::move(*file));
+  delete file;
+  EXPECT_TRUE(std::filesystem::exists(path));
+}
+
 TEST(TempDir, TypeTraits) {
   EXPECT_TRUE(std::is_default_constructible_v<TempDir>);
+  EXPECT_TRUE(std::is_move_constructible_v<TempDir>);
   EXPECT_FALSE(std::is_copy_constructible_v<TempDir>);
-  EXPECT_FALSE(std::is_move_constructible_v<TempDir>);
   EXPECT_FALSE(std::is_copy_assignable_v<TempDir>);
   EXPECT_FALSE(std::is_move_assignable_v<TempDir>);
 }
@@ -121,6 +129,14 @@ TEST(TempDir, ContentOfTemporaryDirectoryIsAutomaticallyRemoved) {
   }
   EXPECT_FALSE(std::filesystem::exists(path));
   EXPECT_FALSE(std::filesystem::exists(file));
+}
+
+TEST(TempDir, TempDirPersistsMoveConstruction) {
+  auto* dir = new TempDir;
+  auto path = dir->GetPath();
+  TempDir moved(std::move(*dir));
+  delete dir;
+  EXPECT_TRUE(std::filesystem::exists(path));
 }
 
 }  // namespace
