@@ -24,7 +24,7 @@ class LevelDBKeySpaceTestAdapter {
     return {0, false};
   }
 
-  std::optional<I> Get(const K& key) {
+  std::optional<I> Get(const K& key) const {
     auto result = key_space_.Get(key);
     if (result.ok()) return *result;
     return std::nullopt;

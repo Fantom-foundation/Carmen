@@ -51,7 +51,7 @@ class LevelDBKeySpaceBase {
       : impl_(std::move(db)), key_space_(key_space) {}
 
   // Get raw result for given key without key space transformation.
-  absl::StatusOr<std::string> GetFromDB(std::string_view key);
+  absl::StatusOr<std::string> GetFromDB(std::string_view key) const;
 
   // Get last index value.
   absl::StatusOr<std::string> GetLastIndexFromDB();
@@ -78,7 +78,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   using LevelDBKeySpaceBase::LevelDBKeySpaceBase;
 
   // Get index for given key.
-  absl::StatusOr<I> Get(const K& key) {
+  absl::StatusOr<I> Get(const K& key) const {
     auto result = GetFromDB(internal::ToDBKey(key_space_, key));
     if (result.ok()) return internal::ParseDBResult<I>(*result);
     return result.status();

@@ -22,6 +22,7 @@ cc_library(
     name = "test_util",
     hdrs = ["test_util.h"],
     deps = [
+        ":index",
         "//common:hash",
         "@com_google_googletest//:gtest",
     ],
@@ -47,6 +48,7 @@ cc_library(
         "//common:type",
         "//backend/index/leveldb:test_util",
         "//backend/index/leveldb:index",
+        "//common:file_util",
     ],
     visibility = ["//backend/index:__subpackages__"],
     testonly = True,
@@ -57,8 +59,11 @@ cc_binary(
     srcs = ["index_benchmark.cc"],
     deps = [
         ":index_handler",
+        "//backend/common:file",
         "//backend/index/cache",
+        "//backend/index/file:index",
         "//backend/index/memory:index",
+        "//backend/index/memory:linear_hash_index",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
