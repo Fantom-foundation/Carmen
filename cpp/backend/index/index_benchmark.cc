@@ -4,9 +4,9 @@
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index_handler.h"
+#include "backend/index/leveldb/test_util.h"
 #include "backend/index/memory/index.h"
 #include "backend/index/memory/linear_hash_index.h"
-#include "backend/index/leveldb/test_util.h"
 #include "benchmark/benchmark.h"
 
 namespace carmen::backend::index {
@@ -17,7 +17,8 @@ constexpr const std::size_t kPageSize = 1 << 12;  // = 4 KiB
 using InMemoryIndex = InMemoryIndex<Key, std::uint32_t>;
 using CachedInMemoryIndex = Cached<InMemoryIndex>;
 using InMemoryLinearHashIndex = InMemoryLinearHashIndex<Key, std::uint32_t>;
-using FileIndexInMemory = FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
+using FileIndexInMemory =
+    FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
 using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
 using LevelDBIndex = LevelDBKeySpaceTestAdapter<Key, std::uint32_t>;
