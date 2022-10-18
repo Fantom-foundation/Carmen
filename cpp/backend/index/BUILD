@@ -24,6 +24,7 @@ cc_library(
     deps = [
         ":index",
         "//common:hash",
+        "//backend/index:index_handler",
         "@com_google_googletest//:gtest",
     ],
     visibility = ["//backend/index:__subpackages__"],

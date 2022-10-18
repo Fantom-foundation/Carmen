@@ -3,6 +3,7 @@
 #include <type_traits>
 
 #include "backend/index/index.h"
+#include "backend/index/index_handler.h"
 #include "common/hash.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
@@ -14,19 +15,19 @@ using ::testing::Optional;
 
 // Implements a generic test suite for index implementations checking basic
 // properties like GetOrAdd, contains, and hashing functionality.
-template <typename IndexHandler>
+template <Index I>
 class IndexTest : public testing::Test {};
 
 TYPED_TEST_SUITE_P(IndexTest);
 
 TYPED_TEST_P(IndexTest, TypeProperties) {
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_TRUE(std::is_move_constructible_v<decltype(index)>);
 }
 
 TYPED_TEST_P(IndexTest, IdentifiersAreAssignedInorder) {
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
   EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
@@ -34,7 +35,7 @@ TYPED_TEST_P(IndexTest, IdentifiersAreAssignedInorder) {
 }
 
 TYPED_TEST_P(IndexTest, SameKeyLeadsToSameIdentifier) {
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
   EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
@@ -43,7 +44,7 @@ TYPED_TEST_P(IndexTest, SameKeyLeadsToSameIdentifier) {
 }
 
 TYPED_TEST_P(IndexTest, ContainsIdentifiesIndexedElements) {
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_FALSE(index.Get(1));
   EXPECT_FALSE(index.Get(2));
@@ -61,7 +62,7 @@ TYPED_TEST_P(IndexTest, ContainsIdentifiesIndexedElements) {
 }
 
 TYPED_TEST_P(IndexTest, GetRetrievesPresentKeys) {
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_EQ(index.Get(1), std::nullopt);
   EXPECT_EQ(index.Get(2), std::nullopt);
@@ -74,14 +75,14 @@ TYPED_TEST_P(IndexTest, GetRetrievesPresentKeys) {
 }
 
 TYPED_TEST_P(IndexTest, EmptyIndexHasHashEqualsZero) {
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_EQ(Hash{}, index.GetHash());
 }
 
 TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
   Hash hash;
-  TypeParam wrapper;
+  IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_EQ(hash, index.GetHash());
   index.GetOrAdd(12);

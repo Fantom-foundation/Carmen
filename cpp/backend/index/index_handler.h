@@ -61,8 +61,7 @@ template <Trivial K, std::integral I>
 class IndexHandler<LevelDBKeySpaceTestAdapter<K, I>> {
  public:
   IndexHandler()
-      : dir_{},
-        index_(LevelDBIndex(dir_.GetPath().string()).KeySpace<int, int>('t')) {}
+      : index_(LevelDBIndex(dir_.GetPath().string()).KeySpace<int, int>('t')) {}
   LevelDBKeySpaceTestAdapter<K, I>& GetIndex() { return index_; }
 
  private:
