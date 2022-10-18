@@ -6,6 +6,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"testing"
@@ -14,6 +16,7 @@ import (
 func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	const (
 		PageSize        = 2 * 32
+		PoolSize        = 2
 		BranchingFactor = 3
 	)
 
@@ -34,6 +37,10 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	if err != nil {
 		t.Fatalf("failed to init file store; %s", err)
 	}
+	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, BranchingFactor, PoolSize, eviction.NewLeastRecentlyUsedEvictionPolicy(PoolSize))
+	if err != nil {
+		t.Fatalf("failed to init file store; %s", err)
+	}
 	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
 	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, treeFac, defaultItem, PageSize)
 	if err != nil {
@@ -43,10 +50,11 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	t.Cleanup(func() {
 		memstore.Close()
 		filestore.Close()
+		pagedfilestore.Close()
 		ldbstore.Close()
 		db.Close()
 	})
-	return []store.Store[uint32, common.Value]{memstore, filestore, ldbstore}
+	return []store.Store[uint32, common.Value]{memstore, filestore, pagedfilestore, ldbstore}
 }
 
 func TestStoresInitialHash(t *testing.T) {
