@@ -1,6 +1,7 @@
 package ldb
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -65,6 +66,7 @@ func NewIndex[K comparable, I common.Identifier](
 	return p, nil
 }
 
+// GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
 	if val, err = m.db.Get(m.convertKey(key), nil); err != nil {
@@ -95,11 +97,27 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	return idx, nil
 }
 
+// Get returns an index mapping for the key, returns index.ErrNotFound if not exists
+func (m *Index[K, I]) Get(key K) (idx I, err error) {
+	var val []byte
+	if val, err = m.db.Get(m.convertKey(key), nil); err != nil {
+		if err == errors.ErrNotFound {
+			err = index.ErrNotFound
+		}
+		return
+	}
+
+	idx = m.indexSerializer.FromBytes(val)
+	return idx, nil
+}
+
+// Contains returns whether the key exists in the mapping or not.
 func (m *Index[K, I]) Contains(key K) bool {
 	exists, _ := m.db.Has(m.convertKey(key), nil)
 	return exists
 }
 
+// GetStateHash returns the index hash.
 func (m *Index[K, I]) GetStateHash() (hash common.Hash, err error) {
 	return m.hashIndex.Commit()
 }

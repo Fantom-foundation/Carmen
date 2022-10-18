@@ -60,6 +60,7 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 		t.Errorf("failed add of address A1; %s", err)
 		return
 	}
+
 	indexA2, err := memory.GetOrAdd(A)
 	if err != nil {
 		t.Errorf("failed add of address A2; %s", err)
@@ -67,6 +68,16 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 	}
 	if indexA != indexA2 {
 		t.Errorf("assigned two different indexes for the same address")
+		return
+	}
+
+	indexA3, err := memory.Get(A)
+	if err != nil {
+		t.Errorf("failed get id of address A3; %s", err)
+		return
+	}
+	if indexA2 != indexA3 {
+		t.Errorf("Get returns different value than GetOrAdd")
 		return
 	}
 }

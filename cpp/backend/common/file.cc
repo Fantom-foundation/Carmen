@@ -1,6 +1,6 @@
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 
 namespace internal {
 
@@ -50,4 +50,4 @@ void RawFile::GrowFileIfNeeded(std::size_t needed) {
 }
 
 }  // namespace internal
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

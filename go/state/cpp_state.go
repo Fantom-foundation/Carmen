@@ -40,15 +40,19 @@ func (cs *CppState) Release() {
 }
 
 func (s *CppState) CreateAccount(address common.Address) error {
-	panic("Not implemented")
+	C.Carmen_CreateAccount(s.state, unsafe.Pointer(&address[0]))
+	return nil
 }
 
-func (s *CppState) GetAccountState(address common.Address) common.AccountState {
-	panic("Not implemented")
+func (s *CppState) GetAccountState(address common.Address) (common.AccountState, error) {
+	var res common.AccountState
+	C.Carmen_GetAccountState(s.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&res))
+	return res, nil
 }
 
 func (s *CppState) DeleteAccount(address common.Address) error {
-	panic("Not implemented")
+	C.Carmen_DeleteAccount(s.state, unsafe.Pointer(&address[0]))
+	return nil
 }
 
 func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {

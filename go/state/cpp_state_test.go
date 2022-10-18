@@ -6,6 +6,48 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+func TestAccountsAreInitiallyUnknown(t *testing.T) {
+	for _, named_state := range initStates(t) {
+		name := named_state.name
+		state := named_state.state
+		t.Run(name, func(t *testing.T) {
+			account_state, _ := state.GetAccountState(address1)
+			if account_state != common.Unknown {
+				t.Errorf("Initial account is not unknown, got %v", account_state)
+			}
+		})
+	}
+}
+
+func TestAccountsCanBeCreated(t *testing.T) {
+	for _, named_state := range initStates(t) {
+		name := named_state.name
+		state := named_state.state
+		t.Run(name, func(t *testing.T) {
+			state.CreateAccount(address1)
+			account_state, _ := state.GetAccountState(address1)
+			if account_state != common.Exists {
+				t.Errorf("Created account does not exist, got %v", account_state)
+			}
+		})
+	}
+}
+
+func TestAccountsCanBeDeleted(t *testing.T) {
+	for _, named_state := range initStates(t) {
+		name := named_state.name
+		state := named_state.state
+		t.Run(name, func(t *testing.T) {
+			state.CreateAccount(address1)
+			state.DeleteAccount(address1)
+			account_state, _ := state.GetAccountState(address1)
+			if account_state != common.Deleted {
+				t.Errorf("Deleted account is not deleted, got %v", account_state)
+			}
+		})
+	}
+}
+
 func TestReadUninitializedBalance(t *testing.T) {
 	for _, named_state := range initStates(t) {
 		name := named_state.name

@@ -52,6 +52,46 @@ Individual targets can be build using commands similar to
 bazel run //common:type_test
 ```
 
+# Profiling
+To profile and visualize profiled data, we recommend using the `pprof`.
+To install it as Go tool, run:
+```
+go install github.com/google/pprof@latest
+```
+
+The binary will be installed in `$GOPATH/bin` (`$HOME/go/bin` by default). To 
+make it accessible as a `pprof` command, a symbolic link or alias must be created.
+```
+alias pprof=<path_to_pprof>
+```
+To make alias persistent, put it into your `.bashrc` or `.zshrc` file.
+
+Link profiler (`//third_party/gperftools:profiler`) into the target binary you 
+want to profile.
+
+Example:
+```
+cc_binary(
+    name = "eviction_policy_benchmark",
+    srcs = ["eviction_policy_benchmark.cc"],
+    deps = [
+        ":eviction_policy",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+)
+```
+To start collection of profiling data, run the binary with the `CPUPROFILE` 
+environment variable set to the path of the output file. For example:
+```
+CPUPROFILE=/tmp/profile.dat bazel run -c opt //backend/store:store_benchmark -- --benchmark_filter=HashExponential.*File.*/16
+```
+
+To visualize the collected data (`graphviz` has to be installed), run:
+```
+pprof --http=":8000" /tmp/profile.dat
+```
+
 # Setting up your IDE
 The setup of your development environment depends on the IDE of your choice.
 

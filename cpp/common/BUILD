@@ -83,3 +83,81 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name="account_state",
+    hdrs=["account_state.h"],
+    srcs=["account_state.cc"],
+    deps=[
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "account_state_test",
+    srcs = ["account_state_test.cc"],
+    deps = [
+        ":account_state",
+        ":test_util",
+        ":type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "hash_benchmark",
+    srcs = ["hash_benchmark.cc"],
+    deps = [
+        ":hash",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+)
+
+cc_library(
+    name="status_util",
+    hdrs=["status_util.h"],
+    deps=[
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor"
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "status_util_test",
+    srcs = ["status_util_test.cc"],
+    deps = [
+        ":status_util",
+        ":status_test_util",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name="status_test_util",
+    hdrs=["status_test_util.h"],
+    deps=[
+        ":status_util",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor"
+    ],
+    visibility = ["//visibility:public"],
+    testonly = True,
+)
+
+cc_test(
+    name = "status_test_util_test",
+    srcs = ["status_test_util_test.cc"],
+    deps = [
+        ":status_test_util",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

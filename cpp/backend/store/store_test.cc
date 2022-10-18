@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "backend/store/file/store.h"
 #include "backend/store/store_handler.h"
 #include "common/hash.h"

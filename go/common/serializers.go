@@ -62,7 +62,20 @@ func (a HashSerializer) Size() int {
 	return 32
 }
 
-// BalanceSerializer is a Serializer of the Value type
+// AccountStateSerializer is a Serializer of the AccountState type
+type AccountStateSerializer struct{}
+
+func (a AccountStateSerializer) ToBytes(value AccountState) []byte {
+	return []byte{byte(value)}
+}
+func (a AccountStateSerializer) FromBytes(bytes []byte) AccountState {
+	return AccountState(bytes[0])
+}
+func (a AccountStateSerializer) Size() int {
+	return 1
+}
+
+// BalanceSerializer is a Serializer of the Balance type
 type BalanceSerializer struct{}
 
 func (a BalanceSerializer) ToBytes(value Balance) []byte {
@@ -77,7 +90,7 @@ func (a BalanceSerializer) Size() int {
 	return 32
 }
 
-// NonceSerializer is a Serializer of the Value type
+// NonceSerializer is a Serializer of the Nonce type
 type NonceSerializer struct{}
 
 func (a NonceSerializer) ToBytes(value Nonce) []byte {
@@ -92,7 +105,7 @@ func (a NonceSerializer) Size() int {
 	return 32
 }
 
-// SlotIdxSerializer32 is a Serializer of the Value type
+// SlotIdxSerializer32 is a Serializer of the SlotIdx[uint32] type
 type SlotIdxSerializer32 struct {
 	identifierSerializer32 Identifier32Serializer
 }

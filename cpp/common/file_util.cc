@@ -42,7 +42,9 @@ TempFile::TempFile(std::string_view prefix) {
 
 TempFile::~TempFile() {
   // Delete the owned temporary file.
-  std::filesystem::remove(path_);
+  if (!path_.empty()) {
+    std::filesystem::remove(path_);
+  }
 }
 
 const std::filesystem::path& TempFile::GetPath() const { return path_; }
@@ -65,7 +67,9 @@ TempDir::TempDir(std::string_view prefix) {
 
 TempDir::~TempDir() {
   // Delete the owned temporary file.
-  std::filesystem::remove_all(path_);
+  if (!path_.empty()) {
+    std::filesystem::remove_all(path_);
+  }
 }
 
 const std::filesystem::path& TempDir::GetPath() const { return path_; }

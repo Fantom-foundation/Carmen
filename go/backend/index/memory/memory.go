@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -29,6 +30,15 @@ func (m *Index[K, I]) GetOrAdd(key K) (I, error) {
 		idx = I(len(m.data))
 		m.data[key] = idx
 		m.hashIndex.AddKey(key)
+	}
+	return idx, nil
+}
+
+// Get returns an index mapping for the key, returns index.ErrNotFound if not exists
+func (m *Index[K, I]) Get(key K) (I, error) {
+	idx, exists := m.data[key]
+	if !exists {
+		return idx, index.ErrNotFound
 	}
 	return idx, nil
 }

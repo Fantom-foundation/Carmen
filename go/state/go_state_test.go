@@ -13,7 +13,7 @@ import (
 
 const (
 	HashTreeFactor = 3
-	PageSize       = 32
+	PageSize       = 32 * 32
 )
 
 var (
@@ -36,12 +36,22 @@ var (
 )
 
 func TestInMemoryComposition(t *testing.T) {
-	NewInMemoryComposition()
+	_, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
 }
 
 func TestMissingKeys(t *testing.T) {
-	state := NewInMemoryComposition()
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
 
+	accountState, err := state.GetAccountState(address1)
+	if err != nil || accountState != common.Unknown {
+		t.Errorf("Account state must be Unknown. It is: %s, err: %s", accountState, err)
+	}
 	balance, err := state.GetBalance(address1)
 	if (err != nil || balance != common.Balance{}) {
 		t.Errorf("Balance must be empty. It is: %s, err: %s", balance, err)
@@ -57,9 +67,15 @@ func TestMissingKeys(t *testing.T) {
 }
 
 func TestBasicOperations(t *testing.T) {
-	state := NewInMemoryComposition()
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
 
 	// fill-in values
+	if err := state.CreateAccount(address1); err != nil {
+		t.Errorf("Error: %s", err)
+	}
 	if err := state.SetNonce(address1, common.Nonce{123}); err != nil {
 		t.Errorf("Error: %s", err)
 	}
@@ -71,6 +87,9 @@ func TestBasicOperations(t *testing.T) {
 	}
 
 	// fetch values
+	if val, err := state.GetAccountState(address1); err != nil || val != common.Exists {
+		t.Errorf("Created account does not exists: Val: %s, Err: %s", val, err)
+	}
 	if val, err := state.GetNonce(address1); (err != nil || val != common.Nonce{123}) {
 		t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
 	}
@@ -81,6 +100,14 @@ func TestBasicOperations(t *testing.T) {
 		t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
 	}
 
+	// delete account
+	if err := state.DeleteAccount(address1); err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	if val, err := state.GetAccountState(address1); err != nil || val != common.Deleted {
+		t.Errorf("Deleted account is not deleted: Val: %s, Err: %s", val, err)
+	}
+
 	// fetch wrong combinations
 	if val, err := state.GetStorage(address1, key1); (err != nil || val != common.Value{}) {
 		t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
@@ -88,7 +115,10 @@ func TestBasicOperations(t *testing.T) {
 }
 
 func TestMoreInserts(t *testing.T) {
-	state := NewInMemoryComposition()
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
 
 	// insert more combinations, so we do not have only zero-indexes everywhere
 	_ = state.SetStorage(address1, key1, val1)
@@ -114,15 +144,70 @@ func TestMoreInserts(t *testing.T) {
 	}
 }
 
-func NewInMemoryComposition() State {
+func TestHashing(t *testing.T) {
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
+
+	initialHash, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+
+	_ = state.SetStorage(address1, key1, val1)
+	hash1, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash1 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
+
+	_ = state.SetBalance(address1, balance1)
+	hash2, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash2 || hash1 == hash2 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
+
+	_ = state.CreateAccount(address1)
+	hash3, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash3 || hash1 == hash3 || hash2 == hash3 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
+}
+
+func NewInMemoryComposition() (State, error) {
 	var addressIndex index.Index[common.Address, uint32] = indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	var keyIndex index.Index[common.Key, uint32] = indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
 	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
-	var noncesStore store.Store[uint32, common.Nonce] = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, common.Nonce{}, PageSize, HashTreeFactor)
-	var balancesStore store.Store[uint32, common.Balance] = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
-	var valuesStore store.Store[uint32, common.Value] = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
-
-	return NewGoState(addressIndex, keyIndex, slotIndex, noncesStore, balancesStore, valuesStore)
+	var accountsStore store.Store[uint32, common.AccountState]
+	var noncesStore store.Store[uint32, common.Nonce]
+	var balancesStore store.Store[uint32, common.Balance]
+	var valuesStore store.Store[uint32, common.Value]
+	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.Unknown, PageSize, HashTreeFactor)
+	if err != nil {
+		return nil, err
+	}
+	noncesStore, err = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, common.Nonce{}, PageSize, HashTreeFactor)
+	if err != nil {
+		return nil, err
+	}
+	balancesStore, err = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
+	if err != nil {
+		return nil, err
+	}
+	valuesStore, err = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
+	if err != nil {
+		return nil, err
+	}
+	return NewGoState(addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore), nil
 }
 
 var testingErr = fmt.Errorf("testing error")
@@ -140,18 +225,26 @@ type failingIndex[K comparable, I common.Identifier] struct {
 	index.Index[K, I]
 }
 
-func (m failingIndex[K, I]) GetOrAdd(key K) (id I, err error) {
+func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 	err = testingErr
 	return
 }
 
 func TestFailingStore(t *testing.T) {
-	state := NewInMemoryComposition().(*GoState)
-	state.balancesStore = failingStore[uint32, common.Balance]{state.balancesStore}
-	state.noncesStore = failingStore[uint32, common.Nonce]{state.noncesStore}
-	state.valuesStore = failingStore[uint32, common.Value]{state.valuesStore}
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
+	goState := state.(*GoState)
+	goState.balancesStore = failingStore[uint32, common.Balance]{goState.balancesStore}
+	goState.noncesStore = failingStore[uint32, common.Nonce]{goState.noncesStore}
+	goState.valuesStore = failingStore[uint32, common.Value]{goState.valuesStore}
 
-	_, err := state.GetBalance(address1)
+	_ = state.SetBalance(address1, common.Balance{})
+	_ = state.SetNonce(address1, common.Nonce{})
+	_ = state.SetStorage(address1, key1, common.Value{})
+
+	_, err = state.GetBalance(address1)
 	if err != testingErr {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
@@ -168,10 +261,14 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state := NewInMemoryComposition().(*GoState)
-	state.addressIndex = failingIndex[common.Address, uint32]{state.addressIndex}
+	state, err := NewInMemoryComposition()
+	if err != nil {
+		t.Fatalf("failed to create in-memory state; %s", err)
+	}
+	goState := state.(*GoState)
+	goState.addressIndex = failingIndex[common.Address, uint32]{goState.addressIndex}
 
-	_, err := state.GetBalance(address1)
+	_, err = state.GetBalance(address1)
 	if err != testingErr {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}

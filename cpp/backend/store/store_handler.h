@@ -1,6 +1,6 @@
 #include <cstddef>
 
-#include "backend/store/file/file.h"
+#include "backend/common/file.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
 #include "common/file_util.h"
@@ -57,14 +57,15 @@ class StoreHandler<FileStore<int, Value, SingleFile, page_size>,
     : public StoreHandlerBase<page_size, branching_factor> {
  public:
   StoreHandler()
-      : store_(branching_factor,
-               std::make_unique<SingleFile<page_size>>(file_)) {}
+      : store_(branching_factor, std::make_unique<SingleFile<Page>>(file_)) {}
 
   FileStore<int, Value, SingleFile, page_size>& GetStore() { return store_; }
 
  private:
+  using Store = FileStore<int, Value, SingleFile, page_size>;
+  using Page = typename Store::page_type;
   TempFile file_;
-  FileStore<int, Value, SingleFile, page_size> store_;
+  Store store_;
 };
 
 }  // namespace

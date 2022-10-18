@@ -1,42 +1,42 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <fstream>
 #include <span>
 
-#include "backend/store/file/page.h"
+#include "backend/common/page.h"
+#include "backend/common/page_id.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 
 // ------------------------------- Declarations -------------------------------
 
 // The File concept defines an interface for file implementations supporting the
 // loading and storing of fixed length pages. Pages are expected to be numbered
 // in the range [0..n-1], where n is the number of pages in the file.
-//
-// The type T is the type tested for satisfying the File concept and the page
-// size parameter defines the size of each page in bytes.
-template <typename T, std::size_t page_size>
-concept File = requires(T a) {
-  // Files must expose a page size (=number of bytes per page).
-  T::kPageSize;
+template <typename F>
+concept File = requires(F a) {
+  // Files must expose the page type.
+  typename F::page_type;
 
   // Files must be movable.
-  std::is_move_constructible_v<T>;
-  std::is_move_assignable_v<T>;
+  std::is_move_constructible_v<F>;
+  std::is_move_assignable_v<F>;
 
   // Each file implementation must support the extraction of the number of
   // pages.
   { a.GetNumPages() } -> std::same_as<std::size_t>;
   // LoadPage is intended to be used for fetching a single page from the file.
   {
-    a.LoadPage(PageId{}, std::declval<std::span<std::byte, page_size>>())
+    a.LoadPage(PageId{}, const_cast<typename F::page_type&>(
+                             std::declval<typename F::page_type&>()))
     } -> std::same_as<void>;
   // StorePage is intended to be used for fetching a single page from the file.
   {
-    a.StorePage(PageId{}, std::declval<std::span<const std::byte, page_size>>())
+    a.StorePage(PageId{}, std::declval<typename F::page_type>())
     } -> std::same_as<void>;
   // Each file has to support a flush operation after which data previously
   // written must be persisted on disk.
@@ -46,23 +46,24 @@ concept File = requires(T a) {
 // An InMemoryFile implement is provided to for testing purposes, where actual
 // file operations are not relevant. It may also serve as a reference
 // implementation to compare other implementations to in unit testing.
-template <typename std::size_t page_size>
+template <typename Page>
 class InMemoryFile {
  public:
-  static constexpr std::size_t kPageSize = page_size;
+  using page_type = Page;
 
-  std::size_t GetNumPages() const { return data_.size() / page_size; }
+  std::size_t GetNumPages() const { return data_.size(); }
 
-  void LoadPage(PageId id, std::span<std::byte, page_size> trg) const;
+  void LoadPage(PageId id, Page& trg) const;
 
-  void StorePage(PageId id, std::span<const std::byte, page_size> src);
+  void StorePage(PageId id, const Page& src);
 
   void Flush() const {
     // Nothing to do.
   }
 
  private:
-  std::deque<std::byte> data_;
+  using Block = std::array<std::byte, sizeof(Page)>;
+  std::deque<Block> data_;
 };
 
 namespace internal {
@@ -106,21 +107,21 @@ class RawFile {
 
 // An implementation of the File concept using a single file as a persistent
 // storage solution.
-template <typename std::size_t page_size>
+template <typename Page>
 class SingleFile {
  public:
-  static constexpr std::size_t kPageSize = page_size;
+  using page_type = Page;
 
   SingleFile(std::filesystem::path file_path) : file_(file_path) {}
 
-  std::size_t GetNumPages() const { return file_.GetFileSize() / page_size; }
+  std::size_t GetNumPages() const { return file_.GetFileSize() / sizeof(Page); }
 
-  void LoadPage(PageId id, std::span<std::byte, page_size> trg) const {
-    file_.Read(id * page_size, trg);
+  void LoadPage(PageId id, Page& trg) const {
+    file_.Read(id * sizeof(Page), trg.AsRawData());
   }
 
-  void StorePage(PageId id, std::span<const std::byte, page_size> src) {
-    file_.Write(id * page_size, src);
+  void StorePage(PageId id, const Page& src) {
+    file_.Write(id * sizeof(Page), src.AsRawData());
   }
 
   void Flush() const { file_.Flush(); }
@@ -131,29 +132,19 @@ class SingleFile {
 
 // ------------------------------- Definitions --------------------------------
 
-template <typename std::size_t page_size>
-void InMemoryFile<page_size>::LoadPage(
-    PageId id, std::span<std::byte, page_size> trg) const {
-  const auto offset = id * page_size;
-  std::size_t i = 0;
-  for (; i < page_size && offset + i < data_.size(); i++) {
-    trg[i] = data_[offset + i];
-  }
-  for (; i < page_size; i++) {
-    trg[i] = std::byte{0};
-  }
+template <typename Page>
+void InMemoryFile<Page>::LoadPage(PageId id, Page& trg) const {
+  static const Block zero{};
+  auto src = id >= data_.size() ? &zero : &data_[id];
+  std::memcpy(&trg, src, sizeof(Page));
 }
 
-template <typename std::size_t page_size>
-void InMemoryFile<page_size>::StorePage(
-    PageId id, std::span<const std::byte, page_size> src) {
-  const auto offset = id * page_size;
-  if (data_.size() < offset + page_size) {
-    data_.resize(offset + page_size);
+template <typename Page>
+void InMemoryFile<Page>::StorePage(PageId id, const Page& src) {
+  while (data_.size() <= id) {
+    data_.resize(id + 1);
   }
-  for (std::size_t i = 0; i < page_size; i++) {
-    data_[offset + i] = src[i];
-  }
+  std::memcpy(&data_[id], &src, sizeof(Page));
 }
 
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

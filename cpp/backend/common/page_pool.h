@@ -5,14 +5,13 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "backend/store/file/file.h"
-#include "backend/store/file/page.h"
+#include "backend/common/file.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 
 // ------------------------------- Declarations -------------------------------
 
-template <Trivial V, std::size_t page_size>
+template <typename P>
 class PagePoolListener;
 
 // A PagePool implements a fixed sized in-memory cache of pages of a file. It is
@@ -23,13 +22,13 @@ class PagePoolListener;
 // which it writes modifications to. Furthermore, listeners may be registered,
 // enabling the incjection of extra operations during page load and eviction
 // steps.
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size>
+template <typename P, template <typename> class F>
+requires File<F<P>>
 class PagePool {
  public:
-  using File = F<page_size>;
-  using Page = Page<V, page_size>;
-  using Listener = PagePoolListener<V, page_size>;
+  using Page = P;
+  using File = F<Page>;
+  using Listener = PagePoolListener<P>;
 
   // Creates a pool backed by a default instance of the pools File
   // implementation.
@@ -84,10 +83,10 @@ class PagePool {
 // A PagePoolListener provides an observer interface to the activities within a
 // PagePool. It is intended to be used for injecting operations on page load
 // and/or evict operations.
-template <Trivial V, std::size_t page_size>
+template <typename P>
 class PagePoolListener {
  public:
-  using Page = Page<V, page_size>;
+  using Page = P;
   virtual ~PagePoolListener() {}
   // Called after a page got loaded from the file.
   virtual void AfterLoad(PageId id, const Page& page) = 0;
@@ -97,24 +96,22 @@ class PagePoolListener {
 
 // ------------------------------- Definitions --------------------------------
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size> PagePool<V, F, page_size>::PagePool(
-    std::size_t pool_size)
+template <typename P, template <typename> class F>
+requires File<F<P>> PagePool<P, F>::PagePool(std::size_t pool_size)
     : PagePool(std::make_unique<File>(), pool_size) {}
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size> PagePool<V, F, page_size>::PagePool(
-    std::unique_ptr<File> file, std::size_t pool_size)
+template <typename P, template <typename> class F>
+requires File<F<P>> PagePool<P, F>::PagePool(std::unique_ptr<File> file,
+                                             std::size_t pool_size)
     : file_(std::move(file)) {
   pool_.resize(pool_size);
   dirty_.resize(pool_size);
   index_to_pages_.resize(pool_size);
 }
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size>
-typename PagePool<V, F, page_size>::Page& PagePool<V, F, page_size>::Get(
-    PageId id) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+typename PagePool<P, F>::Page& PagePool<P, F>::Get(PageId id) {
   // Try to locate the page in the pool first.
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
@@ -124,7 +121,7 @@ typename PagePool<V, F, page_size>::Page& PagePool<V, F, page_size>::Get(
   // The page is missing, so we need to load it from disk.
   auto idx = GetFreeSlot();
   Page& page = pool_[idx];
-  file_->LoadPage(id, page.AsRawData());
+  file_->LoadPage(id, page);
   pages_to_index_[id] = idx;
   index_to_pages_[idx] = id;
 
@@ -136,27 +133,25 @@ typename PagePool<V, F, page_size>::Page& PagePool<V, F, page_size>::Get(
   return page;
 }
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size>
-void PagePool<V, F, page_size>::MarkAsDirty(PageId id) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::MarkAsDirty(PageId id) {
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
     dirty_[pos->second] = true;
   }
 }
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size>
-void PagePool<V, F, page_size>::AddListener(
-    std::unique_ptr<Listener> listener) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::AddListener(std::unique_ptr<Listener> listener) {
   if (listener != nullptr) {
     listeners_.push_back(std::move(listener));
   }
 }
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size> std::size_t
-PagePool<V, F, page_size>::GetFreeSlot() {
+template <typename P, template <typename> class F>
+requires File<F<P>> std::size_t PagePool<P, F>::GetFreeSlot() {
   // TODO: make this more efficient.
 
   // Look for a free slot.
@@ -180,9 +175,9 @@ PagePool<V, F, page_size>::GetFreeSlot() {
   return trg;
 }
 
-template <Trivial V, template <std::size_t> class F, std::size_t page_size>
-requires File<F<page_size>, page_size>
-void PagePool<V, F, page_size>::EvictSlot(int pos) {
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::EvictSlot(int pos) {
   // Test whether slot is actually occupied.
   auto page_id = index_to_pages_[pos];
   if (page_id == std::nullopt) {
@@ -197,7 +192,7 @@ void PagePool<V, F, page_size>::EvictSlot(int pos) {
 
   // Write to file if dirty.
   if (is_dirty) {
-    file_->StorePage(*page_id, pool_[pos].AsRawData());
+    file_->StorePage(*page_id, pool_[pos]);
     dirty_[pos] = false;
   }
 
@@ -206,4 +201,4 @@ void PagePool<V, F, page_size>::EvictSlot(int pos) {
   index_to_pages_[pos] = std::nullopt;
 }
 
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

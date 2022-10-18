@@ -24,6 +24,7 @@ extern "C" {
 #define C_Nonce void*
 
 #define C_Hash void*
+#define C_AccountState void*
 
 // ------------------------------ Life Cycle ----------------------------------
 
@@ -40,6 +41,18 @@ C_State Carmen_CreateFileBasedState(const char* directory, int length);
 // Releases a state object, thereby causing its destruction. After releasing it,
 // no more operations may be applied on it.
 void Carmen_ReleaseState(C_State state);
+
+// ------------------------------- Accounts -----------------------------------
+
+// Creates a new account or resurrects a deleted account.
+void Carmen_CreateAccount(C_State state, C_Address addr);
+
+// Gets the current state of the given account.
+void Carmen_GetAccountState(C_State state, C_Address addr,
+                            C_AccountState out_state);
+
+// Deletes the given account.
+void Carmen_DeleteAccount(C_State state, C_Address addr);
 
 // -------------------------------- Balance -----------------------------------
 

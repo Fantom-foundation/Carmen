@@ -3,10 +3,11 @@
 #include <filesystem>
 #include <string_view>
 
+#include "backend/common/file.h"
 #include "backend/index/memory/index.h"
-#include "backend/store/file/file.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
+#include "common/account_state.h"
 #include "common/type.h"
 #include "state/state.h"
 
@@ -24,12 +25,16 @@ using InMemoryStore = backend::store::InMemoryStore<K, V>;
 
 template <typename K, typename V>
 using FileBasedStore =
-    backend::store::FileStore<K, V, backend::store::SingleFile, kPageSize>;
+    backend::store::FileStore<K, V, backend::SingleFile, kPageSize>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
  public:
   virtual ~WorldState() {}
+
+  virtual void CreateAccount(const Address&) = 0;
+  virtual AccountState GetAccountState(const Address&) = 0;
+  virtual void DeleteAccount(const Address&) = 0;
 
   virtual const Balance& GetBalance(const Address&) = 0;
   virtual void SetBalance(const Address&, const Balance&) = 0;
@@ -53,6 +58,18 @@ class WorldStateBase : public WorldState {
   WorldStateBase() = default;
 
   WorldStateBase(State state) : state_(std::move(state)) {}
+
+  void CreateAccount(const Address& addr) override {
+    state_.CreateAccount(addr);
+  }
+
+  AccountState GetAccountState(const Address& addr) override {
+    return state_.GetAccountState(addr);
+  }
+
+  void DeleteAccount(const Address& addr) override {
+    state_.DeleteAccount(addr);
+  }
 
   const Balance& GetBalance(const Address& address) override {
     return state_.GetBalance(address);
@@ -85,8 +102,10 @@ class WorldStateBase : public WorldState {
 class InMemoryWorldState
     : public WorldStateBase<State<InMemoryIndex, InMemoryStore>> {};
 
+template <Trivial V>
 auto Open(std::filesystem::path file) {
-  return std::make_unique<backend::store::SingleFile<kPageSize>>(file);
+  return std::make_unique<
+      backend::SingleFile<backend::ArrayPage<V, kPageSize>>>(file);
 }
 
 class FileBasedWorldState
@@ -94,9 +113,12 @@ class FileBasedWorldState
  public:
   FileBasedWorldState(std::filesystem::path directory)
       : WorldStateBase(State<InMemoryIndex, FileBasedStore>(
-            {}, {}, {}, {kHashBranchFactor, Open(directory / "balances.dat")},
-            {kHashBranchFactor, Open(directory / "nonces.dat")},
-            {kHashBranchFactor, Open(directory / "values.dat")})) {}
+            {}, {}, {},
+            {kHashBranchFactor, Open<Balance>(directory / "balances.dat")},
+            {kHashBranchFactor, Open<Nonce>(directory / "nonces.dat")},
+            {kHashBranchFactor, Open<Value>(directory / "values.dat")},
+            {kHashBranchFactor,
+             Open<AccountState>(directory / "account_states.dat")})) {}
 };
 
 }  // namespace
@@ -114,6 +136,26 @@ C_State Carmen_CreateFileBasedState(const char* directory, int length) {
 
 void Carmen_ReleaseState(C_State state) {
   delete reinterpret_cast<carmen::WorldState*>(state);
+}
+
+void Carmen_CreateAccount(C_State state, C_Address addr) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  s.CreateAccount(a);
+}
+
+void Carmen_GetAccountState(C_State state, C_Address addr,
+                            C_AccountState out_state) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto& r = *reinterpret_cast<carmen::AccountState*>(out_state);
+  r = s.GetAccountState(a);
+}
+
+void Carmen_DeleteAccount(C_State state, C_Address addr) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  s.DeleteAccount(a);
 }
 
 void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance) {

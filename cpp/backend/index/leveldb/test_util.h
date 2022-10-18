@@ -9,19 +9,14 @@
 namespace carmen::backend::index {
 // LevelDBKeySpaceAdapter is a wrapper around LevelDBKeySpace. It exposes
 // LevelDBKeySpace methods to be compatible with tests.
-template <Trivial K, std::integral I, char S>
+template <Trivial K, std::integral I>
 class LevelDBKeySpaceTestAdapter {
  public:
   using key_type [[maybe_unused]] = K;
   using value_type [[maybe_unused]] = I;
 
-  LevelDBKeySpaceTestAdapter()
-      : dir_{},
-        key_space_(LevelDBIndex(dir_.GetPath().string()).KeySpace<K, I>(S)) {}
-  LevelDBKeySpaceTestAdapter(LevelDBKeySpaceTestAdapter&&) noexcept {
-    // Fake move constructor to make test suite pass. Test move constructor
-    // in separate test over LevelDBKeySpace instead. (TempDir is not movable)
-  }
+  explicit LevelDBKeySpaceTestAdapter(LevelDBKeySpace<K, I> key_space)
+      : key_space_(std::move(key_space)) {}
 
   std::pair<I, bool> GetOrAdd(const K& key) {
     auto result = key_space_.GetOrAdd(key);
@@ -30,7 +25,7 @@ class LevelDBKeySpaceTestAdapter {
     return {0, false};
   }
 
-  std::optional<I> Get(const K& key) {
+  std::optional<I> Get(const K& key) const {
     auto result = key_space_.Get(key);
     if (result.ok()) return *result;
     return std::nullopt;
@@ -43,7 +38,6 @@ class LevelDBKeySpaceTestAdapter {
   }
 
  private:
-  TempDir dir_;
   LevelDBKeySpace<K, I> key_space_;
 };
 }  // namespace carmen::backend::index
