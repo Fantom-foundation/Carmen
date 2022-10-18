@@ -122,5 +122,5 @@ func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 
 // Close the store
 func (m *Store[I, V]) Close() error {
-	return nil // no-op - we are not keeping any files open
+	return m.file.Close()
 }
