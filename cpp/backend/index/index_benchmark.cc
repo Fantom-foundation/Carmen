@@ -6,6 +6,7 @@
 #include "backend/index/index_handler.h"
 #include "backend/index/memory/index.h"
 #include "backend/index/memory/linear_hash_index.h"
+#include "backend/index/leveldb/test_util.h"
 #include "benchmark/benchmark.h"
 
 namespace carmen::backend::index {
@@ -16,10 +17,11 @@ constexpr const std::size_t kPageSize = 1 << 12;  // = 4 KiB
 using InMemoryIndex = InMemoryIndex<Key, std::uint32_t>;
 using CachedInMemoryIndex = Cached<InMemoryIndex>;
 using InMemoryLinearHashIndex = InMemoryLinearHashIndex<Key, std::uint32_t>;
-using FileIndexInMemory =
-    FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
+using FileIndexInMemory = FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
 using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
+using LevelDBIndex = LevelDBKeySpaceTestAdapter<Key, std::uint32_t>;
+using CachedLevelDBIndex = Cached<LevelDBIndex>;
 
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index:index_benchmark
@@ -77,6 +79,16 @@ BENCHMARK(BM_Insert<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
+BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
+BENCHMARK(BM_Insert<IndexHandler<CachedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
 template <typename IndexHandler>
 void BM_SequentialRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
@@ -117,6 +129,16 @@ BENCHMARK(BM_SequentialRead<IndexHandler<FileIndexOnDisk>>)
     ->Arg(1 << 30);
 
 BENCHMARK(BM_SequentialRead<IndexHandler<CachedFileIndexOnDisk>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
+BENCHMARK(BM_SequentialRead<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
+BENCHMARK(BM_SequentialRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
@@ -167,6 +189,16 @@ BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
+BENCHMARK(BM_UniformRandomRead<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
+BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
 template <typename IndexHandler>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
@@ -209,6 +241,16 @@ BENCHMARK(BM_ExponentialRandomRead<IndexHandler<FileIndexOnDisk>>)
     ->Arg(1 << 30);
 
 BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24)
+    ->Arg(1 << 30);
+
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
@@ -266,6 +308,16 @@ BENCHMARK(BM_Hash<IndexHandler<FileIndexOnDisk>>)
                      // initial entries
 
 BENCHMARK(BM_Hash<IndexHandler<CachedFileIndexOnDisk>>)
+    ->Arg(1 << 10)
+    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
+                     // initial entries
+
+BENCHMARK(BM_Hash<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 10)
+    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
+                     // initial entries
+
+BENCHMARK(BM_Hash<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 10)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
