@@ -1,5 +1,6 @@
 #include "backend/index/memory/linear_hash_index.h"
 
+#include "backend/index/index_handler.h"
 #include "backend/index/test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -10,9 +11,10 @@ namespace {
 using ::testing::Optional;
 
 using TestIndex = InMemoryLinearHashIndex<int, int, 16>;
+using TestSuiteIndex = IndexHandler<InMemoryLinearHashIndex<int, int, 16>>;
 
 // Instantiates common index tests for the InMemory index type.
-INSTANTIATE_TYPED_TEST_SUITE_P(InMemory, IndexTest, TestIndex);
+INSTANTIATE_TYPED_TEST_SUITE_P(InMemory, IndexTest, TestSuiteIndex);
 
 TEST(LinearHashingIndexTest, LoadTest) {
   constexpr int N = 1000;

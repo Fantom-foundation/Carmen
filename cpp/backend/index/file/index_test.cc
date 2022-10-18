@@ -1,6 +1,7 @@
 #include "backend/index/file/index.h"
 
 #include "backend/common/file.h"
+#include "backend/index/index_handler.h"
 #include "backend/index/test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -9,9 +10,10 @@ namespace carmen::backend::index {
 namespace {
 
 using TestIndex = FileIndex<int, int, InMemoryFile, 128>;
+using TestSuiteIndex = IndexHandler<TestIndex>;
 
 // Instantiates common index tests for the FileIndex index type.
-INSTANTIATE_TYPED_TEST_SUITE_P(File, IndexTest, TestIndex);
+INSTANTIATE_TYPED_TEST_SUITE_P(File, IndexTest, TestSuiteIndex);
 
 TEST(FileIndexTest, FillTest) {
   constexpr int N = 1000;

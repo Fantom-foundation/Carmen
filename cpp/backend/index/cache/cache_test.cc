@@ -2,9 +2,9 @@
 
 #include <utility>
 
+#include "backend/index/index_handler.h"
 #include "backend/index/memory/index.h"
 #include "backend/index/test_util.h"
-#include "backend/index/index_handler.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {

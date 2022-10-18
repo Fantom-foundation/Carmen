@@ -1,8 +1,8 @@
 #include "backend/index/leveldb/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/test_util.h"
 #include "backend/index/index_handler.h"
+#include "backend/index/leveldb/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"

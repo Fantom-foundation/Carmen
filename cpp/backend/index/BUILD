@@ -48,6 +48,8 @@ cc_library(
         "//common:type",
         "//backend/index/leveldb:test_util",
         "//backend/index/leveldb:index",
+        "//backend/index/cache:cache",
+        "//backend/index/file:index",
         "//common:file_util",
     ],
     visibility = ["//backend/index:__subpackages__"],
