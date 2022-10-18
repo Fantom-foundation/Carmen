@@ -1,0 +1,46 @@
+package cache
+
+import (
+	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"testing"
+)
+
+var (
+	address1 = common.Address{0x01}
+	address2 = common.Address{0x02}
+	address3 = common.Address{0x03}
+	address4 = common.Address{0x04}
+)
+
+func TestIndexCacheFilled(t *testing.T) {
+	index := NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](common.AddressSerializer{}), 3)
+
+	_, _ = index.GetOrAdd(address1)
+	val, exists := index.cache.Get(address1)
+	if !exists || val != 0 {
+		t.Errorf("Value is not propagated in cahce")
+	}
+}
+
+func TestIndexCacheEviction(t *testing.T) {
+	index := NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](common.AddressSerializer{}), 3)
+
+	_, _ = index.GetOrAdd(address1)
+	_, _ = index.GetOrAdd(address2)
+	_, _ = index.GetOrAdd(address3)
+	_, _ = index.GetOrAdd(address4)
+
+	// fist item evicted from cache
+	_, exists := index.cache.Get(address1)
+	if exists {
+		t.Errorf("Value is not evicted from cahce")
+	}
+
+	// it returns value in cache
+	_ = index.Contains(address1)
+	val, exists := index.cache.Get(address1)
+	if !exists || val != 0 {
+		t.Errorf("Value is not in cahce")
+	}
+}
