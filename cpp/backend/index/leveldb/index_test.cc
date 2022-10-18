@@ -13,18 +13,13 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = LevelDBKeySpaceTestAdapter<int, int, 't'>;
+using TestIndex = LevelDBKeySpaceTestAdapter<int, int>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
 
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
   return LevelDBIndex(dir.GetPath().string()).KeySpace<int, int>('t');
-}
-
-TEST(LevelDBIndexTest, TypeProperties) {
-  using LevelDBKeySpace = LevelDBKeySpace<int, int>;
-  EXPECT_TRUE(std::is_move_constructible_v<LevelDBKeySpace>);
 }
 
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {

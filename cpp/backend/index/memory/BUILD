@@ -36,7 +36,7 @@ cc_test(
     name = "linear_hash_index_test",
     srcs = ["linear_hash_index_test.cc"],
     deps = [
-        ":linear_hash_index", 
+        ":linear_hash_index",
         "//backend/index",
         "//backend/index:test_util",
         "@com_google_googletest//:gtest_main",
@@ -55,7 +55,7 @@ cc_test(
     name = "linear_hash_map_test",
     srcs = ["linear_hash_map_test.cc"],
     deps = [
-        ":linear_hash_map", 
+        ":linear_hash_map",
         "@com_google_googletest//:gtest_main",
     ],
 )
