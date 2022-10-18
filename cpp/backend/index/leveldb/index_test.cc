@@ -1,7 +1,6 @@
 #include "backend/index/leveldb/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/index_handler.h"
 #include "backend/index/leveldb/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
@@ -14,7 +13,7 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = IndexHandler<LevelDBKeySpaceTestAdapter<int, int>>;
+using TestIndex = LevelDBKeySpaceTestAdapter<int, int>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);

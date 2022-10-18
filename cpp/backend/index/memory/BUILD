@@ -16,7 +16,6 @@ cc_test(
         ":index", 
         "//backend/index",
         "//backend/index:test_util",
-        "//backend/index:index_handler",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -40,7 +39,6 @@ cc_test(
         ":linear_hash_index",
         "//backend/index",
         "//backend/index:test_util",
-        "//backend/index:index_handler",
         "@com_google_googletest//:gtest_main",
     ],
 )
