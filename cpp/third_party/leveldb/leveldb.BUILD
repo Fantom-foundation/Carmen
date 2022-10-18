@@ -29,7 +29,8 @@ cc_library(
             "**/*_test.cc",
             "util/testutil.cc",
             "benchmarks/**",
-            "util/*windows*"
+            "util/*windows*",
+            "db/leveldbutil.cc"
         ],
     ),
     hdrs = glob(

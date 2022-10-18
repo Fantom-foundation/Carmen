@@ -4,6 +4,7 @@
 
 #include "backend/index/memory/index.h"
 #include "backend/index/test_util.h"
+#include "backend/index/index_handler.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {
@@ -12,7 +13,7 @@ namespace {
 using ::testing::Return;
 
 using TestIndex = InMemoryIndex<int, int>;
-using CachedIndex = Cached<TestIndex>;
+using CachedIndex = IndexHandler<Cached<TestIndex>>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(Cached, IndexTest, CachedIndex);

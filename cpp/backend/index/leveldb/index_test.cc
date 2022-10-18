@@ -2,6 +2,7 @@
 
 #include "absl/status/statusor.h"
 #include "backend/index/leveldb/test_util.h"
+#include "backend/index/index_handler.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"
@@ -13,18 +14,13 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = LevelDBKeySpaceTestAdapter<int, int, 't'>;
+using TestIndex = IndexHandler<LevelDBKeySpaceTestAdapter<int, int>>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
 
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
   return LevelDBIndex(dir.GetPath().string()).KeySpace<int, int>('t');
-}
-
-TEST(LevelDBIndexTest, TypeProperties) {
-  using LevelDBKeySpace = LevelDBKeySpace<int, int>;
-  EXPECT_TRUE(std::is_move_constructible_v<LevelDBKeySpace>);
 }
 
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {

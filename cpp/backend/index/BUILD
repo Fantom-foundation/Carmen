@@ -45,7 +45,10 @@ cc_library(
     deps = [
         ":index",
         "//common:type",
+        "//backend/index/leveldb:test_util",
+        "//backend/index/leveldb:index",
     ],
+    visibility = ["//backend/index:__subpackages__"],
     testonly = True,
 )
 
