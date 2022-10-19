@@ -34,7 +34,7 @@ jobs:
 
     - name: Build C++ libraries
       working-directory: ./go/lib
-      run: ./build_libstate.sh
+      run: ./build_libcarmen.sh
 
     - name: Build
       working-directory: ./go

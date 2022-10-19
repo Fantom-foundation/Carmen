@@ -11,7 +11,7 @@
 #
 set -e
 cd ../../cpp
-bazel build -c opt //state:libstate.so
+bazel build -c opt //state:libcarmen.so
 mkdir -p ../go/lib
-rm -f ../go/lib/libstate.so
-cp ./bazel-bin/state/libstate.so ../go/lib
+rm -f ../go/lib/libcarmen.so
+cp ./bazel-bin/state/libcarmen.so ../go/lib

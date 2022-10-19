@@ -1,10 +1,10 @@
 package state
 
-//go:generate sh ../lib/build_libstate.sh
+//go:generate sh ../lib/build_libcarmen.sh
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../cpp
-#cgo LDFLAGS: -L${SRCDIR}/../lib -lstate
+#cgo LDFLAGS: -L${SRCDIR}/../lib -lcarmen
 #cgo LDFLAGS: -Wl,-rpath,${SRCDIR}/../lib
 #include <stdlib.h>
 #include "state/c_state.h"

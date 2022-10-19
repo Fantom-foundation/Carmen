@@ -44,7 +44,7 @@ cc_test(
 )
 
 cc_binary(
-  name = "libstate.so",
+  name = "libcarmen.so",
   linkshared = True,
   deps = [
      ":c_state",
