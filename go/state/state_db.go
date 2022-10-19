@@ -7,8 +7,16 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-// This interface serves as a placeholder until the Aida interface is ready.
+// StateDB serves as the public interface defintion of a Carmen StateDB.
 type StateDB interface {
+	// Account management.
+	CreateAccount(common.Address)
+	Exist(common.Address) bool
+	Empty(common.Address) bool
+
+	Suicide(common.Address)
+	HasSuicided(common.Address) bool
+
 	// Balance
 	GetBalance(common.Address) *big.Int
 	AddBalance(common.Address, *big.Int)
@@ -30,10 +38,13 @@ type StateDB interface {
 	AbortTransaction()
 }
 
-// The Carmen implementation of the StateDB interface.
+// stateDB is the internal implementation of the StateDB interface.
 type stateDB struct {
 	// The underlying state data is read/written to.
 	state State
+
+	// A transaction local cache for account states to avoid double-fetches and support rollbacks.
+	accounts map[common.Address]*accountState
 
 	// A transaction local cache of balances to avoid double-fetches and support rollbacks.
 	balances map[common.Address]*balanceValue
@@ -48,7 +59,15 @@ type stateDB struct {
 	undo []func()
 }
 
-// Maintains a balance during a transaction.
+// accountState maintains the state of an account during a transaction.
+type accountState struct {
+	// The committed account state, missing if never fetched.
+	original *common.AccountState
+	// The current account state visible to the state DB users.
+	current common.AccountState
+}
+
+// balanceVale maintains a balance during a transaction.
 type balanceValue struct {
 	// The commited balance of an account, missing if never fetched.
 	original *big.Int
@@ -56,7 +75,7 @@ type balanceValue struct {
 	current big.Int
 }
 
-// Maintains a nonce during a transaction.
+// nonceValue maintains a nonce during a transaction.
 type nonceValue struct {
 	// The commited nonce of an account, missing if never fetched.
 	original *uint64
@@ -64,13 +83,13 @@ type nonceValue struct {
 	current uint64
 }
 
-// A slot ID identifies a storage location.
+// slotId identifies a storage location.
 type slotId struct {
 	addr common.Address
 	key  common.Key
 }
 
-// Maintains the value of a slot.
+// slotValue maintains the value of a slot.
 type slotValue struct {
 	// The committed value in the DB, missing if never fetched.
 	original *common.Value
@@ -89,11 +108,75 @@ func CreateStateDB() (StateDB, error) {
 func CreateStateDBUsing(state State) StateDB {
 	return &stateDB{
 		state:    state,
+		accounts: map[common.Address]*accountState{},
 		balances: map[common.Address]*balanceValue{},
 		nonces:   map[common.Address]*nonceValue{},
 		data:     map[slotId]*slotValue{},
 		undo:     make([]func(), 0, 100),
 	}
+}
+
+func (s *stateDB) SetAccountState(addr common.Address, state common.AccountState) {
+	if val, exists := s.accounts[addr]; exists {
+		if val.current == state {
+			return
+		}
+		old_state := val.current
+		val.current = state
+		s.undo = append(s.undo, func() {
+			val.current = old_state
+		})
+	} else {
+		val = &accountState{
+			original: nil,
+			current:  state,
+		}
+		s.accounts[addr] = val
+		s.undo = append(s.undo, func() {
+			if val.original != nil {
+				val.current = *val.original
+			} else {
+				delete(s.accounts, addr)
+			}
+		})
+	}
+}
+
+func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
+	if val, exists := s.accounts[addr]; exists {
+		return val.current
+	}
+	state, err := s.state.GetAccountState(addr)
+	if err != nil {
+		panic(fmt.Errorf("failed to get account state for address %v: %v", addr, err))
+	}
+	s.accounts[addr] = &accountState{
+		original: &state,
+		current:  state,
+	}
+	return state
+}
+
+func (s *stateDB) CreateAccount(addr common.Address) {
+	s.SetAccountState(addr, common.Exists)
+}
+
+func (s *stateDB) Exist(addr common.Address) bool {
+	return s.GetAccountState(addr) == common.Exists
+}
+
+func (s *stateDB) Suicide(addr common.Address) {
+	s.SetAccountState(addr, common.Deleted)
+}
+
+func (s *stateDB) HasSuicided(addr common.Address) bool {
+	return s.GetAccountState(addr) == common.Deleted
+}
+
+func (s *stateDB) Empty(addr common.Address) bool {
+	// Defined as balance == nonce == code == 0
+	// TODO: check for empty code once available.
+	return s.GetBalance(addr).Sign() == 0 && s.GetNonce(addr) == 0
 }
 
 func clone(val *big.Int) *big.Int {
@@ -104,8 +187,7 @@ func clone(val *big.Int) *big.Int {
 
 func (s *stateDB) GetBalance(addr common.Address) *big.Int {
 	// Check cache first.
-	val, exists := s.balances[addr]
-	if exists {
+	if val, exists := s.balances[addr]; exists {
 		return clone(&val.current) // Do not hand out a pointer to the internal copy!
 	}
 	// Since the value is not present, we need to fetch it from the store.
@@ -159,8 +241,7 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 
 func (s *stateDB) GetNonce(addr common.Address) uint64 {
 	// Check cache first.
-	val, exists := s.nonces[addr]
-	if exists {
+	if val, exists := s.nonces[addr]; exists {
 		return val.current
 	}
 
@@ -178,8 +259,7 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 }
 
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
-	val, exists := s.nonces[addr]
-	if exists {
+	if val, exists := s.nonces[addr]; exists {
 		if val.current != nonce {
 			old_value := val.current
 			val.current = nonce
@@ -226,9 +306,7 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 	// Check whether the slot is already cached/modified.
-	sid := slotId{addr, key}
-	val, exists := s.data[sid]
-	if exists {
+	if val, exists := s.data[slotId{addr, key}]; exists {
 		return val.current
 	}
 	// Fetch missing slot values (will also populate the cache).
@@ -237,8 +315,7 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
 	sid := slotId{addr, key}
-	entry, exists := s.data[sid]
-	if exists {
+	if entry, exists := s.data[sid]; exists {
 		if entry.current != value {
 			old_value := entry.current
 			entry.current = value
@@ -275,6 +352,23 @@ func (s *stateDB) RevertToSnapshot(id int) {
 
 func (s *stateDB) EndTransaction() {
 	// Write all changes to the store
+	for addr, value := range s.accounts {
+		if value.original == nil || *value.original != value.current {
+			if value.current == common.Exists {
+				err := s.state.CreateAccount(addr)
+				if err != nil {
+					panic(fmt.Sprintf("Failed to create account: %v", err))
+				}
+			} else if value.current == common.Deleted {
+				err := s.state.DeleteAccount(addr)
+				if err != nil {
+					panic(fmt.Sprintf("Failed to delete account: %v", err))
+				}
+			} else {
+				panic(fmt.Sprintf("Unknown account state: %v", value.current))
+			}
+		}
+	}
 	for addr, value := range s.balances {
 		if value.original == nil || value.original.Cmp(&value.current) != 0 {
 			new_balance, err := common.ToBalance(&value.current)
@@ -302,6 +396,9 @@ func (s *stateDB) AbortTransaction() {
 }
 
 func (s *stateDB) ResetTransaction() {
-	s.data = map[slotId]*slotValue{}
+	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
+	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
+	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
+	s.data = make(map[slotId]*slotValue, len(s.data))
 	s.undo = s.undo[0:0]
 }

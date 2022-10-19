@@ -55,9 +55,9 @@ const (
 	// Unknown is the state of an unknown account (=default value).
 	Unknown AccountState = 0
 	// Exists is the state of an open account.
-	Exists = 1
+	Exists AccountState = 1
 	// Deleted is the state of a closed account.
-	Deleted = 2
+	Deleted AccountState = 2
 )
 
 func (s AccountState) String() string {
