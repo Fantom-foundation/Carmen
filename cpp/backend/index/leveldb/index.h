@@ -22,7 +22,7 @@ std::string ToDBKey(char key_space, const K& key) {
   std::array<char, sizeof(key) + 1> buffer;
   buffer[0] = key_space;
   memcpy(buffer.data() + 1, &key, sizeof(key));
-  return std::string(buffer.data(), buffer.size());
+  return {buffer.data(), buffer.size()};
 }
 
 // Converts given value into leveldb value.
