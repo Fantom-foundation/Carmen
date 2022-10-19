@@ -164,6 +164,58 @@ func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySeri
 	return indexWrapper[K, I]{keySerializer, indexSerializer, idx}
 }
 
+// createEachMultiLevelDbIndex creates many instances of the index with one shared LevelDB instance
+func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
+
+	// database instance shared by all index instances
+	db, err := leveldb.OpenFile(b.TempDir(), nil)
+	if err != nil {
+		b.Errorf("failed to init leveldb; %s", err)
+	}
+
+	b.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	tableSpaces := []common.TableSpace{common.BalanceKey, common.NonceKey, common.SlotKey, common.ValueKey}
+	indexArray := index.NewIndexArray[K, I]()
+	for _, tableSpace := range tableSpaces {
+		if idx, err := ldb.NewIndex[K, I](db, tableSpace, keySerializer, indexSerializer); err != nil {
+			b.Fatalf("failed to init leveldb index; %s", err)
+		} else {
+			indexArray.Add(idx)
+		}
+	}
+
+	return indexWrapper[K, I]{keySerializer, indexSerializer, indexArray}
+}
+
+// createEachMultiLevelDbIndex creates many instances of the index with each having its LevelDB instance
+func createEachMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
+	tableSpaces := []common.TableSpace{common.BalanceKey, common.NonceKey, common.SlotKey, common.ValueKey}
+	indexArray := index.NewIndexArray[K, I]()
+	for _, tableSpace := range tableSpaces {
+
+		// new database instance for every new index
+		db, err := leveldb.OpenFile(b.TempDir(), nil)
+		if err != nil {
+			b.Errorf("failed to init leveldb; %s", err)
+		}
+
+		b.Cleanup(func() {
+			_ = db.Close()
+		})
+
+		if idx, err := ldb.NewIndex[K, I](db, tableSpace, keySerializer, indexSerializer); err != nil {
+			b.Fatalf("failed to init leveldb index; %s", err)
+		} else {
+			indexArray.Add(idx)
+		}
+	}
+
+	return indexWrapper[K, I]{keySerializer, indexSerializer, indexArray}
+}
+
 // createCachedLevelDbIndex create instance of LevelDB index with the cache
 func createTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B, writeBufferSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
 	opts := opt.Options{WriteBuffer: writeBufferSize}
@@ -230,12 +282,16 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 
 	memoryIndexFunc := func() indexWrapper[K, I] { return createMemoryIndex[K, I](keySerializer, indexSerializer) }
 	levelDbIndexFunc := func() indexWrapper[K, I] { return createLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
+	sharedLevelDbIndexFunc := func() indexWrapper[K, I] {
+		return createSharedMultiLevelDbIndex[K, I](b, keySerializer, indexSerializer)
+	}
+	eachLevelDbIndexFunc := func() indexWrapper[K, I] { return createEachMultiLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
 	transactLevelDbIndexFunc := func() indexWrapper[K, I] { return createTransactLevelDbIndex[K, I](b, transactWriteBuffer, keySerializer, indexSerializer) }
 	cachedLevelDbIndexFunc := func() indexWrapper[K, I] {
 		return createCachedLevelDbIndex[K, I](b, cacheCapacity, keySerializer, indexSerializer)
 	}
 
-	initialSizes := []uint32{0x1p20, 0x1p24, 0x1p30}
+	initialSizes := []uint32{1 << 20, 1 << 24, 1 << 30}
 	updateSizes := []uint32{100}
 
 	//initialSizes := []uint32{1 << 5, 1 << 10} // debug Ns
@@ -244,6 +300,8 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 	return []testConfig[K, I]{
 		{"Memory", initialSizes, updateSizes, memoryIndexFunc},
 		{"LevelDb", initialSizes, updateSizes, levelDbIndexFunc},
+		{"SharedLevelDb", initialSizes, updateSizes, sharedLevelDbIndexFunc},
+		{"EachLevelDb", initialSizes, updateSizes, eachLevelDbIndexFunc},
 		{"TransactLevelDb", initialSizes, updateSizes, transactLevelDbIndexFunc},
 		{"CachedLevelDb", initialSizes, updateSizes, cachedLevelDbIndexFunc},
 	}
