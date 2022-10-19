@@ -1,36 +1,34 @@
 package eviction
 
-import "github.com/Fantom-foundation/Carmen/go/common"
-
-type RandomEvictionPolicy struct {
-	clean common.FlatSet
-	dirty common.FlatSet
+type RandomPolicy struct {
+	clean FlatSet
+	dirty FlatSet
 }
 
-func NewRandomEvictionPolicy(capacity int) Policy {
-	return &RandomEvictionPolicy{
-		clean: common.NewFlatSet(capacity),
-		dirty: common.NewFlatSet(capacity),
+func NewRandomPolicy(capacity int) Policy {
+	return &RandomPolicy{
+		clean: NewFlatSet(capacity),
+		dirty: NewFlatSet(capacity),
 	}
 }
 
-func (re *RandomEvictionPolicy) Read(pageId int) {
+func (re *RandomPolicy) Read(pageId int) {
 	if !re.dirty.Contains(pageId) {
 		re.clean.Add(pageId)
 	}
 }
 
-func (re *RandomEvictionPolicy) Written(pageId int) {
+func (re *RandomPolicy) Written(pageId int) {
 	re.clean.Remove(pageId)
 	re.dirty.Add(pageId)
 }
 
-func (re *RandomEvictionPolicy) Removed(pageId int) {
+func (re *RandomPolicy) Removed(pageId int) {
 	re.clean.Remove(pageId)
 	re.dirty.Remove(pageId)
 }
 
-func (re *RandomEvictionPolicy) GetPageToEvict() int {
+func (re *RandomPolicy) GetPageToEvict() int {
 	if !re.clean.IsEmpty() {
 		return re.clean.PickRandom()
 	}

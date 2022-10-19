@@ -3,7 +3,7 @@ package eviction
 import "testing"
 
 func TestRandomEvictionPolicy(t *testing.T) {
-	p := NewRandomEvictionPolicy(5)
+	p := NewRandomPolicy(5)
 	if p.GetPageToEvict() != -1 {
 		t.Errorf("initial page to evict not nil")
 	}

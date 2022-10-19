@@ -3,7 +3,7 @@ package eviction
 import "testing"
 
 func TestLruInOrderReadsAreEvictedInOrder(t *testing.T) {
-	p := NewLeastRecentlyUsedEvictionPolicy(5)
+	p := NewLRUPolicy(5)
 	if p.GetPageToEvict() != -1 {
 		t.Errorf("initial page to evict not nil")
 	}
@@ -22,7 +22,7 @@ func TestLruInOrderReadsAreEvictedInOrder(t *testing.T) {
 }
 
 func TestLruLeastRecentlyAreEvicted(t *testing.T) {
-	p := NewLeastRecentlyUsedEvictionPolicy(5)
+	p := NewLRUPolicy(5)
 	if p.GetPageToEvict() != -1 {
 		t.Errorf("not evicted correctly")
 	}
@@ -68,7 +68,7 @@ func TestLruLeastRecentlyAreEvicted(t *testing.T) {
 }
 
 func TestLruLastElementCanBeRemoved(t *testing.T) {
-	p := NewLeastRecentlyUsedEvictionPolicy(5)
+	p := NewLRUPolicy(5)
 	p.Read(1)
 	p.Read(2)
 	p.Read(3)
@@ -88,7 +88,7 @@ func TestLruLastElementCanBeRemoved(t *testing.T) {
 }
 
 func TestLruFirstElementCanBeRemoved(t *testing.T) {
-	p := NewLeastRecentlyUsedEvictionPolicy(5)
+	p := NewLRUPolicy(5)
 	p.Read(1)
 	p.Read(2)
 	p.Read(3)
@@ -108,7 +108,7 @@ func TestLruFirstElementCanBeRemoved(t *testing.T) {
 }
 
 func TestLruMiddleElementCanBeRemoved(t *testing.T) {
-	p := NewLeastRecentlyUsedEvictionPolicy(5)
+	p := NewLRUPolicy(5)
 	p.Read(1)
 	p.Read(2)
 	p.Read(3)

@@ -1,4 +1,4 @@
-package common
+package eviction
 
 import (
 	"reflect"

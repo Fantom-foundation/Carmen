@@ -37,9 +37,9 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	if err != nil {
 		t.Fatalf("failed to init file store; %s", err)
 	}
-	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, BranchingFactor, PoolSize, eviction.NewLeastRecentlyUsedEvictionPolicy(PoolSize))
+	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, BranchingFactor, PoolSize, eviction.NewLRUPolicy(PoolSize))
 	if err != nil {
-		t.Fatalf("failed to init file store; %s", err)
+		t.Fatalf("failed to init paged file store; %s", err)
 	}
 	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
 	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, treeFac, defaultItem, PageSize)

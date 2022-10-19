@@ -1,29 +1,29 @@
 package eviction
 
-type LeastRecentlyUsedEvictionPolicy struct {
-	entries map[int]*LruEntry
-	head    *LruEntry
-	tail    *LruEntry
+type LRUPolicy struct {
+	entries map[int]*lruEntry
+	head    *lruEntry
+	tail    *lruEntry
 }
 
-func NewLeastRecentlyUsedEvictionPolicy(capacity int) Policy {
-	return &LeastRecentlyUsedEvictionPolicy{
-		entries: make(map[int]*LruEntry, capacity),
+func NewLRUPolicy(capacity int) Policy {
+	return &LRUPolicy{
+		entries: make(map[int]*lruEntry, capacity),
 		head:    nil,
 		tail:    nil,
 	}
 }
 
-type LruEntry struct {
+type lruEntry struct {
 	pageId int
-	succ   *LruEntry
-	pred   *LruEntry
+	succ   *lruEntry
+	pred   *lruEntry
 }
 
-func (lru *LeastRecentlyUsedEvictionPolicy) Read(pageId int) {
+func (lru *LRUPolicy) Read(pageId int) {
 	entry, exist := lru.entries[pageId]
 	if !exist {
-		entry = &LruEntry{
+		entry = &lruEntry{
 			pageId: pageId,
 		}
 		lru.entries[pageId] = entry
@@ -52,12 +52,12 @@ func (lru *LeastRecentlyUsedEvictionPolicy) Read(pageId int) {
 	lru.head = entry
 }
 
-func (lru *LeastRecentlyUsedEvictionPolicy) Written(pageId int) {
+func (lru *LRUPolicy) Written(pageId int) {
 	// this policy does not distinguish between reads and writes
 	lru.Read(pageId)
 }
 
-func (lru *LeastRecentlyUsedEvictionPolicy) Removed(pageId int) {
+func (lru *LRUPolicy) Removed(pageId int) {
 	entry, exist := lru.entries[pageId]
 	if exist {
 		if entry.pred != nil {
@@ -76,7 +76,7 @@ func (lru *LeastRecentlyUsedEvictionPolicy) Removed(pageId int) {
 	}
 }
 
-func (lru *LeastRecentlyUsedEvictionPolicy) GetPageToEvict() int {
+func (lru *LRUPolicy) GetPageToEvict() int {
 	if lru.tail != nil {
 		return lru.tail.pageId
 	}
