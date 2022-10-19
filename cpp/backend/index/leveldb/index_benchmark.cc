@@ -8,9 +8,9 @@ namespace {
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index/leveldb:index_benchmark
 
-template <typename type>
+template <Trivial Type>
 void BM_ToDBKey(benchmark::State& state) {
-  type var = type{};
+  Type var = Type{};
   for (auto _ : state) {
     auto res = internal::ToDBKey('t', var);
     benchmark::DoNotOptimize(res);
