@@ -82,13 +82,11 @@ BENCHMARK(BM_Insert<IndexHandler<CachedFileIndexOnDisk>>)
 
 BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 BENCHMARK(BM_Insert<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 template <typename IndexHandler>
 void BM_SequentialRead(benchmark::State& state) {
@@ -136,13 +134,11 @@ BENCHMARK(BM_SequentialRead<IndexHandler<CachedFileIndexOnDisk>>)
 
 BENCHMARK(BM_SequentialRead<IndexHandler<LevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 BENCHMARK(BM_SequentialRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 template <typename IndexHandler>
 void BM_UniformRandomRead(benchmark::State& state) {
@@ -192,13 +188,11 @@ BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
 
 BENCHMARK(BM_UniformRandomRead<IndexHandler<LevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 template <typename IndexHandler>
 void BM_ExponentialRandomRead(benchmark::State& state) {
@@ -248,13 +242,11 @@ BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
 
 BENCHMARK(BM_ExponentialRandomRead<IndexHandler<LevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
+    ->Arg(1 << 24);
 
 template <typename IndexHandler>
 void BM_Hash(benchmark::State& state) {
