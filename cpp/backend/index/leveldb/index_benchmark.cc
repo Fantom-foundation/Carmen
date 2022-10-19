@@ -9,7 +9,8 @@ namespace {
 
 void BM_ToDBKey(benchmark::State& state) {
   for (auto _ : state) {
-    internal::ToDBKey('t', 1);
+    auto res = internal::ToDBKey('t', 1);
+    benchmark::DoNotOptimize(res);
   }
 }
 
