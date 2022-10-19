@@ -11,45 +11,53 @@ import (
 // It retains an in-memory copy of the binary data stored in the corresponding page file.
 // Furthermore, it provides index based access to the contained data.
 type Page struct {
-	Data  []byte
-	Dirty bool
+	data  []byte
+	dirty bool
 }
 
-func LoadPage(file *os.File, pageId int, size int64) (*Page, error) {
-	bytes := make([]byte, size)
+func LoadPage(file *os.File, pageId int, pageSize int64) (*Page, error) {
+	buffer := make([]byte, pageSize)
 
-	_, err := file.Seek(int64(pageId)*size, io.SeekStart)
+	_, err := file.Seek(int64(pageId)*pageSize, io.SeekStart)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = file.Read(bytes)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, err // the page does not exist in the data file yet
+	_, err = file.Read(buffer)
+	if err != nil && !errors.Is(err, io.EOF) { // EOF = the page does not exist in the data file yet
+		return nil, err
 	}
 
 	return &Page{
-		Data:  bytes,
-		Dirty: false,
+		data:  buffer,
+		dirty: false,
 	}, nil
 }
 
-func (page *Page) Set(position int64, bytes []byte) {
-	copy(page.Data[position:position+int64(len(bytes))], bytes)
-	page.Dirty = true
+func (p *Page) IsDirty() bool {
+	return p.dirty
 }
 
-func (page *Page) Get(position int64, size int64) []byte {
-	return page.Data[position : position+size]
+func (p *Page) GetContent() []byte {
+	return p.data
 }
 
-func (page *Page) Store(file *os.File, pageId int, size int64) error {
+func (p *Page) Set(position int64, bytes []byte) {
+	copy(p.data[position:position+int64(len(bytes))], bytes)
+	p.dirty = true
+}
+
+func (p *Page) Get(position int64, size int64) []byte {
+	return p.data[position : position+size]
+}
+
+func (p *Page) Store(file *os.File, pageId int, size int64) error {
 	_, err := file.Seek(int64(pageId)*size, io.SeekStart)
 	if err != nil {
 		return err
 	}
 
-	_, err = file.Write(page.Data)
+	_, err = file.Write(p.data)
 	if err != nil {
 		return fmt.Errorf("failed to write the page into file; %s", err)
 	}

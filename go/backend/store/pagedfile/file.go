@@ -91,7 +91,7 @@ func (m *Store[I, V]) evictPage(pageId int) error {
 	if !exists {
 		return fmt.Errorf("page to evict is missing in the pool")
 	}
-	if page.Dirty {
+	if page.IsDirty() {
 		err := page.Store(m.file, pageId, m.pageSize)
 		if err != nil {
 			return err
@@ -134,14 +134,14 @@ func (m *Store[I, V]) GetPage(pageId int) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load store page %d; %s", pageId, err)
 	}
-	return page.Data, nil
+	return page.GetContent(), nil
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	// mark dirty pages as updated in the hashtree
 	for pageId, page := range m.pagesPool {
-		if page.Dirty {
+		if page.IsDirty() {
 			m.hashTree.MarkUpdated(pageId)
 		}
 	}

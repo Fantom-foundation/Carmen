@@ -3,8 +3,10 @@ package eviction
 import "math/rand"
 
 // FlatSet provides a set of unique entries collection, with possibility to pick a random entry.
+// The set use a map to ensure the values uniqueness, but it combines it with a slice,
+// to allow index-based access to entries, which is necessary for the random entry picking.
 type FlatSet struct {
-	positions map[int]int
+	positions map[int]int // maps items to their positions in the entries slice
 	entries   []int
 }
 
