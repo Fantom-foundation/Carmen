@@ -43,6 +43,7 @@ cc_binary(
     srcs = ["index_benchmark.cc"],
     deps = [
         "//backend/index/leveldb:index",
+        "//common:type",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
