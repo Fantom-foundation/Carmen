@@ -19,11 +19,10 @@ class LevelDBIndexImpl;
 // Converts given key space and key into leveldb key.
 template <Trivial K>
 std::string ToDBKey(char key_space, const K& key) {
-  std::string result;
-  result.reserve(sizeof(key) + sizeof(key_space));
-  result.append(sizeof(key_space), key_space);
-  result.append(reinterpret_cast<const char*>(&key), sizeof(key));
-  return result;
+  std::array<char, sizeof(key) + 1> buffer;
+  buffer[0] = key_space;
+  memcpy(buffer.data() + 1, &key, sizeof(key));
+  return std::string(buffer.data(), buffer.size());
 }
 
 // Converts given value into leveldb value.
