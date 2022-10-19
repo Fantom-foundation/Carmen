@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestFileStoreImplements(t *testing.T) {
+func TestPagedFileStoreImplements(t *testing.T) {
 	var s Store[uint64, common.Value]
 	var _ store.Store[uint64, common.Value] = &s
 	var _ io.Closer = &s
@@ -20,7 +20,7 @@ var (
 	C = common.Value{0xCC}
 )
 
-func TestStoringIntoFileStore(t *testing.T) {
+func TestStoringIntoPagedFileStore(t *testing.T) {
 	path := t.TempDir()
 	st := createStore(t, path)
 
@@ -82,7 +82,7 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 	}
 }
 
-func TestHashingInFileStore(t *testing.T) {
+func TestHashingInPagedFileStore(t *testing.T) {
 	path := t.TempDir()
 	st := createStore(t, path)
 
@@ -102,6 +102,28 @@ func TestHashingInFileStore(t *testing.T) {
 	}
 	if initialHast == newHash {
 		t.Errorf("setting into the store have not changed the hash %x %x", initialHast, newHash)
+	}
+}
+
+func TestStoringManyItemsIntoPagedFileStore(t *testing.T) {
+	path := t.TempDir()
+	st := createStore(t, path)
+
+	for i := uint32(0); i < 1000; i++ {
+		err := st.Set(i, common.Value{0x12, byte(i)})
+		if err != nil {
+			t.Fatalf("failed to set item %d; %s", i, err)
+		}
+	}
+
+	for i := uint32(0); i < 1000; i++ {
+		value, err := st.Get(i)
+		if err != nil {
+			t.Fatalf("failed to get item %d; %s", i, err)
+		}
+		if value != (common.Value{0x12, byte(i)}) {
+			t.Errorf("reading item %d returns unexpected value", i)
+		}
 	}
 }
 

@@ -139,11 +139,10 @@ func (m *Store[I, V]) GetPage(pageId int) ([]byte, error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
-	// evict the whole pages pool - hash pages into the hashTree
-	for pageId, _ := range m.pagesPool {
-		err := m.evictPage(pageId)
-		if err != nil {
-			return common.Hash{}, err
+	// mark dirty pages as updated in the hashtree
+	for pageId, page := range m.pagesPool {
+		if page.Dirty {
+			m.hashTree.MarkUpdated(pageId)
 		}
 	}
 	// get the hash
@@ -152,9 +151,18 @@ func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 
 // Flush all changes to the disk
 func (m *Store[I, V]) Flush() (err error) {
-	if _, err = m.hashTree.HashRoot(); err != nil {
+	// update hashes of changed pages in the hashtree
+	if _, err = m.GetStateHash(); err != nil {
 		return err
 	}
+	// evict the whole pages pool - hash pages into the hashTree
+	for pageId, _ := range m.pagesPool {
+		err = m.evictPage(pageId)
+		if err != nil {
+			return err
+		}
+	}
+	// flush file changes to disk
 	if err = m.file.Sync(); err != nil {
 		return err
 	}
