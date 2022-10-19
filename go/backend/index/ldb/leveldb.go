@@ -33,7 +33,8 @@ func NewIndex[K comparable, I common.Identifier](
 
 	// read the last hash from the database
 	var hash []byte
-	if hash, err = db.Get(table.AppendKeyStr(HashKey), nil); err != nil {
+	hashDbKey := table.StrToDBKey(HashKey).ToBytes()
+	if hash, err = db.Get(hashDbKey, nil); err != nil {
 		if err == errors.ErrNotFound {
 			hash = []byte{}
 		} else {
@@ -43,7 +44,8 @@ func NewIndex[K comparable, I common.Identifier](
 
 	// read the last index from the database
 	var last []byte
-	if last, err = db.Get(table.AppendKeyStr(LastIndexKey), nil); err != nil {
+	lastDbKey := table.StrToDBKey(LastIndexKey).ToBytes()
+	if last, err = db.Get(lastDbKey, nil); err != nil {
 		if err == errors.ErrNotFound {
 			last = make([]byte, 4)
 		} else {
@@ -69,7 +71,8 @@ func NewIndex[K comparable, I common.Identifier](
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
-	if val, err = m.db.Get(m.convertKey(key), nil); err != nil {
+	dbKey := m.convertKey(key).ToBytes()
+	if val, err = m.db.Get(dbKey, nil); err != nil {
 		// if the error is actually a non-existing key, we assign a new index
 		if err == errors.ErrNotFound {
 
@@ -80,9 +83,10 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 			m.lastIndex = m.lastIndex + 1
 			nextIdxArr := m.indexSerializer.ToBytes(m.lastIndex)
 
+			lastIndexDbKey := m.convertKeyStr(LastIndexKey).ToBytes()
 			batch := new(leveldb.Batch)
-			batch.Put(m.convertKeyStr(LastIndexKey), nextIdxArr)
-			batch.Put(m.convertKey(key), idxArr)
+			batch.Put(lastIndexDbKey, nextIdxArr)
+			batch.Put(dbKey, idxArr)
 			if err = m.db.Write(batch, nil); err != nil {
 				return
 			}
@@ -100,7 +104,8 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists
 func (m *Index[K, I]) Get(key K) (idx I, err error) {
 	var val []byte
-	if val, err = m.db.Get(m.convertKey(key), nil); err != nil {
+	dbKey := m.convertKey(key).ToBytes()
+	if val, err = m.db.Get(dbKey, nil); err != nil {
 		if err == errors.ErrNotFound {
 			err = index.ErrNotFound
 		}
@@ -113,7 +118,8 @@ func (m *Index[K, I]) Get(key K) (idx I, err error) {
 
 // Contains returns whether the key exists in the mapping or not.
 func (m *Index[K, I]) Contains(key K) bool {
-	exists, _ := m.db.Has(m.convertKey(key), nil)
+	dbKey := m.convertKey(key).ToBytes()
+	exists, _ := m.db.Has(dbKey, nil)
 	return exists
 }
 
@@ -128,19 +134,21 @@ func (m *Index[K, I]) Close() error {
 	if err != nil {
 		return err
 	}
-	return m.db.Put(m.convertKeyStr(HashKey), m.hashSerializer.ToBytes(hash), nil)
+
+	dbKey := m.convertKeyStr(HashKey).ToBytes()
+	return m.db.Put(dbKey, m.hashSerializer.ToBytes(hash), nil)
 }
 
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Index[K, I]) convertKey(key K) []byte {
-	return m.table.AppendKey(m.keySerializer.ToBytes(key))
+func (m *Index[K, I]) convertKey(key K) common.DbKey {
+	return m.table.ToDBKey(m.keySerializer.ToBytes(key))
 }
 
 // convertKeyStr translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // from string
-func (m *Index[K, I]) convertKeyStr(key string) []byte {
-	return m.table.AppendKeyStr(key)
+func (m *Index[K, I]) convertKeyStr(key string) common.DbKey {
+	return m.table.StrToDBKey(key)
 }
