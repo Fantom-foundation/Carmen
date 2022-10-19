@@ -13,6 +13,229 @@ func TestCaremenStateImplementsStateDbInterface(t *testing.T) {
 	var _ StateDB = &db
 }
 
+func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// this will trigger no calls to the underlying state
+
+	db.CreateAccount(address1)
+	if !db.Exist(address1) {
+		t.Errorf("Account does not exist after it was created")
+	}
+	if db.HasSuicided(address1) {
+		t.Errorf("New account is considered deleted")
+	}
+	db.Suicide(address1)
+	if db.Exist(address1) {
+		t.Errorf("Account still exists after suicide")
+	}
+	if !db.HasSuicided(address1) {
+		t.Errorf("Destroyed account is still considered alive")
+	}
+}
+
+func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// this test will cause one call to the DB to check for the existence of the account
+	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Unknown, nil)
+
+	snapshot := db.Snapshot()
+
+	db.CreateAccount(address1)
+	if !db.Exist(address1) {
+		t.Errorf("Account does not exist after it was created")
+	}
+
+	db.RevertToSnapshot(snapshot)
+	if db.Exist(address1) {
+		t.Errorf("Account still exists after rollback")
+	}
+}
+
+func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// this test will cause one call to the DB to check for the existence of the account
+	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
+
+	if !db.Exist(address1) {
+		t.Errorf("Account state is not loaded from underlying state")
+	}
+
+	snapshot := db.Snapshot()
+
+	db.Suicide(address1)
+	if db.Exist(address1) {
+		t.Errorf("Account does still exist after deletion")
+	}
+
+	if !db.HasSuicided(address1) {
+		t.Errorf("Account is not marked as suicided after suicide")
+	}
+
+	db.RevertToSnapshot(snapshot)
+	if !db.Exist(address1) {
+		t.Errorf("Account remains deleted after rollback")
+	}
+	if db.HasSuicided(address1) {
+		t.Errorf("Account is still marked as suicided after rollback")
+	}
+}
+
+func TestCarmenStateCreatedAccountsAreCommitedAtEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The new account is created at the end of the transaction.
+	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
+
+	db.CreateAccount(address1)
+	db.EndTransaction()
+}
+
+func TestCarmenStateCreatedAccountsAreForgottenAtEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The created account is only created once.
+	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
+
+	db.CreateAccount(address1)
+	db.EndTransaction()
+	db.EndTransaction()
+}
+
+func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// -- nothing is supposed to happen on the mock --
+
+	db.CreateAccount(address1)
+	db.AbortTransaction()
+}
+
+func TestCarmenStateDeletedAccountsAreCommitedAtEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The new account is deleted at the end of the transaction.
+	mock.EXPECT().DeleteAccount(gomock.Eq(address1)).Return(nil)
+
+	db.Suicide(address1)
+	db.EndTransaction()
+}
+
+func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// -- nothing is supposed to happen on the mock --
+
+	db.Suicide(address1)
+	db.AbortTransaction()
+}
+
+func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The new account is deleted at the end of the transaction.
+	mock.EXPECT().DeleteAccount(gomock.Eq(address1)).Return(nil)
+
+	db.CreateAccount(address1)
+	db.Suicide(address1)
+	db.EndTransaction()
+}
+
+func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// -- nothing is supposed to happen on the mock --
+
+	db.CreateAccount(address1)
+	db.Suicide(address1)
+	db.AbortTransaction()
+}
+
+func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// An empty account must have its balance and nonce set to zero.
+	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
+	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
+
+	if !db.Empty(address1) {
+		t.Errorf("Empty account not recognized as such")
+	}
+}
+
+func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// An empty account must have its balance and nonce set to zero.
+	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
+	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
+
+	if !db.Empty(address1) {
+		t.Errorf("Empty account not recognized as such")
+	}
+	db.AddBalance(address1, big.NewInt(1))
+	if db.Empty(address1) {
+		t.Errorf("Account with balance != 0 is still considered empty")
+	}
+}
+
+func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// An empty account must have its balance and nonce set to zero.
+	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
+	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
+
+	if !db.Empty(address1) {
+		t.Errorf("Empty account not recognized as such")
+	}
+	db.SetNonce(address1, 1)
+	if db.Empty(address1) {
+		t.Errorf("Account with nonce != 0 is still considered empty")
+	}
+}
+
 func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -146,6 +369,9 @@ func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfTransaction(t *testin
 	mock.EXPECT().SetBalance(gomock.Eq(address1), gomock.Eq(balance)).Return(nil)
 
 	db.AddBalance(address1, big.NewInt(2))
+	db.EndTransaction()
+
+	// The second end-of-transaction should not trigger yet another update.
 	db.EndTransaction()
 }
 
@@ -335,6 +561,9 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfTransaction(t *testing
 	mock.EXPECT().SetNonce(gomock.Eq(address1), gomock.Eq(common.ToNonce(10))).Return(nil)
 
 	db.SetNonce(address1, 10)
+	db.EndTransaction()
+
+	// The second end-of-transaction should not trigger yet another update.
 	db.EndTransaction()
 }
 
