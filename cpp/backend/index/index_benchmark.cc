@@ -80,9 +80,7 @@ BENCHMARK(BM_Insert<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
+BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)->Arg(1 << 20)->Arg(1 << 24);
 
 BENCHMARK(BM_Insert<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
