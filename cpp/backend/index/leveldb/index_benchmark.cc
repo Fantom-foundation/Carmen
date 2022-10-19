@@ -16,9 +16,9 @@ void BM_IntToDBKey(benchmark::State& state) {
 }
 
 void BM_BalanceToDBKey(benchmark::State& state) {
-  auto addr = Balance{};
+  auto balance = Balance{};
   for (auto _ : state) {
-    auto res = internal::ToDBKey('t', addr);
+    auto res = internal::ToDBKey('t', balance);
     benchmark::DoNotOptimize(res);
   }
 }
@@ -32,9 +32,9 @@ void BM_AddressToDBKey(benchmark::State& state) {
 }
 
 void BM_HashToDBKey(benchmark::State& state) {
-  auto addr = Hash{};
+  auto hash = Hash{};
   for (auto _ : state) {
-    auto res = internal::ToDBKey('t', addr);
+    auto res = internal::ToDBKey('t', hash);
     benchmark::DoNotOptimize(res);
   }
 }
