@@ -8,42 +8,20 @@ namespace {
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index/leveldb:index_benchmark
 
-void BM_IntToDBKey(benchmark::State& state) {
+template <typename type>
+void BM_ToDBKey(benchmark::State& state) {
+  type var = type{};
   for (auto _ : state) {
-    auto res = internal::ToDBKey('t', 1);
-    benchmark::DoNotOptimize(res);
-  }
-}
-
-void BM_BalanceToDBKey(benchmark::State& state) {
-  auto balance = Balance{};
-  for (auto _ : state) {
-    auto res = internal::ToDBKey('t', balance);
-    benchmark::DoNotOptimize(res);
-  }
-}
-
-void BM_AddressToDBKey(benchmark::State& state) {
-  auto addr = Address{};
-  for (auto _ : state) {
-    auto res = internal::ToDBKey('t', addr);
-    benchmark::DoNotOptimize(res);
-  }
-}
-
-void BM_HashToDBKey(benchmark::State& state) {
-  auto hash = Hash{};
-  for (auto _ : state) {
-    auto res = internal::ToDBKey('t', hash);
+    auto res = internal::ToDBKey('t', var);
     benchmark::DoNotOptimize(res);
   }
 }
 
 // Register the function as a benchmark
-BENCHMARK(BM_IntToDBKey);
-BENCHMARK(BM_BalanceToDBKey);
-BENCHMARK(BM_AddressToDBKey);
-BENCHMARK(BM_HashToDBKey);
+BENCHMARK(BM_ToDBKey<int>);
+BENCHMARK(BM_ToDBKey<Balance>);
+BENCHMARK(BM_ToDBKey<Address>);
+BENCHMARK(BM_ToDBKey<Hash>);
 
 }  // namespace
 }  // namespace carmen::backend::index
