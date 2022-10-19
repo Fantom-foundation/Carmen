@@ -18,8 +18,6 @@ var (
 	A = common.Value{0xAA}
 	B = common.Value{0xBB}
 	C = common.Value{0xCC}
-
-	defaultItem = common.Value{}
 )
 
 func TestStoringIntoFileStore(t *testing.T) {
@@ -39,7 +37,7 @@ func TestStoringIntoFileStore(t *testing.T) {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	if value, err := st.Get(5); err != nil || value != defaultItem {
+	if value, err := st.Get(5); err != nil || value != (common.Value{}) {
 		t.Errorf("not-existing value is not reported as not-existing; err=%s", err)
 	}
 	if value, err := st.Get(0); err != nil || value != A {
@@ -70,7 +68,7 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	if value, err := st.Get(1); err != nil || value != defaultItem {
+	if value, err := st.Get(1); err != nil || value != (common.Value{}) {
 		t.Errorf("not-existing value is not reported as not-existing")
 	}
 	if value, err := st.Get(5); err != nil || value != A {
@@ -109,7 +107,7 @@ func TestHashingInFileStore(t *testing.T) {
 
 func createStore(t *testing.T, tmpDir string) store.Store[uint32, common.Value] {
 	evictionPolicy := eviction.NewRandomEvictionPolicy(4)
-	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8*32, 3, 4, evictionPolicy)
+	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, 8*32, 3, 4, evictionPolicy)
 	if err != nil {
 		t.Fatalf("unable to create st; %s", err)
 	}

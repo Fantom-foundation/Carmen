@@ -9,8 +9,9 @@ func TestRandomEvictionPolicy(t *testing.T) {
 	}
 	p.Read(10)
 	p.Written(11)
+	// clean pages should be prioritized for the eviction over dirty pages
 	if p.GetPageToEvict() != 10 {
-		t.Errorf("page to evict not 10")
+		t.Errorf("page to evict not 10 - clean pages are not prioritized")
 	}
 	p.Removed(10)
 	if p.GetPageToEvict() != 11 {

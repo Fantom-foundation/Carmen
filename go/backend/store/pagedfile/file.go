@@ -20,12 +20,11 @@ type Store[I common.Identifier, V any] struct {
 	itemSize       int64 // the amount of bytes per one value
 	poolSize       int
 	itemsPerPage   int
-	itemDefault    V
 }
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int64, branchingFactor int, poolSize int, evictionPolicy eviction.Policy) (*Store[I, V], error) {
+func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], pageSize int64, branchingFactor int, poolSize int, evictionPolicy eviction.Policy) (*Store[I, V], error) {
 	itemSize := int64(serializer.Size())
 	if pageSize < itemSize {
 		return nil, fmt.Errorf("page size must not be less than one item size")
@@ -53,7 +52,6 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		itemSize:       itemSize,
 		poolSize:       poolSize,
 		itemsPerPage:   int(pageSize / itemSize),
-		itemDefault:    itemDefault,
 	}
 	s.hashTree = file.CreateHashTreeFactory(path+"/hashes", branchingFactor).Create(s)
 	return s, nil
@@ -118,12 +116,12 @@ func (m *Store[I, V]) Set(id I, value V) error {
 	return nil
 }
 
-// Get a value of the item (or the itemDefault, if not defined)
-func (m *Store[I, V]) Get(id I) (V, error) {
+// Get a value of the item (or a zero value, if not defined)
+func (m *Store[I, V]) Get(id I) (value V, err error) {
 	pageId, itemPosition := m.itemPosition(id)
 	page, err := m.ensurePageLoaded(pageId)
 	if err != nil {
-		return m.itemDefault, fmt.Errorf("failed to load store page %d; %s", pageId, err)
+		return value, fmt.Errorf("failed to load store page %d; %s", pageId, err)
 	}
 	m.evictionPolicy.Read(pageId)
 	bytes := page.Get(itemPosition, m.itemSize)

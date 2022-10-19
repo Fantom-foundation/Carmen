@@ -187,7 +187,7 @@ func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
 }
 
 func initPagedFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
-	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, common.Value{}, PageSize, BranchingFactor, PoolSize, eviction.NewLeastRecentlyUsedEvictionPolicy(PoolSize))
+	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, BranchingFactor, PoolSize, eviction.NewLeastRecentlyUsedEvictionPolicy(PoolSize))
 	if err != nil {
 		b.Fatalf("failed to init pagedfile store; %s", err)
 	}

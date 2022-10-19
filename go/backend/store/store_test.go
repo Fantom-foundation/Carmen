@@ -37,7 +37,7 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 	if err != nil {
 		t.Fatalf("failed to init file store; %s", err)
 	}
-	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, BranchingFactor, PoolSize, eviction.NewLeastRecentlyUsedEvictionPolicy(PoolSize))
+	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, BranchingFactor, PoolSize, eviction.NewLeastRecentlyUsedEvictionPolicy(PoolSize))
 	if err != nil {
 		t.Fatalf("failed to init file store; %s", err)
 	}
