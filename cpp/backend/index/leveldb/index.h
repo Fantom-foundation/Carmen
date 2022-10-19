@@ -21,7 +21,7 @@ template <Trivial K>
 std::string ToDBKey(char key_space, const K& key) {
   std::string result;
   result.reserve(sizeof(key) + sizeof(key_space));
-  result.append(key_space, sizeof(key_space));
+  result.append(sizeof(key_space), key_space);
   result.append(reinterpret_cast<const char*>(&key), sizeof(key));
   return result;
 }
