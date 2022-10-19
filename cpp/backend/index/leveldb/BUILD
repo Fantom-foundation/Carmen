@@ -37,3 +37,14 @@ cc_test(
         "@com_google_absl//absl/status:statusor"
     ],
 )
+
+cc_binary(
+    name = "index_benchmark",
+    srcs = ["index_benchmark.cc"],
+    deps = [
+        "//backend/index/leveldb:index",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+    testonly = True,
+)
