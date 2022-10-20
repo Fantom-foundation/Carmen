@@ -8,7 +8,7 @@
 #include "absl/status/statusor.h"
 
 namespace carmen::backend::index::internal {
-// Forward declaration. See ldb_interface.cc for implementation.
+// Forward declaration. See ldb_instance.cc for implementation.
 class LevelDBImpl;
 
 // LevelDBInstance provides a simple interface to interact with leveldb.

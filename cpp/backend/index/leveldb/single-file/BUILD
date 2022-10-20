@@ -5,7 +5,7 @@ cc_library(
     deps = [
         "//common:type",
         "//common:hash",
-        "//backend/index/leveldb/common:ldb_interface",
+        "//backend/index/leveldb/common:ldb_instance",
         "@com_google_absl//absl/status:statusor"
     ],
     visibility = ["//visibility:public"],
