@@ -8,14 +8,12 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "backend/index/leveldb/common/ldb_instance.h"
 #include "common/hash.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
 namespace internal {
-// Forward declaration of LevelDB implementation class using PIMPL pattern.
-class LevelDBIndexImpl;
-
 // Converts given key space and key into leveldb key.
 template <Trivial K>
 std::string ToDBKey(char key_space, const K& key) {
@@ -46,9 +44,9 @@ absl::StatusOr<I> ParseDBResult(std::string_view value) {
 // over leveldb like get, add, get last index, etc.
 class LevelDBKeySpaceBase {
  public:
-  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDBIndexImpl> db,
+  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDBInstance> db,
                       char key_space)
-      : impl_(std::move(db)), key_space_(key_space) {}
+      : ldb_(std::move(db)), key_space_(key_space) {}
 
   // Get raw result for given key without key space transformation.
   absl::StatusOr<std::string> GetFromDB(std::string_view key) const;
@@ -67,7 +65,7 @@ class LevelDBKeySpaceBase {
   absl::Status AddHashIntoDB(const Hash& hash);
 
  protected:
-  std::shared_ptr<internal::LevelDBIndexImpl> impl_;
+  std::shared_ptr<internal::LevelDBInstance> ldb_;
   char key_space_;
 };
 }  // namespace internal
@@ -201,18 +199,17 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
 class LevelDBIndex {
  public:
-  explicit LevelDBIndex(std::string_view path);
+  static absl::StatusOr<LevelDBIndex> Open(std::string_view path);
 
   // Returns index for given key space.
   template <Trivial K, std::integral I>
   LevelDBKeySpace<K, I> KeySpace(char key_space) {
-    return {impl_, key_space};
+    return {ldb_, key_space};
   }
 
  private:
-  // PIMPL pattern. Implementation is hidden in LevelDBIndexImpl. This allows
-  // us to change implementation without changing the interface.
-  std::shared_ptr<internal::LevelDBIndexImpl> impl_;
+  explicit LevelDBIndex(std::shared_ptr<internal::LevelDBInstance> ldb);
+  std::shared_ptr<internal::LevelDBInstance> ldb_;
 };
 
 }  // namespace carmen::backend::index

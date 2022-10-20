@@ -1,4 +1,4 @@
-#include "backend/index/leveldb/index.h"
+#include "backend/index/leveldb/single-file/index.h"
 #include "benchmark/benchmark.h"
 #include "common/type.h"
 
