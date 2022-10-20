@@ -274,8 +274,8 @@ BENCHMARK(BM_ExponentialRandomWrite<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
-template <typename StoreHandler>
-void BM_HashSequentialUpdates(benchmark::State& state) {
+template <typename StoreHandler, bool include_write_time>
+void RunHashSequentialUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
   StoreHandler wrapper;
 
@@ -287,7 +287,7 @@ void BM_HashSequentialUpdates(benchmark::State& state) {
   int i = 0;
   for (auto _ : state) {
     // Update a set of values.
-    state.PauseTiming();
+    if (!include_write_time) state.PauseTiming();
     for (int j = 0; j < 100; j++) {
       Value value{static_cast<std::uint8_t>(i >> 24),
                   static_cast<std::uint8_t>(i >> 16),
@@ -295,11 +295,16 @@ void BM_HashSequentialUpdates(benchmark::State& state) {
                   static_cast<std::uint8_t>(i)};
       store.Set(i++ % num_elements, value);
     }
-    state.ResumeTiming();
+    if (!include_write_time) state.ResumeTiming();
 
     auto hash = store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
+}
+
+template <typename StoreHandler>
+void BM_HashSequentialUpdates(benchmark::State& state) {
+  RunHashSequentialUpdates<StoreHandler, false>(state);
 }
 
 BENCHMARK(BM_HashSequentialUpdates<
@@ -317,8 +322,8 @@ BENCHMARK(BM_HashSequentialUpdates<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
-template <typename StoreHandler>
-void BM_HashUniformUpdates(benchmark::State& state) {
+template <typename StoreHandler, bool include_write_time>
+void RunHashUniformUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
   StoreHandler wrapper;
 
@@ -333,7 +338,7 @@ void BM_HashUniformUpdates(benchmark::State& state) {
   std::uniform_int_distribution<> dist(0, num_elements - 1);
   for (auto _ : state) {
     // Update a set of values.
-    state.PauseTiming();
+    if (!include_write_time) state.PauseTiming();
     for (int j = 0; j < 100; j++) {
       Value value{static_cast<std::uint8_t>(i >> 24),
                   static_cast<std::uint8_t>(i >> 16),
@@ -342,11 +347,16 @@ void BM_HashUniformUpdates(benchmark::State& state) {
       i++;
       store.Set(dist(gen), value);
     }
-    state.ResumeTiming();
+    if (!include_write_time) state.ResumeTiming();
 
     auto hash = store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
+}
+
+template <typename StoreHandler>
+void BM_HashUniformUpdates(benchmark::State& state) {
+  RunHashUniformUpdates<StoreHandler, false>(state);
 }
 
 BENCHMARK(BM_HashUniformUpdates<
@@ -364,8 +374,8 @@ BENCHMARK(BM_HashUniformUpdates<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
-template <typename StoreHandler>
-void BM_HashExponentialUpdates(benchmark::State& state) {
+template <typename StoreHandler, bool include_write_time>
+void RunHashExponentialUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
   StoreHandler wrapper;
 
@@ -380,7 +390,7 @@ void BM_HashExponentialUpdates(benchmark::State& state) {
   std::exponential_distribution<> dist(double(10) / num_elements);
   for (auto _ : state) {
     // Update a set of values.
-    state.PauseTiming();
+    if (!include_write_time) state.PauseTiming();
     for (int j = 0; j < 100; j++) {
       Value value{static_cast<std::uint8_t>(i >> 24),
                   static_cast<std::uint8_t>(i >> 16),
@@ -389,11 +399,16 @@ void BM_HashExponentialUpdates(benchmark::State& state) {
       i++;
       store.Set(std::size_t(dist(gen)) % num_elements, value);
     }
-    state.ResumeTiming();
+    if (!include_write_time) state.ResumeTiming();
 
     auto hash = store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
+}
+
+template <typename StoreHandler>
+void BM_HashExponentialUpdates(benchmark::State& state) {
+  RunHashExponentialUpdates<StoreHandler, false>(state);
 }
 
 BENCHMARK(BM_HashExponentialUpdates<
@@ -407,6 +422,66 @@ BENCHMARK(BM_HashExponentialUpdates<StoreHandler<
     ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
 
 BENCHMARK(BM_HashExponentialUpdates<StoreHandler<
+              FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+template <typename StoreHandler>
+void BM_SequentialWriteAndHash(benchmark::State& state) {
+  RunHashSequentialUpdates<StoreHandler, true>(state);
+}
+
+BENCHMARK(BM_SequentialWriteAndHash<
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_SequentialWriteAndHash<StoreHandler<
+              FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_SequentialWriteAndHash<StoreHandler<
+              FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+template <typename StoreHandler>
+void BM_UniformWriteAndHash(benchmark::State& state) {
+  RunHashUniformUpdates<StoreHandler, true>(state);
+}
+
+BENCHMARK(BM_UniformWriteAndHash<
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_UniformWriteAndHash<StoreHandler<
+              FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_UniformWriteAndHash<StoreHandler<
+              FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+template <typename StoreHandler>
+void BM_ExponentialWriteAndHash(benchmark::State& state) {
+  RunHashExponentialUpdates<StoreHandler, true>(state);
+}
+
+BENCHMARK(BM_ExponentialWriteAndHash<
+              StoreHandler<ReferenceStore<kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_ExponentialWriteAndHash<StoreHandler<
+              FileStore<int, Value, InMemoryFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since this would require 32 GiB of memory
+
+BENCHMARK(BM_ExponentialWriteAndHash<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
