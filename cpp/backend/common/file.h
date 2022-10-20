@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <filesystem>
@@ -78,16 +79,16 @@ class InMemoryFile {
 
 namespace internal {
 
-// A RawFile instance provides raw read/write access to a file. It provides a
-// utility for implementing actual stricter typed File implementations.
-// Note: a raw File is not satisfying any File concept.
-class RawFile {
+// A FStreamFile provides raw read/write access to a file through C++ streams.
+// It provides a utility for implementing actual stricter typed File
+// implementations. Note: FStreamFile is not satisfying any File concept.
+class FStreamFile {
  public:
   // Opens the given file in read/write mode. If it does not exist, the file is
   // created. TODO(herbertjordan): add error handling.
-  RawFile(std::filesystem::path file);
+  FStreamFile(std::filesystem::path file);
   // Flushes the content and closes the file.
-  ~RawFile();
+  ~FStreamFile();
 
   // Provides the current file size in bytes.
   std::size_t GetFileSize();
@@ -116,6 +117,42 @@ class RawFile {
   std::fstream data_;
 };
 
+// A CFile provides raw read/write access to a file C's stdio.h header.
+class CFile {
+ public:
+  // Opens the given file in read/write mode. If it does not exist, the file is
+  // created. TODO(herbertjordan): add error handling.
+  CFile(std::filesystem::path file);
+  // Flushes the content and closes the file.
+  ~CFile();
+
+  // Provides the current file size in bytes.
+  std::size_t GetFileSize();
+
+  // Reads a range of bytes from the file to the given span. The provided
+  // position is the starting position. The number of bytes to be read is taken
+  // from the length of the provided span.
+  void Read(std::size_t pos, std::span<std::byte> span);
+
+  // Writes a span of bytes to the file at the given position. If needed, the
+  // file is grown to fit all the data of the span. Additional bytes between the
+  // current end and the starting position are initialized with zeros.
+  void Write(std::size_t pos, std::span<const std::byte> span);
+
+  // Flushes all pending/buffered writes to disk.
+  void Flush();
+
+  // Flushes the file and closes the underlying resource.
+  void Close();
+
+ private:
+  // Grows the underlying file to the given size.
+  void GrowFileIfNeeded(std::size_t needed);
+
+  std::size_t file_size_;
+  std::FILE* file_;
+};
+
 }  // namespace internal
 
 // An implementation of the File concept using a single file as a persistent
@@ -142,7 +179,8 @@ class SingleFile {
   void Close() { file_.Close(); }
 
  private:
-  mutable internal::RawFile file_;
+  // mutable internal::FStreamFile file_;
+  mutable internal::CFile file_;
 };
 
 // ------------------------------- Definitions --------------------------------
