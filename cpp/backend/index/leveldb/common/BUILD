@@ -1,5 +1,5 @@
 cc_library(
-    name = "ldb_interface",
+    name = "ldb_instance",
     hdrs = ["ldb_instance.h"],
     srcs = ["ldb_instance.cc"],
     deps = [
@@ -13,7 +13,7 @@ cc_test(
     name = "ldb_interface_test",
     srcs = ["ldb_instance_test.cc"],
     deps = [
-        ":ldb_interface",
+        ":ldb_instance",
         "//common:file_util",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
