@@ -6,7 +6,7 @@
 namespace carmen::backend::store {
 namespace {
 
-constexpr const std::size_t kPageSize = 1 << 14;  // = 16 KiB
+constexpr const std::size_t kPageSize = 1 << 12;  // = 4 KiB
 constexpr const std::size_t kBranchFactor = 32;
 
 // To run benchmarks, use the following command:
