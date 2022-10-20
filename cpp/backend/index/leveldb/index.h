@@ -183,7 +183,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
     // calculate new hash
     while (!keys_.empty()) {
-      hash_ = GetSha256Hash(*hash, keys_.front());
+      hash_ = carmen::GetHash(hasher_, *hash, keys_.front());
       keys_.pop();
     }
 
@@ -197,6 +197,9 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   std::optional<Hash> hash_;
   // Cached keys to compute hash from.
   std::queue<K> keys_;
+
+  // A SHA256 hasher instance used for hashing keys.
+  Sha256Hasher hasher_;
 };
 
 class LevelDBIndex {
