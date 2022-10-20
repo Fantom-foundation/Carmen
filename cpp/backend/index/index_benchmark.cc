@@ -250,20 +250,20 @@ template <typename IndexHandler>
 void BM_Hash(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
 
+  // A new index is created each time since otherwise it quickly fills up all
+  // of the main memory.
+  IndexHandler handler;
+  auto& index = handler.GetIndex();
+
+  // Fill in initial elements.
+  for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
+    index.GetOrAdd(ToKey(i));
+  }
+  index.GetHash();
+  auto i = pre_loaded_num_elements;
+
   for (auto _ : state) {
     state.PauseTiming();
-    // A new index is created each time since otherwise it quickly fills up all
-    // of the main memory.
-    IndexHandler handler;
-    auto& index = handler.GetIndex();
-
-    // Fill in initial elements.
-    for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-      index.GetOrAdd(ToKey(i));
-    }
-    index.GetHash();
-
-    auto i = pre_loaded_num_elements;
     for (int j = 0; j < 100; j++) {
       index.GetOrAdd(ToKey(i++));
     }
