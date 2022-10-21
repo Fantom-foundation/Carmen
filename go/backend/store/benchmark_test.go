@@ -7,6 +7,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"math/rand"
@@ -15,6 +17,7 @@ import (
 
 const (
 	PageSize        = 128 * 32
+	PoolSize        = 100
 	BranchingFactor = 8
 )
 
@@ -151,6 +154,10 @@ func getStoresFactories() (stores []StoreFactory) {
 			getStore: initFileStore,
 		},
 		{
+			label:    "PagedFile",
+			getStore: initPagedFileStore,
+		},
+		{
 			label:    "LevelDb",
 			getStore: initLevelDbStore,
 		},
@@ -175,6 +182,14 @@ func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
 	str, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, common.Value{}, PageSize, BranchingFactor)
 	if err != nil {
 		b.Fatalf("failed to init file store; %s", err)
+	}
+	return str
+}
+
+func initPagedFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
+	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, BranchingFactor, PoolSize, eviction.NewLRUPolicy(PoolSize))
+	if err != nil {
+		b.Fatalf("failed to init pagedfile store; %s", err)
 	}
 	return str
 }
