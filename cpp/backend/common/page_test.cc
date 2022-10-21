@@ -6,19 +6,38 @@
 namespace carmen::backend {
 namespace {
 
+constexpr auto FsPageSize = kFileSystemPageSize;
+
+TEST(GetRequiredPageSizeTest, RoundsUpUsage) {
+  EXPECT_EQ(FsPageSize, GetRequiredPageSize(0));
+  EXPECT_EQ(FsPageSize, GetRequiredPageSize(1));
+  EXPECT_EQ(FsPageSize, GetRequiredPageSize(FsPageSize - 1));
+  EXPECT_EQ(FsPageSize, GetRequiredPageSize(FsPageSize));
+  EXPECT_EQ(2 * FsPageSize, GetRequiredPageSize(FsPageSize + 1));
+  EXPECT_EQ(2 * FsPageSize, GetRequiredPageSize(2 * FsPageSize - 1));
+  EXPECT_EQ(2 * FsPageSize, GetRequiredPageSize(2 * FsPageSize));
+  EXPECT_EQ(3 * FsPageSize, GetRequiredPageSize(2 * FsPageSize + 1));
+}
+
 TEST(ArrayPageTest, ArePages) {
+  EXPECT_TRUE((Page<ArrayPage<int>>));
+  EXPECT_TRUE((Page<ArrayPage<float>>));
   EXPECT_TRUE((Page<ArrayPage<int, 12>>));
   EXPECT_TRUE((Page<ArrayPage<float, 73>>));
+  EXPECT_TRUE((Page<ArrayPage<int, FsPageSize * 4>>));
 }
 
 TEST(ArrayPageTest, PageSize) {
-  EXPECT_EQ(10, sizeof(ArrayPage<int, 10>));
-  EXPECT_EQ(50, sizeof(ArrayPage<int, 50>));
-  EXPECT_EQ(4092, sizeof(ArrayPage<int, 4092>));
+  EXPECT_EQ(FsPageSize, sizeof(ArrayPage<int, 10>));
+  EXPECT_EQ(FsPageSize, sizeof(ArrayPage<int, 50>));
+  EXPECT_EQ(FsPageSize, sizeof(ArrayPage<int, FsPageSize>));
+  EXPECT_EQ(FsPageSize * 2, sizeof(ArrayPage<int, FsPageSize + 1>));
+  EXPECT_EQ(FsPageSize * 2, sizeof(ArrayPage<int, FsPageSize * 2>));
 
-  EXPECT_EQ(10, sizeof(ArrayPage<Value, 10>));
-  EXPECT_EQ(50, sizeof(ArrayPage<Value, 50>));
-  EXPECT_EQ(4092, sizeof(ArrayPage<Value, 4092>));
+  EXPECT_EQ(FsPageSize, sizeof(ArrayPage<Value, 10>));
+  EXPECT_EQ(FsPageSize, sizeof(ArrayPage<Value, 50>));
+  EXPECT_EQ(FsPageSize, sizeof(ArrayPage<Value, 4092>));
+  EXPECT_EQ(FsPageSize * 2, sizeof(ArrayPage<Value, FsPageSize + 1>));
 }
 
 TEST(ArrayPageTest, NumberOfElements) {
@@ -49,6 +68,10 @@ TEST(ArrayPageTest, ElementsCanBeAccessedAndAreDifferentiated) {
 
   for (std::size_t i = 0; i < kSize; i++) {
     EXPECT_EQ(i, page[i]);
+  }
+
+  for (std::size_t i = 0; i < kSize; i++) {
+    EXPECT_EQ(i, page.AsArray()[i]);
   }
 }
 

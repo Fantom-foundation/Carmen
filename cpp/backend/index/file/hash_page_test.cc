@@ -16,10 +16,10 @@ TEST(HashPageTest, IsPage) {
   EXPECT_TRUE((Page<HashPage<int, int, long, 128>>));
 }
 
-TEST(HashPageTest, SizeOfIsAsAdvertised) {
-  EXPECT_EQ(64, sizeof(HashPage<int, int, int, 64>));
-  EXPECT_EQ(128, sizeof(HashPage<int, int, int, 128>));
-  EXPECT_EQ(128, sizeof(HashPage<int, int, long, 128>));
+TEST(HashPageTest, SizeOfFitsPageConstraints) {
+  EXPECT_EQ(kFileSystemPageSize, sizeof(HashPage<int, int, int, 64>));
+  EXPECT_EQ(kFileSystemPageSize, sizeof(HashPage<int, int, int, 128>));
+  EXPECT_EQ(kFileSystemPageSize, sizeof(HashPage<int, int, long, 128>));
   EXPECT_EQ(1 << 14, sizeof(HashPage<int, int, long, 1 << 14>));
 }
 

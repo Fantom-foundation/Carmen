@@ -12,10 +12,14 @@ namespace {
 
 // A page format used for the tests.
 template <std::size_t page_size>
-class Page : public std::array<std::byte, page_size> {
+class alignas(kFileSystemPageSize) Page
+    : public std::array<std::byte, GetRequiredPageSize(page_size)> {
  public:
-  std::span<const std::byte, page_size> AsRawData() const { return *this; };
-  std::span<std::byte, page_size> AsRawData() { return *this; };
+  constexpr static const auto true_page_size = GetRequiredPageSize(page_size);
+  std::span<const std::byte, true_page_size> AsRawData() const {
+    return *this;
+  };
+  std::span<std::byte, true_page_size> AsRawData() { return *this; };
 };
 
 TEST(TestPageTest, IsPage) { EXPECT_TRUE(carmen::backend::Page<Page<12>>); }

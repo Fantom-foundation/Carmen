@@ -46,7 +46,7 @@ concept File = requires(F a) {
 // An InMemoryFile implement is provided to for testing purposes, where actual
 // file operations are not relevant. It may also serve as a reference
 // implementation to compare other implementations to in unit testing.
-template <typename Page>
+template <Page Page>
 class InMemoryFile {
  public:
   using page_type = Page;
@@ -107,7 +107,7 @@ class RawFile {
 
 // An implementation of the File concept using a single file as a persistent
 // storage solution.
-template <typename Page>
+template <Page Page>
 class SingleFile {
  public:
   using page_type = Page;
@@ -132,14 +132,14 @@ class SingleFile {
 
 // ------------------------------- Definitions --------------------------------
 
-template <typename Page>
+template <Page Page>
 void InMemoryFile<Page>::LoadPage(PageId id, Page& trg) const {
   static const Block zero{};
   auto src = id >= data_.size() ? &zero : &data_[id];
   std::memcpy(&trg, src, sizeof(Page));
 }
 
-template <typename Page>
+template <Page Page>
 void InMemoryFile<Page>::StorePage(PageId id, const Page& src) {
   while (data_.size() <= id) {
     data_.resize(id + 1);
