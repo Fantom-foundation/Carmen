@@ -12,40 +12,41 @@ using ::testing::IsOk;
 using ::testing::Not;
 using ::testing::StrEq;
 
-TEST(LevelDBInterfaceTest, TestOpen) {
+TEST(LevelDB, TestOpen) {
   TempDir dir;
   EXPECT_OK(internal::LevelDB::Open(dir.GetPath()));
 }
 
-TEST(LevelDBInterfaceTest, TestOpenIfMissingFalse) {
+TEST(LevelDB, TestOpenIfMissingFalse) {
   TempDir dir;
   auto db = internal::LevelDB::Open(dir.GetPath(), false);
   EXPECT_THAT(db, Not(IsOk()));
 }
 
-TEST(LevelDBInterfaceTest, TestAddAndGet) {
+TEST(LevelDB, TestAddAndGet) {
   TempDir dir;
+  std::string key("key");
+  std::string value("value");
   auto db = *internal::LevelDB::Open(dir.GetPath());
-  ASSERT_OK(db.Add(std::string("key"), std::string("value")));
-  ASSERT_OK_AND_ASSIGN(auto result, db.Get(std::string("key")));
-  EXPECT_THAT(std::string("value"), StrEq(result));
+  ASSERT_OK(db.Add({key, value}));
+  ASSERT_OK_AND_ASSIGN(auto result, db.Get(key));
+  EXPECT_THAT(value, StrEq(result));
 }
 
-TEST(LevelDBInterfaceTest, TestAddBatchAndGet) {
+TEST(LevelDB, TestAddBatchAndGet) {
   TempDir dir;
   auto db = *internal::LevelDB::Open(dir.GetPath());
-  auto input =
-      std::array<std::pair<std::span<const char>, std::span<const char>>, 2>{
-          std::pair<std::span<const char>, std::span<const char>>{
-              std::string("key_1"), std::string("value_1")},
-          std::pair<std::span<const char>, std::span<const char>>{
-              std::string("key_2"), std::string("value_2")}};
+  std::string key1("key1");
+  std::string key2("key2");
+  std::string value1("value1");
+  std::string value2("value2");
+  auto input = std::array{internal::LDBEntry{key1, value1},
+                          internal::LDBEntry{key2, value2}};
   ASSERT_OK(db.AddBatch(input));
-  ASSERT_OK_AND_ASSIGN(auto result_1, db.Get(std::string("key_1")));
-  ASSERT_OK_AND_ASSIGN(auto result_2, db.Get(std::string("key_2")));
-  EXPECT_THAT(std::string("value_1"), StrEq(result_1));
-  EXPECT_THAT(std::string("value_2"), StrEq(result_2));
+  ASSERT_OK_AND_ASSIGN(auto result1, db.Get(key1));
+  ASSERT_OK_AND_ASSIGN(auto result2, db.Get(key2));
+  EXPECT_THAT(value1, StrEq(result1));
+  EXPECT_THAT(value2, StrEq(result2));
 }
-
 }  // namespace
 }  // namespace carmen::backend::index

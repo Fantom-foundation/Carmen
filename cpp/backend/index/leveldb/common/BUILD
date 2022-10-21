@@ -10,7 +10,7 @@ cc_library(
 )
 
 cc_test(
-    name = "ldb_instance_test",
+    name = "level_db_test",
     srcs = ["level_db_test.cc"],
     deps = [
         ":level_db",

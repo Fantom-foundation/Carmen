@@ -44,9 +44,10 @@ class LevelDBImpl {
   }
 
   // Add single value for given key.
-  absl::Status Add(std::span<const char> key, std::span<const char> value) {
-    leveldb::Status status = db_->Put(kWriteOptions, {key.data(), key.size()},
-                                      {value.data(), value.size()});
+  absl::Status Add(LDBEntry entry) {
+    leveldb::Status status =
+        db_->Put(kWriteOptions, {entry.first.data(), entry.first.size()},
+                 {entry.second.data(), entry.second.size()});
 
     if (!status.ok()) return absl::InternalError(status.ToString());
 
@@ -54,9 +55,7 @@ class LevelDBImpl {
   }
 
   // Add batch of values. Input is a span of pairs of key and value.
-  absl::Status AddBatch(
-      std::span<std::pair<std::span<const char>, std::span<const char>>>
-          batch) {
+  absl::Status AddBatch(std::span<LDBEntry> batch) {
     leveldb::WriteBatch write_batch;
 
     for (const auto& [key, value] : batch) {
@@ -90,14 +89,10 @@ absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) {
 }
 
 // Add single value for given key.
-absl::Status LevelDB::Add(std::span<const char> key,
-                          std::span<const char> value) {
-  return impl_->Add(key, value);
-}
+absl::Status LevelDB::Add(LDBEntry entry) { return impl_->Add(entry); }
 
 // Add batch of values. Input is a span of pairs of key and value.
-absl::Status LevelDB::AddBatch(
-    std::span<std::pair<std::span<const char>, std::span<const char>>> batch) {
+absl::Status LevelDB::AddBatch(std::span<LDBEntry> batch) {
   return impl_->AddBatch(batch);
 }
 

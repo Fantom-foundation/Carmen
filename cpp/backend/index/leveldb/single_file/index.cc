@@ -40,8 +40,8 @@ absl::StatusOr<Hash> LevelDBKeySpaceBase::GetHashFromDB() const {
 
 // Add hash value.
 absl::Status LevelDBKeySpaceBase::AddHashIntoDB(const Hash& hash) const {
-  return ldb_->Add(GetHashKey(),
-                   {reinterpret_cast<const char*>(&hash), sizeof(hash)});
+  return ldb_->Add(
+      {GetHashKey(), {reinterpret_cast<const char*>(&hash), sizeof(hash)}});
 }
 }  // namespace internal
 

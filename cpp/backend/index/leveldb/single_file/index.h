@@ -15,10 +15,10 @@
 
 namespace carmen::backend::index {
 namespace internal {
+
 // Converts given key space and key into leveldb key.
 template <Trivial K>
-auto ToDBKey(char key_space, const K& key)
-    -> std::array<char, sizeof(key) + 1> {
+std::array<char, sizeof(K) + 1> ToDBKey(char key_space, const K& key) {
   std::array<char, sizeof(key) + 1> buffer{key_space};
   memcpy(buffer.data() + 1, &key, sizeof(key));
   return buffer;
@@ -26,7 +26,7 @@ auto ToDBKey(char key_space, const K& key)
 
 // Converts given value into leveldb value.
 template <std::integral I>
-auto ToDBValue(const I& value) -> std::array<char, sizeof(value)> {
+std::array<char, sizeof(I)> ToDBValue(const I& value) {
   std::array<char, sizeof(value)> buffer{};
   memcpy(buffer.data(), &value, sizeof(value));
   return buffer;
@@ -53,7 +53,7 @@ class LevelDBKeySpaceBase {
   // Get result for given key.
   template <Trivial K, std::integral I>
   absl::StatusOr<I> GetFromDB(const K& key) const {
-    ASSIGN_OR_RETURN(auto data, ldb_->Get(ToDBKey(key)));
+    ASSIGN_OR_RETURN(auto data, ldb_->Get(ToDBKey(key_space_, key)));
     return ParseDBResult<I>(data);
   }
 
@@ -71,13 +71,10 @@ class LevelDBKeySpaceBase {
   template <std::integral I>
   absl::Status AddIndexAndUpdateLatestIntoDB(auto key, const I& value) const {
     auto db_val = ToDBValue(value);
-    std::array<std::pair<std::span<const char>, std::span<const char>>, 2>
-        batch{
-            std::pair<std::span<const char>, std::span<const char>>{
-                ToDBKey(key), db_val},
-            std::pair<std::span<const char>, std::span<const char>>{
-                GetLastIndexKey(), db_val},
-        };
+    auto db_key = ToDBKey(key_space_, key);
+    auto last_index_key = GetLastIndexKey();
+    auto batch =
+        std::array{LDBEntry{db_key, db_val}, LDBEntry{last_index_key, db_val}};
     return ldb_->AddBatch(batch);
   }
 
@@ -87,12 +84,6 @@ class LevelDBKeySpaceBase {
  private:
   std::string GetHashKey() const;
   std::string GetLastIndexKey() const;
-
-  // Convert given key into leveldb key.
-  template <Trivial K>
-  decltype(auto) ToDBKey(const K& key) const {
-    return internal::ToDBKey(key_space_, key);
-  }
 
   std::shared_ptr<internal::LevelDB> ldb_;
   char key_space_;
