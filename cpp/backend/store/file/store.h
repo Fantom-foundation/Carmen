@@ -61,7 +61,7 @@ class FileStore {
       // Before we throw away a dirty page to make space for something else we
       // update the hash to avoid having to reload it again later.
       if (is_dirty) {
-        hashes_.UpdateHash(id, page.AsRawData());
+        hashes_.UpdateHash(id, std::as_bytes(std::span(page.AsArray())));
       }
     }
 
@@ -76,7 +76,7 @@ class FileStore {
     PageProvider(PagePool& pool) : pool_(pool) {}
 
     std::span<const std::byte> GetPageData(PageId id) override {
-      return pool_.Get(id).AsRawData();
+      return std::as_bytes(std::span(pool_.Get(id).AsArray()));
     }
 
    private:

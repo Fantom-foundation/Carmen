@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "backend/common/page.h"
 #include "backend/common/page_id.h"
 #include "common/type.h"
 
@@ -14,7 +15,7 @@ namespace carmen::backend::index {
 // key/value pairs. Each page maintains a list of key/value pairs, ordered by
 // their hash and a next-pageID pointer to chain up pages.
 template <Trivial H, Trivial K, Trivial V, std::size_t page_size>
-class HashPage {
+class alignas(kFileSystemPageSize) HashPage {
   // A struct describing the meta data stored in each page.
   struct Metadata {
     // The number of elements stored in this page (<=kNumEntries)
@@ -24,6 +25,11 @@ class HashPage {
   };
 
   static_assert(sizeof(Metadata) == 16);
+
+  // A constant providing the full size of this page in memory and on disk.
+  // Note that due to alignment constraints, this may exceed the specified
+  // page_size.
+  constexpr static std::size_t full_page_size = GetRequiredPageSize(page_size);
 
  public:
   // An Entry describes a single key/value pair stored in this page + the hash
@@ -138,11 +144,11 @@ class HashPage {
 
   // Returns a raw data view on this page that can be used for writting the page
   // to secondary storage.
-  std::span<const std::byte, page_size> AsRawData() const { return data_; }
+  std::span<const std::byte, full_page_size> AsRawData() const { return data_; }
 
   // Returns a mutable raw data view on this page that can be used to replace
   // its content with data read from secondary storage.
-  std::span<std::byte, page_size> AsRawData() { return data_; }
+  std::span<std::byte, full_page_size> AsRawData() { return data_; }
 
   // Debug utility to print the content of a single page.
   void Dump() {
@@ -183,7 +189,7 @@ class HashPage {
   void IncrementSize() { GetMetadata().size++; }
 
   // The raw data containing kNumEntries entries + metadata at the end.
-  std::array<std::byte, page_size> data_;
+  std::array<std::byte, full_page_size> data_;
 };
 
 }  // namespace carmen::backend::index

@@ -35,7 +35,7 @@ namespace carmen::backend::index {
 //
 // see: https://en.wikipedia.org/wiki/Linear_hashing
 template <Trivial K, std::integral I, template <typename> class F,
-          std::size_t page_size = 1 << 14>
+          std::size_t page_size = kFileSystemPageSize>
 class FileIndex {
  public:
   using hash_t = std::size_t;
