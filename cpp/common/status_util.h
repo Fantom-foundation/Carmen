@@ -26,7 +26,7 @@
 
 namespace testing::internal {
 
-absl::Status GetStatus(absl::Status status) { return status; }
+inline absl::Status GetStatus(absl::Status status) { return status; }
 
 template <typename T>
 absl::Status GetStatus(absl::StatusOr<T> status) {
@@ -40,7 +40,7 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 #define INTERNAL_RETURN_IF_ERROR_IMPL(expr, var) \
   auto var = (expr);                             \
   if (ABSL_PREDICT_FALSE(!var.ok()))             \
-    return ::testing::internal::GetStatus(std::move(var));
+  return ::testing::internal::GetStatus(std::move(var))
 
 // A macro to evaluate a given expression returning a Status or a StatusOr
 // value and returning an error if the expression failed. Thus, instead of
@@ -63,7 +63,7 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 #define INTERNAL_ASSIGN_OR_RETURN_IMPL(lhs, expr, var)    \
   auto var = (expr);                                      \
   if (ABSL_PREDICT_FALSE(!var.ok())) return var.status(); \
-  lhs = *var;
+  lhs = *var
 
 // A macro to evaluate a given expression returning a StatusOr value and
 // returning from the current function scope if the value could not be obtained.

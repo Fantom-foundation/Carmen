@@ -14,7 +14,7 @@
 #define INTERNAL_ASSERT_OK_AND_ASSIGN_IMPL(lhs, expr, var) \
   auto var = (expr);                                       \
   ASSERT_THAT(var, ::testing::IsOk());                     \
-  lhs = *var;
+  lhs = *var
 
 // The ASSERT_OK_AND_ASSIGN macro can be used in test cases where the OK status
 // of a StatusOr value should be asserted and the status part stripped.

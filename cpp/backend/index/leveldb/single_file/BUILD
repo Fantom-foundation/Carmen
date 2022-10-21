@@ -5,7 +5,8 @@ cc_library(
     deps = [
         "//common:type",
         "//common:hash",
-        "@com_github_google_leveldb//:leveldb",
+        "//backend/index/leveldb/common:level_db",
+        "//common:status_util",
         "@com_google_absl//absl/status:statusor"
     ],
     visibility = ["//visibility:public"],
@@ -23,7 +24,6 @@ cc_library(
     testonly = True,
 )
 
-
 cc_test(
     name = "index_test",
     srcs = ["index_test.cc"],
@@ -32,7 +32,7 @@ cc_test(
         "//common:file_util",
         "//backend/index",
         "//backend/index:test_util",
-        "//backend/index/leveldb:test_util",
+        "//backend/index/leveldb/single_file:test_util",
         "@com_google_googletest//:gtest_main",
         "@com_google_absl//absl/status:statusor"
     ],
@@ -42,7 +42,7 @@ cc_binary(
     name = "index_benchmark",
     srcs = ["index_benchmark.cc"],
     deps = [
-        "//backend/index/leveldb:index",
+        "//backend/index/leveldb/single_file:index",
         "//common:type",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",

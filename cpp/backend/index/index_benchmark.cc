@@ -4,7 +4,7 @@
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index_handler.h"
-#include "backend/index/leveldb/test_util.h"
+#include "backend/index/leveldb/single_file/test_util.h"
 #include "backend/index/memory/index.h"
 #include "backend/index/memory/linear_hash_index.h"
 #include "benchmark/benchmark.h"

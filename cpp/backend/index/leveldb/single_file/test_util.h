@@ -1,7 +1,7 @@
 #pragma once
 
 #include "backend/index/index.h"
-#include "backend/index/leveldb/index.h"
+#include "backend/index/leveldb/single_file/index.h"
 #include "common/file_util.h"
 #include "common/hash.h"
 #include "common/type.h"
