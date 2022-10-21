@@ -140,12 +140,11 @@ void BM_SequentialFileRead(benchmark::State& state) {
   const auto num_pages = target_size / sizeof(Page);
   file.LoadPage(num_pages - 1, trg);
 
+  int i = 0;
   for (auto _ : state) {
     // Load all pages in order.
-    for (std::size_t i = 0; i < num_pages; i++) {
-      file.LoadPage(i, trg);
-      benchmark::DoNotOptimize(trg[0]);
-    }
+    file.LoadPage(i++ % num_pages, trg);
+    benchmark::DoNotOptimize(trg[0]);
   }
 }
 
@@ -182,10 +181,8 @@ void BM_RandomFileRead(benchmark::State& state) {
 
   for (auto _ : state) {
     // Load pages in random order.
-    for (std::size_t i = 0; i < num_pages; i++) {
-      file.LoadPage(distribution(gen), trg);
-      benchmark::DoNotOptimize(trg[0]);
-    }
+    file.LoadPage(distribution(gen), trg);
+    benchmark::DoNotOptimize(trg[0]);
   }
 }
 
