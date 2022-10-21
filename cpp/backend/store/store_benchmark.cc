@@ -152,7 +152,7 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
   std::mt19937 gen(rd());
   std::exponential_distribution<> dist(double(10) / num_elements);
   for (auto _ : state) {
-    auto value = store.Get(dist(gen));
+    auto value = store.Get(static_cast<std::size_t>(dist(gen)) % num_elements);
     benchmark::DoNotOptimize(value);
   }
 }

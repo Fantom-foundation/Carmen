@@ -99,7 +99,7 @@ void BM_SequentialRead(benchmark::State& state) {
 
   auto i = 0;
   for (auto _ : state) {
-    auto id = index.Get(ToKey(i++));
+    auto id = index.Get(ToKey(i++ % pre_loaded_num_elements));
     benchmark::DoNotOptimize(id);
   }
 }
