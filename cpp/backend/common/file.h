@@ -153,6 +153,42 @@ class CFile {
   std::FILE* file_;
 };
 
+// A PosixFile provides raw read/write access to a file through POSIX API.
+class PosixFile {
+ public:
+  // Opens the given file in read/write mode. If it does not exist, the file is
+  // created. TODO(herbertjordan): add error handling.
+  PosixFile(std::filesystem::path file);
+  // Flushes the content and closes the file.
+  ~PosixFile();
+
+  // Provides the current file size in bytes.
+  std::size_t GetFileSize();
+
+  // Reads a range of bytes from the file to the given span. The provided
+  // position is the starting position. The number of bytes to be read is taken
+  // from the length of the provided span.
+  void Read(std::size_t pos, std::span<std::byte> span);
+
+  // Writes a span of bytes to the file at the given position. If needed, the
+  // file is grown to fit all the data of the span. Additional bytes between the
+  // current end and the starting position are initialized with zeros.
+  void Write(std::size_t pos, std::span<const std::byte> span);
+
+  // Flushes all pending/buffered writes to disk.
+  void Flush();
+
+  // Flushes the file and closes the underlying resource.
+  void Close();
+
+ private:
+  // Grows the underlying file to the given size.
+  void GrowFileIfNeeded(std::size_t needed);
+
+  std::size_t file_size_;
+  int fd_;
+};
+
 }  // namespace internal
 
 // An implementation of the File concept using a single file as a persistent
@@ -180,7 +216,8 @@ class SingleFile {
 
  private:
   // mutable internal::FStreamFile file_;
-  mutable internal::CFile file_;
+  // mutable internal::CFile file_;
+  mutable internal::PosixFile file_;
 };
 
 // ------------------------------- Definitions --------------------------------
