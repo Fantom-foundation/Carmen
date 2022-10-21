@@ -8,32 +8,35 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/common/ldb_instance.h"
+#include "backend/index/leveldb/common/level_db.h"
 #include "common/hash.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
 namespace internal {
 // Converts given key space and key into leveldb key.
 template <Trivial K>
-std::string ToDBKey(char key_space, const K& key) {
-  std::array<char, sizeof(key) + 1> buffer;
-  buffer[0] = key_space;
+auto ToDBKey(char key_space, const K& key)
+    -> std::array<char, sizeof(key) + 1> {
+  std::array<char, sizeof(key) + 1> buffer{key_space};
   memcpy(buffer.data() + 1, &key, sizeof(key));
-  return {buffer.data(), buffer.size()};
+  return buffer;
 }
 
 // Converts given value into leveldb value.
 template <std::integral I>
-std::string ToDBValue(const I& value) {
-  return {reinterpret_cast<const char*>(&value), sizeof(value)};
+auto ToDBValue(const I& value) -> std::array<char, sizeof(value)> {
+  std::array<char, sizeof(value)> buffer{};
+  memcpy(buffer.data(), &value, sizeof(value));
+  return buffer;
 }
 
 // Parse result from leveldb.
 template <std::integral I>
-absl::StatusOr<I> ParseDBResult(std::string_view value) {
+absl::StatusOr<I> ParseDBResult(std::span<const char> value) {
   if (value.size() != sizeof(I)) {
-    return absl::InvalidArgumentError("Invalid value size.");
+    return absl::InternalError("Invalid value size.");
   }
   return *reinterpret_cast<const I*>(value.data());
 }
@@ -44,28 +47,54 @@ absl::StatusOr<I> ParseDBResult(std::string_view value) {
 // over leveldb like get, add, get last index, etc.
 class LevelDBKeySpaceBase {
  public:
-  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDBInstance> db,
-                      char key_space)
+  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDB> db, char key_space)
       : ldb_(std::move(db)), key_space_(key_space) {}
 
-  // Get raw result for given key without key space transformation.
-  absl::StatusOr<std::string> GetFromDB(std::string_view key) const;
+  // Get result for given key.
+  template <Trivial K, std::integral I>
+  absl::StatusOr<I> GetFromDB(const K& key) const {
+    ASSIGN_OR_RETURN(auto data, ldb_->Get(ToDBKey(key)));
+    return ParseDBResult<I>(data);
+  }
 
   // Get last index value.
-  absl::StatusOr<std::string> GetLastIndexFromDB();
+  template <std::integral I>
+  absl::StatusOr<I> GetLastIndexFromDB() const {
+    ASSIGN_OR_RETURN(auto data, ldb_->Get(GetLastIndexKey()));
+    return ParseDBResult<I>(data);
+  }
 
   // Get actual hash value.
-  absl::StatusOr<Hash> GetHashFromDB();
+  absl::StatusOr<Hash> GetHashFromDB() const;
 
-  // Add last index value.
-  absl::Status AddIndexAndUpdateLatestIntoDB(std::string_view key,
-                                             std::string_view value);
+  // Add index value for given key. This method also updates last index value.
+  template <std::integral I>
+  absl::Status AddIndexAndUpdateLatestIntoDB(auto key, const I& value) const {
+    auto db_val = ToDBValue(value);
+    std::array<std::pair<std::span<const char>, std::span<const char>>, 2>
+        batch{
+            std::pair<std::span<const char>, std::span<const char>>{
+                ToDBKey(key), db_val},
+            std::pair<std::span<const char>, std::span<const char>>{
+                GetLastIndexKey(), db_val},
+        };
+    return ldb_->AddBatch(batch);
+  }
 
   // Add hash value.
-  absl::Status AddHashIntoDB(const Hash& hash);
+  absl::Status AddHashIntoDB(const Hash& hash) const;
 
- protected:
-  std::shared_ptr<internal::LevelDBInstance> ldb_;
+ private:
+  std::string GetHashKey() const;
+  std::string GetLastIndexKey() const;
+
+  // Convert given key into leveldb key.
+  template <Trivial K>
+  decltype(auto) ToDBKey(const K& key) const {
+    return internal::ToDBKey(key_space_, key);
+  }
+
+  std::shared_ptr<internal::LevelDB> ldb_;
   char key_space_;
 };
 }  // namespace internal
@@ -76,11 +105,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   using LevelDBKeySpaceBase::LevelDBKeySpaceBase;
 
   // Get index for given key.
-  absl::StatusOr<I> Get(const K& key) const {
-    auto result = GetFromDB(internal::ToDBKey(key_space_, key));
-    if (result.ok()) return internal::ParseDBResult<I>(*result);
-    return result.status();
-  }
+  absl::StatusOr<I> Get(const K& key) const { return GetFromDB<K, I>(key); }
 
   // Get index for given key. If key is not found, add it and return new index.
   absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key) {
@@ -98,9 +123,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   }
 
   // Check index for given key exists. Returns true if index exists.
-  bool Contains(const K& key) {
-    return GetFromDB(internal::ToDBKey(key_space_, key)).ok();
-  }
+  bool Contains(const K& key) { return Get(key).ok(); }
 
   // Computes a hash over the full content of this index.
   absl::StatusOr<Hash> GetHash() {
@@ -114,17 +137,8 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // database.
   absl::StatusOr<I> GetLastIndex() {
     if (last_index_.has_value()) return *last_index_;
-
-    auto result = GetLastIndexFromDB();
-    if (result.ok()) {
-      auto index = internal::ParseDBResult<I>(result.value());
-      if (index.ok()) {
-        last_index_ = *index;
-        return last_index_.value();
-      }
-      return index.status();
-    }
-    return result.status();
+    ASSIGN_OR_RETURN(last_index_, GetLastIndexFromDB<I>());
+    return *last_index_;
   }
 
   // Get last hash value. If it is not cached, it will be fetched from database.
@@ -136,10 +150,10 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
     switch (result.status().code()) {
       case absl::StatusCode::kNotFound:
         hash_ = Hash{};
-        return hash_.value();
+        return *hash_;
       case absl::StatusCode::kOk:
-        hash_ = result.value();
-        return hash_.value();
+        hash_ = *result;
+        return *hash_;
       default:
         return result.status();
     }
@@ -160,9 +174,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
         return result.status();
     }
 
-    auto write_value = internal::ToDBValue(*last_index_);
-    auto write_result = AddIndexAndUpdateLatestIntoDB(
-        internal::ToDBKey(key_space_, key), write_value);
+    auto write_result = AddIndexAndUpdateLatestIntoDB(key, *last_index_);
 
     if (!write_result.ok()) return write_result;
 
@@ -202,7 +214,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
 
 class LevelDBIndex {
  public:
-  static absl::StatusOr<LevelDBIndex> Open(std::string_view path);
+  static absl::StatusOr<LevelDBIndex> Open(const std::filesystem::path& path);
 
   // Returns index for given key space.
   template <Trivial K, std::integral I>
@@ -211,8 +223,8 @@ class LevelDBIndex {
   }
 
  private:
-  explicit LevelDBIndex(std::shared_ptr<internal::LevelDBInstance> ldb);
-  std::shared_ptr<internal::LevelDBInstance> ldb_;
+  explicit LevelDBIndex(std::shared_ptr<internal::LevelDB> ldb);
+  std::shared_ptr<internal::LevelDB> ldb_;
 };
 
 }  // namespace carmen::backend::index

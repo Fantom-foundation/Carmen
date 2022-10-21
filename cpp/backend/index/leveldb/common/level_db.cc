@@ -1,5 +1,6 @@
-#include "backend/index/leveldb/common/ldb_instance.h"
+#include "backend/index/leveldb/common/level_db.h"
 
+#include <filesystem>
 #include <span>
 
 #include "absl/status/status.h"
@@ -17,13 +18,12 @@ constexpr leveldb::ReadOptions kReadOptions = leveldb::ReadOptions();
 // LevelDB index implementation. To encapsulate leveldb dependency.
 class LevelDBImpl {
  public:
-  static absl::StatusOr<LevelDBImpl> Open(std::string_view path,
+  static absl::StatusOr<LevelDBImpl> Open(const std::filesystem::path& path,
                                           bool create_if_missing = true) {
     leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = create_if_missing;
-    leveldb::Status status =
-        leveldb::DB::Open(options, {path.data(), path.size()}, &db);
+    leveldb::Status status = leveldb::DB::Open(options, path.string(), &db);
 
     if (!status.ok()) return absl::InternalError(status.ToString());
 
@@ -31,7 +31,7 @@ class LevelDBImpl {
   }
 
   // Get value for given key.
-  absl::StatusOr<std::string> Get(std::string_view key) const {
+  absl::StatusOr<std::string> Get(std::span<const char> key) const {
     std::string value;
     leveldb::Status status =
         db_->Get(kReadOptions, {key.data(), key.size()}, &value);
@@ -44,7 +44,7 @@ class LevelDBImpl {
   }
 
   // Add single value for given key.
-  absl::Status Add(std::string_view key, std::string_view value) {
+  absl::Status Add(std::span<const char> key, std::span<const char> value) {
     leveldb::Status status = db_->Put(kWriteOptions, {key.data(), key.size()},
                                       {value.data(), value.size()});
 
@@ -55,7 +55,8 @@ class LevelDBImpl {
 
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(
-      std::span<std::pair<std::string_view, std::string_view>> batch) {
+      std::span<std::pair<std::span<const char>, std::span<const char>>>
+          batch) {
     leveldb::WriteBatch write_batch;
 
     for (const auto& [key, value] : batch) {
@@ -76,34 +77,33 @@ class LevelDBImpl {
 };
 
 // Open leveldb database connection.
-absl::StatusOr<LevelDBInstance> LevelDBInstance::Open(std::string_view path,
-                                                      bool create_if_missing) {
+absl::StatusOr<LevelDB> LevelDB::Open(const std::filesystem::path& path,
+                                      bool create_if_missing) {
   auto db = LevelDBImpl::Open(path, create_if_missing);
   if (!db.ok()) return db.status();
-  return LevelDBInstance(std::make_unique<LevelDBImpl>(std::move(*db)));
+  return LevelDB(std::make_unique<LevelDBImpl>(std::move(*db)));
 }
 
 // Get value for given key.
-absl::StatusOr<std::string> LevelDBInstance::Get(std::string_view key) {
+absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) {
   return impl_->Get(key);
 }
 
 // Add single value for given key.
-absl::Status LevelDBInstance::Add(std::string_view key,
-                                  std::string_view value) {
+absl::Status LevelDB::Add(std::span<const char> key,
+                          std::span<const char> value) {
   return impl_->Add(key, value);
 }
 
 // Add batch of values. Input is a span of pairs of key and value.
-absl::Status LevelDBInstance::AddBatch(
-    std::span<std::pair<std::string_view, std::string_view>> batch) {
+absl::Status LevelDB::AddBatch(
+    std::span<std::pair<std::span<const char>, std::span<const char>>> batch) {
   return impl_->AddBatch(batch);
 }
 
-LevelDBInstance::LevelDBInstance(std::unique_ptr<LevelDBImpl> db)
-    : impl_(std::move(db)) {}
+LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
 
-LevelDBInstance::LevelDBInstance(LevelDBInstance&&) noexcept = default;
+LevelDB::LevelDB(LevelDB&&) noexcept = default;
 
-LevelDBInstance::~LevelDBInstance() = default;
+LevelDB::~LevelDB() = default;
 }  // namespace carmen::backend::index::internal

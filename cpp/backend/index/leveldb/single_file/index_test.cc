@@ -1,7 +1,7 @@
-#include "backend/index/leveldb/single-file/index.h"
+#include "backend/index/leveldb/single_file/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/single-file/test_util.h"
+#include "backend/index/leveldb/single_file/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"
@@ -19,7 +19,7 @@ using TestIndex = LevelDBKeySpaceTestAdapter<int, int>;
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
 
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
-  return (*LevelDBIndex::Open(dir.GetPath().string())).KeySpace<int, int>('t');
+  return (*LevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
 }
 
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {
@@ -28,7 +28,7 @@ TEST(LevelDBIndexTest, ConvertToLevelDBKey) {
   std::stringstream ss;
   ss << 'A';
   ss.write(reinterpret_cast<const char*>(&key), sizeof(key));
-  EXPECT_THAT(res, StrEq(ss.str()));
+  EXPECT_THAT(std::string(res.data(), res.size()), StrEq(ss.str()));
 }
 
 TEST(LevelDBIndexTest, ConvertAndParseLevelDBValue) {

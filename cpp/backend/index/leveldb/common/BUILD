@@ -1,7 +1,7 @@
 cc_library(
-    name = "ldb_instance",
-    hdrs = ["ldb_instance.h"],
-    srcs = ["ldb_instance.cc"],
+    name = "level_db",
+    hdrs = ["level_db.h"],
+    srcs = ["level_db.cc"],
     deps = [
         "@com_github_google_leveldb//:leveldb",
         "@com_google_absl//absl/status:statusor"
@@ -11,9 +11,9 @@ cc_library(
 
 cc_test(
     name = "ldb_instance_test",
-    srcs = ["ldb_instance_test.cc"],
+    srcs = ["level_db_test.cc"],
     deps = [
-        ":ldb_instance",
+        ":level_db",
         "//common:file_util",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
