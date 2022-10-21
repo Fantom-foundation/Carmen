@@ -82,7 +82,10 @@ class PagePool {
 
   // Indexes recording which page is in which pool postion.
   absl::flat_hash_map<PageId, int> pages_to_index_;
-  std::vector<std::optional<PageId>> index_to_pages_;
+  std::vector<PageId> index_to_pages_;
+
+  // A list of free slots, used like a FIFO.
+  std::vector<std::size_t> free_list_;
 
   // A list of listeners observing the page pool state.
   std::vector<std::unique_ptr<Listener>> listeners_;
@@ -115,6 +118,11 @@ requires File<F<P>> PagePool<P, F>::PagePool(std::unique_ptr<File> file,
   pool_.resize(pool_size);
   dirty_.resize(pool_size);
   index_to_pages_.resize(pool_size);
+  pages_to_index_.reserve(pool_size);
+  free_list_.reserve(pool_size);
+  for (std::size_t i = 0; i < pool_size; i++) {
+    free_list_.push_back(pool_size - i - 1);
+  }
 }
 
 template <typename P, template <typename> class F>
@@ -163,10 +171,7 @@ requires File<F<P>>
 void PagePool<P, F>::Flush() {
   for (std::size_t i = 0; i < pool_.size(); i++) {
     if (!dirty_[i]) continue;
-    const auto& page_id = index_to_pages_[i];
-    if (page_id.has_value()) {
-      file_->StorePage(*page_id, pool_[i]);
-    }
+    file_->StorePage(index_to_pages_[i], pool_[i]);
     dirty_[i] = false;
   }
 }
@@ -181,12 +186,10 @@ void PagePool<P, F>::Close() {
 template <typename P, template <typename> class F>
 requires File<F<P>> std::size_t PagePool<P, F>::GetFreeSlot() {
   // TODO: make this more efficient.
-
-  // Look for a free slot.
-  for (std::size_t i = 0; i < index_to_pages_.size(); i++) {
-    if (index_to_pages_[i] == std::nullopt) {
-      return i;
-    }
+  if (!free_list_.empty()) {
+    std::size_t res = free_list_.back();
+    free_list_.pop_back();
+    return res;
   }
 
   // Next, look for a clean page.
@@ -206,27 +209,21 @@ requires File<F<P>> std::size_t PagePool<P, F>::GetFreeSlot() {
 template <typename P, template <typename> class F>
 requires File<F<P>>
 void PagePool<P, F>::EvictSlot(int pos) {
-  // Test whether slot is actually occupied.
-  auto page_id = index_to_pages_[pos];
-  if (page_id == std::nullopt) {
-    return;
-  }
-
   // Notify listeners about pending eviction.
+  auto page_id = index_to_pages_[pos];
   bool is_dirty = dirty_[pos];
   for (auto& listener : listeners_) {
-    listener->BeforeEvict(*page_id, pool_[pos], is_dirty);
+    listener->BeforeEvict(page_id, pool_[pos], is_dirty);
   }
 
   // Write to file if dirty.
   if (is_dirty) {
-    file_->StorePage(*page_id, pool_[pos]);
+    file_->StorePage(page_id, pool_[pos]);
     dirty_[pos] = false;
   }
 
-  // Mark pool position as free.
-  pages_to_index_.erase(*page_id);
-  index_to_pages_[pos] = std::nullopt;
+  // Erase page ID association of slot.
+  pages_to_index_.erase(page_id);
 }
 
 }  // namespace carmen::backend
