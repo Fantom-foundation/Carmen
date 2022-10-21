@@ -6,7 +6,7 @@ var dbKeySink DbKey
 
 func BenchmarkConvertTableSpaceSerializer(b *testing.B) {
 	serializer := KeySerializer{}
-	prefix := BalanceKey
+	prefix := BalanceStoreKey
 	key := Key{}
 	for i := 1; i <= b.N; i++ {
 		key[0] = byte(i)

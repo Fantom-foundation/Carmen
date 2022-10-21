@@ -142,8 +142,8 @@ func openLevelDb(t *testing.T, path string) (db *leveldb.DB) {
 }
 
 func createNewDepot(t *testing.T, db *leveldb.DB) depot.Depot[uint32] {
-	hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueKey, 3)
-	d, err := NewDepot[uint32](db, common.ValueKey, common.Identifier32Serializer{}, hashTreeFac, 2)
+	hashTreeFac := htldb.CreateHashTreeFactory(db, common.DepotCodeKey, 3)
+	d, err := NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, hashTreeFac, 2)
 	if err != nil {
 		t.Fatalf("failed to create memory depot; %s", err)
 	}

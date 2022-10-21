@@ -20,7 +20,7 @@ func initIndexes(t *testing.T) (indexes []index.Index[common.Address, uint32]) {
 	idSerializer := common.Identifier32Serializer{}
 
 	memindex := memory.NewIndex[common.Address, uint32](keySerializer)
-	ldbindex, _ := ldb.NewIndex[common.Address, uint32](db, common.BalanceKey, keySerializer, idSerializer)
+	ldbindex, _ := ldb.NewIndex[common.Address, uint32](db, common.BalanceStoreKey, keySerializer, idSerializer)
 
 	t.Cleanup(func() {
 		memindex.Close()
