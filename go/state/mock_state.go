@@ -92,6 +92,21 @@ func (mr *MockStateMockRecorder) GetBalance(address interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockState)(nil).GetBalance), address)
 }
 
+// GetCode mocks base method.
+func (m *MockState) GetCode(address common.Address) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCode", address)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCode indicates an expected call of GetCode.
+func (mr *MockStateMockRecorder) GetCode(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCode", reflect.TypeOf((*MockState)(nil).GetCode), address)
+}
+
 // GetHash mocks base method.
 func (m *MockState) GetHash() (common.Hash, error) {
 	m.ctrl.T.Helper()
@@ -149,6 +164,20 @@ func (m *MockState) SetBalance(address common.Address, balance common.Balance) e
 func (mr *MockStateMockRecorder) SetBalance(address, balance interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalance", reflect.TypeOf((*MockState)(nil).SetBalance), address, balance)
+}
+
+// SetCode mocks base method.
+func (m *MockState) SetCode(address common.Address, code []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetCode", address, code)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetCode indicates an expected call of SetCode.
+func (mr *MockStateMockRecorder) SetCode(address, code interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCode", reflect.TypeOf((*MockState)(nil).SetCode), address, code)
 }
 
 // SetNonce mocks base method.

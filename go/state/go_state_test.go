@@ -1,7 +1,9 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"testing"
 
@@ -65,6 +67,10 @@ func TestMissingKeys(t *testing.T) {
 	if (err != nil || value != common.Value{}) {
 		t.Errorf("Value must be empty. It is: %s, err: %s", value, err)
 	}
+	code, err := state.GetCode(address1)
+	if err != nil || code != nil {
+		t.Errorf("Value must be empty. It is: %s, err: %s", value, err)
+	}
 }
 
 func TestBasicOperations(t *testing.T) {
@@ -86,6 +92,9 @@ func TestBasicOperations(t *testing.T) {
 	if err := state.SetStorage(address3, key1, common.Value{67}); err != nil {
 		t.Errorf("Error: %s", err)
 	}
+	if err := state.SetCode(address1, []byte{0x12, 0x34}); err != nil {
+		t.Errorf("Error: %s", err)
+	}
 
 	// fetch values
 	if val, err := state.GetAccountState(address1); err != nil || val != common.Exists {
@@ -98,6 +107,9 @@ func TestBasicOperations(t *testing.T) {
 		t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
 	}
 	if val, err := state.GetStorage(address3, key1); (err != nil || val != common.Value{67}) {
+		t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+	}
+	if val, err := state.GetCode(address1); err != nil || !bytes.Equal(val, []byte{0x12, 0x34}) {
 		t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
 	}
 
@@ -182,33 +194,42 @@ func TestHashing(t *testing.T) {
 	if initialHash == hash3 || hash1 == hash3 || hash2 == hash3 {
 		t.Errorf("hash of changed state not changed; %s", err)
 	}
+
+	_ = state.SetCode(address1, []byte{0x12, 0x34, 0x56, 0x78})
+	hash4, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("unable to get state hash; %s", err)
+	}
+	if initialHash == hash4 || hash3 == hash4 {
+		t.Errorf("hash of changed state not changed; %s", err)
+	}
 }
 
 func NewInMemoryComposition() (State, error) {
 	var addressIndex index.Index[common.Address, uint32] = indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	var keyIndex index.Index[common.Key, uint32] = indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
 	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
-	var accountsStore store.Store[uint32, common.AccountState]
-	var noncesStore store.Store[uint32, common.Nonce]
-	var balancesStore store.Store[uint32, common.Balance]
-	var valuesStore store.Store[uint32, common.Value]
 	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	noncesStore, err = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	noncesStore, err := storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	balancesStore, err = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	valuesStore, err = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	return NewGoState(addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore), nil
+	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	return NewGoState(addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot), nil
 }
 
 var testingErr = fmt.Errorf("testing error")
