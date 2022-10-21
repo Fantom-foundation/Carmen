@@ -1,5 +1,8 @@
 #include "backend/common/file.h"
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <cassert>
 
 namespace carmen::backend {
@@ -132,6 +135,77 @@ void CFile::GrowFileIfNeeded(std::size_t needed) {
     auto step = std::min(kStepSize, needed - file_size_);
     auto len = fwrite(kZeros->data(), sizeof(std::byte), step, file_);
     assert(len == step);
+    file_size_ += step;
+  }
+}
+
+PosixFile::PosixFile(std::filesystem::path file) {
+  // Create the parent directory.
+  CreateDirectory(file.parent_path());
+  // fd_ = open(file.string().c_str(), O_CREAT | O_RDWR);
+  //  When this is enabled, all read/writes must use aligned memory locations!
+  fd_ = open(file.string().c_str(), O_CREAT | O_DIRECT | O_RDWR);
+  assert(fd_ >= 0);
+  off_t size = lseek(fd_, 0, SEEK_END);
+  if (size == -1) {
+    perror("Error getting file size: ");
+  }
+  file_size_ = size;
+}
+
+PosixFile::~PosixFile() { Close(); }
+
+std::size_t PosixFile::GetFileSize() { return file_size_; }
+
+void PosixFile::Read(std::size_t pos, std::span<std::byte> span) {
+  if (fd_ < 0) return;
+  GrowFileIfNeeded(pos + span.size());
+  lseek(fd_, pos, SEEK_SET);
+  read(fd_, span.data(), span.size());
+}
+
+void PosixFile::Write(std::size_t pos, std::span<const std::byte> span) {
+  if (fd_ < 0) return;
+  // Grow file as needed.
+  GrowFileIfNeeded(pos + span.size());
+  lseek(fd_, pos, SEEK_SET);
+  write(fd_, span.data(), span.size());
+}
+
+void PosixFile::Flush() {
+  if (fd_ < 0) return;
+  fsync(fd_);
+}
+
+void PosixFile::Close() {
+  if (fd_ < 0) return;
+  Flush();
+  close(fd_);
+  fd_ = -1;
+}
+
+void PosixFile::GrowFileIfNeeded(std::size_t needed) {
+  // Retain a 256 KiB buffer of zeros for initializing disk space.
+  constexpr static std::size_t kStepSize = 1 << 18;
+  static auto kZeros = std::make_unique<ArrayPage<int, kStepSize>>();
+  if (file_size_ >= needed) {
+    return;
+  }
+  /*
+  lseek(fd_, needed-1, SEEK_SET);
+  const char zero = 0;
+  write(fd_, &zero, 1);
+  file_size_ = needed;
+  */
+  auto offset = lseek(fd_, 0, SEEK_END);
+  assert(offset == static_cast<off_t>(file_size_));
+  while (file_size_ < needed) {
+    auto step = std::min(kStepSize, needed - file_size_);
+    auto len = write(fd_, kZeros->AsRawData().data(), step);
+    if (len < 0) {
+      perror("Error growing file");
+    }
+    assert(len == static_cast<ssize_t>(step));
     file_size_ += step;
   }
 }
