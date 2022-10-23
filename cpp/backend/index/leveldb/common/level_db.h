@@ -25,13 +25,13 @@ class LevelDB {
                                       bool create_if_missing = true);
 
   // Get value for given key.
-  absl::StatusOr<std::string> Get(std::span<const char> key);
+  absl::StatusOr<std::string> Get(std::span<const char> key) const;
 
   // Add single value for given key.
-  absl::Status Add(LDBEntry entry);
+  absl::Status Add(LDBEntry entry) const;
 
   // Add batch of values. Input is a span of pairs of key and value.
-  absl::Status AddBatch(std::span<LDBEntry> batch);
+  absl::Status AddBatch(std::span<LDBEntry> batch) const;
 
  private:
   explicit LevelDB(std::unique_ptr<LevelDBImpl> db);

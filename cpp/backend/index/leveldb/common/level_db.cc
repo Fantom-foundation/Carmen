@@ -18,6 +18,9 @@ constexpr leveldb::ReadOptions kReadOptions = leveldb::ReadOptions();
 // LevelDB index implementation. To encapsulate leveldb dependency.
 class LevelDBImpl {
  public:
+  LevelDBImpl(LevelDBImpl&&) noexcept = default;
+  ~LevelDBImpl() = default;
+
   static absl::StatusOr<LevelDBImpl> Open(const std::filesystem::path& path,
                                           bool create_if_missing = true) {
     leveldb::DB* db;
@@ -84,15 +87,15 @@ absl::StatusOr<LevelDB> LevelDB::Open(const std::filesystem::path& path,
 }
 
 // Get value for given key.
-absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) {
+absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) const {
   return impl_->Get(key);
 }
 
 // Add single value for given key.
-absl::Status LevelDB::Add(LDBEntry entry) { return impl_->Add(entry); }
+absl::Status LevelDB::Add(LDBEntry entry) const { return impl_->Add(entry); }
 
 // Add batch of values. Input is a span of pairs of key and value.
-absl::Status LevelDB::AddBatch(std::span<LDBEntry> batch) {
+absl::Status LevelDB::AddBatch(std::span<LDBEntry> batch) const {
   return impl_->AddBatch(batch);
 }
 
