@@ -43,7 +43,7 @@ class LevelDBIndexBase {
 
   // Get index for given key.
   absl::StatusOr<I> Get(const K& key) const {
-    ASSIGN_OR_RETURN(auto data, GetDB()->Get(ToDBKey(key)));
+    ASSIGN_OR_RETURN(auto data, GetDB().Get(ToDBKey(key)));
     return ParseDBResult<I>(data);
   }
 
@@ -86,35 +86,36 @@ class LevelDBIndexBase {
   virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
 
   // Get leveldb handle.
-  virtual internal::LevelDB* GetDB() const = 0;
+  virtual internal::LevelDB& GetDB() = 0;
+  virtual const internal::LevelDB& GetDB() const = 0;
 
   // Get last index value.
   absl::StatusOr<I> GetLastIndexFromDB() const {
-    ASSIGN_OR_RETURN(auto data, GetDB()->Get(GetLastIndexKey()));
+    ASSIGN_OR_RETURN(auto data, GetDB().Get(GetLastIndexKey()));
     return ParseDBResult<I>(data);
   }
 
   // Get actual hash value.
   absl::StatusOr<Hash> GetHashFromDB() const {
-    ASSIGN_OR_RETURN(auto data, GetDB()->Get(GetHashKey()));
+    ASSIGN_OR_RETURN(auto data, GetDB().Get(GetHashKey()));
     if (data.size() != sizeof(Hash))
       return absl::InternalError("Invalid hash size.");
     return *reinterpret_cast<Hash*>(data.data());
   }
 
   // Add index value for given key. This method also updates last index value.
-  absl::Status AddIndexAndUpdateLatestIntoDB(auto key, const I& value) const {
+  absl::Status AddIndexAndUpdateLatestIntoDB(auto key, const I& value) {
     auto db_val = ToDBValue(value);
     auto db_key = ToDBKey(key);
     auto last_index_key = GetLastIndexKey();
     auto batch =
         std::array{LDBEntry{db_key, db_val}, LDBEntry{last_index_key, db_val}};
-    return GetDB()->AddBatch(batch);
+    return GetDB().AddBatch(batch);
   }
 
   // Add hash value into database.
-  absl::Status AddHashIntoDB(const Hash& hash) const {
-    return GetDB()->Add(
+  absl::Status AddHashIntoDB(const Hash& hash) {
+    return GetDB().Add(
         {GetHashKey(), {reinterpret_cast<const char*>(&hash), sizeof(hash)}});
   }
 

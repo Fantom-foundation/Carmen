@@ -92,10 +92,10 @@ absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) const {
 }
 
 // Add single value for given key.
-absl::Status LevelDB::Add(LDBEntry entry) const { return impl_->Add(entry); }
+absl::Status LevelDB::Add(LDBEntry entry) { return impl_->Add(entry); }
 
 // Add batch of values. Input is a span of pairs of key and value.
-absl::Status LevelDB::AddBatch(std::span<LDBEntry> batch) const {
+absl::Status LevelDB::AddBatch(std::span<LDBEntry> batch) {
   return impl_->AddBatch(batch);
 }
 

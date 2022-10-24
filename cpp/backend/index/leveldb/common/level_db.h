@@ -28,10 +28,10 @@ class LevelDB {
   absl::StatusOr<std::string> Get(std::span<const char> key) const;
 
   // Add single value for given key.
-  absl::Status Add(LDBEntry entry) const;
+  absl::Status Add(LDBEntry entry);
 
   // Add batch of values. Input is a span of pairs of key and value.
-  absl::Status AddBatch(std::span<LDBEntry> batch) const;
+  absl::Status AddBatch(std::span<LDBEntry> batch);
 
  private:
   explicit LevelDB(std::unique_ptr<LevelDBImpl> db);

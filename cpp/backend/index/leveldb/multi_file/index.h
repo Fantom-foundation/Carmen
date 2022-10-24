@@ -35,9 +35,8 @@ class LevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
     return buffer;
   };
 
-  internal::LevelDB* GetDB() const override {
-    return const_cast<internal::LevelDB*>(&ldb_);
-  }
+  internal::LevelDB& GetDB() override { return ldb_; }
+  const internal::LevelDB& GetDB() const override { return ldb_; }
 
   internal::LevelDB ldb_;
 };
