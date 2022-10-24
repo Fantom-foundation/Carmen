@@ -5,8 +5,7 @@
 #include "common/type.h"
 
 namespace carmen::backend::index {
-// LevelDBIndexTestAdapter is a wrapper around LevelDBIndex. It exposes
-// LevelDBIndex methods to be compatible with tests.
+// LevelDBIndexTestAdapter is a wrapper around LevelDBIndex.
 template <Trivial K, std::integral I>
 class LevelDBIndexTestAdapter {
  public:

@@ -103,5 +103,5 @@ LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
 
 LevelDB::LevelDB(LevelDB&&) noexcept = default;
 
-LevelDB::~LevelDB() = default;
+LevelDB::~LevelDB() {}
 }  // namespace carmen::backend::index::internal

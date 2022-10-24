@@ -3,6 +3,8 @@
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index.h"
+#include "backend/index/leveldb/multi_file/index.h"
+#include "backend/index/leveldb/multi_file/test_util.h"
 #include "backend/index/leveldb/single_file/index.h"
 #include "backend/index/leveldb/single_file/test_util.h"
 #include "common/file_util.h"
@@ -61,12 +63,25 @@ template <Trivial K, std::integral I>
 class IndexHandler<LevelDBKeySpaceTestAdapter<K, I>> {
  public:
   IndexHandler()
-      : index_((*LevelDBIndex::Open(dir_.GetPath())).KeySpace<K, I>('t')) {}
+      : index_((*KeySpacedLevelDBIndex::Open(dir_.GetPath()))
+                   .KeySpace<K, I>('t')) {}
   LevelDBKeySpaceTestAdapter<K, I>& GetIndex() { return index_; }
 
  private:
   TempDir dir_;
   LevelDBKeySpaceTestAdapter<K, I> index_;
+};
+
+// A specialization of the generic IndexHandler for leveldb implementation.
+template <Trivial K, std::integral I>
+class IndexHandler<LevelDBIndexTestAdapter<K, I>> {
+ public:
+  IndexHandler() : index_(*LevelDBIndex<K, I>::Open(dir_.GetPath())) {}
+  LevelDBIndexTestAdapter<K, I>& GetIndex() { return index_; }
+
+ private:
+  TempDir dir_;
+  LevelDBIndexTestAdapter<K, I> index_;
 };
 
 }  // namespace

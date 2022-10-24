@@ -19,7 +19,7 @@ using TestIndex = LevelDBKeySpaceTestAdapter<int, int>;
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
 
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
-  return (*LevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
+  return (*KeySpacedLevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
 }
 
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {

@@ -31,7 +31,11 @@ std::array<char, sizeof(I)> ToDBValue(const I& value) {
   return buffer;
 }
 
-template <Trivial K, std::integral I>
+// Base levelDB index class. This class provides basic functionality for
+// leveldb index. Key has to be trivially copyable and value has to be
+// std::integral. KPL stands for key prefix length. It is the length of the
+// prefix of the key that is used to group keys together.
+template <Trivial K, std::integral I, std::size_t KPL>
 class LevelDBIndexBase {
  public:
   LevelDBIndexBase(LevelDBIndexBase&&) noexcept = default;
@@ -39,7 +43,7 @@ class LevelDBIndexBase {
 
   // Get index for given key.
   absl::StatusOr<I> Get(const K& key) const {
-    ASSIGN_OR_RETURN(auto data, ldb_->Get(ToDBKey(key)));
+    ASSIGN_OR_RETURN(auto data, GetDB()->Get(ToDBKey(key)));
     return ParseDBResult<I>(data);
   }
 
@@ -70,31 +74,29 @@ class LevelDBIndexBase {
 
  protected:
   explicit LevelDBIndexBase() = default;
-  void Initialize(internal::LevelDB* ldb) { ldb_ = ldb; }
 
  private:
   // Get hash key into leveldb.
-  virtual std::string_view GetHashKey() const = 0;
+  virtual std::string GetHashKey() const = 0;
 
   // Get last index key into leveldb.
-  virtual std::string_view GetLastIndexKey() const = 0;
+  virtual std::string GetLastIndexKey() const = 0;
 
   // Converts given key into leveldb key.
-  std::array<char, sizeof(K)> ToDBKey(const K& key) const {
-    std::array<char, sizeof(K)> buffer;
-    memcpy(buffer.data(), &key, sizeof(K));
-    return buffer;
-  };
+  virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
+
+  // Get leveldb handle.
+  virtual internal::LevelDB* GetDB() const = 0;
 
   // Get last index value.
   absl::StatusOr<I> GetLastIndexFromDB() const {
-    ASSIGN_OR_RETURN(auto data, ldb_->Get(GetLastIndexKey()));
+    ASSIGN_OR_RETURN(auto data, GetDB()->Get(GetLastIndexKey()));
     return ParseDBResult<I>(data);
   }
 
   // Get actual hash value.
   absl::StatusOr<Hash> GetHashFromDB() const {
-    ASSIGN_OR_RETURN(auto data, ldb_->Get(GetHashKey()));
+    ASSIGN_OR_RETURN(auto data, GetDB()->Get(GetHashKey()));
     if (data.size() != sizeof(Hash))
       return absl::InternalError("Invalid hash size.");
     return *reinterpret_cast<Hash*>(data.data());
@@ -107,12 +109,12 @@ class LevelDBIndexBase {
     auto last_index_key = GetLastIndexKey();
     auto batch =
         std::array{LDBEntry{db_key, db_val}, LDBEntry{last_index_key, db_val}};
-    return ldb_->AddBatch(batch);
+    return GetDB()->AddBatch(batch);
   }
 
   // Add hash value into database.
   absl::Status AddHashIntoDB(const Hash& hash) const {
-    return ldb_->Add(
+    return GetDB()->Add(
         {GetHashKey(), {reinterpret_cast<const char*>(&hash), sizeof(hash)}});
   }
 
@@ -184,8 +186,6 @@ class LevelDBIndexBase {
     return AddHashIntoDB(*hash_);
   }
 
-  internal::LevelDB* ldb_;
-
   // Last index value. This is used to generate new index.
   std::optional<I> last_index_;
   // Current hash value.
@@ -195,4 +195,4 @@ class LevelDBIndexBase {
   // A SHA256 hasher instance used for hashing keys.
   Sha256Hasher hasher_;
 };
-}  // namespace carmen::backend::index
+}  // namespace carmen::backend::index::internal

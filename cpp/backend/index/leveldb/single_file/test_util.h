@@ -7,8 +7,7 @@
 #include "common/type.h"
 
 namespace carmen::backend::index {
-// LevelDBKeySpaceAdapter is a wrapper around LevelDBKeySpace. It exposes
-// LevelDBKeySpace methods to be compatible with tests.
+// LevelDBKeySpaceAdapter is a wrapper around LevelDBKeySpace.
 template <Trivial K, std::integral I>
 class LevelDBKeySpaceTestAdapter {
  public:

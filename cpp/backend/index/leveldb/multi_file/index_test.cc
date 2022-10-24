@@ -17,9 +17,6 @@ using ::testing::StrEq;
 TEST(LevelDBMultiFileIndex, TestOpen) {
   auto dir = TempDir();
   ASSERT_THAT(TestIndex::Open(dir.GetPath()), IsOk());
-
-  TestIndex::Open(dir.GetPath()).value();
-
 }
 
 TEST(LevelDBMultiFileIndex, IndexIsPersistent) {
@@ -30,18 +27,17 @@ TEST(LevelDBMultiFileIndex, IndexIsPersistent) {
   {
     auto index = *TestIndex::Open(dir.GetPath());
     EXPECT_THAT(index.Get(1).status().code(), absl::StatusCode::kNotFound);
-    //result = index.GetOrAdd(1);
-    //ASSERT_OK(result);
-    //EXPECT_EQ((*result).second, true);
-    //EXPECT_THAT(*index.Get(1), (*result).first);
+    result = index.GetOrAdd(1);
+    ASSERT_OK(result);
+    EXPECT_TRUE((*result).second);
+    EXPECT_THAT(*index.Get(1), (*result).first);
   }
 
   // Reopen index and check that the value is still present.
   {
-    //auto index = *TestIndex::Open(dir.GetPath());
-    //EXPECT_THAT(*index.Get(1), (*result).first);
+    auto index = *TestIndex::Open(dir.GetPath());
+    EXPECT_THAT(*index.Get(1), (*result).first);
   }
 }
-
 }  // namespace
 }  // namespace carmen::backend::index

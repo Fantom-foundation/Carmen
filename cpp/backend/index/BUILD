@@ -49,6 +49,8 @@ cc_library(
         "//common:type",
         "//backend/index/leveldb/single_file:test_util",
         "//backend/index/leveldb/single_file:index",
+        "//backend/index/leveldb/multi_file:test_util",
+        "//backend/index/leveldb/multi_file:index",
         "//backend/index/cache:cache",
         "//backend/index/file:index",
         "//common:file_util",

@@ -1,23 +1,19 @@
 #pragma once
 
-#include <string_view>
 #include <array>
+#include <string_view>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/common/level_db.h"
 #include "backend/index/leveldb/common/index.h"
+#include "backend/index/leveldb/common/level_db.h"
 
 namespace carmen::backend::index {
-namespace internal {
-constexpr std::string_view kHashKey = "hash";
-constexpr std::string_view kLastIndexKey = "last_index";
-}
 
-// LevelDBIndex is an index implementation over leveldb.
+// KeySpacedLevelDBIndex is an index implementation over leveldb.
 template <Trivial K, std::integral I>
-class LevelDBIndex : public internal::LevelDBIndexBase<K, I> {
+class LevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
  public:
   static absl::StatusOr<LevelDBIndex> Open(const std::filesystem::path& path) {
     auto db = internal::LevelDB::Open(path);
@@ -27,19 +23,23 @@ class LevelDBIndex : public internal::LevelDBIndexBase<K, I> {
 
  private:
   explicit LevelDBIndex(internal::LevelDB ldb)
-      : internal::LevelDBIndexBase<K, I>(), test(std::move(ldb)) {
-                                                //this->Initialize(&test);
-  }
+      : internal::LevelDBIndexBase<K, I, 0>(), ldb_(std::move(ldb)) {}
 
-  std::string_view GetHashKey() const override {
-      return internal::kHashKey;
+  std::string GetHashKey() const override { return "hash"; };
+
+  std::string GetLastIndexKey() const override { return "last_index"; }
+
+  std::array<char, sizeof(K)> ToDBKey(const K& key) const override {
+    std::array<char, sizeof(K)> buffer;
+    memcpy(buffer.data(), &key, sizeof(K));
+    return buffer;
   };
 
-  std::string_view GetLastIndexKey() const override {
-    return internal::kLastIndexKey;
+  internal::LevelDB* GetDB() const override {
+    return const_cast<internal::LevelDB*>(&ldb_);
   }
 
-  internal::LevelDB test;
+  internal::LevelDB ldb_;
 };
 
 }  // namespace carmen::backend::index

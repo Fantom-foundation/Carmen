@@ -21,8 +21,8 @@ using FileIndexInMemory =
     FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
 using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
-using LevelDBIndex = LevelDBKeySpaceTestAdapter<Key, std::uint32_t>;
-using CachedLevelDBIndex = Cached<LevelDBIndex>;
+using KeySpacedLevelDBIndex = LevelDBKeySpaceTestAdapter<Key, std::uint32_t>;
+using CachedKeySpacedLevelDBIndex = Cached<KeySpacedLevelDBIndex>;
 
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index:index_benchmark
@@ -80,9 +80,11 @@ BENCHMARK(BM_Insert<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)->Arg(1 << 20)->Arg(1 << 24);
+BENCHMARK(BM_Insert<IndexHandler<KeySpacedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
 
-BENCHMARK(BM_Insert<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_Insert<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -130,11 +132,11 @@ BENCHMARK(BM_SequentialRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_SequentialRead<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_SequentialRead<IndexHandler<KeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
-BENCHMARK(BM_SequentialRead<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_SequentialRead<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -184,11 +186,11 @@ BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_UniformRandomRead<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_UniformRandomRead<IndexHandler<KeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
-BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -238,11 +240,11 @@ BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<KeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -303,12 +305,12 @@ BENCHMARK(BM_Hash<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
 
-BENCHMARK(BM_Hash<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_Hash<IndexHandler<KeySpacedLevelDBIndex>>)
     ->Arg(1 << 10)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
 
-BENCHMARK(BM_Hash<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_Hash<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 10)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
