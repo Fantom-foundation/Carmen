@@ -77,7 +77,9 @@ func (ht *HashTree) childrenOfNode(layer, node int) (data []byte, err error) {
 	// use iterator to read nodes for the current branching factor
 	firstNode := ht.firstChildOf(node)
 	lastNode := firstNode + ht.factor
-	r := util.Range{Start: ht.convertKey(layer-1, firstNode), Limit: ht.convertKey(layer-1, lastNode)}
+	dbStartKey := ht.convertKey(layer-1, firstNode).ToBytes()
+	dbEndKey := ht.convertKey(layer-1, lastNode).ToBytes()
+	r := util.Range{Start: dbStartKey, Limit: dbEndKey}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
 
@@ -99,8 +101,8 @@ func (ht *HashTree) childrenOfNode(layer, node int) (data []byte, err error) {
 // layerLength returns index of last nodes in this layer, which is the length of this layer
 func (ht *HashTree) layerLength(layer int) (length int, err error) {
 	// set the range for full layer
-	firstNode := ht.convertKey(layer, 0)
-	lastNode := ht.convertKey(layer, 0xFFFF)
+	firstNode := ht.convertKey(layer, 0).ToBytes()
+	lastNode := ht.convertKey(layer, 0xFFFF).ToBytes()
 	r := util.Range{Start: firstNode, Limit: lastNode}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -116,8 +118,8 @@ func (ht *HashTree) layerLength(layer int) (length int, err error) {
 // getRootHash reads the root hash from the database
 func (ht *HashTree) getRootHash() (hash []byte, err error) {
 	// set the range for full layers
-	firstNode := ht.convertKey(0, 0)
-	lastNode := ht.convertKey(0xFF, 0)
+	firstNode := ht.convertKey(0, 0).ToBytes()
+	lastNode := ht.convertKey(0xFF, 0).ToBytes()
 	r := util.Range{Start: firstNode, Limit: lastNode}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -131,7 +133,8 @@ func (ht *HashTree) getRootHash() (hash []byte, err error) {
 
 // updateNode updates the hash-node value to the given value
 func (ht *HashTree) updateNode(layer, node int, nodeHash []byte) error {
-	return ht.db.Put(ht.convertKey(layer, node), nodeHash, nil)
+	dbKey := ht.convertKey(layer, node).ToBytes()
+	return ht.db.Put(dbKey, nodeHash, nil)
 }
 
 // parentOf provides an index of a parent node, by the child index
@@ -221,11 +224,11 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 	return
 }
 
-func (ht *HashTree) convertKey(layer, node int) []byte {
+func (ht *HashTree) convertKey(layer, node int) common.DbKey {
 	//  the key is: [tableSpace]H[layer][node]
 	// layer is 8bit (256 layers Max)
 	// node is 16bit
-	return ht.table.AppendKey(
-		common.HashKey.AppendKey(
+	return ht.table.DBToDBKey(
+		common.HashKey.ToDBKey(
 			binary.BigEndian.AppendUint16([]byte{uint8(layer)}, uint16(node))))
 }

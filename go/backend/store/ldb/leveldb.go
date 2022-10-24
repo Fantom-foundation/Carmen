@@ -52,7 +52,9 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int) {
 func (m *Store[I, V]) GetPage(page int) (pageData []byte, err error) {
 	pageStartKey := page * m.pageSize
 	pageEndKey := pageStartKey + m.pageSize
-	r := util.Range{Start: m.convertKey(I(pageStartKey)), Limit: m.convertKey(I(pageEndKey))}
+	startDbKey := m.convertKey(I(pageStartKey)).ToBytes()
+	endDbKey := m.convertKey(I(pageEndKey)).ToBytes()
+	r := util.Range{Start: startDbKey, Limit: endDbKey}
 	iter := m.db.NewIterator(&r, nil)
 	defer iter.Release()
 
@@ -72,7 +74,8 @@ func (m *Store[I, V]) GetPage(page int) (pageData []byte, err error) {
 
 func (m *Store[I, V]) Set(id I, value V) (err error) {
 	// index is mapped in the database directly
-	if err = m.db.Put(m.convertKey(id), m.valueSerializer.ToBytes(value), nil); err == nil {
+	dbKey := m.convertKey(id).ToBytes()
+	if err = m.db.Put(dbKey, m.valueSerializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
 		m.hashTree.MarkUpdated(page)
 	}
@@ -82,7 +85,8 @@ func (m *Store[I, V]) Set(id I, value V) (err error) {
 func (m *Store[I, V]) Get(id I) (v V, err error) {
 	// index is mapped in the database directly
 	var val []byte
-	if val, err = m.db.Get(m.convertKey(id), nil); err != nil {
+	dbKey := m.convertKey(id).ToBytes()
+	if val, err = m.db.Get(dbKey, nil); err != nil {
 		if err == leveldb.ErrNotFound {
 			return v, nil
 		}
@@ -106,6 +110,6 @@ func (m *Store[I, V]) Close() error {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Store[I, V]) convertKey(idx I) []byte {
-	return m.table.AppendKey(m.indexSerializer.ToBytes(idx))
+func (m *Store[I, V]) convertKey(idx I) common.DbKey {
+	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
 }
