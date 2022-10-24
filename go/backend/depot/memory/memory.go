@@ -28,8 +28,8 @@ func NewDepot[I common.Identifier](hashItems int, hashtreeFactory hashtree.Facto
 	return m, nil
 }
 
-// itemPage provides the hash group of an item
-func (m *Depot[I]) itemPage(id I) (page int) {
+// itemHashGroup provides the hash group into which belongs the item
+func (m *Depot[I]) itemHashGroup(id I) (page int) {
 	// casting to I for division in proper bit width
 	return int(id / I(m.hashItems))
 }
@@ -63,7 +63,7 @@ func (m *Depot[I]) Set(id I, value []byte) error {
 		m.data = append(m.data, nil)
 	}
 	m.data[id] = value
-	m.hashTree.MarkUpdated(m.itemPage(id))
+	m.hashTree.MarkUpdated(m.itemHashGroup(id))
 	return nil
 }
 

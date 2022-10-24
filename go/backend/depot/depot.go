@@ -11,7 +11,7 @@ type Depot[I common.Identifier] interface {
 	// Set creates a new mapping from the index to the value
 	Set(id I, value []byte) error
 
-	// Get a value associated with the index (or a default value if not defined)
+	// Get a value associated with the index (or nil if not defined)
 	Get(id I) ([]byte, error)
 
 	// GetStateHash computes and returns a cryptographical hash of the stored data

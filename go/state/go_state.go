@@ -160,7 +160,7 @@ func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {
-	sources := [8]common.HashProvider{
+	sources := []common.HashProvider{
 		s.addressIndex,
 		s.keyIndex,
 		s.slotIndex,
