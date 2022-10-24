@@ -43,4 +43,10 @@ type State interface {
 
 	// GetHash hashes the values.
 	GetHash() (common.Hash, error)
+
+	// Flush writes all committed content to disk.
+	Flush() error
+
+	// Close flushes the store and closes it.
+	Close() error
 }

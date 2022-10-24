@@ -41,6 +41,9 @@ concept File = requires(F a) {
   // Each file has to support a flush operation after which data previously
   // written must be persisted on disk.
   { a.Flush() } -> std::same_as<void>;
+  // Each file has to support a close operation, flushing buffered data and
+  // releasing file resources. After a file is closed it may no longer be used.
+  { a.Close() } -> std::same_as<void>;
 };
 
 // An InMemoryFile implement is provided to for testing purposes, where actual
@@ -51,6 +54,9 @@ class InMemoryFile {
  public:
   using page_type = Page;
 
+  InMemoryFile() = default;
+  InMemoryFile(std::filesystem::path){};
+
   std::size_t GetNumPages() const { return data_.size(); }
 
   void LoadPage(PageId id, Page& trg) const;
@@ -58,6 +64,10 @@ class InMemoryFile {
   void StorePage(PageId id, const Page& src);
 
   void Flush() const {
+    // Nothing to do.
+  }
+
+  void Close() const {
     // Nothing to do.
   }
 
@@ -95,6 +105,9 @@ class RawFile {
   // Flushes all pending/buffered writes to disk.
   void Flush();
 
+  // Flushes the file and closes the underlying resource.
+  void Close();
+
  private:
   // Grows the underlying file to the given size.
   void GrowFileIfNeeded(std::size_t needed);
@@ -124,7 +137,9 @@ class SingleFile {
     file_.Write(id * sizeof(Page), src.AsRawData());
   }
 
-  void Flush() const { file_.Flush(); }
+  void Flush() { file_.Flush(); }
+
+  void Close() { file_.Close(); }
 
  private:
   mutable internal::RawFile file_;

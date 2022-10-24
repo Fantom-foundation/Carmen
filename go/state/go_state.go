@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
@@ -182,4 +183,12 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 	}
 	copy(hash[:], h.Sum(nil))
 	return hash, nil
+}
+
+func (s *GoState) Flush() error {
+	return s.Flush()
+}
+
+func (s *GoState) Close() error {
+	return s.Close()
 }

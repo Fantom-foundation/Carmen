@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <filesystem>
 
 #include "backend/common/file.h"
 #include "backend/store/file/store.h"
@@ -26,8 +27,12 @@ class StoreHandlerBase {
   // page size and branching factor.
   auto& GetReferenceStore() { return reference_; }
 
+  // A temporary directory files of the maintained store a placed in.
+  std::filesystem::path GetStoreDirectory() const { return dir_; }
+
  private:
   ReferenceStore<page_size> reference_;
+  TempDir dir_;
 };
 
 // A generic store handler enclosing the setup and tear down of various store
@@ -42,30 +47,27 @@ template <typename Store, std::size_t branching_factor>
 class StoreHandler
     : public StoreHandlerBase<Store::kPageSize, branching_factor> {
  public:
-  StoreHandler() : store_(branching_factor) {}
+  using StoreHandlerBase<Store::kPageSize, branching_factor>::GetStoreDirectory;
+  StoreHandler() : store_(GetStoreDirectory(), branching_factor) {}
   Store& GetStore() { return store_; }
 
  private:
   Store store_;
 };
 
-// A specialization of a StoreHandler for File-Based SingleFile stores handling
-// the creation and deletion of temporary files backing the store.
-template <typename Value, std::size_t page_size, std::size_t branching_factor>
-class StoreHandler<FileStore<int, Value, SingleFile, page_size>,
-                   branching_factor>
+// A specialization of a StoreHandler for InMemoryStores handling ingoring the
+// creation/deletion of temporary files and directories.
+template <typename Key, Trivial Value, std::size_t page_size,
+          std::size_t branching_factor>
+class StoreHandler<InMemoryStore<Key, Value, page_size>, branching_factor>
     : public StoreHandlerBase<page_size, branching_factor> {
  public:
-  StoreHandler()
-      : store_(branching_factor, std::make_unique<SingleFile<Page>>(file_)) {}
+  StoreHandler() : store_(branching_factor) {}
 
-  FileStore<int, Value, SingleFile, page_size>& GetStore() { return store_; }
+  InMemoryStore<Key, Value, page_size>& GetStore() { return store_; }
 
  private:
-  using Store = FileStore<int, Value, SingleFile, page_size>;
-  using Page = typename Store::page_type;
-  TempFile file_;
-  Store store_;
+  InMemoryStore<Key, Value, page_size> store_;
 };
 
 }  // namespace

@@ -30,6 +30,10 @@ concept Index = requires(I a, const I b) {
   // index is defined to be zero. For every element added, the new hash is to be
   // computed as Sha256(old_hash, key).
   { a.GetHash() } -> std::same_as<Hash>;
+  // Indexes must be flushable.
+  { a.Flush() } -> std::same_as<void>;
+  // Indexes must be closeable.
+  { a.Close() } -> std::same_as<void>;
 };
 
 }  // namespace carmen::backend::index

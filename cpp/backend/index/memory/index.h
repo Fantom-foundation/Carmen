@@ -63,6 +63,16 @@ class InMemoryIndex {
     return hash_;
   }
 
+  // Flush unsafed index keys to disk.
+  void Flush() {
+    // ignored
+  }
+
+  // Close this index and release resources.
+  void Close() {
+    // ignored
+  }
+
  private:
   absl::flat_hash_map<K, I> data_;
   mutable std::queue<K> unhashed_keys_;

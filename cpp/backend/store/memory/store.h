@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <deque>
+#include <filesystem>
 #include <limits>
 #include <memory>
 #include <type_traits>
@@ -53,6 +54,12 @@ class InMemoryStore {
 
   // Computes a hash over the full content of this store.
   Hash GetHash() const;
+
+  // Ignored, since store is not backed by disk storage.
+  void Flush() {}
+
+  // Ignored, since store does not maintain any resources.
+  void Close() {}
 
  private:
   constexpr static auto elements_per_page = page_size / sizeof(V);

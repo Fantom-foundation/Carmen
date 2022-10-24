@@ -194,6 +194,40 @@ TEST_P(CStateTest, HashesChangeOnUpdates) {
   EXPECT_NE(initial_hash, new_hash);
 }
 
+TEST_P(CStateTest, StateCanBeFlushed) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+  Address addr{0x01};
+  Key key{0x02};
+  Value value{0x03};
+  Carmen_SetStorageValue(state, &addr, &key, &value);
+
+  Carmen_Flush(state);
+}
+
+TEST_P(CStateTest, StateCanBeFlushedMoreThanOnce) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+  Address addr{0x01};
+  Key key{0x02};
+  Value value{0x03};
+  Carmen_SetStorageValue(state, &addr, &key, &value);
+
+  Carmen_Flush(state);
+
+  value = Value{0x04};
+  Carmen_SetStorageValue(state, &addr, &key, &value);
+
+  Carmen_Flush(state);
+  Carmen_Flush(state);
+}
+
+TEST_P(CStateTest, StateCanBeClosed) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+  Carmen_Close(state);
+}
+
 INSTANTIATE_TEST_SUITE_P(
     All, CStateTest, testing::Values(Config::kInMemory, Config::kFileBased),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {

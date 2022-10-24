@@ -64,6 +64,12 @@ class Cached {
     return hash;
   }
 
+  // Flush unsafed index keys to disk.
+  void Flush() { index_.Flush(); }
+
+  // Close this index and release resources.
+  void Close() { index_.Close(); }
+
  private:
   constexpr static std::size_t kDefaultSize = 1 << 20;  // ~1 million
 
