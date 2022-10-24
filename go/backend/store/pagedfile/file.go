@@ -155,7 +155,7 @@ func (m *Store[I, V]) Flush() (err error) {
 		return err
 	}
 	// evict the whole pages pool - hash pages into the hashTree
-	for pageId, _ := range m.pagesPool {
+	for pageId := range m.pagesPool {
 		err = m.evictPage(pageId)
 		if err != nil {
 			return err

@@ -73,7 +73,7 @@ func (ht *HashTree) commit() (err error) {
 	h := sha256.New() // the hasher is created once for the whole block as it hashes the fastest
 	for layer := 0; layer < len(ht.tree); layer++ {
 		needNextLayer := false
-		for node, _ := range ht.dirtyNodes[layer] {
+		for node := range ht.dirtyNodes[layer] {
 			var nodeHash []byte
 			if layer == 0 {
 				// hash the data of the page, which comes from the outside
