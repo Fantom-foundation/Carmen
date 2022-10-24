@@ -286,7 +286,9 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 		return createSharedMultiLevelDbIndex[K, I](b, keySerializer, indexSerializer)
 	}
 	eachLevelDbIndexFunc := func() indexWrapper[K, I] { return createEachMultiLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
-	transactLevelDbIndexFunc := func() indexWrapper[K, I] { return createTransactLevelDbIndex[K, I](b, transactWriteBuffer, keySerializer, indexSerializer) }
+	transactLevelDbIndexFunc := func() indexWrapper[K, I] {
+		return createTransactLevelDbIndex[K, I](b, transactWriteBuffer, keySerializer, indexSerializer)
+	}
 	cachedLevelDbIndexFunc := func() indexWrapper[K, I] {
 		return createCachedLevelDbIndex[K, I](b, cacheCapacity, keySerializer, indexSerializer)
 	}
