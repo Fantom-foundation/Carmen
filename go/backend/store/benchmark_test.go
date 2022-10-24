@@ -3,6 +3,9 @@ package store_test
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -171,7 +174,7 @@ func toValue(i uint32) common.Value {
 }
 
 func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
-	str, err := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, BranchingFactor)
+	str, err := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(BranchingFactor))
 	if err != nil {
 		b.Fatalf("failed to init memory store; %s", err)
 	}
@@ -179,7 +182,7 @@ func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 }
 
 func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
-	str, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, common.Value{}, PageSize, BranchingFactor)
+	str, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(b.TempDir()+"/hashtree", BranchingFactor))
 	if err != nil {
 		b.Fatalf("failed to init file store; %s", err)
 	}
@@ -187,7 +190,7 @@ func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
 }
 
 func initPagedFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
-	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, BranchingFactor, PoolSize, eviction.NewLRUPolicy(PoolSize))
+	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(b.TempDir()+"/hashes", BranchingFactor), PoolSize, eviction.NewLRUPolicy(PoolSize))
 	if err != nil {
 		b.Fatalf("failed to init pagedfile store; %s", err)
 	}
@@ -199,8 +202,8 @@ func initLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
 	}
-	hashTree := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
-	store, err = ldb.NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, common.Value{}, PageSize)
+	hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
+	store, err = ldb.NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, PageSize)
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
 	}

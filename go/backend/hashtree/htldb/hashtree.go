@@ -1,10 +1,10 @@
-package ldb
+package htldb
 
 import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"

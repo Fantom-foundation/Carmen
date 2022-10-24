@@ -1,4 +1,4 @@
-package ldb
+package htldb
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"

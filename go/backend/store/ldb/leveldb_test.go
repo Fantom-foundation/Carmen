@@ -2,8 +2,8 @@ package ldb
 
 import (
 	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"io"
@@ -21,8 +21,7 @@ var (
 	B = common.Value{0xBB}
 	C = common.Value{0xCC}
 
-	defaultItem = common.Value{0xFF}
-	table       = []byte("V")
+	table = []byte("V")
 )
 
 const (
@@ -35,7 +34,7 @@ func TestEmpty(t *testing.T) {
 	db := openStoreDb(t, tmpDir)
 	s := createNewStore(t, db)
 
-	if val, err := s.Get(10); err != nil || val != defaultItem {
+	if val, err := s.Get(10); err != nil || val != (common.Value{}) {
 		t.Errorf("Result is incorrect. Res: %s, Err: %s", val, err)
 	}
 }
@@ -206,8 +205,8 @@ func closeDb[I common.Identifier, K common.Value](db *leveldb.DB, p *Store[I, K]
 }
 
 func createNewStore(t *testing.T, db *leveldb.DB) *Store[uint32, common.Value] {
-	hashTree := memory.CreateHashTreeFactory(BranchingFactor)
-	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, defaultItem, PageSize)
+	hashTree := htmemory.CreateHashTreeFactory(BranchingFactor)
+	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, PageSize)
 
 	if err != nil {
 		t.Fatalf("unable to create Store")

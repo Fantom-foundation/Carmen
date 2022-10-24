@@ -2,8 +2,7 @@ package pagedfile
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"os"
@@ -24,7 +23,7 @@ type Store[I common.Identifier, V any] struct {
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], pageSize int64, branchingFactor int, poolSize int, evictionPolicy eviction.Policy) (*Store[I, V], error) {
+func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], pageSize int64, hashtreeFactory hashtree.Factory, poolSize int, evictionPolicy eviction.Policy) (*Store[I, V], error) {
 	itemSize := int64(serializer.Size())
 	if pageSize < itemSize {
 		return nil, fmt.Errorf("page size must not be less than one item size")
@@ -53,7 +52,7 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		poolSize:       poolSize,
 		itemsPerPage:   int(pageSize / itemSize),
 	}
-	s.hashTree = file.CreateHashTreeFactory(path+"/hashes", branchingFactor).Create(s)
+	s.hashTree = hashtreeFactory.Create(s)
 	return s, nil
 }
 
