@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -162,27 +163,53 @@ func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySeri
 	return indexWrapper[K, I]{keySerializer, indexSerializer, idx}
 }
 
+// createCachedLevelDbIndex create instance of LevelDB index with the cache
+func createCachedLevelDbIndex[K comparable, I common.Identifier](b *testing.B, cacheCapacity int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
+	db, err := leveldb.OpenFile(b.TempDir(), nil)
+	if err != nil {
+		b.Errorf("failed to init leveldb; %s", err)
+	}
+
+	b.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	idx, err := ldb.NewIndex[K, I](db, common.SlotKey, keySerializer, indexSerializer)
+	if err != nil {
+		b.Fatalf("failed to init leveldb index; %s", err)
+	}
+
+	cached := cache.NewIndex[K, I](idx, cacheCapacity)
+	return indexWrapper[K, I]{keySerializer, indexSerializer, cached}
+}
+
 var sink interface{}
 
 // toKey converts the key from an input uint32 to the generic Key
 func (iw *indexWrapper[K, I]) toKey(key uint32) K {
-	keyBytes := binary.BigEndian.AppendUint32([]byte{}, key)
+	keyBytes := binary.BigEndian.AppendUint32(make([]byte, 0, 32), key)
 	return iw.keySerializer.FromBytes(keyBytes)
 }
 
 func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) []testConfig[K, I] {
 
+	cacheCapacity := 2 << 15 // number of items: 2 ^ 15 * 32B = 1MB
+
 	memoryIndexFunc := func() indexWrapper[K, I] { return createMemoryIndex[K, I](keySerializer, indexSerializer) }
 	levelDbIndexFunc := func() indexWrapper[K, I] { return createLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
+	cachedLevelDbIndexFunc := func() indexWrapper[K, I] {
+		return createCachedLevelDbIndex[K, I](b, cacheCapacity, keySerializer, indexSerializer)
+	}
 
 	initialSizes := []uint32{0x1p20, 0x1p24, 0x1p30}
 	updateSizes := []uint32{100}
 
-	//initialSizes := []uint32{1 << 20, 1 << 24} // debug Ns
+	//initialSizes := []uint32{1 << 5, 1 << 10} // debug Ns
 	//updateSizes := []uint32{1, 2}             // debug Ms
 
 	return []testConfig[K, I]{
 		{"Memory", initialSizes, updateSizes, memoryIndexFunc},
 		{"LevelDb", initialSizes, updateSizes, levelDbIndexFunc},
+		{"CachedLevelDb", initialSizes, updateSizes, cachedLevelDbIndexFunc},
 	}
 }
