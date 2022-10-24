@@ -23,6 +23,8 @@ using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
 using KeySpacedLevelDBIndex = LevelDBKeySpaceTestAdapter<Key, std::uint32_t>;
 using CachedKeySpacedLevelDBIndex = Cached<KeySpacedLevelDBIndex>;
+using LevelDBIndex = LevelDBIndexTestAdapter<Key, std::uint32_t>;
+using CachedLevelDBIndex = Cached<LevelDBIndex>;
 
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index:index_benchmark
@@ -88,6 +90,12 @@ BENCHMARK(BM_Insert<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
+BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)->Arg(1 << 20)->Arg(1 << 24);
+
+BENCHMARK(BM_Insert<IndexHandler<CachedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
 template <typename IndexHandler>
 void BM_SequentialRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
@@ -137,6 +145,14 @@ BENCHMARK(BM_SequentialRead<IndexHandler<KeySpacedLevelDBIndex>>)
     ->Arg(1 << 24);
 
 BENCHMARK(BM_SequentialRead<IndexHandler<CachedKeySpacedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_SequentialRead<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_SequentialRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -194,6 +210,14 @@ BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
+BENCHMARK(BM_UniformRandomRead<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
 template <typename IndexHandler>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
@@ -245,6 +269,14 @@ BENCHMARK(BM_ExponentialRandomRead<IndexHandler<KeySpacedLevelDBIndex>>)
     ->Arg(1 << 24);
 
 BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedKeySpacedLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -315,5 +347,14 @@ BENCHMARK(BM_Hash<IndexHandler<CachedKeySpacedLevelDBIndex>>)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
 
+BENCHMARK(BM_Hash<IndexHandler<LevelDBIndex>>)
+    ->Arg(1 << 10)
+    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
+                     // initial entries
+
+BENCHMARK(BM_Hash<IndexHandler<CachedLevelDBIndex>>)
+    ->Arg(1 << 10)
+    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
+                     // initial entries
 }  // namespace
 }  // namespace carmen::backend::index
