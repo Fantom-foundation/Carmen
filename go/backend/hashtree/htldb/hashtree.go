@@ -157,7 +157,7 @@ func (ht *HashTree) calculateHash(hasher hash.Hash, content []byte) (hash []byte
 // updateDirtyNodes updates parent nodes marked as dirty with a hash of its children
 func (ht *HashTree) updateDirtyNodes(layer int, dirtyNodes map[int]bool, hasher hash.Hash) (newDirtyNodes map[int]bool, nodeHash []byte, err error) {
 	newDirtyNodes = make(map[int]bool)
-	for node, _ := range dirtyNodes {
+	for node := range dirtyNodes {
 		var content []byte
 		if layer == 0 {
 			// hash the data of the page
