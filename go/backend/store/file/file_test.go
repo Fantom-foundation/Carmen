@@ -1,9 +1,11 @@
 package file
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
+	"os"
 	"testing"
 )
 
@@ -107,7 +109,11 @@ func TestHashingInFileStore(t *testing.T) {
 }
 
 func createStore(t *testing.T, tmpDir string) store.Store[uint32, common.Value] {
-	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, defaultItem, 8*32, 3)
+	err := os.MkdirAll(tmpDir+"/hashes", 0700)
+	if err != nil {
+		t.Fatalf("failed to create dir for hashtree; %s", err)
+	}
+	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, 8*32, htfile.CreateHashTreeFactory(tmpDir+"/hashes", 3))
 	if err != nil {
 		t.Fatalf("unable to create st; %s", err)
 	}

@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
@@ -191,19 +192,19 @@ func NewInMemoryComposition() (State, error) {
 	var noncesStore store.Store[uint32, common.Nonce]
 	var balancesStore store.Store[uint32, common.Balance]
 	var valuesStore store.Store[uint32, common.Value]
-	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.Unknown, PageSize, HashTreeFactor)
+	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	noncesStore, err = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, common.Nonce{}, PageSize, HashTreeFactor)
+	noncesStore, err = storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	balancesStore, err = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.Balance{}, PageSize, HashTreeFactor)
+	balancesStore, err = storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	valuesStore, err = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.Value{}, PageSize, HashTreeFactor)
+	valuesStore, err = storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}

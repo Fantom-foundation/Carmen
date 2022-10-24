@@ -2,13 +2,13 @@ package ldb
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-// Store is a database-based store.Store implementation. It stores items in a key-value databse.
+// Store is a database-based store.Store implementation. It stores items in a key-value database.
 type Store[I common.Identifier, V any] struct {
 	db              *leveldb.DB
 	hashTree        hashtree.HashTree
@@ -17,7 +17,6 @@ type Store[I common.Identifier, V any] struct {
 	pageSize        int // the amount of items stored in one database page
 	itemSize        int // the amount of bytes per one value
 	table           common.TableSpace
-	itemDefault     V
 }
 
 // NewStore constructs a new instance of the Store.
@@ -27,7 +26,6 @@ func NewStore[I common.Identifier, V any](
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],
 	hashTreeFactory hashtree.Factory,
-	itemDefault V,
 	pageSize int) (store *Store[I, V], err error) {
 
 	if pageSize < serializer.Size() {
@@ -41,7 +39,6 @@ func NewStore[I common.Identifier, V any](
 		pageSize:        pageSize / serializer.Size(),
 		itemSize:        serializer.Size(),
 		table:           table,
-		itemDefault:     itemDefault,
 	}
 	store.hashTree = hashTreeFactory.Create(store)
 	return
@@ -87,7 +84,7 @@ func (m *Store[I, V]) Get(id I) (v V, err error) {
 	var val []byte
 	if val, err = m.db.Get(m.convertKey(id), nil); err != nil {
 		if err == leveldb.ErrNotFound {
-			return m.itemDefault, nil
+			return v, nil
 		}
 	} else {
 		v = m.valueSerializer.FromBytes(val)
