@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <iostream>
 #include <queue>
 #include <sstream>
@@ -122,6 +123,12 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
     if (!status.ok()) return status;
     return GetLastHash();
   }
+
+  // Flush unsafed index keys to disk.
+  void Flush() { assert(false && "Not implemented"); }
+
+  // Close this index and release resources.
+  void Close() { assert(false && "Not implemented"); }
 
  private:
   // Get last index value. If it is not cached, it will be fetched from

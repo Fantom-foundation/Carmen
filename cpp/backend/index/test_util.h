@@ -113,6 +113,8 @@ class MockIndex {
   MOCK_METHOD((std::pair<V, bool>), GetOrAdd, (const K& key));
   MOCK_METHOD((std::optional<V>), Get, (const K& key), (const));
   MOCK_METHOD(Hash, GetHash, ());
+  MOCK_METHOD(void, Flush, ());
+  MOCK_METHOD(void, Close, ());
 };
 
 // A movable wrapper of a mock index. This may be required when a index needs to
@@ -130,6 +132,10 @@ class MockIndexWrapper {
   std::optional<V> Get(const K& key) const { return index_->Get(key); }
 
   Hash GetHash() { return index_->GetHash(); }
+
+  void Flush() { return index_->Flush(); }
+
+  void Close() { return index_->Close(); }
 
   // Returns a reference to the wrapped MockIndex. This pointer is stable.
   MockIndex<K, V>& GetMockIndex() { return *index_; }

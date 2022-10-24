@@ -117,5 +117,84 @@ TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
   pool.Get(0);
 }
 
+template <carmen::backend::Page P>
+class MockFile {
+ public:
+  using page_type = P;
+  MOCK_METHOD(std::size_t, GetNumPages, ());
+  MOCK_METHOD(void, LoadPage, (PageId id, P& dest));
+  MOCK_METHOD(void, StorePage, (PageId id, const P& src));
+  MOCK_METHOD(void, Flush, ());
+  MOCK_METHOD(void, Close, ());
+};
+
+TEST(MockFileTest, IsFile) { EXPECT_TRUE(File<MockFile<Page>>); }
+
+TEST(PagePoolTest, FlushWritesDirtyPages) {
+  auto file = std::make_unique<MockFile<Page>>();
+  auto& mock = *file;
+  PagePool<Page, MockFile> pool(std::move(file), 2);
+
+  EXPECT_CALL(mock, LoadPage(10, _));
+  EXPECT_CALL(mock, LoadPage(20, _));
+  EXPECT_CALL(mock, StorePage(10, _));
+  EXPECT_CALL(mock, StorePage(20, _));
+
+  pool.Get(10);
+  pool.Get(20);
+  pool.MarkAsDirty(10);
+  pool.MarkAsDirty(20);
+
+  pool.Flush();
+}
+
+TEST(PagePoolTest, FlushResetsPageState) {
+  auto file = std::make_unique<MockFile<Page>>();
+  auto& mock = *file;
+  PagePool<Page, MockFile> pool(std::move(file), 2);
+
+  EXPECT_CALL(mock, LoadPage(10, _));
+  EXPECT_CALL(mock, StorePage(10, _));
+
+  pool.Get(10);
+  pool.MarkAsDirty(10);
+
+  pool.Flush();
+  pool.Flush();  // < not written a second time
+}
+
+TEST(PagePoolTest, CleanPagesAreNotFlushed) {
+  auto file = std::make_unique<MockFile<Page>>();
+  auto& mock = *file;
+  PagePool<Page, MockFile> pool(std::move(file), 2);
+
+  EXPECT_CALL(mock, LoadPage(10, _));
+  EXPECT_CALL(mock, LoadPage(20, _));
+  EXPECT_CALL(mock, StorePage(20, _));
+
+  pool.Get(10);
+  pool.Get(20);
+  pool.MarkAsDirty(20);
+
+  pool.Flush();
+}
+
+TEST(PagePoolTest, ClosingPoolFlushesPagesAndClosesFile) {
+  auto file = std::make_unique<MockFile<Page>>();
+  auto& mock = *file;
+  PagePool<Page, MockFile> pool(std::move(file), 2);
+
+  EXPECT_CALL(mock, LoadPage(10, _));
+  EXPECT_CALL(mock, LoadPage(20, _));
+  EXPECT_CALL(mock, StorePage(20, _));
+  EXPECT_CALL(mock, Close());
+
+  pool.Get(10);
+  pool.Get(20);
+  pool.MarkAsDirty(20);
+
+  pool.Close();
+}
+
 }  // namespace
 }  // namespace carmen::backend

@@ -70,6 +70,12 @@ class FileIndex {
   // Computes a hash over the full content of this index.
   Hash GetHash() const;
 
+  // Flush unsafed index keys to disk.
+  void Flush();
+
+  // Close this index and release resources.
+  void Close();
+
   // Prints the content of this index to std::cout. Mainly intended for manual
   // inspection and debugging.
   void Dump() const;
@@ -270,6 +276,22 @@ Hash FileIndex<K, I, F, page_size>::GetHash() const {
     unhashed_keys_.pop();
   }
   return hash_;
+}
+
+template <Trivial K, std::integral I, template <typename> class F,
+          std::size_t page_size>
+void FileIndex<K, I, F, page_size>::Flush() {
+  primary_pool_->Flush();
+  overflow_pool_->Flush();
+  // TODO: safe hash and free list.
+}
+
+template <Trivial K, std::integral I, template <typename> class F,
+          std::size_t page_size>
+void FileIndex<K, I, F, page_size>::Close() {
+  Flush();
+  primary_pool_->Close();
+  overflow_pool_->Close();
 }
 
 template <Trivial K, std::integral I, template <typename> class F,

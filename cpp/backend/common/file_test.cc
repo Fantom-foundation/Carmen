@@ -96,6 +96,34 @@ TEST(SingleFileTest, IsFile) {
   EXPECT_TRUE(File<SingleFile<Page<32>>>);
 }
 
+TEST(SingleFileTest, ExistingFileCanBeOpened) {
+  TempFile temp_file;
+  ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
+  SingleFile<Page<32>> file(temp_file.GetPath());
+  EXPECT_EQ(0, file.GetNumPages());
+}
+
+TEST(SingleFileTest, NonExistingFileIsCreated) {
+  TempFile temp_file;
+  ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
+  std::filesystem::remove(temp_file.GetPath());
+  ASSERT_FALSE(std::filesystem::exists(temp_file.GetPath()));
+  SingleFile<Page<32>> file(temp_file.GetPath());
+  EXPECT_TRUE(std::filesystem::exists(temp_file.GetPath()));
+  EXPECT_EQ(0, file.GetNumPages());
+}
+
+TEST(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
+  TempDir temp_dir;
+  SingleFile<Page<32>> file(temp_dir.GetPath() / "some" / "dir" / "file.dat");
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath()));
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some"));
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir"));
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir" /
+                                      "file.dat"));
+  EXPECT_EQ(0, file.GetNumPages());
+}
+
 TEST(SingleFileTest, InitialFileIsEmpty) {
   TempFile temp_file;
   SingleFile<Page<32>> file(temp_file.GetPath());

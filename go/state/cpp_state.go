@@ -101,3 +101,13 @@ func (cs *CppState) GetHash() (common.Hash, error) {
 	C.Carmen_GetHash(cs.state, unsafe.Pointer(&hash[0]))
 	return hash, nil
 }
+
+func (cs *CppState) Flush() error {
+	C.Carmen_Flush(cs.state)
+	return nil
+}
+
+func (cs *CppState) Close() error {
+	C.Carmen_Close(cs.state)
+	return nil
+}

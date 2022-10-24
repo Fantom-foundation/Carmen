@@ -4,7 +4,22 @@ namespace carmen::backend {
 
 namespace internal {
 
+namespace {
+
+// Creates the provided directory file path recursively. Returns true on
+// success, false otherwise.
+bool CreateDirectory(std::filesystem::path dir) {
+  if (std::filesystem::exists(dir)) return true;
+  if (!dir.has_relative_path()) return false;
+  return CreateDirectory(dir.parent_path()) &&
+         std::filesystem::create_directory(dir);
+}
+
+}  // namespace
+
 RawFile::RawFile(std::filesystem::path file) {
+  // Create the parent directory.
+  CreateDirectory(file.parent_path());
   // Opening the file write-only first creates the file in case it does not
   // exist.
   data_.open(file, std::ios::binary | std::ios::out);
@@ -33,6 +48,11 @@ void RawFile::Write(std::size_t pos, std::span<const std::byte> span) {
 }
 
 void RawFile::Flush() { std::flush(data_); }
+
+void RawFile::Close() {
+  Flush();
+  data_.close();
+}
 
 void RawFile::GrowFileIfNeeded(std::size_t needed) {
   // Retain a 256 KiB buffer of zeros for initializing disk space.

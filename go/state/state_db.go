@@ -36,6 +36,10 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	EndTransaction()
 	AbortTransaction()
+
+	// Flushes committed state to disk.
+	Flush() error
+	Close() error
 }
 
 // stateDB is the internal implementation of the StateDB interface.
@@ -97,8 +101,8 @@ type slotValue struct {
 	current common.Value
 }
 
-func CreateStateDB() (StateDB, error) {
-	state, err := NewCppInMemoryState()
+func CreateStateDB(directory string) (StateDB, error) {
+	state, err := NewCppFileBasedState(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -401,4 +405,12 @@ func (s *stateDB) ResetTransaction() {
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data = make(map[slotId]*slotValue, len(s.data))
 	s.undo = s.undo[0:0]
+}
+
+func (s *stateDB) Flush() error {
+	return s.state.Flush()
+}
+
+func (s *stateDB) Close() error {
+	return s.state.Close()
 }

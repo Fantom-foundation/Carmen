@@ -54,6 +54,14 @@ class PagePool {
   // Registers a page pool listener monitoring events.
   void AddListener(std::unique_ptr<Listener> listener);
 
+  // Syncronizes all pages in the pool by writing all dirty pages out to disk.
+  // Does not affect the content of the pool, nor are page accesses reported to
+  // the pool policies.
+  void Flush();
+
+  // Flushes the content of this pool and released the underlying file.
+  void Close();
+
  private:
   // Obtains a free slot in the pool. If all are occupied, a page is evicted to
   // make space.
@@ -148,6 +156,26 @@ void PagePool<P, F>::AddListener(std::unique_ptr<Listener> listener) {
   if (listener != nullptr) {
     listeners_.push_back(std::move(listener));
   }
+}
+
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::Flush() {
+  for (std::size_t i = 0; i < pool_.size(); i++) {
+    if (!dirty_[i]) continue;
+    const auto& page_id = index_to_pages_[i];
+    if (page_id.has_value()) {
+      file_->StorePage(*page_id, pool_[i]);
+    }
+    dirty_[i] = false;
+  }
+}
+
+template <typename P, template <typename> class F>
+requires File<F<P>>
+void PagePool<P, F>::Close() {
+  Flush();
+  file_->Close();
 }
 
 template <typename P, template <typename> class F>
