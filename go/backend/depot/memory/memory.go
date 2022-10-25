@@ -68,7 +68,7 @@ func (m *Depot[I]) Set(id I, value []byte) error {
 	return nil
 }
 
-// Get a value of the item (or the itemDefault, if not defined)
+// Get a value of the item (or nil if not defined)
 func (m *Depot[I]) Get(id I) (out []byte, err error) {
 	if int(id) < len(m.data) {
 		out = m.data[id]
