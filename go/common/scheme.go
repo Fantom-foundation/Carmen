@@ -4,6 +4,12 @@ package common
 type TableSpace byte
 
 const (
+	// AddressKey is a respective "table space"
+	AddressKey TableSpace = 'A'
+	// KeyKey is a respective "table space"
+	KeyKey TableSpace = 'K'
+	// AccountKey is a respective "table space"
+	AccountKey TableSpace = 'C'
 	// BalanceKey is a respective "table space"
 	BalanceKey TableSpace = 'B'
 	// NonceKey is a respective "table space"

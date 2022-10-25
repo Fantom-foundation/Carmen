@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -80,6 +81,18 @@ func (m *Array[K, I]) GetStateHash() (common.Hash, error) {
 		}
 	}
 	return res, nil
+}
+
+// Flush clean-ups all possible dirty values
+func (m *Array[K, I]) Flush() error {
+	var resErr error
+	for _, idx := range m.indexes {
+		if err := idx.Flush(); err != nil {
+			resErr = err
+		}
+	}
+
+	return resErr
 }
 
 // Close closes the storage and clean-ups all possible dirty values

@@ -3,10 +3,11 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"os"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
@@ -111,6 +112,11 @@ func (m *Store[I, V]) Get(id I) (value V, err error) {
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()
+}
+
+// Flush the store
+func (m *Store[I, V]) Flush() error {
+	return m.file.Sync()
 }
 
 // Close the store
