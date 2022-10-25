@@ -91,31 +91,38 @@ TEST(InMemoryFileTest, LoadingUninitializedPagesLeadsToZeros) {
   EXPECT_EQ(zero, loaded);
 }
 
-TEST(SingleFileTest, IsFile) {
-  EXPECT_TRUE(File<SingleFile<Page<8>>>);
-  EXPECT_TRUE(File<SingleFile<Page<32>>>);
+template <typename F>
+class SingleFileTest : public testing::Test {};
+
+TYPED_TEST_SUITE_P(SingleFileTest);
+
+TYPED_TEST_P(SingleFileTest, IsFile) {
+  using RawFile = TypeParam;
+  EXPECT_TRUE((File<SingleFileBase<Page<8>, RawFile>>));
+  EXPECT_TRUE((File<SingleFileBase<Page<32>, RawFile>>));
 }
 
-TEST(SingleFileTest, ExistingFileCanBeOpened) {
+TYPED_TEST_P(SingleFileTest, ExistingFileCanBeOpened) {
   TempFile temp_file;
   ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
-  SingleFile<Page<32>> file(temp_file.GetPath());
+  SingleFileBase<Page<32>, TypeParam> file(temp_file.GetPath());
   EXPECT_EQ(0, file.GetNumPages());
 }
 
-TEST(SingleFileTest, NonExistingFileIsCreated) {
+TYPED_TEST_P(SingleFileTest, NonExistingFileIsCreated) {
   TempFile temp_file;
   ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
   std::filesystem::remove(temp_file.GetPath());
   ASSERT_FALSE(std::filesystem::exists(temp_file.GetPath()));
-  SingleFile<Page<32>> file(temp_file.GetPath());
+  SingleFileBase<Page<32>, TypeParam> file(temp_file.GetPath());
   EXPECT_TRUE(std::filesystem::exists(temp_file.GetPath()));
   EXPECT_EQ(0, file.GetNumPages());
 }
 
-TEST(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
+TYPED_TEST_P(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
   TempDir temp_dir;
-  SingleFile<Page<32>> file(temp_dir.GetPath() / "some" / "dir" / "file.dat");
+  SingleFileBase<Page<32>, TypeParam> file(temp_dir.GetPath() / "some" / "dir" /
+                                           "file.dat");
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath()));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some"));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir"));
@@ -124,16 +131,16 @@ TEST(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
   EXPECT_EQ(0, file.GetNumPages());
 }
 
-TEST(SingleFileTest, InitialFileIsEmpty) {
+TYPED_TEST_P(SingleFileTest, InitialFileIsEmpty) {
   TempFile temp_file;
-  SingleFile<Page<32>> file(temp_file.GetPath());
+  SingleFileBase<Page<32>, TypeParam> file(temp_file.GetPath());
   EXPECT_EQ(0, file.GetNumPages());
 }
 
-TEST(SingleFileTest, PagesCanBeWrittenAndRead) {
+TYPED_TEST_P(SingleFileTest, PagesCanBeWrittenAndRead) {
   using Page = Page<8>;
   TempFile temp_file;
-  SingleFile<Page> file(temp_file.GetPath());
+  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   file.StorePage(0, page_a);
@@ -144,10 +151,10 @@ TEST(SingleFileTest, PagesCanBeWrittenAndRead) {
   EXPECT_EQ(page_a, restored);
 }
 
-TEST(SingleFileTest, PagesAreDifferentiated) {
+TYPED_TEST_P(SingleFileTest, PagesAreDifferentiated) {
   TempFile temp_file;
   using Page = Page<4>;
-  SingleFile<Page> file(temp_file.GetPath());
+  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   Page page_b{std::byte{0x03}, std::byte{0x04}};
@@ -163,10 +170,10 @@ TEST(SingleFileTest, PagesAreDifferentiated) {
   EXPECT_EQ(page_b, restored);
 }
 
-TEST(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
+TYPED_TEST_P(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
   TempFile temp_file;
   using Page = Page<8>;
-  SingleFile<Page> file(temp_file.GetPath());
+  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
 
   // Storing a page at position 2 implicitly creates pages 0 and 1.
   Page page_a{std::byte{0x01}, std::byte{0x02}};
@@ -183,16 +190,28 @@ TEST(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
   EXPECT_EQ(page_a, restored);
 }
 
-TEST(SingleFileTest, LoadingUninitializedPagesLeadsToZeros) {
+TYPED_TEST_P(SingleFileTest, LoadingUninitializedPagesLeadsToZeros) {
   TempFile temp_file;
   using Page = Page<4>;
-  SingleFile<Page> file(temp_file.GetPath());
+  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
   Page zero{};
   Page loaded;
   loaded.fill(std::byte{1});
   file.LoadPage(0, loaded);
   EXPECT_EQ(zero, loaded);
 }
+
+REGISTER_TYPED_TEST_SUITE_P(SingleFileTest, IsFile, ExistingFileCanBeOpened,
+                            NonExistingFileIsCreated,
+                            NestedDirectoryIsCreatedIfNeeded,
+                            InitialFileIsEmpty, PagesCanBeWrittenAndRead,
+                            PagesAreDifferentiated,
+                            WritingPagesCreatesImplicitEmptyPages,
+                            LoadingUninitializedPagesLeadsToZeros);
+
+using RawFileTypes = ::testing::Types<internal::FStreamFile, internal::CFile,
+                                      internal::PosixFile>;
+INSTANTIATE_TYPED_TEST_SUITE_P(My, SingleFileTest, RawFileTypes);
 
 }  // namespace
 }  // namespace carmen::backend::store

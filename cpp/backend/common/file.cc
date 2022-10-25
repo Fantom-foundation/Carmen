@@ -83,7 +83,7 @@ CFile::CFile(std::filesystem::path file) {
   // But for read/write we need the file to be openend in expended read mode.
   file_ = std::fopen(file.string().c_str(), "r+b");
   assert(file_);
-  auto succ = std::fseek(file_, 0, SEEK_END);
+  [[maybe_unused]] auto succ = std::fseek(file_, 0, SEEK_END);
   assert(succ == 0);
   file_size_ = std::ftell(file_);
 }
@@ -95,9 +95,10 @@ std::size_t CFile::GetFileSize() { return file_size_; }
 void CFile::Read(std::size_t pos, std::span<std::byte> span) {
   if (file_ == nullptr) return;
   GrowFileIfNeeded(pos + span.size());
-  auto succ = std::fseek(file_, pos, SEEK_SET);
+  [[maybe_unused]] auto succ = std::fseek(file_, pos, SEEK_SET);
   assert(succ == 0);
-  auto len = std::fread(span.data(), sizeof(std::byte), span.size(), file_);
+  [[maybe_unused]] auto len =
+      std::fread(span.data(), sizeof(std::byte), span.size(), file_);
   assert(len == span.size());
 }
 
@@ -105,9 +106,10 @@ void CFile::Write(std::size_t pos, std::span<const std::byte> span) {
   if (file_ == nullptr) return;
   // Grow file as needed.
   GrowFileIfNeeded(pos + span.size());
-  auto succ = std::fseek(file_, pos, SEEK_SET);
+  [[maybe_unused]] auto succ = std::fseek(file_, pos, SEEK_SET);
   assert(succ == 0);
-  auto len = std::fwrite(span.data(), sizeof(std::byte), span.size(), file_);
+  [[maybe_unused]] auto len =
+      std::fwrite(span.data(), sizeof(std::byte), span.size(), file_);
   assert(len == span.size());
 }
 
@@ -133,7 +135,8 @@ void CFile::GrowFileIfNeeded(std::size_t needed) {
   std::fseek(file_, 0, SEEK_END);
   while (file_size_ < needed) {
     auto step = std::min(kStepSize, needed - file_size_);
-    auto len = fwrite(kZeros->data(), sizeof(std::byte), step, file_);
+    [[maybe_unused]] auto len =
+        fwrite(kZeros->data(), sizeof(std::byte), step, file_);
     assert(len == step);
     file_size_ += step;
   }
@@ -142,7 +145,6 @@ void CFile::GrowFileIfNeeded(std::size_t needed) {
 PosixFile::PosixFile(std::filesystem::path file) {
   // Create the parent directory.
   CreateDirectory(file.parent_path());
-  // fd_ = open(file.string().c_str(), O_CREAT | O_RDWR);
   //  When this is enabled, all read/writes must use aligned memory locations!
   fd_ = open(file.string().c_str(), O_CREAT | O_DIRECT | O_RDWR);
   assert(fd_ >= 0);
@@ -161,7 +163,8 @@ void PosixFile::Read(std::size_t pos, std::span<std::byte> span) {
   if (fd_ < 0) return;
   GrowFileIfNeeded(pos + span.size());
   lseek(fd_, pos, SEEK_SET);
-  read(fd_, span.data(), span.size());
+  [[maybe_unused]] auto len = read(fd_, span.data(), span.size());
+  assert(len == static_cast<ssize_t>(span.size()));
 }
 
 void PosixFile::Write(std::size_t pos, std::span<const std::byte> span) {
@@ -169,7 +172,8 @@ void PosixFile::Write(std::size_t pos, std::span<const std::byte> span) {
   // Grow file as needed.
   GrowFileIfNeeded(pos + span.size());
   lseek(fd_, pos, SEEK_SET);
-  write(fd_, span.data(), span.size());
+  [[maybe_unused]] auto len = write(fd_, span.data(), span.size());
+  assert(len == static_cast<ssize_t>(span.size()));
 }
 
 void PosixFile::Flush() {
@@ -191,13 +195,7 @@ void PosixFile::GrowFileIfNeeded(std::size_t needed) {
   if (file_size_ >= needed) {
     return;
   }
-  /*
-  lseek(fd_, needed-1, SEEK_SET);
-  const char zero = 0;
-  write(fd_, &zero, 1);
-  file_size_ = needed;
-  */
-  auto offset = lseek(fd_, 0, SEEK_END);
+  [[maybe_unused]] auto offset = lseek(fd_, 0, SEEK_END);
   assert(offset == static_cast<off_t>(file_size_));
   while (file_size_ < needed) {
     auto step = std::min(kStepSize, needed - file_size_);
