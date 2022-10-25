@@ -128,7 +128,7 @@ func (m *Index[K, I]) GetStateHash() (hash common.Hash, err error) {
 	return m.hashIndex.Commit()
 }
 
-func (m *Index[K, I]) Close() error {
+func (m *Index[K, I]) Flush() error {
 	// commit and persist the state
 	hash, err := m.GetStateHash()
 	if err != nil {
@@ -137,6 +137,10 @@ func (m *Index[K, I]) Close() error {
 
 	dbKey := m.convertKeyStr(HashKey).ToBytes()
 	return m.db.Put(dbKey, m.hashSerializer.ToBytes(hash), nil)
+}
+
+func (m *Index[K, I]) Close() error {
+	return m.Flush()
 }
 
 // convertKey translates the Index representation of the key into a database key.

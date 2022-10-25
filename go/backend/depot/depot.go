@@ -17,6 +17,6 @@ type Depot[I common.Identifier] interface {
 	// GetStateHash computes and returns a cryptographical hash of the stored data
 	GetStateHash() (common.Hash, error)
 
-	// Close the depot
-	Close() error
+	// Also, depots need to be flush and closable.
+	common.FlushAndCloser
 }
