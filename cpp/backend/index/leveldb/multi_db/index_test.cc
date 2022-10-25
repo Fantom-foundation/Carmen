@@ -1,4 +1,4 @@
-#include "backend/index/leveldb/multi_file/index.h"
+#include "backend/index/leveldb/multi_db/index.h"
 
 #include "common/file_util.h"
 #include "common/status_test_util.h"

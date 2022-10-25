@@ -1,7 +1,7 @@
-#include "backend/index/leveldb/single_file/index.h"
+#include "backend/index/leveldb/single_db/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/single_file/test_util.h"
+#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"
