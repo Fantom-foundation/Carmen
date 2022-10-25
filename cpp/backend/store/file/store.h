@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "backend/common/page_pool.h"
@@ -22,13 +24,11 @@ class FileStore {
   // The page type used by this store.
   using page_type = ArrayPage<V, page_size>;
 
-  // Creates a new, empty FileStore using the given branching factor for its
-  // hash computation.
-  FileStore(std::size_t hash_branching_factor = 32);
-
-  // Creates a new FileStore based on the given file.
-  FileStore(std::size_t hash_branching_factor,
-            std::unique_ptr<F<page_type>> file);
+  // Creates a new file store meantaining its content in the given directory and
+  // using the provided branching factor for its hash computation.
+  FileStore(
+      std::filesystem::path directory = std::filesystem::temp_directory_path(),
+      std::size_t hash_branching_factor = 32);
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value);
@@ -41,6 +41,12 @@ class FileStore {
 
   // Computes a hash over the full content of this store.
   Hash GetHash() const;
+
+  // Flushes internally buffered modified data to disk.
+  void Flush();
+
+  // Flushes the store and closes resource references.
+  void Close();
 
  private:
   using Page = ArrayPage<V, page_size>;
@@ -61,7 +67,7 @@ class FileStore {
       // Before we throw away a dirty page to make space for something else we
       // update the hash to avoid having to reload it again later.
       if (is_dirty) {
-        hashes_.UpdateHash(id, page.AsRawData());
+        hashes_.UpdateHash(id, std::as_bytes(std::span(page.AsArray())));
       }
     }
 
@@ -76,7 +82,7 @@ class FileStore {
     PageProvider(PagePool& pool) : pool_(pool) {}
 
     std::span<const std::byte> GetPageData(PageId id) override {
-      return pool_.Get(id).AsRawData();
+      return std::as_bytes(std::span(pool_.Get(id).AsArray()));
     }
 
    private:
@@ -95,22 +101,21 @@ class FileStore {
   // The data structure hanaging the hashing of states. The hashes are placed in
   // a unique pointer to ensure pointer stability when the store is moved.
   mutable std::unique_ptr<HashTree> hashes_;
+
+  // The name of the file to safe hashes to.
+  std::filesystem::path hash_file_;
 };
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
 requires File<F<ArrayPage<V, page_size>>>
-FileStore<K, V, F, page_size>::FileStore(std::size_t hash_branching_factor)
-    : FileStore(hash_branching_factor, std::make_unique<F<page_type>>()) {}
-
-template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
-requires File<F<ArrayPage<V, page_size>>>
-FileStore<K, V, F, page_size>::FileStore(std::size_t hash_branching_factor,
-                                         std::unique_ptr<F<page_type>> file)
-    : pool_(std::make_unique<PagePool>(std::move(file))),
+FileStore<K, V, F, page_size>::FileStore(std::filesystem::path directory,
+                                         std::size_t hash_branching_factor)
+    : pool_(std::make_unique<PagePool>(
+          std::make_unique<F<page_type>>(directory / "data.dat"))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
-                                         hash_branching_factor)) {
+                                         hash_branching_factor)),
+      hash_file_(directory / "hash.dat") {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 
@@ -138,5 +143,21 @@ template <typename K, Trivial V, template <typename> class F,
 requires File<F<ArrayPage<V, page_size>>> Hash
 FileStore<K, V, F, page_size>::GetHash()
 const { return hashes_->GetHash(); }
+
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size>
+requires File<F<ArrayPage<V, page_size>>>
+void FileStore<K, V, F, page_size>::Flush() {
+  pool_->Flush();
+  hashes_->SaveToFile(hash_file_);
+}
+
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size>
+requires File<F<ArrayPage<V, page_size>>>
+void FileStore<K, V, F, page_size>::Close() {
+  Flush();
+  pool_->Close();
+}
 
 }  // namespace carmen::backend::store

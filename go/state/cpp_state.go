@@ -88,8 +88,26 @@ func (cs *CppState) SetStorage(address common.Address, key common.Key, value com
 	return nil
 }
 
+func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
+	panic("not implemented")
+}
+
+func (cs *CppState) SetCode(address common.Address, code []byte) error {
+	panic("not implemented")
+}
+
 func (cs *CppState) GetHash() (common.Hash, error) {
 	var hash common.Hash
 	C.Carmen_GetHash(cs.state, unsafe.Pointer(&hash[0]))
 	return hash, nil
+}
+
+func (cs *CppState) Flush() error {
+	C.Carmen_Flush(cs.state)
+	return nil
+}
+
+func (cs *CppState) Close() error {
+	C.Carmen_Close(cs.state)
+	return nil
 }

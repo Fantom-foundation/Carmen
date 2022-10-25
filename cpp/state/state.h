@@ -72,6 +72,14 @@ class State {
   // entire maintained state.
   Hash GetHash() const;
 
+  // Syncs internally modified write-buffers to disk.
+  void Flush();
+
+  // Flushes the content of the state to disk and closes all resource
+  // references. After the state has been closed, no more operations may be
+  // performed on it.
+  void Close();
+
  private:
   // Indexes for mapping address, keys, and slots to dense, numeric IDs.
   IndexType<Address, AddressId> address_index_;
@@ -203,6 +211,30 @@ Hash State<IndexType, StoreType>::GetHash() const {
                        slot_index_.GetHash(), balances_.GetHash(),
                        nonces_.GetHash(), value_store_.GetHash(),
                        account_states_.GetHash());
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType>
+void State<IndexType, StoreType>::Flush() {
+  address_index_.Flush();
+  key_index_.Flush();
+  slot_index_.Flush();
+  account_states_.Flush();
+  balances_.Flush();
+  nonces_.Flush();
+  value_store_.Flush();
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType>
+void State<IndexType, StoreType>::Close() {
+  address_index_.Close();
+  key_index_.Close();
+  slot_index_.Close();
+  account_states_.Close();
+  balances_.Close();
+  nonces_.Close();
+  value_store_.Close();
 }
 
 }  // namespace carmen

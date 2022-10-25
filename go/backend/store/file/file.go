@@ -3,7 +3,7 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"os"
@@ -11,25 +11,19 @@ import (
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[I common.Identifier, V any] struct {
-	file        *os.File
-	hashTree    hashtree.HashTree
-	serializer  common.Serializer[V]
-	pageSize    int // the amount of bytes of one page
-	pageItems   int // the amount of items stored in one page
-	itemSize    int // the amount of bytes per one value
-	itemDefault V
+	file       *os.File
+	hashTree   hashtree.HashTree
+	serializer common.Serializer[V]
+	pageSize   int // the amount of bytes of one page
+	pageItems  int // the amount of items stored in one page
+	itemSize   int // the amount of bytes per one value
 }
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], itemDefault V, pageSize int, branchingFactor int) (*Store[I, V], error) {
+func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], pageSize int, hashtreeFactory hashtree.Factory) (*Store[I, V], error) {
 	if pageSize < serializer.Size() {
 		return nil, fmt.Errorf("file store pageSize too small (minimum %d)", serializer.Size())
-	}
-
-	err := os.MkdirAll(path+"/hashes", 0700)
-	if err != nil {
-		return nil, err
 	}
 
 	file, err := os.OpenFile(path+"/data", os.O_RDWR|os.O_CREATE, 0600)
@@ -38,14 +32,13 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 	}
 
 	s := &Store[I, V]{
-		file:        file,
-		serializer:  serializer,
-		pageSize:    pageSize,
-		pageItems:   pageSize / serializer.Size(),
-		itemSize:    serializer.Size(),
-		itemDefault: itemDefault,
+		file:       file,
+		serializer: serializer,
+		pageSize:   pageSize,
+		pageItems:  pageSize / serializer.Size(),
+		itemSize:   serializer.Size(),
 	}
-	s.hashTree = CreateHashTreeFactory(path+"/hashes", branchingFactor).Create(s)
+	s.hashTree = hashtreeFactory.Create(s)
 	return s, nil
 }
 
@@ -93,24 +86,24 @@ func (m *Store[I, V]) Set(id I, value V) error {
 }
 
 // Get a value of the item (or the itemDefault, if not defined)
-func (m *Store[I, V]) Get(id I) (V, error) {
+func (m *Store[I, V]) Get(id I) (value V, err error) {
 	_, itemPosition := m.itemPosition(id)
 
-	_, err := m.file.Seek(itemPosition, io.SeekStart)
+	_, err = m.file.Seek(itemPosition, io.SeekStart)
 	if err != nil {
-		return m.itemDefault, err
+		return value, err
 	}
 
 	bytes := make([]byte, m.itemSize)
 	n, err := m.file.Read(bytes)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return m.itemDefault, nil // the item does not exist in the page file (the file is shorter)
+			return value, nil // the item does not exist in the page file (the file is shorter)
 		}
-		return m.itemDefault, err
+		return value, err
 	}
 	if n != m.itemSize {
-		return m.itemDefault, fmt.Errorf("unable to read - page file is corrupted")
+		return value, fmt.Errorf("unable to read - page file is corrupted")
 	}
 	return m.serializer.FromBytes(bytes), nil
 }

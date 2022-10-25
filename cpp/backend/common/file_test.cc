@@ -12,10 +12,14 @@ namespace {
 
 // A page format used for the tests.
 template <std::size_t page_size>
-class Page : public std::array<std::byte, page_size> {
+class alignas(kFileSystemPageSize) Page
+    : public std::array<std::byte, GetRequiredPageSize(page_size)> {
  public:
-  std::span<const std::byte, page_size> AsRawData() const { return *this; };
-  std::span<std::byte, page_size> AsRawData() { return *this; };
+  constexpr static const auto true_page_size = GetRequiredPageSize(page_size);
+  std::span<const std::byte, true_page_size> AsRawData() const {
+    return *this;
+  };
+  std::span<std::byte, true_page_size> AsRawData() { return *this; };
 };
 
 TEST(TestPageTest, IsPage) { EXPECT_TRUE(carmen::backend::Page<Page<12>>); }
@@ -90,6 +94,34 @@ TEST(InMemoryFileTest, LoadingUninitializedPagesLeadsToZeros) {
 TEST(SingleFileTest, IsFile) {
   EXPECT_TRUE(File<SingleFile<Page<8>>>);
   EXPECT_TRUE(File<SingleFile<Page<32>>>);
+}
+
+TEST(SingleFileTest, ExistingFileCanBeOpened) {
+  TempFile temp_file;
+  ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
+  SingleFile<Page<32>> file(temp_file.GetPath());
+  EXPECT_EQ(0, file.GetNumPages());
+}
+
+TEST(SingleFileTest, NonExistingFileIsCreated) {
+  TempFile temp_file;
+  ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
+  std::filesystem::remove(temp_file.GetPath());
+  ASSERT_FALSE(std::filesystem::exists(temp_file.GetPath()));
+  SingleFile<Page<32>> file(temp_file.GetPath());
+  EXPECT_TRUE(std::filesystem::exists(temp_file.GetPath()));
+  EXPECT_EQ(0, file.GetNumPages());
+}
+
+TEST(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
+  TempDir temp_dir;
+  SingleFile<Page<32>> file(temp_dir.GetPath() / "some" / "dir" / "file.dat");
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath()));
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some"));
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir"));
+  EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir" /
+                                      "file.dat"));
+  EXPECT_EQ(0, file.GetNumPages());
 }
 
 TEST(SingleFileTest, InitialFileIsEmpty) {

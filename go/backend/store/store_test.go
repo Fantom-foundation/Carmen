@@ -2,6 +2,10 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -25,24 +29,30 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 		t.Fatalf("failed to init leveldb; %s", err)
 	}
 
-	defaultItem := common.Value{}
 	valSerializer := common.ValueSerializer{}
 	idSerializer := common.Identifier32Serializer{}
+	var hashtreeFac hashtree.Factory
 
-	memstore, err := memory.NewStore[uint32, common.Value](valSerializer, defaultItem, PageSize, BranchingFactor)
+	hashtreeFac = htmemory.CreateHashTreeFactory(BranchingFactor)
+	memstore, err := memory.NewStore[uint32, common.Value](valSerializer, PageSize, hashtreeFac)
 	if err != nil {
 		t.Fatalf("failed to init memory store; %s", err)
 	}
-	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, defaultItem, PageSize, BranchingFactor)
+
+	hashtreeFac = htfile.CreateHashTreeFactory(t.TempDir(), BranchingFactor)
+	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, hashtreeFac)
 	if err != nil {
 		t.Fatalf("failed to init file store; %s", err)
 	}
-	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, BranchingFactor, PoolSize, eviction.NewLRUPolicy(PoolSize))
+
+	hashtreeFac = htfile.CreateHashTreeFactory(t.TempDir(), BranchingFactor)
+	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, hashtreeFac, PoolSize, eviction.NewLRUPolicy(PoolSize))
 	if err != nil {
 		t.Fatalf("failed to init paged file store; %s", err)
 	}
-	treeFac := ldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
-	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, treeFac, defaultItem, PageSize)
+
+	hashtreeFac = htldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
+	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, hashtreeFac, PageSize)
 	if err != nil {
 		t.Fatalf("failed to init leveldb store; %s", err)
 	}

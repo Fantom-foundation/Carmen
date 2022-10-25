@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <string_view>
 
-#include "backend/common/file.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
@@ -46,6 +45,9 @@ class WorldState {
   virtual void SetValue(const Address&, const Key&, const Value&) = 0;
 
   virtual Hash GetHash() = 0;
+
+  virtual void Flush() = 0;
+  virtual void Close() = 0;
 };
 
 // A generic implementation of the WorldState interface forwarding member
@@ -95,6 +97,10 @@ class WorldStateBase : public WorldState {
 
   Hash GetHash() override { return state_.GetHash(); }
 
+  void Flush() override { state_.Flush(); }
+
+  void Close() override { state_.Close(); }
+
  protected:
   State state_;
 };
@@ -102,23 +108,15 @@ class WorldStateBase : public WorldState {
 class InMemoryWorldState
     : public WorldStateBase<State<InMemoryIndex, InMemoryStore>> {};
 
-template <Trivial V>
-auto Open(std::filesystem::path file) {
-  return std::make_unique<
-      backend::SingleFile<backend::ArrayPage<V, kPageSize>>>(file);
-}
-
 class FileBasedWorldState
     : public WorldStateBase<State<InMemoryIndex, FileBasedStore>> {
  public:
   FileBasedWorldState(std::filesystem::path directory)
       : WorldStateBase(State<InMemoryIndex, FileBasedStore>(
-            {}, {}, {},
-            {kHashBranchFactor, Open<Balance>(directory / "balances.dat")},
-            {kHashBranchFactor, Open<Nonce>(directory / "nonces.dat")},
-            {kHashBranchFactor, Open<Value>(directory / "values.dat")},
-            {kHashBranchFactor,
-             Open<AccountState>(directory / "account_states.dat")})) {}
+            {}, {}, {}, {directory / "balances", kHashBranchFactor},
+            {directory / "nonces", kHashBranchFactor},
+            {directory / "values", kHashBranchFactor},
+            {directory / "account_states", kHashBranchFactor})) {}
 };
 
 }  // namespace
@@ -132,6 +130,14 @@ C_State Carmen_CreateInMemoryState() {
 
 C_State Carmen_CreateFileBasedState(const char* directory, int length) {
   return new carmen::FileBasedWorldState(std::string_view(directory, length));
+}
+
+void Carmen_Flush(C_State state) {
+  reinterpret_cast<carmen::WorldState*>(state)->Flush();
+}
+
+void Carmen_Close(C_State state) {
+  reinterpret_cast<carmen::WorldState*>(state)->Close();
 }
 
 void Carmen_ReleaseState(C_State state) {

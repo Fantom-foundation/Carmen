@@ -1,29 +1,29 @@
 package memory
 
 import (
+	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
-	"github.com/Fantom-foundation/Carmen/go/backend/store"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"testing"
 )
 
-func TestMemoryStoreImplements(t *testing.T) {
-	var s Store[uint32, common.Value]
-	var _ store.Store[uint32, common.Value] = &s
+func TestMemoryDepotImplements(t *testing.T) {
+	var s Depot[uint32]
+	var _ depot.Depot[uint32] = &s
 	var _ io.Closer = &s
 }
 
 var (
-	A = common.Value{0xAA}
-	B = common.Value{0xBB}
-	C = common.Value{0xCC}
+	A = []byte{0xAA}
+	B = []byte{0xBB, 0xBB}
+	C = []byte{0xCC}
 )
 
-func TestStoringIntoMemoryStore(t *testing.T) {
-	memory, err := NewStore[uint64, common.Value](common.ValueSerializer{}, 64, htmemory.CreateHashTreeFactory(3))
+func TestStoringIntoMemoryDepot(t *testing.T) {
+	memory, err := NewDepot[uint64](2, htmemory.CreateHashTreeFactory(3))
 	if err != nil {
-		t.Fatalf("failed to create memory store; %s", err)
+		t.Fatalf("failed to create memory depot; %s", err)
 	}
 	defer memory.Close()
 
@@ -40,24 +40,24 @@ func TestStoringIntoMemoryStore(t *testing.T) {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	if value, _ := memory.Get(5); value != (common.Value{}) {
+	if value, _ := memory.Get(5); value != nil {
 		t.Errorf("not-existing value is not reported as not-existing")
 	}
-	if value, _ := memory.Get(0); value != A {
+	if value, _ := memory.Get(0); !bytes.Equal(value, A) {
 		t.Errorf("reading written A returned different value")
 	}
-	if value, _ := memory.Get(1); value != B {
+	if value, _ := memory.Get(1); !bytes.Equal(value, B) {
 		t.Errorf("reading written B returned different value")
 	}
-	if value, _ := memory.Get(2); value != C {
+	if value, _ := memory.Get(2); !bytes.Equal(value, C) {
 		t.Errorf("reading written C returned different value")
 	}
 }
 
 func TestStoringToArbitraryPosition(t *testing.T) {
-	memory, err := NewStore[uint64, common.Value](common.ValueSerializer{}, 64, htmemory.CreateHashTreeFactory(3))
+	memory, err := NewDepot[uint64](2, htmemory.CreateHashTreeFactory(3))
 	if err != nil {
-		t.Fatalf("failed to create memory store; %s", err)
+		t.Fatalf("failed to create memory depot; %s", err)
 	}
 	defer memory.Close()
 
@@ -74,24 +74,24 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 		t.Fatalf("failed to set C; %s", err)
 	}
 
-	if value, _ := memory.Get(1); value != (common.Value{}) {
+	if value, _ := memory.Get(1); value != nil {
 		t.Errorf("not-existing value is not reported as not-existing")
 	}
-	if value, _ := memory.Get(5); value != A {
+	if value, _ := memory.Get(5); !bytes.Equal(value, A) {
 		t.Errorf("reading written A returned different value")
 	}
-	if value, _ := memory.Get(4); value != B {
+	if value, _ := memory.Get(4); !bytes.Equal(value, B) {
 		t.Errorf("reading written B returned different value")
 	}
-	if value, _ := memory.Get(9); value != C {
+	if value, _ := memory.Get(9); !bytes.Equal(value, C) {
 		t.Errorf("reading written C returned different value")
 	}
 }
 
-func TestHashingInMemoryStore(t *testing.T) {
-	memory, err := NewStore[uint64, common.Value](common.ValueSerializer{}, 64, htmemory.CreateHashTreeFactory(3))
+func TestHashingInMemoryDepot(t *testing.T) {
+	memory, err := NewDepot[uint64](2, htmemory.CreateHashTreeFactory(3))
 	if err != nil {
-		t.Fatalf("failed to create memory store; %s", err)
+		t.Fatalf("failed to create memory depot; %s", err)
 	}
 	defer memory.Close()
 
@@ -110,6 +110,6 @@ func TestHashingInMemoryStore(t *testing.T) {
 		t.Fatalf("failed to hash; %s", err)
 	}
 	if initialHast == newHash {
-		t.Errorf("setting into the store have not changed the hash %x %x", initialHast, newHash)
+		t.Errorf("setting into the depot have not changed the hash %x %x", initialHast, newHash)
 	}
 }

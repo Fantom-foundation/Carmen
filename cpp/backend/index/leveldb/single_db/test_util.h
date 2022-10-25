@@ -38,6 +38,10 @@ class SingleLevelDBIndexTestAdapter {
     return Hash{};
   }
 
+  void Flush() { key_space_.Flush(); }
+
+  void Close() { key_space_.Close(); }
+
  private:
   LevelDBKeySpace<K, I> key_space_;
 };

@@ -41,6 +41,14 @@ class InMemoryLinearHashIndex {
     return hash_;
   }
 
+  void Flush() {
+    // ignored
+  }
+
+  void Close() {
+    // ignored
+  }
+
  private:
   LinearHashMap<K, I, elements_in_bucket> data_;
   mutable std::queue<K> unhashed_keys_;

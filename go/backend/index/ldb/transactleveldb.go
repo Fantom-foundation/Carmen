@@ -8,14 +8,9 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
-const (
-	HashKey      = "hash"
-	LastIndexKey = "last"
-)
-
-// Index represents a key-value store for holding the index data.
-type Index[K comparable, I common.Identifier] struct {
-	db              *leveldb.DB
+// TransactIndex represents a key-value store for holding the index data.
+type TransactIndex[K comparable, I common.Identifier] struct {
+	tr              *leveldb.Transaction
 	table           common.TableSpace
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
@@ -24,17 +19,16 @@ type Index[K comparable, I common.Identifier] struct {
 	hashSerializer  common.HashSerializer
 }
 
-// NewIndex creates a new instance of the index backed by a persisted database
-func NewIndex[K comparable, I common.Identifier](
-	db *leveldb.DB,
+// NewTransactIndex creates a new instance of the index backed by a persisted database
+func NewTransactIndex[K comparable, I common.Identifier](
+	tr *leveldb.Transaction,
 	table common.TableSpace,
 	keySerializer common.Serializer[K],
-	indexSerializer common.Serializer[I]) (p *Index[K, I], err error) {
+	indexSerializer common.Serializer[I]) (p *TransactIndex[K, I], err error) {
 
 	// read the last hash from the database
 	var hash []byte
-	hashDbKey := table.StrToDBKey(HashKey).ToBytes()
-	if hash, err = db.Get(hashDbKey, nil); err != nil {
+	if hash, err = tr.Get(table.StrToDBKey(HashKey).ToBytes(), nil); err != nil {
 		if err == errors.ErrNotFound {
 			hash = []byte{}
 		} else {
@@ -44,8 +38,7 @@ func NewIndex[K comparable, I common.Identifier](
 
 	// read the last index from the database
 	var last []byte
-	lastDbKey := table.StrToDBKey(LastIndexKey).ToBytes()
-	if last, err = db.Get(lastDbKey, nil); err != nil {
+	if last, err = tr.Get(table.StrToDBKey(LastIndexKey).ToBytes(), nil); err != nil {
 		if err == errors.ErrNotFound {
 			last = make([]byte, 4)
 		} else {
@@ -54,8 +47,8 @@ func NewIndex[K comparable, I common.Identifier](
 	}
 
 	hashSerializer := common.HashSerializer{}
-	p = &Index[K, I]{
-		db:              db,
+	p = &TransactIndex[K, I]{
+		tr:              tr,
 		table:           table,
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
@@ -69,10 +62,9 @@ func NewIndex[K comparable, I common.Identifier](
 }
 
 // GetOrAdd returns an index mapping for the key, or creates the new index
-func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
+func (m *TransactIndex[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
-	dbKey := m.convertKey(key).ToBytes()
-	if val, err = m.db.Get(dbKey, nil); err != nil {
+	if val, err = m.tr.Get(m.convertKey(key).ToBytes(), nil); err != nil {
 		// if the error is actually a non-existing key, we assign a new index
 		if err == errors.ErrNotFound {
 
@@ -83,11 +75,10 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 			m.lastIndex = m.lastIndex + 1
 			nextIdxArr := m.indexSerializer.ToBytes(m.lastIndex)
 
-			lastIndexDbKey := m.convertKeyStr(LastIndexKey).ToBytes()
 			batch := new(leveldb.Batch)
-			batch.Put(lastIndexDbKey, nextIdxArr)
-			batch.Put(dbKey, idxArr)
-			if err = m.db.Write(batch, nil); err != nil {
+			batch.Put(m.convertKeyStr(LastIndexKey).ToBytes(), nextIdxArr)
+			batch.Put(m.convertKey(key).ToBytes(), idxArr)
+			if err = m.tr.Write(batch, nil); err != nil {
 				return
 			}
 			m.hashIndex.AddKey(key)
@@ -102,10 +93,9 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 }
 
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists
-func (m *Index[K, I]) Get(key K) (idx I, err error) {
+func (m *TransactIndex[K, I]) Get(key K) (idx I, err error) {
 	var val []byte
-	dbKey := m.convertKey(key).ToBytes()
-	if val, err = m.db.Get(dbKey, nil); err != nil {
+	if val, err = m.tr.Get(m.convertKey(key).ToBytes(), nil); err != nil {
 		if err == errors.ErrNotFound {
 			err = index.ErrNotFound
 		}
@@ -117,38 +107,35 @@ func (m *Index[K, I]) Get(key K) (idx I, err error) {
 }
 
 // Contains returns whether the key exists in the mapping or not.
-func (m *Index[K, I]) Contains(key K) bool {
-	dbKey := m.convertKey(key).ToBytes()
-	exists, _ := m.db.Has(dbKey, nil)
+func (m *TransactIndex[K, I]) Contains(key K) bool {
+	exists, _ := m.tr.Has(m.convertKey(key).ToBytes(), nil)
 	return exists
 }
 
 // GetStateHash returns the index hash.
-func (m *Index[K, I]) GetStateHash() (hash common.Hash, err error) {
+func (m *TransactIndex[K, I]) GetStateHash() (hash common.Hash, err error) {
 	return m.hashIndex.Commit()
 }
 
-func (m *Index[K, I]) Close() error {
+func (m *TransactIndex[K, I]) Close() error {
 	// commit and persist the state
 	hash, err := m.GetStateHash()
 	if err != nil {
 		return err
 	}
-
-	dbKey := m.convertKeyStr(HashKey).ToBytes()
-	return m.db.Put(dbKey, m.hashSerializer.ToBytes(hash), nil)
+	return m.tr.Put(m.convertKeyStr(HashKey).ToBytes(), m.hashSerializer.ToBytes(hash), nil)
 }
 
-// convertKey translates the Index representation of the key into a database key.
+// convertKey translates the TransactIndex representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Index[K, I]) convertKey(key K) common.DbKey {
+func (m *TransactIndex[K, I]) convertKey(key K) common.DbKey {
 	return m.table.ToDBKey(m.keySerializer.ToBytes(key))
 }
 
-// convertKeyStr translates the Index representation of the key into a database key.
+// convertKeyStr translates the TransactIndex representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // from string
-func (m *Index[K, I]) convertKeyStr(key string) common.DbKey {
+func (m *TransactIndex[K, I]) convertKeyStr(key string) common.DbKey {
 	return m.table.StrToDBKey(key)
 }

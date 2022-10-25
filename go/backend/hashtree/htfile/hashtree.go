@@ -1,10 +1,10 @@
-package file
+package htfile
 
 import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
 	"io"
@@ -168,7 +168,7 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 // updateDirtyNodes updates parent nodes marked as dirty with a hash of its children
 func (ht *HashTree) updateDirtyNodes(childrenLayer, parentsLayer *os.File, layerId int, dirtyNodes map[int]bool, hasher hash.Hash) (newDirtyNodes map[int]bool, err error) {
 	newDirtyNodes = make(map[int]bool)
-	for node, _ := range dirtyNodes {
+	for node := range dirtyNodes {
 		var content, nodeHash []byte
 		if layerId == 0 {
 			// hash the data of the page

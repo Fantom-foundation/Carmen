@@ -35,6 +35,18 @@ type State interface {
 	// SetStorage updates the memory slot for the account address (i.e. the contract) and the memory location key.
 	SetStorage(address common.Address, key common.Key, value common.Value) error
 
+	// GetCode returns code of the contract for the input contract address.
+	GetCode(address common.Address) ([]byte, error)
+
+	// SetCode updates code of the contract for the input contract address.
+	SetCode(address common.Address, code []byte) error
+
 	// GetHash hashes the values.
 	GetHash() (common.Hash, error)
+
+	// Flush writes all committed content to disk.
+	Flush() error
+
+	// Close flushes the store and closes it.
+	Close() error
 }

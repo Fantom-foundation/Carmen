@@ -38,6 +38,13 @@ C_State Carmen_CreateInMemoryState();
 // the caller, which is required to release it eventually.
 C_State Carmen_CreateFileBasedState(const char* directory, int length);
 
+// Flushes all committed state information to disk to gurantee permanent
+// storage. All internally cached modifications is synced to disk.
+void Carmen_Flush(C_State state);
+
+// Closes this state, releasing all IO handles and locks on external resources.
+void Carmen_Close(C_State state);
+
 // Releases a state object, thereby causing its destruction. After releasing it,
 // no more operations may be applied on it.
 void Carmen_ReleaseState(C_State state);

@@ -2,13 +2,13 @@ package ldb
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/hashtree"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-// Store is a database-based store.Store implementation. It stores items in a key-value databse.
+// Store is a database-based store.Store implementation. It stores items in a key-value database.
 type Store[I common.Identifier, V any] struct {
 	db              *leveldb.DB
 	hashTree        hashtree.HashTree
@@ -17,7 +17,6 @@ type Store[I common.Identifier, V any] struct {
 	pageSize        int // the amount of items stored in one database page
 	itemSize        int // the amount of bytes per one value
 	table           common.TableSpace
-	itemDefault     V
 }
 
 // NewStore constructs a new instance of the Store.
@@ -27,7 +26,6 @@ func NewStore[I common.Identifier, V any](
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],
 	hashTreeFactory hashtree.Factory,
-	itemDefault V,
 	pageSize int) (store *Store[I, V], err error) {
 
 	if pageSize < serializer.Size() {
@@ -41,7 +39,6 @@ func NewStore[I common.Identifier, V any](
 		pageSize:        pageSize / serializer.Size(),
 		itemSize:        serializer.Size(),
 		table:           table,
-		itemDefault:     itemDefault,
 	}
 	store.hashTree = hashTreeFactory.Create(store)
 	return
@@ -55,7 +52,9 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int) {
 func (m *Store[I, V]) GetPage(page int) (pageData []byte, err error) {
 	pageStartKey := page * m.pageSize
 	pageEndKey := pageStartKey + m.pageSize
-	r := util.Range{Start: m.convertKey(I(pageStartKey)), Limit: m.convertKey(I(pageEndKey))}
+	startDbKey := m.convertKey(I(pageStartKey)).ToBytes()
+	endDbKey := m.convertKey(I(pageEndKey)).ToBytes()
+	r := util.Range{Start: startDbKey, Limit: endDbKey}
 	iter := m.db.NewIterator(&r, nil)
 	defer iter.Release()
 
@@ -75,7 +74,8 @@ func (m *Store[I, V]) GetPage(page int) (pageData []byte, err error) {
 
 func (m *Store[I, V]) Set(id I, value V) (err error) {
 	// index is mapped in the database directly
-	if err = m.db.Put(m.convertKey(id), m.valueSerializer.ToBytes(value), nil); err == nil {
+	dbKey := m.convertKey(id).ToBytes()
+	if err = m.db.Put(dbKey, m.valueSerializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
 		m.hashTree.MarkUpdated(page)
 	}
@@ -85,9 +85,10 @@ func (m *Store[I, V]) Set(id I, value V) (err error) {
 func (m *Store[I, V]) Get(id I) (v V, err error) {
 	// index is mapped in the database directly
 	var val []byte
-	if val, err = m.db.Get(m.convertKey(id), nil); err != nil {
+	dbKey := m.convertKey(id).ToBytes()
+	if val, err = m.db.Get(dbKey, nil); err != nil {
 		if err == leveldb.ErrNotFound {
-			return m.itemDefault, nil
+			return v, nil
 		}
 	} else {
 		v = m.valueSerializer.FromBytes(val)
@@ -109,6 +110,6 @@ func (m *Store[I, V]) Close() error {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Store[I, V]) convertKey(idx I) []byte {
-	return m.table.AppendKey(m.indexSerializer.ToBytes(idx))
+func (m *Store[I, V]) convertKey(idx I) common.DbKey {
+	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
 }

@@ -1,4 +1,4 @@
-package file
+package htmemory
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -9,17 +9,15 @@ var zeroHash = common.Hash{}
 
 // Test initial and modified state to have different hashes
 func TestHashtreeInitialState(t *testing.T) {
-	tmpDir := t.TempDir()
-
 	pages := [][]byte{}
-	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
+	tree := NewHashTree(3, testingPageProvider{pages: pages})
 
 	hash, err := tree.HashRoot()
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
 	if hash != zeroHash {
-		t.Errorf("Initial hash is not zero")
+		t.Errorf("Initial hash after commit is not zero, but %x", hash)
 	}
 
 	pages = [][]byte{{0xFA}}
@@ -35,10 +33,8 @@ func TestHashtreeInitialState(t *testing.T) {
 
 // Test that without actual change, the hash does not change
 func TestHashtreeUnchangedState(t *testing.T) {
-	tmpDir := t.TempDir()
-
 	pages := make([][]byte, 10)
-	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
+	tree := NewHashTree(3, testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
@@ -64,10 +60,8 @@ func TestHashtreeUnchangedState(t *testing.T) {
 
 // Test that a change changes the hash
 func TestHashtreeChangedState(t *testing.T) {
-	tmpDir := t.TempDir()
-
 	pages := make([][]byte, 10)
-	tree := NewHashTree(tmpDir, 3, testingPageProvider{pages: pages})
+	tree := NewHashTree(3, testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
@@ -94,14 +88,11 @@ func TestHashtreeChangedState(t *testing.T) {
 
 // Test that two ways of building the same state leads to the same hash
 func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
-	tmpDirA := t.TempDir()
-	tmpDirB := t.TempDir()
-
 	// initialize two different states
 	pagesA := [][]byte{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {0}, {0}}
 	pagesB := [][]byte{{0}, {42}, {2}, {3}, {4}, {5}, {6}, {7}, {0}, {0}, {0}, {0}}
-	treeA := NewHashTree(tmpDirA, 3, testingPageProvider{pages: pagesA})
-	treeB := NewHashTree(tmpDirB, 3, testingPageProvider{pages: pagesB})
+	treeA := NewHashTree(3, testingPageProvider{pages: pagesA})
+	treeB := NewHashTree(3, testingPageProvider{pages: pagesB})
 	for i := 0; i < 8; i++ {
 		treeA.MarkUpdated(i)
 		treeB.MarkUpdated(i)
@@ -143,11 +134,9 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 
 // Whitebox test of the amount of hash layers produced by different amounts of pages
 func TestAmountOfLevels(t *testing.T) {
-	tmpDir := t.TempDir()
-
 	branchingFactor := 3
 	pages := make([][]byte, branchingFactor*branchingFactor+1)
-	tree := NewHashTree(tmpDir, branchingFactor, testingPageProvider{pages: pages})
+	tree := NewHashTree(branchingFactor, testingPageProvider{pages: pages})
 
 	var i int
 	for ; i < branchingFactor*branchingFactor; i++ {
@@ -158,12 +147,8 @@ func TestAmountOfLevels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
-	count, err := tree.getLayersCount()
-	if err != nil {
-		t.Fatalf("failed to count layers; %s", err)
-	}
-	if count != 3 {
-		t.Errorf("Unexpected amount of tree levels")
+	if len(tree.tree) != 3 {
+		t.Errorf("Unexpected amount of tree levels: levels %d, items %d", len(tree.tree), len(tree.tree[0]))
 	}
 
 	pages[i] = []byte{byte(i)}
@@ -172,12 +157,8 @@ func TestAmountOfLevels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to hash; %s", err)
 	}
-	count, err = tree.getLayersCount()
-	if err != nil {
-		t.Fatalf("failed to count layers; %s", err)
-	}
-	if count != 4 {
-		t.Errorf("Unexpected amount of tree levels")
+	if len(tree.tree) != 4 {
+		t.Errorf("Unexpected amount of tree levels: levels %d, items %d", len(tree.tree), len(tree.tree[0]))
 	}
 }
 

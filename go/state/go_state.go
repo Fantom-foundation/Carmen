@@ -2,6 +2,8 @@ package state
 
 import (
 	"crypto/sha256"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -9,14 +11,14 @@ import (
 
 // GoState manages dependencies to other interfaces to build this service
 type GoState struct {
-	addressIndex   index.Index[common.Address, uint32]
-	keyIndex       index.Index[common.Key, uint32]
-	slotIndex      index.Index[common.SlotIdx[uint32], uint32]
-	accountsStore  store.Store[uint32, common.AccountState]
-	noncesStore    store.Store[uint32, common.Nonce]
-	balancesStore  store.Store[uint32, common.Balance]
-	valuesStore    store.Store[uint32, common.Value]
-	hashSerializer common.HashSerializer
+	addressIndex  index.Index[common.Address, uint32]
+	keyIndex      index.Index[common.Key, uint32]
+	slotIndex     index.Index[common.SlotIdx[uint32], uint32]
+	accountsStore store.Store[uint32, common.AccountState]
+	noncesStore   store.Store[uint32, common.Nonce]
+	balancesStore store.Store[uint32, common.Balance]
+	valuesStore   store.Store[uint32, common.Value]
+	codesDepot    depot.Depot[uint32]
 }
 
 // NewGoState creates a new instance of this service
@@ -27,9 +29,10 @@ func NewGoState(
 	accountsStore store.Store[uint32, common.AccountState],
 	noncesStore store.Store[uint32, common.Nonce],
 	balancesStore store.Store[uint32, common.Balance],
-	valuesStore store.Store[uint32, common.Value]) *GoState {
+	valuesStore store.Store[uint32, common.Value],
+	codesDepot depot.Depot[uint32]) *GoState {
 
-	return &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, common.HashSerializer{}}
+	return &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot}
 }
 
 func (s *GoState) CreateAccount(address common.Address) (err error) {
@@ -138,8 +141,27 @@ func (s *GoState) SetStorage(address common.Address, key common.Key, value commo
 	return s.valuesStore.Set(slotIdx, value)
 }
 
+func (s *GoState) GetCode(address common.Address) (value []byte, err error) {
+	idx, err := s.addressIndex.Get(address)
+	if err != nil {
+		if err == index.ErrNotFound {
+			return nil, nil
+		}
+		return
+	}
+	return s.codesDepot.Get(idx)
+}
+
+func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
+	idx, err := s.addressIndex.GetOrAdd(address)
+	if err != nil {
+		return
+	}
+	return s.codesDepot.Set(idx, code)
+}
+
 func (s *GoState) GetHash() (hash common.Hash, err error) {
-	sources := [7]common.HashProvider{
+	sources := []common.HashProvider{
 		s.addressIndex,
 		s.keyIndex,
 		s.slotIndex,
@@ -147,6 +169,7 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 		s.noncesStore,
 		s.valuesStore,
 		s.accountsStore,
+		s.codesDepot,
 	}
 
 	h := sha256.New()
@@ -154,9 +177,18 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 		if hash, err = source.GetStateHash(); err != nil {
 			return
 		}
-		if _, err = h.Write(s.hashSerializer.ToBytes(hash)); err != nil {
+		if _, err = h.Write(hash[:]); err != nil {
 			return
 		}
 	}
-	return s.hashSerializer.FromBytes(h.Sum(nil)), nil
+	copy(hash[:], h.Sum(nil))
+	return hash, nil
+}
+
+func (s *GoState) Flush() error {
+	return s.Flush()
+}
+
+func (s *GoState) Close() error {
+	return s.Close()
 }
