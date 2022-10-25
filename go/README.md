@@ -13,3 +13,12 @@ Before commiting any changes in the Go source files into the repository, please 
 ```
 gofmt -s -w .
 ```
+
+# Running benchmarks
+Benchmarks use Go "testing" package. To run for example the Stores benchmark, run:
+```
+go test ./backend/store -bench=/.*File.*_16
+```
+For more information about the regex selecting benchmarks to run,
+check [Go testing documentation](https://pkg.go.dev/testing#hdr-Subtests_and_Sub_benchmarks).
+
