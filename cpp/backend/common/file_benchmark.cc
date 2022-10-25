@@ -24,14 +24,32 @@ namespace {
 // The user Guide for the used benchmark infrastructure can be found here:
 // https://github.com/google/benchmark/blob/main/docs/user_guide.md
 
-// An utility wrapper to be specialized for various file implementations to
-// handle them uniformely within benchmarks.
-template <typename F>
-class FileWrapper;
-
 // A page format used for the benchmarks.
 template <std::size_t page_size>
 using Page = ArrayPage<std::byte, page_size>;
+
+// An utility wrapper to be specialized for various file implementations to
+// handle them uniformely within benchmarks.
+//
+// The default implementation maintains a File instance and the ownership of a
+// temporary file on disk backing the owned file instance. In particular, it
+// creates a temporary file when being instantiated and removes it upon
+// destruction of the wrapper instance.
+template <typename F>
+class FileWrapper {
+ public:
+  FileWrapper() : file_(std::make_unique<F>(temp_file_)) {}
+  ~FileWrapper() {
+    file_->Flush();
+    file_.reset();
+    std::filesystem::remove(temp_file_);
+  }
+  F& GetFile() { return *file_; }
+
+ private:
+  TempFile temp_file_;
+  std::unique_ptr<F> file_;
+};
 
 // A specialization of a FileWrapper for the InMemoryFile reference
 // implementation.
@@ -44,26 +62,14 @@ class FileWrapper<InMemoryFile<Page<page_size>>> {
   InMemoryFile<Page<page_size>> file_;
 };
 
-// A specialization of a FileWrapper for the SingleFile implementation. In
-// addition to maintaining a File instance, this wrapper also handles the
-// ownership of a temporary file on disk backing owned file instance. In
-// particular, it creates a temporary file when being instantiated and removes
-// it upon destruction of the wrapper instance.
-template <typename Page>
-class FileWrapper<SingleFile<Page>> {
- public:
-  FileWrapper() : file_(std::make_unique<SingleFile<Page>>(temp_file_)) {}
-  ~FileWrapper() {
-    file_->Flush();
-    file_.reset();
-    std::filesystem::remove(temp_file_);
-  }
-  SingleFile<Page>& GetFile() { return *file_; }
+template <::carmen::backend::Page Page>
+using StreamFile = SingleFileBase<Page, internal::FStreamFile>;
 
- private:
-  TempFile temp_file_;
-  std::unique_ptr<SingleFile<Page>> file_;
-};
+template <::carmen::backend::Page Page>
+using CFile = SingleFileBase<Page, internal::CFile>;
+
+template <::carmen::backend::Page Page>
+using PosixFile = SingleFileBase<Page, internal::PosixFile>;
 
 // Test the creation of files between 1 and 64 MiB.
 constexpr long kMinSize = 1 << 20;
@@ -93,6 +99,18 @@ BENCHMARK(BM_FileInit<InMemoryFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
 BENCHMARK(BM_FileInit<SingleFile<Page<256>>>)->Range(kMinSize, kMaxSize);
 BENCHMARK(BM_FileInit<SingleFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
 BENCHMARK(BM_FileInit<SingleFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_FileInit<StreamFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<StreamFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<StreamFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_FileInit<CFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<CFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<CFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_FileInit<PosixFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<PosixFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<PosixFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
 
 // A benchmark testing the filling of a file with zeros by starting from an
 // empty file and loading new pages in sequence.
@@ -125,6 +143,27 @@ BENCHMARK(BM_SequentialFileFilling<SingleFile<Page<256>>>)
 BENCHMARK(BM_SequentialFileFilling<SingleFile<Page<4096>>>)
     ->Range(kMinSize, kMaxSize);
 BENCHMARK(BM_SequentialFileFilling<SingleFile<Page<16384>>>)
+    ->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_SequentialFileFilling<StreamFile<Page<256>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<StreamFile<Page<4096>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<StreamFile<Page<16384>>>)
+    ->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_SequentialFileFilling<CFile<Page<256>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<CFile<Page<4096>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<CFile<Page<16384>>>)
+    ->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_SequentialFileFilling<PosixFile<Page<256>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<PosixFile<Page<4096>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<PosixFile<Page<16384>>>)
     ->Range(kMinSize, kMaxSize);
 
 // A benchmark testing the speed of reading pages sequentially.
@@ -162,6 +201,24 @@ BENCHMARK(BM_SequentialFileRead<SingleFile<Page<4096>>>)
 BENCHMARK(BM_SequentialFileRead<SingleFile<Page<16384>>>)
     ->Range(kMinSize, kMaxSize);
 
+BENCHMARK(BM_SequentialFileRead<StreamFile<Page<256>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<StreamFile<Page<4096>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<StreamFile<Page<16384>>>)
+    ->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_SequentialFileRead<CFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<CFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<CFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_SequentialFileRead<PosixFile<Page<256>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<PosixFile<Page<4096>>>)
+    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<PosixFile<Page<16384>>>)
+    ->Range(kMinSize, kMaxSize);
+
 // A benchmark testing the speed of reading pages randomly.
 template <typename F>
 void BM_RandomFileRead(benchmark::State& state) {
@@ -197,6 +254,19 @@ BENCHMARK(BM_RandomFileRead<SingleFile<Page<256>>>)->Range(kMinSize, kMaxSize);
 BENCHMARK(BM_RandomFileRead<SingleFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
 BENCHMARK(BM_RandomFileRead<SingleFile<Page<16384>>>)
     ->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_RandomFileRead<StreamFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<StreamFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<StreamFile<Page<16384>>>)
+    ->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_RandomFileRead<CFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<CFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<CFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_RandomFileRead<PosixFile<Page<256>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<PosixFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<PosixFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
 
 }  // namespace
 }  // namespace carmen::backend::store
