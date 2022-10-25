@@ -75,6 +75,12 @@ class LevelDBIndexBase {
     return GetLastHash();
   }
 
+  // Flush unsafed index keys to disk.
+  void Flush() { assert(false && "Not implemented"); }
+
+  // Close this index and release resources.
+  void Close() { assert(false && "Not implemented"); }
+
  protected:
   explicit LevelDBIndexBase() = default;
 
