@@ -23,7 +23,7 @@ var (
 )
 
 func TestStoringIntoLdbDepot(t *testing.T) {
-	d := createNewDepot(t, openLevelDb(t))
+	d := createNewDepot(t, openLevelDb(t, t.TempDir()))
 
 	err := d.Set(0, A)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestStoringIntoLdbDepot(t *testing.T) {
 }
 
 func TestStoringToArbitraryPosition(t *testing.T) {
-	d := createNewDepot(t, openLevelDb(t))
+	d := createNewDepot(t, openLevelDb(t, t.TempDir()))
 
 	err := d.Set(5, A)
 	if err != nil {
@@ -82,8 +82,32 @@ func TestStoringToArbitraryPosition(t *testing.T) {
 	}
 }
 
+func TestDepotPersistence(t *testing.T) {
+	path := t.TempDir()
+	ldb := openLevelDb(t, path)
+	d := createNewDepot(t, ldb)
+
+	err := d.Set(1, B)
+	if err != nil {
+		t.Fatalf("failed to set into a depot; %s", err)
+	}
+
+	_ = d.Close()
+	_ = ldb.Close()
+	ldb2 := openLevelDb(t, path)
+	d2 := createNewDepot(t, ldb2)
+
+	value, err := d2.Get(1)
+	if err != nil {
+		t.Fatalf("failed to get from a depot; %s", err)
+	}
+	if !bytes.Equal(value, B) {
+		t.Errorf("value stored into a depo not persisted")
+	}
+}
+
 func TestHashingInLdbDepot(t *testing.T) {
-	d := createNewDepot(t, openLevelDb(t))
+	d := createNewDepot(t, openLevelDb(t, t.TempDir()))
 
 	initialHast, err := d.GetStateHash()
 	if err != nil {
@@ -104,8 +128,8 @@ func TestHashingInLdbDepot(t *testing.T) {
 	}
 }
 
-func openLevelDb(t *testing.T) (db *leveldb.DB) {
-	db, err := leveldb.OpenFile(t.TempDir(), nil)
+func openLevelDb(t *testing.T, path string) (db *leveldb.DB) {
+	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		t.Fatalf("Cannot open DB, err: %s", err)
 	}

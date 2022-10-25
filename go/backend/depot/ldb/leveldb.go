@@ -1,7 +1,6 @@
 package ldb
 
 import (
-	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -18,17 +17,12 @@ type Depot[I common.Identifier] struct {
 }
 
 // NewDepot constructs a new instance of Depot.
-// It needs a serializer of data items and the default value for a not-set item.
 func NewDepot[I common.Identifier](db *leveldb.DB,
 	table common.TableSpace,
 	indexSerializer common.Serializer[I],
 	hashtreeFactory hashtree.Factory,
 	hashItems int,
 ) (*Depot[I], error) {
-	if hashItems <= 0 || hashtreeFactory == nil || indexSerializer == nil {
-		return nil, fmt.Errorf("depot parameters invalid")
-	}
-
 	m := &Depot[I]{
 		db:              db,
 		table:           table,
@@ -39,7 +33,7 @@ func NewDepot[I common.Identifier](db *leveldb.DB,
 	return m, nil
 }
 
-// itemHashGroup provides the hash group into which belongs the item
+// itemHashGroup provides the hash group into which the item belongs
 func (m *Depot[I]) itemHashGroup(id I) (page int) {
 	// casting to I for division in proper bit width
 	return int(id / I(m.hashItems))
@@ -51,9 +45,11 @@ func (m *Depot[I]) hashGroupRange(page int) (start int, end int) {
 }
 
 func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
-	start, end := m.hashGroupRange(hashGroup)
-	r := util.Range{Start: m.convertKey(I(start)), Limit: m.convertKey(I(end))}
-	iter := m.db.NewIterator(&r, nil)
+	startKey, endKey := m.hashGroupRange(hashGroup)
+	startDbKey := m.convertKey(I(startKey)).ToBytes()
+	endDbKey := m.convertKey(I(endKey)).ToBytes()
+	keysRange := util.Range{Start: startDbKey, Limit: endDbKey}
+	iter := m.db.NewIterator(&keysRange, nil)
 	defer iter.Release()
 
 	for iter.Next() {
@@ -67,7 +63,7 @@ func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
 
 // Set a value of an item
 func (m *Depot[I]) Set(id I, value []byte) error {
-	err := m.db.Put(m.convertKey(id), value, nil)
+	err := m.db.Put(m.convertKey(id).ToBytes(), value, nil)
 	if err != nil {
 		return err
 	}
@@ -77,7 +73,7 @@ func (m *Depot[I]) Set(id I, value []byte) error {
 
 // Get a value of the item (or nil if not defined)
 func (m *Depot[I]) Get(id I) (out []byte, err error) {
-	out, err = m.db.Get(m.convertKey(id), nil)
+	out, err = m.db.Get(m.convertKey(id).ToBytes(), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
 	}
@@ -87,8 +83,8 @@ func (m *Depot[I]) Get(id I) (out []byte, err error) {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Depot[I]) convertKey(idx I) []byte {
-	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx)).ToBytes()
+func (m *Depot[I]) convertKey(idx I) common.DbKey {
+	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
@@ -96,7 +92,14 @@ func (m *Depot[I]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()
 }
 
+// Flush the depot
+func (m *Depot[I]) Flush() error {
+	// commit state hash root
+	_, err := m.GetStateHash()
+	return err
+}
+
 // Close the store
 func (m *Depot[I]) Close() error {
-	return nil // no-op for in-memory database
+	return m.Flush()
 }
