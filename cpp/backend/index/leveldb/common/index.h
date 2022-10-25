@@ -14,15 +14,14 @@
 #include "common/status_util.h"
 #include "common/type.h"
 
-namespace carmen::backend::index {
-namespace internal {
-
-// Converts given key space and key into leveldb key.
-template <Trivial K>
-std::array<char, sizeof(K) + 1> ToDBKey(char key_space, const K& key) {
-  std::array<char, sizeof(key) + 1> buffer{key_space};
-  memcpy(buffer.data() + 1, &key, sizeof(key));
-  return buffer;
+namespace carmen::backend::index::internal {
+template <std::integral I>
+// Parse result from leveldb.
+absl::StatusOr<I> ParseDBResult(std::span<const char> value) {
+  if (value.size() != sizeof(I)) {
+    return absl::InternalError("Invalid value size.");
+  }
+  return *reinterpret_cast<const I*>(value.data());
 }
 
 // Converts given value into leveldb value.
@@ -33,71 +32,23 @@ std::array<char, sizeof(I)> ToDBValue(const I& value) {
   return buffer;
 }
 
-// Parse result from leveldb.
-template <std::integral I>
-absl::StatusOr<I> ParseDBResult(std::span<const char> value) {
-  if (value.size() != sizeof(I)) {
-    return absl::InternalError("Invalid value size.");
-  }
-  return *reinterpret_cast<const I*>(value.data());
-}
-
-// LevelDBKeySpaceBase is a base class for all key spaces. It provides basic
-// functionality for key space. It is not intended to be used directly. Instead
-// use one of the derived classes. This class handles all the basic operations
-// over leveldb like get, add, get last index, etc.
-class LevelDBKeySpaceBase {
+// Base levelDB index class. This class provides basic functionality for
+// leveldb index. Key has to be trivially copyable and value has to be
+// std::integral. KPL stands for key prefix length. It is the length of the
+// prefix of the key that is used to group keys together. Grouped keys are
+// used for storing data into single leveldb file to distinct data from
+// different indexes.
+template <Trivial K, std::integral I, std::size_t KPL>
+class LevelDBIndexBase {
  public:
-  LevelDBKeySpaceBase(std::shared_ptr<internal::LevelDB> db, char key_space)
-      : ldb_(std::move(db)), key_space_(key_space) {}
-
-  // Get result for given key.
-  template <Trivial K, std::integral I>
-  absl::StatusOr<I> GetFromDB(const K& key) const {
-    ASSIGN_OR_RETURN(auto data, ldb_->Get(ToDBKey(key_space_, key)));
-    return ParseDBResult<I>(data);
-  }
-
-  // Get last index value.
-  template <std::integral I>
-  absl::StatusOr<I> GetLastIndexFromDB() const {
-    ASSIGN_OR_RETURN(auto data, ldb_->Get(GetLastIndexKey()));
-    return ParseDBResult<I>(data);
-  }
-
-  // Get actual hash value.
-  absl::StatusOr<Hash> GetHashFromDB() const;
-
-  // Add index value for given key. This method also updates last index value.
-  template <std::integral I>
-  absl::Status AddIndexAndUpdateLatestIntoDB(auto key, const I& value) const {
-    auto db_val = ToDBValue(value);
-    auto db_key = ToDBKey(key_space_, key);
-    auto last_index_key = GetLastIndexKey();
-    auto batch =
-        std::array{LDBEntry{db_key, db_val}, LDBEntry{last_index_key, db_val}};
-    return ldb_->AddBatch(batch);
-  }
-
-  // Add hash value.
-  absl::Status AddHashIntoDB(const Hash& hash) const;
-
- private:
-  std::string GetHashKey() const;
-  std::string GetLastIndexKey() const;
-
-  std::shared_ptr<internal::LevelDB> ldb_;
-  char key_space_;
-};
-}  // namespace internal
-
-template <Trivial K, std::integral I>
-class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
- public:
-  using LevelDBKeySpaceBase::LevelDBKeySpaceBase;
+  LevelDBIndexBase(LevelDBIndexBase&&) noexcept = default;
+  virtual ~LevelDBIndexBase() = default;
 
   // Get index for given key.
-  absl::StatusOr<I> Get(const K& key) const { return GetFromDB<K, I>(key); }
+  absl::StatusOr<I> Get(const K& key) const {
+    ASSIGN_OR_RETURN(auto data, GetDB().Get(ToDBKey(key)));
+    return ParseDBResult<I>(data);
+  }
 
   // Get index for given key. If key is not found, add it and return new index.
   absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key) {
@@ -130,12 +81,58 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   // Close this index and release resources.
   void Close() { assert(false && "Not implemented"); }
 
+ protected:
+  explicit LevelDBIndexBase() = default;
+
  private:
+  // Get hash key into leveldb.
+  virtual std::string GetHashKey() const = 0;
+
+  // Get last index key into leveldb.
+  virtual std::string GetLastIndexKey() const = 0;
+
+  // Converts given key into leveldb key.
+  virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
+
+  // Get leveldb handle.
+  virtual internal::LevelDB& GetDB() = 0;
+  virtual const internal::LevelDB& GetDB() const = 0;
+
+  // Get last index value.
+  absl::StatusOr<I> GetLastIndexFromDB() const {
+    ASSIGN_OR_RETURN(auto data, GetDB().Get(GetLastIndexKey()));
+    return ParseDBResult<I>(data);
+  }
+
+  // Get actual hash value.
+  absl::StatusOr<Hash> GetHashFromDB() const {
+    ASSIGN_OR_RETURN(auto data, GetDB().Get(GetHashKey()));
+    if (data.size() != sizeof(Hash))
+      return absl::InternalError("Invalid hash size.");
+    return *reinterpret_cast<Hash*>(data.data());
+  }
+
+  // Add index value for given key. This method also updates last index value.
+  absl::Status AddIndexAndUpdateLatestIntoDB(auto key, const I& value) {
+    auto db_val = ToDBValue(value);
+    auto db_key = ToDBKey(key);
+    auto last_index_key = GetLastIndexKey();
+    auto batch =
+        std::array{LDBEntry{db_key, db_val}, LDBEntry{last_index_key, db_val}};
+    return GetDB().AddBatch(batch);
+  }
+
+  // Add hash value into database.
+  absl::Status AddHashIntoDB(const Hash& hash) {
+    return GetDB().Add(
+        {GetHashKey(), {reinterpret_cast<const char*>(&hash), sizeof(hash)}});
+  }
+
   // Get last index value. If it is not cached, it will be fetched from
   // database.
   absl::StatusOr<I> GetLastIndex() {
     if (last_index_.has_value()) return *last_index_;
-    ASSIGN_OR_RETURN(last_index_, GetLastIndexFromDB<I>());
+    ASSIGN_OR_RETURN(last_index_, GetLastIndexFromDB());
     return *last_index_;
   }
 
@@ -205,24 +202,7 @@ class LevelDBKeySpace : protected internal::LevelDBKeySpaceBase {
   std::optional<Hash> hash_;
   // Cached keys to compute hash from.
   std::queue<K> keys_;
-
   // A SHA256 hasher instance used for hashing keys.
   Sha256Hasher hasher_;
 };
-
-class LevelDBIndex {
- public:
-  static absl::StatusOr<LevelDBIndex> Open(const std::filesystem::path& path);
-
-  // Returns index for given key space.
-  template <Trivial K, std::integral I>
-  LevelDBKeySpace<K, I> KeySpace(char key_space) {
-    return {ldb_, key_space};
-  }
-
- private:
-  explicit LevelDBIndex(std::shared_ptr<internal::LevelDB> ldb);
-  std::shared_ptr<internal::LevelDB> ldb_;
-};
-
-}  // namespace carmen::backend::index
+}  // namespace carmen::backend::index::internal

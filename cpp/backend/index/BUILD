@@ -47,8 +47,10 @@ cc_library(
     deps = [
         ":index",
         "//common:type",
-        "//backend/index/leveldb/single_file:test_util",
-        "//backend/index/leveldb/single_file:index",
+        "//backend/index/leveldb/single_db:test_util",
+        "//backend/index/leveldb/single_db:index",
+        "//backend/index/leveldb/multi_db:test_util",
+        "//backend/index/leveldb/multi_db:index",
         "//backend/index/cache:cache",
         "//backend/index/file:index",
         "//common:file_util",

@@ -4,7 +4,7 @@
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index_handler.h"
-#include "backend/index/leveldb/single_file/test_util.h"
+#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/memory/index.h"
 #include "backend/index/memory/linear_hash_index.h"
 #include "benchmark/benchmark.h"
@@ -21,8 +21,10 @@ using FileIndexInMemory =
     FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
 using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
-using LevelDBIndex = LevelDBKeySpaceTestAdapter<Key, std::uint32_t>;
-using CachedLevelDBIndex = Cached<LevelDBIndex>;
+using SingleLevelDBIndex = SingleLevelDBIndexTestAdapter<Key, std::uint32_t>;
+using CachedSingleLevelDBIndex = Cached<SingleLevelDBIndex>;
+using MultiLevelDBIndex = MultiLevelDBIndexTestAdapter<Key, std::uint32_t>;
+using CachedMultiLevelDBIndex = Cached<MultiLevelDBIndex>;
 
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index:index_benchmark
@@ -80,9 +82,19 @@ BENCHMARK(BM_Insert<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_Insert<IndexHandler<LevelDBIndex>>)->Arg(1 << 20)->Arg(1 << 24);
+BENCHMARK(BM_Insert<IndexHandler<SingleLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
 
-BENCHMARK(BM_Insert<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_Insert<IndexHandler<CachedSingleLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_Insert<IndexHandler<MultiLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_Insert<IndexHandler<CachedMultiLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -130,11 +142,19 @@ BENCHMARK(BM_SequentialRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_SequentialRead<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_SequentialRead<IndexHandler<SingleLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
-BENCHMARK(BM_SequentialRead<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_SequentialRead<IndexHandler<CachedSingleLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_SequentialRead<IndexHandler<MultiLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_SequentialRead<IndexHandler<CachedMultiLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -184,11 +204,19 @@ BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_UniformRandomRead<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_UniformRandomRead<IndexHandler<SingleLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
-BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedSingleLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_UniformRandomRead<IndexHandler<MultiLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedMultiLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -238,11 +266,19 @@ BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 24)
     ->Arg(1 << 30);
 
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<SingleLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedSingleLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<MultiLevelDBIndex>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);
+
+BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedMultiLevelDBIndex>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);
 
@@ -303,15 +339,24 @@ BENCHMARK(BM_Hash<IndexHandler<CachedFileIndexOnDisk>>)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
 
-BENCHMARK(BM_Hash<IndexHandler<LevelDBIndex>>)
+BENCHMARK(BM_Hash<IndexHandler<SingleLevelDBIndex>>)
     ->Arg(1 << 10)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
 
-BENCHMARK(BM_Hash<IndexHandler<CachedLevelDBIndex>>)
+BENCHMARK(BM_Hash<IndexHandler<CachedSingleLevelDBIndex>>)
     ->Arg(1 << 10)
     ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
                      // initial entries
 
+BENCHMARK(BM_Hash<IndexHandler<MultiLevelDBIndex>>)
+    ->Arg(1 << 10)
+    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
+                     // initial entries
+
+BENCHMARK(BM_Hash<IndexHandler<CachedMultiLevelDBIndex>>)
+    ->Arg(1 << 10)
+    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
+                     // initial entries
 }  // namespace
 }  // namespace carmen::backend::index

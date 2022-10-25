@@ -25,7 +25,7 @@ class LevelDB {
                                       bool create_if_missing = true);
 
   // Get value for given key.
-  absl::StatusOr<std::string> Get(std::span<const char> key);
+  absl::StatusOr<std::string> Get(std::span<const char> key) const;
 
   // Add single value for given key.
   absl::Status Add(LDBEntry entry);

@@ -11,9 +11,6 @@ namespace carmen {
 template <typename T>
 concept Trivial = std::is_trivially_copyable_v<T>;
 
-template <class T>
-concept Integral = std::is_integral_v<T>;
-
 constexpr int kHashLength = 32;
 constexpr int kAddressLength = 20;
 constexpr int kKeyLength = 32;

@@ -18,6 +18,9 @@ constexpr leveldb::ReadOptions kReadOptions = leveldb::ReadOptions();
 // LevelDB index implementation. To encapsulate leveldb dependency.
 class LevelDBImpl {
  public:
+  LevelDBImpl(LevelDBImpl&&) noexcept = default;
+  ~LevelDBImpl() = default;
+
   static absl::StatusOr<LevelDBImpl> Open(const std::filesystem::path& path,
                                           bool create_if_missing = true) {
     leveldb::DB* db;
@@ -84,7 +87,7 @@ absl::StatusOr<LevelDB> LevelDB::Open(const std::filesystem::path& path,
 }
 
 // Get value for given key.
-absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) {
+absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) const {
   return impl_->Get(key);
 }
 
@@ -100,5 +103,5 @@ LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
 
 LevelDB::LevelDB(LevelDB&&) noexcept = default;
 
-LevelDB::~LevelDB() = default;
+LevelDB::~LevelDB() {}
 }  // namespace carmen::backend::index::internal

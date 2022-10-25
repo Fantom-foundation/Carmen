@@ -1,7 +1,7 @@
-#include "backend/index/leveldb/single_file/index.h"
+#include "backend/index/leveldb/single_db/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/single_file/test_util.h"
+#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"
@@ -13,13 +13,13 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = LevelDBKeySpaceTestAdapter<int, int>;
+using TestIndex = SingleLevelDBIndexTestAdapter<int, int>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
 
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
-  return (*LevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
+  return (*SingleLevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
 }
 
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {

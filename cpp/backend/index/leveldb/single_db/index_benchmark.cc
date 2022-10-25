@@ -1,4 +1,4 @@
-#include "backend/index/leveldb/single_file/index.h"
+#include "backend/index/leveldb/single_db/index.h"
 #include "benchmark/benchmark.h"
 #include "common/type.h"
 
@@ -6,7 +6,7 @@ namespace carmen::backend::index {
 namespace {
 
 // To run benchmarks, use the following command:
-//    bazel run -c opt //backend/index/leveldb/single_file:index_benchmark
+//    bazel run -c opt //backend/index/leveldb/single_db:index_benchmark
 
 template <Trivial Type>
 void BM_ToDBKey(benchmark::State& state) {
