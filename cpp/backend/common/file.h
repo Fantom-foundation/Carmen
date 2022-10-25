@@ -193,12 +193,12 @@ class PosixFile {
 
 // An implementation of the File concept using a single file as a persistent
 // storage solution.
-template <Page Page>
-class SingleFile {
+template <Page Page, typename RawFile>
+class SingleFileBase {
  public:
   using page_type = Page;
 
-  SingleFile(std::filesystem::path file_path) : file_(file_path) {}
+  SingleFileBase(std::filesystem::path file_path) : file_(file_path) {}
 
   std::size_t GetNumPages() const { return file_.GetFileSize() / sizeof(Page); }
 
@@ -215,10 +215,14 @@ class SingleFile {
   void Close() { file_.Close(); }
 
  private:
-  // mutable internal::FStreamFile file_;
-  // mutable internal::CFile file_;
-  mutable internal::PosixFile file_;
+  mutable RawFile file_;
 };
+
+// Defines the default SingleFile format to use the C API.
+// Client code like the FileIndex or FileStore depend on the file type exhibit a
+// single template parameter. Thus, this alias definition here is required.
+template <Page Page>
+using SingleFile = SingleFileBase<Page, internal::CFile>;
 
 // ------------------------------- Definitions --------------------------------
 
