@@ -36,6 +36,10 @@ class MultiLevelDBIndexTestAdapter {
     return Hash{};
   }
 
+  void Flush() { index_.Flush(); }
+
+  void Close() { index_.Close(); }
+
  private:
   MultiLevelDBIndex<K, I> index_;
 };
