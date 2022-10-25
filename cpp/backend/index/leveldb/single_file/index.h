@@ -56,9 +56,12 @@ class LevelDBKeySpace : public internal::LevelDBIndexBase<K, I, 1> {
   char key_space_;
 };
 
-class KeySpacedLevelDBIndex {
+// MultiLevelDBIndex is an index implementation over leveldb. It uses a single
+// file to store all the data. Data is stored in the following format:
+// key_space + key -> value.
+class SingleLevelDBIndex {
  public:
-  static absl::StatusOr<KeySpacedLevelDBIndex> Open(
+  static absl::StatusOr<SingleLevelDBIndex> Open(
       const std::filesystem::path& path);
 
   // Returns index for given key space.
@@ -68,7 +71,7 @@ class KeySpacedLevelDBIndex {
   }
 
  private:
-  explicit KeySpacedLevelDBIndex(std::shared_ptr<internal::LevelDB> ldb);
+  explicit SingleLevelDBIndex(std::shared_ptr<internal::LevelDB> ldb);
   std::shared_ptr<internal::LevelDB> ldb_;
 };
 

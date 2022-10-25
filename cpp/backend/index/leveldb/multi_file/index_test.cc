@@ -8,7 +8,7 @@
 namespace carmen::backend::index {
 namespace {
 
-using TestIndex = LevelDBIndex<int, int>;
+using TestIndex = MultiLevelDBIndex<int, int>;
 
 using ::testing::IsOk;
 using ::testing::Not;

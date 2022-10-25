@@ -60,28 +60,28 @@ class IndexHandler<FileIndex<K, I, SingleFile, page_size>> {
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<LevelDBKeySpaceTestAdapter<K, I>> {
+class IndexHandler<SingleLevelDBIndexTestAdapter<K, I>> {
  public:
   IndexHandler()
-      : index_((*KeySpacedLevelDBIndex::Open(dir_.GetPath()))
-                   .KeySpace<K, I>('t')) {}
-  LevelDBKeySpaceTestAdapter<K, I>& GetIndex() { return index_; }
+      : index_(
+            (*SingleLevelDBIndex::Open(dir_.GetPath())).KeySpace<K, I>('t')) {}
+  SingleLevelDBIndexTestAdapter<K, I>& GetIndex() { return index_; }
 
  private:
   TempDir dir_;
-  LevelDBKeySpaceTestAdapter<K, I> index_;
+  SingleLevelDBIndexTestAdapter<K, I> index_;
 };
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<LevelDBIndexTestAdapter<K, I>> {
+class IndexHandler<MultiLevelDBIndexTestAdapter<K, I>> {
  public:
-  IndexHandler() : index_(*LevelDBIndex<K, I>::Open(dir_.GetPath())) {}
-  LevelDBIndexTestAdapter<K, I>& GetIndex() { return index_; }
+  IndexHandler() : index_(*MultiLevelDBIndex<K, I>::Open(dir_.GetPath())) {}
+  MultiLevelDBIndexTestAdapter<K, I>& GetIndex() { return index_; }
 
  private:
   TempDir dir_;
-  LevelDBIndexTestAdapter<K, I> index_;
+  MultiLevelDBIndexTestAdapter<K, I> index_;
 };
 
 }  // namespace

@@ -11,18 +11,21 @@
 
 namespace carmen::backend::index {
 
-// KeySpacedLevelDBIndex is an index implementation over leveldb.
+// MultiLevelDBIndex is an index implementation over leveldb. Each index
+// is supposed to be stored in a separate leveldb instance. Data is stored in
+// the following format: key -> value.
 template <Trivial K, std::integral I>
-class LevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
+class MultiLevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
  public:
-  static absl::StatusOr<LevelDBIndex> Open(const std::filesystem::path& path) {
+  static absl::StatusOr<MultiLevelDBIndex> Open(
+      const std::filesystem::path& path) {
     auto db = internal::LevelDB::Open(path);
     if (!db.ok()) return db.status();
-    return LevelDBIndex(std::move(*db));
+    return MultiLevelDBIndex(std::move(*db));
   }
 
  private:
-  explicit LevelDBIndex(internal::LevelDB ldb)
+  explicit MultiLevelDBIndex(internal::LevelDB ldb)
       : internal::LevelDBIndexBase<K, I, 0>(), ldb_(std::move(ldb)) {}
 
   std::string GetHashKey() const override { return "hash"; };

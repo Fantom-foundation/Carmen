@@ -13,13 +13,13 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = LevelDBKeySpaceTestAdapter<int, int>;
+using TestIndex = SingleLevelDBIndexTestAdapter<int, int>;
 
 // Instantiates common index tests for the Cached index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
 
 LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
-  return (*KeySpacedLevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
+  return (*SingleLevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
 }
 
 TEST(LevelDBIndexTest, ConvertToLevelDBKey) {

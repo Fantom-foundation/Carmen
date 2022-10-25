@@ -34,7 +34,9 @@ std::array<char, sizeof(I)> ToDBValue(const I& value) {
 // Base levelDB index class. This class provides basic functionality for
 // leveldb index. Key has to be trivially copyable and value has to be
 // std::integral. KPL stands for key prefix length. It is the length of the
-// prefix of the key that is used to group keys together.
+// prefix of the key that is used to group keys together. Grouped keys are
+// used for storing data into single leveldb file to distinct data from
+// different indexes.
 template <Trivial K, std::integral I, std::size_t KPL>
 class LevelDBIndexBase {
  public:

@@ -5,14 +5,16 @@
 #include "common/type.h"
 
 namespace carmen::backend::index {
-// LevelDBIndexTestAdapter is a wrapper around LevelDBIndex.
+// MultiLevelDBIndexTestAdapter is a wrapper around MultiLevelDBIndex. Providing
+// interface for benchmarking and testing. This is subject to be removed
+// once we have index interface updated.
 template <Trivial K, std::integral I>
-class LevelDBIndexTestAdapter {
+class MultiLevelDBIndexTestAdapter {
  public:
   using key_type [[maybe_unused]] = K;
   using value_type [[maybe_unused]] = I;
 
-  explicit LevelDBIndexTestAdapter(LevelDBIndex<K, I> index)
+  explicit MultiLevelDBIndexTestAdapter(MultiLevelDBIndex<K, I> index)
       : index_(std::move(index)) {}
 
   std::pair<I, bool> GetOrAdd(const K& key) {
@@ -35,6 +37,6 @@ class LevelDBIndexTestAdapter {
   }
 
  private:
-  LevelDBIndex<K, I> index_;
+  MultiLevelDBIndex<K, I> index_;
 };
 }  // namespace carmen::backend::index
