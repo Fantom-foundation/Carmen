@@ -6,6 +6,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htthinfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -39,7 +40,7 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 		t.Fatalf("failed to init memory store; %s", err)
 	}
 
-	hashtreeFac = htfile.CreateHashTreeFactory(t.TempDir(), BranchingFactor)
+	hashtreeFac = htthinfile.CreateHashTreeFactory(t.TempDir()+"/hashesfile", BranchingFactor)
 	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, hashtreeFac)
 	if err != nil {
 		t.Fatalf("failed to init file store; %s", err)
