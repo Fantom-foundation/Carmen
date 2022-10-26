@@ -3,9 +3,9 @@ package store_test
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htthinfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -244,7 +244,8 @@ func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 }
 
 func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
-	str, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(b.TempDir(), BranchingFactor))
+	treeFac := htthinfile.CreateHashTreeFactory(b.TempDir()+"/hashes", BranchingFactor)
+	str, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, treeFac)
 	if err != nil {
 		b.Fatalf("failed to init file store; %s", err)
 	}
@@ -252,7 +253,8 @@ func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
 }
 
 func initPagedFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
-	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(b.TempDir(), BranchingFactor), PoolSize, eviction.NewLRUPolicy(PoolSize))
+	treeFac := htthinfile.CreateHashTreeFactory(b.TempDir()+"/hashes", BranchingFactor)
+	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, treeFac, PoolSize, eviction.NewLRUPolicy(PoolSize))
 	if err != nil {
 		b.Fatalf("failed to init pagedfile store; %s", err)
 	}
