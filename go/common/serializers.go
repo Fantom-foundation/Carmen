@@ -87,7 +87,7 @@ func (a BalanceSerializer) FromBytes(bytes []byte) Balance {
 	return value
 }
 func (a BalanceSerializer) Size() int {
-	return 32
+	return 16
 }
 
 // NonceSerializer is a Serializer of the Nonce type
@@ -102,7 +102,7 @@ func (a NonceSerializer) FromBytes(bytes []byte) Nonce {
 	return value
 }
 func (a NonceSerializer) Size() int {
-	return 32
+	return 8
 }
 
 // SlotIdxSerializer32 is a Serializer of the SlotIdx[uint32] type
@@ -111,14 +111,15 @@ type SlotIdxSerializer32 struct {
 }
 
 func (a SlotIdxSerializer32) ToBytes(value SlotIdx[uint32]) []byte {
-	b1 := a.identifierSerializer32.ToBytes(value.AddressIdx)
-	b2 := a.identifierSerializer32.ToBytes(value.KeyIdx)
-	return append(b1, b2...)
+	res := make([]byte, 0, 8)
+	res = binary.LittleEndian.AppendUint32(res, value.AddressIdx)
+	res = binary.LittleEndian.AppendUint32(res, value.KeyIdx)
+	return res
 }
 func (a SlotIdxSerializer32) FromBytes(bytes []byte) SlotIdx[uint32] {
 	value := SlotIdx[uint32]{
-		AddressIdx: a.identifierSerializer32.FromBytes(bytes[0:4]),
-		KeyIdx:     a.identifierSerializer32.FromBytes(bytes[4:8]),
+		AddressIdx: binary.LittleEndian.Uint32(bytes[0:4]),
+		KeyIdx:     binary.LittleEndian.Uint32(bytes[4:8]),
 	}
 	return value
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func TestAccountsAreInitiallyUnknown(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -20,7 +20,7 @@ func TestAccountsAreInitiallyUnknown(t *testing.T) {
 }
 
 func TestAccountsCanBeCreated(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -34,7 +34,7 @@ func TestAccountsCanBeCreated(t *testing.T) {
 }
 
 func TestAccountsCanBeDeleted(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -49,7 +49,7 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 }
 
 func TestReadUninitializedBalance(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestReadUninitializedBalance(t *testing.T) {
 }
 
 func TestWriteAndReadBalance(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestWriteAndReadBalance(t *testing.T) {
 }
 
 func TestReadUninitializedNonce(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestReadUninitializedNonce(t *testing.T) {
 }
 
 func TestWriteAndReadNonce(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestWriteAndReadNonce(t *testing.T) {
 }
 
 func TestReadUninitializedSlot(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -137,7 +137,7 @@ func TestReadUninitializedSlot(t *testing.T) {
 }
 
 func TestWriteAndReadSlot(t *testing.T) {
-	for _, named_state := range initStates(t) {
+	for _, named_state := range initCppStates(t) {
 		name := named_state.name
 		state := named_state.state
 		t.Run(name, func(t *testing.T) {
@@ -156,12 +156,7 @@ func TestWriteAndReadSlot(t *testing.T) {
 	}
 }
 
-type namedState struct {
-	name  string
-	state State
-}
-
-func initStates(t *testing.T) []namedState {
+func initCppStates(t *testing.T) []NamedStateConfig {
 	in_memory, err := NewCppInMemoryState()
 	if err != nil {
 		t.Fatalf("Failed to create in-memory store: %v", err)
@@ -172,7 +167,7 @@ func initStates(t *testing.T) []namedState {
 		t.Fatalf("Failed to create in-memory store: %v", err)
 	}
 	t.Cleanup(func() { file_based.Release() })
-	return []namedState{
+	return []NamedStateConfig{
 		{"InMemory", in_memory},
 		{"FileBased", file_based},
 	}

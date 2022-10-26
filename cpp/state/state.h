@@ -207,10 +207,10 @@ void State<IndexType, StoreType>::SetStorageValue(const Address& address,
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType>
 Hash State<IndexType, StoreType>::GetHash() const {
-  return GetSha256Hash(address_index_.GetHash(), key_index_.GetHash(),
-                       slot_index_.GetHash(), balances_.GetHash(),
-                       nonces_.GetHash(), value_store_.GetHash(),
-                       account_states_.GetHash());
+  return GetSha256Hash(
+      address_index_.GetHash(), key_index_.GetHash(), slot_index_.GetHash(),
+      balances_.GetHash(), nonces_.GetHash(), value_store_.GetHash(),
+      account_states_.GetHash(), /*placeholder for code depot*/ Hash{});
 }
 
 template <template <typename K, typename V> class IndexType,

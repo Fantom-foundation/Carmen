@@ -25,14 +25,13 @@ var (
 	val3 = common.Value{0x03}
 
 	balance1 = common.Balance{0x01}
+	balance2 = common.Balance{0x02}
+	balance3 = common.Balance{0x03}
 
 	nonce1 = common.Nonce{0x01}
+	nonce2 = common.Nonce{0x02}
+	nonce3 = common.Nonce{0x03}
 )
-
-type NamedStateConfig struct {
-	state State
-	name  string
-}
 
 func initGoStates(t *testing.T) []NamedStateConfig {
 	mem_state, err := NewGoInMemoryState()
@@ -49,8 +48,8 @@ func initGoStates(t *testing.T) []NamedStateConfig {
 		ldb_state.Close()
 	})
 	return []NamedStateConfig{
-		{mem_state, "memory"},
-		{ldb_state, "LevelDB"},
+		{"memory", mem_state},
+		{"LevelDB", ldb_state},
 	}
 }
 
