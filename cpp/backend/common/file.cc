@@ -40,7 +40,11 @@ FStreamFile::~FStreamFile() { Close(); }
 std::size_t FStreamFile::GetFileSize() { return file_size_; }
 
 void FStreamFile::Read(std::size_t pos, std::span<std::byte> span) {
-  GrowFileIfNeeded(pos + span.size());
+  if (pos + span.size() > file_size_) {
+    assert(pos >= file_size_ && "Reading non-aligned pages!");
+    memset(span.data(), 0, span.size());
+    return;
+  }
   data_.seekg(pos);
   data_.read(reinterpret_cast<char*>(span.data()), span.size());
 }
@@ -94,7 +98,11 @@ std::size_t CFile::GetFileSize() { return file_size_; }
 
 void CFile::Read(std::size_t pos, std::span<std::byte> span) {
   if (file_ == nullptr) return;
-  GrowFileIfNeeded(pos + span.size());
+  if (pos + span.size() > file_size_) {
+    assert(pos >= file_size_ && "Reading non-aligned pages!");
+    memset(span.data(), 0, span.size());
+    return;
+  }
   [[maybe_unused]] auto succ = std::fseek(file_, pos, SEEK_SET);
   assert(succ == 0);
   [[maybe_unused]] auto len =
@@ -161,6 +169,11 @@ std::size_t PosixFile::GetFileSize() { return file_size_; }
 
 void PosixFile::Read(std::size_t pos, std::span<std::byte> span) {
   if (fd_ < 0) return;
+  if (pos + span.size() > file_size_) {
+    assert(pos >= file_size_ && "Reading non-aligned pages!");
+    memset(span.data(), 0, span.size());
+    return;
+  }
   GrowFileIfNeeded(pos + span.size());
   lseek(fd_, pos, SEEK_SET);
   [[maybe_unused]] auto len = read(fd_, span.data(), span.size());
