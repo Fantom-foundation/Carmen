@@ -37,6 +37,9 @@ type StateDB interface {
 	EndTransaction()
 	AbortTransaction()
 
+	// GetHash obtains a cryptographically unique hash of this state.
+	GetHash() common.Hash
+
 	// Flushes committed state to disk.
 	Flush() error
 	Close() error
@@ -405,6 +408,14 @@ func (s *stateDB) ResetTransaction() {
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data = make(map[slotId]*slotValue, len(s.data))
 	s.undo = s.undo[0:0]
+}
+
+func (s *stateDB) GetHash() common.Hash {
+	hash, err := s.state.GetHash()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to compute hash: %v", err))
+	}
+	return hash
 }
 
 func (s *stateDB) Flush() error {
