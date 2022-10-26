@@ -284,5 +284,9 @@ func initStoreContent(b *testing.B, store store.Store[uint32, common.Value], dbS
 			b.Fatalf("failed to set store item; %s", err)
 		}
 	}
+	_, err := store.GetStateHash()
+	if err != nil {
+		b.Fatalf("failed to get store hash; %s", err)
+	}
 	b.StartTimer()
 }
