@@ -82,12 +82,12 @@ void BM_FileInit(benchmark::State& state) {
   const auto target_size = state.range(0);
 
   for (auto _ : state) {
-    // We create a file and only load the final page. This implicitly creates
+    // We create a file and only write the final page. This implicitly creates
     // the rest of the file.
     FileWrapper<F> wrapper;
     F& file = wrapper.GetFile();
     Page trg;
-    file.LoadPage(target_size / sizeof(Page) - 1, trg);
+    file.StorePage(target_size / sizeof(Page) - 1, trg);
     benchmark::DoNotOptimize(trg[0]);
   }
 }
@@ -123,9 +123,8 @@ void BM_SequentialFileFilling(benchmark::State& state) {
     FileWrapper<F> wrapper;
     F& file = wrapper.GetFile();
     for (std::size_t i = 0; i < target_size / sizeof(Page); i++) {
-      // Loading a page initializes the page to zero on disk.
       Page trg;
-      file.LoadPage(i, trg);
+      file.StorePage(i, trg);
       benchmark::DoNotOptimize(trg[0]);
     }
   }
@@ -177,7 +176,7 @@ void BM_SequentialFileRead(benchmark::State& state) {
   F& file = wrapper.GetFile();
   Page trg;
   const auto num_pages = target_size / sizeof(Page);
-  file.LoadPage(num_pages - 1, trg);
+  file.StorePage(num_pages - 1, trg);
 
   int i = 0;
   for (auto _ : state) {
@@ -230,7 +229,7 @@ void BM_RandomFileRead(benchmark::State& state) {
   F& file = wrapper.GetFile();
   Page trg;
   const auto num_pages = target_size / sizeof(Page);
-  file.LoadPage(num_pages - 1, trg);
+  file.StorePage(num_pages - 1, trg);
 
   std::random_device rd;
   std::mt19937 gen(rd());
