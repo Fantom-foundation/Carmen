@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	HashTreeFactor = 3
-	PageSize       = 32 * 32
+	HashTreeFactor = 32
+	PageSize       = 1 << 12
 )
 
 // GoState manages dependencies to other interfaces to build this service

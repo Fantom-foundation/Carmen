@@ -46,6 +46,7 @@ Hash HashTree::GetHash() {
 
   // Update hashes of dirty pages.
   absl::flat_hash_set<int> dirty_parent;
+  std::swap(dirty_level_one_positions_, dirty_parent);
   for (PageId i : dirty_pages_) {
     auto data = page_source_->GetPageData(i);
     GetMutableHash(0, i) = carmen::GetHash(hasher_, data);
@@ -57,11 +58,6 @@ Hash HashTree::GetHash() {
   if (num_pages_ == 1) {
     return GetMutableHash(0, 0);
   }
-
-  // Complete list of level-1 nodes that are dirty.
-  dirty_parent.insert(dirty_level_one_positions_.begin(),
-                      dirty_level_one_positions_.end());
-  dirty_level_one_positions_.clear();
 
   // Perform hash aggregation.
   for (std::size_t level = 1;; level++) {
