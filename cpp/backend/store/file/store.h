@@ -5,7 +5,7 @@
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "backend/common/page_pool.h"
-#include "backend/store/file/hash_tree.h"
+#include "backend/store/hash_tree.h"
 #include "common/hash.h"
 #include "common/type.h"
 

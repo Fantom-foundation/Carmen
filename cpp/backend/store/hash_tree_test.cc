@@ -1,4 +1,4 @@
-#include "backend/store/file/hash_tree.h"
+#include "backend/store/hash_tree.h"
 
 #include <filesystem>
 #include <sstream>
