@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "backend/store/hash_tree.h"
 #include "common/hash.h"
 #include "common/type.h"
 
@@ -26,7 +27,9 @@ class InMemoryStore {
   // Creates a new InMemoryStore using the provided value as the
   // branching factor for hash computation.
   InMemoryStore(std::size_t hash_branching_factor = 32)
-      : hash_branching_factor_(hash_branching_factor) {}
+      : pages_(std::make_unique<Pages>()),
+        hashes_(std::make_unique<PageProvider>(*pages_),
+                hash_branching_factor) {}
 
   // Instances can not be copied.
   InMemoryStore(const InMemoryStore&) = delete;
@@ -34,10 +37,11 @@ class InMemoryStore {
   // Updates the value associated to the given key.
   void Set(const K& key, V value) {
     auto page_number = key / elements_per_page;
-    while (pages_.size() <= page_number) {
-      pages_.push_back(std::make_unique<Page>());
+    if (pages_->size() <= page_number) {
+      pages_->resize(page_number + 1);
     }
-    (*pages_[page_number])[key % elements_per_page] = value;
+    (*pages_)[page_number][key % elements_per_page] = value;
+    hashes_.MarkDirty(page_number);
   }
 
   // Retrieves the value associated to the given key. If no values has
@@ -46,10 +50,11 @@ class InMemoryStore {
   const V& Get(const K& key) const {
     static const V default_value{};
     auto page_number = key / elements_per_page;
-    if (page_number >= pages_.size()) {
+    hashes_.RegisterPage(page_number);
+    if (page_number >= pages_->size()) {
       return default_value;
     }
-    return (*pages_[page_number])[key % elements_per_page];
+    return (*pages_)[page_number][key % elements_per_page];
   }
 
   // Computes a hash over the full content of this store.
@@ -63,6 +68,7 @@ class InMemoryStore {
 
  private:
   constexpr static auto elements_per_page = page_size / sizeof(V);
+
   // A page of the InMemory storage holding a fixed length array of values.
   class Page {
    public:
@@ -75,86 +81,46 @@ class InMemoryStore {
     // Appends the content of this page to the provided hasher instance.
     void AppendTo(Sha256Hasher& hasher) { hasher.Ingest(data_); }
 
+    // Provides byte-level asscess to the maintained data.
+    std::span<const std::byte> AsBytes() const {
+      return std::as_bytes(std::span<const V>(data_));
+    }
+
    private:
     std::array<V, elements_per_page> data_;
   };
 
-  // An indexed list of pages containing the actual values.
-  std::deque<std::unique_ptr<Page>> pages_;
+  // The container type used to maintain the actual pages.
+  using Pages = std::deque<Page>;
 
-  // The branching factor used for aggregating hashes.
-  const std::size_t hash_branching_factor_;
+  // A page source providing the owned hash tree access to the stored pages.
+  class PageProvider : public PageSource {
+   public:
+    PageProvider(Pages& pages) : pages_(pages) {}
+
+    std::span<const std::byte> GetPageData(PageId id) override {
+      static const Page empty{};
+      if (id >= pages_.size()) {
+        return empty.AsBytes();
+      }
+      return pages_[id].AsBytes();
+    }
+
+   private:
+    Pages& pages_;
+  };
+
+  // An indexed list of pages containing the actual values. The container is
+  // wrapped in a unique pointer to facilitate pointer stability under move.
+  std::unique_ptr<Pages> pages_;
+
+  // The data structure hanaging the hashing of states.
+  mutable HashTree hashes_;
 };
 
 template <typename K, Trivial V, std::size_t page_size>
 Hash InMemoryStore<K, V, page_size>::GetHash() const {
-  // The computation of the full store hash is comprising two
-  // steps:
-  //   - step 1: hashing of individual pages
-  //   - step 2: an iterative, tree-shaped reduction to a single value
-  //
-  // Step 1: The content of each page is hashed and the result stored
-  // as a vector of hashes. This vector provides the input layer of the
-  // second step.
-  //
-  // Step 2: To aggregate the vector of hashes into a single hash, the
-  // following steps are executed:
-  //   - the hashes of the previous iteration are grouped into
-  //     fixed-size buckets, the last one padded with zero hashes as needed
-  //   - a hash is computed for the content of each bucket
-  // Thus, in every step the number of hashes is reduced by a factor of
-  // size of the buckets (=branch_width).
-  // This process is repeated until the number of hashes produced in one
-  // iteration is reduced to one. This hash is then the resulting overall
-  // hash of the store.
-  //
-  // Future improvements:
-  //  - track access to pages and maintain list of dirty pages
-  //  - keep a record of all hashes of the aggregation states
-  //  - when computing state hashes, only re-compute hashes affected
-  //    by dirty pages.
-
-  const std::size_t branch_width = hash_branching_factor_;
-
-  if (pages_.empty()) {
-    return Hash();
-  }
-
-  Sha256Hasher hasher;
-  std::vector<Hash> hashes;
-
-  // Reserver maximum padded size.
-  const auto padded_size =
-      (pages_.size() % branch_width == 0)
-          ? pages_.size()
-          : (pages_.size() / branch_width + 1) * branch_width;
-  hashes.reserve(padded_size);
-
-  // Hash individual pages, forming the leaf level.
-  for (const auto& page : pages_) {
-    hasher.Reset();
-    page->AppendTo(hasher);
-    hashes.push_back(hasher.GetHash());
-  }
-
-  // Perform a reduction on the tree.
-  while (hashes.size() > 1) {
-    // Add padding to the current input level.
-    if (hashes.size() % branch_width != 0) {
-      hashes.resize(((hashes.size() / branch_width) + 1) * branch_width);
-    }
-    // Perform one round of hashing in the tree.
-    for (std::size_t i = 0; i < hashes.size() / branch_width; i++) {
-      hasher.Reset();
-      hasher.Ingest(
-          reinterpret_cast<const std::byte*>(&hashes[i * branch_width]),
-          sizeof(Hash) * branch_width);
-      hashes[i] = hasher.GetHash();
-    }
-    hashes.resize(hashes.size() / branch_width);
-  }
-
-  return hashes[0];
+  return hashes_.GetHash();
 }
 
 }  // namespace carmen::backend::store
