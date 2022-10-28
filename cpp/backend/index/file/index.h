@@ -1,6 +1,8 @@
 #pragma once
 
 #include <deque>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -51,9 +53,14 @@ class FileIndex {
   // Creates a new, empty index backed by a default-constructed file.
   FileIndex();
 
-  // Creates an index based on the given files.
-  FileIndex(std::unique_ptr<File> primary_page_file,
-            std::unique_ptr<File> overflow_page_file);
+  // Creates an index retaining its data in the given directory.
+  FileIndex(std::filesystem::path directory);
+
+  // File indexes are move-constructible.
+  FileIndex(FileIndex&&) = default;
+
+  // On destruction file indexes are automatically flushed and closed.
+  ~FileIndex() { Close(); }
 
   // Retrieves the ordinal number for the given key. If the key
   // is known, it it will return a previously established value
@@ -91,6 +98,11 @@ class FileIndex {
 
   // The log_2() of the initial size of an index.
   constexpr static const std::uint8_t kInitialHashLength = 2;
+
+  // Creates an index based on the given files.
+  FileIndex(std::unique_ptr<File> primary_page_file,
+            std::unique_ptr<File> overflow_page_file,
+            std::filesystem::path metadata_file = "");
 
   // A helper function to locate a entry in this map. Returns a tuple containing
   // the key's hash, the containing bucket, and the containing entry. Only if
@@ -159,6 +171,10 @@ class FileIndex {
   // The page pool wrapping access to the overflow page file.
   mutable PagePool<Page, F> overflow_pool_;
 
+  // The file used to store meta information covering the values of the fields
+  // below. The path is a unique ptr to manage ownership during moves.
+  std::unique_ptr<std::filesystem::path> metadata_file_;
+
   // A hasher to compute hashes for keys.
   absl::Hash<K> key_hasher_;
 
@@ -205,14 +221,59 @@ FileIndex<K, I, F, page_size>::FileIndex()
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
+FileIndex<K, I, F, page_size>::FileIndex(std::filesystem::path directory)
+    : FileIndex(std::make_unique<File>(directory / "primary.dat"),
+                std::make_unique<File>(directory / "overflow.dat"),
+                directory / "metadata.dat") {}
+
+template <Trivial K, std::integral I, template <typename> class F,
+          std::size_t page_size>
 FileIndex<K, I, F, page_size>::FileIndex(
     std::unique_ptr<File> primary_page_file,
-    std::unique_ptr<File> overflow_page_file)
+    std::unique_ptr<File> overflow_page_file,
+    std::filesystem::path metadata_file)
     : primary_pool_(std::move(primary_page_file)),
       overflow_pool_(std::move(overflow_page_file)),
       low_mask_((1 << kInitialHashLength) - 1),
       high_mask_((low_mask_ << 1) | 0x1),
-      num_buckets_(1 << kInitialHashLength) {}
+      num_buckets_(1 << kInitialHashLength) {
+  // Take ownership of the metadata file and track it through a unique ptr.
+  metadata_file_ =
+      std::make_unique<std::filesystem::path>(std::move(metadata_file));
+  if (!std::filesystem::exists(*metadata_file_)) return;
+
+  // Load metadata from file.
+  std::fstream in(*metadata_file_, std::ios::binary | std::ios::in);
+  auto read_scalar = [&](auto& scalar) {
+    in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
+  };
+
+  // Start with scalars.
+  read_scalar(size_);
+  read_scalar(next_to_split_);
+  read_scalar(low_mask_);
+  read_scalar(high_mask_);
+  read_scalar(num_buckets_);
+  read_scalar(num_overflow_pages_);
+  read_scalar(hash_);
+
+  // Read bucket tail list.
+  assert(sizeof(bucket_tails_.size()) == sizeof(std::size_t));
+  std::size_t size;
+  read_scalar(size);
+  bucket_tails_.resize(size);
+  for (std::size_t i = 0; i < size; i++) {
+    read_scalar(bucket_tails_[i]);
+  }
+
+  // Read free list.
+  assert(sizeof(overflow_page_free_list_.size()) == sizeof(std::size_t));
+  read_scalar(size);
+  overflow_page_free_list_.resize(size);
+  for (std::size_t i = 0; i < size; i++) {
+    read_scalar(overflow_page_free_list_[i]);
+  }
+}
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
@@ -281,17 +342,47 @@ Hash FileIndex<K, I, F, page_size>::GetHash() const {
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
 void FileIndex<K, I, F, page_size>::Flush() {
-  primary_pool_->Flush();
-  overflow_pool_->Flush();
-  // TODO: safe hash and free list.
+  primary_pool_.Flush();
+  overflow_pool_.Flush();
+
+  // Flush metadata if this is an owning instance.
+  if (!metadata_file_ || metadata_file_->empty()) return;
+
+  // Sync out metadata information.
+  std::fstream out(*metadata_file_, std::ios::binary | std::ios::out);
+  auto write_scalar = [&](auto scalar) {
+    out.write(reinterpret_cast<const char*>(&scalar), sizeof(scalar));
+  };
+
+  // Start with scalars.
+  write_scalar(size_);
+  write_scalar(next_to_split_);
+  write_scalar(low_mask_);
+  write_scalar(high_mask_);
+  write_scalar(num_buckets_);
+  write_scalar(num_overflow_pages_);
+  auto hash = GetHash();
+  write_scalar(hash);
+
+  // Write bucket tail list.
+  write_scalar(bucket_tails_.size());
+  for (const auto& page_id : bucket_tails_) {
+    write_scalar(page_id);
+  }
+
+  // Write free list.
+  write_scalar(overflow_page_free_list_.size());
+  for (const auto& page_id : overflow_page_free_list_) {
+    write_scalar(page_id);
+  }
 }
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
 void FileIndex<K, I, F, page_size>::Close() {
   Flush();
-  primary_pool_->Close();
-  overflow_pool_->Close();
+  primary_pool_.Close();
+  overflow_pool_.Close();
 }
 
 template <Trivial K, std::integral I, template <typename> class F,
