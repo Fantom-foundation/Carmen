@@ -4,8 +4,8 @@
 #include <cstdlib>
 #include <optional>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/container/node_hash_map.h"
 
 namespace carmen::backend::store {
 
@@ -53,17 +53,26 @@ std::optional<std::size_t> RandomEvictionPolicy::GetPageToEvict() {
 
 LeastRecentlyUsedEvictionPolicy::LeastRecentlyUsedEvictionPolicy(
     std::size_t size)
-    : entries_(size) {}
+    : index_(size) {}
 
 void LeastRecentlyUsedEvictionPolicy::Read(std::size_t position) {
-  auto [pos, new_entry] = entries_.insert({position, {}});
-  Entry* cur = &pos->second;
+  auto [pos, new_entry] = index_.insert({position, nullptr});
+  Entry* cur;
   if (new_entry) {
+    if (free_ != nullptr) {
+      cur = free_;
+      free_ = free_->succ;
+    } else {
+      entries_.push_back({});
+      cur = &entries_.back();
+    }
+    pos->second = cur;
     cur->position = position;
     if (tail_ == nullptr) {
       tail_ = cur;
     }
   } else {
+    cur = pos->second;
     if (head_ == cur) {
       return;
     }
@@ -91,11 +100,11 @@ void LeastRecentlyUsedEvictionPolicy::Written(std::size_t position) {
 }
 
 void LeastRecentlyUsedEvictionPolicy::Removed(std::size_t position) {
-  auto pos = entries_.find(position);
-  if (pos == entries_.end()) {
+  auto pos = index_.find(position);
+  if (pos == index_.end()) {
     return;
   }
-  Entry* cur = &pos->second;
+  Entry* cur = pos->second;
   if (cur->pred) {
     cur->pred->succ = cur->succ;
   } else {
@@ -108,7 +117,11 @@ void LeastRecentlyUsedEvictionPolicy::Removed(std::size_t position) {
     tail_ = cur->pred;
   }
 
-  entries_.erase(pos);
+  index_.erase(pos);
+
+  // Insert current element into free list.
+  cur->pred = free_;
+  free_ = cur;
 }
 
 std::optional<std::size_t> LeastRecentlyUsedEvictionPolicy::GetPageToEvict() {

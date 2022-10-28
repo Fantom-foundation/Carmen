@@ -3,7 +3,7 @@ cc_library(
     hdrs = ["eviction_policy.h"],
     srcs = ["eviction_policy.cc"],
     deps = [
-        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
     ]
 )
