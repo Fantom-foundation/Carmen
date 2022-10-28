@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"math/big"
+	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -94,6 +95,17 @@ type nonceValue struct {
 type slotId struct {
 	addr common.Address
 	key  common.Key
+}
+
+func (s *slotId) Compare(other *slotId) int {
+	c := s.addr.Compare(&other.addr)
+	if c < 0 {
+		return -1
+	}
+	if c > 0 {
+		return 1
+	}
+	return s.key.Compare(&other.key)
 }
 
 // slotValue maintains the value of a slot.
@@ -357,16 +369,33 @@ func (s *stateDB) RevertToSnapshot(id int) {
 	}
 }
 
+func max(a, b int) int {
+	if a < b {
+		return b
+	}
+	return a
+}
+
 func (s *stateDB) EndTransaction() {
-	// Write all changes to the store
+	// Write all changes to the store. Note, the store's state hash depends on the insertion order.
+	// Thus, the insertion must be performed in a deterministic order. Maps in Go have an undefined
+	// order and are deliberately randomized. Thus, updates need to be ordered before being written
+	// to the underlying state.
+
+	// Update account stats in deterministic order in state DB
+	addresses := make([]common.Address, 0, max(max(len(s.accounts), len(s.balances)), len(s.nonces)))
+	sort_addresses := func() {
+		sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(&addresses[j]) < 0 })
+	}
 	for addr, value := range s.accounts {
 		if value.original == nil || *value.original != value.current {
 			if value.current == common.Exists {
-				if err := s.state.CreateAccount(addr); err != nil {
-					panic(fmt.Sprintf("Failed to create account: %v", err))
-				}
+				addresses = append(addresses, addr)
 			} else if value.current == common.Deleted {
-				if err := s.state.DeleteAccount(addr); err != nil {
+				// We can delete accounts in an arbitrary order since deleting does not
+				// introduce new values in the address -> addr_id map.
+				err := s.state.DeleteAccount(addr)
+				if err != nil {
 					panic(fmt.Sprintf("Failed to delete account: %v", err))
 				}
 			} else {
@@ -374,31 +403,55 @@ func (s *stateDB) EndTransaction() {
 			}
 		}
 	}
+	sort_addresses()
+	for _, address := range addresses {
+		err := s.state.CreateAccount(address)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to create account: %v", err))
+		}
+	}
+
+	// Update balances in a deterministic order.
+	addresses = addresses[0:0]
 	for addr, value := range s.balances {
 		if value.original == nil || value.original.Cmp(&value.current) != 0 {
-			if new_balance, err := common.ToBalance(&value.current); err != nil {
-				panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
-			} else {
-				if err := s.state.SetBalance(addr, new_balance); err != nil {
-					panic(fmt.Sprintf("Unable to set balance: %v", err))
-				}
-			}
+			addresses = append(addresses, addr)
 		}
 	}
+	sort_addresses()
+	for _, addr := range addresses {
+		new_balance, err := common.ToBalance(&s.balances[addr].current)
+		if err != nil {
+			panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
+		}
+		s.state.SetBalance(addr, new_balance)
+	}
+
+	// Update nonces in a deterministic order.
+	addresses = addresses[0:0]
 	for addr, value := range s.nonces {
 		if value.original == nil || *value.original != value.current {
-			if err := s.state.SetNonce(addr, common.ToNonce(value.current)); err != nil {
-				panic(fmt.Sprintf("Unable to set nonce: %v", err))
-			}
+			addresses = append(addresses, addr)
 		}
 	}
+	sort_addresses()
+	for _, addr := range addresses {
+		s.state.SetNonce(addr, common.ToNonce(s.nonces[addr].current))
+	}
+
+	// Update storage values in state DB
+	slots := make([]slotId, 0, len(s.data))
 	for slot, value := range s.data {
 		if value.original == nil || *value.original != value.current {
-			if err := s.state.SetStorage(slot.addr, slot.key, value.current); err != nil {
-				panic(fmt.Sprintf("Unable to set storage: %v", err))
-			}
+			slots = append(slots, slot)
 		}
 	}
+	sort.Slice(slots, func(i, j int) bool { return slots[i].Compare(&slots[j]) < 0 })
+	for _, slot := range slots {
+		s.state.SetStorage(slot.addr, slot.key, s.data[slot].current)
+	}
+
+	// Reset internal state for next transaction
 	s.ResetTransaction()
 }
 

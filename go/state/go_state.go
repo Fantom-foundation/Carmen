@@ -49,6 +49,9 @@ func (s *GoState) GetAccountState(address common.Address) (state common.AccountS
 
 func (s *GoState) DeleteAccount(address common.Address) (err error) {
 	idx, err := s.addressIndex.Get(address)
+	if err == index.ErrNotFound {
+		err = nil
+	}
 	if err != nil {
 		return
 	}

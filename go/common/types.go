@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -70,6 +71,14 @@ func (s AccountState) String() string {
 		return "deleted"
 	}
 	return "invalid"
+}
+
+func (a *Address) Compare(b *Address) int {
+	return bytes.Compare(a[:], b[:])
+}
+
+func (a *Key) Compare(b *Key) int {
+	return bytes.Compare(a[:], b[:])
 }
 
 var (
