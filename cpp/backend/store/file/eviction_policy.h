@@ -2,10 +2,11 @@
 
 #include <concepts>
 #include <cstddef>
+#include <deque>
 #include <optional>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/container/node_hash_map.h"
 
 namespace carmen::backend::store {
 
@@ -63,14 +64,20 @@ class LeastRecentlyUsedEvictionPolicy {
   };
 
   // A map of all entries, mapping page position to entries in an LRU list.
-  absl::node_hash_map<std::size_t, Entry> entries_;
+  absl::flat_hash_map<std::size_t, Entry*> index_;
 
   // A pointer to the most recently used entry.
   Entry* head_ = nullptr;
 
   // A pointer to the least recently used entry to be evicted next. The element
-  // pointed to is owned by the entries_ map.
+  // pointed to is owned by the entries_ container.
   Entry* tail_ = nullptr;
+
+  // The head of a free-list of entries that can be reused.
+  Entry* free_ = nullptr;
+
+  // The actual entries, owned by a pointer stable container.
+  std::deque<Entry> entries_;
 };
 
 }  // namespace carmen::backend::store
