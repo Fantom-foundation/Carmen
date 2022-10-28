@@ -169,6 +169,7 @@ void PagePool<P, F>::AddListener(std::unique_ptr<Listener> listener) {
 template <typename P, template <typename> class F>
 requires File<F<P>>
 void PagePool<P, F>::Flush() {
+  if (!file_) return;
   for (std::size_t i = 0; i < pool_.size(); i++) {
     if (!dirty_[i]) continue;
     file_->StorePage(index_to_pages_[i], pool_[i]);
@@ -180,7 +181,7 @@ template <typename P, template <typename> class F>
 requires File<F<P>>
 void PagePool<P, F>::Close() {
   Flush();
-  file_->Close();
+  if (file_) file_->Close();
 }
 
 template <typename P, template <typename> class F>

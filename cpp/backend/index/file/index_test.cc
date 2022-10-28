@@ -8,6 +8,8 @@
 namespace carmen::backend::index {
 namespace {
 
+using testing::Pair;
+
 using TestIndex = FileIndex<int, int, InMemoryFile, 128>;
 
 // Instantiates common index tests for the FileIndex index type.
@@ -60,6 +62,27 @@ TEST(FileIndexTest, LastInsertedElementIsPresent) {
   for (int i = 0; i < N; i++) {
     EXPECT_EQ((std::pair{i, true}), index.GetOrAdd(i));
     ASSERT_EQ(index.Get(i), i);
+  }
+}
+
+TEST(FileIndexTest, StoreCanBeSafedAndRestored) {
+  using Index = FileIndex<int, int, SingleFile>;
+  const int kNumElements = 100000;
+  TempDir dir;
+  Hash hash;
+  {
+    Index index(dir.GetPath());
+    for (int i = 0; i < kNumElements; i++) {
+      EXPECT_THAT(index.GetOrAdd(i + 5), Pair(i, true));
+    }
+    hash = index.GetHash();
+  }
+  {
+    Index restored(dir.GetPath());
+    EXPECT_EQ(hash, restored.GetHash());
+    for (int i = 0; i < kNumElements; i++) {
+      EXPECT_EQ(restored.Get(i + 5), i);
+    }
   }
 }
 

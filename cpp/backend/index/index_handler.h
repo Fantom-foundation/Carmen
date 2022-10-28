@@ -47,9 +47,7 @@ template <Trivial K, std::integral I, std::size_t page_size>
 class IndexHandler<FileIndex<K, I, SingleFile, page_size>> {
  public:
   using File = typename FileIndex<K, I, SingleFile, page_size>::File;
-  IndexHandler()
-      : index_(std::make_unique<File>(dir_.GetPath() / "primary.dat"),
-               std::make_unique<File>(dir_.GetPath() / "overflow.dat")) {}
+  IndexHandler() : index_(dir_.GetPath()) {}
 
   FileIndex<K, I, SingleFile, page_size>& GetIndex() { return index_; }
 
