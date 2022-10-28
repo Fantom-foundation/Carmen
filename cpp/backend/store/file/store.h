@@ -26,9 +26,14 @@ class FileStore {
 
   // Creates a new file store meantaining its content in the given directory and
   // using the provided branching factor for its hash computation.
-  FileStore(
-      std::filesystem::path directory = std::filesystem::temp_directory_path(),
-      std::size_t hash_branching_factor = 32);
+  FileStore(std::filesystem::path directory,
+            std::size_t hash_branching_factor = 32);
+
+  // FileStore instances support to be moved.
+  FileStore(FileStore&&) = default;
+
+  // File stores are automatically closed on destruction.
+  ~FileStore() { Close(); }
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value);
@@ -117,6 +122,9 @@ FileStore<K, V, F, page_size>::FileStore(std::filesystem::path directory,
                                          hash_branching_factor)),
       hash_file_(directory / "hash.dat") {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
+  if (std::filesystem::exists(hash_file_)) {
+    hashes_->LoadFromFile(hash_file_);
+  }
 }
 
 template <typename K, Trivial V, template <typename> class F,
@@ -148,8 +156,8 @@ template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size>
 requires File<F<ArrayPage<V, page_size>>>
 void FileStore<K, V, F, page_size>::Flush() {
-  pool_->Flush();
-  hashes_->SaveToFile(hash_file_);
+  if (pool_) pool_->Flush();
+  if (hashes_) hashes_->SaveToFile(hash_file_);
 }
 
 template <typename K, Trivial V, template <typename> class F,
@@ -157,7 +165,7 @@ template <typename K, Trivial V, template <typename> class F,
 requires File<F<ArrayPage<V, page_size>>>
 void FileStore<K, V, F, page_size>::Close() {
   Flush();
-  pool_->Close();
+  if (pool_) pool_->Close();
 }
 
 }  // namespace carmen::backend::store
