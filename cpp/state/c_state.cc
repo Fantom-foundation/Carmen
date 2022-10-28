@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string_view>
 
+#include "backend/index/file/index.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
@@ -21,6 +22,10 @@ using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
 
 template <typename K, typename V>
 using InMemoryStore = backend::store::InMemoryStore<K, V, kPageSize>;
+
+template <typename K, typename I>
+using FileBasedIndex =
+    backend::index::FileIndex<K, I, backend::SingleFile, kPageSize>;
 
 template <typename K, typename V>
 using FileBasedStore =
@@ -109,11 +114,12 @@ class InMemoryWorldState
     : public WorldStateBase<State<InMemoryIndex, InMemoryStore>> {};
 
 class FileBasedWorldState
-    : public WorldStateBase<State<InMemoryIndex, FileBasedStore>> {
+    : public WorldStateBase<State<FileBasedIndex, FileBasedStore>> {
  public:
   FileBasedWorldState(std::filesystem::path directory)
-      : WorldStateBase(State<InMemoryIndex, FileBasedStore>(
-            {}, {}, {}, {directory / "balances", kHashBranchFactor},
+      : WorldStateBase(State<FileBasedIndex, FileBasedStore>(
+            {directory / "addresses"}, {directory / "keys"},
+            {directory / "slots"}, {directory / "balances", kHashBranchFactor},
             {directory / "nonces", kHashBranchFactor},
             {directory / "values", kHashBranchFactor},
             {directory / "account_states", kHashBranchFactor})) {}

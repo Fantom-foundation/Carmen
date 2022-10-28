@@ -234,5 +234,33 @@ INSTANTIATE_TEST_SUITE_P(
       return ToString(info.param);
     });
 
+TEST(FileBasedStateTest, CanBeStoredAndReloaded) {
+  TempDir dir;
+  auto path = dir.GetPath().string();
+  Hash hash;
+  {
+    auto state = Carmen_CreateFileBasedState(path.c_str(), path.length());
+
+    Address addr{0x01};
+    Key key{0x02};
+    Value value{0x03};
+    Carmen_SetStorageValue(state, &addr, &key, &value);
+    Carmen_GetHash(state, &hash);
+    Carmen_ReleaseState(state);
+  }
+  {
+    auto state = Carmen_CreateFileBasedState(path.c_str(), path.length());
+    Address addr{0x01};
+    Key key{0x02};
+    Value value{};
+    Carmen_GetStorageValue(state, &addr, &key, &value);
+    EXPECT_EQ(value, Value{0x03});
+    Hash recovered;
+    Carmen_GetHash(state, &recovered);
+    EXPECT_EQ(hash, recovered);
+    Carmen_ReleaseState(state);
+  }
+}
+
 }  // namespace
 }  // namespace carmen
