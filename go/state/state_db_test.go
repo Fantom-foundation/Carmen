@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -832,4 +833,105 @@ func TestCarmenStateCanBeUsedForMultipleTransactions(t *testing.T) {
 	db.EndTransaction()
 	db.SetState(address1, key1, val3)
 	db.EndTransaction()
+}
+
+func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
+	ref_state, err := NewMemory()
+	if err != nil {
+		t.Fatalf("failed to create reference state: %v", err)
+	}
+	ref := CreateStateDBUsing(ref_state)
+	mod(ref)
+	ref.EndTransaction()
+	want := ref.GetHash()
+	for i := 0; i < 10; i++ {
+		for _, config := range initStates(t) {
+			t.Run(fmt.Sprintf("%v/run=%d", config.name, i), func(t *testing.T) {
+				state := CreateStateDBUsing(config.state)
+				mod(state)
+				state.EndTransaction()
+				if got := state.GetHash(); want != got {
+					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
+				}
+			})
+		}
+	}
+}
+
+func TestStateHashIsDeterministicForEmptyState(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		// nothing
+	})
+}
+
+func TestStateHashIsDeterministicForSingleUpdate(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetState(address1, key1, val1)
+	})
+}
+
+func TestStateHashIsDeterministicForMultipleUpdate(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetState(address1, key1, val1)
+		s.SetState(address2, key2, val2)
+		s.SetState(address3, key3, val3)
+	})
+}
+
+func TestStateHashIsDeterministicForMultipleAccountCreations(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.CreateAccount(address1)
+		s.CreateAccount(address2)
+		s.CreateAccount(address3)
+	})
+}
+
+func TestStateHashIsDeterministicForMultipleAccountModifications(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.CreateAccount(address1)
+		s.CreateAccount(address2)
+		s.CreateAccount(address3)
+		s.Suicide(address2)
+		s.Suicide(address1)
+	})
+}
+
+func TestStateHashIsDeterministicForMultipleBalanceUpdates(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.AddBalance(address1, big.NewInt(12))
+		s.AddBalance(address2, big.NewInt(14))
+		s.AddBalance(address3, big.NewInt(16))
+		s.SubBalance(address3, big.NewInt(8))
+	})
+}
+
+func TestStateHashIsDeterministicForMultipleNonceUpdates(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetNonce(address1, 12)
+		s.SetNonce(address2, 14)
+		s.SetNonce(address3, 18)
+	})
+}
+
+func TestSlotIdOrder(t *testing.T) {
+	inputs := []struct {
+		a, b slotId
+		want int
+	}{
+		// Some cases with equal values.
+		{slotId{address1, key1}, slotId{address1, key1}, 0},
+		{slotId{address1, key2}, slotId{address1, key2}, 0},
+		{slotId{address2, key1}, slotId{address2, key1}, 0},
+		// Some cases where the address makes the difference.
+		{slotId{address1, key1}, slotId{address2, key1}, -1},
+		{slotId{address3, key1}, slotId{address2, key1}, 1},
+		// Some cases where the key makes the difference.
+		{slotId{address2, key1}, slotId{address2, key2}, -1},
+		{slotId{address2, key3}, slotId{address2, key2}, 1},
+	}
+	for _, input := range inputs {
+		if got := input.a.Compare(&input.b); got != input.want {
+			t.Errorf("Comparison of %v and %v failed, wanted %d, got %d", input.a, input.b, input.want, got)
+		}
+	}
 }
