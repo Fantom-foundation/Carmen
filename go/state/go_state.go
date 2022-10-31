@@ -67,31 +67,31 @@ func NewGoLevelDbState(directory string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressIndex, err := indexldb.NewIndex[common.Address, uint32](db, common.AddressKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	addressIndex, err := indexldb.NewIndex[common.Address, uint32](db, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	keyIndex, err := indexldb.NewIndex[common.Key, uint32](db, common.KeyKey, common.KeySerializer{}, common.Identifier32Serializer{})
+	keyIndex, err := indexldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := indexldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
+	slotIndex, err := indexldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	accountsStore, err := storeldb.NewStore[uint32, common.AccountState](db, common.AccountKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	accountsStore, err := storeldb.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
-	noncesStore, err := storeldb.NewStore[uint32, common.Nonce](db, common.NonceKey, common.NonceSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	noncesStore, err := storeldb.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
-	balancesStore, err := storeldb.NewStore[uint32, common.Balance](db, common.BalanceKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	balancesStore, err := storeldb.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
-	valuesStore, err := storeldb.NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	valuesStore, err := storeldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}

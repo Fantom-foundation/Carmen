@@ -206,7 +206,7 @@ func closeDb[I common.Identifier, K common.Value](db *leveldb.DB, p *Store[I, K]
 
 func createNewStore(t *testing.T, db *leveldb.DB) *Store[uint32, common.Value] {
 	hashTree := htmemory.CreateHashTreeFactory(BranchingFactor)
-	s, err := NewStore[uint32, common.Value](db, common.ValueKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, PageSize)
+	s, err := NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, PageSize)
 
 	if err != nil {
 		t.Fatalf("unable to create Store")

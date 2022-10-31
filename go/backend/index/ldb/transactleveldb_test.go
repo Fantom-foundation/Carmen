@@ -248,7 +248,7 @@ func reopenTransactIndexDb(t *testing.T, idx index.Index[common.Address, uint32]
 
 // createIndex creates a new instance of the index using the input database
 func createTransactIndex(t *testing.T, tr *leveldb.Transaction) index.Index[common.Address, uint32] {
-	idx, err := NewTransactIndex[common.Address, uint32](tr, common.BalanceKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	idx, err := NewTransactIndex[common.Address, uint32](tr, common.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open TransactIndex, err: %s", err)
 	}
