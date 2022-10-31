@@ -63,8 +63,8 @@ template <Trivial K, std::integral I>
 class IndexHandler<SingleLevelDBIndexTestAdapter<K, I>> {
  public:
   IndexHandler()
-      : index_(
-            (*SingleLevelDBIndex::Open(dir_.GetPath())).KeySpace<K, I>('t')) {}
+      : index_((*SingleLevelDBIndex::Open(dir_.GetPath()))
+                   .template KeySpace<K, I>('t')) {}
   SingleLevelDBIndexTestAdapter<K, I>& GetIndex() { return index_; }
 
  private:
