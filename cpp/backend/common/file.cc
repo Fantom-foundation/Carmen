@@ -153,8 +153,12 @@ void CFile::GrowFileIfNeeded(std::size_t needed) {
 PosixFile::PosixFile(std::filesystem::path file) {
   // Create the parent directory.
   CreateDirectory(file.parent_path());
-  //  When this is enabled, all read/writes must use aligned memory locations!
+#ifdef O_DIRECT
+  // When using O_DIRECT, all read/writes must use aligned memory locations!
   fd_ = open(file.string().c_str(), O_CREAT | O_DIRECT | O_RDWR);
+#else
+  fd_ = open(file.string().c_str(), O_CREAT | O_RDWR);
+#endif
   assert(fd_ >= 0);
   off_t size = lseek(fd_, 0, SEEK_END);
   if (size == -1) {
