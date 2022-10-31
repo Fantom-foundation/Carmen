@@ -8,6 +8,30 @@
 
 namespace carmen::backend::index {
 
+// A snapshot of the state of a index providing access to the contained data
+// frozen at it creation time. This definies an interface for index
+// implementation specific implementations.
+//
+// The life cycle of a snapshot defines the duration of its availability.
+// Snapshots are volatile, thus not persistent over application restarts. A
+// snapshot is created by a call to `CreateSnapshot()` on a index instance, and
+// destroyed upon destruction. It does not (need) to persist beyond the lifetime
+// of the current process.
+template <typename K>
+class IndexSnapshot {
+ public:
+  virtual ~IndexSnapshot() {}
+
+  // Obtains the number of keys stored in the snapshot.
+  virtual std::size_t GetSize() const = 0;
+
+  // Obtains a sub-range [from, .., to) of the keys stored in this snapshot. The
+  // reference to the container underlying the resulting span may only be valid
+  // until the next call to this function or the snapshots destruction.
+  virtual std::span<const K> GetKeys(std::size_t from,
+                                     std::size_t to) const = 0;
+};
+
 // Defines the interface expected for a Index I mapping keys of type K to
 // integral values of type V.
 template <typename I>

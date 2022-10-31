@@ -1,10 +1,13 @@
 #pragma once
 
 #include <concepts>
+#include <deque>
+#include <memory>
 #include <optional>
 #include <queue>
 
 #include "absl/container/flat_hash_map.h"
+#include "backend/index/index.h"
 #include "common/hash.h"
 #include "common/type.h"
 
@@ -26,6 +29,12 @@ class InMemoryIndex {
   // The value type of ordinal values mapped to keys.
   using value_type = I;
 
+  // Initializes an empty index.
+  InMemoryIndex();
+
+  // Initializes an index based on the content of the given snapshot.
+  InMemoryIndex(const IndexSnapshot<K>& snapshot);
+
   // Retrieves the ordinal number for the given key. If the key
   // is known, it it will return a previously established value
   // for the key. If the key has not been encountered before,
@@ -36,7 +45,7 @@ class InMemoryIndex {
     auto [pos, is_new] = data_.insert({key, I{}});
     if (is_new) {
       pos->second = data_.size() - 1;
-      unhashed_keys_.push(key);
+      list_->push_back(key);
     }
     return {pos->second, is_new};
   }
@@ -56,12 +65,17 @@ class InMemoryIndex {
 
   // Computes a hash over the full content of this index.
   Hash GetHash() const {
-    while (!unhashed_keys_.empty()) {
-      hash_ = carmen::GetHash(hasher_, hash_, unhashed_keys_.front());
-      unhashed_keys_.pop();
+    auto& list = *list_;
+    while (next_to_hash_ != list.size()) {
+      hash_ = carmen::GetHash(hasher_, hash_, list[next_to_hash_++]);
     }
     return hash_;
   }
+
+  // Creates a snapshot of this index shielded from future additions that can be
+  // safely accessed concurrently to other operations. It internally references
+  // state of this index and thus must not outlive this index object.
+  std::unique_ptr<IndexSnapshot<K>> CreateSnapshot() const;
 
   // Flush unsafed index keys to disk.
   void Flush() {
@@ -74,10 +88,77 @@ class InMemoryIndex {
   }
 
  private:
+  // Implements a snapshot by capturing the current index's size and a view to
+  // its key list.
+  class Snapshot final : public IndexSnapshot<K> {
+   public:
+    Snapshot(const std::deque<K>& list) : size_(list.size()), list_(list) {}
+
+    // Obtains the number of keys stored in the snapshot.
+    std::size_t GetSize() const override { return size_; }
+
+    std::span<const K> GetKeys(std::size_t from,
+                               std::size_t to) const override {
+      from = std::max<std::size_t>(0, std::min(from, size_));
+      to = std::max<std::size_t>(from, std::min(to, size_));
+      if (from == to) {
+        return {};
+      }
+      buffer_.clear();
+      buffer_.reserve(to - from);
+      for (auto i = from; i < to; i++) {
+        buffer_.push_back(list_[i]);
+      }
+      return std::span<const K>(buffer_).subspan(0, to - from);
+    }
+
+   private:
+    // The number of elements in the index when the snapshot was created.
+    const std::size_t size_;
+    // A reference to the index's main key list which might get extended after
+    // the snapshot was created.
+    const std::deque<K>& list_;
+    // An internal buffer used to retain ownership while accessing keys.
+    mutable std::vector<K> buffer_;
+  };
+
+  // The full list of keys in order of insertion. Thus, a key at position i is
+  // mapped to value i. It is required for implementing snapshots. The list is
+  // wrapped into a unique_ptr to support pointer stability under move
+  // operations.
+  std::unique_ptr<std::deque<K>> list_;
+
+  // An index mapping keys to their identifier values.
   absl::flat_hash_map<K, I> data_;
-  mutable std::queue<K> unhashed_keys_;
+
+  mutable std::size_t next_to_hash_ = 0;
   mutable Sha256Hasher hasher_;
   mutable Hash hash_;
 };
+
+template <Trivial K, std::integral I>
+InMemoryIndex<K, I>::InMemoryIndex()
+    : list_(std::make_unique<std::deque<K>>()) {}
+
+template <Trivial K, std::integral I>
+InMemoryIndex<K, I>::InMemoryIndex(const IndexSnapshot<K>& snapshot)
+    : InMemoryIndex() {
+  // Insert all the keys in order.
+  constexpr static const std::size_t kBlockSize = 1024;
+  auto num_elements = snapshot.GetSize();
+  for (std::size_t i = 0; i < num_elements; i += kBlockSize) {
+    auto to = std::min(i + kBlockSize, num_elements);
+    for (const auto& key : snapshot.GetKeys(i, to)) {
+      GetOrAdd(key);
+    }
+  }
+  // Refresh the hash.
+  GetHash();
+}
+
+template <Trivial K, std::integral I>
+std::unique_ptr<IndexSnapshot<K>> InMemoryIndex<K, I>::CreateSnapshot() const {
+  return std::make_unique<Snapshot>(*list_);
+}
 
 }  // namespace carmen::backend::index
