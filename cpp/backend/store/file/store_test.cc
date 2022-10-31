@@ -75,7 +75,7 @@ TEST(FileStoreTest, HashesCoverMultiplePages) {
   EXPECT_NE(hash_a, hash_b);
 }
 
-TEST(FileStoreTest, StoreCanBeSafedAndRestored) {
+TEST(FileStoreTest, StoreCanBeSavedAndRestored) {
   using Store = FileStore<int, int, SingleFile>;
   const auto kNumElements = static_cast<int>(Store::kPageSize * 10);
   TempDir dir;
