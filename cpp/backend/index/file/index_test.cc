@@ -65,7 +65,7 @@ TEST(FileIndexTest, LastInsertedElementIsPresent) {
   }
 }
 
-TEST(FileIndexTest, StoreCanBeSafedAndRestored) {
+TEST(FileIndexTest, StoreCanBeSavedAndRestored) {
   using Index = FileIndex<int, int, SingleFile>;
   const int kNumElements = 100000;
   TempDir dir;
