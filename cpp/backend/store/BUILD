@@ -1,4 +1,13 @@
 cc_library(
+    name = "store",
+    hdrs = ["store.h"],
+    deps = [
+        "//backend/common:page_id",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "store_handler",
     hdrs = ["store_handler.h"],
     deps = [

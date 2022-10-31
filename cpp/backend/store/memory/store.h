@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <limits>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "backend/store/hash_tree.h"
+#include "backend/store/store.h"
 #include "common/hash.h"
 #include "common/type.h"
 
@@ -34,6 +36,9 @@ class InMemoryStore {
   // Instances can not be copied.
   InMemoryStore(const InMemoryStore&) = delete;
 
+  // Initializes a new store instance based on the given snapshot data.
+  InMemoryStore(const StoreSnapshot&, std::size_t hash_branching_factor = 32);
+
   // Updates the value associated to the given key.
   void Set(const K& key, V value) {
     auto page_number = key / elements_per_page;
@@ -56,6 +61,13 @@ class InMemoryStore {
     }
     return (*pages_)[page_number][key % elements_per_page];
   }
+
+  // Creates a snapshot of the data maintained in this store. Snapshots may be
+  // used to transfer state information between instances without the need of
+  // blocking other operations on the store.
+  // The resulting snapshot references content in this store and must not
+  // outlive the store instance.
+  std::unique_ptr<StoreSnapshot> CreateSnapshot() const;
 
   // Computes a hash over the full content of this store.
   Hash GetHash() const;
@@ -86,12 +98,37 @@ class InMemoryStore {
       return std::as_bytes(std::span<const V>(data_));
     }
 
+    // Provides mutable byte-level access to the maintained data.
+    std::span<std::byte> AsBytes() {
+      return std::as_writable_bytes(std::span<V>(data_));
+    }
+
    private:
     std::array<V, elements_per_page> data_;
   };
 
   // The container type used to maintain the actual pages.
   using Pages = std::deque<Page>;
+
+  // A naive snapshot implementation accepting a deep copy of all the data in
+  // the store.
+  class DeepSnapshot : public StoreSnapshot {
+   public:
+    DeepSnapshot(Pages pages) : pages_(std::move(pages)) {}
+
+    std::size_t GetNumPages() const override { return pages_.size(); }
+
+    std::span<const std::byte> GetPageData(PageId id) const override {
+      static const Page empty{};
+      if (id >= pages_.size()) {
+        return empty.AsBytes();
+      }
+      return pages_[id].AsBytes();
+    }
+
+   private:
+    Pages pages_;
+  };
 
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public PageSource {
@@ -121,6 +158,29 @@ class InMemoryStore {
 template <typename K, Trivial V, std::size_t page_size>
 Hash InMemoryStore<K, V, page_size>::GetHash() const {
   return hashes_.GetHash();
+}
+
+template <typename K, Trivial V, std::size_t page_size>
+InMemoryStore<K, V, page_size>::InMemoryStore(const StoreSnapshot& snapshot,
+                                              std::size_t hash_branching_factor)
+    : InMemoryStore(hash_branching_factor) {
+  // Load all pages from the snapshot.
+  auto num_pages = snapshot.GetNumPages();
+  for (std::size_t i = 0; i < num_pages; i++) {
+    pages_->emplace_back();
+    auto dest = pages_->back().AsBytes();
+    auto src = snapshot.GetPageData(i);
+    std::memcpy(dest.data(), src.data(), dest.size());
+    hashes_.MarkDirty(i);
+  }
+  // Refresh the hashes.
+  hashes_.GetHash();
+}
+
+template <typename K, Trivial V, std::size_t page_size>
+std::unique_ptr<StoreSnapshot> InMemoryStore<K, V, page_size>::CreateSnapshot()
+    const {
+  return std::make_unique<DeepSnapshot>(*pages_);
 }
 
 }  // namespace carmen::backend::store
