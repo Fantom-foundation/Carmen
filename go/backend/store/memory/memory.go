@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -67,6 +68,11 @@ func (m *Store[I, V]) Get(id I) (item V, err error) {
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()
+}
+
+// Flush the store
+func (m *Store[I, V]) Flush() error {
+	return nil // no-op for in-memory database
 }
 
 // Close the store

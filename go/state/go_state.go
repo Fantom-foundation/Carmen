@@ -2,11 +2,24 @@ package state
 
 import (
 	"crypto/sha256"
+	"io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
+	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
+	indexldb "github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
+	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	storeldb "github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
+	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/syndtr/goleveldb/leveldb"
+)
+
+const (
+	HashTreeFactor = 32
+	PageSize       = 1 << 12
 )
 
 // GoState manages dependencies to other interfaces to build this service
@@ -19,20 +32,77 @@ type GoState struct {
 	balancesStore store.Store[uint32, common.Balance]
 	valuesStore   store.Store[uint32, common.Value]
 	codesDepot    depot.Depot[uint32]
+	cleanup       []func()
 }
 
-// NewGoState creates a new instance of this service
-func NewGoState(
-	addressIndex index.Index[common.Address, uint32],
-	keyIndex index.Index[common.Key, uint32],
-	slotIndex index.Index[common.SlotIdx[uint32], uint32],
-	accountsStore store.Store[uint32, common.AccountState],
-	noncesStore store.Store[uint32, common.Nonce],
-	balancesStore store.Store[uint32, common.Balance],
-	valuesStore store.Store[uint32, common.Value],
-	codesDepot depot.Depot[uint32]) *GoState {
+func NewGoInMemoryState() (State, error) {
+	var addressIndex index.Index[common.Address, uint32] = indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
+	var keyIndex index.Index[common.Key, uint32] = indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
+	var slotIndex index.Index[common.SlotIdx[uint32], uint32] = indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
+	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	noncesStore, err := storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	return &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}, nil
+}
 
-	return &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot}
+func NewGoLevelDbState(directory string) (State, error) {
+	db, err := leveldb.OpenFile(directory, nil)
+	if err != nil {
+		return nil, err
+	}
+	addressIndex, err := indexldb.NewIndex[common.Address, uint32](db, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	if err != nil {
+		return nil, err
+	}
+	keyIndex, err := indexldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
+	if err != nil {
+		return nil, err
+	}
+	slotIndex, err := indexldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
+	if err != nil {
+		return nil, err
+	}
+	accountsStore, err := storeldb.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	noncesStore, err := storeldb.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	balancesStore, err := storeldb.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	valuesStore, err := storeldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htmemory.CreateHashTreeFactory(HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	if err != nil {
+		return nil, err
+	}
+	cleanup := []func(){
+		func() { db.Close() },
+	}
+	return &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup}, nil
 }
 
 func (s *GoState) CreateAccount(address common.Address) (err error) {
@@ -186,9 +256,49 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 }
 
 func (s *GoState) Flush() error {
-	return s.Flush()
+	flushables := []common.Flusher{
+		s.addressIndex,
+		s.keyIndex,
+		s.slotIndex,
+		s.accountsStore,
+		s.noncesStore,
+		s.balancesStore,
+		s.valuesStore,
+		s.codesDepot,
+	}
+
+	var last error = nil
+	for _, flushable := range flushables {
+		if err := flushable.Flush(); err != nil {
+			last = err
+		}
+	}
+	return last
 }
 
 func (s *GoState) Close() error {
-	return s.Close()
+	closeables := []io.Closer{
+		s.addressIndex,
+		s.keyIndex,
+		s.slotIndex,
+		s.accountsStore,
+		s.noncesStore,
+		s.balancesStore,
+		s.valuesStore,
+		s.codesDepot,
+	}
+
+	var last error = nil
+	for _, closeable := range closeables {
+		if err := closeable.Close(); err != nil {
+			last = err
+		}
+	}
+
+	if s.cleanup != nil {
+		for _, clean := range s.cleanup {
+			clean()
+		}
+	}
+	return last
 }

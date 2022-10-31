@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -67,7 +68,7 @@ func (m *Depot[I]) Set(id I, value []byte) error {
 	return nil
 }
 
-// Get a value of the item (or the itemDefault, if not defined)
+// Get a value of the item (or nil if not defined)
 func (m *Depot[I]) Get(id I) (out []byte, err error) {
 	if int(id) < len(m.data) {
 		out = m.data[id]
@@ -80,7 +81,12 @@ func (m *Depot[I]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()
 }
 
-// Close the store
+// Flush the depot
+func (m *Depot[I]) Flush() error {
+	return nil // no-op for in-memory database
+}
+
+// Close the depot
 func (m *Depot[I]) Close() error {
 	return nil // no-op for in-memory database
 }

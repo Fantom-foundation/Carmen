@@ -2,6 +2,7 @@ package ldb
 
 import (
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -101,10 +102,14 @@ func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()
 }
 
-func (m *Store[I, V]) Close() error {
-	// commit state hash root before closing
+func (m *Store[I, V]) Flush() error {
+	// commit state hash root
 	_, err := m.GetStateHash()
 	return err
+}
+
+func (m *Store[I, V]) Close() error {
+	return m.Flush()
 }
 
 // convertKey translates the Index representation of the key into a database key.

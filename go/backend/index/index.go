@@ -2,6 +2,7 @@ package index
 
 import (
 	"errors"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -25,8 +26,8 @@ type Index[K comparable, I common.Identifier] interface {
 	// GetStateHash returns the index hash.
 	GetStateHash() (common.Hash, error)
 
-	// Close closes the storage and clean-ups all possible dirty values
-	Close() error
+	// Also, indexes need to be flush and closable.
+	common.FlushAndCloser
 }
 
 var (

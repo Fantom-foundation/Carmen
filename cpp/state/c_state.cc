@@ -13,14 +13,14 @@
 namespace carmen {
 namespace {
 
-constexpr const std::size_t kPageSize = 1 << 14;  // 16 KiB
+constexpr const std::size_t kPageSize = 1 << 12;  // 4 KiB
 constexpr const std::size_t kHashBranchFactor = 32;
 
 template <typename K, typename V>
 using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
 
 template <typename K, typename V>
-using InMemoryStore = backend::store::InMemoryStore<K, V>;
+using InMemoryStore = backend::store::InMemoryStore<K, V, kPageSize>;
 
 template <typename K, typename V>
 using FileBasedStore =

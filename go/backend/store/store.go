@@ -19,6 +19,6 @@ type Store[I common.Identifier, V any] interface {
 	// GetStateHash computes and returns a cryptographical hash of the stored data
 	GetStateHash() (common.Hash, error)
 
-	// Close the store
-	Close() error
+	// Also, stores need to be flush and closable.
+	common.FlushAndCloser
 }

@@ -54,6 +54,11 @@ func (m *Index[K, I]) GetStateHash() (common.Hash, error) {
 	return m.hashIndex.Commit()
 }
 
+// Flush does nothing.
+func (m *Index[K, I]) Flush() error {
+	return nil
+}
+
 // Close closes the storage and clean-ups all possible dirty values
 func (m *Index[K, I]) Close() error {
 	return nil

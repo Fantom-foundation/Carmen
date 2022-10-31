@@ -4,16 +4,26 @@ package common
 type TableSpace byte
 
 const (
-	// BalanceKey is a respective "table space"
-	BalanceKey TableSpace = 'B'
-	// NonceKey is a respective "table space"
-	NonceKey TableSpace = 'N'
-	// SlotKey is a respective "table space"
-	SlotKey TableSpace = 'S'
-	// ValueKey is a respective "table space"
-	ValueKey TableSpace = 'V'
+	// AccountStoreKey is a respective "table space"
+	AccountStoreKey TableSpace = 'C'
+	// BalanceStoreKey is a respective "table space"
+	BalanceStoreKey TableSpace = 'B'
+	// NonceStoreKey is a respective "table space"
+	NonceStoreKey TableSpace = 'N'
+	// SlotStoreKey is a respective "table space"
+	SlotStoreKey TableSpace = 'S'
+	// ValueStoreKey is a respective "table space"
+	ValueStoreKey TableSpace = 'V'
 	// HashKey is a respective "table space" for the hash tree
 	HashKey TableSpace = 'H'
+	// AddressIndexKey is a respective "table space"
+	AddressIndexKey TableSpace = 'A'
+	// SlotLocIndexKey is a respective "table space"
+	SlotLocIndexKey TableSpace = 'L'
+	// KeyIndexKey is a respective "table space"
+	KeyIndexKey TableSpace = 'K'
+	// DepotCodeKey is a respective "table space"
+	DepotCodeKey TableSpace = 'D'
 )
 
 // DbKey expects max size of the 32B key plus at most two bytes

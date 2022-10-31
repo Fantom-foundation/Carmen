@@ -14,7 +14,7 @@ func TestHashTreeInitialState(t *testing.T) {
 	db := openDb(t, tmpDir)
 
 	pages := [][]byte{}
-	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
+	tree := CreateHashTreeFactory(db, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pages})
 
 	hash, err := tree.HashRoot()
 	if err != nil {
@@ -40,7 +40,7 @@ func TestHashTreeUnchangedState(t *testing.T) {
 	db := openDb(t, tmpDir)
 
 	pages := make([][]byte, 10)
-	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
+	tree := CreateHashTreeFactory(db, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
@@ -70,7 +70,7 @@ func TestHashTreeChangedState(t *testing.T) {
 	db := openDb(t, tmpDir)
 
 	pages := make([][]byte, 10)
-	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
+	tree := CreateHashTreeFactory(db, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
@@ -106,8 +106,8 @@ func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 	// initialize two different states
 	pagesA := [][]byte{{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {0}, {0}}
 	pagesB := [][]byte{{0}, {42}, {2}, {3}, {4}, {5}, {6}, {7}, {0}, {0}, {0}, {0}}
-	treeA := CreateHashTreeFactory(db1, common.ValueKey, 3).Create(testingPageProvider{pages: pagesA})
-	treeB := CreateHashTreeFactory(db2, common.ValueKey, 3).Create(testingPageProvider{pages: pagesB})
+	treeA := CreateHashTreeFactory(db1, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pagesA})
+	treeB := CreateHashTreeFactory(db2, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pagesB})
 	for i := 0; i < 8; i++ {
 		treeA.MarkUpdated(i)
 		treeB.MarkUpdated(i)
@@ -153,7 +153,7 @@ func TestTreePersisted(t *testing.T) {
 	db := openDb(t, tmpDir)
 
 	pages := make([][]byte, 10)
-	tree := CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
+	tree := CreateHashTreeFactory(db, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pages})
 
 	for i := 0; i < 10; i++ {
 		pages[i] = []byte{byte(i)}
@@ -167,7 +167,7 @@ func TestTreePersisted(t *testing.T) {
 	// reopen and check the hash is still there
 	closeHashTreeDb(t, db)
 	db = openDb(t, tmpDir)
-	tree = CreateHashTreeFactory(db, common.ValueKey, 3).Create(testingPageProvider{pages: pages})
+	tree = CreateHashTreeFactory(db, common.ValueStoreKey, 3).Create(testingPageProvider{pages: pages})
 
 	hashReopen, err := tree.HashRoot()
 	if err != nil {

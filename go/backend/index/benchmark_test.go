@@ -156,7 +156,7 @@ func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySeri
 		_ = db.Close()
 	})
 
-	idx, err := ldb.NewIndex[K, I](db, common.SlotKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](db, common.SlotStoreKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
@@ -177,7 +177,7 @@ func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing
 		_ = db.Close()
 	})
 
-	tableSpaces := []common.TableSpace{common.BalanceKey, common.NonceKey, common.SlotKey, common.ValueKey}
+	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.SlotStoreKey, common.ValueStoreKey}
 	indexArray := index.NewIndexArray[K, I]()
 	for _, tableSpace := range tableSpaces {
 		if idx, err := ldb.NewIndex[K, I](db, tableSpace, keySerializer, indexSerializer); err != nil {
@@ -192,7 +192,7 @@ func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing
 
 // createEachMultiLevelDbIndex creates many instances of the index with each having its LevelDB instance
 func createEachMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
-	tableSpaces := []common.TableSpace{common.BalanceKey, common.NonceKey, common.SlotKey, common.ValueKey}
+	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.SlotStoreKey, common.ValueStoreKey}
 	indexArray := index.NewIndexArray[K, I]()
 	for _, tableSpace := range tableSpaces {
 
@@ -237,7 +237,7 @@ func createTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B,
 		_ = db.Close()
 	})
 
-	idx, err := ldb.NewTransactIndex[K, I](tr, common.SlotKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewTransactIndex[K, I](tr, common.SlotStoreKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
@@ -256,7 +256,7 @@ func createCachedLevelDbIndex[K comparable, I common.Identifier](b *testing.B, c
 		_ = db.Close()
 	})
 
-	idx, err := ldb.NewIndex[K, I](db, common.SlotKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](db, common.SlotStoreKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}

@@ -53,7 +53,12 @@ func (m *Index[K, I]) GetStateHash() (common.Hash, error) {
 	return m.wrapped.GetStateHash()
 }
 
-// Close closes the storage and clean-ups all possible dirty values
+// Flush pushes buffered write operations to disk.
+func (m *Index[K, I]) Flush() error {
+	return m.wrapped.Flush()
+}
+
+// Close closes the storage and clean-ups all possible dirty values.
 func (m *Index[K, I]) Close() error {
 	return m.wrapped.Close()
 }

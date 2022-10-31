@@ -117,13 +117,17 @@ func (m *TransactIndex[K, I]) GetStateHash() (hash common.Hash, err error) {
 	return m.hashIndex.Commit()
 }
 
-func (m *TransactIndex[K, I]) Close() error {
+func (m *TransactIndex[K, I]) Flush() error {
 	// commit and persist the state
 	hash, err := m.GetStateHash()
 	if err != nil {
 		return err
 	}
 	return m.tr.Put(m.convertKeyStr(HashKey).ToBytes(), m.hashSerializer.ToBytes(hash), nil)
+}
+
+func (m *TransactIndex[K, I]) Close() error {
+	return m.Flush()
 }
 
 // convertKey translates the TransactIndex representation of the key into a database key.

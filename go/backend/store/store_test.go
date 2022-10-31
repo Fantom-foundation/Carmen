@@ -51,8 +51,8 @@ func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
 		t.Fatalf("failed to init paged file store; %s", err)
 	}
 
-	hashtreeFac = htldb.CreateHashTreeFactory(db, common.ValueKey, BranchingFactor)
-	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueKey, valSerializer, idSerializer, hashtreeFac, PageSize)
+	hashtreeFac = htldb.CreateHashTreeFactory(db, common.ValueStoreKey, BranchingFactor)
+	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, valSerializer, idSerializer, hashtreeFac, PageSize)
 	if err != nil {
 		t.Fatalf("failed to init leveldb store; %s", err)
 	}
