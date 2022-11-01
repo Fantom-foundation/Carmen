@@ -287,7 +287,6 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 			var value []byte
 			for i, expectedHash := range expectedHashes {
 				value = append(value, byte(i<<4|i))
-				fmt.Printf("inserting value %x\n", value)
 				if err := d.Set(uint32(i), value); err != nil {
 					t.Fatalf("failed to set store item %d; %s", i, err)
 				}
@@ -308,6 +307,11 @@ func TestDepotsHashingByComparison(t *testing.T) {
 	for _, fac := range getDepotsFactories(t) {
 		depots[fac.label] = fac.getDepot(t.TempDir())
 	}
+	defer func() {
+		for _, d := range depots {
+			_ = d.Close()
+		}
+	}()
 
 	for i := 0; i < 10; i++ {
 		for _, d := range depots {
