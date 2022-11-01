@@ -7,7 +7,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-// Depot is an in-memory store.Depot implementation - it maps IDs to values
+// Depot is an LevelDB backed store.Depot implementation
 type Depot[I common.Identifier] struct {
 	db              *leveldb.DB
 	table           common.TableSpace
