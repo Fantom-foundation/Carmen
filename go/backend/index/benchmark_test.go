@@ -93,7 +93,7 @@ func (iw *indexWrapper[K, I]) benchmarkInsert(b *testing.B, keyShift uint32) {
 		if err != nil {
 			b.Fatalf("failed to add item into Index; %s", err)
 		}
-		sink = idx // prevent compiler to optimize it out
+		sinkInt = uint32(idx) // prevent compiler to optimize it out
 	}
 }
 
@@ -104,7 +104,7 @@ func (iw *indexWrapper[K, I]) benchmarkRead(b *testing.B, dist common.Distributi
 		if err != nil {
 			b.Fatalf("failed to add item into Index; %s", err)
 		}
-		sink = idx // prevent compiler to optimize it out
+		sinkInt = uint32(idx) // prevent compiler to optimize it out
 	}
 }
 
@@ -123,11 +123,11 @@ func (iw *indexWrapper[K, I]) benchmarkHash(b *testing.B, updateSize, keyShift u
 		b.StartTimer()
 
 		// this we measure
-		idx, err := iw.idx.GetStateHash()
+		hash, err := iw.idx.GetStateHash()
 		if err != nil {
 			b.Fatalf("failed to hash; %s", err)
 		}
-		sink = idx
+		sinkHash = hash
 	}
 }
 
@@ -265,7 +265,8 @@ func createCachedLevelDbIndex[K comparable, I common.Identifier](b *testing.B, c
 	return indexWrapper[K, I]{keySerializer, indexSerializer, cached}
 }
 
-var sink interface{}
+var sinkInt uint32
+var sinkHash common.Hash
 
 // toKey converts the key from an input uint32 to the generic Key
 func (iw *indexWrapper[K, I]) toKey(key uint32) K {

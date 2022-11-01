@@ -40,7 +40,8 @@ var initialSizes = []int{1 << 20, 1 << 24, 1 << 30}
 // number of values updated before each measured hash recalculation
 var updateSizes = []int{100}
 
-var sink interface{}
+var sinkValue common.Value
+var sinkHash common.Hash
 
 func BenchmarkInsert(b *testing.B) {
 	for _, fac := range getStoresFactories() {
@@ -93,7 +94,7 @@ func benchmarkRead(b *testing.B, dist common.Distribution, store store.Store[uin
 		if err != nil {
 			b.Fatalf("failed to read item from store; %s", err)
 		}
-		sink = value // prevent compiler to optimize it out
+		sinkValue = value // prevent compiler to optimize it out
 	}
 }
 
@@ -161,7 +162,7 @@ func benchmarkHash(b *testing.B, dist common.Distribution, updateSize int, store
 		if err != nil {
 			b.Fatalf("failed to hash store; %s", err)
 		}
-		sink = hash // prevent compiler to optimize it out
+		sinkHash = hash // prevent compiler to optimize it out
 	}
 }
 
@@ -199,7 +200,7 @@ func benchmarkWriteAndHash(b *testing.B, dist common.Distribution, updateSize in
 		if err != nil {
 			b.Fatalf("failed to hash store; %s", err)
 		}
-		sink = hash // prevent compiler to optimize it out
+		sinkHash = hash // prevent compiler to optimize it out
 	}
 }
 
