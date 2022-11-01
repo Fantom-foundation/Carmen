@@ -16,11 +16,11 @@ namespace {
 template <Trivial K, std::integral I>
 class SingleIndexBM {
  public:
-  explicit SingleIndexBM(std::uint8_t indexes) {
-    assert(indexes > 0 && "indexes must be greater than 0");
+  explicit SingleIndexBM(std::uint8_t num_indexes) {
+    assert(num_indexes > 0 && "num_indexes must be greater than 0");
     // initialize index leveldb index
     auto index = *SingleLevelDBIndex::Open(dir_.GetPath());
-    for (std::uint8_t i = 0; i < indexes; ++i) {
+    for (std::uint8_t i = 0; i < num_indexes; ++i) {
       // create key space
       indexes_.push_back(index.KeySpace<K, I>(i));
     }
@@ -37,9 +37,9 @@ class SingleIndexBM {
 template <Trivial K, std::integral I>
 class MultiIndexBM {
  public:
-  explicit MultiIndexBM(std::uint8_t indexes) {
-    assert(indexes > 0 && "indexes must be greater than 0");
-    for (std::uint8_t i = 0; i < indexes; ++i) {
+  explicit MultiIndexBM(std::uint8_t num_indexes) {
+    assert(num_indexes > 0 && "num_indexes must be greater than 0");
+    for (std::uint8_t i = 0; i < num_indexes; ++i) {
       auto dir = TempDir();
       indexes_.push_back(*MultiLevelDBIndex<K, I>::Open(dir.GetPath()));
       dirs_.push_back(std::move(dir));
@@ -122,7 +122,7 @@ void BM_SequentialRead(benchmark::State& state) {
   auto i = 0;
   for (auto _ : state) {
     auto& idx = index.GetIndex(i % indexes_count);
-    auto id = idx.GetOrAdd(ToKey(i));
+    auto id = idx.GetOrAdd(ToKey(i % pre_loaded_num_elements));
     benchmark::DoNotOptimize(*id);
     ++i;
   }
@@ -205,7 +205,7 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
   for (auto _ : state) {
     auto i = dist(gen);
     auto& idx = index.GetIndex(int(i) % indexes_count);
-    auto id = idx.GetOrAdd(ToKey(i));
+    auto id = idx.GetOrAdd(ToKey(std::int64_t(i) % pre_loaded_num_elements));
     benchmark::DoNotOptimize(*id);
   }
 }
