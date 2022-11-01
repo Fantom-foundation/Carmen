@@ -1,6 +1,8 @@
 package state
 
 import (
+	fileDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/file"
+	ldbDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
@@ -24,45 +26,40 @@ const CacheCapacity = 1 << 24 // 2 ^ 24 -> 512MB for 32 keys
 // TransactBufferMB is the size of buffer before the transaction is flushed expressed in MBs
 const TransactBufferMB = 512 * opt.MiB
 
-// branchingFactor branching factor for the hashing tree of the Store
-const branchingFactor = 3
-
 // NewMemory creates in memory implementation
-func NewMemory() (StateDB, error) {
+func NewMemory() (*GoState, error) {
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
 
-	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	noncesStore, err := storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	noncesStore, err := storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
 	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
-	stateDB := CreateStateDBUsing(state)
-
-	return stateDB, nil
+	return state, nil
 }
 
 // NewLeveLIndexFileStore creates LevelDB Index and File Store implementations
-func NewLeveLIndexFileStore(path string) (StateDB, error) {
+func NewLeveLIndexFileStore(path string) (*GoState, error) {
 	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
@@ -86,54 +83,54 @@ func NewLeveLIndexFileStore(path string) (StateDB, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(accountStorePath, 0777); err != nil {
 		return nil, err
 	}
-	accountsStore, err := file.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, branchingFactor))
+	accountsStore, err := file.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(noncesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	noncesStore, err := file.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, branchingFactor))
+	noncesStore, err := file.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(balancesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	balancesStore, err := file.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, branchingFactor))
+	balancesStore, err := file.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(valuesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	valuesStore, err := file.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, branchingFactor))
+	valuesStore, err := file.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO switch from in-memory once it is implemented
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	depotPath := storePath + string(filepath.Separator) + "depot"
+	if err = os.Mkdir(depotPath, 0777); err != nil {
+		return nil, err
+	}
+	codesDepot, err := fileDepot.NewDepot[uint32](depotPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(depotPath, HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
-	stateDB := CreateStateDBUsing(state)
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
 
-	// TODO - when to close Indexes, Stores, and the database?
-
-	return stateDB, nil
+	return state, nil
 }
 
 // NewCachedLeveLIndexFileStore creates Cached LevelDB Index and File Store implementations
-func NewCachedLeveLIndexFileStore(path string) (StateDB, error) {
+func NewCachedLeveLIndexFileStore(path string) (*GoState, error) {
 	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
@@ -157,41 +154,44 @@ func NewCachedLeveLIndexFileStore(path string) (StateDB, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(accountStorePath, 0777); err != nil {
 		return nil, err
 	}
-	accountsStore, err := file.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, branchingFactor))
+	accountsStore, err := file.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(noncesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	noncesStore, err := file.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, branchingFactor))
+	noncesStore, err := file.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(balancesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	balancesStore, err := file.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, branchingFactor))
+	balancesStore, err := file.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(valuesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	valuesStore, err := file.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, branchingFactor))
+	valuesStore, err := file.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO switch from in-memory once it is implemented
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	depotPath := storePath + string(filepath.Separator) + "depot"
+	if err = os.Mkdir(depotPath, 0777); err != nil {
+		return nil, err
+	}
+	codesDepot, err := fileDepot.NewDepot[uint32](depotPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(depotPath, HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -200,24 +200,20 @@ func NewCachedLeveLIndexFileStore(path string) (StateDB, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
 
-	stateDB := CreateStateDBUsing(state)
-
-	// TODO - when to close Indexes, Stores, and the database?
-
-	return stateDB, nil
+	return state, nil
 }
 
 // NewCachedTransactLeveLIndexFileStore creates Cached and Transactional LevelDB Index and File Store implementations
-func NewCachedTransactLeveLIndexFileStore(path string) (StateDB, error) {
+func NewCachedTransactLeveLIndexFileStore(path string) (*GoState, error) {
 	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
 	}
 
 	opts := opt.Options{WriteBuffer: TransactBufferMB}
-	db, err := leveldb.OpenFile(path, &opts)
+	db, err := leveldb.OpenFile(indexPath, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -240,60 +236,66 @@ func NewCachedTransactLeveLIndexFileStore(path string) (StateDB, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(accountStorePath, 0777); err != nil {
 		return nil, err
 	}
-	accountsStore, err := file.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, branchingFactor))
+	accountsStore, err := file.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(noncesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	noncesStore, err := file.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, branchingFactor))
+	noncesStore, err := file.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(balancesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	balancesStore, err := file.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, branchingFactor))
+	balancesStore, err := file.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(indexPath, 0777); err != nil {
+	if err = os.Mkdir(valuesStorePath, 0777); err != nil {
 		return nil, err
 	}
-	valuesStore, err := file.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, branchingFactor))
+	valuesStore, err := file.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO switch from in-memory once it is implemented
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	depotPath := storePath + string(filepath.Separator) + "depot"
+	if err = os.Mkdir(depotPath, 0777); err != nil {
+		return nil, err
+	}
+	codesDepot, err := fileDepot.NewDepot[uint32](depotPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(depotPath, HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
+	}
+
+	cleanup := []func(){
+		func() {
+			_ = tx.Commit()
+			_ = db.Close()
+		},
 	}
 
 	state := &GoState{
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup}
 
-	stateDB := CreateStateDBUsing(state)
-
-	// TODO - when to close Indexes, Stores, and the database?
-
-	return stateDB, nil
+	return state, nil
 }
 
 // NewLeveLIndexAndStore creates Index and Store both backed up by the leveldb
-func NewLeveLIndexAndStore(path string) (StateDB, error) {
+func NewLeveLIndexAndStore(path string) (*GoState, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
@@ -311,43 +313,39 @@ func NewLeveLIndexAndStore(path string) (StateDB, error) {
 		return nil, err
 	}
 
-	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, branchingFactor)
+	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
 	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, branchingFactor)
+	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
 	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, branchingFactor)
+	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
 	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
+	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
 	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO switch from in-memory once it is implemented
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
-	stateDB := CreateStateDBUsing(state)
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
 
-	// TODO - when to close Indexes, Stores, and the database?
-
-	return stateDB, nil
+	return state, nil
 }
 
 // NewCachedLeveLIndexAndStore creates Index and Store both backed up by the leveldb
-func NewCachedLeveLIndexAndStore(path string) (StateDB, error) {
+func NewCachedLeveLIndexAndStore(path string) (*GoState, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
@@ -365,29 +363,28 @@ func NewCachedLeveLIndexAndStore(path string) (StateDB, error) {
 		return nil, err
 	}
 
-	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, branchingFactor)
+	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
 	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, branchingFactor)
+	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
 	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, branchingFactor)
+	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
 	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
+	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
 	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO switch from in-memory once it is implemented
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -397,16 +394,13 @@ func NewCachedLeveLIndexAndStore(path string) (StateDB, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
-	stateDB := CreateStateDBUsing(state)
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
 
-	// TODO - when to close Indexes, Stores, and the database?
-
-	return stateDB, nil
+	return state, nil
 }
 
 // NewTransactCachedLeveLIndexAndStore creates Index and Store both backed up by the leveldb
-func NewTransactCachedLeveLIndexAndStore(path string) (StateDB, error) {
+func NewTransactCachedLeveLIndexAndStore(path string) (*GoState, error) {
 	opts := opt.Options{WriteBuffer: TransactBufferMB}
 	db, err := leveldb.OpenFile(path, &opts)
 	if err != nil {
@@ -430,31 +424,37 @@ func NewTransactCachedLeveLIndexAndStore(path string) (StateDB, error) {
 	}
 
 	// TODO we do not have yet transactional leveldb stores
-	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, branchingFactor)
+	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
 	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, branchingFactor)
+	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
 	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, branchingFactor)
+	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
 	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
-	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
+	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
 	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO switch from in-memory once it is implemented
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(branchingFactor))
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), PageSize)
 	if err != nil {
 		return nil, err
+	}
+
+	cleanup := []func(){
+		func() {
+			_ = tx.Commit()
+			_ = db.Close()
+		},
 	}
 
 	// TODO no support for cached stores yet - create it
@@ -462,12 +462,9 @@ func NewTransactCachedLeveLIndexAndStore(path string) (StateDB, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
-	stateDB := CreateStateDBUsing(state)
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup}
 
-	// TODO - when to close Indexes, Stores, and the database?
-
-	return stateDB, nil
+	return state, nil
 }
 
 // createSubDirs creates two subdirectories of the given for the Store and the Index
@@ -481,4 +478,13 @@ func createSubDirs(rootPath string) (indexPath, storePath string, err error) {
 	err = os.Mkdir(storePath, 0777)
 
 	return
+}
+
+// closeDBFunc clean-ups by closing the input databse
+func closeDBFunc(db *leveldb.DB) []func() {
+	return []func(){
+		func() {
+			_ = db.Close()
+		},
+	}
 }

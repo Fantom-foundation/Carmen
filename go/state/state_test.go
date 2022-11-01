@@ -6,28 +6,24 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-type NamedStateConfig struct {
+type namedStateConfig struct {
 	name  string
 	state State
 }
 
-func referenceState() (State, error) {
-	return NewGoInMemoryState()
-}
-
-func initStates(t *testing.T) []NamedStateConfig {
-	res := []NamedStateConfig{}
+func initStates(t *testing.T) []namedStateConfig {
+	var res []namedStateConfig
 	for _, s := range initCppStates(t) {
-		res = append(res, NamedStateConfig{name: "cpp-" + s.name, state: s.state})
+		res = append(res, namedStateConfig{name: "cpp-" + s.name, state: s.state})
 	}
 	for _, s := range initGoStates(t) {
-		res = append(res, NamedStateConfig{name: "go-" + s.name, state: s.state})
+		res = append(res, namedStateConfig{name: "go-" + s.name, state: s.state})
 	}
 	return res
 }
 
 func testHashAfterModification(t *testing.T, mod func(s State)) {
-	ref, err := referenceState()
+	ref, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}

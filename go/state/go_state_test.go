@@ -33,23 +33,54 @@ var (
 	nonce3 = common.Nonce{0x03}
 )
 
-func initGoStates(t *testing.T) []NamedStateConfig {
-	mem_state, err := NewGoInMemoryState()
+func initGoStates(t *testing.T) []namedStateConfig {
+	memState, err := NewMemory()
 	if err != nil {
-		t.Fatalf("failed to init in-memory state: %v", err)
+		t.Fatalf("failed to init state: %v", err)
 	}
-	ldb_state, err := NewGoLevelDbState(t.TempDir())
+	ldbFileState, err := NewLeveLIndexFileStore(t.TempDir())
 	if err != nil {
-		t.Fatalf("failed to init LevelDB state: %v", err)
+		t.Fatalf("failed to init state: %v", err)
+	}
+	cachedLdbFileState, err := NewCachedLeveLIndexFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to init state: %v", err)
+	}
+	cachedTransactLdbFileState, err := NewCachedTransactLeveLIndexFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to init state: %v", err)
+	}
+	ldbState, err := NewLeveLIndexAndStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to init state: %v", err)
+	}
+	cachedLdbState, err := NewCachedLeveLIndexAndStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to init state: %v", err)
+	}
+	cachedTransactLdbState, err := NewTransactCachedLeveLIndexAndStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to init state: %v", err)
 	}
 
 	t.Cleanup(func() {
-		mem_state.Close()
-		ldb_state.Close()
+		_ = memState.Close()
+		_ = ldbFileState.Close()
+		_ = cachedLdbFileState.Close()
+		_ = cachedTransactLdbFileState.Close()
+		_ = ldbState.Close()
+		_ = cachedLdbState.Close()
+		_ = cachedTransactLdbState.Close()
 	})
-	return []NamedStateConfig{
-		{"memory", mem_state},
-		{"LevelDB", ldb_state},
+
+	return []namedStateConfig{
+		{"Memory", memState},
+		{"LevelDB Index, File Store", ldbFileState},
+		{"Cached LevelDB Index, File Store", cachedLdbFileState},
+		{"Cached Transact LevelDB, Index File Store", cachedTransactLdbFileState},
+		{"LevelDB Index and Store", ldbState},
+		{"Cached LevelDB Index and Store", cachedLdbState},
+		//{"Cached Transact LevelDB Index and Store", cachedTransactLdbState},  // cannot combine transact and non-transact access
 	}
 }
 
@@ -166,6 +197,7 @@ func TestMoreInserts(t *testing.T) {
 }
 
 func TestHashing(t *testing.T) {
+	var hashes []common.Hash
 	for _, config := range initGoStates(t) {
 		t.Run(config.name, func(t *testing.T) {
 			state := config.state
@@ -209,7 +241,15 @@ func TestHashing(t *testing.T) {
 			if initialHash == hash4 || hash3 == hash4 {
 				t.Errorf("hash of changed state not changed; %s", err)
 			}
+			hashes = append(hashes, hash4) // store the last hash
 		})
+	}
+
+	// check all final hashes are the same
+	for i := 0; i < len(hashes)-1; i++ {
+		if hashes[i] != hashes[i+1] {
+			t.Errorf("hashes differ ")
+		}
 	}
 }
 
@@ -234,14 +274,13 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewGoInMemoryState()
+	state, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goState := state.(*GoState)
-	goState.balancesStore = failingStore[uint32, common.Balance]{goState.balancesStore}
-	goState.noncesStore = failingStore[uint32, common.Nonce]{goState.noncesStore}
-	goState.valuesStore = failingStore[uint32, common.Value]{goState.valuesStore}
+	state.balancesStore = failingStore[uint32, common.Balance]{state.balancesStore}
+	state.noncesStore = failingStore[uint32, common.Nonce]{state.noncesStore}
+	state.valuesStore = failingStore[uint32, common.Value]{state.valuesStore}
 
 	_ = state.SetBalance(address1, common.Balance{})
 	_ = state.SetNonce(address1, common.Nonce{})
@@ -264,12 +303,11 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewGoInMemoryState()
+	state, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goState := state.(*GoState)
-	goState.addressIndex = failingIndex[common.Address, uint32]{goState.addressIndex}
+	state.addressIndex = failingIndex[common.Address, uint32]{state.addressIndex}
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {

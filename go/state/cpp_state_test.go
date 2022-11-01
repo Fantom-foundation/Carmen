@@ -156,7 +156,7 @@ func TestWriteAndReadSlot(t *testing.T) {
 	}
 }
 
-func initCppStates(t *testing.T) []NamedStateConfig {
+func initCppStates(t *testing.T) []namedStateConfig {
 	in_memory, err := NewCppInMemoryState()
 	if err != nil {
 		t.Fatalf("Failed to create in-memory store: %v", err)
@@ -167,7 +167,7 @@ func initCppStates(t *testing.T) []NamedStateConfig {
 		t.Fatalf("Failed to create in-memory store: %v", err)
 	}
 	t.Cleanup(func() { file_based.Release() })
-	return []NamedStateConfig{
+	return []namedStateConfig{
 		{"InMemory", in_memory},
 		{"FileBased", file_based},
 	}
