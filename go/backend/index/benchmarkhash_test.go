@@ -10,7 +10,7 @@ import (
 
 var updateKeysSizes = []int{100}
 
-var hashSink interface{}
+var hashSink common.Hash
 
 // hashWrapper wraps an instance of the hash index to have serializers and the hash index available at hand
 type hashWrapper[K comparable] struct {
