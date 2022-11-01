@@ -112,7 +112,7 @@ func CreateStateDB(directory string) (StateDB, error) {
 	return CreateStateDBUsing(state), nil
 }
 
-func CreateStateDBUsing(state State) StateDB {
+func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
 		state:    state,
 		accounts: map[common.Address]*accountState{},
@@ -362,13 +362,11 @@ func (s *stateDB) EndTransaction() {
 	for addr, value := range s.accounts {
 		if value.original == nil || *value.original != value.current {
 			if value.current == common.Exists {
-				err := s.state.CreateAccount(addr)
-				if err != nil {
+				if err := s.state.CreateAccount(addr); err != nil {
 					panic(fmt.Sprintf("Failed to create account: %v", err))
 				}
 			} else if value.current == common.Deleted {
-				err := s.state.DeleteAccount(addr)
-				if err != nil {
+				if err := s.state.DeleteAccount(addr); err != nil {
 					panic(fmt.Sprintf("Failed to delete account: %v", err))
 				}
 			} else {
@@ -378,21 +376,27 @@ func (s *stateDB) EndTransaction() {
 	}
 	for addr, value := range s.balances {
 		if value.original == nil || value.original.Cmp(&value.current) != 0 {
-			new_balance, err := common.ToBalance(&value.current)
-			if err != nil {
+			if new_balance, err := common.ToBalance(&value.current); err != nil {
 				panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
+			} else {
+				if err := s.state.SetBalance(addr, new_balance); err != nil {
+					panic(fmt.Sprintf("Unable to set balance: %v", err))
+				}
 			}
-			s.state.SetBalance(addr, new_balance)
 		}
 	}
 	for addr, value := range s.nonces {
 		if value.original == nil || *value.original != value.current {
-			s.state.SetNonce(addr, common.ToNonce(value.current))
+			if err := s.state.SetNonce(addr, common.ToNonce(value.current)); err != nil {
+				panic(fmt.Sprintf("Unable to set nonce: %v", err))
+			}
 		}
 	}
 	for slot, value := range s.data {
 		if value.original == nil || *value.original != value.current {
-			s.state.SetStorage(slot.addr, slot.key, value.current)
+			if err := s.state.SetStorage(slot.addr, slot.key, value.current); err != nil {
+				panic(fmt.Sprintf("Unable to set storage: %v", err))
+			}
 		}
 	}
 	s.ResetTransaction()

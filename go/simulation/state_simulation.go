@@ -24,7 +24,7 @@ func main() {
 
 	// TODO loop from here N-times for N blocks
 	// simulate one block processing
-	simulate(stateDB, dist, t)
+	simulate(state.CreateStateDBUsing(stateDB), dist, t)
 }
 
 // simulate executes simulation from StartBlock and runs the Markov Chain until EndBlock is reached
