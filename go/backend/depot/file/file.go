@@ -10,8 +10,8 @@ import (
 	"os"
 )
 
-const OffsetSize = 8
-const LengthSize = 4
+const OffsetSize = 8 // uint64
+const LengthSize = 4 // uint32
 
 // Depot is a file-based Depot implementation
 type Depot[I common.Identifier] struct {

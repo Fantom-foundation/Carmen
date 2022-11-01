@@ -1,8 +1,9 @@
-package depot
+package depot_test
 
 import (
 	"bytes"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
@@ -14,57 +15,65 @@ import (
 	"testing"
 )
 
-type DepotFactory struct {
+type depotFactory struct {
 	label    string
-	getDepot func(tempDir string) Depot[uint32]
+	getDepot func(tempDir string) depot.Depot[uint32]
 }
 
-func getDepotsFactories(tb testing.TB, db *leveldb.DB) (stores []DepotFactory) {
-	return []DepotFactory{
+func getDepotsFactories(tb testing.TB) (stores []depotFactory) {
+	return []depotFactory{
 		{
 			label: "Memory",
-			getDepot: func(tempDir string) Depot[uint32] {
-				d, err := memory.NewDepot[uint32](2, htmemory.CreateHashTreeFactory(3))
+			getDepot: func(tempDir string) depot.Depot[uint32] {
+				hashTree := htmemory.CreateHashTreeFactory(3)
+				d, err := memory.NewDepot[uint32](2, hashTree)
 				if err != nil {
-					tb.Fatalf("%s", err)
+					tb.Fatalf("failed to create depot; %s", err)
 				}
 				return d
 			},
 		},
 		{
 			label: "File",
-			getDepot: func(tempDir string) Depot[uint32] {
-				d, err := file.NewDepot[uint32](tempDir, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(tempDir, 3), 2)
+			getDepot: func(tempDir string) depot.Depot[uint32] {
+				hashTree := htfile.CreateHashTreeFactory(tempDir, 3)
+				d, err := file.NewDepot[uint32](tempDir, common.Identifier32Serializer{}, hashTree, 2)
 				if err != nil {
-					tb.Fatalf("%s", err)
+					tb.Fatalf("failed to create depot; %s", err)
 				}
 				return d
 			},
 		},
 		{
 			label: "LevelDb",
-			getDepot: func(tempDir string) Depot[uint32] {
-				d, err := ldb.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, 3), 2)
+			getDepot: func(tempDir string) depot.Depot[uint32] {
+				db, err := leveldb.OpenFile(tempDir, nil)
 				if err != nil {
-					tb.Fatalf("%s", err)
+					tb.Fatalf("failed to open LevelDB; %s", err)
 				}
-				return d
+				hashTree := htldb.CreateHashTreeFactory(db, common.DepotCodeKey, 3)
+				dep, err := ldb.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, hashTree, 2)
+				if err != nil {
+					tb.Fatalf("failed to create depot; %s", err)
+				}
+				return &ldbDepotWrapper{dep, db}
 			},
 		},
 	}
 }
 
-func openLevelDb(t *testing.T, path string) (db *leveldb.DB) {
-	db, err := leveldb.OpenFile(path, nil)
+// ldbDepotWrapper wraps the ldb.Depot to close the LevelDB on the depot Close
+type ldbDepotWrapper struct {
+	depot.Depot[uint32]
+	db *leveldb.DB
+}
+
+func (w *ldbDepotWrapper) Close() error {
+	err := w.Depot.Close()
 	if err != nil {
-		t.Fatalf("Cannot open DB, err: %s", err)
+		return err
 	}
-
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
-
-	return
+	return w.db.Close()
 }
 
 var (
@@ -74,7 +83,7 @@ var (
 )
 
 func TestSetGet(t *testing.T) {
-	for _, factory := range getDepotsFactories(t, openLevelDb(t, t.TempDir())) {
+	for _, factory := range getDepotsFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -109,7 +118,7 @@ func TestSetGet(t *testing.T) {
 }
 
 func TestSetToArbitraryPosition(t *testing.T) {
-	for _, factory := range getDepotsFactories(t, openLevelDb(t, t.TempDir())) {
+	for _, factory := range getDepotsFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -144,7 +153,7 @@ func TestSetToArbitraryPosition(t *testing.T) {
 }
 
 func TestDepotPersistence(t *testing.T) {
-	for _, factory := range getDepotsFactories(t, openLevelDb(t, t.TempDir())) {
+	for _, factory := range getDepotsFactories(t) {
 		if factory.label == "Memory" {
 			continue
 		}
@@ -172,7 +181,7 @@ func TestDepotPersistence(t *testing.T) {
 }
 
 func TestHashing(t *testing.T) {
-	for _, factory := range getDepotsFactories(t, openLevelDb(t, t.TempDir())) {
+	for _, factory := range getDepotsFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -202,7 +211,7 @@ func TestHashing(t *testing.T) {
 }
 
 func TestHashAfterChangingBack(t *testing.T) {
-	for _, factory := range getDepotsFactories(t, openLevelDb(t, t.TempDir())) {
+	for _, factory := range getDepotsFactories(t) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -248,9 +257,55 @@ func TestHashAfterChangingBack(t *testing.T) {
 	}
 }
 
+func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
+	// Tests the hashes for values [0x00], [0x00, 0x11] ... [..., 0xFF] inserted in sequence.
+	// reference hashes from the C++ implementation
+	expectedHashes := []string{
+		"6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+		"aea3b18a4991da51ab201722c233c967e9c5d726cbc9a327c42b17d24268303b",
+		"e136dc145513327cf5846ea5cbb3b9d30543d27963288dd7bf6ad63360085df8",
+		"a98672f2a05a5b71b49451e85238e3f4ebc6fb8cedb00d55d8bc4ea6e52d0117",
+		"1e7f4c505dd16f8537bdad064b49a8c0a64a707725fbf09ad4311f280781e9e4",
+		"b07ee4eec6d898d88ec3ef9c66c64f3f0896cd1c7e759b825baf541d42e77784",
+		"9346102f81ac75e583499081d9ab10c7050ff682c7dfd4700a9f909ee469a2de",
+		"44532b1bcf3840a8bf0ead0a6052d4968c5fac6023cd1f86ad43175e53d25e9c",
+		"2de0363a6210fca91e2143b945a86f42ae90cd786e641d51e2a7b9c141b020b0",
+		"0c81b39c90852a66f18b0518d36dceb2f889501dc279e759bb2d1253a63caa8e",
+		"c9fa5b094c4d964bf6d2b25d7ba1e580a83b9ebf2ea8594e99baa81474be4c47",
+		"078fb14729015631017d2d82c844642ec723e92e06eb41f88ca83b36e3a04d30",
+		"4f91e8c410a52b53e46f7b787fdc240c3349711108c2a1ac69ddb0c64e51f918",
+		"4e0d2c84af4f9e54c2d0864302a72703c656996585ec99f7290a2172617ea0e9",
+		"38e68d99bafc836105e88a1092ebdadb6d8a4a1acec29eecc7ec01b885e6f820",
+		"f9764b20bf761bd89b3266697fbc1c336548c3bcbb1c81e4ecf3829df53d98ec",
+	}
+
+	for _, factory := range getDepotsFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			d := factory.getDepot(t.TempDir())
+			defer d.Close()
+
+			var value []byte
+			for i, expectedHash := range expectedHashes {
+				value = append(value, byte(i<<4|i))
+				fmt.Printf("inserting value %x\n", value)
+				if err := d.Set(uint32(i), value); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+				hash, err := d.GetStateHash()
+				if err != nil {
+					t.Fatalf("failed to hash depot with %d values; %s", i+1, err)
+				}
+				if expectedHash != fmt.Sprintf("%x", hash) {
+					t.Errorf("invalid hash: %x (expected %s)", hash, expectedHash)
+				}
+			}
+		})
+	}
+}
+
 func TestDepotsHashingByComparison(t *testing.T) {
-	depots := make(map[string]Depot[uint32])
-	for _, fac := range getDepotsFactories(t, openLevelDb(t, t.TempDir())) {
+	depots := make(map[string]depot.Depot[uint32])
+	for _, fac := range getDepotsFactories(t) {
 		depots[fac.label] = fac.getDepot(t.TempDir())
 	}
 
@@ -266,7 +321,7 @@ func TestDepotsHashingByComparison(t *testing.T) {
 	}
 }
 
-func compareHashes(depots map[string]Depot[uint32]) error {
+func compareHashes(depots map[string]depot.Depot[uint32]) error {
 	var firstHash common.Hash
 	var firstLabel string
 	for label, d := range depots {
