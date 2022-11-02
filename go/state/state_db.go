@@ -32,6 +32,12 @@ type StateDB interface {
 	GetState(common.Address, common.Key) common.Value
 	SetState(common.Address, common.Key, common.Value)
 
+	// Code management.
+	GetCode(common.Address) []byte
+	SetCode(common.Address, []byte)
+	GetCodeHash(common.Address) common.Hash
+	GetCodeSize(common.Address) int
+
 	// Transaction scope management.
 	Snapshot() int
 	RevertToSnapshot(int)
@@ -62,6 +68,9 @@ type stateDB struct {
 
 	// A transaction local cache of storage values to avoid double-fetches and support rollbacks.
 	data map[slotId]*slotValue
+
+	// A transaction local cache of contract codes and their properties.
+	codes map[common.Address]*codeValue
 
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
@@ -116,6 +125,13 @@ type slotValue struct {
 	current common.Value
 }
 
+// codeValue maintains the code associated to a given address.
+type codeValue struct {
+	code  []byte
+	hash  *common.Hash
+	dirty bool // < set if code has been updated in transaction
+}
+
 func CreateStateDB(directory string) (StateDB, error) {
 	state, err := NewCppFileBasedState(directory)
 	if err != nil {
@@ -131,6 +147,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		balances: map[common.Address]*balanceValue{},
 		nonces:   map[common.Address]*nonceValue{},
 		data:     map[slotId]*slotValue{},
+		codes:    map[common.Address]*codeValue{},
 		undo:     make([]func(), 0, 100),
 	}
 }
@@ -355,6 +372,68 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 	}
 }
 
+func (s *stateDB) GetCode(addr common.Address) []byte {
+	val, exists := s.codes[addr]
+	if !exists {
+		val = &codeValue{}
+		s.codes[addr] = val
+	}
+	if val.code == nil {
+		code, err := s.state.GetCode(addr)
+		if err != nil {
+			panic(fmt.Sprintf("Unable to obtain code for %v: %v", addr, err))
+		}
+		val.code = code
+	}
+	return val.code
+}
+
+func (s *stateDB) SetCode(addr common.Address, code []byte) {
+	val, exists := s.codes[addr]
+	if !exists {
+		val = &codeValue{code: code, dirty: true}
+		s.codes[addr] = val
+		s.undo = append(s.undo, func() {
+			delete(s.codes, addr)
+		})
+	} else {
+		old := *val
+		val.code = code
+		val.hash = nil
+		val.dirty = true
+		s.undo = append(s.undo, func() {
+			*(s.codes[addr]) = old
+		})
+	}
+}
+
+func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
+	val, exists := s.codes[addr]
+	if !exists {
+		val = &codeValue{}
+		s.codes[addr] = val
+	}
+	if val.dirty && val.hash == nil {
+		// If the code is dirty (=uncommitted) the hash needs to be computed on the fly.
+		hash := common.GetSha256Hash(val.code)
+		val.hash = &hash
+	}
+	if val.hash == nil {
+		hash, err := s.state.GetCodeHash(addr)
+		if err != nil {
+			panic(fmt.Sprintf("Unable to obtain code hash for %v: %v", addr, err))
+		}
+		val.hash = &hash
+	}
+	return *val.hash
+}
+
+func (s *stateDB) GetCodeSize(addr common.Address) int {
+	// For now, let's load the full code and get its size. If this turns out to be
+	// a costly operation, a special "GetSize" call to the state may be added.
+	return len(s.GetCode(addr))
+}
+
 func (s *stateDB) Snapshot() int {
 	return len(s.undo)
 }
@@ -451,6 +530,18 @@ func (s *stateDB) EndTransaction() {
 		s.state.SetStorage(slot.addr, slot.key, s.data[slot].current)
 	}
 
+	// Update modified codes.
+	addresses = addresses[0:0]
+	for addr, value := range s.codes {
+		if value.dirty {
+			addresses = append(addresses, addr)
+		}
+	}
+	sort_addresses()
+	for _, addr := range addresses {
+		s.state.SetCode(addr, s.codes[addr].code)
+	}
+
 	// Reset internal state for next transaction
 	s.ResetTransaction()
 }
@@ -464,6 +555,7 @@ func (s *stateDB) ResetTransaction() {
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data = make(map[slotId]*slotValue, len(s.data))
+	s.codes = make(map[common.Address]*codeValue)
 	s.undo = s.undo[0:0]
 }
 

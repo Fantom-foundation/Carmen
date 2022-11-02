@@ -2,8 +2,10 @@ package common
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"math/big"
 )
 
@@ -128,4 +130,18 @@ func ToNonce(value uint64) (res Nonce) {
 // ToUint64 converts the value of a nonce into a integer value.
 func (n *Nonce) ToUint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
+}
+
+// GetSha256Hash computes the Sha256 hash of the given data.
+func GetSha256Hash(data []byte) Hash {
+	hasher := sha256.New()
+	return GetHash(hasher, data)
+}
+
+// GetHash computes the hash of the given data using the given hashing aglorithm.
+func GetHash(h hash.Hash, data []byte) (res Hash) {
+	h.Reset()
+	h.Write(data)
+	copy(res[:], h.Sum(nil)[:])
+	return
 }

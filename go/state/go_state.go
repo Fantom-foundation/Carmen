@@ -156,6 +156,16 @@ func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
 	return s.codesDepot.Set(idx, code)
 }
 
+func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err error) {
+	// TODO: consider retrieving cached hashes
+	code, err := s.GetCode(address)
+	if err != nil {
+		return
+	}
+	hash = common.GetSha256Hash(code)
+	return
+}
+
 func (s *GoState) GetHash() (hash common.Hash, err error) {
 	sources := []common.HashProvider{
 		s.addressIndex,

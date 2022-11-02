@@ -96,6 +96,10 @@ func (cs *CppState) SetCode(address common.Address, code []byte) error {
 	panic("not implemented")
 }
 
+func (cs *CppState) GetCodeHash(address common.Address) (common.Hash, error) {
+	panic("not implemented")
+}
+
 func (cs *CppState) GetHash() (common.Hash, error) {
 	var hash common.Hash
 	C.Carmen_GetHash(cs.state, unsafe.Pointer(&hash[0]))
