@@ -9,6 +9,10 @@ namespace {
 constexpr const std::size_t kPageSize = 1 << 12;  // = 4 KiB
 constexpr const std::size_t kBranchFactor = 32;
 
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size>
+using LazyFileStore = FileStore<K, V, F, page_size, false>;
+
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/store:store_benchmark
 
@@ -37,6 +41,11 @@ BENCHMARK(BM_SequentialInsert<StoreHandler<
 
 BENCHMARK(BM_SequentialInsert<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_SequentialInsert<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
@@ -72,6 +81,12 @@ BENCHMARK(BM_Insert<StoreHandler<FileStore<int, Value, SingleFile, kPageSize>,
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(
+    BM_Insert<StoreHandler<LazyFileStore<int, Value, SingleFile, kPageSize>,
+                           kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 // Benchmarks sequential read of read of keys.
 template <typename StoreHandler>
 void BM_SequentialRead(benchmark::State& state) {
@@ -101,6 +116,11 @@ BENCHMARK(BM_SequentialRead<StoreHandler<
 
 BENCHMARK(BM_SequentialRead<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_SequentialRead<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
@@ -138,6 +158,11 @@ BENCHMARK(BM_UniformRandomRead<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(BM_UniformRandomRead<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 // Benchmarks random, exponentially distributed reads
 template <typename StoreHandler>
 void BM_ExponentialRandomRead(benchmark::State& state) {
@@ -172,6 +197,11 @@ BENCHMARK(BM_ExponentialRandomRead<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(BM_ExponentialRandomRead<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 // Benchmarks sequential writes of keys.
 template <typename StoreHandler>
 void BM_SequentialWrite(benchmark::State& state) {
@@ -201,6 +231,11 @@ BENCHMARK(BM_SequentialWrite<StoreHandler<
 
 BENCHMARK(BM_SequentialWrite<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_SequentialWrite<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
@@ -239,6 +274,11 @@ BENCHMARK(BM_UniformRandomWrite<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(BM_UniformRandomWrite<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 // Benchmarks sequential read of read of keys.
 template <typename StoreHandler>
 void BM_ExponentialRandomWrite(benchmark::State& state) {
@@ -271,6 +311,11 @@ BENCHMARK(BM_ExponentialRandomWrite<StoreHandler<
 
 BENCHMARK(BM_ExponentialRandomWrite<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_ExponentialRandomWrite<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
@@ -319,6 +364,11 @@ BENCHMARK(BM_HashSequentialUpdates<StoreHandler<
 
 BENCHMARK(BM_HashSequentialUpdates<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_HashSequentialUpdates<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
@@ -374,6 +424,11 @@ BENCHMARK(BM_HashUniformUpdates<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(BM_HashUniformUpdates<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 template <typename StoreHandler, bool include_write_time>
 void RunHashExponentialUpdates(benchmark::State& state) {
   auto num_elements = state.range(0);
@@ -426,6 +481,11 @@ BENCHMARK(BM_HashExponentialUpdates<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(BM_HashExponentialUpdates<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 template <typename StoreHandler>
 void BM_SequentialWriteAndHash(benchmark::State& state) {
   RunHashSequentialUpdates<StoreHandler, true>(state);
@@ -443,6 +503,11 @@ BENCHMARK(BM_SequentialWriteAndHash<StoreHandler<
 
 BENCHMARK(BM_SequentialWriteAndHash<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_SequentialWriteAndHash<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
@@ -466,6 +531,11 @@ BENCHMARK(BM_UniformWriteAndHash<StoreHandler<
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 
+BENCHMARK(BM_UniformWriteAndHash<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
 template <typename StoreHandler>
 void BM_ExponentialWriteAndHash(benchmark::State& state) {
   RunHashExponentialUpdates<StoreHandler, true>(state);
@@ -483,6 +553,11 @@ BENCHMARK(BM_ExponentialWriteAndHash<StoreHandler<
 
 BENCHMARK(BM_ExponentialWriteAndHash<StoreHandler<
               FileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
+    ->Arg(1 << 20)
+    ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
+
+BENCHMARK(BM_ExponentialWriteAndHash<StoreHandler<
+              LazyFileStore<int, Value, SingleFile, kPageSize>, kBranchFactor>>)
     ->Arg(1 << 20)
     ->Arg(1 << 24);  // 1<<30 skipped since it takes too long to run
 

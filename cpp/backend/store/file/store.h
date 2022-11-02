@@ -14,7 +14,7 @@ namespace carmen::backend::store {
 // The FileStore is a file-backed implementation of a mutable key/value store.
 // It provides mutation, lookup, and global state hashing support.
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size = 32>
+          std::size_t page_size = 32, bool eager_hashing = true>
 requires File<F<ArrayPage<V, page_size>>>
 class FileStore {
  public:
@@ -112,25 +112,27 @@ class FileStore {
 };
 
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
+          std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-FileStore<K, V, F, page_size>::FileStore(std::filesystem::path directory,
-                                         std::size_t hash_branching_factor)
+FileStore<K, V, F, page_size, eager_hashing>::FileStore(
+    std::filesystem::path directory, std::size_t hash_branching_factor)
     : pool_(std::make_unique<PagePool>(
           std::make_unique<F<page_type>>(directory / "data.dat"))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
       hash_file_(directory / "hash.dat") {
-  pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
+  if (eager_hashing) {
+    pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
+  }
   if (std::filesystem::exists(hash_file_)) {
     hashes_->LoadFromFile(hash_file_);
   }
 }
 
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
+          std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-void FileStore<K, V, F, page_size>::Set(const K& key, V value) {
+void FileStore<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   auto& trg = pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
@@ -140,30 +142,30 @@ void FileStore<K, V, F, page_size>::Set(const K& key, V value) {
 }
 
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
+          std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-const V& FileStore<K, V, F, page_size>::Get(const K& key) const {
+const V& FileStore<K, V, F, page_size, eager_hashing>::Get(const K& key) const {
   return pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
 }
 
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
+          std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>> Hash
-FileStore<K, V, F, page_size>::GetHash()
+FileStore<K, V, F, page_size, eager_hashing>::GetHash()
 const { return hashes_->GetHash(); }
 
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
+          std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-void FileStore<K, V, F, page_size>::Flush() {
+void FileStore<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) pool_->Flush();
   if (hashes_) hashes_->SaveToFile(hash_file_);
 }
 
 template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
+          std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-void FileStore<K, V, F, page_size>::Close() {
+void FileStore<K, V, F, page_size, eager_hashing>::Close() {
   Flush();
   if (pool_) pool_->Close();
 }
