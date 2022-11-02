@@ -1,6 +1,9 @@
 package state
 
 import (
+	"os"
+	"path/filepath"
+
 	fileDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/file"
 	ldbDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
@@ -16,15 +19,13 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"os"
-	"path/filepath"
 )
 
 // CacheCapacity is the size of the cache expressed as the number of cached keys
 const CacheCapacity = 1 << 24 // 2 ^ 24 -> 512MB for 32 keys
 
 // TransactBufferMB is the size of buffer before the transaction is flushed expressed in MBs
-const TransactBufferMB = 512 * opt.MiB
+const TransactBufferMB = 128 * opt.MiB
 
 // NewMemory creates in memory implementation
 func NewMemory() (*GoState, error) {
