@@ -31,7 +31,9 @@ func (m *Index[K, I]) Get(key K) (idx I, err error) {
 	idx, exists := m.cache.Get(key)
 	if !exists {
 		idx, err = m.wrapped.Get(key)
-		m.cache.Set(key, idx)
+		if err == nil {
+			m.cache.Set(key, idx)
+		}
 	}
 	return
 }
@@ -40,7 +42,7 @@ func (m *Index[K, I]) Get(key K) (idx I, err error) {
 func (m *Index[K, I]) Contains(key K) (exists bool) {
 	_, exists = m.cache.Get(key)
 	if !exists {
-		if idx, err := m.wrapped.Get(key); err != index.ErrNotFound {
+		if idx, err := m.wrapped.Get(key); err == nil {
 			m.cache.Set(key, idx)
 		}
 	}

@@ -1,9 +1,11 @@
 package cache
 
 import (
+	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 var (
@@ -42,5 +44,19 @@ func TestIndexCacheEviction(t *testing.T) {
 	val, exists := index.cache.Get(address1)
 	if !exists || val != 0 {
 		t.Errorf("Value is not in cahce")
+	}
+}
+
+var ErrNotFound = index.ErrNotFound
+
+func TestNonExistingValuesAreNotCached(t *testing.T) {
+	index := NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](common.AddressSerializer{}), 3)
+	_, err := index.Get(address1)
+	if err != ErrNotFound {
+		t.Errorf("Address 1 should not exist")
+	}
+	_, err = index.Get(address1)
+	if err != ErrNotFound {
+		t.Errorf("Address 1 should still not exist")
 	}
 }
