@@ -110,7 +110,7 @@ TEST(InMemoryStoreTest, LargeSnapshotRecoveryWorks) {
 
   Store restored(*snapshot);
   for (int i = 0; i < kNumElements; i++) {
-    EXPECT_THAT(store.Get(i), i + 10);
+    EXPECT_EQ(store.Get(i), i + 10);
   }
   EXPECT_EQ(restored.GetHash(), hash);
 }

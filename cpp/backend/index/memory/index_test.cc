@@ -49,7 +49,7 @@ TEST(InMemoryIndexTest, LargeSnapshotRecoveryWorks) {
 
   TestIndex restored(*snapshot);
   for (int i = 0; i < kNumElements; i++) {
-    EXPECT_THAT(index.Get(i + 10), i);
+    EXPECT_EQ(index.Get(i + 10), i);
   }
   EXPECT_EQ(restored.GetHash(), hash);
 }
