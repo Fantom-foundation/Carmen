@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"testing"
@@ -835,6 +836,162 @@ func TestCarmenStateCanBeUsedForMultipleTransactions(t *testing.T) {
 	db.EndTransaction()
 }
 
+func TestCarmenStateCodesCanBeRead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+
+	if got := db.GetCode(address1); !bytes.Equal(got, want) {
+		t.Errorf("error retrieving code, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateCodesCanBeSet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	db.SetCode(address1, want)
+
+	if got := db.GetCode(address1); !bytes.Equal(got, want) {
+		t.Errorf("error retrieving code, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want1 := []byte{0xAC, 0xDC}
+	want2 := []byte{0xFE, 0xEF}
+
+	db.SetCode(address1, want1)
+	snapshot := db.Snapshot()
+
+	if got := db.GetCode(address1); !bytes.Equal(got, want1) {
+		t.Errorf("error retrieving code, wanted %v, got %v", want1, got)
+	}
+
+	db.SetCode(address1, want2)
+
+	if got := db.GetCode(address1); !bytes.Equal(got, want2) {
+		t.Errorf("error retrieving code after update, wanted %v, got %v", want2, got)
+	}
+
+	db.RevertToSnapshot(snapshot)
+
+	if got := db.GetCode(address1); !bytes.Equal(got, want1) {
+		t.Errorf("error retrieving code after rollback, wanted %v, got %v", want1, got)
+	}
+}
+
+func TestCarmenStateReadCodesAreNotCommitted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+
+	db.GetCode(address1)
+	db.EndTransaction()
+}
+
+func TestCarmenStateUpdatedCodesAreCommitted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	mock.EXPECT().SetCode(gomock.Eq(address1), gomock.Eq(want)).Return(nil)
+
+	db.SetCode(address1, want)
+	db.EndTransaction()
+}
+
+func TestCarmenStateUpdatedCodesAreCommittedOnlyOnce(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	mock.EXPECT().SetCode(gomock.Eq(address1), gomock.Eq(want)).Return(nil)
+
+	db.SetCode(address1, want)
+	db.EndTransaction()
+
+	// No commit on second time
+	db.EndTransaction()
+}
+
+func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+
+	if got := db.GetCodeSize(address1); got != len(want) {
+		t.Errorf("error retrieving code size, wanted %v, got %v", len(want), got)
+	}
+}
+
+func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAC, 0xDC}
+	db.SetCode(address1, want)
+
+	if got := db.GetCodeSize(address1); got != len(want) {
+		t.Errorf("error retrieving code size, wanted %v, got %v", len(want), got)
+	}
+}
+
+func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := common.Hash{0xAC, 0xDC}
+	mock.EXPECT().GetCodeHash(gomock.Eq(address1)).Return(want, nil)
+
+	if got := db.GetCodeHash(address1); got != want {
+		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	code := []byte{0xAC, 0xDC}
+	db.SetCode(address1, code)
+
+	want := common.GetSha256Hash(code)
+	if got := db.GetCodeHash(address1); got != want {
+		t.Errorf("error retrieving code hash, wanted %v, got %v", len(want), got)
+	}
+}
+
 func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	ref_state, err := NewMemory()
 	if err != nil {
@@ -912,6 +1069,16 @@ func TestStateHashIsDeterministicForMultipleNonceUpdates(t *testing.T) {
 		s.SetNonce(address3, 18)
 	})
 }
+
+/* -- disabled until Codes are supported by C++ implementation
+func TestStateHashIsDeterministicForMultipleCodeUpdates(t *testing.T) {
+	testStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetCode(address1, []byte{0xAC})
+		s.SetCode(address2, []byte{0xDC})
+		s.SetCode(address3, []byte{0x20})
+	})
+}
+*/
 
 func TestSlotIdOrder(t *testing.T) {
 	inputs := []struct {

@@ -41,6 +41,9 @@ type State interface {
 	// SetCode updates code of the contract for the input contract address.
 	SetCode(address common.Address, code []byte) error
 
+	// GetCodeHash returns the hash of the code of the input contract address.
+	GetCodeHash(address common.Address) (common.Hash, error)
+
 	// GetHash hashes the values.
 	GetHash() (common.Hash, error)
 

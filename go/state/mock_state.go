@@ -135,6 +135,21 @@ func (mr *MockStateMockRecorder) GetCode(address interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCode", reflect.TypeOf((*MockState)(nil).GetCode), address)
 }
 
+// GetCodeHash mocks base method.
+func (m *MockState) GetCodeHash(address common.Address) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCodeHash", address)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCodeHash indicates an expected call of GetCodeHash.
+func (mr *MockStateMockRecorder) GetCodeHash(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeHash", reflect.TypeOf((*MockState)(nil).GetCodeHash), address)
+}
+
 // GetHash mocks base method.
 func (m *MockState) GetHash() (common.Hash, error) {
 	m.ctrl.T.Helper()
