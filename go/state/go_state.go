@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"hash"
 	"io"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
@@ -26,6 +27,7 @@ type GoState struct {
 	valuesStore   store.Store[uint32, common.Value]
 	codesDepot    depot.Depot[uint32]
 	cleanup       []func()
+	hasher        hash.Hash
 }
 
 func (s *GoState) CreateAccount(address common.Address) (err error) {
@@ -162,7 +164,10 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 	if err != nil {
 		return
 	}
-	hash = common.GetSha256Hash(code)
+	if s.hasher == nil {
+		s.hasher = sha256.New()
+	}
+	hash = common.GetHash(s.hasher, code)
 	return
 }
 

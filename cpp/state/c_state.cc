@@ -1,6 +1,9 @@
 #include "state/c_state.h"
 
+#include <cstddef>
+#include <cstring>
 #include <filesystem>
+#include <span>
 #include <string_view>
 
 #include "backend/index/file/index.h"
@@ -48,6 +51,10 @@ class WorldState {
 
   virtual const Value& GetValue(const Address&, const Key&) = 0;
   virtual void SetValue(const Address&, const Key&, const Value&) = 0;
+
+  virtual std::span<const std::byte> GetCode(const Address&) = 0;
+  virtual Hash GetCodeHash(const Address&) = 0;
+  virtual void SetCode(const Address&, std::span<const std::byte>) = 0;
 
   virtual Hash GetHash() = 0;
 
@@ -98,6 +105,18 @@ class WorldStateBase : public WorldState {
   void SetValue(const Address& addr, const Key& key,
                 const Value& value) override {
     state_.SetStorageValue(addr, key, value);
+  }
+
+  std::span<const std::byte> GetCode(const Address& addr) override {
+    return state_.GetCode(addr);
+  }
+
+  Hash GetCodeHash(const Address& addr) override {
+    return state_.GetCodeHash(addr);
+  }
+
+  void SetCode(const Address& addr, std::span<const std::byte> code) override {
+    state_.SetCode(addr, code);
   }
 
   Hash GetHash() override { return state_.GetHash(); }
@@ -214,6 +233,34 @@ void Carmen_SetStorageValue(C_State state, C_Address addr, C_Key key,
   auto& k = *reinterpret_cast<carmen::Key*>(key);
   auto& v = *reinterpret_cast<carmen::Value*>(value);
   s.SetValue(a, k, v);
+}
+
+void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
+                    uint32_t* out_length) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto code = s.GetCode(a);
+  auto capacity = *out_length;
+  *out_length = code.size();
+  if (code.size() > capacity) {
+    return;
+  }
+  memcpy(out_code, code.data(), code.size());
+}
+
+void Carmen_SetCode(C_State state, C_Address addr, C_Code code,
+                    uint32_t length) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto c = reinterpret_cast<const std::byte*>(code);
+  s.SetCode(a, {c, static_cast<std::size_t>(length)});
+}
+
+void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);
+  h = s.GetCodeHash(a);
 }
 
 void Carmen_GetHash(C_State state, C_Hash out_hash) {
