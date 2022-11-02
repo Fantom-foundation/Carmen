@@ -38,7 +38,7 @@ TEST(HashTreeTest, HashOfSinglePageIsTheSameHash) {
 
 TEST(HashTreeTest, HashesOfMultiplePagesAreAggregated) {
   auto source = std::make_unique<MockPageSource>();
-  HashTree tree(std::move(source), /*branch_factor=*/4);
+  HashTree tree(std::move(source), /*branching_factor=*/4);
 
   // The hashes for the first 3 pages is fixed.
   Hash hash_0{0x01, 0x02};
@@ -56,7 +56,7 @@ TEST(HashTreeTest, HashesOfMultiplePagesAreAggregated) {
 
 TEST(HashTreeTest, AggregationMaySpanMultipleLevels) {
   auto source = std::make_unique<MockPageSource>();
-  HashTree tree(std::move(source), /*branch_factor=*/2);
+  HashTree tree(std::move(source), /*branching_factor=*/2);
 
   // The hashes for the first 3 pages is fixed.
   Hash hash_0{0x01, 0x02};

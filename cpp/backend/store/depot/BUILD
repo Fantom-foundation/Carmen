@@ -1,0 +1,30 @@
+cc_library(
+    name = "depot",
+    hdrs = ["depot.h"],
+    deps = [
+        "//common:type",
+        "//common:hash"
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "depot_handler",
+    hdrs = ["depot_handler.h"],
+    deps = [
+        ":depot"
+    ],
+    testonly = True,
+)
+
+cc_test(
+    name = "depot_test",
+    srcs = ["depot_test.cc"],
+    deps = [
+        ":depot",
+        ":depot_handler",
+        "//backend/store/depot/memory:depot",
+        "//common:status_test_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
