@@ -11,6 +11,7 @@ package state
 */
 import "C"
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -89,15 +90,25 @@ func (cs *CppState) SetStorage(address common.Address, key common.Key, value com
 }
 
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
-	panic("not implemented")
+	const max_size = 25000 // Contract limit is 24577
+	code := make([]byte, max_size)
+	var size C.uint32_t
+	C.Carmen_GetCode(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&code[0]), &size)
+	if size >= max_size {
+		return nil, fmt.Errorf("Unable to load contract exceeding maximum capacity of %v", max_size)
+	}
+	return code[0:size], nil
 }
 
 func (cs *CppState) SetCode(address common.Address, code []byte) error {
-	panic("not implemented")
+	C.Carmen_SetCode(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&code[0]), C.uint32_t(len(code)))
+	return nil
 }
 
 func (cs *CppState) GetCodeHash(address common.Address) (common.Hash, error) {
-	panic("not implemented")
+	var hash common.Hash
+	C.Carmen_GetCodeHash(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&hash[0]))
+	return hash, nil
 }
 
 func (cs *CppState) GetHash() (common.Hash, error) {

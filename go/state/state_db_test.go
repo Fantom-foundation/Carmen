@@ -1070,15 +1070,15 @@ func TestStateHashIsDeterministicForMultipleNonceUpdates(t *testing.T) {
 	})
 }
 
-/* -- disabled until Codes are supported by C++ implementation
 func TestStateHashIsDeterministicForMultipleCodeUpdates(t *testing.T) {
+	// disabled until Codes are supported by C++ implementation
+	t.Skip("Skipped until C++ implementation is completed")
 	testStateDbHashAfterModification(t, func(s StateDB) {
 		s.SetCode(address1, []byte{0xAC})
 		s.SetCode(address2, []byte{0xDC})
 		s.SetCode(address3, []byte{0x20})
 	})
 }
-*/
 
 func TestSlotIdOrder(t *testing.T) {
 	inputs := []struct {

@@ -1,6 +1,8 @@
 // This header file defines a C interface for manipulating the world state.
 // It is intendend to be used to bridge the Go/C++ boundary.
 
+#include <stdint.h>
+
 #if __cplusplus
 extern "C" {
 #endif
@@ -22,6 +24,7 @@ extern "C" {
 #define C_Value void*
 #define C_Balance void*
 #define C_Nonce void*
+#define C_Code void*
 
 #define C_Hash void*
 #define C_AccountState void*
@@ -86,6 +89,19 @@ void Carmen_GetStorageValue(C_State state, C_Address addr, C_Key key,
 // Updates the value of storage location (addr,key) in the given state.
 void Carmen_SetStorageValue(C_State state, C_Address addr, C_Key key,
                             C_Value value);
+
+// --------------------------------- Code -------------------------------------
+
+// Retrieves the code stored under the given address.
+void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
+                    uint32_t* out_length);
+
+// Updates the code stored under the given address.
+void Carmen_SetCode(C_State state, C_Address addr, C_Code code,
+                    uint32_t length);
+
+// Retrieves the hash of the code stored under the given address.
+void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash);
 
 // ------------------------------ Global Hash ---------------------------------
 

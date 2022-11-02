@@ -55,7 +55,7 @@ func NewMemory() (*GoState, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil, nil}
 	return state, nil
 }
 
@@ -125,7 +125,7 @@ func NewLeveLIndexFileStore(path string) (*GoState, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -201,7 +201,7 @@ func NewCachedLeveLIndexFileStore(path string) (*GoState, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -290,7 +290,7 @@ func NewCachedTransactLeveLIndexFileStore(path string) (*GoState, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup, nil}
 
 	return state, nil
 }
@@ -340,7 +340,7 @@ func NewLeveLIndexAndStore(path string) (*GoState, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -395,7 +395,7 @@ func NewCachedLeveLIndexAndStore(path string) (*GoState, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db)}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -463,7 +463,7 @@ func NewTransactCachedLeveLIndexAndStore(path string) (*GoState, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup, nil}
 
 	return state, nil
 }

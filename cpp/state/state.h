@@ -68,6 +68,15 @@ class State {
   void SetStorageValue(const Address& address, const Key& key,
                        const Value& value);
 
+  // Retrieve the code stored under the given address.
+  std::span<const std::byte> GetCode(const Address& address) const;
+
+  // Updates the code stored under the given address.
+  void SetCode(const Address& address, std::span<const std::byte> code) const;
+
+  // Retrieves the hash of the code stored under the given address.
+  Hash GetCodeHash(const Address& address) const;
+
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
   Hash GetHash() const;
@@ -202,6 +211,28 @@ void State<IndexType, StoreType>::SetStorageValue(const Address& address,
   Slot slot{addr_id, key_id};
   auto slot_id = slot_index_.GetOrAdd(slot).first;
   value_store_.Set(slot_id, value);
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType>
+std::span<const std::byte> State<IndexType, StoreType>::GetCode(
+    const Address&) const {
+  // TODO: implement!
+  return {};
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType>
+void State<IndexType, StoreType>::SetCode(const Address&,
+                                          std::span<const std::byte>) const {
+  // TODO: implement!
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType>
+Hash State<IndexType, StoreType>::GetCodeHash(const Address&) const {
+  // TODO: implement!
+  return {};
 }
 
 template <template <typename K, typename V> class IndexType,
