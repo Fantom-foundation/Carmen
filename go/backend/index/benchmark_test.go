@@ -237,12 +237,42 @@ func createTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B,
 		_ = db.Close()
 	})
 
-	idx, err := ldb.NewTransactIndex[K, I](tr, common.SlotStoreKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](tr, common.SlotStoreKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
 
 	return indexWrapper[K, I]{keySerializer, indexSerializer, idx}
+}
+
+// createCachedTransactLevelDbIndex create instance of LevelDB index witch is transactional and cached
+func createCachedTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B, writeBufferSize int, cacheCapacity int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
+	opts := opt.Options{WriteBuffer: writeBufferSize}
+	db, err := leveldb.OpenFile(b.TempDir(), &opts)
+	if err != nil {
+		b.Errorf("failed to init leveldb; %s", err)
+	}
+
+	tr, err := db.OpenTransaction()
+	if err != nil {
+		b.Errorf("failed to init leveldb transaction; %s", err)
+	}
+
+	b.Cleanup(func() {
+		_ = tr.Commit()
+	})
+
+	b.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	idx, err := ldb.NewIndex[K, I](tr, common.SlotStoreKey, keySerializer, indexSerializer)
+	if err != nil {
+		b.Fatalf("failed to init leveldb index; %s", err)
+	}
+	cached := cache.NewIndex[K, I](idx, cacheCapacity)
+
+	return indexWrapper[K, I]{keySerializer, indexSerializer, cached}
 }
 
 // createCachedLevelDbIndex create instance of LevelDB index with the cache
@@ -277,9 +307,9 @@ func (iw *indexWrapper[K, I]) toKey(key uint32) K {
 func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) []testConfig[K, I] {
 
 	// the size of buffer for transaction execution
-	transactWriteBuffer := 512 * opt.MiB
+	transactWriteBuffer := 1024 * opt.MiB
 
-	cacheCapacity := 2 << 15 // number of items: 2 ^ 15 * 32B = 1MB
+	cacheCapacity := 1 << 25 // number of items: 2 ^ 25 * 32B = 1GB
 
 	memoryIndexFunc := func() indexWrapper[K, I] { return createMemoryIndex[K, I](keySerializer, indexSerializer) }
 	levelDbIndexFunc := func() indexWrapper[K, I] { return createLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
@@ -292,6 +322,9 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 	}
 	cachedLevelDbIndexFunc := func() indexWrapper[K, I] {
 		return createCachedLevelDbIndex[K, I](b, cacheCapacity, keySerializer, indexSerializer)
+	}
+	cachedTransactLevelDbIndexFunc := func() indexWrapper[K, I] {
+		return createCachedTransactLevelDbIndex[K, I](b, transactWriteBuffer, cacheCapacity, keySerializer, indexSerializer)
 	}
 
 	initialSizes := []uint32{1 << 20, 1 << 24, 1 << 30}
@@ -307,5 +340,6 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 		{"EachLevelDb", initialSizes, updateSizes, eachLevelDbIndexFunc},
 		{"TransactLevelDb", initialSizes, updateSizes, transactLevelDbIndexFunc},
 		{"CachedLevelDb", initialSizes, updateSizes, cachedLevelDbIndexFunc},
+		{"CachedTransactLevelDb", initialSizes, updateSizes, cachedTransactLevelDbIndexFunc},
 	}
 }

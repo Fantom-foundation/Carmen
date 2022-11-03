@@ -223,15 +223,15 @@ func NewCachedTransactLeveLIndexFileStore(path string) (*GoState, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressIndex, err := ldb.NewTransactIndex[common.Address, uint32](tx, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	addressIndex, err := ldb.NewIndex[common.Address, uint32](tx, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := ldb.NewTransactIndex[common.SlotIdx[uint32], uint32](tx, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
+	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](tx, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	keyIndex, err := ldb.NewTransactIndex[common.Key, uint32](tx, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
+	keyIndex, err := ldb.NewIndex[common.Key, uint32](tx, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -411,42 +411,42 @@ func NewTransactCachedLeveLIndexAndStore(path string) (*GoState, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressIndex, err := ldb.NewTransactIndex[common.Address, uint32](tx, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	addressIndex, err := ldb.NewIndex[common.Address, uint32](tx, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := ldb.NewTransactIndex[common.SlotIdx[uint32], uint32](tx, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
+	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](tx, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	keyIndex, err := ldb.NewTransactIndex[common.Key, uint32](tx, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO we do not have yet transactional leveldb stores
-	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
-	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
-	if err != nil {
-		return nil, err
-	}
-	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
-	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
-	if err != nil {
-		return nil, err
-	}
-	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
-	if err != nil {
-		return nil, err
-	}
-	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
-	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
+	keyIndex, err := ldb.NewIndex[common.Key, uint32](tx, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
 
-	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), PageSize)
+	accountHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.AccountStoreKey, HashTreeFactor)
+	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](tx, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
+	if err != nil {
+		return nil, err
+	}
+	nonceHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.NonceStoreKey, HashTreeFactor)
+	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](tx, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
+	if err != nil {
+		return nil, err
+	}
+	balanceHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.BalanceStoreKey, HashTreeFactor)
+	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](tx, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
+	if err != nil {
+		return nil, err
+	}
+	valueHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.ValueStoreKey, HashTreeFactor)
+	valuesStore, err := ldbstore.NewStore[uint32, common.Value](tx, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	depotHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.DepotCodeKey, HashTreeFactor)
+	codesDepot, err := ldbDepot.NewDepot[uint32](tx, common.DepotCodeKey, common.Identifier32Serializer{}, depotHashTreeFactory, PageSize)
 	if err != nil {
 		return nil, err
 	}

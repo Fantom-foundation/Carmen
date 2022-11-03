@@ -14,6 +14,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"math/rand"
 	"testing"
 )
@@ -223,6 +224,10 @@ func getStoresFactories() (stores []StoreFactory) {
 			label:    "LevelDb",
 			getStore: initLevelDbStore,
 		},
+		{
+			label:    "TransactLevelDb",
+			getStore: initTransactLevelDbStore,
+		},
 	}
 }
 
@@ -269,6 +274,35 @@ func initLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
 	b.Cleanup(func() {
 		db.Close()
 	})
+	return store
+}
+
+func initTransactLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
+	writeBufferSize := 1024 * opt.MiB
+	opts := opt.Options{WriteBuffer: writeBufferSize}
+	db, err := leveldb.OpenFile(b.TempDir(), &opts)
+	if err != nil {
+		b.Fatalf("failed to init leveldb store; %s", err)
+	}
+
+	tr, err := db.OpenTransaction()
+	if err != nil {
+		b.Errorf("failed to init leveldb transaction; %s", err)
+	}
+
+	b.Cleanup(func() {
+		_ = tr.Commit()
+	})
+	b.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	hashTreeFac := htldb.CreateHashTreeFactory(tr, common.ValueStoreKey, BranchingFactor)
+	store, err = ldb.NewStore[uint32, common.Value](tr, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, PageSize)
+	if err != nil {
+		b.Fatalf("failed to init leveldb store; %s", err)
+	}
+
 	return store
 }
 
