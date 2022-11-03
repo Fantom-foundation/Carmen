@@ -74,13 +74,35 @@ TYPED_TEST_P(DepotTest, NonEmptyDepotHasHash) {
   ASSERT_NE(initial_hash, new_hash);
 }
 
+TYPED_TEST_P(DepotTest, HashChangesBack) {
+  TypeParam wrapper;
+  auto& depot = wrapper.GetDepot();
+
+  EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
+  EXPECT_OK(
+      depot.Set(100, std::array{std::byte{1}, std::byte{2}, std::byte{3}}));
+  ASSERT_OK_AND_ASSIGN(auto initial_hash, depot.GetHash());
+
+  EXPECT_OK(
+      depot.Set(10, std::array{std::byte{1}, std::byte{2}, std::byte{3}}));
+  ASSERT_OK_AND_ASSIGN(auto new_hash, depot.GetHash());
+
+  ASSERT_NE(initial_hash, new_hash);
+
+  EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
+  ASSERT_OK_AND_ASSIGN(new_hash, depot.GetHash());
+
+  ASSERT_EQ(initial_hash, new_hash);
+}
+
 REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
-                            EmptyDepotHasZeroHash, NonEmptyDepotHasHash);
+                            EmptyDepotHasZeroHash, NonEmptyDepotHasHash,
+                            HashChangesBack);
 
 using DepotTypes = ::testing::Types<
     // Branching size 3, Size of box 2.
-    DepotHandler<InMemoryDepot<unsigned int>, 3, 2>>;
+    DepotHandler<InMemoryDepot<unsigned int>, 3, 1>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 

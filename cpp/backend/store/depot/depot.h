@@ -1,8 +1,9 @@
 #pragma once
 
 #include <concepts>
-#include <optional>
-#include <utility>
+#include <cstddef>
+#include <span>
+#include <type_traits>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"

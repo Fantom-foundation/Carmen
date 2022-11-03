@@ -63,7 +63,7 @@ class InMemoryDepot {
 
  private:
   using Box = std::vector<std::byte>;
-  using Boxes = std::vector<Box>;
+  using Boxes = std::deque<Box>;
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
@@ -73,7 +73,7 @@ class InMemoryDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public PageSource {
    public:
-    explicit PageProvider(Boxes& boxes, std::size_t& num_hash_boxes)
+    explicit PageProvider(Boxes& boxes, std::size_t num_hash_boxes)
         : boxes_(boxes), num_hash_boxes_(num_hash_boxes) {}
 
     // Get data for given page. The data is valid until the next call to
@@ -81,10 +81,11 @@ class InMemoryDepot {
     std::span<const std::byte> GetPageData(PageId id) override {
       static auto empty = Box{};
       // calculate start and end of the hash group
-      auto start = boxes_.begin() + id * num_hash_boxes_;
+      auto hash_group = id / num_hash_boxes_;
+      auto start = boxes_.begin() + hash_group * num_hash_boxes_;
       auto end =
           boxes_.begin() +
-          std::min(id * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
+          std::min(hash_group * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
 
       if (start >= end) return empty;
 
@@ -97,6 +98,7 @@ class InMemoryDepot {
       page_data_.reserve(len);
       std::size_t pos = 0;
       for (auto it = start; it != end; ++it) {
+        if (it->empty()) continue;
         std::memcpy(page_data_.data() + pos, it->data(), it->size());
         pos += it->size();
       }
@@ -106,7 +108,7 @@ class InMemoryDepot {
 
    private:
     Boxes& boxes_;
-    std::size_t& num_hash_boxes_;
+    std::size_t num_hash_boxes_;
     std::vector<std::byte> page_data_;
   };
 
