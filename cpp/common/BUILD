@@ -6,6 +6,33 @@ cc_library(
 )
 
 cc_library(
+    name = "macro_utils",
+    hdrs = ["macro_utils.h"],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "benchmark",
+    hdrs = ["benchmark.h"],
+    deps = [
+        ":macro_utils",
+        "@com_google_absl//absl/strings",
+        "@com_github_google_benchmark//:benchmark",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "benchmark_benchmark",
+    srcs = ["benchmark_benchmark.cc"],
+    deps = [
+        ":benchmark",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+)
+
+cc_library(
     name="hex_util",
     hdrs=["hex_util.h"],
     srcs=["hex_util.cc"],
