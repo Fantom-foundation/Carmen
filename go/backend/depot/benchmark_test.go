@@ -20,16 +20,19 @@ import (
 //     go test ./backend/depot -bench=/.*File.*_16777216
 
 // initial number of values inserted into the Depot before the benchmark
-var initialSizes = []int{1 << 20, 1 << 24, 1 << 30}
+var initialSizes = []int{1 << 20, 1 << 24}
 
 // number of values updated before each measured hash recalculation
 var updateSizes = []int{100}
+
+const branchingFactor = 32
+const hashItems = 256
 
 var sinkBytes []byte
 var sinkHash common.Hash
 
 func BenchmarkInsert(b *testing.B) {
-	for _, fac := range getDepotsFactories(b) {
+	for _, fac := range getDepotsFactories(b, branchingFactor, hashItems) {
 		for _, initialSize := range initialSizes {
 			s := fac.getDepot(b.TempDir())
 			initialized := false
@@ -55,7 +58,7 @@ func benchmarkInsert(b *testing.B, depot depot.Depot[uint32]) {
 }
 
 func BenchmarkRead(b *testing.B) {
-	for _, fac := range getDepotsFactories(b) {
+	for _, fac := range getDepotsFactories(b, branchingFactor, hashItems) {
 		for _, initialSize := range initialSizes {
 			s := fac.getDepot(b.TempDir())
 			initialized := false
@@ -84,7 +87,7 @@ func benchmarkRead(b *testing.B, dist common.Distribution, depot depot.Depot[uin
 }
 
 func BenchmarkWrite(b *testing.B) {
-	for _, fac := range getDepotsFactories(b) {
+	for _, fac := range getDepotsFactories(b, branchingFactor, hashItems) {
 		for _, initialSize := range initialSizes {
 			s := fac.getDepot(b.TempDir())
 			initialized := false
@@ -112,7 +115,7 @@ func benchmarkWrite(b *testing.B, dist common.Distribution, depot depot.Depot[ui
 }
 
 func BenchmarkHash(b *testing.B) {
-	for _, fac := range getDepotsFactories(b) {
+	for _, fac := range getDepotsFactories(b, branchingFactor, hashItems) {
 		for _, initialSize := range initialSizes {
 			s := fac.getDepot(b.TempDir())
 			initialized := false
@@ -152,7 +155,7 @@ func benchmarkHash(b *testing.B, dist common.Distribution, updateSize int, depot
 }
 
 func BenchmarkWriteAndHash(b *testing.B) {
-	for _, fac := range getDepotsFactories(b) {
+	for _, fac := range getDepotsFactories(b, branchingFactor, hashItems) {
 		for _, initialSize := range initialSizes {
 			s := fac.getDepot(b.TempDir())
 			initialized := false
