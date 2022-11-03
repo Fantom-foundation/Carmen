@@ -35,12 +35,8 @@ func BenchmarkInsert(b *testing.B) {
 	for _, fac := range getDepotsFactories(b, branchingFactor, hashItems) {
 		for _, initialSize := range initialSizes {
 			s := fac.getDepot(b.TempDir())
-			initialized := false
 			b.Run(fmt.Sprintf("Depot %s initialSize %d", fac.label, initialSize), func(b *testing.B) {
-				if !initialized {
-					initDepotContent(b, s, initialSize)
-					initialized = true
-				}
+				initDepotContent(b, s, initialSize)
 				benchmarkInsert(b, s)
 			})
 			_ = s.Close()

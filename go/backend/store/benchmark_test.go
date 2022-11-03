@@ -47,12 +47,8 @@ func BenchmarkInsert(b *testing.B) {
 	for _, fac := range getStoresFactories() {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b)
-			initialized := false
 			b.Run(fmt.Sprintf("Store %s initialSize %d", fac.label, initialSize), func(b *testing.B) {
-				if !initialized {
-					initStoreContent(b, s, initialSize)
-					initialized = true
-				}
+				initStoreContent(b, s, initialSize)
 				benchmarkInsert(b, s)
 			})
 			_ = s.Close()
