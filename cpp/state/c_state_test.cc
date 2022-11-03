@@ -2,11 +2,15 @@
 
 #include "common/account_state.h"
 #include "common/file_util.h"
+#include "common/hash.h"
 #include "common/type.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen {
 namespace {
+
+using ::testing::ElementsAre;
 
 enum class Config {
   kInMemory,
@@ -192,6 +196,93 @@ TEST_P(CStateTest, HashesChangeOnUpdates) {
   Carmen_GetHash(state, &new_hash);
 
   EXPECT_NE(initial_hash, new_hash);
+}
+
+TEST_P(CStateTest, CodesAreInitallyEmpty) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  std::vector<std::byte> code(10);
+  uint32_t size = code.size();
+  Carmen_GetCode(state, &addr, code.data(), &size);
+  EXPECT_EQ(size, 0);
+}
+
+TEST_P(CStateTest, CodesCanBeSetAndRetrieved) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  std::vector<std::byte> code({std::byte{12}, std::byte{14}});
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+
+  std::vector<std::byte> restored(10);
+  uint32_t size = restored.size();
+  Carmen_GetCode(state, &addr, restored.data(), &size);
+  ASSERT_EQ(size, 2);
+  restored.resize(size);
+  EXPECT_EQ(code, restored);
+}
+
+TEST_P(CStateTest, GetCodeFailsIfBufferIsTooSmall) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  std::vector<std::byte> code({std::byte{12}, std::byte{14}});
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+
+  std::vector<std::byte> restored({std::byte{10}});
+  uint32_t size = restored.size();
+  Carmen_GetCode(state, &addr, restored.data(), &size);
+  EXPECT_EQ(size, 2);
+  EXPECT_THAT(restored, ElementsAre(std::byte{10}));
+}
+
+TEST_P(CStateTest, CodesAffectHashes) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+
+  Hash initial;
+  Carmen_GetHash(state, &initial);
+
+  Address addr{0x01};
+  std::vector<std::byte> code({std::byte{12}, std::byte{14}});
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+
+  Hash first_update;
+  Carmen_GetHash(state, &first_update);
+
+  code.push_back(std::byte{16});
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+
+  Hash second_update;
+  Carmen_GetHash(state, &second_update);
+
+  EXPECT_NE(initial, first_update);
+  EXPECT_NE(initial, second_update);
+  EXPECT_NE(first_update, second_update);
+}
+
+TEST_P(CStateTest, CodeHashesMatchCodes) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  Hash hash;
+  Carmen_GetCodeHash(state, &addr, &hash);
+  EXPECT_EQ(hash, Hash{});
+
+  std::vector<std::byte> code({std::byte{12}, std::byte{14}});
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+  Carmen_GetCodeHash(state, &addr, &hash);
+  EXPECT_EQ(hash, GetSha256Hash(std::span(code)));
+
+  code.clear();
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+  Carmen_GetCodeHash(state, &addr, &hash);
+  EXPECT_EQ(hash, Hash{});
 }
 
 TEST_P(CStateTest, StateCanBeFlushed) {

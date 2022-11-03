@@ -17,7 +17,8 @@ namespace carmen {
 // of index and store types, which are instantiated internally to form the
 // data infrastructure required to maintain all necessary information.
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
 class State {
  public:
   // The types used for internal indexing.
@@ -45,7 +46,8 @@ class State {
         StoreType<AddressId, Balance> balances,
         StoreType<AddressId, Nonce> nonces,
         StoreType<SlotId, Value> value_store,
-        StoreType<AddressId, AccountState> account_states);
+        StoreType<AddressId, AccountState> account_states,
+        DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes);
 
   void CreateAccount(const Address& address);
 
@@ -72,7 +74,7 @@ class State {
   std::span<const std::byte> GetCode(const Address& address) const;
 
   // Updates the code stored under the given address.
-  void SetCode(const Address& address, std::span<const std::byte> code) const;
+  void SetCode(const Address& address, std::span<const std::byte> code);
 
   // Retrieves the hash of the code stored under the given address.
   Hash GetCodeHash(const Address& address) const;
@@ -106,36 +108,49 @@ class State {
 
   // The store retaining account state information.
   StoreType<AddressId, AccountState> account_states_;
+
+  // The code depot to retain account contracts.
+  DepotType<AddressId> codes_;
+
+  // A store to retain code hashes.
+  StoreType<AddressId, Hash> code_hashes_;
 };
 
 // ----------------------------- Definitions ----------------------------------
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-State<IndexType, StoreType>::State(
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+State<IndexType, StoreType, DepotType>::State(
     IndexType<Address, AddressId> address_index,
     IndexType<Key, KeyId> key_index, IndexType<Slot, SlotId> slot_index,
     StoreType<AddressId, Balance> balances, StoreType<AddressId, Nonce> nonces,
     StoreType<SlotId, Value> value_store,
-    StoreType<AddressId, AccountState> account_states)
+    StoreType<AddressId, AccountState> account_states,
+    DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes)
     : address_index_(std::move(address_index)),
       key_index_(std::move(key_index)),
       slot_index_(std::move(slot_index)),
       balances_(std::move(balances)),
       nonces_(std::move(nonces)),
       value_store_(std::move(value_store)),
-      account_states_(std::move(account_states)) {}
+      account_states_(std::move(account_states)),
+      codes_(std::move(codes)),
+      code_hashes_(std::move(code_hashes)) {}
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::CreateAccount(const Address& address) {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::CreateAccount(
+    const Address& address) {
   auto addr_id = address_index_.GetOrAdd(address);
   account_states_.Set(addr_id.first, AccountState::kExists);
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-AccountState State<IndexType, StoreType>::GetAccountState(
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+AccountState State<IndexType, StoreType, DepotType>::GetAccountState(
     const Address& address) const {
   auto addr_id = address_index_.Get(address);
   if (!addr_id.has_value()) return AccountState::kUnknown;
@@ -143,16 +158,19 @@ AccountState State<IndexType, StoreType>::GetAccountState(
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::DeleteAccount(const Address& address) {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::DeleteAccount(
+    const Address& address) {
   auto addr_id = address_index_.Get(address);
   if (!addr_id.has_value()) return;
   account_states_.Set(*addr_id, AccountState::kDeleted);
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-const Balance& State<IndexType, StoreType>::GetBalance(
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+const Balance& State<IndexType, StoreType, DepotType>::GetBalance(
     const Address& address) const {
   constexpr static const Balance kZero;
   auto addr_id = address_index_.Get(address);
@@ -161,16 +179,18 @@ const Balance& State<IndexType, StoreType>::GetBalance(
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::SetBalance(const Address& address,
-                                             Balance value) {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::SetBalance(const Address& address,
+                                                        Balance value) {
   auto addr_id = address_index_.GetOrAdd(address).first;
   balances_.Set(addr_id, value);
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-const Nonce& State<IndexType, StoreType>::GetNonce(
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+const Nonce& State<IndexType, StoreType, DepotType>::GetNonce(
     const Address& address) const {
   constexpr static const Nonce kZero;
   auto addr_id = address_index_.Get(address);
@@ -179,16 +199,18 @@ const Nonce& State<IndexType, StoreType>::GetNonce(
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::SetNonce(const Address& address,
-                                           Nonce value) {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::SetNonce(const Address& address,
+                                                      Nonce value) {
   auto addr_id = address_index_.GetOrAdd(address).first;
   nonces_.Set(addr_id, value);
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-const Value& State<IndexType, StoreType>::GetStorageValue(
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+const Value& State<IndexType, StoreType, DepotType>::GetStorageValue(
     const Address& address, const Key& key) const {
   constexpr static const Value kZero;
   auto addr_id = address_index_.Get(address);
@@ -202,10 +224,10 @@ const Value& State<IndexType, StoreType>::GetStorageValue(
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::SetStorageValue(const Address& address,
-                                                  const Key& key,
-                                                  const Value& value) {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::SetStorageValue(
+    const Address& address, const Key& key, const Value& value) {
   auto addr_id = address_index_.GetOrAdd(address).first;
   auto key_id = key_index_.GetOrAdd(key).first;
   Slot slot{addr_id, key_id};
@@ -214,39 +236,49 @@ void State<IndexType, StoreType>::SetStorageValue(const Address& address,
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-std::span<const std::byte> State<IndexType, StoreType>::GetCode(
-    const Address&) const {
-  // TODO: implement!
-  return {};
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+std::span<const std::byte> State<IndexType, StoreType, DepotType>::GetCode(
+    const Address& address) const {
+  auto addr_id = address_index_.Get(address);
+  if (!addr_id.has_value()) return {};
+  return *codes_.Get(*addr_id);
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::SetCode(const Address&,
-                                          std::span<const std::byte>) const {
-  // TODO: implement!
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::SetCode(
+    const Address& address, std::span<const std::byte> code) {
+  auto addr_id = address_index_.GetOrAdd(address).first;
+  codes_.Set(addr_id, code).IgnoreError();
+  code_hashes_.Set(addr_id, code.empty() ? Hash{} : GetSha256Hash(code));
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-Hash State<IndexType, StoreType>::GetCodeHash(const Address&) const {
-  // TODO: implement!
-  return {};
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+Hash State<IndexType, StoreType, DepotType>::GetCodeHash(
+    const Address& address) const {
+  auto addr_id = address_index_.Get(address);
+  if (!addr_id.has_value()) return {};
+  return code_hashes_.Get(*addr_id);
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-Hash State<IndexType, StoreType>::GetHash() const {
-  return GetSha256Hash(
-      address_index_.GetHash(), key_index_.GetHash(), slot_index_.GetHash(),
-      balances_.GetHash(), nonces_.GetHash(), value_store_.GetHash(),
-      account_states_.GetHash(), /*placeholder for code depot*/ Hash{});
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+Hash State<IndexType, StoreType, DepotType>::GetHash() const {
+  return GetSha256Hash(address_index_.GetHash(), key_index_.GetHash(),
+                       slot_index_.GetHash(), balances_.GetHash(),
+                       nonces_.GetHash(), value_store_.GetHash(),
+                       account_states_.GetHash(), *codes_.GetHash());
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::Flush() {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::Flush() {
   address_index_.Flush();
   key_index_.Flush();
   slot_index_.Flush();
@@ -254,11 +286,14 @@ void State<IndexType, StoreType>::Flush() {
   balances_.Flush();
   nonces_.Flush();
   value_store_.Flush();
+  codes_.Flush().IgnoreError();  // until function returns error itself
+  code_hashes_.Flush();
 }
 
 template <template <typename K, typename V> class IndexType,
-          template <typename K, typename V> class StoreType>
-void State<IndexType, StoreType>::Close() {
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+void State<IndexType, StoreType, DepotType>::Close() {
   address_index_.Close();
   key_index_.Close();
   slot_index_.Close();
@@ -266,6 +301,8 @@ void State<IndexType, StoreType>::Close() {
   balances_.Close();
   nonces_.Close();
   value_store_.Close();
+  codes_.Close().IgnoreError();  // until function returns error itself
+  code_hashes_.Close();
 }
 
 }  // namespace carmen

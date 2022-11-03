@@ -6,6 +6,7 @@
 #include <span>
 #include <string_view>
 
+#include "backend/depot/memory/depot.h"
 #include "backend/index/file/index.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
@@ -19,12 +20,16 @@ namespace {
 
 constexpr const std::size_t kPageSize = 1 << 12;  // 4 KiB
 constexpr const std::size_t kHashBranchFactor = 32;
+constexpr const std::size_t kDepotBlockSize = kPageSize;
 
 template <typename K, typename V>
 using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
 
 template <typename K, typename V>
 using InMemoryStore = backend::store::InMemoryStore<K, V, kPageSize>;
+
+template <typename K>
+using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 
 template <typename K, typename I>
 using FileBasedIndex =
@@ -130,18 +135,22 @@ class WorldStateBase : public WorldState {
 };
 
 class InMemoryWorldState
-    : public WorldStateBase<State<InMemoryIndex, InMemoryStore>> {};
+    : public WorldStateBase<
+          State<InMemoryIndex, InMemoryStore, InMemoryDepot>> {};
 
 class FileBasedWorldState
-    : public WorldStateBase<State<FileBasedIndex, FileBasedStore>> {
+    : public WorldStateBase<
+          State<FileBasedIndex, FileBasedStore, InMemoryDepot>> {
  public:
   FileBasedWorldState(std::filesystem::path directory)
-      : WorldStateBase(State<FileBasedIndex, FileBasedStore>(
+      : WorldStateBase(State<FileBasedIndex, FileBasedStore, InMemoryDepot>(
             {directory / "addresses"}, {directory / "keys"},
             {directory / "slots"}, {directory / "balances", kHashBranchFactor},
             {directory / "nonces", kHashBranchFactor},
             {directory / "values", kHashBranchFactor},
-            {directory / "account_states", kHashBranchFactor})) {}
+            {directory / "account_states", kHashBranchFactor},
+            {kHashBranchFactor, kDepotBlockSize},
+            {directory / "code_hashes", kHashBranchFactor})) {}
 };
 
 }  // namespace

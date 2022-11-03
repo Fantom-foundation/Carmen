@@ -19,8 +19,8 @@ class InMemoryDepot {
 
   // Creates a new InMemoryDepot using the provided branching factor and
   // number of boxes per group for hash computation.
-  explicit InMemoryDepot(std::size_t hash_branching_factor = 32,
-                         std::size_t num_hash_boxes = 4)
+  InMemoryDepot(std::size_t hash_branching_factor = 32,
+                std::size_t num_hash_boxes = 4)
       : num_hash_boxes_(num_hash_boxes),
         boxes_(std::make_unique<Boxes>()),
         hashes_(std::make_unique<PageProvider>(*boxes_, num_hash_boxes),
