@@ -20,13 +20,13 @@ type depotFactory struct {
 	getDepot func(tempDir string) depot.Depot[uint32]
 }
 
-func getDepotsFactories(tb testing.TB) (stores []depotFactory) {
+func getDepotsFactories(tb testing.TB, branchingFactor int, hashItems int) (stores []depotFactory) {
 	return []depotFactory{
 		{
 			label: "Memory",
 			getDepot: func(tempDir string) depot.Depot[uint32] {
-				hashTree := htmemory.CreateHashTreeFactory(3)
-				d, err := memory.NewDepot[uint32](2, hashTree)
+				hashTree := htmemory.CreateHashTreeFactory(branchingFactor)
+				d, err := memory.NewDepot[uint32](hashItems, hashTree)
 				if err != nil {
 					tb.Fatalf("failed to create depot; %s", err)
 				}
@@ -36,8 +36,8 @@ func getDepotsFactories(tb testing.TB) (stores []depotFactory) {
 		{
 			label: "File",
 			getDepot: func(tempDir string) depot.Depot[uint32] {
-				hashTree := htfile.CreateHashTreeFactory(tempDir, 3)
-				d, err := file.NewDepot[uint32](tempDir, common.Identifier32Serializer{}, hashTree, 2)
+				hashTree := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
+				d, err := file.NewDepot[uint32](tempDir, common.Identifier32Serializer{}, hashTree, hashItems)
 				if err != nil {
 					tb.Fatalf("failed to create depot; %s", err)
 				}
@@ -51,8 +51,8 @@ func getDepotsFactories(tb testing.TB) (stores []depotFactory) {
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}
-				hashTree := htldb.CreateHashTreeFactory(db, common.DepotCodeKey, 3)
-				dep, err := ldb.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, hashTree, 2)
+				hashTree := htldb.CreateHashTreeFactory(db, common.DepotCodeKey, branchingFactor)
+				dep, err := ldb.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, hashTree, hashItems)
 				if err != nil {
 					tb.Fatalf("failed to create depot; %s", err)
 				}
@@ -83,7 +83,7 @@ var (
 )
 
 func TestSetGet(t *testing.T) {
-	for _, factory := range getDepotsFactories(t) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -118,7 +118,7 @@ func TestSetGet(t *testing.T) {
 }
 
 func TestSetToArbitraryPosition(t *testing.T) {
-	for _, factory := range getDepotsFactories(t) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -153,7 +153,7 @@ func TestSetToArbitraryPosition(t *testing.T) {
 }
 
 func TestDepotPersistence(t *testing.T) {
-	for _, factory := range getDepotsFactories(t) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
 		if factory.label == "Memory" {
 			continue
 		}
@@ -181,7 +181,7 @@ func TestDepotPersistence(t *testing.T) {
 }
 
 func TestHashing(t *testing.T) {
-	for _, factory := range getDepotsFactories(t) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -211,7 +211,7 @@ func TestHashing(t *testing.T) {
 }
 
 func TestHashAfterChangingBack(t *testing.T) {
-	for _, factory := range getDepotsFactories(t) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -279,7 +279,7 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 		"f9764b20bf761bd89b3266697fbc1c336548c3bcbb1c81e4ecf3829df53d98ec",
 	}
 
-	for _, factory := range getDepotsFactories(t) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
 			defer d.Close()
@@ -304,7 +304,7 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 
 func TestDepotsHashingByComparison(t *testing.T) {
 	depots := make(map[string]depot.Depot[uint32])
-	for _, fac := range getDepotsFactories(t) {
+	for _, fac := range getDepotsFactories(t, 3, 2) {
 		depots[fac.label] = fac.getDepot(t.TempDir())
 	}
 	defer func() {

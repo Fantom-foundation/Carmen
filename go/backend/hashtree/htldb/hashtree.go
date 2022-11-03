@@ -102,7 +102,7 @@ func (ht *HashTree) childrenOfNode(layer, node int) (data []byte, err error) {
 func (ht *HashTree) layerLength(layer int) (length int, err error) {
 	// set the range for full layer
 	firstNode := ht.convertKey(layer, 0).ToBytes()
-	lastNode := ht.convertKey(layer, 0xFFFF).ToBytes()
+	lastNode := ht.convertKey(layer, 0xFFFFFFFF).ToBytes()
 	r := util.Range{Start: firstNode, Limit: lastNode}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -227,8 +227,8 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 func (ht *HashTree) convertKey(layer, node int) common.DbKey {
 	//  the key is: [tableSpace]H[layer][node]
 	// layer is 8bit (256 layers Max)
-	// node is 16bit
+	// node is 32bit
 	return ht.table.DBToDBKey(
 		common.HashKey.ToDBKey(
-			binary.BigEndian.AppendUint16([]byte{uint8(layer)}, uint16(node))))
+			binary.BigEndian.AppendUint32([]byte{uint8(layer)}, uint32(node))))
 }
