@@ -15,23 +15,22 @@ type Page struct {
 	dirty bool
 }
 
-func LoadPage(file *os.File, pageId int, pageSize int64) (*Page, error) {
-	buffer := make([]byte, pageSize)
-
-	_, err := file.Seek(int64(pageId)*pageSize, io.SeekStart)
+func (p *Page) Load(file *os.File, pageId int) error {
+	_, err := file.Seek(int64(pageId)*int64(len(p.data)), io.SeekStart)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	_, err = file.Read(buffer)
+	n, err := file.Read(p.data)
 	if err != nil && !errors.Is(err, io.EOF) { // EOF = the page does not exist in the data file yet
-		return nil, err
+		return err
 	}
 
-	return &Page{
-		data:  buffer,
-		dirty: false,
-	}, nil
+	for ; n < len(p.data); n++ {
+		p.data[n] = 0x00
+	}
+	p.dirty = false
+	return nil
 }
 
 func (p *Page) IsDirty() bool {
@@ -51,8 +50,8 @@ func (p *Page) Get(position int64, size int64) []byte {
 	return p.data[position : position+size]
 }
 
-func (p *Page) Store(file *os.File, pageId int, size int64) error {
-	_, err := file.Seek(int64(pageId)*size, io.SeekStart)
+func (p *Page) Store(file *os.File, pageId int) error {
+	_, err := file.Seek(int64(pageId)*int64(len(p.data)), io.SeekStart)
 	if err != nil {
 		return err
 	}

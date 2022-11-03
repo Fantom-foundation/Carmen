@@ -67,15 +67,13 @@ func (m *Store[I, V]) ensurePageLoaded(pageId int) (*Page, error) {
 	if exists {
 		return page, nil
 	}
-	// evict if the pool is full
-	if len(m.pagesPool) >= m.poolSize {
-		err := m.evictPage(m.evictionPolicy.GetPageToEvict())
-		if err != nil {
-			return nil, err
-		}
+	// get an empty page
+	page, err := m.getEmptyPage()
+	if err != nil {
+		return nil, err
 	}
-	// load the page into the pool
-	page, err := LoadPage(m.file, pageId, m.pageSize)
+	// load the page from the disk
+	err = page.Load(m.file, pageId)
 	if err != nil {
 		return nil, err
 	}
@@ -84,14 +82,26 @@ func (m *Store[I, V]) ensurePageLoaded(pageId int) (*Page, error) {
 	return page, nil
 }
 
-// evictPage removes the page from the pool, stores it if changed
-func (m *Store[I, V]) evictPage(pageId int) error {
-	page, exists := m.pagesPool[pageId]
-	if !exists {
-		return fmt.Errorf("page to evict is missing in the pool")
+// getEmptyPage provides an empty page for a page loading
+func (m *Store[I, V]) getEmptyPage() (*Page, error) {
+	// evict if the pool is full
+	if len(m.pagesPool) >= m.poolSize {
+		evictedPageId := m.evictionPolicy.GetPageToEvict()
+		evictedPage := m.pagesPool[evictedPageId]
+		err := m.evictPage(evictedPageId, evictedPage)
+		return evictedPage, err
+	} else {
+		return &Page{
+			data:  make([]byte, m.pageSize),
+			dirty: false,
+		}, nil
 	}
+}
+
+// evictPage removes the page from the pool, stores it if changed
+func (m *Store[I, V]) evictPage(pageId int, page *Page) error {
 	if page.IsDirty() {
-		err := page.Store(m.file, pageId, m.pageSize)
+		err := page.Store(m.file, pageId)
 		if err != nil {
 			return err
 		}
@@ -155,8 +165,8 @@ func (m *Store[I, V]) Flush() (err error) {
 		return err
 	}
 	// evict the whole pages pool - hash pages into the hashTree
-	for pageId := range m.pagesPool {
-		err = m.evictPage(pageId)
+	for pageId, page := range m.pagesPool {
+		err = m.evictPage(pageId, page)
 		if err != nil {
 			return err
 		}
