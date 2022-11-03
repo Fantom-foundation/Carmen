@@ -228,6 +228,9 @@ func (ht *HashTree) convertKey(layer, node int) common.DbKey {
 	//  the key is: [tableSpace]H[layer][node]
 	// layer is 8bit (256 layers Max)
 	// node is 16bit
+	if node&(^0xFFFF) != 0 {
+		panic("node id overflow in LevelDb HashTree")
+	}
 	return ht.table.DBToDBKey(
 		common.HashKey.ToDBKey(
 			binary.BigEndian.AppendUint16([]byte{uint8(layer)}, uint16(node))))
