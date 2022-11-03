@@ -19,13 +19,13 @@ class MultiLevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
  public:
   static absl::StatusOr<MultiLevelDBIndex> Open(
       const std::filesystem::path& path) {
-    auto db = internal::LevelDB::Open(path);
+    auto db = LevelDB::Open(path);
     if (!db.ok()) return db.status();
     return MultiLevelDBIndex(std::move(*db));
   }
 
  private:
-  explicit MultiLevelDBIndex(internal::LevelDB ldb)
+  explicit MultiLevelDBIndex(LevelDB ldb)
       : internal::LevelDBIndexBase<K, I, 0>(), ldb_(std::move(ldb)) {}
 
   std::string GetHashKey() const override { return "hash"; };
@@ -38,10 +38,10 @@ class MultiLevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
     return buffer;
   };
 
-  internal::LevelDB& GetDB() override { return ldb_; }
-  const internal::LevelDB& GetDB() const override { return ldb_; }
+  LevelDB& GetDB() override { return ldb_; }
+  const LevelDB& GetDB() const override { return ldb_; }
 
-  internal::LevelDB ldb_;
+  LevelDB ldb_;
 };
 
 }  // namespace carmen::backend::index

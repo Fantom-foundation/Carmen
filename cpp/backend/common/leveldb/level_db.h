@@ -7,7 +7,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 
-namespace carmen::backend::index::internal {
+namespace carmen::backend {
 using LDBEntry = std::pair<std::span<const char>, std::span<const char>>;
 
 // Forward declaration. See level_db.cc for implementation.
@@ -39,4 +39,4 @@ class LevelDB {
   // Pointer to implementation.
   std::unique_ptr<LevelDBImpl> impl_;
 };
-}  // namespace carmen::backend::index::internal
+}  // namespace carmen::backend

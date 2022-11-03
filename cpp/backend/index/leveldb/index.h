@@ -95,8 +95,8 @@ class LevelDBIndexBase {
   virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
 
   // Get leveldb handle.
-  virtual internal::LevelDB& GetDB() = 0;
-  virtual const internal::LevelDB& GetDB() const = 0;
+  virtual LevelDB& GetDB() = 0;
+  virtual const LevelDB& GetDB() const = 0;
 
   // Get last index value.
   absl::StatusOr<I> GetLastIndexFromDB() const {

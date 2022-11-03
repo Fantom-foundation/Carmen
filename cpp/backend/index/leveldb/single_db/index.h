@@ -31,7 +31,7 @@ std::string StrToDBKey(char key_space, std::span<const char> key);
 template <Trivial K, std::integral I>
 class LevelDBKeySpace : public internal::LevelDBIndexBase<K, I, 1> {
  public:
-  LevelDBKeySpace(std::shared_ptr<internal::LevelDB> ldb, char key_space)
+  LevelDBKeySpace(std::shared_ptr<LevelDB> ldb, char key_space)
       : internal::LevelDBIndexBase<K, I, 1>(),
         ldb_(std::move(ldb)),
         key_space_(key_space) {}
@@ -49,10 +49,10 @@ class LevelDBKeySpace : public internal::LevelDBIndexBase<K, I, 1> {
     return internal::ToDBKey(key_space_, key);
   };
 
-  internal::LevelDB& GetDB() override { return *ldb_; }
-  const internal::LevelDB& GetDB() const override { return *ldb_; }
+  LevelDB& GetDB() override { return *ldb_; }
+  const LevelDB& GetDB() const override { return *ldb_; }
 
-  std::shared_ptr<internal::LevelDB> ldb_;
+  std::shared_ptr<LevelDB> ldb_;
   char key_space_;
 };
 
@@ -71,8 +71,8 @@ class SingleLevelDBIndex {
   }
 
  private:
-  explicit SingleLevelDBIndex(std::shared_ptr<internal::LevelDB> ldb);
-  std::shared_ptr<internal::LevelDB> ldb_;
+  explicit SingleLevelDBIndex(std::shared_ptr<LevelDB> ldb);
+  std::shared_ptr<LevelDB> ldb_;
 };
 
 }  // namespace carmen::backend::index

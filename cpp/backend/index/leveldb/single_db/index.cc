@@ -17,13 +17,13 @@ std::string StrToDBKey(char key_space, std::span<const char> key) {
 
 absl::StatusOr<SingleLevelDBIndex> SingleLevelDBIndex::Open(
     const std::filesystem::path& path) {
-  auto db = internal::LevelDB::Open(path);
+  auto db = LevelDB::Open(path);
   if (!db.ok()) return db.status();
   return SingleLevelDBIndex(
-      std::make_shared<internal::LevelDB>(std::move(*db)));
+      std::make_shared<LevelDB>(std::move(*db)));
 }
 
 // SingleLevelDBIndex constructor.
-SingleLevelDBIndex::SingleLevelDBIndex(std::shared_ptr<internal::LevelDB> ldb)
+SingleLevelDBIndex::SingleLevelDBIndex(std::shared_ptr<LevelDB> ldb)
     : ldb_(std::move(ldb)) {}
 }  // namespace carmen::backend::index

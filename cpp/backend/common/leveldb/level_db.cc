@@ -9,7 +9,7 @@
 #include "leveldb/slice.h"
 #include "leveldb/write_batch.h"
 
-namespace carmen::backend::index::internal {
+namespace carmen::backend {
 namespace {
 constexpr leveldb::WriteOptions kWriteOptions = leveldb::WriteOptions();
 constexpr leveldb::ReadOptions kReadOptions = leveldb::ReadOptions();
@@ -104,4 +104,4 @@ LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
 LevelDB::LevelDB(LevelDB&&) noexcept = default;
 
 LevelDB::~LevelDB() {}
-}  // namespace carmen::backend::index::internal
+}  // namespace carmen::backend
