@@ -1,17 +1,4 @@
 cc_library(
-    name = "index",
-    hdrs = ["index.h"],
-    deps = [
-        "//common:type",
-        "//common:hash",
-        "//backend/index/leveldb/common:level_db",
-        "//common:status_util",
-        "@com_google_absl//absl/status:statusor"
-    ],
-    visibility = ["//backend/index/leveldb:__subpackages__"],
-)
-
-cc_library(
     name = "level_db",
     hdrs = ["level_db.h"],
     srcs = ["level_db.cc"],
@@ -19,7 +6,7 @@ cc_library(
         "@com_github_google_leveldb//:leveldb",
         "@com_google_absl//absl/status:statusor"
     ],
-    visibility = ["//backend/index/leveldb:__subpackages__"],
+    visibility = ["//backend:__subpackages__"],
 )
 
 cc_test(

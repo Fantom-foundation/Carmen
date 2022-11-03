@@ -8,8 +8,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/common/index.h"
-#include "backend/index/leveldb/common/level_db.h"
+#include "backend/common/leveldb/level_db.h"
+#include "backend/index/leveldb/index.h"
 #include "common/hash.h"
 #include "common/status_util.h"
 #include "common/type.h"
