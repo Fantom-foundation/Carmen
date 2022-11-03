@@ -80,7 +80,7 @@ func initGoStates(t *testing.T) []namedStateConfig {
 		{"Cached Transact LevelDB, Index File Store", cachedTransactLdbFileState},
 		{"LevelDB Index and Store", ldbState},
 		{"Cached LevelDB Index and Store", cachedLdbState},
-		//{"Cached Transact LevelDB Index and Store", cachedTransactLdbState},  // cannot combine transact and non-transact access
+		{"Cached Transact LevelDB Index and Store", cachedTransactLdbState}, // cannot combine transact and non-transact access
 	}
 }
 

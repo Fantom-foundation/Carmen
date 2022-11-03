@@ -9,7 +9,7 @@ import (
 
 // Depot is an LevelDB backed store.Depot implementation
 type Depot[I common.Identifier] struct {
-	db              *leveldb.DB
+	db              common.LevelDB
 	table           common.TableSpace
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
@@ -17,7 +17,7 @@ type Depot[I common.Identifier] struct {
 }
 
 // NewDepot constructs a new instance of Depot.
-func NewDepot[I common.Identifier](db *leveldb.DB,
+func NewDepot[I common.Identifier](db common.LevelDB,
 	table common.TableSpace,
 	indexSerializer common.Serializer[I],
 	hashtreeFactory hashtree.Factory,
