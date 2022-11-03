@@ -1,8 +1,8 @@
 #include <cstddef>
 
-#include "backend/store/depot/depot.h"
+#include "backend/depot/depot.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend::depot {
 namespace {
 
 // A generic depot handler enclosing the setup and tear down of various depot
@@ -25,4 +25,4 @@ class DepotHandler {
   Depot depot_;
 };
 }  // namespace
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend::depot

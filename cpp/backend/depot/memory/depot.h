@@ -8,7 +8,7 @@
 #include "common/hash.h"
 #include "common/type.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend::depot {
 
 // In memory implementation of a Depot.
 template <std::integral K>
@@ -26,9 +26,6 @@ class InMemoryDepot {
         hashes_(std::make_unique<PageProvider>(*boxes_, num_hash_boxes),
                 hash_branching_factor) {}
 
-  // Instances can not be copied.
-  InMemoryDepot(const InMemoryDepot&) = delete;
-
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
@@ -41,11 +38,10 @@ class InMemoryDepot {
   }
 
   // Retrieves the value associated to the given key. If no values has
-  // been previously set using the Set(..) function above, the default
-  // value defined during the construction of a depot instance is returned.
+  // been previously set using the Set(..) function above, and empty span
+  // is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     static auto default_value = Box{};
-    hashes_.RegisterPage(GetBoxHashGroup(key));
     if (key >= boxes_->size()) {
       return default_value;
     }
@@ -71,7 +67,7 @@ class InMemoryDepot {
   }
 
   // A page source providing the owned hash tree access to the stored pages.
-  class PageProvider : public PageSource {
+  class PageProvider : public store::PageSource {
    public:
     explicit PageProvider(Boxes& boxes, std::size_t num_hash_boxes)
         : boxes_(boxes), num_hash_boxes_(num_hash_boxes) {}
@@ -81,11 +77,10 @@ class InMemoryDepot {
     std::span<const std::byte> GetPageData(PageId id) override {
       static auto empty = Box{};
       // calculate start and end of the hash group
-      auto hash_group = id / num_hash_boxes_;
-      auto start = boxes_.begin() + hash_group * num_hash_boxes_;
-      auto end = boxes_.begin() +
-                 std::min(hash_group * num_hash_boxes_ + num_hash_boxes_,
-                          boxes_.size());
+      auto start = boxes_.begin() + id * num_hash_boxes_;
+      auto end =
+          boxes_.begin() +
+          std::min(id * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
 
       if (start >= end) return empty;
 
@@ -95,7 +90,7 @@ class InMemoryDepot {
         len += it->size();
       }
 
-      page_data_.reserve(len);
+      page_data_.resize(len);
       std::size_t pos = 0;
       for (auto it = start; it != end; ++it) {
         if (it->empty()) continue;
@@ -120,7 +115,7 @@ class InMemoryDepot {
   std::unique_ptr<Boxes> boxes_;
 
   // The data structure managing the hashing of states.
-  mutable HashTree hashes_;
+  mutable store::HashTree hashes_;
 };
 
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend::depot

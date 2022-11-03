@@ -23,8 +23,9 @@ cc_test(
     deps = [
         ":depot",
         ":depot_handler",
-        "//backend/store/depot/memory:depot",
+        "//backend/depot/memory:depot",
         "//common:status_test_util",
+        "//common:test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

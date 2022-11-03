@@ -9,7 +9,7 @@
 #include "absl/status/statusor.h"
 #include "common/type.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend::depot {
 
 // Defines the interface expected for a Depot D mapping integral keys to
 // byte array values of various lengths.
@@ -25,7 +25,7 @@ concept Depot = requires(D a, const D b) {
   // Set data for given key.
   {
     a.Set(std::declval<typename D::key_type>(),
-          std::declval<std::span<std::byte>>())
+          std::declval<std::span<const std::byte>>())
     } -> std::same_as<absl::Status>;
   // Retrieves data from Depot. Default value is returned when not found.
   {
@@ -38,4 +38,4 @@ concept Depot = requires(D a, const D b) {
   // Depots must be closeable.
   { a.Close() } -> std::same_as<absl::Status>;
 };
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend::depot
