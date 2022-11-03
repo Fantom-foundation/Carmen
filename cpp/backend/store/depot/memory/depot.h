@@ -83,9 +83,9 @@ class InMemoryDepot {
       // calculate start and end of the hash group
       auto hash_group = id / num_hash_boxes_;
       auto start = boxes_.begin() + hash_group * num_hash_boxes_;
-      auto end =
-          boxes_.begin() +
-          std::min(hash_group * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
+      auto end = boxes_.begin() +
+                 std::min(hash_group * num_hash_boxes_ + num_hash_boxes_,
+                          boxes_.size());
 
       if (start >= end) return empty;
 
