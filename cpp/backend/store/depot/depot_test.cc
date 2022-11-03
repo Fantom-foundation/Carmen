@@ -12,7 +12,7 @@ using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::StrEq;
 
-// A test suite testing generic store implementations.
+// A test suite testing generic depot implementations.
 template <typename>
 class DepotTest : public testing::Test {};
 

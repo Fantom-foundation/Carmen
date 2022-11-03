@@ -42,7 +42,7 @@ class InMemoryDepot {
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, the default
-  // value defined during the construction of a store instance is returned.
+  // value defined during the construction of a depot instance is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     static auto default_value = Box{};
     hashes_.RegisterPage(GetBoxHashGroup(key));
