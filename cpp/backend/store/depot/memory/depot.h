@@ -19,7 +19,8 @@ class InMemoryDepot {
 
   // Creates a new InMemoryDepot using the provided branching factor and
   // number of boxes per group for hash computation.
-  explicit InMemoryDepot(std::size_t hash_branching_factor = 32, std::size_t num_hash_boxes = 4)
+  explicit InMemoryDepot(std::size_t hash_branching_factor = 32,
+                         std::size_t num_hash_boxes = 4)
       : num_hash_boxes_(num_hash_boxes),
         boxes_(std::make_unique<Boxes>()),
         hashes_(std::make_unique<PageProvider>(*boxes_, num_hash_boxes),
@@ -52,9 +53,7 @@ class InMemoryDepot {
   }
 
   // Computes a hash over the full content of this depot.
-  absl::StatusOr<Hash> GetHash() const {
-    return hashes_.GetHash();
-  }
+  absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
   // Ignored, since depot is not backed by disk storage.
   absl::Status Flush() { return absl::OkStatus(); }
@@ -64,7 +63,7 @@ class InMemoryDepot {
 
  private:
   using Box = std::vector<std::byte>;
-  using Boxes = std::deque<Box>;
+  using Boxes = std::vector<Box>;
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
@@ -74,7 +73,8 @@ class InMemoryDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public PageSource {
    public:
-    explicit PageProvider(Boxes& boxes, std::size_t& num_hash_boxes) : boxes_(boxes), num_hash_boxes_(num_hash_boxes) {}
+    explicit PageProvider(Boxes& boxes, std::size_t& num_hash_boxes)
+        : boxes_(boxes), num_hash_boxes_(num_hash_boxes) {}
 
     // Get data for given page. The data is valid until the next call to
     // this function.
@@ -82,7 +82,9 @@ class InMemoryDepot {
       static auto empty = Box{};
       // calculate start and end of the hash group
       auto start = boxes_.begin() + id * num_hash_boxes_;
-      auto end = boxes_.begin() + std::min(id * num_hash_boxes_ + num_hash_boxes_, boxes_.size()) + 1;
+      auto end =
+          boxes_.begin() +
+          std::min(id * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
 
       if (start >= end) return empty;
 

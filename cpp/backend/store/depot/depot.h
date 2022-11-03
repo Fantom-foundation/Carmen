@@ -4,9 +4,9 @@
 #include <optional>
 #include <utility>
 
-#include "common/type.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/type.h"
 
 namespace carmen::backend::store {
 
@@ -23,7 +23,8 @@ concept Depot = requires(D a, const D b) {
 
   // Set data for given key.
   {
-    a.Set(std::declval<typename D::key_type>(), std::declval<std::span<std::byte>>())
+    a.Set(std::declval<typename D::key_type>(),
+          std::declval<std::span<std::byte>>())
     } -> std::same_as<absl::Status>;
   // Retrieves data from Depot. Default value is returned when not found.
   {
