@@ -1,12 +1,17 @@
 #include "state/state.h"
 
+#include "backend/depot/memory/depot.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/type.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen {
+
+using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
 
 template <typename K, typename V>
 using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
@@ -14,7 +19,10 @@ using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
 template <typename K, typename V>
 using InMemoryStore = backend::store::InMemoryStore<K, V>;
 
-using InMemoryState = State<InMemoryIndex, InMemoryStore>;
+template <typename K>
+using InMemoryDepot = backend::depot::InMemoryDepot<K>;
+
+using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
 
 TEST(StateTest, DefaultAccountStateIsUnknown) {
   Address a{0x01};
@@ -162,6 +170,74 @@ TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
   state.SetNonce({}, Nonce{0x12});
   auto value_12_hash_again = state.GetHash();
   EXPECT_EQ(value_12_hash, value_12_hash_again);
+}
+
+TEST(StateTest, DefaultCodeIsEmpty) {
+  Address a{0x01};
+  Address b{0x02};
+
+  InMemoryState state;
+  EXPECT_THAT(state.GetCode(a), ElementsAre());
+  EXPECT_THAT(state.GetCode(b), ElementsAre());
+}
+
+TEST(StateTest, CodesCanBeUpdated) {
+  Address a{0x01};
+  Address b{0x02};
+  std::vector<std::byte> code1{std::byte{1}, std::byte{2}};
+  std::vector<std::byte> code2{std::byte{1}, std::byte{2}};
+
+  InMemoryState state;
+  EXPECT_THAT(state.GetCode(a), ElementsAre());
+  EXPECT_THAT(state.GetCode(b), ElementsAre());
+
+  state.SetCode(a, code1);
+  EXPECT_THAT(state.GetCode(a), ElementsAreArray(code1));
+  EXPECT_THAT(state.GetCode(b), ElementsAre());
+
+  state.SetCode(b, code2);
+  EXPECT_THAT(state.GetCode(a), ElementsAreArray(code1));
+  EXPECT_THAT(state.GetCode(b), ElementsAreArray(code2));
+}
+
+TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
+  Address a{0x01};
+  std::vector<std::byte> code{std::byte{1}, std::byte{2}};
+
+  InMemoryState state;
+
+  EXPECT_EQ(state.GetCodeHash(a), Hash{});
+
+  state.SetCode(a, code);
+  EXPECT_EQ(state.GetCodeHash(a), GetSha256Hash(std::span(code)));
+
+  // Resetting code to zero reverts code to zero.
+  state.SetCode(a, {});
+  EXPECT_EQ(state.GetCodeHash(a), Hash{});
+}
+
+TEST(StateTest, CodesAreCoveredByGlobalStateHash) {
+  InMemoryState state;
+  auto base_hash = state.GetHash();
+  state.SetCode({}, std::vector{std::byte{12}});
+  auto value_12_hash = state.GetHash();
+  EXPECT_NE(base_hash, value_12_hash);
+  state.SetCode({}, std::vector{std::byte(14)});
+  auto value_14_hash = state.GetHash();
+  EXPECT_NE(base_hash, value_14_hash);
+
+  // Resetting value gets us original hash.
+  state.SetCode({}, std::vector{std::byte{12}});
+  auto value_12_hash_again = state.GetHash();
+  EXPECT_EQ(value_12_hash, value_12_hash_again);
+}
+
+TEST(StateTest, LookingUpMissingCodeDoesNotChangeGlobalHash) {
+  Address a{0x01};
+  InMemoryState state;
+  auto base_hash = state.GetHash();
+  state.GetCode(a);
+  EXPECT_EQ(state.GetHash(), base_hash);
 }
 
 TEST(StateTest, ValuesAddedCanBeRetrieved) {

@@ -14,6 +14,7 @@ cc_test(
         ":state",
         "//backend/index/memory:index",
         "//backend/store/memory:store",
+        "//backend/depot/memory:depot",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -28,6 +29,7 @@ cc_library(
         "//backend/index/memory:index",
         "//backend/store/file:store",
         "//backend/store/memory:store",
+        "//backend/depot/memory:depot",
     ],
     alwayslink = True,
 )
