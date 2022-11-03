@@ -40,8 +40,7 @@ TEST(LevelDB, TestAddBatchAndGet) {
   std::string key2("key2");
   std::string value1("value1");
   std::string value2("value2");
-  auto input = std::array{LDBEntry{key1, value1},
-                          LDBEntry{key2, value2}};
+  auto input = std::array{LDBEntry{key1, value1}, LDBEntry{key2, value2}};
   ASSERT_OK(db.AddBatch(input));
   ASSERT_OK_AND_ASSIGN(auto result1, db.Get(key1));
   ASSERT_OK_AND_ASSIGN(auto result2, db.Get(key2));
