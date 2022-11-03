@@ -80,7 +80,7 @@ REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
 
 using DepotTypes = ::testing::Types<
     // Branching size 3, Size of box 2.
-    DepotHandler<InMemoryDepot<unsigned int>, 32, 2>>;
+    DepotHandler<InMemoryDepot<unsigned int>, 3, 2>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 
