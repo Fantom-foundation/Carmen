@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstddef>
 
 #include "backend/index/cache/cache.h"

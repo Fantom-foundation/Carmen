@@ -56,7 +56,7 @@ cc_library(
         "//common:hash",
         "@com_google_absl//absl/container:flat_hash_set",
     ],
-    visibility = ["//backend/store:__subpackages__"],
+    visibility = ["//backend:__subpackages__"],
 )
 
 cc_test(
