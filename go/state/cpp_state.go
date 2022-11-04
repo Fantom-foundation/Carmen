@@ -92,7 +92,7 @@ func (cs *CppState) SetStorage(address common.Address, key common.Key, value com
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 	const max_size = 25000 // Contract limit is 24577
 	code := make([]byte, max_size)
-	var size C.uint32_t
+	var size C.uint32_t = max_size
 	C.Carmen_GetCode(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&code[0]), &size)
 	if size >= max_size {
 		return nil, fmt.Errorf("Unable to load contract exceeding maximum capacity of %v", max_size)
@@ -101,7 +101,11 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 }
 
 func (cs *CppState) SetCode(address common.Address, code []byte) error {
-	C.Carmen_SetCode(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&code[0]), C.uint32_t(len(code)))
+	var code_ptr unsafe.Pointer
+	if len(code) > 0 {
+		code_ptr = unsafe.Pointer(&code[0])
+	}
+	C.Carmen_SetCode(cs.state, unsafe.Pointer(&address[0]), code_ptr, C.uint32_t(len(code)))
 	return nil
 }
 

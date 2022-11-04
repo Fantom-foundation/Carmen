@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -151,6 +152,74 @@ func TestWriteAndReadSlot(t *testing.T) {
 			}
 			if value != val1 {
 				t.Errorf("Invalid value read, got %v, wanted %v", value, val1)
+			}
+		})
+	}
+}
+
+func getTestCodeOfLength(size int) []byte {
+	res := make([]byte, size)
+	for i := 0; i < size; i++ {
+		res[i] = byte(i)
+	}
+	return res
+}
+
+func getTestCodes() [][]byte {
+	return [][]byte{
+		nil,
+		{},
+		{0xAC},
+		{0xAC, 0xDC},
+		getTestCodeOfLength(100),
+		getTestCodeOfLength(1000),
+		getTestCodeOfLength(24577),
+	}
+}
+
+func TestSetAndGetCode(t *testing.T) {
+	for _, named_state := range initCppStates(t) {
+		name := named_state.name
+		state := named_state.state
+		t.Run(name, func(t *testing.T) {
+			for _, code := range getTestCodes() {
+				err := state.SetCode(address1, code)
+				if err != nil {
+					t.Fatalf("Error setting code: %v", err)
+				}
+				value, err := state.GetCode(address1)
+				if err != nil {
+					t.Fatalf("Error fetching code: %v", err)
+				}
+				if !bytes.Equal(code, value) {
+					t.Errorf("Invalid value read, got %v, wanted %v", value, code)
+				}
+			}
+		})
+	}
+}
+
+func TestSetAndGetCodeHash(t *testing.T) {
+	for _, named_state := range initCppStates(t) {
+		name := named_state.name
+		state := named_state.state
+		t.Run(name, func(t *testing.T) {
+			for _, code := range getTestCodes() {
+				err := state.SetCode(address1, code)
+				if err != nil {
+					t.Fatalf("Error setting code: %v", err)
+				}
+				hash, err := state.GetCodeHash(address1)
+				if err != nil {
+					t.Fatalf("Error fetching code: %v", err)
+				}
+				want := common.GetSha256Hash(code)
+				if len(code) == 0 {
+					want = common.Hash{}
+				}
+				if hash != want {
+					t.Errorf("Invalid code hash, got %v, wanted %v", hash, want)
+				}
 			}
 		})
 	}
