@@ -15,6 +15,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"io"
 	"math/rand"
 	"testing"
 )
@@ -49,17 +50,17 @@ func BenchmarkInsert(b *testing.B) {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b)
 			b.Run(fmt.Sprintf("Store %s initialSize %d", fac.label, initialSize), func(b *testing.B) {
-				initStoreContent(b, s, initialSize)
-				benchmarkInsert(b, s)
+				s.initStoreContent(b, initialSize)
+				s.benchmarkInsert(b)
 			})
 			_ = s.Close()
 		}
 	}
 }
 
-func benchmarkInsert(b *testing.B, store store.Store[uint32, common.Value]) {
+func (s *storeWrapper) benchmarkInsert(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		err := store.Set(uint32(i), toValue(uint32(i)))
+		err := s.store.Set(uint32(i), toValue(uint32(i)))
 		if err != nil {
 			b.Fatalf("failed to set store item; %s", err)
 		}
@@ -74,10 +75,10 @@ func BenchmarkRead(b *testing.B) {
 			for _, dist := range common.GetDistributions(initialSize) {
 				b.Run(fmt.Sprintf("Store %s initialSize %d dist %s", fac.label, initialSize, dist.Label), func(b *testing.B) {
 					if !initialized {
-						initStoreContent(b, s, initialSize)
+						s.initStoreContent(b, initialSize)
 						initialized = true
 					}
-					benchmarkRead(b, dist, s)
+					s.benchmarkRead(b, dist)
 				})
 			}
 			_ = s.Close()
@@ -85,9 +86,9 @@ func BenchmarkRead(b *testing.B) {
 	}
 }
 
-func benchmarkRead(b *testing.B, dist common.Distribution, store store.Store[uint32, common.Value]) {
+func (s *storeWrapper) benchmarkRead(b *testing.B, dist common.Distribution) {
 	for i := 0; i < b.N; i++ {
-		value, err := store.Get(dist.GetNext())
+		value, err := s.store.Get(dist.GetNext())
 		if err != nil {
 			b.Fatalf("failed to read item from store; %s", err)
 		}
@@ -103,10 +104,10 @@ func BenchmarkWrite(b *testing.B) {
 			for _, dist := range common.GetDistributions(initialSize) {
 				b.Run(fmt.Sprintf("Store %s initialSize %d dist %s", fac.label, initialSize, dist.Label), func(b *testing.B) {
 					if !initialized {
-						initStoreContent(b, s, initialSize)
+						s.initStoreContent(b, initialSize)
 						initialized = true
 					}
-					benchmarkWrite(b, dist, s)
+					s.benchmarkWrite(b, dist)
 				})
 			}
 			_ = s.Close()
@@ -114,9 +115,9 @@ func BenchmarkWrite(b *testing.B) {
 	}
 }
 
-func benchmarkWrite(b *testing.B, dist common.Distribution, store store.Store[uint32, common.Value]) {
+func (s *storeWrapper) benchmarkWrite(b *testing.B, dist common.Distribution) {
 	for i := 0; i < b.N; i++ {
-		err := store.Set(dist.GetNext(), toValue(uint32(i)))
+		err := s.store.Set(dist.GetNext(), toValue(uint32(i)))
 		if err != nil {
 			b.Fatalf("failed to set store item; %s", err)
 		}
@@ -132,10 +133,10 @@ func BenchmarkHash(b *testing.B) {
 				for _, dist := range common.GetDistributions(initialSize) {
 					b.Run(fmt.Sprintf("Store %s initialSize %d updateSize %d dist %s", fac.label, initialSize, updateSize, dist.Label), func(b *testing.B) {
 						if !initialized {
-							initStoreContent(b, s, initialSize)
+							s.initStoreContent(b, initialSize)
 							initialized = true
 						}
-						benchmarkHash(b, dist, updateSize, s)
+						s.benchmarkHash(b, dist, updateSize)
 					})
 				}
 			}
@@ -144,18 +145,18 @@ func BenchmarkHash(b *testing.B) {
 	}
 }
 
-func benchmarkHash(b *testing.B, dist common.Distribution, updateSize int, store store.Store[uint32, common.Value]) {
+func (s *storeWrapper) benchmarkHash(b *testing.B, dist common.Distribution, updateSize int) {
 	for i := 0; i < b.N; i++ {
 		b.StopTimer() // don't measure the update
 		for ii := 0; ii < updateSize; ii++ {
-			err := store.Set(dist.GetNext(), toValue(rand.Uint32()))
+			err := s.store.Set(dist.GetNext(), toValue(rand.Uint32()))
 			if err != nil {
 				b.Fatalf("failed to set store item; %s", err)
 			}
 		}
 		b.StartTimer()
 
-		hash, err := store.GetStateHash()
+		hash, err := s.store.GetStateHash()
 		if err != nil {
 			b.Fatalf("failed to hash store; %s", err)
 		}
@@ -172,10 +173,10 @@ func BenchmarkWriteAndHash(b *testing.B) {
 				for _, dist := range common.GetDistributions(initialSize) {
 					b.Run(fmt.Sprintf("Store %s initialSize %d updateSize %d dist %s", fac.label, initialSize, updateSize, dist.Label), func(b *testing.B) {
 						if !initialized {
-							initStoreContent(b, s, initialSize)
+							s.initStoreContent(b, initialSize)
 							initialized = true
 						}
-						benchmarkWriteAndHash(b, dist, updateSize, s)
+						s.benchmarkWriteAndHash(b, dist, updateSize)
 					})
 				}
 			}
@@ -184,16 +185,16 @@ func BenchmarkWriteAndHash(b *testing.B) {
 	}
 }
 
-func benchmarkWriteAndHash(b *testing.B, dist common.Distribution, updateSize int, store store.Store[uint32, common.Value]) {
+func (s *storeWrapper) benchmarkWriteAndHash(b *testing.B, dist common.Distribution, updateSize int) {
 	for i := 0; i < b.N; i++ {
 		for ii := 0; ii < updateSize; ii++ {
-			err := store.Set(dist.GetNext(), toValue(rand.Uint32()))
+			err := s.store.Set(dist.GetNext(), toValue(rand.Uint32()))
 			if err != nil {
 				b.Fatalf("failed to set store item; %s", err)
 			}
 		}
 
-		hash, err := store.GetStateHash()
+		hash, err := s.store.GetStateHash()
 		if err != nil {
 			b.Fatalf("failed to hash store; %s", err)
 		}
@@ -203,7 +204,7 @@ func benchmarkWriteAndHash(b *testing.B, dist common.Distribution, updateSize in
 
 type StoreFactory struct {
 	label    string
-	getStore func(b *testing.B) store.Store[uint32, common.Value]
+	getStore func(b *testing.B) storeWrapper
 }
 
 func getStoresFactories() (stores []StoreFactory) {
@@ -237,47 +238,73 @@ func toValue(i uint32) common.Value {
 	return value
 }
 
-func initMemStore(b *testing.B) (store store.Store[uint32, common.Value]) {
+// storeWrapper wraps an instance of the Store to have serializers and the index available at hand.
+// Additionally, it maintains call-back method to clean-up at the end of tests
+type storeWrapper struct {
+	io.Closer
+	store    store.Store[uint32, common.Value]
+	cleanups []func() error
+}
+
+// storeWrapper creates a new storeWrapper
+func newStoreWrapper(
+	store store.Store[uint32, common.Value]) storeWrapper {
+	return storeWrapper{store: store}
+}
+
+// cleanUp registers a clean-up callback
+func (s *storeWrapper) cleanUp(f func() error) {
+	s.cleanups = append(s.cleanups, f)
+}
+
+// Close executes clean-up
+func (s *storeWrapper) Close() error {
+	for _, f := range s.cleanups {
+		_ = f()
+	}
+	return s.store.Close()
+}
+
+func initMemStore(b *testing.B) storeWrapper {
 	str, err := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(BranchingFactor))
 	if err != nil {
 		b.Fatalf("failed to init memory store; %s", err)
 	}
-	return str
+	return newStoreWrapper(str)
 }
 
-func initFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
+func initFileStore(b *testing.B) storeWrapper {
 	str, err := file.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(b.TempDir(), BranchingFactor))
 	if err != nil {
 		b.Fatalf("failed to init file store; %s", err)
 	}
-	return str
+	return newStoreWrapper(str)
 }
 
-func initPagedFileStore(b *testing.B) (str store.Store[uint32, common.Value]) {
+func initPagedFileStore(b *testing.B) storeWrapper {
 	str, err := pagedfile.NewStore[uint32, common.Value](b.TempDir(), common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(b.TempDir(), BranchingFactor), PoolSize, eviction.NewLRUPolicy(PoolSize))
 	if err != nil {
 		b.Fatalf("failed to init pagedfile store; %s", err)
 	}
-	return str
+	return newStoreWrapper(str)
 }
 
-func initLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
+func initLevelDbStore(b *testing.B) storeWrapper {
 	db, err := leveldb.OpenFile(b.TempDir(), nil)
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
 	}
 	hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, BranchingFactor)
-	store, err = ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, PageSize)
+	str, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, PageSize)
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
 	}
-	b.Cleanup(func() {
-		db.Close()
-	})
-	return store
+	wrapper := newStoreWrapper(str)
+	wrapper.cleanUp(db.Close)
+	return wrapper
 }
 
-func initTransactLevelDbStore(b *testing.B) (store store.Store[uint32, common.Value]) {
+func initTransactLevelDbStore(b *testing.B) storeWrapper {
 	writeBufferSize := 1024 * opt.MiB
 	opts := opt.Options{WriteBuffer: writeBufferSize}
 	db, err := leveldb.OpenFile(b.TempDir(), &opts)
@@ -298,24 +325,27 @@ func initTransactLevelDbStore(b *testing.B) (store store.Store[uint32, common.Va
 	})
 
 	hashTreeFac := htldb.CreateHashTreeFactory(tr, common.ValueStoreKey, BranchingFactor)
-	store, err = ldb.NewStore[uint32, common.Value](tr, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, PageSize)
+	str, err := ldb.NewStore[uint32, common.Value](tr, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, PageSize)
 	if err != nil {
 		b.Fatalf("failed to init leveldb store; %s", err)
 	}
 
-	return store
+	wrapper := newStoreWrapper(str)
+	wrapper.cleanUp(tr.Commit)
+	wrapper.cleanUp(db.Close)
+	return wrapper
 }
 
-func initStoreContent(b *testing.B, store store.Store[uint32, common.Value], dbSize int) {
+func (s *storeWrapper) initStoreContent(b *testing.B, dbSize int) {
 	b.StopTimer() // dont measure initialization
 	for i := 0; i < dbSize; i++ {
 		value := binary.BigEndian.AppendUint32([]byte{}, uint32(i))
-		err := store.Set(uint32(i), common.Value{value[0], value[1], value[2], value[3]})
+		err := s.store.Set(uint32(i), common.Value{value[0], value[1], value[2], value[3]})
 		if err != nil {
 			b.Fatalf("failed to set store item; %s", err)
 		}
 	}
-	_, err := store.GetStateHash()
+	_, err := s.store.GetStateHash()
 	if err != nil {
 		b.Fatalf("failed to get store hash; %s", err)
 	}
