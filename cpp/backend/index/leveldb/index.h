@@ -9,7 +9,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/common/level_db.h"
+#include "backend/common/leveldb/level_db.h"
 #include "common/hash.h"
 #include "common/status_util.h"
 #include "common/type.h"
@@ -95,8 +95,8 @@ class LevelDBIndexBase {
   virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
 
   // Get leveldb handle.
-  virtual internal::LevelDB& GetDB() = 0;
-  virtual const internal::LevelDB& GetDB() const = 0;
+  virtual LevelDB& GetDB() = 0;
+  virtual const LevelDB& GetDB() const = 0;
 
   // Get last index value.
   absl::StatusOr<I> GetLastIndexFromDB() const {
