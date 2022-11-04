@@ -241,10 +241,10 @@ absl::Status HashTree::SaveToLevelDB(const std::filesystem::path& file) {
   RETURN_IF_ERROR((*db).Add({"branching_factor", branching_factor}));
   RETURN_IF_ERROR((*db).Add({"num_pages", num_pages}));
   RETURN_IF_ERROR((*db).Add({"hash", hash_bytes}));
+
   for (std::size_t i = 0; i < num_pages_; i++) {
-    const auto& hash = hashes_[0][i];
-    std::array<char, sizeof(hash)> hash_bytes{};
-    std::memcpy(hash_bytes.data(), &hash, sizeof(hash));
+    std::array<char, sizeof(Hash)> hash_bytes{};
+    std::memcpy(hash_bytes.data(), &hashes_[0][i], sizeof(Hash));
     RETURN_IF_ERROR((*db).Add({"page_" + std::to_string(i), hash_bytes}));
   }
 
