@@ -38,6 +38,18 @@ type StateDB interface {
 	GetCodeHash(common.Address) common.Hash
 	GetCodeSize(common.Address) int
 
+	// Refund tracking.
+	AddRefund(uint64)
+	SubRefund(uint64)
+	GetRefund() uint64
+
+	// Access list tracking.
+	ClearAccessList()
+	AddAddressToAccessList(common.Address)
+	AddSlotToAccessList(common.Address, common.Key)
+	AddressInAccessList(common.Address) bool
+	SlotInAccessList(common.Address, common.Key) (addressOk bool, slotOk bool)
+
 	// Transaction scope management.
 	Snapshot() int
 	RevertToSnapshot(int)
@@ -74,6 +86,9 @@ type stateDB struct {
 
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
+
+	// The refund accumulated in the current transaction.
+	refund uint64
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -434,6 +449,48 @@ func (s *stateDB) GetCodeSize(addr common.Address) int {
 	return len(s.GetCode(addr))
 }
 
+func (s *stateDB) AddRefund(amount uint64) {
+	old := s.refund
+	s.refund += amount
+	s.undo = append(s.undo, func() {
+		s.refund = old
+	})
+}
+func (s *stateDB) SubRefund(amount uint64) {
+	if amount > s.refund {
+		panic(fmt.Sprintf("Refund counter below zero (to be removed: %d > refund: %d)", amount, s.refund))
+	}
+	old := s.refund
+	s.refund -= amount
+	s.undo = append(s.undo, func() {
+		s.refund = old
+	})
+}
+
+func (s *stateDB) GetRefund() uint64 {
+	return s.refund
+}
+
+// Access list tracking.
+func (s *stateDB) ClearAccessList() {
+	panic("Not implemented")
+}
+func (s *stateDB) AddAddressToAccessList(common.Address) {
+	panic("Not implemented")
+}
+
+func (s *stateDB) AddSlotToAccessList(common.Address, common.Key) {
+	panic("Not implemented")
+}
+
+func (s *stateDB) AddressInAccessList(common.Address) bool {
+	panic("Not implemented")
+}
+
+func (s *stateDB) SlotInAccessList(common.Address, common.Key) (addressOk bool, slotOk bool) {
+	panic("Not implemented")
+}
+
 func (s *stateDB) Snapshot() int {
 	return len(s.undo)
 }
@@ -556,6 +613,7 @@ func (s *stateDB) ResetTransaction() {
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data = make(map[slotId]*slotValue, len(s.data))
 	s.codes = make(map[common.Address]*codeValue)
+	s.refund = 0
 	s.undo = s.undo[0:0]
 }
 
