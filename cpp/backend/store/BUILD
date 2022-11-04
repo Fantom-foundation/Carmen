@@ -52,9 +52,13 @@ cc_library(
     deps = [
         "//backend/common:page",
         "//backend/common:page_id",
+        "//backend/common/leveldb:level_db",
         "//common:type",
         "//common:hash",
+        "//common:status_util",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//backend:__subpackages__"],
 )
@@ -67,6 +71,7 @@ cc_test(
         "//common:type",
         "//common:hash",
         "//common:file_util",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

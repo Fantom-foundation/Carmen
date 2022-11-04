@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "common/file_util.h"
+#include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -268,5 +269,91 @@ TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestored) {
   }
 }
 
+TEST(HashTreeTest, EmptyTreeCanBeSavedToLevelDB) {
+  auto source = std::make_unique<MockPageSource>();
+  HashTree tree(std::move(source));
+
+  TempDir dir;
+  std::filesystem::remove(dir);
+  ASSERT_OK(tree.SaveToLevelDB(dir));
+  EXPECT_TRUE(std::filesystem::exists(dir));
+}
+
+TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestoredFromLevelDB) {
+  TempDir dir;
+  std::filesystem::remove(dir);
+  Hash hash;
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    ASSERT_OK(tree.SaveToLevelDB(dir));
+    EXPECT_TRUE(std::filesystem::exists(dir));
+
+    hash = tree.GetHash();
+  }
+
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    ASSERT_OK(tree.LoadFromLevelDB(dir));
+    EXPECT_EQ(hash, tree.GetHash());
+  }
+}
+
+TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestoredFromLevelDB) {
+  TempDir dir;
+  std::filesystem::remove(dir);
+  Hash hash;
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    tree.UpdateHash(0, Hash{0x01, 0x02});
+    tree.UpdateHash(1, Hash{0x03, 0x04});
+    tree.UpdateHash(2, Hash{0x05, 0x06});
+
+    ASSERT_OK(tree.SaveToLevelDB(dir));
+    EXPECT_TRUE(std::filesystem::exists(dir));
+
+    hash = tree.GetHash();
+  }
+
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source));
+
+    ASSERT_OK(tree.LoadFromLevelDB(dir));
+    EXPECT_EQ(hash, tree.GetHash());
+  }
+}
+
+TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestoredFromLevelDB) {
+  TempDir dir;
+  std::filesystem::remove(dir);
+  Hash hash;
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source), /*branching_factor=*/2);
+
+    tree.UpdateHash(0, Hash{0x01, 0x02});
+    tree.UpdateHash(1, Hash{0x03, 0x04});
+    tree.UpdateHash(2, Hash{0x05, 0x06});
+
+    ASSERT_OK(tree.SaveToLevelDB(dir));
+    EXPECT_TRUE(std::filesystem::exists(dir));
+
+    hash = tree.GetHash();
+  }
+
+  {
+    auto source = std::make_unique<MockPageSource>();
+    HashTree tree(std::move(source), /*branching_factor=*/2);
+
+    ASSERT_OK(tree.LoadFromLevelDB(dir));
+    EXPECT_EQ(hash, tree.GetHash());
+  }
+}
 }  // namespace
 }  // namespace carmen::backend::store
