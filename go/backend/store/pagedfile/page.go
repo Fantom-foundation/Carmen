@@ -16,12 +16,7 @@ type Page struct {
 }
 
 func (p *Page) Load(file *os.File, pageId int) error {
-	_, err := file.Seek(int64(pageId)*int64(len(p.data)), io.SeekStart)
-	if err != nil {
-		return err
-	}
-
-	n, err := file.Read(p.data)
+	n, err := file.ReadAt(p.data, int64(pageId)*int64(len(p.data)))
 	if err != nil && !errors.Is(err, io.EOF) { // EOF = the page does not exist in the data file yet
 		return err
 	}
@@ -51,12 +46,7 @@ func (p *Page) Get(position int64, size int64) []byte {
 }
 
 func (p *Page) Store(file *os.File, pageId int) error {
-	_, err := file.Seek(int64(pageId)*int64(len(p.data)), io.SeekStart)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(p.data)
+	_, err := file.WriteAt(p.data, int64(pageId)*int64(len(p.data)))
 	if err != nil {
 		return fmt.Errorf("failed to write the page into file; %s", err)
 	}

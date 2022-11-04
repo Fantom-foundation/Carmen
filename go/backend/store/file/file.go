@@ -56,12 +56,7 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
 func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
 	buffer := make([]byte, m.pageSize)
 
-	_, err := m.file.Seek(int64(page)*int64(m.pageSize), io.SeekStart)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = m.file.Read(buffer)
+	_, err := m.file.ReadAt(buffer, int64(page)*int64(m.pageSize))
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err // the page does not exist in the data file yet
 	}
@@ -72,12 +67,7 @@ func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
 func (m *Store[I, V]) Set(id I, value V) error {
 	page, itemPosition := m.itemPosition(id)
 
-	_, err := m.file.Seek(itemPosition, io.SeekStart)
-	if err != nil {
-		return fmt.Errorf("failed to seek in data file to %d; %s", itemPosition, err)
-	}
-
-	_, err = m.file.Write(m.serializer.ToBytes(value))
+	_, err := m.file.WriteAt(m.serializer.ToBytes(value), itemPosition)
 	if err != nil {
 		return fmt.Errorf("failed to write into data file; %s", err)
 	}
@@ -90,13 +80,8 @@ func (m *Store[I, V]) Set(id I, value V) error {
 func (m *Store[I, V]) Get(id I) (value V, err error) {
 	_, itemPosition := m.itemPosition(id)
 
-	_, err = m.file.Seek(itemPosition, io.SeekStart)
-	if err != nil {
-		return value, err
-	}
-
 	bytes := make([]byte, m.itemSize)
-	n, err := m.file.Read(bytes)
+	n, err := m.file.ReadAt(bytes, itemPosition)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return value, nil // the item does not exist in the page file (the file is shorter)
