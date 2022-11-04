@@ -251,7 +251,7 @@ absl::Status HashTree::SaveToLevelDB(const std::filesystem::path& file) {
 template <typename T>
 absl::StatusOr<T> ParseRawData(std::span<const char> data) {
   if (data.size() != sizeof(T))
-    return absl::InvalidArgumentError("Invalid data size");
+    return absl::InternalError("Invalid data size");
   return *reinterpret_cast<const T*>(data.data());
 }
 
@@ -264,7 +264,7 @@ absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
   ASSIGN_OR_RETURN(auto branching_factor,
                    ParseRawData<decltype(branching_factor_)>(result));
   if (branching_factor != branching_factor_)
-    return absl::InvalidArgumentError(
+    return absl::InternalError(
         "Invalid branching factor in leveldb file.");
 
   // Load the number of pages.
