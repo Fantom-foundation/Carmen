@@ -6,8 +6,10 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "backend/common/leveldb/level_db.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -211,6 +213,103 @@ bool HashTree::LoadFromFile(std::filesystem::path file) {
   }
 
   return true;
+}
+
+absl::Status HashTree::SaveToLevelDB(const std::filesystem::path& file) {
+  // The following information is stored in the leveldb:
+  //  - the branching factor (4 byte, little endian)
+  //  - the number of pages (4 byte, little endian)
+  //  - the aggregated hash
+  //  - the hash of each page
+  static_assert(std::endian::native == std::endian::little,
+                "Big endian architectures not yet supported.");
+
+  auto db = LevelDB::Open(file, /*create_if_missing=*/true);
+  if (!db.ok()) return db.status();
+
+  std::array<char, sizeof(branching_factor_)> branching_factor{};
+  std::memcpy(branching_factor.data(), &branching_factor_,
+              sizeof(branching_factor_));
+
+  std::array<char, sizeof(num_pages_)> num_pages{};
+  std::memcpy(num_pages.data(), &num_pages_, sizeof(num_pages_));
+
+  auto hash = GetHash();
+  std::array<char, sizeof(hash)> hash_bytes{};
+  std::memcpy(hash_bytes.data(), &hash, sizeof(hash));
+
+  RETURN_IF_ERROR((*db).Add({"branching_factor", branching_factor}));
+  RETURN_IF_ERROR((*db).Add({"num_pages", num_pages}));
+  RETURN_IF_ERROR((*db).Add({"hash", hash_bytes}));
+  for (std::size_t i = 0; i < num_pages_; i++) {
+    const auto& hash = hashes_[0][i];
+    std::array<char, sizeof(hash)> hash_bytes{};
+    std::memcpy(hash_bytes.data(), &hash, sizeof(hash));
+    RETURN_IF_ERROR((*db).Add({"page_" + std::to_string(i), hash_bytes}));
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
+  auto db = LevelDB::Open(file, /*create_if_missing=*/false);
+  if (!db.ok()) return db.status();
+
+  // Load the branching factor.
+  ASSIGN_OR_RETURN(auto result, (*db).Get("branching_factor"));
+  if (result.size() != sizeof(branching_factor_))
+    return absl::InternalError("Invalid branching factor in leveldb file.");
+  auto branching_factor =
+      *reinterpret_cast<decltype(branching_factor_)*>(result.data());
+  if (branching_factor != branching_factor_)
+    return absl::InternalError("Invalid branching factor in leveldb file.");
+
+  // Load the number of pages.
+  ASSIGN_OR_RETURN(result, (*db).Get("num_pages"));
+  if (result.size() != sizeof(num_pages_))
+    return absl::InternalError("Invalid number of pages in leveldb file.");
+  auto num_pages = *reinterpret_cast<decltype(num_pages_)*>(result.data());
+  num_pages_ = num_pages;
+
+  // Load the global hash.
+  ASSIGN_OR_RETURN(result, (*db).Get("hash"));
+  if (result.size() != sizeof(Hash))
+    return absl::InternalError("Invalid hash in leveldb file.");
+  auto file_hash = *reinterpret_cast<Hash*>(result.data());
+
+  // Read the page hashes.
+  hashes_.clear();
+  if (num_pages > 0) {
+    std::vector<Hash> page_hashes;
+    page_hashes.resize(GetPaddedSize(num_pages, branching_factor_));
+    for (std::size_t i = 0; i < num_pages; i++) {
+      ASSIGN_OR_RETURN(result, (*db).Get("page_" + std::to_string(i)));
+      if (result.size() != sizeof(Hash))
+        return absl::InternalError("Invalid hash in leveldb file for page: " +
+                                   std::to_string(i));
+      page_hashes[i] = *reinterpret_cast<Hash*>(result.data());
+    }
+    hashes_.push_back(std::move(page_hashes));
+  }
+
+  // Update hash information.
+  dirty_pages_.clear();
+  dirty_level_one_positions_.clear();
+  for (std::size_t i = 0; i < num_pages; i += branching_factor_) {
+    dirty_level_one_positions_.insert(i / branching_factor);
+  }
+
+  // Recompute hashes.
+  auto hash = GetHash();
+
+  if (hash != file_hash) {
+    std::stringstream ss;
+    ss << "Unable to verify hash:\n - in leveldb:  " << file_hash
+       << "\n - restored: " << hash << "\n";
+    return absl::InternalError(ss.str());
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::store
