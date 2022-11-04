@@ -47,8 +47,8 @@ type StateDB interface {
 	ClearAccessList()
 	AddAddressToAccessList(common.Address)
 	AddSlotToAccessList(common.Address, common.Key)
-	AddressInAccessList(common.Address) bool
-	SlotInAccessList(common.Address, common.Key) (addressOk bool, slotOk bool)
+	IsAddressInAccessList(common.Address) bool
+	IsSlotInAccessList(common.Address, common.Key) (addressPresent bool, slotPresent bool)
 
 	// Transaction scope management.
 	Snapshot() int
@@ -89,6 +89,12 @@ type stateDB struct {
 
 	// The refund accumulated in the current transaction.
 	refund uint64
+
+	// A set of accessed addresses in the current transaction.
+	accessed_addresses map[common.Address]int
+
+	// A set of accessed slots in the current transaction.
+	accessed_slots map[slotId]int
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -157,13 +163,16 @@ func CreateStateDB(directory string) (StateDB, error) {
 
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
-		state:    state,
-		accounts: map[common.Address]*accountState{},
-		balances: map[common.Address]*balanceValue{},
-		nonces:   map[common.Address]*nonceValue{},
-		data:     map[slotId]*slotValue{},
-		codes:    map[common.Address]*codeValue{},
-		undo:     make([]func(), 0, 100),
+		state:              state,
+		accounts:           map[common.Address]*accountState{},
+		balances:           map[common.Address]*balanceValue{},
+		nonces:             map[common.Address]*nonceValue{},
+		data:               map[slotId]*slotValue{},
+		codes:              map[common.Address]*codeValue{},
+		refund:             0,
+		accessed_addresses: map[common.Address]int{},
+		accessed_slots:     map[slotId]int{},
+		undo:               make([]func(), 0, 100),
 	}
 }
 
@@ -471,24 +480,48 @@ func (s *stateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// Access list tracking.
 func (s *stateDB) ClearAccessList() {
-	panic("Not implemented")
-}
-func (s *stateDB) AddAddressToAccessList(common.Address) {
-	panic("Not implemented")
-}
-
-func (s *stateDB) AddSlotToAccessList(common.Address, common.Key) {
-	panic("Not implemented")
+	if len(s.accessed_addresses) > 0 {
+		s.accessed_addresses = make(map[common.Address]int)
+	}
+	if len(s.accessed_slots) > 0 {
+		s.accessed_slots = make(map[slotId]int)
+	}
 }
 
-func (s *stateDB) AddressInAccessList(common.Address) bool {
-	panic("Not implemented")
+func (s *stateDB) AddAddressToAccessList(addr common.Address) {
+	_, found := s.accessed_addresses[addr]
+	if !found {
+		s.accessed_addresses[addr] = 0
+		s.undo = append(s.undo, func() {
+			delete(s.accessed_addresses, addr)
+		})
+	}
 }
 
-func (s *stateDB) SlotInAccessList(common.Address, common.Key) (addressOk bool, slotOk bool) {
-	panic("Not implemented")
+func (s *stateDB) AddSlotToAccessList(addr common.Address, key common.Key) {
+	s.AddAddressToAccessList(addr)
+	sid := slotId{addr, key}
+	_, found := s.accessed_slots[sid]
+	if !found {
+		s.accessed_slots[sid] = 0
+		s.undo = append(s.undo, func() {
+			delete(s.accessed_slots, sid)
+		})
+	}
+}
+
+func (s *stateDB) IsAddressInAccessList(addr common.Address) bool {
+	_, found := s.accessed_addresses[addr]
+	return found
+}
+
+func (s *stateDB) IsSlotInAccessList(addr common.Address, key common.Key) (addressPresent bool, slotPresent bool) {
+	_, found := s.accessed_slots[slotId{addr, key}]
+	if found {
+		return true, true
+	}
+	return s.IsAddressInAccessList(addr), false
 }
 
 func (s *stateDB) Snapshot() int {
@@ -614,6 +647,7 @@ func (s *stateDB) ResetTransaction() {
 	s.data = make(map[slotId]*slotValue, len(s.data))
 	s.codes = make(map[common.Address]*codeValue)
 	s.refund = 0
+	s.ClearAccessList()
 	s.undo = s.undo[0:0]
 }
 
