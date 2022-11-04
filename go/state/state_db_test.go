@@ -992,6 +992,164 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	}
 }
 
+func TestCarmenStateInitialRefundIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	if got := db.GetRefund(); got != 0 {
+		t.Errorf("initial refund is not 0, got: %v", got)
+	}
+}
+
+func TestCarmenStateRefundCanBeModified(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	var want uint64 = 0
+	if got := db.GetRefund(); got != want {
+		t.Errorf("initial refund is not 0, got: %v", got)
+	}
+	db.AddRefund(12)
+	want += 12
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+	db.SubRefund(10)
+	want -= 10
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+	db.AddRefund(14)
+	want += 14
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateAddedRefundCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	var want uint64 = 0
+	if got := db.GetRefund(); got != want {
+		t.Errorf("initial refund is not 0, got: %v", got)
+	}
+	db.AddRefund(12)
+	want += 12
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	snapshot1 := db.Snapshot()
+	db.AddRefund(14)
+	want += 14
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	snapshot2 := db.Snapshot()
+	db.AddRefund(16)
+	want += 16
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot2)
+	want -= 16
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to roll back refund, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot1)
+	want -= 14
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to roll back refund, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateRemovedRefundCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	var want uint64 = 0
+	if got := db.GetRefund(); got != want {
+		t.Errorf("initial refund is not 0, got: %v", got)
+	}
+	db.AddRefund(100)
+	want += 100
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	snapshot1 := db.Snapshot()
+	db.SubRefund(14)
+	want -= 14
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	snapshot2 := db.Snapshot()
+	db.SubRefund(16)
+	want -= 16
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot2)
+	want += 16
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to roll back refund, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot1)
+	want += 14
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to roll back refund, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateRefundIsResetAtTransactionEnd(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	var want uint64 = 12
+	db.AddRefund(12)
+	if got := db.GetRefund(); got != 12 {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+	db.EndTransaction()
+	if got := db.GetRefund(); got != 0 {
+		t.Errorf("refund after end of transaction is not 0, got: %v", got)
+	}
+}
+
+func TestCarmenStateRefundIsResetAtTransactionAbort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	var want uint64 = 12
+	db.AddRefund(12)
+	if got := db.GetRefund(); got != 12 {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+	db.AbortTransaction()
+	if got := db.GetRefund(); got != 0 {
+		t.Errorf("refund after abort of transaction is not 0, got: %v", got)
+	}
+}
+
 func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	ref_state, err := NewMemory()
 	if err != nil {
