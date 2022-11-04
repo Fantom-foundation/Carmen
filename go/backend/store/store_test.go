@@ -6,6 +6,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
@@ -101,6 +102,23 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 				}
 
 				return &storeClosingWrapper{str, []func() error{tr.Commit, db.Close}}
+			},
+		},
+		{
+			label: "CachedLevelDb",
+			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+				cacheCapacity := 1 << 18
+				db, err := leveldb.OpenFile(tempDir, nil)
+				if err != nil {
+					tb.Fatalf("failed to init leveldb store; %s", err)
+				}
+				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				if err != nil {
+					tb.Fatalf("failed to init leveldb store; %s", err)
+				}
+				cached := cache.NewStore[uint32, common.Value](str, cacheCapacity)
+				return &storeClosingWrapper{cached, []func() error{db.Close}}
 			},
 		},
 	}
