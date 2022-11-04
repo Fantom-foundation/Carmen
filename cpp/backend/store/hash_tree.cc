@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/common/leveldb/level_db.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
@@ -215,6 +217,12 @@ bool HashTree::LoadFromFile(std::filesystem::path file) {
   return true;
 }
 
+template <typename T>
+std::span<const char> AsRawData(const T& value) {
+  auto bytes = std::as_bytes(std::span<const T>(&value, 1));
+  return {reinterpret_cast<const char*>(bytes.data()), sizeof(T)};
+}
+
 absl::Status HashTree::SaveToLevelDB(const std::filesystem::path& file) {
   // The following information is stored in the leveldb:
   //  - the branching factor (4 byte, little endian)
@@ -227,28 +235,24 @@ absl::Status HashTree::SaveToLevelDB(const std::filesystem::path& file) {
   auto db = LevelDB::Open(file, /*create_if_missing=*/true);
   if (!db.ok()) return db.status();
 
-  std::array<char, sizeof(branching_factor_)> branching_factor{};
-  std::memcpy(branching_factor.data(), &branching_factor_,
-              sizeof(branching_factor_));
-
-  std::array<char, sizeof(num_pages_)> num_pages{};
-  std::memcpy(num_pages.data(), &num_pages_, sizeof(num_pages_));
-
-  auto hash = GetHash();
-  std::array<char, sizeof(hash)> hash_bytes{};
-  std::memcpy(hash_bytes.data(), &hash, sizeof(hash));
-
-  RETURN_IF_ERROR((*db).Add({"branching_factor", branching_factor}));
-  RETURN_IF_ERROR((*db).Add({"num_pages", num_pages}));
-  RETURN_IF_ERROR((*db).Add({"hash", hash_bytes}));
+  RETURN_IF_ERROR(
+      (*db).Add({"ht_branching_factor", AsRawData(branching_factor_)}));
+  RETURN_IF_ERROR((*db).Add({"ht_num_pages", AsRawData(num_pages_)}));
+  RETURN_IF_ERROR((*db).Add({"ht_hash", AsRawData(GetHash())}));
 
   for (std::size_t i = 0; i < num_pages_; i++) {
-    std::array<char, sizeof(Hash)> hash_bytes{};
-    std::memcpy(hash_bytes.data(), &hashes_[0][i], sizeof(Hash));
-    RETURN_IF_ERROR((*db).Add({"page_" + std::to_string(i), hash_bytes}));
+    RETURN_IF_ERROR(
+        (*db).Add({"ht_page_" + std::to_string(i), AsRawData(hashes_[0][i])}));
   }
 
   return absl::OkStatus();
+}
+
+template <typename T>
+absl::StatusOr<T> ParseRawData(std::span<const char> data) {
+  if (data.size() != sizeof(T))
+    return absl::InvalidArgumentError("Invalid data size");
+  return *reinterpret_cast<const T*>(data.data());
 }
 
 absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
@@ -256,38 +260,29 @@ absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
   if (!db.ok()) return db.status();
 
   // Load the branching factor.
-  ASSIGN_OR_RETURN(auto result, (*db).Get("branching_factor"));
-  if (result.size() != sizeof(branching_factor_))
-    return absl::InternalError("Invalid branching factor in leveldb file.");
-  auto branching_factor =
-      *reinterpret_cast<decltype(branching_factor_)*>(result.data());
+  ASSIGN_OR_RETURN(auto result, (*db).Get("ht_branching_factor"));
+  ASSIGN_OR_RETURN(auto branching_factor,
+                   ParseRawData<decltype(branching_factor_)>(result));
   if (branching_factor != branching_factor_)
-    return absl::InternalError("Invalid branching factor in leveldb file.");
+    return absl::InvalidArgumentError(
+        "Invalid branching factor in leveldb file.");
 
   // Load the number of pages.
-  ASSIGN_OR_RETURN(result, (*db).Get("num_pages"));
-  if (result.size() != sizeof(num_pages_))
-    return absl::InternalError("Invalid number of pages in leveldb file.");
-  auto num_pages = *reinterpret_cast<decltype(num_pages_)*>(result.data());
-  num_pages_ = num_pages;
+  ASSIGN_OR_RETURN(result, (*db).Get("ht_num_pages"));
+  ASSIGN_OR_RETURN(num_pages_, ParseRawData<decltype(num_pages_)>(result));
 
   // Load the global hash.
-  ASSIGN_OR_RETURN(result, (*db).Get("hash"));
-  if (result.size() != sizeof(Hash))
-    return absl::InternalError("Invalid hash in leveldb file.");
-  auto file_hash = *reinterpret_cast<Hash*>(result.data());
+  ASSIGN_OR_RETURN(result, (*db).Get("ht_hash"));
+  ASSIGN_OR_RETURN(auto file_hash, ParseRawData<Hash>(result));
 
   // Read the page hashes.
   hashes_.clear();
-  if (num_pages > 0) {
+  if (num_pages_ > 0) {
     std::vector<Hash> page_hashes;
-    page_hashes.resize(GetPaddedSize(num_pages, branching_factor_));
-    for (std::size_t i = 0; i < num_pages; i++) {
-      ASSIGN_OR_RETURN(result, (*db).Get("page_" + std::to_string(i)));
-      if (result.size() != sizeof(Hash))
-        return absl::InternalError("Invalid hash in leveldb file for page: " +
-                                   std::to_string(i));
-      page_hashes[i] = *reinterpret_cast<Hash*>(result.data());
+    page_hashes.resize(GetPaddedSize(num_pages_, branching_factor_));
+    for (std::size_t i = 0; i < num_pages_; i++) {
+      ASSIGN_OR_RETURN(result, (*db).Get("ht_page_" + std::to_string(i)));
+      ASSIGN_OR_RETURN(page_hashes[i], ParseRawData<Hash>(result));
     }
     hashes_.push_back(std::move(page_hashes));
   }
@@ -295,7 +290,7 @@ absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
   // Update hash information.
   dirty_pages_.clear();
   dirty_level_one_positions_.clear();
-  for (std::size_t i = 0; i < num_pages; i += branching_factor_) {
+  for (std::size_t i = 0; i < num_pages_; i += branching_factor_) {
     dirty_level_one_positions_.insert(i / branching_factor);
   }
 

@@ -6,6 +6,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
 #include "common/type.h"
