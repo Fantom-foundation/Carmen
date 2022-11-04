@@ -1150,6 +1150,245 @@ func TestCarmenStateRefundIsResetAtTransactionAbort(t *testing.T) {
 	}
 }
 
+func TestCarmenStateAccessedAddressesCanBeAdded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	if db.IsAddressInAccessList(address1) {
+		t.Errorf("Accessed address list initially not empty")
+	}
+	if db.IsAddressInAccessList(address2) {
+		t.Errorf("Accessed address list initially not empty")
+	}
+
+	db.AddAddressToAccessList(address1)
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Added address not in access list")
+	}
+	if db.IsAddressInAccessList(address2) {
+		t.Errorf("Non-added address is in access list")
+	}
+
+	db.AddAddressToAccessList(address2)
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Added address not in access list")
+	}
+	if !db.IsAddressInAccessList(address2) {
+		t.Errorf("Added address not in access list")
+	}
+}
+
+func TestCarmenStateAccessedAddressesCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	snapshot1 := db.Snapshot()
+
+	db.AddAddressToAccessList(address1)
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Added address not in access list")
+	}
+
+	snapshot2 := db.Snapshot()
+
+	db.AddAddressToAccessList(address2)
+	if !db.IsAddressInAccessList(address2) {
+		t.Errorf("Added address not in access list")
+	}
+
+	db.RevertToSnapshot(snapshot2)
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Address 1 should still be in access list")
+	}
+	if db.IsAddressInAccessList(address2) {
+		t.Errorf("Address 2 should be removed by rollback")
+	}
+
+	db.RevertToSnapshot(snapshot1)
+	if db.IsAddressInAccessList(address1) {
+		t.Errorf("Address 1 should be removed by rollback")
+	}
+	if db.IsAddressInAccessList(address2) {
+		t.Errorf("Address 2 should be removed by rollback")
+	}
+}
+
+func TestCarmenStateAccessedAddressesAreResetAtTransactionEnd(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.AddAddressToAccessList(address1)
+	db.EndTransaction()
+	if db.IsAddressInAccessList(address1) {
+		t.Errorf("Accessed addresses not cleared at end of transaction")
+	}
+}
+
+func TestCarmenStateAccessedAddressesAreResetAtTransactionAbort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.AddAddressToAccessList(address1)
+	db.AbortTransaction()
+	if db.IsAddressInAccessList(address1) {
+		t.Errorf("Accessed addresses not cleared at abort of transaction")
+	}
+}
+
+func TestCarmenStateAccessedSlotsCanBeAdded(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	if _, b := db.IsSlotInAccessList(address1, key1); b {
+		t.Errorf("Accessed slot list initially not empty")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key2); b {
+		t.Errorf("Accessed slot list initially not empty")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key2); b {
+		t.Errorf("Accessed slot list initially not empty")
+	}
+
+	db.AddSlotToAccessList(address1, key1)
+	if _, b := db.IsSlotInAccessList(address1, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key2); b {
+		t.Errorf("Non-added slot in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key2); b {
+		t.Errorf("Non-added slot in access list")
+	}
+
+	db.AddSlotToAccessList(address2, key2)
+	if _, b := db.IsSlotInAccessList(address1, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key2); b {
+		t.Errorf("Non-added slot in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key2); !b {
+		t.Errorf("Added slot not in access list")
+	}
+
+	db.AddSlotToAccessList(address1, key2)
+	if _, b := db.IsSlotInAccessList(address1, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key2); !b {
+		t.Errorf("Added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key2); !b {
+		t.Errorf("Added slot not in access list")
+	}
+}
+
+func TestCarmenStateAddingSlotToAccessListAddsAddress(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.AddSlotToAccessList(address1, key1)
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Address of accessed slot not in address list")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+}
+
+func TestCarmenStateAccessedSlotsCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	snapshot1 := db.Snapshot()
+	db.AddSlotToAccessList(address1, key1)
+	snapshot2 := db.Snapshot()
+	db.AddSlotToAccessList(address2, key1)
+
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Address of added slot not in access list")
+	}
+	if !db.IsAddressInAccessList(address2) {
+		t.Errorf("Address of added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+
+	db.RevertToSnapshot(snapshot2)
+
+	if !db.IsAddressInAccessList(address1) {
+		t.Errorf("Rollback removed address 1 although still needed")
+	}
+	if db.IsAddressInAccessList(address2) {
+		t.Errorf("Address 2 still present after rollback")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key1); !b {
+		t.Errorf("Added slot not in access list")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key1); b {
+		t.Errorf("Added slot not removed by rollback")
+	}
+
+	db.RevertToSnapshot(snapshot1)
+
+	if db.IsAddressInAccessList(address1) {
+		t.Errorf("Address 1 still present after rollback")
+	}
+	if db.IsAddressInAccessList(address2) {
+		t.Errorf("Address 2 still present after rollback")
+	}
+	if _, b := db.IsSlotInAccessList(address1, key1); b {
+		t.Errorf("Added slot not removed by rollback")
+	}
+	if _, b := db.IsSlotInAccessList(address2, key1); b {
+		t.Errorf("Added slot not removed by rollback")
+	}
+}
+
+func TestCarmenStateAccessedSlotsAreResetAtTransactionEnd(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.AddSlotToAccessList(address1, key1)
+	db.EndTransaction()
+	if a, b := db.IsSlotInAccessList(address1, key1); a || b {
+		t.Errorf("Accessed slot not cleared at end of transaction")
+	}
+}
+
+func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.AddSlotToAccessList(address1, key1)
+	db.AbortTransaction()
+	if a, b := db.IsSlotInAccessList(address1, key1); a || b {
+		t.Errorf("Accessed slot not cleared at abort of transaction")
+	}
+}
+
 func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	ref_state, err := NewMemory()
 	if err != nil {
