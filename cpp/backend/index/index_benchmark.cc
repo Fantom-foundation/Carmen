@@ -8,6 +8,7 @@
 #include "backend/index/memory/index.h"
 #include "backend/index/memory/linear_hash_index.h"
 #include "benchmark/benchmark.h"
+#include "common/benchmark.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -29,6 +30,16 @@ using CachedMultiLevelDBIndex = Cached<MultiLevelDBIndex>;
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index:index_benchmark
 
+// Defines the list of configurations to be benchmarked.
+BENCHMARK_TYPE_LIST(IndexConfigList, InMemoryIndex, CachedInMemoryIndex,
+                    InMemoryLinearHashIndex, FileIndexInMemory, FileIndexOnDisk,
+                    CachedFileIndexOnDisk, SingleLevelDBIndex,
+                    CachedSingleLevelDBIndex, MultiLevelDBIndex,
+                    CachedMultiLevelDBIndex);
+
+// Defines the list of problem sizes.
+const auto kSizes = std::vector<int64_t>({1 << 20, 1 << 24});
+
 Key ToKey(std::int64_t value) {
   return Key{static_cast<std::uint8_t>(value >> 32),
              static_cast<std::uint8_t>(value >> 24),
@@ -38,10 +49,10 @@ Key ToKey(std::int64_t value) {
 }
 
 // Benchmarks the sequential insertion of keys into indexes.
-template <typename IndexHandler>
+template <typename Index>
 void BM_Insert(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler handler;
+  IndexHandler<Index> handler;
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -56,52 +67,12 @@ void BM_Insert(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_Insert<IndexHandler<InMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
+BENCHMARK_ALL(BM_Insert, IndexConfigList)->ArgList(kSizes);
 
-BENCHMARK(BM_Insert<IndexHandler<CachedInMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_Insert<IndexHandler<InMemoryLinearHashIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_Insert<IndexHandler<FileIndexInMemory>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_Insert<IndexHandler<FileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_Insert<IndexHandler<CachedFileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_Insert<IndexHandler<SingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_Insert<IndexHandler<CachedSingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_Insert<IndexHandler<MultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_Insert<IndexHandler<CachedMultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-template <typename IndexHandler>
+template <typename Index>
 void BM_SequentialRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler handler;
+  IndexHandler<Index> handler;
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -116,52 +87,12 @@ void BM_SequentialRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_SequentialRead<IndexHandler<InMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
+BENCHMARK_ALL(BM_SequentialRead, IndexConfigList)->ArgList(kSizes);
 
-BENCHMARK(BM_SequentialRead<IndexHandler<CachedInMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_SequentialRead<IndexHandler<InMemoryLinearHashIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_SequentialRead<IndexHandler<FileIndexInMemory>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_SequentialRead<IndexHandler<FileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_SequentialRead<IndexHandler<CachedFileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_SequentialRead<IndexHandler<SingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_SequentialRead<IndexHandler<CachedSingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_SequentialRead<IndexHandler<MultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_SequentialRead<IndexHandler<CachedMultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-template <typename IndexHandler>
+template <typename Index>
 void BM_UniformRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler handler;
+  IndexHandler<Index> handler;
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -178,52 +109,12 @@ void BM_UniformRandomRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_UniformRandomRead<IndexHandler<InMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
+BENCHMARK_ALL(BM_UniformRandomRead, IndexConfigList)->ArgList(kSizes);
 
-BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedInMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<InMemoryLinearHashIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<FileIndexInMemory>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<FileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<SingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedSingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<MultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_UniformRandomRead<IndexHandler<CachedMultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-template <typename IndexHandler>
+template <typename Index>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler handler;
+  IndexHandler<Index> handler;
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -240,55 +131,12 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<InMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
+BENCHMARK_ALL(BM_ExponentialRandomRead, IndexConfigList)->ArgList(kSizes);
 
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedInMemoryIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<InMemoryLinearHashIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<FileIndexInMemory>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);  // 1<<30 skipped since this would require 36 GiB of memory
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<FileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedFileIndexOnDisk>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24)
-    ->Arg(1 << 30);
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<SingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedSingleLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<MultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-BENCHMARK(BM_ExponentialRandomRead<IndexHandler<CachedMultiLevelDBIndex>>)
-    ->Arg(1 << 20)
-    ->Arg(1 << 24);
-
-template <typename IndexHandler>
+template <typename Index>
 void BM_Hash(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-
-  // A new index is created each time since otherwise it quickly fills up all
-  // of the main memory.
-  IndexHandler handler;
+  IndexHandler<Index> handler;
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -309,54 +157,7 @@ void BM_Hash(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_Hash<IndexHandler<InMemoryIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
+BENCHMARK_ALL(BM_Hash, IndexConfigList)->ArgList(kSizes);
 
-BENCHMARK(BM_Hash<IndexHandler<CachedInMemoryIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<InMemoryLinearHashIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<FileIndexInMemory>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<FileIndexOnDisk>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<CachedFileIndexOnDisk>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<SingleLevelDBIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<CachedSingleLevelDBIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<MultiLevelDBIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
-
-BENCHMARK(BM_Hash<IndexHandler<CachedMultiLevelDBIndex>>)
-    ->Arg(1 << 10)
-    ->Arg(1 << 14);  // skipped larger cases since it takes forever to hash
-                     // initial entries
 }  // namespace
 }  // namespace carmen::backend::index

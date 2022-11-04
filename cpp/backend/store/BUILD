@@ -39,6 +39,7 @@ cc_binary(
         ":store_handler",
         "//backend/store/memory:store",
         "//backend/store/file:store",
+        "//common:benchmark",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
