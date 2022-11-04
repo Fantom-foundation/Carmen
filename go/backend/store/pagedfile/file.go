@@ -151,27 +151,25 @@ func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	// mark dirty pages as updated in the hashtree
 	for pageId, page := range m.pagesPool {
 		if page.IsDirty() {
+			// write the page to disk (but don't evict - keep in page pool as a clean page)
+			err := page.Store(m.file, pageId)
+			if err != nil {
+				return common.Hash{}, err
+			}
 			m.hashTree.MarkUpdated(pageId)
 		}
 	}
-	// get the hash
+	// update the hashTree and get the hash
 	return m.hashTree.HashRoot()
 }
 
 // Flush all changes to the disk
 func (m *Store[I, V]) Flush() (err error) {
-	// update hashes of changed pages in the hashtree
+	// flush dirty pages and update the hashTree
 	if _, err = m.GetStateHash(); err != nil {
 		return err
 	}
-	// evict the whole pages pool - hash pages into the hashTree
-	for pageId, page := range m.pagesPool {
-		err = m.evictPage(pageId, page)
-		if err != nil {
-			return err
-		}
-	}
-	// flush file changes to disk
+	// flush data file changes to disk
 	if err = m.file.Sync(); err != nil {
 		return err
 	}
