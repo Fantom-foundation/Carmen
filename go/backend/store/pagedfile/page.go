@@ -50,5 +50,6 @@ func (p *Page) Store(file *os.File, pageId int) error {
 	if err != nil {
 		return fmt.Errorf("failed to write the page into file; %s", err)
 	}
+	p.dirty = false
 	return nil
 }
