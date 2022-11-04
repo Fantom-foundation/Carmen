@@ -86,5 +86,5 @@ func TestLRUOrder(t *testing.T) {
 }
 
 func initCache(capacity int) *Cache[int, int] {
-	return NewCache[int, int](capacity)
+	return NewCache[int, int](capacity, nil)
 }

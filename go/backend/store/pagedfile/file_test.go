@@ -3,7 +3,6 @@ package pagedfile
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"testing"
@@ -129,8 +128,7 @@ func TestStoringManyItemsIntoPagedFileStore(t *testing.T) {
 }
 
 func createStore(t *testing.T, tmpDir string) store.Store[uint32, common.Value] {
-	evictionPolicy := eviction.NewRandomPolicy(4)
-	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, 8*32, htfile.CreateHashTreeFactory(tmpDir+"/hashes", 3), 4, evictionPolicy)
+	st, err := NewStore[uint32, common.Value](tmpDir, common.ValueSerializer{}, 8*32, htfile.CreateHashTreeFactory(tmpDir+"/hashes", 3), 4)
 	if err != nil {
 		t.Fatalf("unable to create st; %s", err)
 	}

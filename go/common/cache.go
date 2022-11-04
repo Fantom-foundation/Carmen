@@ -6,13 +6,21 @@ type Cache[K comparable, V any] struct {
 	capacity int
 	head     *entry[K, V]
 	tail     *entry[K, V]
+	onEvict  func(K, V)
 }
 
 // NewCache returns a new instance
-func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
+func NewCache[K comparable, V any](capacity int, onEvict func(K, V)) *Cache[K, V] {
 	return &Cache[K, V]{
 		cache:    make(map[K]*entry[K, V]),
 		capacity: capacity,
+		onEvict:  onEvict,
+	}
+}
+
+func (c *Cache[K, V]) Iterate(callback func(K, V)) {
+	for key, value := range c.cache {
+		callback(key, value.val)
 	}
 }
 
@@ -36,6 +44,10 @@ func (c *Cache[K, V]) Set(key K, val V) {
 
 	// create entry if it does not exist
 	if !exists {
+		if len(c.cache) >= c.capacity {
+			c.dropLast()
+		}
+
 		item = new(entry[K, V])
 		item.key = key
 		c.cache[key] = item
@@ -55,9 +67,6 @@ func (c *Cache[K, V]) Set(key K, val V) {
 
 	item.val = val
 	c.touch(item)
-	if len(c.cache) > c.capacity {
-		c.dropLast()
-	}
 }
 
 // touch marks the entry used
@@ -87,6 +96,10 @@ func (c *Cache[K, V]) dropLast() {
 
 	if c.tail == nil {
 		return // no tail - empty list
+	}
+
+	if c.onEvict != nil {
+		c.onEvict(c.tail.key, c.tail.val)
 	}
 
 	delete(c.cache, c.tail.key)
