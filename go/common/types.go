@@ -13,6 +13,8 @@ import (
 type Serializer[T any] interface {
 	// ToBytes serialize the type to bytes
 	ToBytes(T) []byte
+	// ToGivenBytes serialize the type into a provided slice
+	ToGivenBytes(T, []byte)
 	// FromBytes deserialize the type from bytes
 	FromBytes([]byte) T
 	// Size provides the size of the type when serialized (bytes)

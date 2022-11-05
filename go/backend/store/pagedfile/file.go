@@ -105,8 +105,9 @@ func (m *Store[I, V]) Set(id I, value V) error {
 	if err != nil {
 		return fmt.Errorf("failed to load store page %d; %s", pageId, err)
 	}
-	bytes := m.serializer.ToBytes(value)
-	page.Set(itemPosition, bytes)
+	pageItemBytes := page.Get(itemPosition, int64(m.serializer.Size()))
+	m.serializer.ToGivenBytes(value, pageItemBytes)
+	page.SetDirty()
 	return nil
 }
 
