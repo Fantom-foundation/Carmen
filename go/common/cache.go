@@ -12,12 +12,13 @@ type Cache[K comparable, V any] struct {
 // NewCache returns a new instance
 func NewCache[K comparable, V any](capacity int, onEvict func(K, V)) *Cache[K, V] {
 	return &Cache[K, V]{
-		cache:    make(map[K]*entry[K, V]),
+		cache:    make(map[K]*entry[K, V], capacity),
 		capacity: capacity,
 		onEvict:  onEvict,
 	}
 }
 
+// Iterate all cached entries - calls the callback for each key-value pair in the cache
 func (c *Cache[K, V]) Iterate(callback func(K, V)) {
 	for key, value := range c.cache {
 		callback(key, value.val)
@@ -45,14 +46,16 @@ func (c *Cache[K, V]) Set(key K, val V) {
 	// create entry if it does not exist
 	if !exists {
 		if len(c.cache) >= c.capacity {
-			c.dropLast()
+			item = c.dropLast() // reuse evicted object for the new entry
+		} else {
+			item = new(entry[K, V])
 		}
-
-		item = new(entry[K, V])
 		item.key = key
+		item.val = val
 		c.cache[key] = item
 
 		// Make the new entry the head of the LRU queue.
+		item.prev = nil
 		item.next = c.head
 		if c.head != nil {
 			c.head.prev = item
@@ -65,7 +68,6 @@ func (c *Cache[K, V]) Set(key K, val V) {
 		}
 	}
 
-	item.val = val
 	c.touch(item)
 }
 
@@ -91,20 +93,21 @@ func (c *Cache[K, V]) touch(item *entry[K, V]) {
 	c.head = item
 }
 
-// dropLast drop last element from the queue
-func (c *Cache[K, V]) dropLast() {
-
+// dropLast drop the last element from the queue and returns it
+func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 	if c.tail == nil {
-		return // no tail - empty list
+		return nil // no tail - empty list
 	}
 
 	if c.onEvict != nil {
 		c.onEvict(c.tail.key, c.tail.val)
 	}
 
+	dropped = c.tail
 	delete(c.cache, c.tail.key)
 	c.tail = c.tail.prev
 	c.tail.next = nil
+	return dropped
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

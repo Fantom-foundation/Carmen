@@ -2,6 +2,8 @@ package common
 
 import "testing"
 
+var removedKey, removedValue int
+
 func TestEmpty(t *testing.T) {
 	c := initCache(3)
 
@@ -43,10 +45,17 @@ func TestExceedCapacity(t *testing.T) {
 		t.Errorf("Item should exist")
 	}
 
+	if removedKey != 0 || removedValue != 0 {
+		t.Errorf("No item should have been evicted yet")
+	}
+
 	c.Set(4, 44)
 	_, exists = c.Get(2) // 2 is the oldest in the cache
 	if exists {
 		t.Errorf("Item should be evicted")
+	}
+	if removedKey != 2 || removedValue != 22 {
+		t.Errorf("Incorrectly evicted item: %d/%d", removedKey, removedValue)
 	}
 }
 
@@ -86,5 +95,8 @@ func TestLRUOrder(t *testing.T) {
 }
 
 func initCache(capacity int) *Cache[int, int] {
-	return NewCache[int, int](capacity, nil)
+	return NewCache[int, int](capacity, func(key int, value int) {
+		removedKey = key
+		removedValue = value
+	})
 }
