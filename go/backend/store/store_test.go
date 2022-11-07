@@ -2,7 +2,6 @@ package store_test
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
@@ -14,75 +13,141 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"testing"
 )
 
-func initStores(t *testing.T) (stores []store.Store[uint32, common.Value]) {
-	const (
-		PageSize        = 2 * 32
-		PoolSize        = 2
-		BranchingFactor = 3
-	)
+// test stores parameters (different from benchmark stores parameters)
+const (
+	BranchingFactor = 3
+	PageSize        = 2 * 32
+	PoolSize        = 10
+)
 
-	db, err := leveldb.OpenFile(t.TempDir(), nil)
-	if err != nil {
-		t.Fatalf("failed to init leveldb; %s", err)
+type storeFactory struct {
+	label    string
+	getStore func(tempDir string) store.Store[uint32, common.Value]
+}
+
+func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSize int) (stores []storeFactory) {
+	return []storeFactory{
+		{
+			label: "Memory",
+			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+				hashTreeFac := htmemory.CreateHashTreeFactory(branchingFactor)
+				str, err := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, pageSize, hashTreeFac)
+				if err != nil {
+					tb.Fatalf("failed to init memory store; %s", err)
+				}
+				return str
+			},
+		},
+		{
+			label: "File",
+			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+				hashTreeFac := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
+				str, err := file.NewStore[uint32, common.Value](tempDir, common.ValueSerializer{}, pageSize, hashTreeFac)
+				if err != nil {
+					tb.Fatalf("failed to init file store; %s", err)
+				}
+				return str
+			},
+		},
+		{
+			label: "PagedFile",
+			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+				hashTreeFac := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
+				str, err := pagedfile.NewStore[uint32, common.Value](tempDir, common.ValueSerializer{}, int64(pageSize), hashTreeFac, poolSize, eviction.NewLRUPolicy(poolSize))
+				if err != nil {
+					tb.Fatalf("failed to init pagedfile store; %s", err)
+				}
+				return str
+			},
+		},
+		{
+			label: "LevelDb",
+			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+				db, err := leveldb.OpenFile(tempDir, nil)
+				if err != nil {
+					tb.Fatalf("failed to init leveldb store; %s", err)
+				}
+				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				if err != nil {
+					tb.Fatalf("failed to init leveldb store; %s", err)
+				}
+				return &storeClosingWrapper{str, []func() error{db.Close}}
+			},
+		},
+		{
+			label: "TransactLevelDb",
+			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+				writeBufferSize := 1024 * opt.MiB
+				opts := opt.Options{WriteBuffer: writeBufferSize}
+				db, err := leveldb.OpenFile(tempDir, &opts)
+				if err != nil {
+					tb.Fatalf("failed to init leveldb store; %s", err)
+				}
+
+				tr, err := db.OpenTransaction()
+				if err != nil {
+					tb.Errorf("failed to init leveldb transaction; %s", err)
+				}
+
+				hashTreeFac := htldb.CreateHashTreeFactory(tr, common.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, common.Value](tr, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				if err != nil {
+					tb.Fatalf("failed to init leveldb store; %s", err)
+				}
+
+				return &storeClosingWrapper{str, []func() error{tr.Commit, db.Close}}
+			},
+		},
 	}
+}
 
-	valSerializer := common.ValueSerializer{}
-	idSerializer := common.Identifier32Serializer{}
-	var hashtreeFac hashtree.Factory
+// storeClosingWrapper wraps an instance of the Store to clean-up related resources when the Store is closed
+type storeClosingWrapper struct {
+	store.Store[uint32, common.Value]
+	cleanups []func() error
+}
 
-	hashtreeFac = htmemory.CreateHashTreeFactory(BranchingFactor)
-	memstore, err := memory.NewStore[uint32, common.Value](valSerializer, PageSize, hashtreeFac)
-	if err != nil {
-		t.Fatalf("failed to init memory store; %s", err)
+// Close executes clean-up
+func (s *storeClosingWrapper) Close() error {
+	for _, f := range s.cleanups {
+		_ = f()
 	}
-
-	hashtreeFac = htfile.CreateHashTreeFactory(t.TempDir(), BranchingFactor)
-	filestore, err := file.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, hashtreeFac)
-	if err != nil {
-		t.Fatalf("failed to init file store; %s", err)
-	}
-
-	hashtreeFac = htfile.CreateHashTreeFactory(t.TempDir(), BranchingFactor)
-	pagedfilestore, err := pagedfile.NewStore[uint32, common.Value](t.TempDir(), valSerializer, PageSize, hashtreeFac, PoolSize, eviction.NewLRUPolicy(PoolSize))
-	if err != nil {
-		t.Fatalf("failed to init paged file store; %s", err)
-	}
-
-	hashtreeFac = htldb.CreateHashTreeFactory(db, common.ValueStoreKey, BranchingFactor)
-	ldbstore, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, valSerializer, idSerializer, hashtreeFac, PageSize)
-	if err != nil {
-		t.Fatalf("failed to init leveldb store; %s", err)
-	}
-
-	t.Cleanup(func() {
-		memstore.Close()
-		filestore.Close()
-		pagedfilestore.Close()
-		ldbstore.Close()
-		db.Close()
-	})
-	return []store.Store[uint32, common.Value]{memstore, filestore, pagedfilestore, ldbstore}
+	return s.Store.Close()
 }
 
 func TestStoresInitialHash(t *testing.T) {
-	stores := initStores(t)
+	for _, factory := range getStoresFactories(t, BranchingFactor, PageSize, PoolSize) {
+		t.Run(factory.label, func(t *testing.T) {
+			s := factory.getStore(t.TempDir())
+			defer s.Close()
 
-	for _, store := range stores {
-		hash, err := store.GetStateHash()
-		if err != nil {
-			t.Fatalf("failed to hash empty store; %s", err)
-		}
-		if hash != (common.Hash{}) {
-			t.Errorf("invalid hash of empty store: %x (expected zeros)", hash)
-		}
+			hash, err := s.GetStateHash()
+			if err != nil {
+				t.Fatalf("failed to hash empty store; %s", err)
+			}
+			if hash != (common.Hash{}) {
+				t.Errorf("invalid hash of empty store: %x (expected zeros)", hash)
+			}
+
+		})
 	}
 }
 
 func TestStoresHashingByComparison(t *testing.T) {
-	stores := initStores(t)
+	stores := make(map[string]store.Store[uint32, common.Value])
+	for _, factory := range getStoresFactories(t, BranchingFactor, PageSize, PoolSize) {
+		stores[factory.label] = factory.getStore(t.TempDir())
+	}
+	defer func() {
+		for _, d := range stores {
+			_ = d.Close()
+		}
+	}()
 
 	for i := 0; i < 10; i++ {
 		for _, store := range stores {
@@ -97,8 +162,6 @@ func TestStoresHashingByComparison(t *testing.T) {
 }
 
 func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
-	stores := initStores(t)
-
 	// Tests the hashes for values 0x00, 0x11 ... 0xFF inserted in sequence.
 	// reference hashes from the C++ implementation
 	expectedHashes := []string{
@@ -121,33 +184,40 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 		"6f060e465bb1b155a6b4822a13b704d3986ab43d7928c14b178e07a8f7673951",
 	}
 
-	for i, expectedHash := range expectedHashes {
-		for _, store := range stores {
-			if err := store.Set(uint32(i), common.Value{byte(i<<4 | i)}); err != nil {
-				t.Fatalf("failed to set store item %d; %s", i, err)
+	for _, factory := range getStoresFactories(t, BranchingFactor, PageSize, PoolSize) {
+		t.Run(factory.label, func(t *testing.T) {
+			s := factory.getStore(t.TempDir())
+			defer s.Close()
+
+			for i, expectedHash := range expectedHashes {
+				if err := s.Set(uint32(i), common.Value{byte(i<<4 | i)}); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+				hash, err := s.GetStateHash()
+				if err != nil {
+					t.Fatalf("failed to hash store with %d values; %s", i+1, err)
+				}
+				if expectedHash != fmt.Sprintf("%x", hash) {
+					t.Errorf("invalid hash: %x (expected %s)", hash, expectedHash)
+				}
 			}
-			hash, err := store.GetStateHash()
-			if err != nil {
-				t.Fatalf("failed to hash store with %d values; %s", i+1, err)
-			}
-			if expectedHash != fmt.Sprintf("%x", hash) {
-				t.Errorf("invalid hash: %x (expected %s)", hash, expectedHash)
-			}
-		}
+		})
 	}
 }
 
-func compareHashes(stores []store.Store[uint32, common.Value]) error {
+func compareHashes(stores map[string]store.Store[uint32, common.Value]) error {
 	var firstHash common.Hash
-	for i, store := range stores {
+	var firstLabel string
+	for label, store := range stores {
 		hash, err := store.GetStateHash()
 		if err != nil {
 			return err
 		}
-		if i == 0 {
+		if firstHash == (common.Hash{}) {
 			firstHash = hash
+			firstLabel = label
 		} else if firstHash != hash {
-			return fmt.Errorf("different hashes: %x != %x", firstHash, hash)
+			return fmt.Errorf("different hashes: %s(%x) != %s(%x)", firstLabel, firstHash, label, hash)
 		}
 	}
 	return nil
