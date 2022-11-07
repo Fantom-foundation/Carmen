@@ -180,11 +180,28 @@ TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
   }
 }
 
+TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
+  TypeParam wrapper;
+  auto& store = wrapper.GetStore();
+  auto& reference = wrapper.GetReferenceStore();
+
+  // Implictitly create empty pages by asking for an element with a high ID.
+  reference.Get(10000);
+  store.Get(10000);
+
+  // Hash is computed as if all pages are initialized.
+  auto ref_hash = reference.GetHash();
+  auto trg_hash = store.GetHash();
+  EXPECT_NE(Hash{}, trg_hash);
+  EXPECT_EQ(ref_hash, trg_hash);
+}
+
 REGISTER_TYPED_TEST_SUITE_P(StoreTest, UninitializedValuesAreZero,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
                             EmptyStoreHasZeroHash, KnownHashesAreReproduced,
                             HashesRespectBranchingFactor,
-                            HashesEqualReferenceImplementation);
+                            HashesEqualReferenceImplementation,
+                            HashesRespectEmptyPages);
 
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.
@@ -192,24 +209,28 @@ using StoreTypes = ::testing::Types<
     StoreHandler<InMemoryStore<int, Value, 32>, 32>,
     StoreHandler<FileStore<int, Value, InMemoryFile, 32>, 32>,
     StoreHandler<FileStore<int, Value, SingleFile, 32>, 32>,
+    StoreHandler<FileStore<int, Value, SingleFile, 32, false>, 32>,
 
     // Page size 64, branching size 3.
     StoreHandler<ReferenceStore<64>, 3>,
     StoreHandler<InMemoryStore<int, Value, 64>, 3>,
     StoreHandler<FileStore<int, Value, InMemoryFile, 64>, 3>,
     StoreHandler<FileStore<int, Value, SingleFile, 64>, 3>,
+    StoreHandler<FileStore<int, Value, SingleFile, 64, false>, 3>,
 
     // Page size 64, branching size 8.
     StoreHandler<ReferenceStore<64>, 8>,
     StoreHandler<InMemoryStore<int, Value, 64>, 8>,
     StoreHandler<FileStore<int, Value, InMemoryFile, 64>, 8>,
     StoreHandler<FileStore<int, Value, SingleFile, 64>, 8>,
+    StoreHandler<FileStore<int, Value, SingleFile, 64, false>, 8>,
 
     // Page size 128, branching size 4.
     StoreHandler<ReferenceStore<128>, 4>,
     StoreHandler<InMemoryStore<int, Value, 128>, 4>,
     StoreHandler<FileStore<int, Value, InMemoryFile, 128>, 4>,
-    StoreHandler<FileStore<int, Value, SingleFile, 128>, 4>>;
+    StoreHandler<FileStore<int, Value, SingleFile, 128>, 4>,
+    StoreHandler<FileStore<int, Value, SingleFile, 128, false>, 4>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, StoreTest, StoreTypes);
 
