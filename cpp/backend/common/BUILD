@@ -95,6 +95,7 @@ cc_library(
     name = "page_pool",
     hdrs = ["page_pool.h"],
     deps = [
+        ":eviction_policy",
         ":file",
         ":page_id",
         "//common:memory_usage",

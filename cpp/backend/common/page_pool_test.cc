@@ -1,6 +1,7 @@
 #include "backend/common/page_pool.h"
 
 #include <filesystem>
+#include <optional>
 #include <sstream>
 
 #include "backend/common/file.h"
@@ -12,7 +13,9 @@ namespace carmen::backend {
 namespace {
 
 using ::testing::_;
+using ::testing::InSequence;
 using ::testing::NiceMock;
+using ::testing::Return;
 using ::testing::Sequence;
 
 using Page = ArrayPage<int, 40>;
@@ -194,6 +197,95 @@ TEST(PagePoolTest, ClosingPoolFlushesPagesAndClosesFile) {
   pool.MarkAsDirty(20);
 
   pool.Close();
+}
+
+class MockEvictionPolicy {
+ public:
+  MockEvictionPolicy(std::size_t = 0) {}
+  MOCK_METHOD(void, Read, (std::size_t));
+  MOCK_METHOD(void, Written, (std::size_t));
+  MOCK_METHOD(void, Removed, (std::size_t));
+  MOCK_METHOD(std::optional<std::size_t>, GetPageToEvict, ());
+};
+
+TEST(MockEvictionPolicy, IsEvictionPolicy) {
+  EXPECT_TRUE(EvictionPolicy<MockEvictionPolicy>);
+}
+
+TEST(PagePoolTest, EvictionPolicyIsInformedAboutRead) {
+  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  auto& mock = pool.GetEvictionPolicy();
+
+  // This assumes that unused pages are used in order.
+  Sequence s;
+  EXPECT_CALL(mock, Read(0)).InSequence(s);
+  EXPECT_CALL(mock, Read(1)).InSequence(s);
+  EXPECT_CALL(mock, Read(0)).InSequence(s);
+
+  pool.Get(10);
+  pool.Get(20);
+  pool.Get(10);
+}
+
+TEST(PagePoolTest, EvictionPolicyIsInformedAboutWrite) {
+  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  auto& mock = pool.GetEvictionPolicy();
+
+  // This assumes that unused pages are used in order.
+  {
+    InSequence s;
+    EXPECT_CALL(mock, Read(0));
+    EXPECT_CALL(mock, Written(0));
+    EXPECT_CALL(mock, Read(1));
+    EXPECT_CALL(mock, Written(1));
+  }
+
+  pool.Get(10);
+  pool.MarkAsDirty(10);
+  pool.Get(20);
+  pool.MarkAsDirty(20);
+}
+
+TEST(PagePoolTest, OnEvictionPolicyIsConsultedAndInformed) {
+  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  auto& mock = pool.GetEvictionPolicy();
+
+  // This assumes that unused pages are used in order.
+  {
+    InSequence s;
+    EXPECT_CALL(mock, Read(0));
+    EXPECT_CALL(mock, Read(1));
+    EXPECT_CALL(mock, GetPageToEvict()).WillOnce(Return(1));
+    EXPECT_CALL(mock, Removed(1));
+    EXPECT_CALL(mock, Read(1));
+    EXPECT_CALL(mock, GetPageToEvict()).WillOnce(Return(0));
+    EXPECT_CALL(mock, Removed(0));
+    EXPECT_CALL(mock, Read(0));
+  }
+
+  pool.Get(10);
+  pool.Get(20);
+  pool.Get(30);
+  pool.Get(40);
+}
+
+TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
+  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  auto& mock = pool.GetEvictionPolicy();
+
+  // This assumes that unused pages are used in order.
+  {
+    InSequence s;
+    EXPECT_CALL(mock, Read(0));
+    EXPECT_CALL(mock, Read(1));
+    EXPECT_CALL(mock, GetPageToEvict()).WillOnce(Return(std::nullopt));
+    EXPECT_CALL(mock, Removed(_));
+    EXPECT_CALL(mock, Read(_));
+  }
+
+  pool.Get(10);
+  pool.Get(20);
+  pool.Get(30);
 }
 
 }  // namespace
