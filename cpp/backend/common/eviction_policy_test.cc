@@ -42,12 +42,12 @@ TEST(LeastRecentlyUsedEvictionPolicyTest, InOrderReadsAreEvictedInOrder) {
 
   for (std::size_t i = 0; i < 10; i++) {
     // Adding i pages in order 0 ... i-1.
-    for (std::size_t j = 0; j < i; j++) {
+    for (std::size_t j = 0; j <= i; j++) {
       policy.Read(j);
     }
 
     // Pages should be evicted in same order as added.
-    for (std::size_t j = 0; j < i; j++) {
+    for (std::size_t j = 0; j <= i; j++) {
       EXPECT_EQ(j, policy.GetPageToEvict());
       policy.Removed(j);
     }

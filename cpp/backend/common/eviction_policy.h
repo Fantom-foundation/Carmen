@@ -58,13 +58,12 @@ class LeastRecentlyUsedEvictionPolicy {
  private:
   // Entries used to form a double-linked list of least-recently-used positions.
   struct Entry {
-    std::size_t position;
-    Entry* succ;
-    Entry* pred;
+    Entry* succ = nullptr;
+    Entry* pred = nullptr;
   };
 
-  // A map of all entries, mapping page position to entries in an LRU list.
-  absl::flat_hash_map<std::size_t, Entry*> index_;
+  // A list of all entries, indexed by the pool position.
+  std::vector<Entry> entries_;
 
   // A pointer to the most recently used entry.
   Entry* head_ = nullptr;
@@ -72,12 +71,6 @@ class LeastRecentlyUsedEvictionPolicy {
   // A pointer to the least recently used entry to be evicted next. The element
   // pointed to is owned by the entries_ container.
   Entry* tail_ = nullptr;
-
-  // The head of a free-list of entries that can be reused.
-  Entry* free_ = nullptr;
-
-  // The actual entries, owned by a pointer stable container.
-  std::deque<Entry> entries_;
 };
 
 }  // namespace carmen::backend

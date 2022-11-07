@@ -53,38 +53,33 @@ std::optional<std::size_t> RandomEvictionPolicy::GetPageToEvict() {
 
 LeastRecentlyUsedEvictionPolicy::LeastRecentlyUsedEvictionPolicy(
     std::size_t size)
-    : index_(size) {}
+    : entries_(size) {
+  auto last = &(entries_[0]);
+  for (auto& cur : entries_) {
+    last->succ = &cur;
+    last = &cur;
+  }
+  last->succ = nullptr;
+}
 
 void LeastRecentlyUsedEvictionPolicy::Read(std::size_t position) {
-  auto [pos, new_entry] = index_.insert({position, nullptr});
-  Entry* cur;
-  if (new_entry) {
-    if (free_ != nullptr) {
-      cur = free_;
-      free_ = free_->succ;
-    } else {
-      entries_.push_back({});
-      cur = &entries_.back();
-    }
-    pos->second = cur;
-    cur->position = position;
-    if (tail_ == nullptr) {
-      tail_ = cur;
-    }
-  } else {
-    cur = pos->second;
-    if (head_ == cur) {
-      return;
-    }
-
-    // Remove element from current position in the list.
-    cur->pred->succ = cur->succ;
-    if (cur->succ) {
-      cur->succ->pred = cur->pred;
-    } else {
-      tail_ = cur->pred;
-    }
+  // Position must be in range.
+  assert(position >= 0 && position < entries_.size());
+  Entry* cur = &entries_[position];
+  if (head_ == cur) {
+    return;
   }
+
+  // Remove element from current position in the list.
+  if (cur->pred) {
+    cur->pred->succ = cur->succ;
+  }
+  if (cur->succ) {
+    cur->succ->pred = cur->pred;
+  } else if (tail_ == cur) {
+    tail_ = cur->pred;
+  }
+
   // Add current element at top of list.
   cur->pred = nullptr;
   cur->succ = head_;
@@ -92,6 +87,9 @@ void LeastRecentlyUsedEvictionPolicy::Read(std::size_t position) {
     head_->pred = cur;
   }
   head_ = cur;
+  if (tail_ == nullptr) {
+    tail_ = cur;
+  }
 }
 
 void LeastRecentlyUsedEvictionPolicy::Written(std::size_t position) {
@@ -100,49 +98,47 @@ void LeastRecentlyUsedEvictionPolicy::Written(std::size_t position) {
 }
 
 void LeastRecentlyUsedEvictionPolicy::Removed(std::size_t position) {
-  auto pos = index_.find(position);
-  if (pos == index_.end()) {
-    return;
+  // Position must be in range.
+  assert(position >= 0 && position < entries_.size());
+  Entry* cur = &entries_[position];
+  auto pred = cur->pred;
+  auto succ = cur->succ;
+  if (pred) {
+    cur->pred->succ = succ;
+    cur->pred = nullptr;
   }
-  Entry* cur = pos->second;
-  if (cur->pred) {
-    cur->pred->succ = cur->succ;
-  } else {
-    head_ = cur->succ;
+  if (succ) {
+    cur->succ->pred = pred;
+    cur->succ = nullptr;
   }
-
-  if (cur->succ) {
-    cur->succ->pred = cur->pred;
-  } else {
-    tail_ = cur->pred;
+  if (head_ == cur) {
+    head_ = succ;
   }
-
-  index_.erase(pos);
-
-  // Insert current element into free list.
-  cur->pred = free_;
-  free_ = cur;
+  if (tail_ == cur) {
+    tail_ = pred;
+  }
 }
 
 std::optional<std::size_t> LeastRecentlyUsedEvictionPolicy::GetPageToEvict() {
   if (tail_ == nullptr) {
     return std::nullopt;
   }
-  return tail_->position;
+  return tail_ - &entries_[0];
 }
 
 void LeastRecentlyUsedEvictionPolicy::Dump() {
   std::cout << "List:\n";
+  Entry* first = &entries_[0];
   Entry* cur = head_;
   while (cur != nullptr) {
-    std::cout << cur->position << " ";
+    std::cout << cur - first << " ";
     cur = cur->succ;
   }
   std::cout << "\n";
 
   cur = tail_;
   while (cur != nullptr) {
-    std::cout << cur->position << " ";
+    std::cout << cur - first << " ";
     cur = cur->pred;
   }
   std::cout << "\n\n";
