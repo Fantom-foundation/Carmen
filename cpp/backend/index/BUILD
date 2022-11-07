@@ -69,6 +69,7 @@ cc_binary(
         "//backend/index/file:index",
         "//backend/index/memory:index",
         "//backend/index/memory:linear_hash_index",
+        "//common:benchmark",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
