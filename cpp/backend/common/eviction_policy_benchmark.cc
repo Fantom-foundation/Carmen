@@ -1,10 +1,13 @@
 #include <random>
 
-#include "backend/store/file/eviction_policy.h"
+#include "backend/common/eviction_policy.h"
 #include "benchmark/benchmark.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 namespace {
+
+// To run benchmarks, use the following command:
+//    bazel run -c opt //backend/common:eviction_policy_benchmark
 
 constexpr long kMinPoolSize = 4;
 constexpr long kMaxPoolSize = 1 << 20;
@@ -112,4 +115,4 @@ BENCHMARK(BM_GetPageToEvictTest<LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
 }  // namespace
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

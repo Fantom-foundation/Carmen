@@ -8,7 +8,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 
 // A concept for an eviction policy to be used in a page pool.
 template <typename P>
@@ -80,4 +80,4 @@ class LeastRecentlyUsedEvictionPolicy {
   std::deque<Entry> entries_;
 };
 
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

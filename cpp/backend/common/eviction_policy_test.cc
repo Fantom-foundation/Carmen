@@ -1,11 +1,11 @@
-#include "backend/store/file/eviction_policy.h"
+#include "backend/common/eviction_policy.h"
 
 #include <filesystem>
 #include <sstream>
 
 #include "gtest/gtest.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 namespace {
 
 TEST(RandomEvictionPolicyTest, IsEvictionPolicy) {
@@ -151,4 +151,4 @@ TEST(LeastRecentlyUsedEvictionPolicyTest, MiddleElementCanBeRemoved) {
 }
 
 }  // namespace
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend

@@ -1,4 +1,4 @@
-#include "backend/store/file/eviction_policy.h"
+#include "backend/common/eviction_policy.h"
 
 #include <cstddef>
 #include <cstdlib>
@@ -7,7 +7,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 
-namespace carmen::backend::store {
+namespace carmen::backend {
 
 namespace {
 
@@ -148,4 +148,4 @@ void LeastRecentlyUsedEvictionPolicy::Dump() {
   std::cout << "\n\n";
 }
 
-}  // namespace carmen::backend::store
+}  // namespace carmen::backend
