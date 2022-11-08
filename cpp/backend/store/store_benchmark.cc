@@ -27,6 +27,15 @@ BENCHMARK_TYPE_LIST(StoreConfigList, (ReferenceStore<kPageSize>),
 // Defines the list of problem sizes.
 const auto kSizes = std::vector<int64_t>({1 << 20, 1 << 24});
 
+// Utility to initialize a store with a given number of elements.
+template <typename Store>
+void InitStore(Store& store, std::size_t num_elements) {
+  for (std::size_t i = 0; i < num_elements; i++) {
+    store.Set(i, Value{1, 2, 3, 4});
+  }
+  store.GetHash();
+}
+
 // Benchmarks the sequential insertion of keys into stores.
 template <typename Store>
 void BM_SequentialInsert(benchmark::State& state) {
@@ -51,7 +60,7 @@ void BM_Insert(benchmark::State& state) {
   // Initialize the store with the initial number of elements.
   StoreHandler<Store, kBranchFactor> wrapper;
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   // Append additional elements to the end of the store.
   auto i = num_elements;
@@ -70,7 +79,7 @@ void BM_SequentialRead(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   int i = 0;
   for (auto _ : state) {
@@ -89,7 +98,7 @@ void BM_UniformRandomRead(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -110,7 +119,7 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -131,7 +140,7 @@ void BM_SequentialWrite(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   int i = 0;
   for (auto _ : state) {
@@ -150,7 +159,7 @@ void BM_UniformRandomWrite(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   int i = 0;
   std::random_device rd;
@@ -172,7 +181,7 @@ void BM_ExponentialRandomWrite(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
 
   int i = 0;
   std::random_device rd;
@@ -193,7 +202,7 @@ void RunHashSequentialUpdates(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
   store.GetHash();
 
   int i = 0;
@@ -228,7 +237,7 @@ void RunHashUniformUpdates(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
   store.GetHash();
 
   int i = 0;
@@ -267,7 +276,7 @@ void RunHashExponentialUpdates(benchmark::State& state) {
 
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
-  store.Get(num_elements - 1);
+  InitStore(store, num_elements);
   store.GetHash();
 
   int i = 0;
