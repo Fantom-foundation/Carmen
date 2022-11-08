@@ -3,6 +3,8 @@
 #include <cstddef>
 
 #include "backend/depot/depot.h"
+#include "backend/depot/leveldb/depot.h"
+#include "common/file_util.h"
 
 namespace carmen::backend::depot {
 namespace {
@@ -26,5 +28,20 @@ class DepotHandler {
  private:
   Depot depot_;
 };
+
+template <std::integral K, std::size_t branching_factor, std::size_t num_hash_boxes>
+class DepotHandler<LevelDBDepot<K>, branching_factor, num_hash_boxes> {
+ public:
+  constexpr static std::size_t kBranchingFactor = branching_factor;
+  constexpr static std::size_t kNumHashBoxes = num_hash_boxes;
+
+  DepotHandler() : depot_(*LevelDBDepot<K>::Open(temp_dir_.GetPath(), branching_factor, num_hash_boxes)) {}
+  LevelDBDepot<K>& GetDepot() { return depot_; }
+
+ private:
+  TempDir temp_dir_;
+  LevelDBDepot<K> depot_;
+};
+
 }  // namespace
 }  // namespace carmen::backend::depot

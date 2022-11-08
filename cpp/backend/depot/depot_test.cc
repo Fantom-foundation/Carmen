@@ -1,5 +1,5 @@
 #include "backend/depot/memory/depot.h"
-
+#include "backend/depot/leveldb/depot.h"
 #include "backend/depot/depot_handler.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
@@ -103,7 +103,9 @@ REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
 
 using DepotTypes = ::testing::Types<
     // Branching size 3, Size of box 2.
-    DepotHandler<InMemoryDepot<unsigned int>, 3, 2>>;
+    //DepotHandler<InMemoryDepot<unsigned int>, 3, 2>,
+    DepotHandler<LevelDBDepot<unsigned int>, 3, 2>
+    >;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 

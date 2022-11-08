@@ -21,6 +21,10 @@ std::span<const char> AsChars(const T& value) {
   return {reinterpret_cast<const char*>(bytes.data()), sizeof(T)};
 }
 
+std::span<const char> AsChars(std::span<const std::byte> data) {
+  return {reinterpret_cast<const char*>(data.data()), data.size()};
+}
+
 // Return a value from a span of bytes. Target value has to be trivial.
 template <typename T>
 absl::StatusOr<T> FromChars(std::span<const char> data) {

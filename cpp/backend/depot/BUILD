@@ -12,7 +12,9 @@ cc_library(
     name = "depot_handler",
     hdrs = ["depot_handler.h"],
     deps = [
-        ":depot"
+        ":depot",
+        "//backend/depot/leveldb:depot",
+        "//common:file_util"
     ],
     testonly = True,
 )
@@ -24,6 +26,7 @@ cc_test(
         ":depot",
         ":depot_handler",
         "//backend/depot/memory:depot",
+        "//backend/depot/leveldb:depot",
         "//common:status_test_util",
         "//common:test_util",
         "@com_google_googletest//:gtest_main",

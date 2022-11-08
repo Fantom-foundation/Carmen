@@ -1,12 +1,16 @@
 #pragma once
 
 #include <concepts>
+#include <filesystem>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
 #include "common/hash.h"
 #include "common/type.h"
+#include "backend/common/leveldb/level_db.h"
+#include "common/status_util.h"
+#include "common/byte_util.h"
 
 namespace carmen::backend::depot {
 
@@ -17,49 +21,57 @@ class LevelDBDepot {
   // The type of the depot key.
   using key_type = K;
 
-  // Creates a new InMemoryDepot using the provided branching factor and
-  // number of boxes per group for hash computation.
-  LevelDBDepot(std::size_t hash_branching_factor = 32,
-                std::size_t num_hash_boxes = 4)
-      : num_hash_boxes_(num_hash_boxes),
-        boxes_(std::make_unique<Boxes>()),
-        hashes_(std::make_unique<PageProvider>(*boxes_, num_hash_boxes),
-                hash_branching_factor) {}
+  // Open connection to the depot. If the depot does not exist, it will be
+  // created. If the depot exists, it will be opened.
+  static absl::StatusOr<LevelDBDepot> Open(const std::filesystem::path& path, std::size_t hash_branching_factor = 32,
+                                           std::size_t num_hash_boxes = 4) {
+    auto db = LevelDB::Open(path);
+    if (!db.ok()) return db.status();
+    auto depot = LevelDBDepot(std::move(*db), hash_branching_factor, num_hash_boxes);
+
+    if (!std::filesystem::is_empty(path)) {
+      RETURN_IF_ERROR(depot.hashes_.LoadFromLevelDB(*db));
+    }
+    return depot;
+  }
 
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
-    if (key >= boxes_->size()) {
-      boxes_->resize(key + 1);
-    }
-    (*boxes_)[key] = Box{data.begin(), data.end()};
+    RETURN_IF_ERROR(db_.Add({AsChars(key), AsChars(data)}));
     hashes_.MarkDirty(GetBoxHashGroup(key));
     return absl::OkStatus();
   }
 
-  // Retrieves the value associated to the given key. If no values has
-  // been previously set using the Set(..) function above, and empty span
-  // is returned.
+  // Retrieves the value associated to the given key. The data is valid
+  // until the next call to this function.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
-    static auto default_value = Box{};
-    if (key >= boxes_->size()) {
-      return default_value;
-    }
-    return (*boxes_)[key];
+    ASSIGN_OR_RETURN(auto value, db_.Get(AsChars(key)));
+    get_data_.resize(value.size());
+    std::memcpy(get_data_.data(), value.data(), value.size());
+    return std::span{get_data_.data(), value.size()};
   }
 
   // Computes a hash over the full content of this depot.
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
-  // Ignored, since depot is not backed by disk storage.
-  absl::Status Flush() { return absl::OkStatus(); }
+  // Flush all pending changes to disk.
+  absl::Status Flush() { return hashes_.SaveToLevelDB(db_); }
 
-  // Ignored, since depot does not maintain any resources.
-  absl::Status Close() { return absl::OkStatus(); }
+  // Close the depot.
+  absl::Status Close() {
+    RETURN_IF_ERROR(Flush());
+    return absl::OkStatus();
+  }
 
  private:
-  using Box = std::vector<std::byte>;
-  using Boxes = std::deque<Box>;
+  // Creates a new LevelDBDepot using the provided leveldb path, branching factor and
+  // number of boxes per group for hash computation.
+  LevelDBDepot(LevelDB level_db, std::size_t hash_branching_factor, std::size_t num_hash_boxes)
+      : db_(std::move(level_db)),
+        num_hash_boxes_(num_hash_boxes),
+        hashes_(std::make_unique<PageProvider>(num_hash_boxes, db_),
+                hash_branching_factor) {}
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
@@ -69,53 +81,55 @@ class LevelDBDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public store::PageSource {
    public:
-    explicit PageProvider(Boxes& boxes, std::size_t num_hash_boxes)
-        : boxes_(boxes), num_hash_boxes_(num_hash_boxes) {}
+    explicit PageProvider(std::size_t num_hash_boxes, const LevelDB& db)
+        : db_(db),
+          num_hash_boxes_(num_hash_boxes) {}
 
     // Get data for given page. The data is valid until the next call to
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
-      static auto empty = Box{};
-      // calculate start and end of the hash group
-      auto start = boxes_.begin() + id * num_hash_boxes_;
-      auto end =
-          boxes_.begin() +
-          std::min(id * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
+      static auto empty = std::array<std::byte, 0>{};
+      auto start = id * num_hash_boxes_;
+      auto end = start + num_hash_boxes_;
 
       if (start >= end) return empty;
 
-      // calculate the size of the hash group
-      std::size_t len = 0;
-      for (auto it = start; it != end; ++it) {
-        len += it->size();
+      std::size_t size = 0;
+      for (std::size_t i = start; i <= end; ++i) {
+        auto result = db_.Get(AsChars(i));
+        switch (result.status().code()) {
+          case absl::StatusCode::kOk:
+            page_data_.resize(size + result->size());
+            std::memcpy(page_data_.data() + size, (*result).data(), (*result).size());
+            size += result->size();
+            break;
+          case absl::StatusCode::kNotFound:
+            break;
+          default:
+            return empty;
+        }
       }
 
-      page_data_.resize(len);
-      std::size_t pos = 0;
-      for (auto it = start; it != end; ++it) {
-        if (it->empty()) continue;
-        std::memcpy(page_data_.data() + pos, it->data(), it->size());
-        pos += it->size();
-      }
-
-      return {page_data_.data(), len};
+      return {page_data_.data(), size};
     }
 
    private:
-    Boxes& boxes_;
+    const LevelDB& db_;
     std::size_t num_hash_boxes_;
     std::vector<std::byte> page_data_;
   };
 
+  // The underlying LevelDB instance.
+  LevelDB db_;
+
   // The amount of boxes that will be grouped into a single hashing group.
   const std::size_t num_hash_boxes_;
 
-  // An indexed list of boxes containing the actual values. The container is
-  // wrapped in a unique pointer to facilitate pointer stability under move.
-  std::unique_ptr<Boxes> boxes_;
-
   // The data structure managing the hashing of states.
   mutable store::HashTree hashes_;
+
+  // Temporary storage for the result of Get().
+  mutable std::vector<std::byte> get_data_;
 };
 
 }  // namespace carmen::backend::depot
