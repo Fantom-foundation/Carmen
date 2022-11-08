@@ -48,7 +48,7 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		itemsPerPage: int(pageSize / itemSize),
 	}
 	s.hashTree = hashtreeFactory.Create(s)
-	s.pagesPool = common.NewCache[int, *Page](poolSize, s.onEvict)
+	s.pagesPool = common.NewCache[int, *Page](poolSize)
 	return s, nil
 }
 
@@ -58,32 +58,36 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
 }
 
 // ensurePageLoaded loads the page into the page pool if it is not there already
-func (m *Store[I, V]) ensurePageLoaded(pageId int) (*Page, error) {
+func (m *Store[I, V]) ensurePageLoaded(pageId int) (page *Page, err error) {
 	page, exists := m.pagesPool.Get(pageId)
 	if exists {
-		return page, nil
+		return
 	}
 	// get an empty page
 	page = m.getEmptyPage()
 	// load the page from the disk
-	err := page.Load(m.file, pageId)
+	err = page.Load(m.file, pageId)
 	if err != nil {
-		return nil, err
+		return
 	}
-	m.pagesPool.Set(pageId, page)
-	return page, nil
+	removedPageId, removedPage := m.pagesPool.Set(pageId, page)
+	if removedPage != nil {
+		err = m.handleEvictedPage(removedPageId, removedPage)
+	}
+	return
 }
 
-// onEvict handles evicting a page from the page pool
-func (m *Store[I, V]) onEvict(pageId int, page *Page) {
+// handleEvictedPage ensures storing an evicted page back to the disk
+func (m *Store[I, V]) handleEvictedPage(pageId int, page *Page) error {
 	if page.IsDirty() {
 		err := page.Store(m.file, pageId)
 		if err != nil {
-			panic(fmt.Errorf("failed to store evicted file store page; %s", err))
+			return fmt.Errorf("failed to store evicted page; %s", err)
 		}
 		m.hashTree.MarkUpdated(pageId)
 	}
 	m.freePage = page
+	return nil
 }
 
 // getEmptyPage provides an empty page for a page loading

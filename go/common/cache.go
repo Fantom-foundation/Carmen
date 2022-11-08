@@ -6,15 +6,13 @@ type Cache[K comparable, V any] struct {
 	capacity int
 	head     *entry[K, V]
 	tail     *entry[K, V]
-	onEvict  func(K, V)
 }
 
 // NewCache returns a new instance
-func NewCache[K comparable, V any](capacity int, onEvict func(K, V)) *Cache[K, V] {
+func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 	return &Cache[K, V]{
 		cache:    make(map[K]*entry[K, V], capacity),
 		capacity: capacity,
-		onEvict:  onEvict,
 	}
 }
 
@@ -40,13 +38,15 @@ func (c *Cache[K, V]) Get(key K) (val V, exists bool) {
 // If the key is already present, the value is updated and the key marked as
 // used. If the value is not present, a new entry is added to this
 // cache. This causes another entry to be removed if the cache size is exceeded.
-func (c *Cache[K, V]) Set(key K, val V) {
+func (c *Cache[K, V]) Set(key K, val V) (removedKey K, removedValue V) {
 	item, exists := c.cache[key]
 
 	// create entry if it does not exist
 	if !exists {
 		if len(c.cache) >= c.capacity {
 			item = c.dropLast() // reuse evicted object for the new entry
+			removedKey = item.key
+			removedValue = item.val
 		} else {
 			item = new(entry[K, V])
 		}
@@ -69,6 +69,7 @@ func (c *Cache[K, V]) Set(key K, val V) {
 	}
 
 	c.touch(item)
+	return
 }
 
 // touch marks the entry used
@@ -97,10 +98,6 @@ func (c *Cache[K, V]) touch(item *entry[K, V]) {
 func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 	if c.tail == nil {
 		return nil // no tail - empty list
-	}
-
-	if c.onEvict != nil {
-		c.onEvict(c.tail.key, c.tail.val)
 	}
 
 	dropped = c.tail

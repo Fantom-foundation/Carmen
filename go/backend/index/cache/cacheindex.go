@@ -13,7 +13,7 @@ type Index[K comparable, I common.Identifier] struct {
 
 // NewIndex constructs a new Index instance, which either delegates to the wrapped index or gets data from the cache if it has them.
 func NewIndex[K comparable, I common.Identifier](wrapped index.Index[K, I], cacheCapacity int) *Index[K, I] {
-	return &Index[K, I]{wrapped, common.NewCache[K, I](cacheCapacity, nil)}
+	return &Index[K, I]{wrapped, common.NewCache[K, I](cacheCapacity)}
 }
 
 // GetOrAdd returns an index mapping for the key, or creates the new index

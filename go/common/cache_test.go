@@ -2,8 +2,6 @@ package common
 
 import "testing"
 
-var removedKey, removedValue int
-
 func TestEmpty(t *testing.T) {
 	c := initCache(3)
 
@@ -38,24 +36,23 @@ func TestExceedCapacity(t *testing.T) {
 
 	c.Set(1, 11)
 	c.Set(2, 22)
-	c.Set(3, 33)
+	removedKey, removedValue := c.Set(3, 33)
+	if removedKey != 0 || removedValue != 0 {
+		t.Errorf("No item should have been evicted yet")
+	}
 
 	_, exists := c.Get(1) // one refreshed - first in the cache now
 	if exists == false {
 		t.Errorf("Item should exist")
 	}
 
-	if removedKey != 0 || removedValue != 0 {
-		t.Errorf("No item should have been evicted yet")
+	removedKey, removedValue = c.Set(4, 44)
+	if removedKey != 2 || removedValue != 22 {
+		t.Errorf("Incorrectly evicted item: %d/%d", removedKey, removedValue)
 	}
-
-	c.Set(4, 44)
 	_, exists = c.Get(2) // 2 is the oldest in the cache
 	if exists {
 		t.Errorf("Item should be evicted")
-	}
-	if removedKey != 2 || removedValue != 22 {
-		t.Errorf("Incorrectly evicted item: %d/%d", removedKey, removedValue)
 	}
 }
 
@@ -95,8 +92,5 @@ func TestLRUOrder(t *testing.T) {
 }
 
 func initCache(capacity int) *Cache[int, int] {
-	return NewCache[int, int](capacity, func(key int, value int) {
-		removedKey = key
-		removedValue = value
-	})
+	return NewCache[int, int](capacity)
 }
