@@ -28,7 +28,8 @@ const CacheCapacity = 1 << 24 // 2 ^ 24 -> 512MB for 32 keys
 const TransactBufferMB = 128 * opt.MiB
 
 // NewMemory creates in memory implementation
-func NewMemory() (*GoState, error) {
+// (path parameter for compatibility with other state factories, can be left empty)
+func NewMemory(path string) (State, error) {
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
@@ -60,7 +61,7 @@ func NewMemory() (*GoState, error) {
 }
 
 // NewLeveLIndexFileStore creates LevelDB Index and File Store implementations
-func NewLeveLIndexFileStore(path string) (*GoState, error) {
+func NewLeveLIndexFileStore(path string) (State, error) {
 	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
@@ -131,7 +132,7 @@ func NewLeveLIndexFileStore(path string) (*GoState, error) {
 }
 
 // NewCachedLeveLIndexFileStore creates Cached LevelDB Index and File Store implementations
-func NewCachedLeveLIndexFileStore(path string) (*GoState, error) {
+func NewCachedLeveLIndexFileStore(path string) (State, error) {
 	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
@@ -207,7 +208,7 @@ func NewCachedLeveLIndexFileStore(path string) (*GoState, error) {
 }
 
 // NewCachedTransactLeveLIndexFileStore creates Cached and Transactional LevelDB Index and File Store implementations
-func NewCachedTransactLeveLIndexFileStore(path string) (*GoState, error) {
+func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
@@ -296,7 +297,7 @@ func NewCachedTransactLeveLIndexFileStore(path string) (*GoState, error) {
 }
 
 // NewLeveLIndexAndStore creates Index and Store both backed up by the leveldb
-func NewLeveLIndexAndStore(path string) (*GoState, error) {
+func NewLeveLIndexAndStore(path string) (State, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
@@ -346,7 +347,7 @@ func NewLeveLIndexAndStore(path string) (*GoState, error) {
 }
 
 // NewCachedLeveLIndexAndStore creates Index and Store both backed up by the leveldb
-func NewCachedLeveLIndexAndStore(path string) (*GoState, error) {
+func NewCachedLeveLIndexAndStore(path string) (State, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
@@ -401,7 +402,7 @@ func NewCachedLeveLIndexAndStore(path string) (*GoState, error) {
 }
 
 // NewTransactCachedLeveLIndexAndStore creates Index and Store both backed up by the leveldb
-func NewTransactCachedLeveLIndexAndStore(path string) (*GoState, error) {
+func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 	opts := opt.Options{WriteBuffer: TransactBufferMB}
 	db, err := leveldb.OpenFile(path, &opts)
 	if err != nil {

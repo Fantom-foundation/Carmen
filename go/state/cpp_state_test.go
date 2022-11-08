@@ -8,10 +8,14 @@ import (
 )
 
 func TestAccountsAreInitiallyUnknown(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			account_state, _ := state.GetAccountState(address1)
 			if account_state != common.Unknown {
 				t.Errorf("Initial account is not unknown, got %v", account_state)
@@ -21,10 +25,14 @@ func TestAccountsAreInitiallyUnknown(t *testing.T) {
 }
 
 func TestAccountsCanBeCreated(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			state.CreateAccount(address1)
 			account_state, _ := state.GetAccountState(address1)
 			if account_state != common.Exists {
@@ -35,10 +43,14 @@ func TestAccountsCanBeCreated(t *testing.T) {
 }
 
 func TestAccountsCanBeDeleted(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			state.CreateAccount(address1)
 			state.DeleteAccount(address1)
 			account_state, _ := state.GetAccountState(address1)
@@ -50,10 +62,14 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 }
 
 func TestReadUninitializedBalance(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			balance, err := state.GetBalance(address1)
 			if err != nil {
 				t.Fatalf("Error fetching balance: %v", err)
@@ -66,11 +82,15 @@ func TestReadUninitializedBalance(t *testing.T) {
 }
 
 func TestWriteAndReadBalance(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
-			err := state.SetBalance(address1, balance1)
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
+			err = state.SetBalance(address1, balance1)
 			if err != nil {
 				t.Fatalf("Error updating balance: %v", err)
 			}
@@ -86,10 +106,14 @@ func TestWriteAndReadBalance(t *testing.T) {
 }
 
 func TestReadUninitializedNonce(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			nonce, err := state.GetNonce(address1)
 			if err != nil {
 				t.Fatalf("Error fetching nonce: %v", err)
@@ -102,11 +126,15 @@ func TestReadUninitializedNonce(t *testing.T) {
 }
 
 func TestWriteAndReadNonce(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
-			err := state.SetNonce(address1, nonce1)
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
+			err = state.SetNonce(address1, nonce1)
 			if err != nil {
 				t.Fatalf("Error updating nonce: %v", err)
 			}
@@ -122,10 +150,14 @@ func TestWriteAndReadNonce(t *testing.T) {
 }
 
 func TestReadUninitializedSlot(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			value, err := state.GetStorage(address1, key1)
 			if err != nil {
 				t.Fatalf("Error fetching storage slot: %v", err)
@@ -138,11 +170,15 @@ func TestReadUninitializedSlot(t *testing.T) {
 }
 
 func TestWriteAndReadSlot(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
-			err := state.SetStorage(address1, key1, val1)
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
+			err = state.SetStorage(address1, key1, val1)
 			if err != nil {
 				t.Fatalf("Error updating storage: %v", err)
 			}
@@ -178,10 +214,14 @@ func getTestCodes() [][]byte {
 }
 
 func TestSetAndGetCode(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			for _, code := range getTestCodes() {
 				err := state.SetCode(address1, code)
 				if err != nil {
@@ -200,10 +240,14 @@ func TestSetAndGetCode(t *testing.T) {
 }
 
 func TestSetAndGetCodeHash(t *testing.T) {
-	for _, named_state := range initCppStates(t) {
-		name := named_state.name
-		state := named_state.state
-		t.Run(name, func(t *testing.T) {
+	for _, config := range initCppStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			for _, code := range getTestCodes() {
 				err := state.SetCode(address1, code)
 				if err != nil {
@@ -225,19 +269,9 @@ func TestSetAndGetCodeHash(t *testing.T) {
 	}
 }
 
-func initCppStates(t *testing.T) []namedStateConfig {
-	in_memory, err := NewCppInMemoryState()
-	if err != nil {
-		t.Fatalf("Failed to create in-memory store: %v", err)
-	}
-	t.Cleanup(func() { in_memory.Release() })
-	file_based, err := NewCppFileBasedState(t.TempDir())
-	if err != nil {
-		t.Fatalf("Failed to create in-memory store: %v", err)
-	}
-	t.Cleanup(func() { file_based.Release() })
+func initCppStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"InMemory", in_memory},
-		{"FileBased", file_based},
+		{"InMemory", NewCppInMemoryState},
+		{"FileBased", NewCppFileBasedState},
 	}
 }

@@ -14,7 +14,7 @@ import (
 const KeysCacheSize = 256
 
 func main() {
-	stateDB, err := state.NewMemory()
+	memState, err := state.NewMemory("")
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +24,7 @@ func main() {
 
 	// TODO loop from here N-times for N blocks
 	// simulate one block processing
-	simulate(state.CreateStateDBUsing(stateDB), dist, t)
+	simulate(state.CreateStateDBUsing(memState), dist, t)
 }
 
 // simulate executes simulation from StartBlock and runs the Markov Chain until EndBlock is reached
