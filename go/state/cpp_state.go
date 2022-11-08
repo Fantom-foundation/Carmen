@@ -33,13 +33,6 @@ func NewCppFileBasedState(directory string) (State, error) {
 	return &CppState{state: C.Carmen_CreateFileBasedState(dir, C.int(len(directory)))}, nil
 }
 
-func (cs *CppState) Release() {
-	if cs.state != nil {
-		C.Carmen_ReleaseState(cs.state)
-		cs.state = nil
-	}
-}
-
 func (s *CppState) CreateAccount(address common.Address) error {
 	C.Carmen_CreateAccount(s.state, unsafe.Pointer(&address[0]))
 	return nil
@@ -127,6 +120,10 @@ func (cs *CppState) Flush() error {
 }
 
 func (cs *CppState) Close() error {
-	C.Carmen_Close(cs.state)
+	if cs.state != nil {
+		C.Carmen_Close(cs.state)
+		C.Carmen_ReleaseState(cs.state)
+		cs.state = nil
+	}
 	return nil
 }
