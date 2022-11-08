@@ -7,23 +7,23 @@ import (
 )
 
 type namedStateConfig struct {
-	name  string
-	state State
+	name        string
+	createState func(tmpDir string) (State, error)
 }
 
-func initStates(t *testing.T) []namedStateConfig {
+func initStates() []namedStateConfig {
 	var res []namedStateConfig
-	for _, s := range initCppStates(t) {
-		res = append(res, namedStateConfig{name: "cpp-" + s.name, state: s.state})
+	for _, s := range initCppStates() {
+		res = append(res, namedStateConfig{name: "cpp-" + s.name, createState: s.createState})
 	}
-	for _, s := range initGoStates(t) {
-		res = append(res, namedStateConfig{name: "go-" + s.name, state: s.state})
+	for _, s := range initGoStates() {
+		res = append(res, namedStateConfig{name: "go-" + s.name, createState: s.createState})
 	}
 	return res
 }
 
 func testHashAfterModification(t *testing.T, mod func(s State)) {
-	ref, err := NewMemory()
+	ref, err := NewMemory("")
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}
@@ -32,10 +32,16 @@ func testHashAfterModification(t *testing.T, mod func(s State)) {
 	if err != nil {
 		t.Fatalf("failed to get hash of reference state: %v", err)
 	}
-	for _, config := range initStates(t) {
+	for _, config := range initStates() {
 		t.Run(config.name, func(t *testing.T) {
-			mod(config.state)
-			got, err := config.state.GetHash()
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
+			mod(state)
+			got, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("failed to compute hash: %v", err)
 			}

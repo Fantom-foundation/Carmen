@@ -23,11 +23,11 @@ type CppState struct {
 	state unsafe.Pointer
 }
 
-func NewCppInMemoryState() (*CppState, error) {
+func NewCppInMemoryState(directory string) (State, error) {
 	return &CppState{state: C.Carmen_CreateInMemoryState()}, nil
 }
 
-func NewCppFileBasedState(directory string) (*CppState, error) {
+func NewCppFileBasedState(directory string) (State, error) {
 	dir := C.CString(directory)
 	defer C.free(unsafe.Pointer(dir))
 	return &CppState{state: C.Carmen_CreateFileBasedState(dir, C.int(len(directory)))}, nil

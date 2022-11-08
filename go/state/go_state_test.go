@@ -33,61 +33,27 @@ var (
 	nonce3 = common.Nonce{0x03}
 )
 
-func initGoStates(t *testing.T) []namedStateConfig {
-	memState, err := NewMemory()
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-	ldbFileState, err := NewLeveLIndexFileStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-	cachedLdbFileState, err := NewCachedLeveLIndexFileStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-	cachedTransactLdbFileState, err := NewCachedTransactLeveLIndexFileStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-	ldbState, err := NewLeveLIndexAndStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-	cachedLdbState, err := NewCachedLeveLIndexAndStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-	cachedTransactLdbState, err := NewTransactCachedLeveLIndexAndStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("failed to init state: %v", err)
-	}
-
-	t.Cleanup(func() {
-		_ = memState.Close()
-		_ = ldbFileState.Close()
-		_ = cachedLdbFileState.Close()
-		_ = cachedTransactLdbFileState.Close()
-		_ = ldbState.Close()
-		_ = cachedLdbState.Close()
-		_ = cachedTransactLdbState.Close()
-	})
-
+func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory", memState},
-		{"LevelDB Index, File Store", ldbFileState},
-		{"Cached LevelDB Index, File Store", cachedLdbFileState},
-		{"Cached Transact LevelDB, Index File Store", cachedTransactLdbFileState},
-		{"LevelDB Index and Store", ldbState},
-		{"Cached LevelDB Index and Store", cachedLdbState},
-		{"Cached Transact LevelDB Index and Store", cachedTransactLdbState}, // cannot combine transact and non-transact access
+		{"Memory", NewMemory},
+		{"LevelDB Index, File Store", NewLeveLIndexFileStore},
+		{"Cached LevelDB Index, File Store", NewCachedLeveLIndexFileStore},
+		{"Cached Transact LevelDB, Index File Store", NewCachedTransactLeveLIndexFileStore},
+		{"LevelDB Index and Store", NewLeveLIndexAndStore},
+		{"Cached LevelDB Index and Store", NewCachedLeveLIndexAndStore},
+		{"Cached Transact LevelDB Index and Store", NewTransactCachedLeveLIndexAndStore}, // cannot combine transact and non-transact access
 	}
 }
 
 func TestMissingKeys(t *testing.T) {
-	for _, config := range initGoStates(t) {
+	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
-			state := config.state
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			accountState, err := state.GetAccountState(address1)
 			if err != nil || accountState != common.Unknown {
 				t.Errorf("Account state must be Unknown. It is: %s, err: %s", accountState, err)
@@ -113,9 +79,14 @@ func TestMissingKeys(t *testing.T) {
 }
 
 func TestBasicOperations(t *testing.T) {
-	for _, config := range initGoStates(t) {
+	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
-			state := config.state
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			// fill-in values
 			if err := state.CreateAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
@@ -167,9 +138,14 @@ func TestBasicOperations(t *testing.T) {
 }
 
 func TestMoreInserts(t *testing.T) {
-	for _, config := range initGoStates(t) {
+	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
-			state := config.state
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			// insert more combinations, so we do not have only zero-indexes everywhere
 			_ = state.SetStorage(address1, key1, val1)
 			_ = state.SetStorage(address1, key2, val2)
@@ -198,9 +174,14 @@ func TestMoreInserts(t *testing.T) {
 
 func TestHashing(t *testing.T) {
 	var hashes []common.Hash
-	for _, config := range initGoStates(t) {
+	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
-			state := config.state
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
 			initialHash, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %s", err)
@@ -274,13 +255,14 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewMemory()
+	state, err := NewMemory("")
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	state.balancesStore = failingStore[uint32, common.Balance]{state.balancesStore}
-	state.noncesStore = failingStore[uint32, common.Nonce]{state.noncesStore}
-	state.valuesStore = failingStore[uint32, common.Value]{state.valuesStore}
+	goState := state.(*GoState)
+	goState.balancesStore = failingStore[uint32, common.Balance]{goState.balancesStore}
+	goState.noncesStore = failingStore[uint32, common.Nonce]{goState.noncesStore}
+	goState.valuesStore = failingStore[uint32, common.Value]{goState.valuesStore}
 
 	_ = state.SetBalance(address1, common.Balance{})
 	_ = state.SetNonce(address1, common.Nonce{})
@@ -303,11 +285,12 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewMemory()
+	state, err := NewMemory("")
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	state.addressIndex = failingIndex[common.Address, uint32]{state.addressIndex}
+	goState := state.(*GoState)
+	goState.addressIndex = failingIndex[common.Address, uint32]{goState.addressIndex}
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {
