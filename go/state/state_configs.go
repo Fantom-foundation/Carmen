@@ -1,6 +1,7 @@
 package state
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"os"
 	"path/filepath"
 
@@ -55,8 +56,12 @@ func NewMemory() (State, error) {
 	if err != nil {
 		return nil, err
 	}
+	codeHashesStore, err := storemem.NewStore[uint32, common.Hash](common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory())
+	if err != nil {
+		return nil, err
+	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, nil, nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, nil, nil}
 	return state, nil
 }
 
@@ -117,16 +122,24 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	depotPath := storePath + string(filepath.Separator) + "depot"
-	if err = os.Mkdir(depotPath, 0777); err != nil {
+	codesPath := storePath + string(filepath.Separator) + "codes"
+	if err = os.Mkdir(codesPath, 0777); err != nil {
 		return nil, err
 	}
-	codesDepot, err := fileDepot.NewDepot[uint32](depotPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(depotPath, HashTreeFactor), PageSize)
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
+	if err = os.Mkdir(codeHashesStorePath, 0777); err != nil {
+		return nil, err
+	}
+	codeHashesStore, err := file.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory())
 	if err != nil {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -189,11 +202,19 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	depotPath := storePath + string(filepath.Separator) + "depot"
-	if err = os.Mkdir(depotPath, 0777); err != nil {
+	codesPath := storePath + string(filepath.Separator) + "codes"
+	if err = os.Mkdir(codesPath, 0777); err != nil {
 		return nil, err
 	}
-	codesDepot, err := fileDepot.NewDepot[uint32](depotPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(depotPath, HashTreeFactor), PageSize)
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
+	if err = os.Mkdir(codeHashesStorePath, 0777); err != nil {
+		return nil, err
+	}
+	codeHashesStore, err := file.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory())
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +223,7 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -271,11 +292,19 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	depotPath := storePath + string(filepath.Separator) + "depot"
-	if err = os.Mkdir(depotPath, 0777); err != nil {
+	codesPath := storePath + string(filepath.Separator) + "codes"
+	if err = os.Mkdir(codesPath, 0777); err != nil {
 		return nil, err
 	}
-	codesDepot, err := fileDepot.NewDepot[uint32](depotPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(depotPath, HashTreeFactor), PageSize)
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), PageSize)
+	if err != nil {
+		return nil, err
+	}
+	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
+	if err = os.Mkdir(codeHashesStorePath, 0777); err != nil {
+		return nil, err
+	}
+	codeHashesStore, err := file.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory())
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +320,7 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup, nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanup, nil}
 
 	return state, nil
 }
@@ -340,8 +369,12 @@ func NewLeveLIndexAndStore(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), PageSize)
+	if err != nil {
+		return nil, err
+	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -390,13 +423,17 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), PageSize)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO no support for cached stores yet - create it
 	state := &GoState{
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, closeDBFunc(db), nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
 
 	return state, nil
 }
@@ -451,6 +488,10 @@ func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](tx, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), PageSize)
+	if err != nil {
+		return nil, err
+	}
 
 	cleanup := []func(){
 		func() {
@@ -464,7 +505,7 @@ func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, cleanup, nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanup, nil}
 
 	return state, nil
 }
