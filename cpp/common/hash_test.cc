@@ -92,5 +92,24 @@ TEST(Sha256HashTest, HashesCanBeHashed) {
   hasher.Ingest(Hash{});
 }
 
+absl::flat_hash_map<std::string, std::string> GetKnownKeccakHashes() {
+  // The following hashes have been obtained from a third-party implementation.
+  absl::flat_hash_map<std::string, std::string> res;
+  res[""] =
+      "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
+  res["a"] =
+      "0x3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1cb";
+  res["abc"] =
+      "0x4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45";
+  return res;
+}
+
+TEST(Keccak256Test, KnownHashes) {
+  for (auto [text, hash] : GetKnownKeccakHashes()) {
+    auto data = std::as_bytes(std::span(text.data(), text.size()));
+    EXPECT_THAT(Print(GetKeccak256Hash(data)), StrEq(hash));
+  }
+}
+
 }  // namespace
 }  // namespace carmen

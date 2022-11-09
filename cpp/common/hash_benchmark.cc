@@ -53,5 +53,17 @@ void BM_Sha256HashKeyChain(benchmark::State& state) {
 
 BENCHMARK(BM_Sha256HashKeyChain)->Range(1, 1 << 12)->Arg(100);
 
+// Benchmarks the computation of keccak hash values.
+void BM_Keccak256Hashing(benchmark::State& state) {
+  auto num_keys = state.range(0);
+  std::vector<std::byte> data(num_keys);
+  for (auto _ : state) {
+    auto hash = GetKeccak256Hash(data);
+    benchmark::DoNotOptimize(hash);
+  }
+}
+
+BENCHMARK(BM_Keccak256Hashing)->Range(1, 1 << 21);
+
 }  // namespace
 }  // namespace carmen::backend::store

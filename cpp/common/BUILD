@@ -78,6 +78,7 @@ cc_library(
     deps=[
         ":type",
         "@boringssl//:crypto",
+        "@ethash//:keccak",
     ],
     visibility = ["//visibility:public"],
 )
