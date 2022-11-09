@@ -277,7 +277,7 @@ TEST_P(CStateTest, CodeHashesMatchCodes) {
   std::vector<std::byte> code({std::byte{12}, std::byte{14}});
   Carmen_SetCode(state, &addr, code.data(), code.size());
   Carmen_GetCodeHash(state, &addr, &hash);
-  EXPECT_EQ(hash, GetSha256Hash(std::span(code)));
+  EXPECT_EQ(hash, GetKeccak256Hash(std::span(code)));
 
   code.clear();
   Carmen_SetCode(state, &addr, code.data(), code.size());

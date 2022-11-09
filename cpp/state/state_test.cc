@@ -209,7 +209,7 @@ TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
   EXPECT_EQ(state.GetCodeHash(a), Hash{});
 
   state.SetCode(a, code);
-  EXPECT_EQ(state.GetCodeHash(a), GetSha256Hash(std::span(code)));
+  EXPECT_EQ(state.GetCodeHash(a), GetKeccak256Hash(std::span(code)));
 
   // Resetting code to zero reverts code to zero.
   state.SetCode(a, {});

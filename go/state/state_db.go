@@ -439,7 +439,7 @@ func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
 	}
 	if val.dirty && val.hash == nil {
 		// If the code is dirty (=uncommitted) the hash needs to be computed on the fly.
-		hash := common.GetSha256Hash(val.code)
+		hash := common.GetKeccak256Hash(val.code)
 		val.hash = &hash
 	}
 	if val.hash == nil {

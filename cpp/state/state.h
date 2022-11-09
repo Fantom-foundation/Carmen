@@ -252,7 +252,7 @@ void State<IndexType, StoreType, DepotType>::SetCode(
     const Address& address, std::span<const std::byte> code) {
   auto addr_id = address_index_.GetOrAdd(address).first;
   codes_.Set(addr_id, code).IgnoreError();
-  code_hashes_.Set(addr_id, code.empty() ? Hash{} : GetSha256Hash(code));
+  code_hashes_.Set(addr_id, code.empty() ? Hash{} : GetKeccak256Hash(code));
 }
 
 template <template <typename K, typename V> class IndexType,

@@ -9,6 +9,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -165,7 +166,7 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 		return
 	}
 	if s.hasher == nil {
-		s.hasher = sha256.New()
+		s.hasher = sha3.NewLegacyKeccak256()
 	}
 	hash = common.GetHash(s.hasher, code)
 	return

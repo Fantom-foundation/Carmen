@@ -257,7 +257,7 @@ func TestSetAndGetCodeHash(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Error fetching code: %v", err)
 				}
-				want := common.GetSha256Hash(code)
+				want := common.GetKeccak256Hash(code)
 				if len(code) == 0 {
 					want = common.Hash{}
 				}
