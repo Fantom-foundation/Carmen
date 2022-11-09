@@ -70,9 +70,9 @@ func (m *Store[I, V]) ensurePageLoaded(pageId int) (page *Page, err error) {
 	if err != nil {
 		return
 	}
-	removedPageId, removedPage := m.pagesPool.Set(pageId, page)
-	if removedPage != nil {
-		err = m.handleEvictedPage(removedPageId, removedPage)
+	evictedPageId, evictedPage := m.pagesPool.Set(pageId, page)
+	if evictedPage != nil {
+		err = m.handleEvictedPage(evictedPageId, evictedPage)
 	}
 	return
 }
@@ -110,7 +110,7 @@ func (m *Store[I, V]) Set(id I, value V) error {
 		return fmt.Errorf("failed to load store page %d; %s", pageId, err)
 	}
 	pageItemBytes := page.Get(itemPosition, int64(m.serializer.Size()))
-	m.serializer.ToGivenBytes(value, pageItemBytes)
+	m.serializer.CopyBytes(value, pageItemBytes)
 	page.SetDirty()
 	return nil
 }
@@ -136,18 +136,22 @@ func (m *Store[I, V]) GetPage(pageId int) ([]byte, error) {
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
-func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
+func (m *Store[I, V]) GetStateHash() (hash common.Hash, err error) {
 	// mark dirty pages as updated in the hashtree
-	m.pagesPool.Iterate(func(pageId int, page *Page) {
+	m.pagesPool.Iterate(func(pageId int, page *Page) bool {
 		if page.IsDirty() {
 			// write the page to disk (but don't evict - keep in page pool as a clean page)
-			err := page.Store(m.file, pageId)
+			err = page.Store(m.file, pageId)
 			if err != nil {
-				panic(fmt.Errorf("failed to store hashed file store page; %s", err))
+				return false
 			}
 			m.hashTree.MarkUpdated(pageId)
 		}
+		return true
 	})
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to flush pages pool to calculate store hash; %s", err)
+	}
 	// update the hashTree and get the hash
 	return m.hashTree.HashRoot()
 }

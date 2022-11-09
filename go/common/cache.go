@@ -17,9 +17,11 @@ func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 }
 
 // Iterate all cached entries - calls the callback for each key-value pair in the cache
-func (c *Cache[K, V]) Iterate(callback func(K, V)) {
+func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 	for key, value := range c.cache {
-		callback(key, value.val)
+		if !callback(key, value.val) {
+			return // terminate iteration if false returned from the callback
+		}
 	}
 }
 
@@ -38,15 +40,15 @@ func (c *Cache[K, V]) Get(key K) (val V, exists bool) {
 // If the key is already present, the value is updated and the key marked as
 // used. If the value is not present, a new entry is added to this
 // cache. This causes another entry to be removed if the cache size is exceeded.
-func (c *Cache[K, V]) Set(key K, val V) (removedKey K, removedValue V) {
+func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
 	item, exists := c.cache[key]
 
 	// create entry if it does not exist
 	if !exists {
 		if len(c.cache) >= c.capacity {
 			item = c.dropLast() // reuse evicted object for the new entry
-			removedKey = item.key
-			removedValue = item.val
+			evictedKey = item.key
+			evictedValue = item.val
 		} else {
 			item = new(entry[K, V])
 		}

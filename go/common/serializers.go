@@ -8,7 +8,7 @@ type AddressSerializer struct{}
 func (a AddressSerializer) ToBytes(address Address) []byte {
 	return address[:]
 }
-func (a AddressSerializer) ToGivenBytes(address Address, out []byte) {
+func (a AddressSerializer) CopyBytes(address Address, out []byte) {
 	copy(out, address[:])
 }
 func (a AddressSerializer) FromBytes(bytes []byte) Address {
@@ -26,7 +26,7 @@ type KeySerializer struct{}
 func (a KeySerializer) ToBytes(key Key) []byte {
 	return key[:]
 }
-func (a KeySerializer) ToGivenBytes(key Key, out []byte) {
+func (a KeySerializer) CopyBytes(key Key, out []byte) {
 	copy(out, key[:])
 }
 func (a KeySerializer) FromBytes(bytes []byte) Key {
@@ -44,7 +44,7 @@ type ValueSerializer struct{}
 func (a ValueSerializer) ToBytes(value Value) []byte {
 	return value[:]
 }
-func (a ValueSerializer) ToGivenBytes(value Value, out []byte) {
+func (a ValueSerializer) CopyBytes(value Value, out []byte) {
 	copy(out, value[:])
 }
 func (a ValueSerializer) FromBytes(bytes []byte) Value {
@@ -62,7 +62,7 @@ type HashSerializer struct{}
 func (a HashSerializer) ToBytes(hash Hash) []byte {
 	return hash[:]
 }
-func (a HashSerializer) ToGivenBytes(hash Hash, out []byte) {
+func (a HashSerializer) CopyBytes(hash Hash, out []byte) {
 	copy(out, hash[:])
 }
 func (a HashSerializer) FromBytes(bytes []byte) Hash {
@@ -80,7 +80,7 @@ type AccountStateSerializer struct{}
 func (a AccountStateSerializer) ToBytes(value AccountState) []byte {
 	return []byte{byte(value)}
 }
-func (a AccountStateSerializer) ToGivenBytes(value AccountState, out []byte) {
+func (a AccountStateSerializer) CopyBytes(value AccountState, out []byte) {
 	out[0] = byte(value)
 }
 func (a AccountStateSerializer) FromBytes(bytes []byte) AccountState {
@@ -96,7 +96,7 @@ type BalanceSerializer struct{}
 func (a BalanceSerializer) ToBytes(value Balance) []byte {
 	return value[:]
 }
-func (a BalanceSerializer) ToGivenBytes(value Balance, out []byte) {
+func (a BalanceSerializer) CopyBytes(value Balance, out []byte) {
 	copy(out, value[:])
 }
 func (a BalanceSerializer) FromBytes(bytes []byte) Balance {
@@ -114,7 +114,7 @@ type NonceSerializer struct{}
 func (a NonceSerializer) ToBytes(value Nonce) []byte {
 	return value[:]
 }
-func (a NonceSerializer) ToGivenBytes(value Nonce, out []byte) {
+func (a NonceSerializer) CopyBytes(value Nonce, out []byte) {
 	copy(out, value[:])
 }
 func (a NonceSerializer) FromBytes(bytes []byte) Nonce {
@@ -137,7 +137,7 @@ func (a SlotIdxSerializer32) ToBytes(value SlotIdx[uint32]) []byte {
 	res = binary.LittleEndian.AppendUint32(res, value.KeyIdx)
 	return res
 }
-func (a SlotIdxSerializer32) ToGivenBytes(value SlotIdx[uint32], out []byte) {
+func (a SlotIdxSerializer32) CopyBytes(value SlotIdx[uint32], out []byte) {
 	binary.LittleEndian.PutUint32(out[0:4], value.AddressIdx)
 	binary.LittleEndian.PutUint32(out[4:8], value.KeyIdx)
 }
@@ -158,7 +158,7 @@ type Identifier32Serializer struct{}
 func (a Identifier32Serializer) ToBytes(value uint32) []byte {
 	return binary.BigEndian.AppendUint32([]byte{}, value)
 }
-func (a Identifier32Serializer) ToGivenBytes(value uint32, out []byte) {
+func (a Identifier32Serializer) CopyBytes(value uint32, out []byte) {
 	binary.LittleEndian.PutUint32(out, value)
 }
 func (a Identifier32Serializer) FromBytes(bytes []byte) uint32 {
