@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"hash"
 	"math/big"
+
+	"golang.org/x/crypto/sha3"
 )
 
 // Serializer allows to convert the type to a slice of bytes and back
@@ -137,6 +139,12 @@ func (n *Nonce) ToUint64() uint64 {
 // GetSha256Hash computes the Sha256 hash of the given data.
 func GetSha256Hash(data []byte) Hash {
 	hasher := sha256.New()
+	return GetHash(hasher, data)
+}
+
+// GetKeccak256Hash computes the Keccak256 hash of the given data.
+func GetKeccak256Hash(data []byte) Hash {
+	hasher := sha3.NewLegacyKeccak256()
 	return GetHash(hasher, data)
 }
 
