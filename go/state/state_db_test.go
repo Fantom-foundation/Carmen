@@ -1390,7 +1390,7 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 }
 
 func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
-	ref_state, err := NewMemory("")
+	ref_state, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}

@@ -35,7 +35,7 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory", NewMemory},
+		{"Memory", newTestingMemory},
 		{"LevelDB Index, File Store", NewLeveLIndexFileStore},
 		{"Cached LevelDB Index, File Store", NewCachedLeveLIndexFileStore},
 		{"Cached Transact LevelDB, Index File Store", NewCachedTransactLeveLIndexFileStore},
@@ -43,6 +43,10 @@ func initGoStates() []namedStateConfig {
 		{"Cached LevelDB Index and Store", NewCachedLeveLIndexAndStore},
 		{"Cached Transact LevelDB Index and Store", NewTransactCachedLeveLIndexAndStore}, // cannot combine transact and non-transact access
 	}
+}
+
+func newTestingMemory(_ string) (State, error) {
+	return NewMemory()
 }
 
 func TestMissingKeys(t *testing.T) {
@@ -255,7 +259,7 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewMemory("")
+	state, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
@@ -285,7 +289,7 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewMemory("")
+	state, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}

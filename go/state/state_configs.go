@@ -29,7 +29,7 @@ const TransactBufferMB = 128 * opt.MiB
 
 // NewMemory creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
-func NewMemory(path string) (State, error) {
+func NewMemory() (State, error) {
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
