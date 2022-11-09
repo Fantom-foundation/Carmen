@@ -3,12 +3,14 @@ package common
 import (
 	"crypto/sha256"
 	"fmt"
+	"hash/maphash"
 	"testing"
 )
 
 var (
 	globalHash = sha256.New()
 	sink       []byte
+	intSink    uint64
 )
 
 // numBytes upper bound of number of bytes to hash
@@ -24,7 +26,7 @@ const step = 3
 func BenchmarkNewHashEveryLoop(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
 		data := make([]byte, i)
-		b.Run(fmt.Sprintf("NewHashEveryLoop n %d", i), func(b *testing.B) {
+		b.Run(fmt.Sprintf("NewHashEveryLoop dataSize %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				h := sha256.New()
 				h.Write(data)
@@ -39,7 +41,7 @@ func BenchmarkOneHashAllLoops(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
 		data := make([]byte, i)
 		localHash := sha256.New()
-		b.Run(fmt.Sprintf("OneHashAllLoops n %d", i), func(b *testing.B) {
+		b.Run(fmt.Sprintf("OneHashAllLoops dataSize %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				localHash.Reset()
 				localHash.Write(data)
@@ -53,7 +55,7 @@ func BenchmarkOneHashAllLoops(b *testing.B) {
 func BenchmarkOneGlobalHash(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
 		data := make([]byte, i)
-		b.Run(fmt.Sprintf("OneGlobalHash n %d", i), func(b *testing.B) {
+		b.Run(fmt.Sprintf("OneGlobalHash dataSize %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				globalHash.Reset()
 				globalHash.Write(data)
@@ -69,7 +71,7 @@ func BenchmarkHashKeyChain(b *testing.B) {
 		keys := make([]Key, i)
 		hash := make([]byte, len(Hash{}))
 		localHash := sha256.New()
-		b.Run(fmt.Sprintf("HashKeyChain n %d", i), func(b *testing.B) {
+		b.Run(fmt.Sprintf("HashKeyChain dataSize %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				for _, key := range keys {
 					localHash.Reset()
@@ -87,10 +89,26 @@ func BenchmarkHashKeyChain(b *testing.B) {
 func BenchmarkKeccak256(b *testing.B) {
 	for i := 1; i <= numBytes; i = i << step {
 		data := make([]byte, i)
-		b.Run(fmt.Sprintf("Keccak256 %d", i), func(b *testing.B) {
+		b.Run(fmt.Sprintf("Keccak256 dataSize: %d", i), func(b *testing.B) {
 			for i := 1; i <= b.N; i++ {
 				hash := GetKeccak256Hash(data)
 				sink = hash[:]
+			}
+		})
+	}
+}
+
+// BenchmarkMapHash hashes a number of bytes testing performance of a map (non-cryptographical) hash
+func BenchmarkMapHash(b *testing.B) {
+	for i := 1; i <= numBytes; i = i << step {
+		data := make([]byte, i)
+		b.Run(fmt.Sprintf("MapHash EveryLoop dataSize: %d", i), func(b *testing.B) {
+			for i := 1; i <= b.N; i++ {
+				var h maphash.Hash
+				h.SetSeed(hashSeed)
+				_, _ = h.Write(data)
+				hash := h.Sum64()
+				intSink = hash
 			}
 		})
 	}

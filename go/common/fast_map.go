@@ -2,8 +2,8 @@ package common
 
 const kFastMapBuckets = 1 << 16
 
-// Hasher is an interface for types implementing hash functions for values.
-type Hasher[K any] interface {
+// ShortHasher is an interface for types implementing hash functions for values.
+type ShortHasher[K any] interface {
 	Hash(K) uint16
 }
 
@@ -13,13 +13,13 @@ type FastMap[K comparable, V any] struct {
 	buckets     [kFastMapBuckets]fmPtr
 	data        []fastMapEntry[K, V]
 	generation  uint16
-	hasher      Hasher[K]
+	hasher      ShortHasher[K]
 	size        int
 	usedBuckets []uint16
 }
 
 // NewFastMap creates a FastMap based on the given hasher.
-func NewFastMap[K comparable, V any](hasher Hasher[K]) *FastMap[K, V] {
+func NewFastMap[K comparable, V any](hasher ShortHasher[K]) *FastMap[K, V] {
 	res := &FastMap[K, V]{
 		// The initial size is just an optimization to reduce initial resizing operations.
 		data:        make([]fastMapEntry[K, V], 0, 10000),
@@ -46,8 +46,8 @@ func (m *FastMap[K, V]) Get(key K) (V, bool) {
 	return res, false
 }
 
-// Set updates the value associated to the given key in this map.
-func (m *FastMap[K, V]) Set(key K, value V) {
+// Put updates the value associated to the given key in this map.
+func (m *FastMap[K, V]) Put(key K, value V) {
 	hash := m.hasher.Hash(key)
 	cur := m.toPos(m.buckets[hash])
 
@@ -72,9 +72,9 @@ func (m *FastMap[K, V]) Set(key K, value V) {
 	m.size++
 }
 
-// Delete removes the entry with the given key from this map and returns
+// Remove removes the entry with the given key from this map and returns
 // whether the key has been present before the delete operation.
-func (m *FastMap[K, V]) Delete(key K) bool {
+func (m *FastMap[K, V]) Remove(key K) bool {
 	hash := m.hasher.Hash(key)
 	cur := m.toPos(m.buckets[hash])
 	ptr := &m.buckets[hash]
@@ -107,8 +107,8 @@ func (m *FastMap[K, V]) Clear() {
 	}
 }
 
-// Length returns the number of elements in this map.
-func (m *FastMap[K, V]) Length() int {
+// Size returns the number of elements in this map.
+func (m *FastMap[K, V]) Size() int {
 	return m.size
 }
 

@@ -1,19 +1,9 @@
 package common
 
 import (
+	"math/rand"
 	"testing"
 )
-
-// Map provides an interface to handle different implementations
-// in test and benchmarks uniformely.
-type Map[K comparable, V any] interface {
-	Set(key Key, value V)
-	Get(key Key) (V, bool)
-	Delete(key Key) bool
-	Length() int
-	ForEach(func(K, V))
-	Clear()
-}
 
 // BuildInMap adapts the language level map as a reference map for
 // tests and benchmarks.
@@ -25,8 +15,9 @@ func NewBuildInMap[K comparable, V any]() *BuildInMap[K, V] {
 	return &BuildInMap[K, V]{data: map[K]V{}}
 }
 
-func (m *BuildInMap[K, V]) Set(key K, value V) {
+func (m *BuildInMap[K, V]) Put(key K, value V) {
 	m.data[key] = value
+	return
 }
 
 func (m *BuildInMap[K, V]) Get(key K) (V, bool) {
@@ -34,13 +25,13 @@ func (m *BuildInMap[K, V]) Get(key K) (V, bool) {
 	return value, exists
 }
 
-func (m *BuildInMap[K, V]) Delete(key K) bool {
-	_, exists := m.data[key]
+func (m *BuildInMap[K, V]) Remove(key K) (exists bool) {
+	_, exists = m.data[key]
 	delete(m.data, key)
-	return exists
+	return
 }
 
-func (m *BuildInMap[K, V]) Length() int {
+func (m *BuildInMap[K, V]) Size() int {
 	return len(m.data)
 }
 
@@ -80,7 +71,7 @@ func NewKeyIntMap() *KeyIntMap {
 }
 
 func (m *KeyIntMap) Get(key Key) (int, bool) {
-	hash := KeyHasher{}.Hash(key)
+	hash := KeyShortHasher{}.Hash(key)
 	cur := m.toPos(m.buckets[hash])
 	for 0 <= cur && cur < int64(len(m.data)) {
 		if m.data[cur].key == key {
@@ -91,8 +82,8 @@ func (m *KeyIntMap) Get(key Key) (int, bool) {
 	return 0, false
 }
 
-func (m *KeyIntMap) Set(key Key, value int) {
-	hash := KeyHasher{}.Hash(key)
+func (m *KeyIntMap) Put(key Key, value int) {
+	hash := KeyShortHasher{}.Hash(key)
 	cur := m.toPos(m.buckets[hash])
 
 	if cur < 0 {
@@ -113,10 +104,12 @@ func (m *KeyIntMap) Set(key Key, value int) {
 	m.data[new].value = value
 	m.data[new].next = m.buckets[hash]
 	m.buckets[hash] = m.toPtr(int64(new))
+
+	return
 }
 
-func (m *KeyIntMap) Delete(key Key) bool {
-	hash := KeyHasher{}.Hash(key)
+func (m *KeyIntMap) Remove(key Key) bool {
+	hash := KeyShortHasher{}.Hash(key)
 	cur := m.toPos(m.buckets[hash])
 	ptr := &m.buckets[hash]
 	for 0 <= cur && cur < int64(len(m.data)) {
@@ -143,7 +136,7 @@ func (m *KeyIntMap) Clear() {
 	}
 }
 
-func (m *KeyIntMap) Length() int {
+func (m *KeyIntMap) Size() int {
 	return m.size
 }
 
@@ -177,17 +170,18 @@ type namedMapConfig struct {
 	get  func() Map[Key, int]
 }
 
-type KeyHasher struct{}
+type KeyShortHasher struct{}
 
-func (h KeyHasher) Hash(key Key) uint16 {
+func (h KeyShortHasher) Hash(key Key) uint16 {
 	return uint16(key[30])<<8 | uint16(key[31])
 }
 
 func getMapConfigs() []namedMapConfig {
 	return []namedMapConfig{
 		{"BuildIn", func() Map[Key, int] { return NewBuildInMap[Key, int]() }},
-		{"FastMap", func() Map[Key, int] { return NewFastMap[Key, int](KeyHasher{}) }},
+		{"FastMap", func() Map[Key, int] { return NewFastMap[Key, int](KeyShortHasher{}) }},
 		{"SpecializedKeyIntMap", func() Map[Key, int] { return NewKeyIntMap() }},
+		{"SortedMap", func() Map[Key, int] { return NewSortedMap[Key, int](kFastMapBuckets, KeyComparator{}) }},
 	}
 }
 
@@ -199,7 +193,7 @@ func TestMapInsertedIsContained(t *testing.T) {
 			if _, exists := data.Get(key); exists {
 				t.Errorf("Data should not contain key 12")
 			}
-			data.Set(key, 14)
+			data.Put(key, 14)
 			if value, exists := data.Get(key); !exists || value != 14 {
 				t.Errorf("Data should contain key 12 with value 14, got %v,%v", value, exists)
 			}
@@ -224,7 +218,7 @@ func TestMapInsertedIsContainedExhaustive(t *testing.T) {
 				}
 				key[30] = byte(i >> 8)
 				key[31] = byte(i)
-				data.Set(key, 1)
+				data.Put(key, 1)
 			}
 		})
 	}
@@ -235,11 +229,11 @@ func TestMapDeleteRemovesKey(t *testing.T) {
 		data := config.get()
 		t.Run(config.name, func(t *testing.T) {
 			key := Key{12}
-			data.Set(key, 1)
+			data.Put(key, 1)
 			if _, exists := data.Get(key); !exists {
 				t.Errorf("Data should contain key 12")
 			}
-			if was_present := data.Delete(key); !was_present {
+			if was_present := data.Remove(key); !was_present {
 				t.Errorf("Delete did not find key %v", key)
 			}
 			if _, exists := data.Get(key); exists {
@@ -257,11 +251,11 @@ func TestMapDeleteRemovesSelectedKeyFromBucket(t *testing.T) {
 			for i := 0; i <= 10; i++ {
 				// all those keys end up in the same bucket.
 				key := Key{byte(i)}
-				data.Set(key, i)
+				data.Put(key, i)
 			}
 
 			// remove the first element in the bucket list (last inserted)
-			data.Delete(Key{byte(10)})
+			data.Remove(Key{byte(10)})
 			if _, exists := data.Get(Key{byte(10)}); exists {
 				t.Errorf("Failed to delete key 10")
 			}
@@ -275,7 +269,7 @@ func TestMapDeleteRemovesSelectedKeyFromBucket(t *testing.T) {
 			}
 
 			// remove the first element in the bucket list (first inserted)
-			data.Delete(Key{byte(0)})
+			data.Remove(Key{byte(0)})
 			if _, exists := data.Get(Key{byte(0)}); exists {
 				t.Errorf("Failed to delete key 0")
 			}
@@ -289,7 +283,7 @@ func TestMapDeleteRemovesSelectedKeyFromBucket(t *testing.T) {
 			}
 
 			// remove an element in the middle of the bucket list
-			data.Delete(Key{byte(5)})
+			data.Remove(Key{byte(5)})
 			if _, exists := data.Get(Key{byte(5)}); exists {
 				t.Errorf("Failed to delete key 5")
 			}
@@ -313,7 +307,7 @@ func TestMapClearRemovesContent(t *testing.T) {
 		data := config.get()
 		t.Run(config.name, func(t *testing.T) {
 			key := Key{12}
-			data.Set(key, 1)
+			data.Put(key, 1)
 			if _, exists := data.Get(key); !exists {
 				t.Errorf("Data should contain key 12")
 			}
@@ -334,7 +328,7 @@ func TestMapClearRemovesAllContent(t *testing.T) {
 			for i := 0; i < N; i++ {
 				key[30] = byte(i >> 8)
 				key[31] = byte(i)
-				data.Set(key, i)
+				data.Put(key, i)
 			}
 			for i := 0; i < N; i++ {
 				key[30] = byte(i >> 8)
@@ -360,22 +354,22 @@ func TestMapAddingKeysIsReflectedInSize(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			data := config.get()
 			want := 0
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
-			data.Set(Key{12}, 4)
+			data.Put(Key{12}, 4)
 			want = 1
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
-			data.Set(Key{14}, 6)
+			data.Put(Key{14}, 6)
 			want = 2
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
 			// Update does not change the size
-			data.Set(Key{12}, 6)
-			if got := data.Length(); want != got {
+			data.Put(Key{12}, 6)
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
 		})
@@ -386,26 +380,26 @@ func TestMapDeletingKeysIsReflectedInSize(t *testing.T) {
 	for _, config := range getMapConfigs() {
 		t.Run(config.name, func(t *testing.T) {
 			data := config.get()
-			data.Set(Key{12}, 1)
-			data.Set(Key{14}, 2)
-			data.Set(Key{16}, 3)
+			data.Put(Key{12}, 1)
+			data.Put(Key{14}, 2)
+			data.Put(Key{16}, 3)
 			want := 3
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
-			data.Delete(Key{12})
+			data.Remove(Key{12})
 			want = 2
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
-			data.Delete(Key{14})
+			data.Remove(Key{14})
 			want = 1
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
 			// Deleting a missing key does not change the size
-			data.Delete(Key{8})
-			if got := data.Length(); want != got {
+			data.Remove(Key{8})
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
 		})
@@ -416,16 +410,16 @@ func TestMapClearResetsSize(t *testing.T) {
 	for _, config := range getMapConfigs() {
 		t.Run(config.name, func(t *testing.T) {
 			data := config.get()
-			data.Set(Key{12}, 1)
-			data.Set(Key{14}, 2)
-			data.Set(Key{16}, 3)
+			data.Put(Key{12}, 1)
+			data.Put(Key{14}, 2)
+			data.Put(Key{16}, 3)
 			want := 3
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
 			data.Clear()
 			want = 0
-			if got := data.Length(); want != got {
+			if got := data.Size(); want != got {
 				t.Errorf("invalid length, wanted %v, got %v", want, got)
 			}
 		})
@@ -461,7 +455,7 @@ func TestMapForEachVisitsAllElements(t *testing.T) {
 					}
 				}
 
-				data.Set(Key{byte(i)}, i*i)
+				data.Put(Key{byte(i)}, i*i)
 			}
 		})
 	}
@@ -474,9 +468,10 @@ func BenchmarkMapInsertAndClear(b *testing.B) {
 		data.Clear()
 		b.Run(config.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
+				key[31] = byte(rand.Intn(256))
 				for j := 0; j < 100; j++ {
 					key[31] *= 7
-					data.Set(key, j)
+					data.Put(key, j)
 				}
 				data.Clear()
 			}

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
+	"hash/maphash"
 	"math/big"
 
 	"golang.org/x/crypto/sha3"
@@ -21,6 +22,11 @@ type Serializer[T any] interface {
 	FromBytes([]byte) T
 	// Size provides the size of the type when serialized (bytes)
 	Size() int // size in bytes when serialized
+}
+
+// Comparator is an interface for comparing two items
+type Comparator[T any] interface {
+	Compare(a, b *T) int
 }
 
 type HashProvider interface {
@@ -90,6 +96,46 @@ func (a *Key) Compare(b *Key) int {
 	return bytes.Compare(a[:], b[:])
 }
 
+// Compare slots first by the address and then by the key if the addresses are the same.
+// It returns zero when both addresses and keys are the same
+// otherwise it returns a negative number when A is lower than B
+// or a positive number when A is higher than B.
+func (a *SlotIdx[I]) Compare(b *SlotIdx[I]) int {
+	if a.AddressIdx > b.AddressIdx {
+		return 1
+	}
+	if a.AddressIdx < b.AddressIdx {
+		return -1
+	}
+
+	if a.KeyIdx > b.KeyIdx {
+		return 1
+	}
+	if a.KeyIdx < b.KeyIdx {
+		return -1
+	}
+
+	return 0
+}
+
+type AddressComparator struct{}
+
+func (c AddressComparator) Compare(a, b *Address) int {
+	return a.Compare(b)
+}
+
+type KeyComparator struct{}
+
+func (c KeyComparator) Compare(a, b *Key) int {
+	return a.Compare(b)
+}
+
+type Identifier32Comparator struct{}
+
+func (c Identifier32Comparator) Compare(a, b *SlotIdx[uint32]) int {
+	return a.Compare(b)
+}
+
 var (
 	one        = big.NewInt(1)
 	maxBalance = getMaxBalance()
@@ -157,4 +203,50 @@ func GetHash(h hash.Hash, data []byte) (res Hash) {
 	h.Write(data)
 	copy(res[:], h.Sum(nil)[:])
 	return
+}
+
+var hashSeed = maphash.MakeSeed() // TODO this is a stable seed only within one runtime
+
+type AddressHasher struct{}
+
+// Hash implements non-cryptographical hash to be used in maps
+func (s AddressHasher) Hash(a *Address) uint64 {
+	var h maphash.Hash
+	h.SetSeed(hashSeed)
+	_, _ = h.Write(a[:])
+	return h.Sum64()
+}
+
+type KeyHasher struct{}
+
+// Hash implements non-cryptographical hash to be used in maps
+func (s KeyHasher) Hash(a *Key) uint64 {
+	var h maphash.Hash
+	h.SetSeed(hashSeed)
+	_, _ = h.Write(a[:])
+	return h.Sum64()
+}
+
+type SlotIdxHasher struct{}
+
+func (s SlotIdxHasher) Hash(a *SlotIdx[uint32]) uint64 {
+	var h uint64 = 17
+	var prime uint64 = 31
+
+	h = h*prime + uint64(a.AddressIdx)
+	h = h*prime + uint64(a.KeyIdx)
+
+	return h
+}
+
+func (h Hash) ToBytes() []byte {
+	return h[:]
+}
+
+func (a Address) String() string {
+	return fmt.Sprintf("%x", a[:])
+}
+
+func (a Key) String() string {
+	return fmt.Sprintf("%x", a[:])
 }

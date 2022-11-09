@@ -13,8 +13,8 @@ var (
 )
 
 func TestMemoryIndexImplements(t *testing.T) {
-	var memory Index[*common.Address, uint32]
-	var _ index.Index[*common.Address, uint32] = &memory
+	var memory Index[common.Address, uint32]
+	var _ index.Index[common.Address, uint32] = &memory
 	var _ io.Closer = &memory
 }
 

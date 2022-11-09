@@ -2,7 +2,7 @@ package ldb
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
-	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -20,7 +20,7 @@ type Index[K comparable, I common.Identifier] struct {
 	table           common.TableSpace
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
-	hashIndex       *hashindex.HashIndex[K]
+	hashIndex       *indexhash.IndexHash[K]
 	lastIndex       I
 }
 
@@ -58,7 +58,7 @@ func NewIndex[K comparable, I common.Identifier](
 		table:           table,
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
-		hashIndex:       hashindex.InitHashIndex[K](hash, keySerializer),
+		hashIndex:       indexhash.InitIndexHash[K](hash, keySerializer),
 		lastIndex:       lastIndex,
 	}
 

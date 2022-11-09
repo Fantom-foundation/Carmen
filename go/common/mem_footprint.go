@@ -31,6 +31,12 @@ func (mf *MemoryFootprint) AddChild(name string, child *MemoryFootprint) {
 	mf.children[name] = child
 }
 
+// GetChild returns a child of the memory footprint with the given name
+func (mf *MemoryFootprint) GetChild(name string) (child *MemoryFootprint) {
+	child = mf.children[name]
+	return
+}
+
 // Value provides the amount of bytes consumed by the database structure (excluding its subcomponents)
 func (mf *MemoryFootprint) Value() uintptr {
 	return mf.value
