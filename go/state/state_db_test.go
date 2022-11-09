@@ -986,9 +986,9 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	code := []byte{0xAC, 0xDC}
 	db.SetCode(address1, code)
 
-	want := common.GetSha256Hash(code)
+	want := common.GetKeccak256Hash(code)
 	if got := db.GetCodeHash(address1); got != want {
-		t.Errorf("error retrieving code hash, wanted %v, got %v", len(want), got)
+		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
 	}
 }
 
