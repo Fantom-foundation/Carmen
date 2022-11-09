@@ -82,3 +82,16 @@ func BenchmarkHashKeyChain(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkHashKeyChain hashes a number of keys
+func BenchmarkKeccak256(b *testing.B) {
+	for i := 1; i <= numBytes; i = i << step {
+		data := make([]byte, i)
+		b.Run(fmt.Sprintf("Keccak256 %d", i), func(b *testing.B) {
+			for i := 1; i <= b.N; i++ {
+				hash := GetKeccak256Hash(data)
+				sink = hash[:]
+			}
+		})
+	}
+}

@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 )
@@ -77,6 +78,30 @@ func TestNonceToUint64Conversion(t *testing.T) {
 		val := pair.n.ToUint64()
 		if val != pair.i {
 			t.Errorf("Incorrect conversion of nonce %v into numeric value - wanted %v, got %v", pair.n, pair.i, val)
+		}
+	}
+}
+
+func TestKeccak256NilHashesLikeEmptyList(t *testing.T) {
+	nil_hash := GetKeccak256Hash(nil)
+	empty_hash := GetKeccak256Hash([]byte{})
+	if nil_hash != empty_hash {
+		t.Errorf("nil does not hash like empty slice, got %x, wanted %x", nil_hash, empty_hash)
+	}
+}
+
+func TestKeccak256KnownHashes(t *testing.T) {
+	inputs := []struct {
+		plain, hash string
+	}{
+		{"", "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"},
+		{"a", "3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1cb"},
+		{"abc", "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"},
+	}
+	for _, input := range inputs {
+		hash := GetKeccak256Hash([]byte(input.plain))
+		if input.hash != fmt.Sprintf("%x", hash) {
+			t.Errorf("invalid hash: %x (expected %s)", hash, input.hash)
 		}
 	}
 }
