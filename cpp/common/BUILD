@@ -188,3 +188,23 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name="byte_util",
+    hdrs=["byte_util.h"],
+    deps=[
+        "@com_google_absl//absl/status:statusor"
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "byte_util_test",
+    srcs = ["byte_util_test.cc"],
+    deps = [
+        ":byte_util",
+        "//common:status_test_util",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
