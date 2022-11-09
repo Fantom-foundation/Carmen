@@ -11,7 +11,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile/eviction"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -58,7 +57,7 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 			label: "PagedFile",
 			getStore: func(tempDir string) store.Store[uint32, common.Value] {
 				hashTreeFac := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
-				str, err := pagedfile.NewStore[uint32, common.Value](tempDir, common.ValueSerializer{}, int64(pageSize), hashTreeFac, poolSize, eviction.NewLRUPolicy(poolSize))
+				str, err := pagedfile.NewStore[uint32, common.Value](tempDir, common.ValueSerializer{}, int64(pageSize), hashTreeFac, poolSize)
 				if err != nil {
 					tb.Fatalf("failed to init pagedfile store; %s", err)
 				}

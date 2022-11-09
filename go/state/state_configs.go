@@ -22,7 +22,7 @@ import (
 )
 
 // CacheCapacity is the size of the cache expressed as the number of cached keys
-const CacheCapacity = 1 << 24 // 2 ^ 24 -> 512MB for 32 keys
+const CacheCapacity = 1 << 20 // 2 ^ 20 keys -> 32MB for 32-bytes keys
 
 // TransactBufferMB is the size of buffer before the transaction is flushed expressed in MBs
 const TransactBufferMB = 128 * opt.MiB
