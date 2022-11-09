@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "common/type.h"
+#include "ethash/keccak.h"
 #include "openssl/evp.h"
 #include "openssl/sha.h"
 
@@ -63,5 +64,12 @@ void Sha256Hasher::Ingest(std::string_view str) {
 }
 
 Hash Sha256Hasher::GetHash() const { return _impl->GetHash(); }
+
+Hash GetKeccak256Hash(std::span<const std::byte> data) {
+  static_assert(sizeof(Hash) == sizeof(ethash_hash256));
+  ethash_hash256 res = ethash_keccak256(
+      reinterpret_cast<const uint8_t*>(data.data()), data.size());
+  return reinterpret_cast<Hash&>(res);
+}
 
 }  // namespace carmen
