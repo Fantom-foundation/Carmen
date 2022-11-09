@@ -23,7 +23,7 @@ func initStates() []namedStateConfig {
 }
 
 func testHashAfterModification(t *testing.T, mod func(s State)) {
-	ref, err := NewMemory("")
+	ref, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}
