@@ -71,7 +71,7 @@ class FileStore {
     void BeforeEvict(PageId id, const Page& page, bool is_dirty) override {
       // Before we throw away a dirty page to make space for something else we
       // update the hash to avoid having to reload it again later.
-      if (is_dirty) {
+      if (eager_hashing && is_dirty) {
         hashes_.UpdateHash(id, std::as_bytes(std::span(page.AsArray())));
       }
     }
@@ -121,9 +121,7 @@ FileStore<K, V, F, page_size, eager_hashing>::FileStore(
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
       hash_file_(directory / "hash.dat") {
-  if (eager_hashing) {
-    pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
-  }
+  pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
   if (std::filesystem::exists(hash_file_)) {
     hashes_->LoadFromFile(hash_file_);
   }

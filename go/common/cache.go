@@ -11,8 +11,17 @@ type Cache[K comparable, V any] struct {
 // NewCache returns a new instance
 func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 	return &Cache[K, V]{
-		cache:    make(map[K]*entry[K, V]),
+		cache:    make(map[K]*entry[K, V], capacity),
 		capacity: capacity,
+	}
+}
+
+// Iterate all cached entries - calls the callback for each key-value pair in the cache
+func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
+	for key, value := range c.cache {
+		if !callback(key, value.val) {
+			return // terminate iteration if false returned from the callback
+		}
 	}
 }
 
@@ -31,16 +40,24 @@ func (c *Cache[K, V]) Get(key K) (val V, exists bool) {
 // If the key is already present, the value is updated and the key marked as
 // used. If the value is not present, a new entry is added to this
 // cache. This causes another entry to be removed if the cache size is exceeded.
-func (c *Cache[K, V]) Set(key K, val V) {
+func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
 	item, exists := c.cache[key]
 
 	// create entry if it does not exist
 	if !exists {
-		item = new(entry[K, V])
+		if len(c.cache) >= c.capacity {
+			item = c.dropLast() // reuse evicted object for the new entry
+			evictedKey = item.key
+			evictedValue = item.val
+		} else {
+			item = new(entry[K, V])
+		}
 		item.key = key
+		item.val = val
 		c.cache[key] = item
 
 		// Make the new entry the head of the LRU queue.
+		item.prev = nil
 		item.next = c.head
 		if c.head != nil {
 			c.head.prev = item
@@ -53,11 +70,8 @@ func (c *Cache[K, V]) Set(key K, val V) {
 		}
 	}
 
-	item.val = val
 	c.touch(item)
-	if len(c.cache) > c.capacity {
-		c.dropLast()
-	}
+	return
 }
 
 // touch marks the entry used
@@ -82,16 +96,17 @@ func (c *Cache[K, V]) touch(item *entry[K, V]) {
 	c.head = item
 }
 
-// dropLast drop last element from the queue
-func (c *Cache[K, V]) dropLast() {
-
+// dropLast drop the last element from the queue and returns it
+func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 	if c.tail == nil {
-		return // no tail - empty list
+		return nil // no tail - empty list
 	}
 
+	dropped = c.tail
 	delete(c.cache, c.tail.key)
 	c.tail = c.tail.prev
 	c.tail.next = nil
+	return dropped
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

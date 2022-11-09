@@ -1390,21 +1390,28 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 }
 
 func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
-	ref_state, err := NewMemory()
+	ref_state, err := NewMemory("")
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}
 	ref := CreateStateDBUsing(ref_state)
+	defer ref.Close()
 	mod(ref)
 	ref.EndTransaction()
 	want := ref.GetHash()
 	for i := 0; i < 10; i++ {
-		for _, config := range initStates(t) {
+		for _, config := range initStates() {
 			t.Run(fmt.Sprintf("%v/run=%d", config.name, i), func(t *testing.T) {
-				state := CreateStateDBUsing(config.state)
-				mod(state)
-				state.EndTransaction()
-				if got := state.GetHash(); want != got {
+				state, err := config.createState(t.TempDir())
+				if err != nil {
+					t.Fatalf("failed to initialize state %s", config.name)
+				}
+				stateDb := CreateStateDBUsing(state)
+				defer stateDb.Close()
+
+				mod(stateDb)
+				stateDb.EndTransaction()
+				if got := stateDb.GetHash(); want != got {
 					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
 				}
 			})

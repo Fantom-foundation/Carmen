@@ -41,6 +41,10 @@ func (p *Page) Set(position int64, bytes []byte) {
 	p.dirty = true
 }
 
+func (p *Page) SetDirty() {
+	p.dirty = true
+}
+
 func (p *Page) Get(position int64, size int64) []byte {
 	return p.data[position : position+size]
 }

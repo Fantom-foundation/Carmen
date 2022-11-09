@@ -13,6 +13,8 @@ import (
 type Serializer[T any] interface {
 	// ToBytes serialize the type to bytes
 	ToBytes(T) []byte
+	// CopyBytes serialize the type into a provided slice
+	CopyBytes(T, []byte)
 	// FromBytes deserialize the type from bytes
 	FromBytes([]byte) T
 	// Size provides the size of the type when serialized (bytes)
@@ -51,7 +53,7 @@ type SlotIdx[I Identifier] struct {
 	KeyIdx     I
 }
 
-// AccountState is the base type of an enum of account states.
+// AccountState is the base type of account states enum.
 type AccountState byte
 
 const (

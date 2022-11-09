@@ -15,19 +15,29 @@ class LeastRecentlyUsedCache {
  public:
   // Creates a new LRU cache with the given maximum capacity of elements.
   LeastRecentlyUsedCache(std::size_t capacity = 10)
-      : capacity_(capacity), cache_(capacity + 1) {}
+      : entries_(capacity),
+        index_(capacity + 1),
+        head_(&entries_.front()),
+        tail_(&entries_.back()) {
+    Entry* last = nullptr;
+    for (Entry& cur : entries_) {
+      if (last) {
+        last->succ = &cur;
+      }
+      cur.pred = last;
+      last = &cur;
+    }
+  }
 
   // Returns a pointer to the value mapped to the given key or nullptr, if there
   // is no such value in this cache. The access to the key is considered a use,
   // promoting the value in the LRU order.
   const V* Get(const K& key) {
-    auto pos = cache_.find(key);
-    if (pos == cache_.end()) {
+    auto pos = index_.find(key);
+    if (pos == index_.end()) {
       return nullptr;
     }
-    assert(head_);
-    assert(tail_);
-    Touch(pos->second.get());
+    Touch(pos->second);
     return &pos->second->value;
   }
 
@@ -37,38 +47,30 @@ class LeastRecentlyUsedCache {
   // cache. This may cause another entry to be removed if the cache size would
   // be exceeded.
   void Set(const K& key, const V& value) {
-    auto [pos, new_entry] = cache_.insert({key, nullptr});
+    auto [pos, new_entry] = index_.insert({key, nullptr});
     // Create the entry if it is new.
     if (new_entry) {
-      pos->second = std::make_unique<Entry>();
+      pos->second = GetFreeEntry();
       pos->second->key = key;
 
       // Also, make the new entry the head of the LRU queue.
       pos->second->pred = nullptr;
       pos->second->succ = head_;
       if (head_) {
-        head_->pred = pos->second.get();
+        head_->pred = pos->second;
       }
-      head_ = pos->second.get();
-
-      // The very first entry is head and tail at the same time.
-      if (tail_ == nullptr) {
-        tail_ = head_;
-      }
+      head_ = pos->second;
     }
     pos->second->value = value;
-    Touch(pos->second.get());
-    if (new_entry && cache_.size() > capacity_) {
-      DropLast();
-    }
+    Touch(pos->second);
   }
 
   // For testing only: returns the list of contained keys in LRU order.
   std::vector<K> GetOrderedKeysForTesting() const {
     std::vector<K> keys;
-    keys.reserve(cache_.size());
+    keys.reserve(index_.size());
     auto cur = head_;
-    while (cur) {
+    while (cur && keys.size() < index_.size()) {
       keys.push_back(cur->key);
       cur = cur->succ;
     }
@@ -81,11 +83,9 @@ class LeastRecentlyUsedCache {
   struct Entry {
     K key;
     V value;
-    Entry* pred;
-    Entry* succ;
+    Entry* pred = nullptr;
+    Entry* succ = nullptr;
   };
-
-  const std::size_t capacity_;
 
   // Registers an access to an entry by moving it to the front of the LRU queue.
   void Touch(Entry* entry) {
@@ -109,17 +109,25 @@ class LeastRecentlyUsedCache {
     head_ = entry;
   }
 
-  void DropLast() {
-    if (tail_ == nullptr) return;
+  Entry* GetFreeEntry() {
+    assert(tail_ != nullptr);
     auto new_tail = tail_->pred;
     new_tail->succ = nullptr;
-    cache_.erase(tail_->key);
+    if (index_.size() > entries_.size()) {
+      index_.erase(tail_->key);
+    }
+    auto result = tail_;
     tail_ = new_tail;
+    return result;
   }
 
-  // The maintained in-memory value cache.
-  absl::flat_hash_map<K, std::unique_ptr<Entry>> cache_;
+  // The entries stored in this cache.
+  std::vector<Entry> entries_;
 
+  // An index to the stored entries.
+  absl::flat_hash_map<K, Entry*> index_;
+
+  // The list of entries in LRU order.
   Entry* head_ = nullptr;
   Entry* tail_ = nullptr;
 };
