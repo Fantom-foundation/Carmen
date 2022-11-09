@@ -25,13 +25,15 @@ class LevelDBDepot {
   // created. If the depot exists, it will be opened.
   static absl::StatusOr<LevelDBDepot> Open(const std::filesystem::path& path, std::size_t hash_branching_factor = 32,
                                            std::size_t num_hash_boxes = 4) {
+    auto is_new = !std::filesystem::exists(path) || std::filesystem::is_empty(path);
     auto db = LevelDB::Open(path);
     if (!db.ok()) return db.status();
     auto depot = LevelDBDepot(std::move(*db), hash_branching_factor, num_hash_boxes);
 
-    if (!std::filesystem::is_empty(path)) {
-      RETURN_IF_ERROR(depot.hashes_.LoadFromLevelDB(*db));
+    if (!is_new) {
+      RETURN_IF_ERROR(depot.hashes_.LoadFromLevelDB(depot.db_));
     }
+
     return depot;
   }
 
