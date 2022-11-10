@@ -19,16 +19,17 @@ const (
 
 // GoState manages dependencies to other interfaces to build this service
 type GoState struct {
-	addressIndex  index.Index[common.Address, uint32]
-	keyIndex      index.Index[common.Key, uint32]
-	slotIndex     index.Index[common.SlotIdx[uint32], uint32]
-	accountsStore store.Store[uint32, common.AccountState]
-	noncesStore   store.Store[uint32, common.Nonce]
-	balancesStore store.Store[uint32, common.Balance]
-	valuesStore   store.Store[uint32, common.Value]
-	codesDepot    depot.Depot[uint32]
-	cleanup       []func()
-	hasher        hash.Hash
+	addressIndex    index.Index[common.Address, uint32]
+	keyIndex        index.Index[common.Key, uint32]
+	slotIndex       index.Index[common.SlotIdx[uint32], uint32]
+	accountsStore   store.Store[uint32, common.AccountState]
+	noncesStore     store.Store[uint32, common.Nonce]
+	balancesStore   store.Store[uint32, common.Balance]
+	valuesStore     store.Store[uint32, common.Value]
+	codesDepot      depot.Depot[uint32]
+	codeHashesStore store.Store[uint32, common.Hash]
+	cleanup         []func()
+	hasher          hash.Hash
 }
 
 func (s *GoState) CreateAccount(address common.Address) (err error) {
@@ -152,24 +153,34 @@ func (s *GoState) GetCode(address common.Address) (value []byte, err error) {
 }
 
 func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
+	var codeHash common.Hash
+	if code != nil { // codeHash is zero for empty code
+		if s.hasher == nil {
+			s.hasher = sha3.NewLegacyKeccak256()
+		}
+		codeHash = common.GetHash(s.hasher, code)
+	}
+
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
 	}
-	return s.codesDepot.Set(idx, code)
-}
-
-func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err error) {
-	// TODO: consider retrieving cached hashes
-	code, err := s.GetCode(address)
+	err = s.codesDepot.Set(idx, code)
 	if err != nil {
 		return
 	}
-	if s.hasher == nil {
-		s.hasher = sha3.NewLegacyKeccak256()
+	return s.codeHashesStore.Set(idx, codeHash)
+}
+
+func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err error) {
+	idx, err := s.addressIndex.Get(address)
+	if err != nil {
+		if err == index.ErrNotFound {
+			return common.Hash{}, nil
+		}
+		return
 	}
-	hash = common.GetHash(s.hasher, code)
-	return
+	return s.codeHashesStore.Get(idx)
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {
@@ -182,6 +193,7 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 		s.valuesStore,
 		s.accountsStore,
 		s.codesDepot,
+		// codeHashesStore omitted intentionally
 	}
 
 	h := sha256.New()
@@ -207,6 +219,7 @@ func (s *GoState) Flush() error {
 		s.balancesStore,
 		s.valuesStore,
 		s.codesDepot,
+		s.codeHashesStore,
 	}
 
 	var last error = nil

@@ -54,7 +54,7 @@ func TestMissingKeys(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
 			}
 			defer state.Close()
 
@@ -87,7 +87,7 @@ func TestBasicOperations(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
 			}
 			defer state.Close()
 
@@ -146,7 +146,7 @@ func TestMoreInserts(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
 			}
 			defer state.Close()
 
@@ -182,7 +182,7 @@ func TestHashing(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
 			}
 			defer state.Close()
 
