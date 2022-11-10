@@ -38,12 +38,11 @@ class InMemoryDepot {
   }
 
   // Retrieves the value associated to the given key. If no values has
-  // been previously set using the Set(..) function above, and empty span
+  // been previously set using the Set(..) function above, not found status
   // is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
-    static auto default_value = Box{};
     if (key >= boxes_->size()) {
-      return default_value;
+      return absl::NotFoundError("Key not found");
     }
     return (*boxes_)[key];
   }

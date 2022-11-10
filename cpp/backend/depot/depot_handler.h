@@ -29,13 +29,16 @@ class DepotHandler {
   Depot depot_;
 };
 
-template <std::integral K, std::size_t branching_factor, std::size_t num_hash_boxes>
+template <std::integral K, std::size_t branching_factor,
+          std::size_t num_hash_boxes>
 class DepotHandler<LevelDBDepot<K>, branching_factor, num_hash_boxes> {
  public:
   constexpr static std::size_t kBranchingFactor = branching_factor;
   constexpr static std::size_t kNumHashBoxes = num_hash_boxes;
 
-  DepotHandler() : depot_(*LevelDBDepot<K>::Open(temp_dir_.GetPath(), branching_factor, num_hash_boxes)) {}
+  DepotHandler()
+      : depot_(*LevelDBDepot<K>::Open(temp_dir_.GetPath(), branching_factor,
+                                      num_hash_boxes)) {}
   LevelDBDepot<K>& GetDepot() { return depot_; }
 
  private:
