@@ -1,13 +1,12 @@
 #include "backend/depot/memory/depot.h"
 
-#include <include/gmock/gmock-matchers.h>
-
 #include "backend/depot/depot_handler.h"
 #include "backend/depot/leveldb/depot.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
-#include "include/gmock/gmock.h"
-#include "include/gtest/gtest.h"
+#include "gmock/gmock-matchers.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace carmen::backend::depot {
 namespace {

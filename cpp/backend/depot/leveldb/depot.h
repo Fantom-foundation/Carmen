@@ -87,7 +87,7 @@ class LevelDBDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public store::PageSource {
    public:
-    explicit PageProvider(std::size_t num_hash_boxes, const LevelDB& db)
+    PageProvider(std::size_t num_hash_boxes, const LevelDB& db)
         : db_(db), num_hash_boxes_(num_hash_boxes) {}
 
     // Get data for given page. The data is valid until the next call to

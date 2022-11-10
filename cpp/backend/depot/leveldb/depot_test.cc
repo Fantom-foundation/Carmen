@@ -3,8 +3,8 @@
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "common/type.h"
-#include "include/gmock/gmock.h"
-#include "include/gtest/gtest.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace carmen::backend::depot {
 namespace {
