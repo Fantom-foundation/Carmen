@@ -70,8 +70,7 @@ class LevelDBIndexBase {
 
   // Computes a hash over the full content of this index.
   absl::StatusOr<Hash> GetHash() {
-    auto status = Commit();
-    if (!status.ok()) return status;
+    RETURN_IF_ERROR(Commit());
     return GetLastHash();
   }
 
@@ -169,9 +168,7 @@ class LevelDBIndexBase {
         return result.status();
     }
 
-    auto write_result = AddIndexAndUpdateLatestIntoDB(key, *last_index_);
-
-    if (!write_result.ok()) return write_result;
+    RETURN_IF_ERROR(AddIndexAndUpdateLatestIntoDB(key, *last_index_));
 
     // Append key into queue.
     keys_.push(key);
@@ -183,12 +180,11 @@ class LevelDBIndexBase {
   absl::Status Commit() {
     if (keys_.empty()) return absl::OkStatus();
 
-    auto hash = GetLastHash();
-    if (!hash.ok()) return hash.status();
+    ASSIGN_OR_RETURN(auto hash, GetLastHash());
 
     // calculate new hash
     while (!keys_.empty()) {
-      hash_ = carmen::GetHash(hasher_, *hash, keys_.front());
+      hash_ = carmen::GetHash(hasher_, hash, keys_.front());
       keys_.pop();
     }
 

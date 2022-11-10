@@ -241,9 +241,8 @@ absl::Status HashTree::SaveToLevelDB(const std::filesystem::path& file) {
   static_assert(std::endian::native == std::endian::little,
                 "Big endian architectures not yet supported.");
 
-  auto db = LevelDB::Open(file, /*create_if_missing=*/true);
-  if (!db.ok()) return db.status();
-  return SaveToLevelDB(*db);
+  ASSIGN_OR_RETURN(auto db, LevelDB::Open(file, /*create_if_missing=*/true));
+  return SaveToLevelDB(db);
 }
 
 absl::Status HashTree::LoadFromLevelDB(const LevelDB& level_db) {
@@ -295,9 +294,8 @@ absl::Status HashTree::LoadFromLevelDB(const LevelDB& level_db) {
 }
 
 absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
-  auto db = LevelDB::Open(file, /*create_if_missing=*/false);
-  if (!db.ok()) return db.status();
-  return LoadFromLevelDB(*db);
+  ASSIGN_OR_RETURN(auto db, LevelDB::Open(file, /*create_if_missing=*/false));
+  return LoadFromLevelDB(db);
 }
 
 }  // namespace carmen::backend::store

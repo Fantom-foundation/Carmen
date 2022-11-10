@@ -28,10 +28,9 @@ class LevelDBDepot {
       std::size_t num_hash_boxes = 4) {
     auto is_new =
         !std::filesystem::exists(path) || std::filesystem::is_empty(path);
-    auto db = LevelDB::Open(path);
-    if (!db.ok()) return db.status();
+    ASSIGN_OR_RETURN(auto db, LevelDB::Open(path, /*create_if_missing=*/true));
     auto depot =
-        LevelDBDepot(std::move(*db), hash_branching_factor, num_hash_boxes);
+        LevelDBDepot(std::move(db), hash_branching_factor, num_hash_boxes);
 
     if (!is_new) {
       RETURN_IF_ERROR(depot.hashes_.LoadFromLevelDB(*depot.db_));

@@ -5,6 +5,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/status_util.h"
 #include "leveldb/db.h"
 #include "leveldb/slice.h"
 #include "leveldb/write_batch.h"
@@ -81,9 +82,8 @@ class LevelDBImpl {
 // Open leveldb database connection.
 absl::StatusOr<LevelDB> LevelDB::Open(const std::filesystem::path& path,
                                       bool create_if_missing) {
-  auto db = LevelDBImpl::Open(path, create_if_missing);
-  if (!db.ok()) return db.status();
-  return LevelDB(std::make_unique<LevelDBImpl>(std::move(*db)));
+  ASSIGN_OR_RETURN(auto db, LevelDBImpl::Open(path, create_if_missing));
+  return LevelDB(std::make_unique<LevelDBImpl>(std::move(db)));
 }
 
 // Get value for given key.
@@ -103,5 +103,5 @@ LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
 
 LevelDB::LevelDB(LevelDB&&) noexcept = default;
 
-LevelDB::~LevelDB() {}
+LevelDB::~LevelDB() = default;
 }  // namespace carmen::backend
