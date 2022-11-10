@@ -17,8 +17,7 @@ std::string StrToDBKey(char key_space, std::span<const char> key) {
 
 absl::StatusOr<SingleLevelDBIndex> SingleLevelDBIndex::Open(
     const std::filesystem::path& path) {
-  ASSIGN_OR_RETURN(auto db,
-                   backend::LevelDB::Open(path, /*create_if_missing=*/true));
+  ASSIGN_OR_RETURN(auto db, LevelDB::Open(path, /*create_if_missing=*/true));
   return SingleLevelDBIndex(std::make_shared<LevelDB>(std::move(db)));
 }
 
