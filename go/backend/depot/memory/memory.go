@@ -99,10 +99,12 @@ func (m *Depot[I]) Close() error {
 }
 
 // GetMemoryFootprint provides the size of the depot in memory in bytes
-func (m *Depot[I]) GetMemoryFootprint() uintptr {
-	size := unsafe.Sizeof(*m) + m.hashTree.GetMemoryFootprint()
+func (m *Depot[I]) GetMemoryFootprint() common.MemoryFootprint {
+	size := unsafe.Sizeof(*m)
 	for _, d := range m.data {
 		size += uintptr(len(d))
 	}
-	return size
+	mf := common.NewMemoryFootprint(size)
+	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	return mf
 }

@@ -2,15 +2,13 @@ package state
 
 import (
 	"crypto/sha256"
-	"hash"
-	"io"
-	"unsafe"
-
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
+	"hash"
+	"io"
 )
 
 const (
@@ -221,24 +219,19 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 	return hash, nil
 }
 
-// GetMemoryFootprint provides the size of the state in memory in bytes
-func (s *GoState) GetMemoryFootprint() uintptr {
-	components := []common.MemoryFootprintProvider{
-		s.addressIndex,
-		s.keyIndex,
-		s.slotIndex,
-		s.accountsStore,
-		s.noncesStore,
-		s.balancesStore,
-		s.valuesStore,
-		s.codesDepot,
-		s.codeHashesStore,
-	}
-	size := unsafe.Sizeof(*s)
-	for _, component := range components {
-		size += component.GetMemoryFootprint()
-	}
-	return size
+// GetMemoryFootprint provides sizes of individual components of the state in the memory
+func (s *GoState) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(0)
+	mf.AddChild("addressIndex", s.addressIndex.GetMemoryFootprint())
+	mf.AddChild("keyIndex", s.keyIndex.GetMemoryFootprint())
+	mf.AddChild("slotIndex", s.slotIndex.GetMemoryFootprint())
+	mf.AddChild("accountsStore", s.accountsStore.GetMemoryFootprint())
+	mf.AddChild("noncesStore", s.noncesStore.GetMemoryFootprint())
+	mf.AddChild("balancesStore", s.balancesStore.GetMemoryFootprint())
+	mf.AddChild("valuesStore", s.valuesStore.GetMemoryFootprint())
+	mf.AddChild("codesDepot", s.codesDepot.GetMemoryFootprint())
+	mf.AddChild("codeHashesStore", s.codeHashesStore.GetMemoryFootprint())
+	return mf
 }
 
 func (s *GoState) Flush() error {

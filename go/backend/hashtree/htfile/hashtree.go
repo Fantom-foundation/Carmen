@@ -213,9 +213,10 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
-func (ht *HashTree) GetMemoryFootprint() uintptr {
-	return unsafe.Sizeof(*ht) + uintptr(len(ht.dirtyPages))*unsafe.Sizeof(struct {
-		key int
-		val bool
+func (ht *HashTree) GetMemoryFootprint() common.MemoryFootprint {
+	dirtyItemSize := unsafe.Sizeof(struct {
+		key   int
+		value bool
 	}{})
+	return common.NewMemoryFootprint(unsafe.Sizeof(*ht) + uintptr(len(ht.dirtyPages))*dirtyItemSize)
 }

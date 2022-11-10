@@ -179,9 +179,10 @@ func (m *Store[I, V]) Close() (err error) {
 }
 
 // GetMemoryFootprint provides the size of the store in memory in bytes
-func (m *Store[I, V]) GetMemoryFootprint() uintptr {
+func (m *Store[I, V]) GetMemoryFootprint() common.MemoryFootprint {
 	pageSize := unsafe.Sizeof(Page{}) + uintptr(m.pageSize)
-	return unsafe.Sizeof(*m) +
-		m.hashTree.GetMemoryFootprint() +
-		m.pagesPool.GetMemoryFootprint(pageSize)
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	mf.AddChild("pagesPool", m.pagesPool.GetMemoryFootprint(pageSize))
+	return mf
 }

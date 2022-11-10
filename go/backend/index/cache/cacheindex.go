@@ -67,6 +67,9 @@ func (m *Index[K, I]) Close() error {
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
-func (m *Index[K, I]) GetMemoryFootprint() uintptr {
-	return unsafe.Sizeof(*m) + m.wrapped.GetMemoryFootprint() + m.cache.GetMemoryFootprint(0)
+func (m *Index[K, I]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("cache", m.cache.GetMemoryFootprint(0))
+	mf.AddChild("sourceIndex", m.wrapped.GetMemoryFootprint())
+	return mf
 }

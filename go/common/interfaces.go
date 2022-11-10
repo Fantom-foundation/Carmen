@@ -13,5 +13,5 @@ type FlushAndCloser interface {
 }
 
 type MemoryFootprintProvider interface {
-	GetMemoryFootprint() uintptr
+	GetMemoryFootprint() MemoryFootprint
 }

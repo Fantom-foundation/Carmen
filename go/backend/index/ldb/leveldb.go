@@ -159,6 +159,8 @@ func (m *Index[K, I]) convertKeyStr(key string) common.DbKey {
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
-func (m *Index[K, I]) GetMemoryFootprint() uintptr {
-	return unsafe.Sizeof(*m) + m.hashIndex.GetMemoryFootprint()
+func (m *Index[K, I]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
+	return mf
 }

@@ -115,9 +115,9 @@ func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 
 // GetMemoryFootprint provides the size of the cache in memory in bytes
 // If V is a pointer type, it needs to provide the size of a referenced value.
-func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) uintptr {
-	e := entry[K, V]{}
-	return uintptr(c.capacity) * (unsafe.Sizeof(e) + referencedValueSize)
+func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) MemoryFootprint {
+	entrySize := unsafe.Sizeof(entry[K, V]{})
+	return NewMemoryFootprint(uintptr(c.capacity) * (entrySize + referencedValueSize))
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

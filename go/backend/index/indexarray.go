@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"strconv"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -109,10 +110,10 @@ func (m *Array[K, I]) Close() error {
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
-func (m *Array[K, I]) GetMemoryFootprint() uintptr {
-	size := unsafe.Sizeof(*m)
-	for _, index := range m.indexes {
-		size += index.GetMemoryFootprint()
+func (m *Array[K, I]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	for i, index := range m.indexes {
+		mf.AddChild(strconv.FormatInt(int64(i), 10), index.GetMemoryFootprint())
 	}
-	return size
+	return mf
 }

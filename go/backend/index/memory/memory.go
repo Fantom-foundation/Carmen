@@ -66,10 +66,12 @@ func (m *Index[K, I]) Close() error {
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
-func (m *Index[K, I]) GetMemoryFootprint() uintptr {
+func (m *Index[K, I]) GetMemoryFootprint() common.MemoryFootprint {
 	dataMapItemSize := unsafe.Sizeof(struct {
 		key K
 		idx I
 	}{})
-	return unsafe.Sizeof(*m) + uintptr(len(m.data))*dataMapItemSize
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m) + uintptr(len(m.data))*dataMapItemSize)
+	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
+	return mf
 }

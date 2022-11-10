@@ -11,8 +11,8 @@ type HashTree interface {
 	// HashRoot computes the hash root of the (merkle) tree.
 	HashRoot() (out common.Hash, err error)
 
-	// GetMemoryFootprint provides the size of the hash-tree in memory in bytes
-	GetMemoryFootprint() uintptr
+	// provides the size of the hash-tree in memory in bytes
+	common.MemoryFootprintProvider
 }
 
 // PageProvider is a source of pages for the HashTree

@@ -74,7 +74,7 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 }
 
 // GetMemoryFootprint provides the size of the structure in memory in bytes
-func (hi *HashIndex[K]) GetMemoryFootprint() uintptr {
+func (hi *HashIndex[K]) GetMemoryFootprint() common.MemoryFootprint {
 	var k K
-	return unsafe.Sizeof(*hi) + uintptr(len(hi.keys))*unsafe.Sizeof(k)
+	return common.NewMemoryFootprint(unsafe.Sizeof(*hi) + uintptr(len(hi.keys))*unsafe.Sizeof(k))
 }
