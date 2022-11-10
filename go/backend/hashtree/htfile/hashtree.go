@@ -9,6 +9,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"unsafe"
 )
 
 const HashLength = 32
@@ -209,4 +210,12 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 	}
 	copy(out[:], hash)
 	return
+}
+
+// GetMemoryFootprint provides the size of the hash-tree in memory in bytes
+func (ht *HashTree) GetMemoryFootprint() uintptr {
+	return unsafe.Sizeof(*ht) + uintptr(len(ht.dirtyPages))*unsafe.Sizeof(struct {
+		key int
+		val bool
+	}{})
 }

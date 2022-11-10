@@ -19,8 +19,15 @@ func (f *NoHashFactory) Create(pageProvider PageProvider) HashTree {
 	return &NoHash{}
 }
 
+// MarkUpdated marks a page as changed
 func (ht *NoHash) MarkUpdated(page int) {}
 
+// HashRoot provides the hash in the root of the hashing tree
 func (ht *NoHash) HashRoot() (out common.Hash, err error) {
 	return common.Hash{}, nil
+}
+
+// GetMemoryFootprint provides the size of the hash-tree in memory in bytes
+func (ht *NoHash) GetMemoryFootprint() uintptr {
+	return 0
 }

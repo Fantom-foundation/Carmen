@@ -4,6 +4,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // Index is an in-memory implementation of index.Index.
@@ -62,4 +63,13 @@ func (m *Index[K, I]) Flush() error {
 // Close closes the storage and clean-ups all possible dirty values
 func (m *Index[K, I]) Close() error {
 	return nil
+}
+
+// GetMemoryFootprint provides the size of the index in memory in bytes
+func (m *Index[K, I]) GetMemoryFootprint() uintptr {
+	dataMapItemSize := unsafe.Sizeof(struct {
+		key K
+		idx I
+	}{})
+	return unsafe.Sizeof(*m) + uintptr(len(m.data))*dataMapItemSize
 }

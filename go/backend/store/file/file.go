@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -107,4 +108,9 @@ func (m *Store[I, V]) Flush() error {
 // Close the store
 func (m *Store[I, V]) Close() error {
 	return m.file.Close()
+}
+
+// GetMemoryFootprint provides the size of the store in memory in bytes
+func (m *Store[I, V]) GetMemoryFootprint() uintptr {
+	return unsafe.Sizeof(*m) + m.hashTree.GetMemoryFootprint()
 }

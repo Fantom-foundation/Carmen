@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"hash"
 	"io"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
@@ -220,6 +221,26 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 	return hash, nil
 }
 
+// GetMemoryFootprint provides the size of the state in memory in bytes
+func (s *GoState) GetMemoryFootprint() uintptr {
+	components := []common.MemoryFootprintProvider{
+		s.addressIndex,
+		s.keyIndex,
+		s.slotIndex,
+		s.accountsStore,
+		s.noncesStore,
+		s.balancesStore,
+		s.valuesStore,
+		s.codesDepot,
+		s.codeHashesStore,
+	}
+	size := unsafe.Sizeof(*s)
+	for _, component := range components {
+		size += component.GetMemoryFootprint()
+	}
+	return size
+}
+
 func (s *GoState) Flush() error {
 	flushables := []common.Flusher{
 		s.addressIndex,
@@ -252,6 +273,7 @@ func (s *GoState) Close() error {
 		s.balancesStore,
 		s.valuesStore,
 		s.codesDepot,
+		s.codeHashesStore,
 	}
 
 	var last error = nil

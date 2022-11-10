@@ -3,6 +3,7 @@ package cache
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // Index wraps another index and a cache
@@ -63,4 +64,9 @@ func (m *Index[K, I]) Flush() error {
 // Close closes the storage and clean-ups all possible dirty values.
 func (m *Index[K, I]) Close() error {
 	return m.wrapped.Close()
+}
+
+// GetMemoryFootprint provides the size of the index in memory in bytes
+func (m *Index[K, I]) GetMemoryFootprint() uintptr {
+	return unsafe.Sizeof(*m) + m.wrapped.GetMemoryFootprint() + m.cache.GetMemoryFootprint(0)
 }

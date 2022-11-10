@@ -5,6 +5,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
+	"unsafe"
 )
 
 // HashTree is a structure allowing to make a hash of the whole database state.
@@ -140,4 +141,24 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 	}
 	copy(out[:], ht.tree[lastLayer][0])
 	return
+}
+
+// GetMemoryFootprint provides the size of the hash-tree in memory in bytes
+func (ht *HashTree) GetMemoryFootprint() uintptr {
+	size := unsafe.Sizeof(*ht)
+	sliceSize := unsafe.Sizeof([]byte{})
+	for i := 0; i < len(ht.tree); i++ {
+		size += sliceSize
+		for j := 0; j < len(ht.tree[i]); j++ {
+			size += sliceSize + uintptr(len(ht.tree[i][j]))
+		}
+	}
+	dirtyMapItemSize := unsafe.Sizeof(struct {
+		key   int
+		value bool
+	}{})
+	for i := 0; i < len(ht.dirtyNodes); i++ {
+		size += uintptr(len(ht.dirtyNodes[i])) * dirtyMapItemSize
+	}
+	return size
 }

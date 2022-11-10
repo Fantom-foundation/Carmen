@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -105,4 +106,13 @@ func (m *Array[K, I]) Close() error {
 	}
 
 	return resErr
+}
+
+// GetMemoryFootprint provides the size of the index in memory in bytes
+func (m *Array[K, I]) GetMemoryFootprint() uintptr {
+	size := unsafe.Sizeof(*m)
+	for _, index := range m.indexes {
+		size += index.GetMemoryFootprint()
+	}
+	return size
 }

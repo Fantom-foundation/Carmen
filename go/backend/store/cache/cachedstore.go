@@ -3,6 +3,7 @@ package cache
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // Store wraps a cache and a store. It caches the stored keys
@@ -47,4 +48,9 @@ func (m *Store[I, V]) Flush() error {
 
 func (m *Store[I, V]) Close() error {
 	return m.Flush()
+}
+
+// GetMemoryFootprint provides the size of the store in memory in bytes
+func (m *Store[I, V]) GetMemoryFootprint() uintptr {
+	return unsafe.Sizeof(*m) + m.store.GetMemoryFootprint() + m.cache.GetMemoryFootprint(0)
 }

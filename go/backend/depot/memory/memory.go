@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -95,4 +96,13 @@ func (m *Depot[I]) Flush() error {
 // Close the depot
 func (m *Depot[I]) Close() error {
 	return nil // no-op for in-memory database
+}
+
+// GetMemoryFootprint provides the size of the depot in memory in bytes
+func (m *Depot[I]) GetMemoryFootprint() uintptr {
+	size := unsafe.Sizeof(*m) + m.hashTree.GetMemoryFootprint()
+	for _, d := range m.data {
+		size += uintptr(len(d))
+	}
+	return size
 }

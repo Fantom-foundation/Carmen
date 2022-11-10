@@ -8,6 +8,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"hash"
+	"unsafe"
 )
 
 const (
@@ -230,4 +231,12 @@ func (ht *HashTree) convertKey(layer, node int) common.DbKey {
 	return ht.table.DBToDBKey(
 		common.HashKey.ToDBKey(
 			binary.BigEndian.AppendUint32([]byte{uint8(layer)}, uint32(node))))
+}
+
+// GetMemoryFootprint provides the size of the hash-tree in memory in bytes
+func (ht *HashTree) GetMemoryFootprint() uintptr {
+	return unsafe.Sizeof(*ht) + uintptr(len(ht.dirtyPages))*unsafe.Sizeof(struct {
+		key   int
+		value bool
+	}{})
 }

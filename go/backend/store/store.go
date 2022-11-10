@@ -19,6 +19,9 @@ type Store[I common.Identifier, V any] interface {
 	// GetStateHash computes and returns a cryptographical hash of the stored data
 	GetStateHash() (common.Hash, error)
 
+	// GetMemoryFootprint provides the size of the store in memory in bytes
+	GetMemoryFootprint() uintptr
+
 	// Also, stores need to be flush and closable.
 	common.FlushAndCloser
 }
