@@ -6,6 +6,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "backend/common/leveldb/level_db.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
 #include "common/type.h"
@@ -76,11 +77,21 @@ class HashTree {
   // them, all outdated hashes are implicitely refreshed.
   absl::Status SaveToLevelDB(const std::filesystem::path& path);
 
+  // Saves the hashes of this tree into the given leveldb instance. Before
+  // saving them, all outdated hashes are implicitely refreshed.
+  absl::Status SaveToLevelDB(LevelDB& level_db);
+
   // Discards the current content of this HashTree and loads all hashes from the
   // given leveldb path. Loaded hashes are considered up-to-date. After loading,
   // the internal tree structure is updated, and the file verified for
   // consistency.
   absl::Status LoadFromLevelDB(const std::filesystem::path& path);
+
+  // Discards the current content of this HashTree and loads all hashes from the
+  // given leveldb instance. Loaded hashes are considered up-to-date. After
+  // loading, the internal tree structure is updated, and the file verified for
+  // consistency.
+  absl::Status LoadFromLevelDB(const LevelDB& level_db);
 
  private:
   // Fetches the hashes of a given layer of the reduction tree. If the layer

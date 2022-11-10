@@ -27,7 +27,7 @@ concept Depot = requires(D a, const D b) {
     a.Set(std::declval<typename D::key_type>(),
           std::declval<std::span<const std::byte>>())
     } -> std::same_as<absl::Status>;
-  // Retrieves data from Depot. Default value is returned when not found.
+  // Retrieves data from Depot. Not found status is returned when not found.
   {
     b.Get(std::declval<typename D::key_type>())
     } -> std::same_as<absl::StatusOr<std::span<const std::byte>>>;

@@ -1,16 +1,19 @@
 #include "backend/depot/memory/depot.h"
 
 #include "backend/depot/depot_handler.h"
+#include "backend/depot/leveldb/depot.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
-#include "include/gmock/gmock.h"
-#include "include/gtest/gtest.h"
+#include "gmock/gmock-matchers.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace carmen::backend::depot {
 namespace {
 
+using ::testing::_;
 using ::testing::ElementsAre;
-using ::testing::IsEmpty;
+using ::testing::StatusIs;
 using ::testing::StrEq;
 
 // A test suite testing generic depot implementations.
@@ -29,13 +32,11 @@ TYPED_TEST_P(DepotTest, DataCanBeAddedAndRetrieved) {
   TypeParam wrapper;
   auto& depot = wrapper.GetDepot();
 
-  ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
-  EXPECT_THAT(val, IsEmpty());
-  ASSERT_OK_AND_ASSIGN(val, depot.Get(100));
-  EXPECT_THAT(val, IsEmpty());
+  EXPECT_THAT(depot.Get(10), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(depot.Get(100), StatusIs(absl::StatusCode::kNotFound, _));
 
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
-  ASSERT_OK_AND_ASSIGN(val, depot.Get(10));
+  ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
   EXPECT_THAT(val, ElementsAre(std::byte{1}, std::byte{2}));
 
   EXPECT_OK(
@@ -96,18 +97,13 @@ TYPED_TEST_P(DepotTest, HashChangesBack) {
   ASSERT_EQ(initial_hash, new_hash);
 }
 
-REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
-                            DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
-                            EmptyDepotHasZeroHash, NonEmptyDepotHasHash,
-                            HashChangesBack);
+TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
+  if (TypeParam::kBranchingFactor != 3 || TypeParam::kNumHashBoxes != 2) {
+    GTEST_SKIP()
+        << "This test is only valid for branching factor 3 and number of "
+           "hash boxes 2.";
+  }
 
-using DepotTypes = ::testing::Types<
-    // Branching size 3, Size of box 2.
-    DepotHandler<InMemoryDepot<unsigned int>, 3, 2>>;
-
-INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
-
-TEST(DepotTest, KnownHashesAreReproduced) {
   DepotHandler<InMemoryDepot<unsigned int>, 3, 2> wrapper;
   auto& depot = wrapper.GetDepot();
 
@@ -136,12 +132,24 @@ TEST(DepotTest, KnownHashesAreReproduced) {
   std::vector<std::byte> data;
   for (const auto& expected_hash : hashes) {
     data.push_back(static_cast<std::byte>(i << 4 | i));
-    EXPECT_OK(depot.Set(i, {data.begin(), data.end()}));
+    EXPECT_OK(depot.Set(i, data));
     ASSERT_OK_AND_ASSIGN(auto actual_hash, depot.GetHash());
     EXPECT_THAT(Print(actual_hash), StrEq(expected_hash));
     i++;
   }
 }
+
+REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
+                            DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
+                            EmptyDepotHasZeroHash, NonEmptyDepotHasHash,
+                            HashChangesBack, KnownHashesAreReproduced);
+
+using DepotTypes = ::testing::Types<
+    // Branching size 3, Size of box 2.
+    DepotHandler<InMemoryDepot<unsigned int>, 3, 2>,
+    DepotHandler<LevelDBDepot<unsigned int>, 3, 2> >;
+
+INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 
 }  // namespace
 }  // namespace carmen::backend::depot
