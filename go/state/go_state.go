@@ -152,6 +152,17 @@ func (s *GoState) GetCode(address common.Address) (value []byte, err error) {
 	return s.codesDepot.Get(idx)
 }
 
+func (s *GoState) GetCodeSize(address common.Address) (size int, err error) {
+	idx, err := s.addressIndex.Get(address)
+	if err != nil {
+		if err == index.ErrNotFound {
+			return 0, nil
+		}
+		return
+	}
+	return s.codesDepot.GetSize(idx)
+}
+
 func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
 	var codeHash common.Hash
 	if code != nil { // codeHash is zero for empty code

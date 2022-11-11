@@ -103,6 +103,9 @@ void Carmen_SetCode(C_State state, C_Address addr, C_Code code,
 // Retrieves the hash of the code stored under the given address.
 void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash);
 
+// Retrieves the code length stored under the given address.
+void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
+
 // ------------------------------ Global Hash ---------------------------------
 
 // Retrieves a global state hash of the given state.

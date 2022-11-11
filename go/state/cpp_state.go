@@ -108,6 +108,12 @@ func (cs *CppState) GetCodeHash(address common.Address) (common.Hash, error) {
 	return hash, nil
 }
 
+func (cs *CppState) GetCodeSize(address common.Address) (int, error) {
+	var size C.uint32_t
+	C.Carmen_GetCodeSize(cs.state, unsafe.Pointer(&address[0]), &size)
+	return int(size), nil
+}
+
 func (cs *CppState) GetHash() (common.Hash, error) {
 	var hash common.Hash
 	C.Carmen_GetHash(cs.state, unsafe.Pointer(&hash[0]))

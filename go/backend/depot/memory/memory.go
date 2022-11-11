@@ -76,6 +76,12 @@ func (m *Depot[I]) Get(id I) (out []byte, err error) {
 	return
 }
 
+// GetSize of the item (or 0 if not defined)
+func (m *Depot[I]) GetSize(id I) (int, error) {
+	value, err := m.Get(id)
+	return len(value), err
+}
+
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Depot[I]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()

@@ -14,6 +14,9 @@ type Depot[I common.Identifier] interface {
 	// Get a value associated with the index (or nil if not defined)
 	Get(id I) ([]byte, error)
 
+	// GetSize of a value associated with the index (or 0 if not defined)
+	GetSize(id I) (int, error)
+
 	// GetStateHash computes and returns a cryptographical hash of the stored data
 	GetStateHash() (common.Hash, error)
 
