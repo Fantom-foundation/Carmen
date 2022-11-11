@@ -29,7 +29,8 @@ cc_library(
             "snappy_unittest.cc",
             "snappy_benchmark.cc",
             "snappy_test_data.cc",
-            "snappy_test_tool.cc"
+            "snappy_test_tool.cc",
+            "snappy_uncompress_fuzzer.cc"
         ],
     ),
     hdrs = glob(
@@ -39,7 +40,6 @@ cc_library(
         ":config_h",
         ":snappy_stubs_public_h",
     ],
-    linkstatic = 1,
     defines = ["HAVE_CONFIG_H"],
     includes = ["."],
 )
