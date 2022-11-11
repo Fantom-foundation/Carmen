@@ -66,6 +66,12 @@ http_archive(
     name = "gperftools",
     #build_file = "@//third_party/gperftools:BUILD",
     build_file_content = _ALL_CONTENT,
+    patches = [
+        "@//third_party/gperftools:pc_from_ucontext.patch",
+    ],
+    patch_args = [
+        "-p1",
+    ],
     strip_prefix = "gperftools-gperftools-2.10",
     urls = [
         "https://github.com/gperftools/gperftools/archive/refs/tags/gperftools-2.10.zip",

@@ -1,0 +1,14 @@
+diff --git a/cmake/PCFromUContext.cmake b/cmake/PCFromUContext.cmake
+index e2db2e3..40bfc9c 100644
+--- a/cmake/PCFromUContext.cmake
++++ b/cmake/PCFromUContext.cmake
+@@ -39,7 +39,8 @@ macro(pc_from_ucontext variable)
+         "uc_mcontext->ss.rip"  # OS X (x86_64)
+         "uc_mcontext->__ss.__rip"  # OS X (>=10.5 [untested])
+         "uc_mcontext->ss.srr0"  # OS X (ppc, ppc64 [untested])
+-        "uc_mcontext->__ss.__srr0")  # OS X (>=10.5 [untested])
++        "uc_mcontext->__ss.__srr0"  # OS X (>=10.5 [untested])
++        "uc_mcontext->__ss.__pc")  # OS X [untested]
+ 
+     set(CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE=1)
+     if(HAVE_CYGWIN_SIGNAL_H)

@@ -2,6 +2,9 @@ load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
 
 cmake(
     name = "profiler",
+    generate_args = [
+        "-Dgperftools_build_benchmark=OFF",
+    ],
     build_args = [
         "--verbose",
         "--",  # <- Pass remaining options to the native tool.
@@ -12,6 +15,9 @@ cmake(
         # TODO: test on windows if needed
         "@platforms//os:windows": [
             "libprofiler.lib",
+        ],
+        "@platforms//os:osx": [
+            "libprofiler.5.5.5.dylib",
         ],
         "//conditions:default": [
             "libprofiler.so.5.5.5",
