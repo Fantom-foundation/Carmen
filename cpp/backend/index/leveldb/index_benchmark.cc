@@ -22,7 +22,7 @@ class SingleIndexBM {
     auto index = *SingleLevelDBIndex::Open(dir_.GetPath());
     for (std::uint8_t i = 0; i < num_indexes; ++i) {
       // create key space
-      indexes_.push_back(index.KeySpace<K, I>(i));
+      indexes_.push_back(index.template KeySpace<K, I>(i));
     }
   }
   LevelDBKeySpace<K, I>& GetIndex(std::uint8_t index) {
