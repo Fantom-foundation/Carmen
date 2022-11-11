@@ -21,7 +21,7 @@ class SingleLevelDBIndexTestAdapter {
 
   std::pair<I, bool> GetOrAdd(const K& key) {
     auto result = key_space_.GetOrAdd(key);
-    if (result.ok()) return {(*result).first, (*result).second};
+    if (result.ok()) return *result;
     // no way to handle error
     return {0, false};
   }

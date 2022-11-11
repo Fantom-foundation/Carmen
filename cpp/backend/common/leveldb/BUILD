@@ -3,6 +3,7 @@ cc_library(
     hdrs = ["level_db.h"],
     srcs = ["level_db.cc"],
     deps = [
+        "//common:status_util",
         "@com_github_google_leveldb//:leveldb",
         "@com_google_absl//absl/status:statusor"
     ],

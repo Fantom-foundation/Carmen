@@ -19,9 +19,8 @@ class MultiLevelDBIndex : public internal::LevelDBIndexBase<K, I, 0> {
  public:
   static absl::StatusOr<MultiLevelDBIndex> Open(
       const std::filesystem::path& path) {
-    auto db = LevelDB::Open(path);
-    if (!db.ok()) return db.status();
-    return MultiLevelDBIndex(std::move(*db));
+    ASSIGN_OR_RETURN(auto db, LevelDB::Open(path));
+    return MultiLevelDBIndex(std::move(db));
   }
 
  private:
