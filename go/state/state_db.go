@@ -148,9 +148,23 @@ type slotValue struct {
 
 // codeValue maintains the code associated to a given address.
 type codeValue struct {
-	code  []byte
-	hash  *common.Hash
-	dirty bool // < set if code has been updated in transaction
+	code       []byte
+	size       int
+	hash       *common.Hash
+	dirty      bool // < set if code has been updated in transaction
+	codeLoaded bool // < set if code is loaded from the state (or written as dirty)
+	sizeLoaded bool // < set if size is loaded from the state (or written as dirty)
+}
+
+func (val *codeValue) setCode(code []byte) {
+	val.code = code
+	val.codeLoaded = true
+	val.setSize(len(code))
+}
+
+func (val *codeValue) setSize(size int) {
+	val.size = size
+	val.sizeLoaded = true
 }
 
 func CreateStateDB(directory string) (StateDB, error) {
@@ -402,12 +416,12 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 		val = &codeValue{}
 		s.codes[addr] = val
 	}
-	if val.code == nil {
+	if !val.codeLoaded {
 		code, err := s.state.GetCode(addr)
 		if err != nil {
 			panic(fmt.Sprintf("Unable to obtain code for %v: %v", addr, err))
 		}
-		val.code = code
+		val.setCode(code)
 	}
 	return val.code
 }
@@ -415,14 +429,15 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 func (s *stateDB) SetCode(addr common.Address, code []byte) {
 	val, exists := s.codes[addr]
 	if !exists {
-		val = &codeValue{code: code, dirty: true}
+		val = &codeValue{dirty: true}
+		val.setCode(code)
 		s.codes[addr] = val
 		s.undo = append(s.undo, func() {
 			delete(s.codes, addr)
 		})
 	} else {
 		old := *val
-		val.code = code
+		val.setCode(code)
 		val.hash = nil
 		val.dirty = true
 		s.undo = append(s.undo, func() {
@@ -443,6 +458,7 @@ func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
 		val.hash = &hash
 	}
 	if val.hash == nil {
+		// hash not loaded, code not dirty - needs to load the hash from the state
 		hash, err := s.state.GetCodeHash(addr)
 		if err != nil {
 			panic(fmt.Sprintf("Unable to obtain code hash for %v: %v", addr, err))
@@ -453,9 +469,19 @@ func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
 }
 
 func (s *stateDB) GetCodeSize(addr common.Address) int {
-	// For now, let's load the full code and get its size. If this turns out to be
-	// a costly operation, a special "GetSize" call to the state may be added.
-	return len(s.GetCode(addr))
+	val, exists := s.codes[addr]
+	if !exists {
+		val = &codeValue{}
+		s.codes[addr] = val
+	}
+	if !val.sizeLoaded {
+		size, err := s.state.GetCodeSize(addr)
+		if err != nil {
+			panic(fmt.Sprintf("Unable to obtain code size for %v: %v", addr, err))
+		}
+		val.setSize(size)
+	}
+	return val.size
 }
 
 func (s *stateDB) AddRefund(amount uint64) {

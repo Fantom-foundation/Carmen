@@ -941,11 +941,11 @@ func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	want := []byte{0xAC, 0xDC}
-	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+	want := 2
+	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(want, nil)
 
-	if got := db.GetCodeSize(address1); got != len(want) {
-		t.Errorf("error retrieving code size, wanted %v, got %v", len(want), got)
+	if got := db.GetCodeSize(address1); got != want {
+		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
 	}
 }
 
