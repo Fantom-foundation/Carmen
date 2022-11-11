@@ -147,6 +147,20 @@ func (m *Depot[I]) getOffsetLen(id I) (offset uint64, length uint32, err error) 
 	return
 }
 
+// GetSize of the item (or 0 if not defined)
+func (m *Depot[I]) GetSize(id I) (length int, err error) {
+	_, itemPosition := m.itemPosition(id)
+	var lengthBytes [LengthSize]byte
+	_, err = m.offsetsFile.ReadAt(lengthBytes[:], itemPosition+OffsetSize)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return int(binary.LittleEndian.Uint32(lengthBytes[:])), nil
+}
+
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Depot[I]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()

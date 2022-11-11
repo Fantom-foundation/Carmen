@@ -80,6 +80,12 @@ func (m *Depot[I]) Get(id I) (out []byte, err error) {
 	return
 }
 
+// GetSize of the item (or 0 if not defined)
+func (m *Depot[I]) GetSize(id I) (int, error) {
+	value, err := m.Get(id)
+	return len(value), err
+}
+
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer

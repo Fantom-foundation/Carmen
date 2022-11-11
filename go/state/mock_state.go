@@ -150,6 +150,21 @@ func (mr *MockStateMockRecorder) GetCodeHash(address interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeHash", reflect.TypeOf((*MockState)(nil).GetCodeHash), address)
 }
 
+// GetCodeSize mocks base method.
+func (m *MockState) GetCodeSize(address common.Address) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCodeSize", address)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCodeSize indicates an expected call of GetCodeSize.
+func (mr *MockStateMockRecorder) GetCodeSize(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeSize", reflect.TypeOf((*MockState)(nil).GetCodeSize), address)
+}
+
 // GetHash mocks base method.
 func (m *MockState) GetHash() (common.Hash, error) {
 	m.ctrl.T.Helper()

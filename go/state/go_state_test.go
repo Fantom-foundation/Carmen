@@ -78,6 +78,10 @@ func TestMissingKeys(t *testing.T) {
 			if err != nil || code != nil {
 				t.Errorf("Value must be empty. It is: %s, err: %s", value, err)
 			}
+			size, err := state.GetCodeSize(address1)
+			if err != nil || size != 0 {
+				t.Errorf("Value must be 0. It is: %d, err: %s", value, err)
+			}
 		})
 	}
 }
@@ -123,6 +127,9 @@ func TestBasicOperations(t *testing.T) {
 			}
 			if val, err := state.GetCode(address1); err != nil || !bytes.Equal(val, []byte{0x12, 0x34}) {
 				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+			}
+			if val, err := state.GetCodeSize(address1); err != nil || val != 2 {
+				t.Errorf("Invalid code size or error returned: Val: %d, Err: %s", val, err)
 			}
 
 			// delete account
