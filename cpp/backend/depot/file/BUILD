@@ -5,6 +5,7 @@ cc_library(
         "//backend/store:hash_tree",
         "//common:hash",
         "//common:type",
+        "//common:status_util",
         "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/status:statusor",
     ],

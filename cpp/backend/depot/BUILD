@@ -14,6 +14,7 @@ cc_library(
     deps = [
         ":depot",
         "//backend/depot/leveldb:depot",
+        "//backend/depot/file:depot",
         "//common:file_util"
     ],
     testonly = True,
@@ -27,6 +28,7 @@ cc_test(
         ":depot_handler",
         "//backend/depot/memory:depot",
         "//backend/depot/leveldb:depot",
+        "//backend/depot/file:depot",
         "//common:status_test_util",
         "//common:test_util",
         "@com_google_googletest//:gtest_main",

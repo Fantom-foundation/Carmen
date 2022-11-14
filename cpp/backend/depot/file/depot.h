@@ -8,6 +8,7 @@
 #include "backend/store/hash_tree.h"
 #include "common/hash.h"
 #include "common/type.h"
+#include "common/status_util.h"
 
 namespace carmen::backend::depot {
 
@@ -26,7 +27,7 @@ class FileDepot {
         hash_file_(directory / "hash.dat"),
         offset_file_(directory / "offset.dat"),
         data_file_(directory / "data.dat"),
-        hashes_(std::make_unique<PageProvider>(offset_file_, data_file_, num_hash_boxes_),
+        hashes_(std::make_unique<PageProvider>(data_file_, num_hash_boxes_, std::bind(&FileDepot::GetBoxOffsetAndSize, this, std::placeholders::_1)),
                 hash_branching_factor) {
         if (std::filesystem::exists(hash_file_)) {
           hashes_.LoadFromFile(hash_file_);
@@ -70,20 +71,42 @@ class FileDepot {
   // been previously set using the Set(..) function above, not found status
   // is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
-    if (key >= boxes_->size()) {
-      return absl::NotFoundError("Key not found");
+    ASSIGN_OR_RETURN(auto metadata, GetBoxOffsetAndSize(key));
+    if (metadata.second == 0) return absl::NotFoundError("Key not found");
+
+    std::ifstream fs(data_file_, std::ios::in | std::ios::binary);
+    if (!fs.is_open()) return absl::InternalError("Failed to open data file");
+
+    get_data_.resize(metadata.second);
+
+    // seek to position in data file
+    if (!fs.seekg(metadata.first, std::ios::beg)) {
+      fs.close();
+      return absl::InternalError("Failed to seek to offset");
     }
-    return (*boxes_)[key];
+
+    // read actual data
+    fs.read(get_data_.data(), metadata.second);
+    fs.close();
+    if (!fs.good()) return absl::InternalError("Failed to read data");
+
+    return std::span<const std::byte>(reinterpret_cast<const std::byte*>(get_data_.data()), metadata.second);
   }
 
   // Computes a hash over the full content of this depot.
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
-  // Ignored, since depot is not backed by disk storage.
-  absl::Status Flush() { return absl::OkStatus(); }
+  // Flush all pending changes to disk.
+  absl::Status Flush() {
+    hashes_.SaveToFile(hash_file_);
+    return absl::OkStatus();
+  }
 
-  // Ignored, since depot does not maintain any resources.
-  absl::Status Close() { return absl::OkStatus(); }
+  // Close the depot.
+  absl::Status Close() {
+    Flush();
+    return absl::OkStatus();
+  }
 
  private:
   using Offset = std::uint64_t;
@@ -94,9 +117,38 @@ class FileDepot {
     return key / num_hash_boxes_;
   }
 
-  // Get position of the given key in the data file.
+  // Get position of the given key in the offset file.
   std::size_t GetBoxPosition(const K& key) const {
     return key * (sizeof(Offset) + sizeof(Size));
+  }
+
+  // Get offset and size for given key from the offset file into the data file.
+  absl::StatusOr<std::pair<Offset, Size>> GetBoxOffsetAndSize(const K& key) const {
+    std::fstream ofs(offset_file_, std::ios::in | std::ios::binary);
+    if (!ofs.is_open()) return absl::InternalError("Failed to open offset file");
+
+    // Seek to the position of the key.
+    if (!ofs.seekg(GetBoxPosition(key), std::ios::beg)) {
+      ofs.close();
+      return absl::InternalError("Failed to seek to position in offset file");
+    }
+
+    // Read offset and size.
+    std::array<char, sizeof(Offset) + sizeof(Size)> data{};
+
+    ofs.read(data.data(), data.max_size());
+    ofs.close();
+
+    if (ofs.eof()) {
+      return absl::NotFoundError("Key not found");
+    }
+
+    if (ofs.fail()) {
+      return absl::InternalError("Failed to read offset and size");
+    }
+
+    return std::pair<Offset, Size> {*reinterpret_cast<const Offset*>(&data),
+                                    *reinterpret_cast<const Size*>(&data + sizeof(Offset))};
   }
 
   // A page source providing the owned hash tree access to the stored pages.
@@ -105,60 +157,74 @@ class FileDepot {
     // Get data for given page. The data is valid until the next call to
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
+      auto static empty = std::array<std::byte, 0>{};
       // calculate start and end of the hash group
-      auto start = boxes_.begin() + id * num_hash_boxes_;
-      auto end =
-          boxes_.begin() +
-          std::min(id * num_hash_boxes_ + num_hash_boxes_, boxes_.size());
+      auto start =  id * num_hash_boxes_;
+      auto end = start + num_hash_boxes_ - 1;
 
-      if (start >= end) return empty;
+      if (start > end) return empty;
 
-      // calculate the size of the hash group
+      std::vector<std::pair<Offset, Size>> metadata(num_hash_boxes_);
+      for (K i = 0; start + i <= end; ++i) {
+        auto meta = metadata_extractor_(i);
+        if (!meta.ok()) return empty;
+        metadata[i] = *meta;
+      }
+
+      std::ifstream fs(data_file_, std::ios::in | std::ios::binary);
+      if (!fs.is_open()) return empty;
+
       std::size_t len = 0;
-      for (auto it = start; it != end; ++it) {
-        len += it->size();
+      for (std::size_t i = 0; i < num_hash_boxes_; ++i) {
+        if (!fs.seekg(metadata[i].first, std::ios::beg)) {
+          fs.close();
+          return empty;
+        }
+
+        page_data_.resize(len + metadata[i].second);
+
+        fs.read(page_data_.data() + len, metadata[i].second);
+        if (fs.fail()) {
+          fs.close();
+          return empty;
+        }
+
+        len += metadata[i].second;
       }
 
-      page_data_.resize(len);
-      std::size_t pos = 0;
-      for (auto it = start; it != end; ++it) {
-        if (it->empty()) continue;
-        std::memcpy(page_data_.data() + pos, it->data(), it->size());
-        pos += it->size();
-      }
-
-      return {page_data_.data(), len};
+      return {reinterpret_cast<const std::byte*>(page_data_.data()), len};
     }
 
-    explicit PageProvider(const std::filesystem::path& offset_file, const std::filesystem::path& data_file, std::size_t num_hash_boxes)
-        : offset_file_(offset_file),
-          data_file_(data_file),
-          num_hash_boxes_(num_hash_boxes) {}
+    PageProvider(const std::filesystem::path& data_file, std::size_t num_hash_boxes, std::function<absl::StatusOr<std::pair<Offset, Size>>(const K&)> metadata_extractor)
+        : data_file_(data_file),
+          num_hash_boxes_(num_hash_boxes),
+          metadata_extractor_(metadata_extractor) {}
 
    private:
-    const std::filesystem::path& offset_file_;
     const std::filesystem::path& data_file_;
-    std::size_t num_hash_boxes_;
-    std::vector<std::byte> page_data_;
+    const std::size_t num_hash_boxes_;
+    std::vector<char> page_data_;
+    std::function<absl::StatusOr<std::pair<Offset, Size>>(const K&)> metadata_extractor_;
   };
+
+  // The amount of boxes that will be grouped into a single hashing group.
+  const std::size_t num_hash_boxes_;
 
   // The name of the file to save hashes to.
   std::filesystem::path hash_file_;
 
-  // The name of the file to save offsets to.
+  // The name of the file to save offsets to. It is used to get positions
+  // of the data in the data file.
   std::filesystem::path offset_file_;
 
-  // The name of the file to save data to.
+  // The name of the file to save data to. It is used to get the actual data.
   std::filesystem::path data_file_;
-
-  // The amount of boxes that will be grouped into a single hashing group.
-  const std::size_t num_hash_boxes_;
 
   // The data structure managing the hashing of states.
   mutable store::HashTree hashes_;
 
   // Temporary storage for the result of Get().
-  mutable std::vector<std::byte> get_data_;
+  mutable std::vector<char> get_data_;
 };
 
 }  // namespace carmen::backend::depot
