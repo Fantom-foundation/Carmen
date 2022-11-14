@@ -10,6 +10,8 @@ type Map[K comparable, V any] interface {
 	Set(key Key, value V)
 	Get(key Key) (V, bool)
 	Delete(key Key) bool
+	Length() int
+	ForEach(func(K, V))
 	Clear()
 }
 
@@ -38,6 +40,16 @@ func (m *BuildInMap[K, V]) Delete(key K) bool {
 	return exists
 }
 
+func (m *BuildInMap[K, V]) Length() int {
+	return len(m.data)
+}
+
+func (m *BuildInMap[K, V]) ForEach(op func(K, V)) {
+	for k, v := range m.data {
+		op(k, v)
+	}
+}
+
 func (m *BuildInMap[K, V]) Clear() {
 	m.data = map[K]V{}
 }
@@ -45,9 +57,11 @@ func (m *BuildInMap[K, V]) Clear() {
 // KeyIntMap implements the FastMap structure for a fixed Key/Value type pair to evaluate
 // the impact of the generic implementation of the FastMap.
 type KeyIntMap struct {
-	buckets    [kFastMapBuckets]fmPtr
-	data       []keyIntMapEntry
-	generation uint16
+	buckets     [kFastMapBuckets]fmPtr
+	data        []keyIntMapEntry
+	generation  uint16
+	size        int
+	usedBuckets []uint16
 }
 
 type keyIntMapEntry struct {
@@ -58,7 +72,8 @@ type keyIntMapEntry struct {
 
 func NewKeyIntMap() *KeyIntMap {
 	res := &KeyIntMap{
-		data: make([]keyIntMapEntry, 0, 10000),
+		data:        make([]keyIntMapEntry, 0, 10000),
+		usedBuckets: make([]uint16, 0, kFastMapBuckets),
 	}
 	res.Clear()
 	return res
@@ -79,6 +94,11 @@ func (m *KeyIntMap) Get(key Key) (int, bool) {
 func (m *KeyIntMap) Set(key Key, value int) {
 	hash := KeyHasher{}.Hash(key)
 	cur := m.toPos(m.buckets[hash])
+
+	if cur < 0 {
+		m.usedBuckets = append(m.usedBuckets, hash)
+	}
+
 	for 0 <= cur && cur < int64(len(m.data)) {
 		if m.data[cur].key == key {
 			m.data[cur].value = value
@@ -86,6 +106,7 @@ func (m *KeyIntMap) Set(key Key, value int) {
 		}
 		cur = m.toPos(m.data[cur].next)
 	}
+	m.size++
 	new := len(m.data)
 	m.data = append(m.data, keyIntMapEntry{})
 	m.data[new].key = key
@@ -101,6 +122,7 @@ func (m *KeyIntMap) Delete(key Key) bool {
 	for 0 <= cur && cur < int64(len(m.data)) {
 		if m.data[cur].key == key {
 			*ptr = m.data[cur].next
+			m.size--
 			return true
 		}
 		ptr = &m.data[cur].next
@@ -112,9 +134,26 @@ func (m *KeyIntMap) Delete(key Key) bool {
 func (m *KeyIntMap) Clear() {
 	m.data = m.data[0:0]
 	m.generation++
+	m.size = 0
+	m.usedBuckets = m.usedBuckets[0:0]
 	if m.generation == 0 {
 		for i := range m.buckets {
 			m.buckets[i] = -1
+		}
+	}
+}
+
+func (m *KeyIntMap) Length() int {
+	return m.size
+}
+
+func (m *KeyIntMap) ForEach(op func(Key, int)) {
+	for _, i := range m.usedBuckets {
+		pos := m.toPos(m.buckets[i])
+		for 0 <= pos && pos < int64(len(m.data)) {
+			entry := &m.data[pos]
+			op(entry.key, entry.value)
+			pos = m.toPos(entry.next)
 		}
 	}
 }
@@ -191,7 +230,7 @@ func TestMapInsertedIsContainedExhaustive(t *testing.T) {
 	}
 }
 
-func TestMapClearDeleteRemovesKey(t *testing.T) {
+func TestMapDeleteRemovesKey(t *testing.T) {
 	for _, config := range getMapConfigs() {
 		data := config.get()
 		t.Run(config.name, func(t *testing.T) {
@@ -210,7 +249,7 @@ func TestMapClearDeleteRemovesKey(t *testing.T) {
 	}
 }
 
-func TestMapClearDeleteRemovesSelectedKeyFromBucket(t *testing.T) {
+func TestMapDeleteRemovesSelectedKeyFromBucket(t *testing.T) {
 	for _, config := range getMapConfigs() {
 		data := config.get()
 		t.Run(config.name, func(t *testing.T) {
@@ -311,6 +350,118 @@ func TestMapClearRemovesAllContent(t *testing.T) {
 				if _, exists := data.Get(key); exists {
 					t.Errorf("Key still present: %v", key)
 				}
+			}
+		})
+	}
+}
+
+func TestMapAddingKeysIsReflectedInSize(t *testing.T) {
+	for _, config := range getMapConfigs() {
+		t.Run(config.name, func(t *testing.T) {
+			data := config.get()
+			want := 0
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			data.Set(Key{12}, 4)
+			want = 1
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			data.Set(Key{14}, 6)
+			want = 2
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			// Update does not change the size
+			data.Set(Key{12}, 6)
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+		})
+	}
+}
+
+func TestMapDeletingKeysIsReflectedInSize(t *testing.T) {
+	for _, config := range getMapConfigs() {
+		t.Run(config.name, func(t *testing.T) {
+			data := config.get()
+			data.Set(Key{12}, 1)
+			data.Set(Key{14}, 2)
+			data.Set(Key{16}, 3)
+			want := 3
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			data.Delete(Key{12})
+			want = 2
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			data.Delete(Key{14})
+			want = 1
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			// Deleting a missing key does not change the size
+			data.Delete(Key{8})
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+		})
+	}
+}
+
+func TestMapClearResetsSize(t *testing.T) {
+	for _, config := range getMapConfigs() {
+		t.Run(config.name, func(t *testing.T) {
+			data := config.get()
+			data.Set(Key{12}, 1)
+			data.Set(Key{14}, 2)
+			data.Set(Key{16}, 3)
+			want := 3
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+			data.Clear()
+			want = 0
+			if got := data.Length(); want != got {
+				t.Errorf("invalid length, wanted %v, got %v", want, got)
+			}
+		})
+	}
+}
+
+func TestMapForEachVisitsAllElements(t *testing.T) {
+	for _, config := range getMapConfigs() {
+		t.Run(config.name, func(t *testing.T) {
+			data := config.get()
+
+			for i := 0; i < 100; i++ {
+				elements := map[Key]int{}
+				data.ForEach(func(key Key, value int) {
+					_, exists := elements[key]
+					if exists {
+						t.Errorf("Visited element more than once: %v", key)
+					}
+					elements[key] = value
+				})
+
+				if i != len(elements) {
+					t.Errorf("Invalid number of elements visited, expected %v, got %v", i, len(elements))
+				} else {
+					for j := 0; j < i; j++ {
+						key := Key{byte(j)}
+						value, exists := elements[key]
+						if !exists {
+							t.Errorf("Failed to visit key %v", key)
+						} else if value != j*j {
+							t.Errorf("Wrong value assigned to key %v: wanted %v, got %v", key, j*j, value)
+						}
+					}
+				}
+
+				data.Set(Key{byte(i)}, i*i)
 			}
 		})
 	}
