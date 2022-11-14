@@ -323,6 +323,16 @@ func TestDepotsHashingByComparison(t *testing.T) {
 			t.Errorf("depots hashes does not match after inserting item %d: %s", i, err)
 		}
 	}
+
+	// modify one item in the middle
+	for _, d := range depots {
+		if err := d.Set(2, []byte{byte(0x99)}); err != nil {
+			t.Fatalf("failed to set again depot item %d; %s", 2, err)
+		}
+	}
+	if err := compareHashes(depots); err != nil {
+		t.Errorf("depots hashes does not match after updating item %d: %s", 2, err)
+	}
 }
 
 func compareHashes(depots map[string]depot.Depot[uint32]) error {
