@@ -242,7 +242,9 @@ std::span<const std::byte> State<IndexType, StoreType, DepotType>::GetCode(
     const Address& address) const {
   auto addr_id = address_index_.Get(address);
   if (!addr_id.has_value()) return {};
-  return *codes_.Get(*addr_id);
+  auto code = codes_.Get(*addr_id);
+  if (code.ok()) return *code;
+  return {};
 }
 
 template <template <typename K, typename V> class IndexType,
