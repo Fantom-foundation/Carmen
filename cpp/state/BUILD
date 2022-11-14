@@ -49,6 +49,13 @@ cc_test(
 cc_binary(
   name = "libcarmen.so",
   linkshared = True,
+  linkopts = select({
+    "@platforms//os:osx": [
+        # Needed to make resulting library moveable
+        "-install_name @rpath/libcarmen.so",
+    ],
+    "//conditions:default": [],
+  }),
   deps = [
      ":c_state",
   ],

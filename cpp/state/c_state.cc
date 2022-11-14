@@ -272,6 +272,13 @@ void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
   h = s.GetCodeHash(a);
 }
 
+void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto& a = *reinterpret_cast<carmen::Address*>(addr);
+  auto code = s.GetCode(a);
+  *out_length = code.size();
+}
+
 void Carmen_GetHash(C_State state, C_Hash out_hash) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);

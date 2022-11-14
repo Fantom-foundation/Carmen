@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <fstream>
 #include <span>
+#include <sstream>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"

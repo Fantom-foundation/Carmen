@@ -234,6 +234,13 @@ func TestSetAndGetCode(t *testing.T) {
 				if !bytes.Equal(code, value) {
 					t.Errorf("Invalid value read, got %v, wanted %v", value, code)
 				}
+				size, err := state.GetCodeSize(address1)
+				if err != nil {
+					t.Fatalf("Error fetching code size: %v", err)
+				}
+				if size != len(code) {
+					t.Errorf("Invalid value size read, got %v, wanted %v", size, len(code))
+				}
 			}
 		})
 	}

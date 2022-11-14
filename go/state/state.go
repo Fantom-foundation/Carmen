@@ -38,6 +38,9 @@ type State interface {
 	// GetCode returns code of the contract for the input contract address.
 	GetCode(address common.Address) ([]byte, error)
 
+	// GetCodeSize returns the length of the contract for the input contract address.
+	GetCodeSize(address common.Address) (int, error)
+
 	// SetCode updates code of the contract for the input contract address.
 	SetCode(address common.Address, code []byte) error
 
