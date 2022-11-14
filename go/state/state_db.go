@@ -148,23 +148,12 @@ type slotValue struct {
 
 // codeValue maintains the code associated to a given address.
 type codeValue struct {
-	code       []byte
-	size       int
-	hash       *common.Hash
-	dirty      bool // < set if code has been updated in transaction
-	codeLoaded bool // < set if code is loaded from the state (or written as dirty)
-	sizeLoaded bool // < set if size is loaded from the state (or written as dirty)
-}
-
-func (val *codeValue) setCode(code []byte) {
-	val.code = code
-	val.codeLoaded = true
-	val.setSize(len(code))
-}
-
-func (val *codeValue) setSize(size int) {
-	val.size = size
-	val.sizeLoaded = true
+	code      []byte
+	size      int
+	hash      *common.Hash
+	dirty     bool // < set if code has been updated in transaction
+	codeValid bool // < set if code is loaded from the state (or written as dirty)
+	sizeValid bool // < set if size is loaded from the state (or written as dirty)
 }
 
 func CreateStateDB(directory string) (StateDB, error) {
@@ -416,12 +405,13 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 		val = &codeValue{}
 		s.codes[addr] = val
 	}
-	if !val.codeLoaded {
+	if !val.codeValid {
 		code, err := s.state.GetCode(addr)
 		if err != nil {
 			panic(fmt.Sprintf("Unable to obtain code for %v: %v", addr, err))
 		}
-		val.setCode(code)
+		val.code, val.codeValid = code, true
+		val.size, val.sizeValid = len(code), true
 	}
 	return val.code
 }
@@ -430,14 +420,16 @@ func (s *stateDB) SetCode(addr common.Address, code []byte) {
 	val, exists := s.codes[addr]
 	if !exists {
 		val = &codeValue{dirty: true}
-		val.setCode(code)
+		val.code, val.codeValid = code, true
+		val.size, val.sizeValid = len(code), true
 		s.codes[addr] = val
 		s.undo = append(s.undo, func() {
 			delete(s.codes, addr)
 		})
 	} else {
 		old := *val
-		val.setCode(code)
+		val.code, val.codeValid = code, true
+		val.size, val.sizeValid = len(code), true
 		val.hash = nil
 		val.dirty = true
 		s.undo = append(s.undo, func() {
@@ -474,12 +466,12 @@ func (s *stateDB) GetCodeSize(addr common.Address) int {
 		val = &codeValue{}
 		s.codes[addr] = val
 	}
-	if !val.sizeLoaded {
+	if !val.sizeValid {
 		size, err := s.state.GetCodeSize(addr)
 		if err != nil {
 			panic(fmt.Sprintf("Unable to obtain code size for %v: %v", addr, err))
 		}
-		val.setSize(size)
+		val.size, val.sizeValid = size, true
 	}
 	return val.size
 }
