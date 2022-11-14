@@ -79,7 +79,7 @@ type stateDB struct {
 	nonces map[common.Address]*nonceValue
 
 	// A transaction local cache of storage values to avoid double-fetches and support rollbacks.
-	data map[slotId]*slotValue
+	data *common.FastMap[slotId, *slotValue]
 
 	// A transaction local cache of contract codes and their properties.
 	codes map[common.Address]*codeValue
@@ -127,6 +127,12 @@ type slotId struct {
 	key  common.Key
 }
 
+type slotHasher struct{}
+
+func (h slotHasher) Hash(id slotId) uint16 {
+	return uint16(id.addr[19])<<8 | uint16(id.key[31])
+}
+
 func (s *slotId) Compare(other *slotId) int {
 	c := s.addr.Compare(&other.addr)
 	if c < 0 {
@@ -170,7 +176,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		accounts:           map[common.Address]*accountState{},
 		balances:           map[common.Address]*balanceValue{},
 		nonces:             map[common.Address]*nonceValue{},
-		data:               map[slotId]*slotValue{},
+		data:               common.NewFastMap[slotId, *slotValue](slotHasher{}),
 		codes:              map[common.Address]*codeValue{},
 		refund:             0,
 		accessed_addresses: map[common.Address]int{},
@@ -344,7 +350,7 @@ func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
 func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.Value {
 	// Check cache first.
 	sid := slotId{addr, key}
-	val, exists := s.data[sid]
+	val, exists := s.data.Get(sid)
 	if exists && val.original != nil {
 		return *val.original
 	}
@@ -359,17 +365,17 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 	if exists {
 		val.original = &original
 	} else {
-		s.data[sid] = &slotValue{
+		s.data.Set(sid, &slotValue{
 			original: &original,
 			current:  original,
-		}
+		})
 	}
 	return original
 }
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 	// Check whether the slot is already cached/modified.
-	if val, exists := s.data[slotId{addr, key}]; exists {
+	if val, exists := s.data.Get(slotId{addr, key}); exists {
 		return val.current
 	}
 	// Fetch missing slot values (will also populate the cache).
@@ -378,7 +384,7 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
 	sid := slotId{addr, key}
-	if entry, exists := s.data[sid]; exists {
+	if entry, exists := s.data.Get(sid); exists {
 		if entry.current != value {
 			old_value := entry.current
 			entry.current = value
@@ -387,13 +393,13 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 			})
 		}
 	} else {
-		s.data[sid] = &slotValue{current: value}
+		s.data.Set(sid, &slotValue{current: value})
 		s.undo = append(s.undo, func() {
-			entry := s.data[sid]
+			entry, _ := s.data.Get(sid)
 			if entry.original != nil {
 				entry.current = *entry.original
 			} else {
-				delete(s.data, sid)
+				s.data.Delete(sid)
 			}
 		})
 	}
@@ -627,15 +633,16 @@ func (s *stateDB) EndTransaction() {
 	}
 
 	// Update storage values in state DB
-	slots := make([]slotId, 0, len(s.data))
-	for slot, value := range s.data {
+	slots := make([]slotId, 0, s.data.Length())
+	s.data.ForEach(func(slot slotId, value *slotValue) {
 		if value.original == nil || *value.original != value.current {
 			slots = append(slots, slot)
 		}
-	}
+	})
 	sort.Slice(slots, func(i, j int) bool { return slots[i].Compare(&slots[j]) < 0 })
 	for _, slot := range slots {
-		s.state.SetStorage(slot.addr, slot.key, s.data[slot].current)
+		value, _ := s.data.Get(slot)
+		s.state.SetStorage(slot.addr, slot.key, value.current)
 	}
 
 	// Update modified codes.
@@ -662,7 +669,7 @@ func (s *stateDB) ResetTransaction() {
 	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
-	s.data = make(map[slotId]*slotValue, len(s.data))
+	s.data.Clear()
 	s.codes = make(map[common.Address]*codeValue)
 	s.refund = 0
 	s.ClearAccessList()
