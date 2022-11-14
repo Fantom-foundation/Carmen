@@ -354,15 +354,18 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 	if exists && val.original != nil {
 		return *val.original
 	}
-
 	// If the value is not present, fetch it from the store.
-	original, err := s.state.GetStorage(addr, key)
+	return s.LoadCommittedState(sid, val)
+}
+
+func (s *stateDB) LoadCommittedState(sid slotId, val *slotValue) common.Value {
+	original, err := s.state.GetStorage(sid.addr, sid.key)
 	if err != nil {
-		panic(fmt.Errorf("failed to load storage location %v/%v: %v", addr, key, err))
+		panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
 	}
 
 	// Remember the original value for future accesses.
-	if exists {
+	if val != nil {
 		val.original = &original
 	} else {
 		s.data.Set(sid, &slotValue{
@@ -375,11 +378,12 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 	// Check whether the slot is already cached/modified.
-	if val, exists := s.data.Get(slotId{addr, key}); exists {
+	sid := slotId{addr, key}
+	if val, exists := s.data.Get(sid); exists {
 		return val.current
 	}
 	// Fetch missing slot values (will also populate the cache).
-	return s.GetCommittedState(addr, key)
+	return s.LoadCommittedState(sid, nil)
 }
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
