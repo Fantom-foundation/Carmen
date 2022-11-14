@@ -126,9 +126,11 @@ func (m *FastMap[K, V]) ForEach(op func(K, V)) {
 
 // fmPtr is the pointer type used inside the FastMap, comprising an
 // a position in the FastMap's data store and a generation counter.
-// The format is
-//
-//    | ----- 48 bit position -------| -- 16 bit generation -- |
+// The format devices the 64 bit of the fmPtr
+//   - first bit for valid/not (=negative values are invalid pointers)
+//   - 47 position bits for up to 2^47 elements in the map
+//   - 16 generation bits, for up to 2^16 generations of content befor
+//     a full reset is required
 //
 // as long as the value is positive. Negative values are considered
 // nil pointers.
