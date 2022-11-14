@@ -1,0 +1,150 @@
+package common
+
+const kFastMapBuckets = 1 << 16
+
+// Hasher is an interface for types implementing hash functions for values.
+type Hasher[K any] interface {
+	Hash(K) uint16
+}
+
+// FastMap is a hash based map type mapping keys to values using a customizable hash function.
+// Furthermore, it supports a O(1) clear operation and minimizes memory allocations.
+type FastMap[K comparable, V any] struct {
+	buckets    [kFastMapBuckets]fmPtr
+	data       []fastMapEntry[K, V]
+	generation uint16
+	hasher     Hasher[K]
+	size       int
+}
+
+// NewFastMap creates a FastMap based on the given hasher.
+func NewFastMap[K comparable, V any](hasher Hasher[K]) *FastMap[K, V] {
+	res := &FastMap[K, V]{
+		// The initial size is just an optimization to reduce initial resizing operations.
+		data:   make([]fastMapEntry[K, V], 0, 10000),
+		hasher: hasher,
+	}
+	// Clear is required to bring the map in a valid state.
+	res.Clear()
+	return res
+}
+
+// Get retrieves a value stored in the map or the types default value, if not present.
+// The second return value is set to true if the value was present, false otherwise.
+func (m *FastMap[K, V]) Get(key K) (V, bool) {
+	hash := m.hasher.Hash(key)
+	cur := m.toPos(m.buckets[hash])
+	for 0 <= cur && cur < int64(len(m.data)) {
+		if m.data[cur].key == key {
+			return m.data[cur].value, true
+		}
+		cur = m.toPos(m.data[cur].next)
+	}
+	var res V
+	return res, false
+}
+
+// Set updates the value associated to the given key in this map.
+func (m *FastMap[K, V]) Set(key K, value V) {
+	hash := m.hasher.Hash(key)
+	cur := m.toPos(m.buckets[hash])
+	for 0 <= cur && cur < int64(len(m.data)) {
+		if m.data[cur].key == key {
+			m.data[cur].value = value
+			return
+		}
+		cur = m.toPos(m.data[cur].next)
+	}
+	new := len(m.data)
+	m.data = append(m.data, fastMapEntry[K, V]{})
+	m.data[new].key = key
+	m.data[new].value = value
+	m.data[new].next = m.buckets[hash]
+	m.buckets[hash] = m.toPtr(int64(new))
+	m.size++
+}
+
+// Delete removes the entry with the given key from this map and returns
+// whether the key has been present before the delete operation.
+func (m *FastMap[K, V]) Delete(key K) bool {
+	hash := m.hasher.Hash(key)
+	cur := m.toPos(m.buckets[hash])
+	ptr := &m.buckets[hash]
+	for 0 <= cur && cur < int64(len(m.data)) {
+		if m.data[cur].key == key {
+			*ptr = m.data[cur].next
+			m.size--
+			return true
+		}
+		ptr = &m.data[cur].next
+		cur = m.toPos(m.data[cur].next)
+	}
+	return false
+}
+
+// Clear removes all entries of this map. This is an O(1)
+func (m *FastMap[K, V]) Clear() {
+	// In the vast majority of cases, this only requires 3 updates.
+	m.data = m.data[0:0] // < reuse underlying array
+	m.generation++       // < invalidate all fast map pointers
+	m.size = 0
+	// When we have a generation overflow we need to
+	// reset all buckets to make sure nothing that was
+	// added previously accidentially becomes valid again.
+	if m.generation == 0 {
+		for i := range m.buckets {
+			m.buckets[i] = -1
+		}
+	}
+}
+
+// Length returns the number of elements in this map.
+func (m *FastMap[K, V]) Length() int {
+	return m.size
+}
+
+// ForEach applies the given operation to each key/value pair in the map.
+func (m *FastMap[K, V]) ForEach(op func(K, V)) {
+	for _, cur := range m.buckets {
+		pos := m.toPos(cur)
+		for 0 <= pos && pos < int64(len(m.data)) {
+			entry := &m.data[pos]
+			op(entry.key, entry.value)
+			pos = m.toPos(entry.next)
+		}
+	}
+}
+
+// fmPtr is the pointer type used inside the FastMap, comprising an
+// a position in the FastMap's data store and a generation counter.
+// The format is
+//
+//    | ----- 48 bit position -------| -- 16 bit generation -- |
+//
+// as long as the value is positive. Negative values are considered
+// nil pointers.
+type fmPtr int64
+
+// toPtr converts a position index into a FastMap pointer.
+func (m *FastMap[K, V]) toPtr(pos int64) fmPtr {
+	// Negative positions become nil pointers.
+	if pos < 0 {
+		return fmPtr(pos)
+	}
+	return fmPtr(int64(pos)<<16 | int64(m.generation))
+}
+
+// toPos converts a FastMap pointer into a position.
+func (m *FastMap[K, V]) toPos(ptr fmPtr) int64 {
+	// Identify nil pointers or invalid pointers.
+	if ptr < 0 || uint16(ptr) != m.generation {
+		return -1
+	}
+	return int64(ptr) >> 16
+}
+
+type fastMapEntry[K any, V any] struct {
+	key   K
+	value V
+	next  fmPtr
+}
