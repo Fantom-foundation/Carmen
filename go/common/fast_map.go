@@ -10,19 +10,21 @@ type Hasher[K any] interface {
 // FastMap is a hash based map type mapping keys to values using a customizable hash function.
 // Furthermore, it supports a O(1) clear operation and minimizes memory allocations.
 type FastMap[K comparable, V any] struct {
-	buckets    [kFastMapBuckets]fmPtr
-	data       []fastMapEntry[K, V]
-	generation uint16
-	hasher     Hasher[K]
-	size       int
+	buckets     [kFastMapBuckets]fmPtr
+	data        []fastMapEntry[K, V]
+	generation  uint16
+	hasher      Hasher[K]
+	size        int
+	usedBuckets []uint16
 }
 
 // NewFastMap creates a FastMap based on the given hasher.
 func NewFastMap[K comparable, V any](hasher Hasher[K]) *FastMap[K, V] {
 	res := &FastMap[K, V]{
 		// The initial size is just an optimization to reduce initial resizing operations.
-		data:   make([]fastMapEntry[K, V], 0, 10000),
-		hasher: hasher,
+		data:        make([]fastMapEntry[K, V], 0, 10000),
+		hasher:      hasher,
+		usedBuckets: make([]uint16, 0, kFastMapBuckets),
 	}
 	// Clear is required to bring the map in a valid state.
 	res.Clear()
@@ -48,6 +50,12 @@ func (m *FastMap[K, V]) Get(key K) (V, bool) {
 func (m *FastMap[K, V]) Set(key K, value V) {
 	hash := m.hasher.Hash(key)
 	cur := m.toPos(m.buckets[hash])
+
+	// Register newly used bucket.
+	if cur < 0 {
+		m.usedBuckets = append(m.usedBuckets, hash)
+	}
+
 	for 0 <= cur && cur < int64(len(m.data)) {
 		if m.data[cur].key == key {
 			m.data[cur].value = value
@@ -84,10 +92,11 @@ func (m *FastMap[K, V]) Delete(key K) bool {
 
 // Clear removes all entries of this map. This is an O(1)
 func (m *FastMap[K, V]) Clear() {
-	// In the vast majority of cases, this only requires 3 updates.
+	// In the vast majority of cases, this only requires O(1) updates.
 	m.data = m.data[0:0] // < reuse underlying array
 	m.generation++       // < invalidate all fast map pointers
 	m.size = 0
+	m.usedBuckets = m.usedBuckets[0:0]
 	// When we have a generation overflow we need to
 	// reset all buckets to make sure nothing that was
 	// added previously accidentially becomes valid again.
@@ -105,8 +114,8 @@ func (m *FastMap[K, V]) Length() int {
 
 // ForEach applies the given operation to each key/value pair in the map.
 func (m *FastMap[K, V]) ForEach(op func(K, V)) {
-	for _, cur := range m.buckets {
-		pos := m.toPos(cur)
+	for _, i := range m.usedBuckets {
+		pos := m.toPos(m.buckets[i])
 		for 0 <= pos && pos < int64(len(m.data)) {
 			entry := &m.data[pos]
 			op(entry.key, entry.value)
