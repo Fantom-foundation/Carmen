@@ -5,11 +5,13 @@ import (
 	"strings"
 )
 
+// MemoryFootprint describes the memory consumption of a database structure
 type MemoryFootprint struct {
 	value    uintptr
 	children map[string]MemoryFootprint
 }
 
+// NewMemoryFootprint creates a new MemoryFootprint instance for a database structure
 func NewMemoryFootprint(value uintptr) MemoryFootprint {
 	return MemoryFootprint{
 		value:    value,
@@ -17,10 +19,12 @@ func NewMemoryFootprint(value uintptr) MemoryFootprint {
 	}
 }
 
+// AddChild allows to attach a MemoryFootprint of the database structure subcomponent
 func (mf *MemoryFootprint) AddChild(name string, child MemoryFootprint) {
 	mf.children[name] = child
 }
 
+// Total provides the amount of bytes consumed by the database structure including all its subcomponents
 func (mf *MemoryFootprint) Total() uintptr {
 	total := mf.value
 	for _, child := range mf.children {
@@ -29,9 +33,11 @@ func (mf *MemoryFootprint) Total() uintptr {
 	return total
 }
 
-func (mf *MemoryFootprint) ToString() (str string, err error) {
+// ToString provides the memory footprint as a tree summary in a string
+// The name param allows to give a name to the root of the tree.
+func (mf *MemoryFootprint) ToString(name string) (str string, err error) {
 	var sb strings.Builder
-	err = mf.toStringBuilder(&sb, "state")
+	err = mf.toStringBuilder(&sb, name)
 	return sb.String(), err
 }
 

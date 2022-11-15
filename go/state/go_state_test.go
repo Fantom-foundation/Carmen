@@ -330,7 +330,7 @@ func TestGetMemoryFootprint(t *testing.T) {
 			defer state.Close()
 
 			memoryFootprint := state.(*GoState).GetMemoryFootprint()
-			str, err := memoryFootprint.ToString()
+			str, err := memoryFootprint.ToString("state")
 			if err != nil {
 				t.Fatalf("failed to get state memory footprint; %s", err)
 			}
