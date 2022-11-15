@@ -11,3 +11,15 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+cc_test(
+    name = "depot_test",
+    srcs = ["depot_test.cc"],
+    deps = [
+        ":depot",
+        "//common:status_test_util",
+        "//common:file_util",
+        "//common:type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
