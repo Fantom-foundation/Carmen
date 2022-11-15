@@ -18,11 +18,24 @@ namespace {
 
 using ::testing::StrEq;
 
+Value ToValue(std::int64_t value) {
+  return Value{static_cast<std::uint8_t>(value >> 32),
+               static_cast<std::uint8_t>(value >> 24),
+               static_cast<std::uint8_t>(value >> 16),
+               static_cast<std::uint8_t>(value >> 8),
+               static_cast<std::uint8_t>(value >> 0)};
+}
+
 // A test suite testing generic store implementations.
 template <typename StoreHandler>
 class StoreTest : public testing::Test {};
 
 TYPED_TEST_SUITE_P(StoreTest);
+
+TYPED_TEST_P(StoreTest, TypeProperties) {
+  TypeParam wrapper;
+  EXPECT_TRUE(std::is_move_constructible_v<decltype(wrapper.GetStore())>);
+}
 
 TYPED_TEST_P(StoreTest, UninitializedValuesAreZero) {
   TypeParam wrapper;
@@ -61,6 +74,36 @@ TYPED_TEST_P(StoreTest, EmptyStoreHasZeroHash) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
   EXPECT_EQ(Hash{}, store.GetHash());
+}
+
+TYPED_TEST_P(StoreTest, HashesChangeWithUpdates) {
+  TypeParam wrapper;
+  auto& store = wrapper.GetStore();
+
+  auto empty_hash = store.GetHash();
+  store.Set(1, Value{0xAA});
+  auto hash_a = store.GetHash();
+  EXPECT_NE(empty_hash, hash_a);
+  store.Set(2, Value{0xFF});
+  auto hash_b = store.GetHash();
+  EXPECT_NE(empty_hash, hash_b);
+  EXPECT_NE(hash_a, hash_b);
+}
+
+TYPED_TEST_P(StoreTest, HashesCoverMultiplePages) {
+  TypeParam wrapper;
+  auto& store = wrapper.GetStore();
+
+  auto empty_hash = store.GetHash();
+  for (int i = 0; i < 10000; i++) {
+    store.Set(i, ToValue(i + 1));
+  }
+  auto hash_a = store.GetHash();
+  EXPECT_NE(empty_hash, hash_a);
+  store.Set(5000, Value{});
+  auto hash_b = store.GetHash();
+  EXPECT_NE(empty_hash, hash_b);
+  EXPECT_NE(hash_a, hash_b);
 }
 
 TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
@@ -196,12 +239,14 @@ TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
   EXPECT_EQ(ref_hash, trg_hash);
 }
 
-REGISTER_TYPED_TEST_SUITE_P(StoreTest, UninitializedValuesAreZero,
+REGISTER_TYPED_TEST_SUITE_P(StoreTest, TypeProperties,
+                            UninitializedValuesAreZero,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
                             EmptyStoreHasZeroHash, KnownHashesAreReproduced,
                             HashesRespectBranchingFactor,
                             HashesEqualReferenceImplementation,
-                            HashesRespectEmptyPages);
+                            HashesRespectEmptyPages, HashesChangeWithUpdates,
+                            HashesCoverMultiplePages);
 
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.
