@@ -941,11 +941,11 @@ func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	want := []byte{0xAC, 0xDC}
-	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+	want := 2
+	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(want, nil)
 
-	if got := db.GetCodeSize(address1); got != len(want) {
-		t.Errorf("error retrieving code size, wanted %v, got %v", len(want), got)
+	if got := db.GetCodeSize(address1); got != want {
+		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
 	}
 }
 
@@ -974,6 +974,27 @@ func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 
 	if got := db.GetCodeHash(address1); got != want {
 		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateSetCodeSizeCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := []byte{0xAB, 0xCD}
+	db.SetCode(address1, want)
+
+	snapshot1 := db.Snapshot()
+	db.SetCode(address1, []byte{0x12, 0x34, 0x56})
+
+	db.RevertToSnapshot(snapshot1)
+	if got := db.GetCodeSize(address1); got != len(want) {
+		t.Errorf("failed to roll back set code, wanted %v, got %v", want, got)
+	}
+	if got := db.GetCode(address1); !bytes.Equal(got, want) {
+		t.Errorf("failed to roll back set code, wanted %v, got %v", want, got)
 	}
 }
 
