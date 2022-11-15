@@ -20,6 +20,9 @@ type Depot[I common.Identifier] interface {
 	// GetStateHash computes and returns a cryptographical hash of the stored data
 	GetStateHash() (common.Hash, error)
 
+	// provides the size of the depot in memory in bytes
+	common.MemoryFootprintProvider
+
 	// Also, depots need to be flush and closable.
 	common.FlushAndCloser
 }

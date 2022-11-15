@@ -8,6 +8,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"os"
+	"unsafe"
 )
 
 const OffsetSize = 8 // uint64
@@ -176,4 +177,11 @@ func (m *Depot[I]) Flush() error {
 // Close the store
 func (m *Depot[I]) Close() error {
 	return m.Flush()
+}
+
+// GetMemoryFootprint provides the size of the depot in memory in bytes
+func (m *Depot[I]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	return mf
 }

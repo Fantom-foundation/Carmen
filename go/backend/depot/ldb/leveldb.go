@@ -5,6 +5,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"unsafe"
 )
 
 // Depot is an LevelDB backed store.Depot implementation
@@ -108,4 +109,11 @@ func (m *Depot[I]) Flush() error {
 // Close the store
 func (m *Depot[I]) Close() error {
 	return m.Flush()
+}
+
+// GetMemoryFootprint provides the size of the depot in memory in bytes
+func (m *Depot[I]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	return mf
 }

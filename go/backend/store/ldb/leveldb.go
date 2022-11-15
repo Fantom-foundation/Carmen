@@ -2,6 +2,7 @@ package ldb
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -117,4 +118,11 @@ func (m *Store[I, V]) Close() error {
 // by the key serializer
 func (m *Store[I, V]) convertKey(idx I) common.DbKey {
 	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
+}
+
+// GetMemoryFootprint provides the size of the store in memory in bytes
+func (m *Store[I, V]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	return mf
 }

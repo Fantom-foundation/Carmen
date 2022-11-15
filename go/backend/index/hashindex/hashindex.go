@@ -3,6 +3,7 @@ package hashindex
 import (
 	"crypto/sha256"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // KeyBufferInitialCapacity is a capacity of dirty keys list to prevent frequent allocations
@@ -70,4 +71,10 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 	hi.keys = hi.keys[0:0]
 
 	return hi.hash, nil
+}
+
+// GetMemoryFootprint provides the size of the structure in memory in bytes
+func (hi *HashIndex[K]) GetMemoryFootprint() common.MemoryFootprint {
+	var k K
+	return common.NewMemoryFootprint(unsafe.Sizeof(*hi) + uintptr(len(hi.keys))*unsafe.Sizeof(k))
 }

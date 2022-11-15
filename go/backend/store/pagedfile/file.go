@@ -5,6 +5,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"os"
+	"unsafe"
 )
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
@@ -175,4 +176,13 @@ func (m *Store[I, V]) Close() (err error) {
 		return err
 	}
 	return m.file.Close()
+}
+
+// GetMemoryFootprint provides the size of the store in memory in bytes
+func (m *Store[I, V]) GetMemoryFootprint() common.MemoryFootprint {
+	pageSize := unsafe.Sizeof(Page{}) + uintptr(m.pageSize)
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	mf.AddChild("pagesPool", m.pagesPool.GetMemoryFootprint(pageSize))
+	return mf
 }

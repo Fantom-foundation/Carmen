@@ -26,6 +26,9 @@ type Index[K comparable, I common.Identifier] interface {
 	// GetStateHash returns the index hash.
 	GetStateHash() (common.Hash, error)
 
+	// provides the size of the index in memory in bytes
+	common.MemoryFootprintProvider
+
 	// Also, indexes need to be flush and closable.
 	common.FlushAndCloser
 }

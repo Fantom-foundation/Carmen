@@ -1,5 +1,9 @@
 package common
 
+import (
+	"unsafe"
+)
+
 // Cache implements a memory overlay for the key-value pair
 type Cache[K comparable, V any] struct {
 	cache    map[K]*entry[K, V]
@@ -107,6 +111,13 @@ func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 	c.tail = c.tail.prev
 	c.tail.next = nil
 	return dropped
+}
+
+// GetMemoryFootprint provides the size of the cache in memory in bytes
+// If V is a pointer type, it needs to provide the size of a referenced value.
+func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) MemoryFootprint {
+	entrySize := unsafe.Sizeof(entry[K, V]{})
+	return NewMemoryFootprint(uintptr(c.capacity) * (entrySize + referencedValueSize))
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

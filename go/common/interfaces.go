@@ -11,3 +11,7 @@ type FlushAndCloser interface {
 	Flusher
 	io.Closer
 }
+
+type MemoryFootprintProvider interface {
+	GetMemoryFootprint() MemoryFootprint
+}

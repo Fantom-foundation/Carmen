@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
@@ -316,5 +317,27 @@ func TestFailingIndex(t *testing.T) {
 	_, err = state.GetStorage(address1, key1)
 	if err != testingErr {
 		t.Errorf("State service does not return the index err; returned %s", err)
+	}
+}
+
+func TestGetMemoryFootprint(t *testing.T) {
+	for _, config := range initGoStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer state.Close()
+
+			memoryFootprint := state.(*GoState).GetMemoryFootprint()
+			str, err := memoryFootprint.ToString("state")
+			if err != nil {
+				t.Fatalf("failed to get state memory footprint; %s", err)
+			}
+			if !strings.Contains(str, "hashTree") {
+				t.Errorf("memory footprint string does not contain any hashTree")
+			}
+			fmt.Printf("Memory footprint:\n%s", str)
+		})
 	}
 }

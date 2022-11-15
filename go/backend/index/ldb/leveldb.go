@@ -6,6 +6,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"unsafe"
 )
 
 const (
@@ -155,4 +156,11 @@ func (m *Index[K, I]) convertKey(key K) common.DbKey {
 // from string
 func (m *Index[K, I]) convertKeyStr(key string) common.DbKey {
 	return m.table.StrToDBKey(key)
+}
+
+// GetMemoryFootprint provides the size of the index in memory in bytes
+func (m *Index[K, I]) GetMemoryFootprint() common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
+	return mf
 }
