@@ -12,7 +12,10 @@
 
 namespace carmen::backend::depot {
 
-// In memory implementation of a Depot.
+// File Depot implementation. The depot consists of 3 files:
+// - data.dat: contains the actual data - append only
+// - offset.dat: contains the offset and size of each key in data.dat
+// - hashes.dat: contains the hash tree of the depot
 template <std::integral K>
 class FileDepot {
  public:
@@ -194,10 +197,16 @@ class FileDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public store::PageSource {
    public:
+    PageProvider(std::fstream& data_fs, std::fstream& offset_fs,
+                 std::size_t num_hash_boxes)
+        : data_fs_(data_fs),
+          offset_fs_(offset_fs),
+          num_hash_boxes_(num_hash_boxes) {}
+
     // Get data for given page. The data is valid until the next call to
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
-      auto static empty = std::array<std::byte, 0>{};
+      auto static empty = std::span<const std::byte>();
       static std::vector<std::pair<Offset, Size>> metadata(num_hash_boxes_);
 
       // calculate start and end of the hash group
@@ -209,11 +218,7 @@ class FileDepot {
       // read metadata for all boxes in the group
       for (K i = 0; start + i <= end; ++i) {
         auto meta = GetBoxOffsetAndSize(start + i, offset_fs_);
-        if (meta.ok()) {
-          metadata[i] = *meta;
-          continue;
-        }
-        metadata[i] = std::pair<Offset, Size>{0, 0};
+        metadata[i] = meta.value_or(std::pair<Offset, Size>{0, 0});
       }
 
       data_fs_.clear();
@@ -230,12 +235,6 @@ class FileDepot {
 
       return {reinterpret_cast<const std::byte*>(page_data_.data()), len};
     }
-
-    PageProvider(std::fstream& data_fs, std::fstream& offset_fs,
-                 std::size_t num_hash_boxes)
-        : data_fs_(data_fs),
-          offset_fs_(offset_fs),
-          num_hash_boxes_(num_hash_boxes) {}
 
    private:
     std::fstream& data_fs_;
