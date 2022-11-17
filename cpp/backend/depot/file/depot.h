@@ -74,7 +74,7 @@ class FileDepot {
     offset_fs_->clear();
 
     // Move to the end of the file and get the position.
-    data_fs_->seekg(0, std::ios::end);
+    data_fs_->seekp(0, std::ios::end);
     auto eof_pos = data_fs_->tellp();
     if (eof_pos == -1)
       return absl::InternalError("Failed to get offset in data file");
@@ -86,7 +86,7 @@ class FileDepot {
 
     // Move to the position of the key in the offset file.
     auto position = GetBoxPosition(key);
-    offset_fs_->seekg(position, std::ios::beg);
+    offset_fs_->seekp(position, std::ios::beg);
 
     // Prepare data to write to the offset file.
     Offset offset = eof_pos;
