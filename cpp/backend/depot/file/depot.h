@@ -207,13 +207,15 @@ class FileDepot {
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
       auto static empty = std::span<const std::byte>();
-      static std::vector<std::pair<Offset, Size>> metadata(num_hash_boxes_);
+      static std::vector<std::pair<Offset, Size>> metadata;
 
       // calculate start and end of the hash group
       auto start = id * num_hash_boxes_;
       auto end = start + num_hash_boxes_ - 1;
 
       if (start > end) return empty;
+
+      metadata.resize(num_hash_boxes_);
 
       // read metadata for all boxes in the group
       for (K i = 0; start + i <= end; ++i) {

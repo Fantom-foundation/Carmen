@@ -152,9 +152,9 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
   std::array<std::byte, 4> value{};
   for (int i = 0; i < N; i++) {
     value = {static_cast<std::byte>(i >> 6 & 0x3),
-                static_cast<std::byte>(i >> 4 & 0x3),
-                static_cast<std::byte>(i >> 2 & 0x3),
-                static_cast<std::byte>(i >> 0 & 0x3)};
+             static_cast<std::byte>(i >> 4 & 0x3),
+             static_cast<std::byte>(i >> 2 & 0x3),
+             static_cast<std::byte>(i >> 0 & 0x3)};
     ASSERT_OK(depot.Set(i, value));
     ASSERT_OK(reference.Set(i, value));
     ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
@@ -180,15 +180,15 @@ using DepotTypes = ::testing::Types<
     DepotHandler<LevelDBDepot<unsigned int>, 3, 2>,
     DepotHandler<FileDepot<unsigned int>, 3, 2>,
 
-    // Branching size 32, Size of box 16.
-    DepotHandler<InMemoryDepot<unsigned int>, 16, 4>,
-    DepotHandler<LevelDBDepot<unsigned int>, 16, 4>,
-    DepotHandler<FileDepot<unsigned int>, 16, 4>,
-
-    // Branching size 32, Size of box 32.
+    // Branching size 16, Size of box 8.
     DepotHandler<InMemoryDepot<unsigned int>, 16, 8>,
     DepotHandler<LevelDBDepot<unsigned int>, 16, 8>,
-    DepotHandler<FileDepot<unsigned int>, 16, 8>>;
+    DepotHandler<FileDepot<unsigned int>, 16, 8>,
+
+    // Branching size 32, Size of box 16.
+    DepotHandler<InMemoryDepot<unsigned int>, 32, 16>,
+    DepotHandler<LevelDBDepot<unsigned int>, 32, 16>,
+    DepotHandler<FileDepot<unsigned int>, 32, 16>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 

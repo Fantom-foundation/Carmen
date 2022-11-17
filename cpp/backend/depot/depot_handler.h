@@ -14,8 +14,10 @@ namespace {
 template <std::integral K>
 using ReferenceDepot = InMemoryDepot<K>;
 
-// A base type for DepotHandlerBase types (see below) exposing common definitions.
-template <std::integral K, std::size_t branching_factor, std::size_t num_hash_boxes>
+// A base type for DepotHandlerBase types (see below) exposing common
+// definitions.
+template <std::integral K, std::size_t branching_factor,
+          std::size_t num_hash_boxes>
 class DepotHandlerBase {
  public:
   constexpr static std::size_t kBranchingFactor = branching_factor;
@@ -23,8 +25,7 @@ class DepotHandlerBase {
 
   // Obtains access to a reference depot implementation to be used to compare
   // the handled depot with.
-  DepotHandlerBase()
-      : reference_(branching_factor, num_hash_boxes) {}
+  DepotHandlerBase() : reference_(branching_factor, num_hash_boxes) {}
 
   auto& GetReferenceDepot() { return reference_; }
 
@@ -35,7 +36,6 @@ class DepotHandlerBase {
   ReferenceDepot<K> reference_;
 };
 
-
 // A generic depot handler enclosing the setup and tear down of various depot
 // implementations in benchmarks handled by depot_benchmark.cc. A handler holds
 // an instance of a depot configured with given branching factor and number of
@@ -45,12 +45,13 @@ class DepotHandlerBase {
 // specializations may add additional setup and tear-down operations.
 template <Depot Depot, std::size_t branching_factor, std::size_t num_hash_boxes>
 class DepotHandler : public DepotHandlerBase<typename Depot::key_type,
-                                             branching_factor,
-                                             num_hash_boxes> {
+                                             branching_factor, num_hash_boxes> {
  public:
-  using DepotHandlerBase<typename Depot::key_type, branching_factor, num_hash_boxes>::GetDepotDirectory;
+  using DepotHandlerBase<typename Depot::key_type, branching_factor,
+                         num_hash_boxes>::GetDepotDirectory;
   DepotHandler()
-      : depot_(*Depot::Open(GetDepotDirectory(), branching_factor, num_hash_boxes)) {}
+      : depot_(*Depot::Open(GetDepotDirectory(), branching_factor,
+                            num_hash_boxes)) {}
   Depot& GetDepot() { return depot_; }
 
  private:
@@ -59,7 +60,8 @@ class DepotHandler : public DepotHandlerBase<typename Depot::key_type,
 
 // A specialization of a DepotHandler for InMemoryDepot handling ingoring the
 // creation/deletion of temporary files and directories.
-template <std::integral K, std::size_t branching_factor, std::size_t num_hash_boxes>
+template <std::integral K, std::size_t branching_factor,
+          std::size_t num_hash_boxes>
 class DepotHandler<InMemoryDepot<K>, branching_factor, num_hash_boxes>
     : public DepotHandlerBase<K, branching_factor, num_hash_boxes> {
  public:
