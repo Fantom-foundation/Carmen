@@ -1,4 +1,4 @@
-#include "backend/depot/leveldb/depot.h"
+#include "backend/depot/file/depot.h"
 
 #include "common/file_util.h"
 #include "common/status_test_util.h"
@@ -10,12 +10,13 @@ namespace carmen::backend::depot {
 namespace {
 
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::StatusIs;
 
-using Depot = LevelDBDepot<unsigned long>;
+using Depot = FileDepot<unsigned long>;
 
-TEST(LevelDBDepotTest, TestIsPersistent) {
+TEST(FileDepotTest, TestIsPersistent) {
   auto dir = TempDir();
   auto elements = std::array{std::byte{1}, std::byte{2}, std::byte{3}};
   Hash hash;

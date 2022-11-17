@@ -1,6 +1,7 @@
 #include "backend/depot/memory/depot.h"
 
 #include "backend/depot/depot_handler.h"
+#include "backend/depot/file/depot.h"
 #include "backend/depot/leveldb/depot.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
@@ -104,7 +105,7 @@ TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
            "hash boxes 2.";
   }
 
-  DepotHandler<InMemoryDepot<unsigned int>, 3, 2> wrapper;
+  TypeParam wrapper;
   auto& depot = wrapper.GetDepot();
 
   // Tests the hashes for values [0x00], [0x00, 0x11] ... [..., 0xFF] inserted
@@ -139,15 +140,55 @@ TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
   }
 }
 
+TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
+  constexpr int N = 100;
+  TypeParam wrapper;
+  auto& depot = wrapper.GetDepot();
+  auto& reference = wrapper.GetReferenceDepot();
+
+  ASSERT_OK_AND_ASSIGN(auto empty_hash, depot.GetHash());
+  EXPECT_EQ(Hash{}, empty_hash);
+
+  std::array<std::byte, 4> value{};
+  for (int i = 0; i < N; i++) {
+    value = {static_cast<std::byte>(i >> 6 & 0x3),
+             static_cast<std::byte>(i >> 4 & 0x3),
+             static_cast<std::byte>(i >> 2 & 0x3),
+             static_cast<std::byte>(i >> 0 & 0x3)};
+    ASSERT_OK(depot.Set(i, value));
+    ASSERT_OK(reference.Set(i, value));
+    ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
+    ASSERT_OK_AND_ASSIGN(auto reference_hash, reference.GetHash());
+    EXPECT_EQ(hash, reference_hash);
+  }
+}
+
 REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
                             EmptyDepotHasZeroHash, NonEmptyDepotHasHash,
-                            HashChangesBack, KnownHashesAreReproduced);
+                            HashChangesBack, KnownHashesAreReproduced,
+                            HashesEqualReferenceImplementation);
 
 using DepotTypes = ::testing::Types<
+    // Branching size 3, Size of box 1.
+    DepotHandler<InMemoryDepot<unsigned int>, 3, 1>,
+    DepotHandler<LevelDBDepot<unsigned int>, 3, 1>,
+    DepotHandler<FileDepot<unsigned int>, 3, 1>,
+
     // Branching size 3, Size of box 2.
     DepotHandler<InMemoryDepot<unsigned int>, 3, 2>,
-    DepotHandler<LevelDBDepot<unsigned int>, 3, 2> >;
+    DepotHandler<LevelDBDepot<unsigned int>, 3, 2>,
+    DepotHandler<FileDepot<unsigned int>, 3, 2>,
+
+    // Branching size 16, Size of box 8.
+    DepotHandler<InMemoryDepot<unsigned int>, 16, 8>,
+    DepotHandler<LevelDBDepot<unsigned int>, 16, 8>,
+    DepotHandler<FileDepot<unsigned int>, 16, 8>,
+
+    // Branching size 32, Size of box 16.
+    DepotHandler<InMemoryDepot<unsigned int>, 32, 16>,
+    DepotHandler<LevelDBDepot<unsigned int>, 32, 16>,
+    DepotHandler<FileDepot<unsigned int>, 32, 16>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 
