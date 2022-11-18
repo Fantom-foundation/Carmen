@@ -94,7 +94,7 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCreatedAccountsAreCommitedAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -105,9 +105,10 @@ func TestCarmenStateCreatedAccountsAreCommitedAtEndOfTransaction(t *testing.T) {
 
 	db.CreateAccount(address1)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateCreatedAccountsAreForgottenAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -118,10 +119,11 @@ func TestCarmenStateCreatedAccountsAreForgottenAtEndOfTransaction(t *testing.T) 
 
 	db.CreateAccount(address1)
 	db.EndTransaction()
-	db.EndTransaction()
+	db.EndBlock()
+	db.EndBlock()
 }
 
-func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfTransaction(t *testing.T) {
+func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -131,9 +133,11 @@ func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfTransaction(t *testing.T) 
 
 	db.CreateAccount(address1)
 	db.AbortTransaction()
+	db.EndBlock()
+	db.EndBlock()
 }
 
-func TestCarmenStateDeletedAccountsAreCommitedAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -144,6 +148,7 @@ func TestCarmenStateDeletedAccountsAreCommitedAtEndOfTransaction(t *testing.T) {
 
 	db.Suicide(address1)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
@@ -156,6 +161,7 @@ func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) 
 
 	db.Suicide(address1)
 	db.AbortTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *testing.T) {
@@ -170,6 +176,7 @@ func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *tes
 	db.CreateAccount(address1)
 	db.Suicide(address1)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
@@ -183,6 +190,7 @@ func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *t
 	db.CreateAccount(address1)
 	db.Suicide(address1)
 	db.AbortTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
@@ -357,7 +365,7 @@ func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	}
 }
 
-func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -372,12 +380,14 @@ func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfTransaction(t *testin
 
 	db.AddBalance(address1, big.NewInt(2))
 	db.EndTransaction()
+	db.EndBlock()
 
-	// The second end-of-transaction should not trigger yet another update.
+	// The second end-of-block should not trigger yet another update.
 	db.EndTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -388,12 +398,15 @@ func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfTransaction(t *testing.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
 	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
-	balance, _ = common.ToBalance(big.NewInt(12))
+	balance, _ = common.ToBalance(big.NewInt(14))
 	mock.EXPECT().SetBalance(gomock.Eq(address1), gomock.Eq(balance)).Return(nil)
 
 	db.AddBalance(address1, big.NewInt(5))
 	db.SubBalance(address1, big.NewInt(3))
 	db.EndTransaction()
+	db.AddBalance(address1, big.NewInt(2))
+	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
@@ -411,6 +424,7 @@ func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	db.SubBalance(address1, big.NewInt(5))
 	db.SubBalance(address1, big.NewInt(5))
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
@@ -426,6 +440,7 @@ func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.
 
 	db.AddBalance(address1, big.NewInt(10))
 	db.AbortTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
@@ -553,7 +568,7 @@ func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -564,12 +579,14 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfTransaction(t *testing
 
 	db.SetNonce(address1, 10)
 	db.EndTransaction()
+	db.EndBlock()
 
 	// The second end-of-transaction should not trigger yet another update.
 	db.EndTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfTransaction(t *testing.T) {
+func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -580,8 +597,10 @@ func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfTransaction(t *testing.T
 
 	db.SetNonce(address1, 10)
 	db.SetNonce(address1, 11)
+	db.EndTransaction()
 	db.SetNonce(address1, 12)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
@@ -596,6 +615,7 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	value := db.GetNonce(address1)
 	db.SetNonce(address1, value)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
@@ -608,6 +628,7 @@ func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T
 
 	db.SetNonce(address1, 10)
 	db.AbortTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateValuesAreReadFromState(t *testing.T) {
@@ -762,7 +783,7 @@ func TestCarmenStateWrittenValuesCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndTransaction(t *testing.T) {
+func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -774,6 +795,7 @@ func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndTransaction(t *testing.T
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
@@ -789,6 +811,7 @@ func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	db.SetState(address1, key2, val2)
 	db.RevertToSnapshot(snapshot)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateNothingIsCommitedOnTransactionAbort(t *testing.T) {
@@ -802,9 +825,10 @@ func TestCarmenStateNothingIsCommitedOnTransactionAbort(t *testing.T) {
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
 	db.AbortTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateOnlyFinalValueIsCommitted(t *testing.T) {
+func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -814,11 +838,67 @@ func TestCarmenStateOnlyFinalValueIsCommitted(t *testing.T) {
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key1, val2)
+	db.EndTransaction()
 	db.SetState(address1, key1, val3)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateCanBeUsedForMultipleTransactions(t *testing.T) {
+func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Only expect a read but no update.
+	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+
+	val := db.GetState(address1, key1)
+	db.SetState(address1, key1, val2)
+	db.EndTransaction()
+	db.SetState(address1, key1, val)
+	db.EndTransaction()
+	db.EndBlock()
+}
+
+func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Only expect a read but no update.
+	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("expected initial value to be %v, got %v", val1, got)
+	}
+	db.SetState(address1, key1, val2)
+	if got := db.GetCommittedState(address1, key1); got != val1 {
+		t.Errorf("expected committed value to be %v, got %v", val1, got)
+	}
+	if got := db.GetState(address1, key1); got != val2 {
+		t.Errorf("expected current value to be %v, got %v", val2, got)
+	}
+
+	db.EndTransaction()
+
+	if got := db.GetCommittedState(address1, key1); got != val2 {
+		t.Errorf("expected committed value to be %v, got %v", val2, got)
+	}
+	if got := db.GetState(address1, key1); got != val2 {
+		t.Errorf("expected current value to be %v, got %v", val2, got)
+	}
+	db.SetState(address1, key1, val3)
+	if got := db.GetCommittedState(address1, key1); got != val2 {
+		t.Errorf("expected committed value to be %v, got %v", val2, got)
+	}
+	if got := db.GetState(address1, key1); got != val3 {
+		t.Errorf("expected current value to be %v, got %v", val3, got)
+	}
+}
+
+func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -830,10 +910,13 @@ func TestCarmenStateCanBeUsedForMultipleTransactions(t *testing.T) {
 
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
+	db.EndBlock()
 	db.SetState(address1, key1, val2)
 	db.EndTransaction()
+	db.EndBlock()
 	db.SetState(address1, key1, val3)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateCodesCanBeRead(t *testing.T) {
@@ -893,7 +976,7 @@ func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
 	}
 }
 
-func TestCarmenStateReadCodesAreNotCommitted(t *testing.T) {
+func TestCarmenStateReadCodesAreNotStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -904,9 +987,10 @@ func TestCarmenStateReadCodesAreNotCommitted(t *testing.T) {
 
 	db.GetCode(address1)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateUpdatedCodesAreCommitted(t *testing.T) {
+func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -917,9 +1001,10 @@ func TestCarmenStateUpdatedCodesAreCommitted(t *testing.T) {
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
+	db.EndBlock()
 }
 
-func TestCarmenStateUpdatedCodesAreCommittedOnlyOnce(t *testing.T) {
+func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -930,9 +1015,11 @@ func TestCarmenStateUpdatedCodesAreCommittedOnlyOnce(t *testing.T) {
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
+	db.EndBlock()
 
-	// No commit on second time
+	// No store on second time
 	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
@@ -1410,7 +1497,7 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 	}
 }
 
-func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
+func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	ref_state, err := NewMemory()
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
@@ -1419,8 +1506,9 @@ func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	defer ref.Close()
 	mod(ref)
 	ref.EndTransaction()
+	ref.EndBlock()
 	want := ref.GetHash()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		for _, config := range initStates() {
 			t.Run(fmt.Sprintf("%v/run=%d", config.name, i), func(t *testing.T) {
 				state, err := config.createState(t.TempDir())
@@ -1432,6 +1520,7 @@ func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 
 				mod(stateDb)
 				stateDb.EndTransaction()
+				stateDb.EndBlock()
 				if got := stateDb.GetHash(); want != got {
 					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
 				}
@@ -1440,36 +1529,36 @@ func testStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	}
 }
 
-func TestStateHashIsDeterministicForEmptyState(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForEmptyState(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		// nothing
 	})
 }
 
-func TestStateHashIsDeterministicForSingleUpdate(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForSingleUpdate(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.SetState(address1, key1, val1)
 	})
 }
 
-func TestStateHashIsDeterministicForMultipleUpdate(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForMultipleUpdate(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.SetState(address1, key1, val1)
 		s.SetState(address2, key2, val2)
 		s.SetState(address3, key3, val3)
 	})
 }
 
-func TestStateHashIsDeterministicForMultipleAccountCreations(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForMultipleAccountCreations(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.CreateAccount(address1)
 		s.CreateAccount(address2)
 		s.CreateAccount(address3)
 	})
 }
 
-func TestStateHashIsDeterministicForMultipleAccountModifications(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForMultipleAccountModifications(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.CreateAccount(address1)
 		s.CreateAccount(address2)
 		s.CreateAccount(address3)
@@ -1478,8 +1567,8 @@ func TestStateHashIsDeterministicForMultipleAccountModifications(t *testing.T) {
 	})
 }
 
-func TestStateHashIsDeterministicForMultipleBalanceUpdates(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForMultipleBalanceUpdates(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.AddBalance(address1, big.NewInt(12))
 		s.AddBalance(address2, big.NewInt(14))
 		s.AddBalance(address3, big.NewInt(16))
@@ -1487,16 +1576,16 @@ func TestStateHashIsDeterministicForMultipleBalanceUpdates(t *testing.T) {
 	})
 }
 
-func TestStateHashIsDeterministicForMultipleNonceUpdates(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForMultipleNonceUpdates(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.SetNonce(address1, 12)
 		s.SetNonce(address2, 14)
 		s.SetNonce(address3, 18)
 	})
 }
 
-func TestStateHashIsDeterministicForMultipleCodeUpdates(t *testing.T) {
-	testStateDbHashAfterModification(t, func(s StateDB) {
+func TestCarmenStateHashIsDeterministicForMultipleCodeUpdates(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
 		s.SetCode(address1, []byte{0xAC})
 		s.SetCode(address2, []byte{0xDC})
 		s.SetCode(address3, []byte{0x20})
