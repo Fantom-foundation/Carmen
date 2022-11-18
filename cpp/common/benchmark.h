@@ -61,7 +61,7 @@ struct NamedType {
 // for each of its element types.
 #define BENCHMARK_TYPE_LIST(NAME, ...) \
   static const auto NAME =             \
-      std::make_tuple(MAP_LIST(_INTERNAL_TO_NAMED_TYPE, __VA_ARGS__));
+      std::make_tuple(MAP_LIST(_INTERNAL_TO_NAMED_TYPE, __VA_ARGS__))
 
 // ------------------------------ Benchmark Group ----------------------------
 
