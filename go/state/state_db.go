@@ -53,8 +53,16 @@ type StateDB interface {
 	// Transaction scope management.
 	Snapshot() int
 	RevertToSnapshot(int)
+
+	BeginTransaction()
 	EndTransaction()
 	AbortTransaction()
+
+	BeginBlock()
+	EndBlock()
+
+	BeginEpoch()
+	EndEpoch(number uint64)
 
 	// GetHash obtains a cryptographically unique hash of this state.
 	GetHash() common.Hash
@@ -146,8 +154,10 @@ func (s *slotId) Compare(other *slotId) int {
 
 // slotValue maintains the value of a slot.
 type slotValue struct {
-	// The committed value in the DB, missing if never fetched.
-	original *common.Value
+	// The value in the DB, missing if never fetched.
+	stored *common.Value
+	// The value committed by the last completed transaction.
+	committed *common.Value
 	// The current value as visible to the state DB users.
 	current common.Value
 }
@@ -351,29 +361,30 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 	// Check cache first.
 	sid := slotId{addr, key}
 	val, exists := s.data.Get(sid)
-	if exists && val.original != nil {
-		return *val.original
+	if exists && val.committed != nil {
+		return *val.committed
 	}
 	// If the value is not present, fetch it from the store.
-	return s.LoadCommittedState(sid, val)
+	return s.LoadStoredState(sid, val)
 }
 
-func (s *stateDB) LoadCommittedState(sid slotId, val *slotValue) common.Value {
-	original, err := s.state.GetStorage(sid.addr, sid.key)
+func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
+	stored, err := s.state.GetStorage(sid.addr, sid.key)
 	if err != nil {
 		panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
 	}
 
-	// Remember the original value for future accesses.
+	// Remember the stored value for future accesses.
 	if val != nil {
-		val.original = &original
+		val.stored = &stored
 	} else {
 		s.data.Set(sid, &slotValue{
-			original: &original,
-			current:  original,
+			stored:    &stored,
+			committed: &stored,
+			current:   stored,
 		})
 	}
-	return original
+	return stored
 }
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
@@ -383,7 +394,7 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 		return val.current
 	}
 	// Fetch missing slot values (will also populate the cache).
-	return s.LoadCommittedState(sid, nil)
+	return s.LoadStoredState(sid, nil)
 }
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
@@ -400,8 +411,8 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		s.data.Set(sid, &slotValue{current: value})
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
-			if entry.original != nil {
-				entry.current = *entry.original
+			if entry.committed != nil {
+				entry.current = *entry.committed
 			} else {
 				s.data.Delete(sid)
 			}
@@ -573,7 +584,32 @@ func max(a, b int) int {
 	return a
 }
 
+func (s *stateDB) BeginTransaction() {
+	// Ignored
+}
+
 func (s *stateDB) EndTransaction() {
+	// Updated committed state of storage.
+	s.data.ForEach(func(_ slotId, value *slotValue) {
+		// We need a copy here to avoid aliasing with the current value that might get updated later.
+		copy := value.current
+		value.committed = &copy
+	})
+	// Reset state, in particular seal effects by forgetting undo list.
+	s.resetTransactionContext()
+}
+
+func (s *stateDB) AbortTransaction() {
+	// Revert all effects and reset transaction context.
+	s.RevertToSnapshot(0)
+	s.resetTransactionContext()
+}
+
+func (s *stateDB) BeginBlock() {
+	// ignored
+}
+
+func (s *stateDB) EndBlock() {
 	// Write all changes to the store. Note, the store's state hash depends on the insertion order.
 	// Thus, the insertion must be performed in a deterministic order. Maps in Go have an undefined
 	// order and are deliberately randomized. Thus, updates need to be ordered before being written
@@ -639,7 +675,7 @@ func (s *stateDB) EndTransaction() {
 	// Update storage values in state DB
 	slots := make([]slotId, 0, s.data.Length())
 	s.data.ForEach(func(slot slotId, value *slotValue) {
-		if value.original == nil || *value.original != value.current {
+		if value.stored == nil || *value.stored != value.current {
 			slots = append(slots, slot)
 		}
 	})
@@ -661,23 +697,17 @@ func (s *stateDB) EndTransaction() {
 		s.state.SetCode(addr, s.codes[addr].code)
 	}
 
-	// Reset internal state for next transaction
-	s.ResetTransaction()
+	// Reset internal state for next block
+	s.reset()
 }
 
-func (s *stateDB) AbortTransaction() {
-	s.ResetTransaction()
+func (s *stateDB) BeginEpoch() {
+	// ignored
 }
 
-func (s *stateDB) ResetTransaction() {
-	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
-	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
-	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
-	s.data.Clear()
-	s.codes = make(map[common.Address]*codeValue)
-	s.refund = 0
-	s.ClearAccessList()
-	s.undo = s.undo[0:0]
+func (s *stateDB) EndEpoch(uint64) {
+	// Simulate the creation of a state snapshot by computing the hash.
+	s.GetHash()
 }
 
 func (s *stateDB) GetHash() common.Hash {
@@ -694,4 +724,19 @@ func (s *stateDB) Flush() error {
 
 func (s *stateDB) Close() error {
 	return s.state.Close()
+}
+
+func (s *stateDB) resetTransactionContext() {
+	s.refund = 0
+	s.ClearAccessList()
+	s.undo = s.undo[0:0]
+}
+
+func (s *stateDB) reset() {
+	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
+	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
+	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
+	s.data.Clear()
+	s.codes = make(map[common.Address]*codeValue)
+	s.resetTransactionContext()
 }
