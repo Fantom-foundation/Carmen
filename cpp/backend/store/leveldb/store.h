@@ -52,7 +52,7 @@ class LevelDBStore {
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, abseil not found
-  // error is returned. The data is valid until the next call to this function.
+  // error is returned.
   absl::StatusOr<V> Get(const K& key) const {
     hashes_.RegisterPage(GetPageId(key));
     ASSIGN_OR_RETURN(auto result, db_->Get(AsChars(key)));
