@@ -3,8 +3,7 @@
 #include <cstddef>
 
 #include "backend/depot/depot.h"
-#include "backend/depot/file/depot.h"
-#include "backend/depot/leveldb/depot.h"
+#include "backend/depot/memory/depot.h"
 #include "common/file_util.h"
 
 namespace carmen::backend::depot {
@@ -58,7 +57,7 @@ class DepotHandler : public DepotHandlerBase<typename Depot::key_type,
   Depot depot_;
 };
 
-// A specialization of a DepotHandler for InMemoryDepot handling ingoring the
+// A specialization of a DepotHandler for InMemoryDepot handling ignoring the
 // creation/deletion of temporary files and directories.
 template <std::integral K, std::size_t branching_factor,
           std::size_t num_hash_boxes>
