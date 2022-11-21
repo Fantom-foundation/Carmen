@@ -62,7 +62,7 @@ func (m *Depot[I]) itemPosition(id I) (hashGroup int, position int64) {
 	return
 }
 
-func (m *Depot[I]) getOffsetLength(offsetBytes []byte) (offset uint64, length uint32) {
+func parseOffsetLength(offsetBytes []byte) (offset uint64, length uint32) {
 	offset = binary.LittleEndian.Uint64(offsetBytes[0:OffsetSize])
 	length = binary.LittleEndian.Uint32(offsetBytes[OffsetSize : OffsetSize+LengthSize])
 	return
@@ -84,7 +84,7 @@ func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
 	isFragmented := false
 	offsetPos := 0
 	for i := 0; i < m.hashItems; i++ {
-		offset, length := m.getOffsetLength(offsetBytes[offsetPos:])
+		offset, length := parseOffsetLength(offsetBytes[offsetPos:])
 		offsets[i] = offset
 		lengths[i] = length
 		totalLen += length
@@ -145,7 +145,7 @@ func (m *Depot[I]) Get(id I) (out []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	offset, length := m.getOffsetLength(offsetBytes[:])
+	offset, length := parseOffsetLength(offsetBytes[:])
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, nil
