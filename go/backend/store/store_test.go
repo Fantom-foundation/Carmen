@@ -12,7 +12,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"testing"
 )
@@ -67,7 +66,7 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 		{
 			label: "LevelDb",
 			getStore: func(tempDir string) store.Store[uint32, common.Value] {
-				db, err := leveldb.OpenFile(tempDir, nil)
+				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
@@ -84,7 +83,7 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 			getStore: func(tempDir string) store.Store[uint32, common.Value] {
 				writeBufferSize := 1024 * opt.MiB
 				opts := opt.Options{WriteBuffer: writeBufferSize}
-				db, err := leveldb.OpenFile(tempDir, &opts)
+				db, err := common.OpenLevelDb(tempDir, &opts)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
@@ -107,7 +106,7 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 			label: "CachedLevelDb",
 			getStore: func(tempDir string) store.Store[uint32, common.Value] {
 				cacheCapacity := 1 << 18
-				db, err := leveldb.OpenFile(tempDir, nil)
+				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}

@@ -1,6 +1,7 @@
 package state
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 
@@ -18,7 +19,6 @@ import (
 	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
@@ -75,7 +75,7 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	db, err := leveldb.OpenFile(indexPath, nil)
+	db, err := common.OpenLevelDb(indexPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -154,7 +154,7 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	db, err := leveldb.OpenFile(indexPath, nil)
+	db, err := common.OpenLevelDb(indexPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -239,7 +239,7 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 	}
 
 	opts := opt.Options{WriteBuffer: TransactBufferMB}
-	db, err := leveldb.OpenFile(indexPath, &opts)
+	db, err := common.OpenLevelDb(indexPath, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +330,7 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 
 // NewLeveLIndexAndStore creates Index and Store both backed up by the leveldb
 func NewLeveLIndexAndStore(path string) (State, error) {
-	db, err := leveldb.OpenFile(path, nil)
+	db, err := common.OpenLevelDb(path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -377,14 +377,14 @@ func NewLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
 
 // NewCachedLeveLIndexAndStore creates Index and Store both backed up by the leveldb
 func NewCachedLeveLIndexAndStore(path string) (State, error) {
-	db, err := leveldb.OpenFile(path, nil)
+	db, err := common.OpenLevelDb(path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,7 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDBFunc(db), nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -444,7 +444,7 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 // NewTransactCachedLeveLIndexAndStore creates Index and Store both backed up by the leveldb
 func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 	opts := opt.Options{WriteBuffer: TransactBufferMB}
-	db, err := leveldb.OpenFile(path, &opts)
+	db, err := common.OpenLevelDb(path, &opts)
 	if err != nil {
 		return nil, err
 	}
@@ -526,8 +526,8 @@ func createSubDirs(rootPath string) (indexPath, storePath string, err error) {
 	return
 }
 
-// closeDBFunc clean-ups by closing the input databse
-func closeDBFunc(db *leveldb.DB) []func() {
+// cleanUpByClosing provides a clean-up function, which ensure closing the resource on the state clean-up
+func cleanUpByClosing(db io.Closer) []func() {
 	return []func(){
 		func() {
 			_ = db.Close()

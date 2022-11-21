@@ -110,7 +110,7 @@ func (m *Array[K, I]) Close() error {
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
-func (m *Array[K, I]) GetMemoryFootprint() common.MemoryFootprint {
+func (m *Array[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	for i, index := range m.indexes {
 		mf.AddChild(strconv.FormatInt(int64(i), 10), index.GetMemoryFootprint())

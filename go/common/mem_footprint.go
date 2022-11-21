@@ -8,27 +8,41 @@ import (
 // MemoryFootprint describes the memory consumption of a database structure
 type MemoryFootprint struct {
 	value    uintptr
-	children map[string]MemoryFootprint
+	children map[string]*MemoryFootprint
 }
 
 // NewMemoryFootprint creates a new MemoryFootprint instance for a database structure
-func NewMemoryFootprint(value uintptr) MemoryFootprint {
-	return MemoryFootprint{
+func NewMemoryFootprint(value uintptr) *MemoryFootprint {
+	return &MemoryFootprint{
 		value:    value,
-		children: make(map[string]MemoryFootprint),
+		children: make(map[string]*MemoryFootprint),
 	}
 }
 
 // AddChild allows to attach a MemoryFootprint of the database structure subcomponent
-func (mf *MemoryFootprint) AddChild(name string, child MemoryFootprint) {
+func (mf *MemoryFootprint) AddChild(name string, child *MemoryFootprint) {
 	mf.children[name] = child
+}
+
+// Value provides the amount of bytes consumed by the database structure (excluding its subcomponents)
+func (mf *MemoryFootprint) Value() uintptr {
+	return mf.value
 }
 
 // Total provides the amount of bytes consumed by the database structure including all its subcomponents
 func (mf *MemoryFootprint) Total() uintptr {
-	total := mf.value
+	includedObjects := make(map[*MemoryFootprint]bool)
+	return includeObjectIntoTotal(mf, includedObjects)
+}
+
+func includeObjectIntoTotal(mf *MemoryFootprint, includedObjects map[*MemoryFootprint]bool) (total uintptr) {
+	if _, exists := includedObjects[mf]; exists {
+		return 0
+	}
+	includedObjects[mf] = true
+	total = mf.value
 	for _, child := range mf.children {
-		total += child.Total()
+		total += includeObjectIntoTotal(child, includedObjects)
 	}
 	return total
 }

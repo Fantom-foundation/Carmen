@@ -6,12 +6,11 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"testing"
 )
 
 func initIndexes(t *testing.T) (indexes []index.Index[common.Address, uint32]) {
-	db, err := leveldb.OpenFile(t.TempDir(), nil)
+	db, err := common.OpenLevelDb(t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("failed to init leveldb; %s", err)
 	}
