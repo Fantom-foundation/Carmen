@@ -203,7 +203,7 @@ func closeDb[I common.Identifier, K common.Value](db *common.LevelDbMemoryFootpr
 	_ = db.Close()
 }
 
-func createNewStore(t *testing.T, db common.LevelDbWithMemoryFootprint) *Store[uint32, common.Value] {
+func createNewStore(t *testing.T, db common.LevelDB) *Store[uint32, common.Value] {
 	hashTree := htmemory.CreateHashTreeFactory(BranchingFactor)
 	s, err := NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, PageSize)
 

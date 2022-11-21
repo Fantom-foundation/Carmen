@@ -244,7 +244,7 @@ func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *co
 }
 
 // createIndex creates a new instance of the index using the input database
-func createIndex(t *testing.T, db common.LevelDbWithMemoryFootprint) index.Index[common.Address, uint32] {
+func createIndex(t *testing.T, db common.LevelDB) index.Index[common.Address, uint32] {
 	idx, err := NewIndex[common.Address, uint32](db, common.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)

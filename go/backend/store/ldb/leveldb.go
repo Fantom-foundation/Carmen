@@ -12,7 +12,7 @@ import (
 
 // Store is a database-based store.Store implementation. It stores items in a key-value database.
 type Store[I common.Identifier, V any] struct {
-	db              common.LevelDbWithMemoryFootprint
+	db              common.LevelDB
 	hashTree        hashtree.HashTree
 	valueSerializer common.Serializer[V]
 	indexSerializer common.Serializer[I]
@@ -23,7 +23,7 @@ type Store[I common.Identifier, V any] struct {
 
 // NewStore constructs a new instance of the Store.
 func NewStore[I common.Identifier, V any](
-	db common.LevelDbWithMemoryFootprint,
+	db common.LevelDB,
 	table common.TableSpace,
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],

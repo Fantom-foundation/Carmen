@@ -18,7 +18,7 @@ const (
 // HashTree is a structure allowing to make a hash of the whole database state.
 // It obtains hashes of individual data pages and reduce them to a hash of the entire state.
 type HashTree struct {
-	db           common.LevelDbWithMemoryFootprint
+	db           common.LevelDB
 	table        common.TableSpace
 	factor       int          // the branching factor - amount of child nodes per one parent node
 	dirtyPages   map[int]bool // set of dirty flags of the tree nodes
@@ -28,13 +28,13 @@ type HashTree struct {
 
 // hashTreeFactory is used for implementation of hashTreeFactory method
 type hashTreeFactory struct {
-	db              common.LevelDbWithMemoryFootprint
+	db              common.LevelDB
 	table           common.TableSpace
 	branchingFactor int
 }
 
 // CreateHashTreeFactory creates a new instance of the hashTreeFactory
-func CreateHashTreeFactory(db common.LevelDbWithMemoryFootprint, table common.TableSpace, branchingFactor int) *hashTreeFactory {
+func CreateHashTreeFactory(db common.LevelDB, table common.TableSpace, branchingFactor int) *hashTreeFactory {
 	return &hashTreeFactory{db: db, table: table, branchingFactor: branchingFactor}
 }
 
@@ -44,7 +44,7 @@ func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.Ha
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(db common.LevelDbWithMemoryFootprint, table common.TableSpace, branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
+func NewHashTree(db common.LevelDB, table common.TableSpace, branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
 	return &HashTree{
 		db:           db,
 		table:        table,

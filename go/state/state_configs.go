@@ -142,7 +142,7 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDbCleanup(db), nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -226,7 +226,7 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDbCleanup(db), nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -377,7 +377,7 @@ func NewLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDbCleanup(db), nil}
+	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -436,7 +436,7 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, closeDbCleanup(db), nil}
+		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -526,8 +526,8 @@ func createSubDirs(rootPath string) (indexPath, storePath string, err error) {
 	return
 }
 
-// closeDbCleanup provides a clean-up function, which ensure closing the database on the state clean-up
-func closeDbCleanup(db io.Closer) []func() {
+// cleanUpByClosing provides a clean-up function, which ensure closing the resource on the state clean-up
+func cleanUpByClosing(db io.Closer) []func() {
 	return []func(){
 		func() {
 			_ = db.Close()

@@ -9,7 +9,7 @@ import (
 
 // LevelDB is an interface missing in original LevelDB design.
 // It contains methods common for the LevelDB instance and its Transactions.
-// It allows easy switching between transactional and non-transactional access.
+// It allows for easy switching between transactional and non-transactional accesses.
 type LevelDB interface {
 
 	// Get gets the value for the given key. It returns ErrNotFound if the
@@ -70,11 +70,7 @@ type LevelDB interface {
 	// It is safe to modify the contents of the arguments after Write returns but
 	// not before. Write will not modify content of the batch.
 	Write(batch *leveldb.Batch, wo *opt.WriteOptions) error
-}
 
-// LevelDbWithMemoryFootprint is an interface based on LevelDB, which also provides the database memory footprint.
-type LevelDbWithMemoryFootprint interface {
-	LevelDB
 	MemoryFootprintProvider
 }
 
