@@ -16,7 +16,7 @@ const (
 
 // Index represents a key-value store for holding the index data.
 type Index[K comparable, I common.Identifier] struct {
-	db              common.LevelDB
+	db              common.LevelDbWithMemoryFootprint
 	table           common.TableSpace
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
@@ -27,7 +27,7 @@ type Index[K comparable, I common.Identifier] struct {
 
 // NewIndex creates a new instance of the index backed by a persisted database
 func NewIndex[K comparable, I common.Identifier](
-	db common.LevelDB,
+	db common.LevelDbWithMemoryFootprint,
 	table common.TableSpace,
 	keySerializer common.Serializer[K],
 	indexSerializer common.Serializer[I]) (p *Index[K, I], err error) {
@@ -162,5 +162,6 @@ func (m *Index[K, I]) convertKeyStr(key string) common.DbKey {
 func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
+	mf.AddChild("levelDb", m.db.GetMemoryFootprint())
 	return mf
 }

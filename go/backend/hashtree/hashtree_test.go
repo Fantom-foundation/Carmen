@@ -7,7 +7,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"io"
 	"testing"
 )
@@ -34,7 +33,7 @@ func getHashTreeFactories(tb testing.TB) (factories []hashTreeFactory) {
 		{
 			label: "LevelDb",
 			getHashtree: func(tempDir string, pages [][]byte) closingHashtreeWrapper {
-				db, err := leveldb.OpenFile(tempDir, nil)
+				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}

@@ -10,7 +10,7 @@ import (
 
 // Depot is an LevelDB backed store.Depot implementation
 type Depot[I common.Identifier] struct {
-	db              common.LevelDB
+	db              common.LevelDbWithMemoryFootprint
 	table           common.TableSpace
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
@@ -18,7 +18,7 @@ type Depot[I common.Identifier] struct {
 }
 
 // NewDepot constructs a new instance of Depot.
-func NewDepot[I common.Identifier](db common.LevelDB,
+func NewDepot[I common.Identifier](db common.LevelDbWithMemoryFootprint,
 	table common.TableSpace,
 	indexSerializer common.Serializer[I],
 	hashtreeFactory hashtree.Factory,
@@ -115,5 +115,6 @@ func (m *Depot[I]) Close() error {
 func (m *Depot[I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	mf.AddChild("levelDb", m.db.GetMemoryFootprint())
 	return mf
 }

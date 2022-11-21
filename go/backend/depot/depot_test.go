@@ -11,7 +11,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
+	"io"
 	"testing"
 )
 
@@ -47,7 +47,7 @@ func getDepotsFactories(tb testing.TB, branchingFactor int, hashItems int) (stor
 		{
 			label: "LevelDb",
 			getDepot: func(tempDir string) depot.Depot[uint32] {
-				db, err := leveldb.OpenFile(tempDir, nil)
+				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}
@@ -65,7 +65,7 @@ func getDepotsFactories(tb testing.TB, branchingFactor int, hashItems int) (stor
 // ldbDepotWrapper wraps the ldb.Depot to close the LevelDB on the depot Close
 type ldbDepotWrapper struct {
 	depot.Depot[uint32]
-	db *leveldb.DB
+	db io.Closer
 }
 
 func (w *ldbDepotWrapper) Close() error {

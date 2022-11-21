@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"testing"
 )
 
@@ -216,14 +215,14 @@ func TestHashPersistedAndAdded(t *testing.T) {
 }
 
 // openIndexTempDb creates a new database on a new temp file
-func openIndexTempDb(t *testing.T) (*leveldb.DB, string) {
+func openIndexTempDb(t *testing.T) (*common.LevelDbMemoryFootprintWrapper, string) {
 	path := t.TempDir()
 	return openIndexDb(t, path), path
 }
 
 // openIndexDb opends LevelDB on the input directory path
-func openIndexDb(t *testing.T, path string) *leveldb.DB {
-	db, err := leveldb.OpenFile(path, nil)
+func openIndexDb(t *testing.T, path string) *common.LevelDbMemoryFootprintWrapper {
+	db, err := common.OpenLevelDb(path, nil)
 	if err != nil {
 		t.Fatalf("Cannot open Db, err: %s", err)
 	}
@@ -234,7 +233,7 @@ func openIndexDb(t *testing.T, path string) *leveldb.DB {
 
 // reopenIndexDb closes database and the index from thw input index wrapper,
 // and creates a new  database pointing to the same location
-func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *leveldb.DB, path string) *leveldb.DB {
+func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *common.LevelDbMemoryFootprintWrapper, path string) *common.LevelDbMemoryFootprintWrapper {
 	if err := idx.Close(); err != nil {
 		t.Errorf("Cannot close Index, err? %s", err)
 	}
@@ -245,7 +244,7 @@ func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *le
 }
 
 // createIndex creates a new instance of the index using the input database
-func createIndex(t *testing.T, db *leveldb.DB) index.Index[common.Address, uint32] {
+func createIndex(t *testing.T, db common.LevelDbWithMemoryFootprint) index.Index[common.Address, uint32] {
 	idx, err := NewIndex[common.Address, uint32](db, common.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)

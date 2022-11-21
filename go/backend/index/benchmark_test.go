@@ -8,7 +8,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"io"
 	"testing"
@@ -175,7 +174,7 @@ func createMemoryIndex[K comparable, I common.Identifier](keySerializer common.S
 
 // createLevelDbIndex create instance of LevelDB index
 func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
-	db, err := leveldb.OpenFile(b.TempDir(), nil)
+	db, err := common.OpenLevelDb(b.TempDir(), nil)
 	if err != nil {
 		b.Errorf("failed to init leveldb; %s", err)
 	}
@@ -194,7 +193,7 @@ func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySeri
 func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
 
 	// database instance shared by all index instances
-	db, err := leveldb.OpenFile(b.TempDir(), nil)
+	db, err := common.OpenLevelDb(b.TempDir(), nil)
 	if err != nil {
 		b.Errorf("failed to init leveldb; %s", err)
 	}
@@ -222,7 +221,7 @@ func createEachMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B
 	for _, tableSpace := range tableSpaces {
 
 		// new database instance for every new index
-		db, err := leveldb.OpenFile(b.TempDir(), nil)
+		db, err := common.OpenLevelDb(b.TempDir(), nil)
 		if err != nil {
 			b.Errorf("failed to init leveldb; %s", err)
 		}
@@ -241,7 +240,7 @@ func createEachMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B
 // createCachedLevelDbIndex create instance of LevelDB index with the cache
 func createTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B, writeBufferSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
 	opts := opt.Options{WriteBuffer: writeBufferSize}
-	db, err := leveldb.OpenFile(b.TempDir(), &opts)
+	db, err := common.OpenLevelDb(b.TempDir(), &opts)
 	if err != nil {
 		b.Errorf("failed to init leveldb; %s", err)
 	}
@@ -265,7 +264,7 @@ func createTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B,
 // createCachedTransactLevelDbIndex create instance of LevelDB index witch is transactional and cached
 func createCachedTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B, writeBufferSize int, cacheCapacity int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
 	opts := opt.Options{WriteBuffer: writeBufferSize}
-	db, err := leveldb.OpenFile(b.TempDir(), &opts)
+	db, err := common.OpenLevelDb(b.TempDir(), &opts)
 	if err != nil {
 		b.Errorf("failed to init leveldb; %s", err)
 	}
@@ -289,7 +288,7 @@ func createCachedTransactLevelDbIndex[K comparable, I common.Identifier](b *test
 
 // createCachedLevelDbIndex create instance of LevelDB index with the cache
 func createCachedLevelDbIndex[K comparable, I common.Identifier](b *testing.B, cacheCapacity int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
-	db, err := leveldb.OpenFile(b.TempDir(), nil)
+	db, err := common.OpenLevelDb(b.TempDir(), nil)
 	if err != nil {
 		b.Errorf("failed to init leveldb; %s", err)
 	}
