@@ -234,7 +234,7 @@ func (ht *HashTree) convertKey(layer, node int) common.DbKey {
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
-func (ht *HashTree) GetMemoryFootprint() common.MemoryFootprint {
+func (ht *HashTree) GetMemoryFootprint() *common.MemoryFootprint {
 	dirtyItemSize := unsafe.Sizeof(struct {
 		key   int
 		value bool

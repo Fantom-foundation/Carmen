@@ -180,7 +180,7 @@ func (m *Depot[I]) Close() error {
 }
 
 // GetMemoryFootprint provides the size of the depot in memory in bytes
-func (m *Depot[I]) GetMemoryFootprint() common.MemoryFootprint {
+func (m *Depot[I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
 	return mf

@@ -220,7 +220,7 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
-func (s *GoState) GetMemoryFootprint() common.MemoryFootprint {
+func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(0)
 	mf.AddChild("addressIndex", s.addressIndex.GetMemoryFootprint())
 	mf.AddChild("keyIndex", s.keyIndex.GetMemoryFootprint())

@@ -28,6 +28,6 @@ func (ht *NoHash) HashRoot() (out common.Hash, err error) {
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
-func (ht *NoHash) GetMemoryFootprint() common.MemoryFootprint {
+func (ht *NoHash) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(0)
 }

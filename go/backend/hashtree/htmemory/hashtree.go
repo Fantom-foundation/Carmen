@@ -144,7 +144,7 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
-func (ht *HashTree) GetMemoryFootprint() common.MemoryFootprint {
+func (ht *HashTree) GetMemoryFootprint() *common.MemoryFootprint {
 	size := unsafe.Sizeof(*ht)
 	sliceSize := unsafe.Sizeof([]byte{})
 	for i := 0; i < len(ht.tree); i++ {
