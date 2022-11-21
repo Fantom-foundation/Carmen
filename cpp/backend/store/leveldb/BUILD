@@ -1,0 +1,29 @@
+cc_library(
+    name = "store",
+    hdrs = ["store.h"],
+    deps = [
+        "//backend/store",
+        "//backend/store:hash_tree",
+        "//common:type",
+        "//common:hash",
+        "//backend/common/leveldb:level_db",
+        "//common:status_util",
+        "//common:byte_util",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
+    name = "test_util",
+    hdrs = ["test_util.h"],
+    deps = [
+        "//backend/store",
+        "//backend/store/leveldb:store",
+        "//common:hash",
+        "//common:type",
+    ],
+    visibility = ["//backend/store:__subpackages__"],
+    testonly = True,
+)
