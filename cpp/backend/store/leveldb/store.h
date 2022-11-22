@@ -68,11 +68,14 @@ class LevelDBStore {
   // Close the store.
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
+    db_.reset(nullptr);
     return absl::OkStatus();
   }
 
  private:
   constexpr static auto elements_per_page = kPageSize / sizeof(V);
+  // elements per page has to be greater than 0
+  static_assert(elements_per_page > 0);
 
   // Creates a new LevelDBStore using the leveldb instance and provided value
   // as the branching factor for hash computation.
@@ -92,19 +95,16 @@ class LevelDBStore {
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
       K start = id * elements_per_page;
-      K end = start + elements_per_page - 1;
-
-      if (start > end) return {};
+      K end = start + elements_per_page;
 
       static auto empty = std::array<std::byte, sizeof(V)>{};
-      for (K i = start; i <= end; i++) {
+      std::size_t offset = 0;
+      for (K i = start; i < end; i++) {
         auto res = db_.Get(AsChars(i));
-        auto position = (i % elements_per_page) * sizeof(V);
-        if (!res.ok()) {
-          std::memcpy(page_buffer_.data() + position, empty.data(), sizeof(V));
-          continue;
-        }
-        std::memcpy(page_buffer_.data() + position, (*res).data(), sizeof(V));
+        auto src = res.ok() ? reinterpret_cast<std::byte*>((*res).data())
+                            : empty.data();
+        std::memcpy(page_buffer_.data() + offset, src, sizeof(V));
+        offset += sizeof(V);
       }
 
       return page_buffer_;
@@ -119,7 +119,7 @@ class LevelDBStore {
   // for move semantics.
   std::unique_ptr<LevelDB> db_;
 
-  // The data structure hanaging the hashing of states.
+  // The data structure managing the hashing of states.
   mutable HashTree hashes_;
 };
 }  // namespace carmen::backend::store

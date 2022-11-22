@@ -19,8 +19,8 @@ cc_library(
     name = "test_util",
     hdrs = ["test_util.h"],
     deps = [
+        ":store",
         "//backend/store",
-        "//backend/store/leveldb:store",
         "//common:hash",
         "//common:type",
     ],
