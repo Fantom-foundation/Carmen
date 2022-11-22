@@ -136,8 +136,11 @@ func TestSetToArbitraryPosition(t *testing.T) {
 				t.Fatalf("failed to set C; %s", err)
 			}
 
-			if value, _ := d.Get(1); value != nil {
-				t.Errorf("not-existing value is not reported as not-existing")
+			if value, err := d.Get(1); err != nil || value != nil {
+				t.Errorf("non-existing value is not reported as non-existing")
+			}
+			if value, err := d.Get(50); err != nil || value != nil {
+				t.Errorf("non-existing value is not reported as non-existing")
 			}
 			if value, _ := d.Get(5); !bytes.Equal(value, A) {
 				t.Errorf("reading written A returned different value")
