@@ -144,15 +144,12 @@ func (m *Depot[I]) Get(id I) (out []byte, err error) {
 	var offsetBytes [OffsetSize + LengthSize]byte
 	_, err = m.offsetsFile.ReadAt(offsetBytes[:], itemPosition)
 	if err != nil {
-		return nil, err
-	}
-	offset, length := parseOffsetLength(offsetBytes[:])
-	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, nil
 		}
 		return nil, err
 	}
+	offset, length := parseOffsetLength(offsetBytes[:])
 	if length == 0 {
 		return nil, nil
 	}
