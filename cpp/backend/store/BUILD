@@ -13,6 +13,8 @@ cc_library(
     deps = [
         "//backend/store/memory:store",
         "//backend/store/file:store",
+        "//backend/store/leveldb:store",
+        "//backend/store/leveldb:test_util",
         "//common:file_util",
         "//common:type", 
     ],

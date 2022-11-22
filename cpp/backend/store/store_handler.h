@@ -5,6 +5,8 @@
 
 #include "backend/common/file.h"
 #include "backend/store/file/store.h"
+#include "backend/store/leveldb/store.h"
+#include "backend/store/leveldb/test_util.h"
 #include "backend/store/memory/store.h"
 #include "common/file_util.h"
 
@@ -70,6 +72,27 @@ class StoreHandler<InMemoryStore<Key, Value, page_size>, branching_factor>
 
  private:
   InMemoryStore<Key, Value, page_size> store_;
+};
+
+// A specialization of a StoreHandler for LevelDBStores handling
+// creation/deletion of instances.
+template <std::integral Key, Trivial Value, std::size_t page_size,
+          std::size_t branching_factor>
+class StoreHandler<LevelDBStore<Key, Value, page_size>, branching_factor>
+    : public StoreHandlerBase<page_size, branching_factor> {
+ public:
+  using StoreHandlerBase<page_size, branching_factor>::GetStoreDirectory;
+
+  StoreHandler()
+      : adapter_(*LevelDBStore<Key, Value, page_size>::Open(
+            GetStoreDirectory(), branching_factor)) {}
+
+  LevelDBStoreTestAdapter<Key, Value, page_size>& GetStore() {
+    return adapter_;
+  }
+
+ private:
+  LevelDBStoreTestAdapter<Key, Value, page_size> adapter_;
 };
 
 }  // namespace
