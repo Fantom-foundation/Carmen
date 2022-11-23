@@ -239,6 +239,13 @@ TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
   EXPECT_EQ(ref_hash, trg_hash);
 }
 
+TYPED_TEST_P(StoreTest, CanProduceMemoryFootprint) {
+  TypeParam wrapper;
+  auto& store = wrapper.GetStore();
+  auto summary = store.GetMemoryFootprint();
+  EXPECT_GT(summary.GetTotal(), Memory(0));
+}
+
 REGISTER_TYPED_TEST_SUITE_P(StoreTest, TypeProperties,
                             UninitializedValuesAreZero,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
@@ -246,7 +253,8 @@ REGISTER_TYPED_TEST_SUITE_P(StoreTest, TypeProperties,
                             HashesRespectBranchingFactor,
                             HashesEqualReferenceImplementation,
                             HashesRespectEmptyPages, HashesChangeWithUpdates,
-                            HashesCoverMultiplePages);
+                            HashesCoverMultiplePages,
+                            CanProduceMemoryFootprint);
 
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.

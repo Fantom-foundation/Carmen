@@ -4,6 +4,7 @@
 #include "backend/index/memory/index.h"
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -252,6 +253,12 @@ TEST(StateTest, ValuesAddedCanBeRetrieved) {
   v = Value{0x03};
   state.SetStorageValue(a, k, v);
   EXPECT_EQ(v, state.GetStorageValue(a, k));
+}
+
+TEST(StateTest, CanProduceAMemoryFootprint) {
+  InMemoryState state;
+  auto usage = state.GetMemoryFootprint();
+  EXPECT_GT(usage.GetTotal(), Memory());
 }
 
 }  // namespace carmen

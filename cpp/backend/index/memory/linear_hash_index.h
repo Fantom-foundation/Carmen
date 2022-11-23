@@ -6,6 +6,7 @@
 #include "absl/hash/hash.h"
 #include "backend/index/memory/linear_hash_map.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -47,6 +48,13 @@ class InMemoryLinearHashIndex {
 
   void Close() {
     // ignored
+  }
+
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("data", data_.GetMemoryFootprint());
+    res.Add("unhashed", SizeOf(unhashed_keys_));
+    return res;
   }
 
  private:

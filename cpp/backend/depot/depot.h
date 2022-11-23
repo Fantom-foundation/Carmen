@@ -7,6 +7,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::depot {
@@ -37,5 +38,7 @@ concept Depot = requires(D a, const D b) {
   { a.Flush() } -> std::same_as<absl::Status>;
   // Depots must be closeable.
   { a.Close() } -> std::same_as<absl::Status>;
-};
+}
+&&MemoryFootprintProvider<D>;
+
 }  // namespace carmen::backend::depot

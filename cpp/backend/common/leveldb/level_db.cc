@@ -5,6 +5,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "leveldb/db.h"
 #include "leveldb/slice.h"
@@ -73,6 +74,15 @@ class LevelDBImpl {
     return absl::OkStatus();
   }
 
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    std::string usage;
+    db_->GetProperty("leveldb.approximate-memory-usage", &usage);
+    res.Add("db", Memory(std::stoll(usage)));
+    return res;
+  }
+
  private:
   explicit LevelDBImpl(leveldb::DB* db) : db_(db) {}
 
@@ -104,4 +114,9 @@ LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
 LevelDB::LevelDB(LevelDB&&) noexcept = default;
 
 LevelDB::~LevelDB() = default;
+
+MemoryFootprint LevelDB::GetMemoryFootprint() const {
+  return impl_->GetMemoryFootprint();
+}
+
 }  // namespace carmen::backend

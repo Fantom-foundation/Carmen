@@ -62,6 +62,7 @@ cc_library(
     deps = [
         ":file",
         ":page_id",
+        "//common:memory_usage",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
     visibility = ["//backend:__subpackages__"],

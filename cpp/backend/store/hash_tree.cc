@@ -9,10 +9,12 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "backend/common/leveldb/level_db.h"
 #include "backend/common/page_id.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -297,6 +299,20 @@ absl::Status HashTree::LoadFromLevelDB(const LevelDB& level_db) {
 absl::Status HashTree::LoadFromLevelDB(const std::filesystem::path& file) {
   ASSIGN_OR_RETURN(auto db, LevelDB::Open(file, /*create_if_missing=*/false));
   return LoadFromLevelDB(db);
+}
+
+MemoryFootprint HashTree::GetMemoryFootprint() const {
+  int i = 0;
+  MemoryFootprint hashsize;
+  for (const auto& hashes : hashes_) {
+    hashsize.Add(absl::StrFormat("level-%d", i++), SizeOf(hashes));
+  }
+
+  MemoryFootprint res(*this);
+  res.Add("hashes", std::move(hashsize));
+  res.Add("dirty_pages", SizeOf(dirty_pages_));
+  res.Add("dirty_level_one_positions", SizeOf(dirty_level_one_positions_));
+  return res;
 }
 
 }  // namespace carmen::backend::store

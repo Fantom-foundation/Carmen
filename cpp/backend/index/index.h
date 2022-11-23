@@ -4,6 +4,7 @@
 #include <optional>
 #include <utility>
 
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -58,6 +59,7 @@ concept Index = requires(I a, const I b) {
   { a.Flush() } -> std::same_as<void>;
   // Indexes must be closeable.
   { a.Close() } -> std::same_as<void>;
-};
+}
+&&MemoryFootprintProvider<I>;
 
 }  // namespace carmen::backend::index

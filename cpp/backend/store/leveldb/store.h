@@ -72,6 +72,14 @@ class LevelDBStore {
     return absl::OkStatus();
   }
 
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("db", db_->GetMemoryFootprint());
+    res.Add("hashes", hashes_.GetMemoryFootprint());
+    return res;
+  }
+
  private:
   constexpr static auto elements_per_page = kPageSize / sizeof(V);
   // elements per page has to be greater than 0

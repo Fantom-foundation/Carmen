@@ -56,7 +56,7 @@ class LevelDBKeySpace : public internal::LevelDBIndexBase<K, I, 1> {
   char key_space_;
 };
 
-// MultiLevelDBIndex is an index implementation over leveldb. It uses a single
+// SingleLevelDBIndex is an index implementation over leveldb. It uses a single
 // file to store all the data. Data is stored in the following format:
 // key_space + key -> value.
 class SingleLevelDBIndex {

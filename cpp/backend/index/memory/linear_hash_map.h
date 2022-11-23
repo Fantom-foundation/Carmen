@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "absl/hash/hash.h"
+#include "common/memory_usage.h"
 
 namespace carmen::backend::index {
 
@@ -99,6 +100,13 @@ class LinearHashMap {
       buckets_[i].Dump();
     }
     std::cout << "\n";
+  }
+
+  // Summarizes the memory usage fo this object.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("buckets", SizeOf(buckets_));
+    return res;
   }
 
  private:

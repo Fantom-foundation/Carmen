@@ -12,6 +12,7 @@
 #include "backend/store/hash_tree.h"
 #include "backend/store/store.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -77,6 +78,14 @@ class InMemoryStore {
 
   // Ignored, since store does not maintain any resources.
   void Close() {}
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("pages", SizeOf(*pages_));
+    res.Add("hashes", hashes_.GetMemoryFootprint());
+    return res;
+  }
 
  private:
   constexpr static auto elements_per_page = page_size / sizeof(V);

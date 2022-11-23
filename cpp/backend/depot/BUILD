@@ -3,7 +3,8 @@ cc_library(
     hdrs = ["depot.h"],
     deps = [
         "//common:type",
-        "//common:hash"
+        "//common:hash",
+        "//common:memory_usage",
     ],
     visibility = ["//visibility:public"],
 )

@@ -53,6 +53,9 @@ class FileStore {
   // Flushes the store and closes resource references.
   void Close();
 
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const;
+
  private:
   using Page = ArrayPage<V, page_size>;
   using PagePool = PagePool<Page, F>;
@@ -166,6 +169,17 @@ requires File<F<ArrayPage<V, page_size>>>
 void FileStore<K, V, F, page_size, eager_hashing>::Close() {
   Flush();
   if (pool_) pool_->Close();
+}
+
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<ArrayPage<V, page_size>>> MemoryFootprint
+FileStore<K, V, F, page_size, eager_hashing>::GetMemoryFootprint()
+const {
+  MemoryFootprint res(*this);
+  res.Add("pool", pool_->GetMemoryFootprint());
+  res.Add("hashes", hashes_->GetMemoryFootprint());
+  return res;
 }
 
 }  // namespace carmen::backend::store

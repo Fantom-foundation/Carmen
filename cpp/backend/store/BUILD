@@ -60,6 +60,7 @@ cc_library(
         "//common:hash",
         "//common:status_util",
         "//common:byte_util",
+        "//common:memory_usage",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status:status",
     ],

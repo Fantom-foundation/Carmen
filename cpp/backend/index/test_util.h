@@ -5,6 +5,7 @@
 #include "backend/index/index.h"
 #include "backend/index/index_handler.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -96,13 +97,18 @@ TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
   EXPECT_EQ(hash, index.GetHash());
 }
 
-REGISTER_TYPED_TEST_SUITE_P(IndexTest, TypeProperties,
-                            IdentifiersAreAssignedInorder,
-                            SameKeyLeadsToSameIdentifier,
-                            ContainsIdentifiesIndexedElements,
-                            GetRetrievesPresentKeys,
-                            EmptyIndexHasHashEqualsZero,
-                            IndexHashIsEqualToInsertionOrder);
+TYPED_TEST_P(IndexTest, CanProduceMemoryFootprint) {
+  IndexHandler<TypeParam> wrapper;
+  auto& index = wrapper.GetIndex();
+  auto summary = index.GetMemoryFootprint();
+  EXPECT_GT(summary.GetTotal(), Memory(0));
+}
+
+REGISTER_TYPED_TEST_SUITE_P(
+    IndexTest, TypeProperties, IdentifiersAreAssignedInorder,
+    SameKeyLeadsToSameIdentifier, ContainsIdentifiesIndexedElements,
+    GetRetrievesPresentKeys, EmptyIndexHasHashEqualsZero,
+    IndexHashIsEqualToInsertionOrder, CanProduceMemoryFootprint);
 
 // A generic mock implementation for mocking out index implementations.
 template <typename K, typename V>
@@ -115,6 +121,7 @@ class MockIndex {
   MOCK_METHOD(Hash, GetHash, ());
   MOCK_METHOD(void, Flush, ());
   MOCK_METHOD(void, Close, ());
+  MOCK_METHOD(MemoryFootprint, GetMemoryFootprint, (), (const));
 };
 
 // A movable wrapper of a mock index. This may be required when a index needs to
@@ -136,6 +143,8 @@ class MockIndexWrapper {
   void Flush() { return index_->Flush(); }
 
   void Close() { return index_->Close(); }
+
+  MemoryFootprint GetMemoryFootprint() const { index_->GetMemoryFootprint(); }
 
   // Returns a reference to the wrapped MockIndex. This pointer is stable.
   MockIndex<K, V>& GetMockIndex() { return *index_; }
