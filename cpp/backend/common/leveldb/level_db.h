@@ -6,6 +6,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/memory_usage.h"
 
 namespace carmen::backend {
 using LDBEntry = std::pair<std::span<const char>, std::span<const char>>;
@@ -32,6 +33,9 @@ class LevelDB {
 
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(std::span<LDBEntry> batch);
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   explicit LevelDB(std::unique_ptr<LevelDBImpl> db);

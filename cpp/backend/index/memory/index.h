@@ -9,6 +9,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "backend/index/index.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -85,6 +86,14 @@ class InMemoryIndex {
   // Close this index and release resources.
   void Close() {
     // ignored
+  }
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("list", SizeOf(*list_));
+    res.Add("index", SizeOf(data_));
+    return res;
   }
 
  private:

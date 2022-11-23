@@ -6,6 +6,7 @@ cc_library(
         "//backend/index",
         "//common:type",
         "//common:hash",
+        "//common:memory_usage",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
     visibility = ["//visibility:public"],
@@ -26,6 +27,7 @@ cc_library(
     name = "lru_cache",
     hdrs = ["lru_cache.h"],
     deps = [
+        "//common:memory_usage",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
 )

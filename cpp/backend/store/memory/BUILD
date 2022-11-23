@@ -6,6 +6,7 @@ cc_library(
         "//backend/store:hash_tree",
         "//common:type",
         "//common:hash",
+        "//common:memory_usage",
     ],
     visibility = ["//visibility:public"],
 )

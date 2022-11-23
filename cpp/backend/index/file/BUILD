@@ -26,6 +26,7 @@ cc_library(
         "//backend/common:page_pool", 
         "//common:type",
         "//common:hash",
+        "//common:memory_usage",
     ],
     visibility = ["//visibility:public"],
 )

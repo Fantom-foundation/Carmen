@@ -3,6 +3,7 @@
 #include "backend/store/leveldb/store.h"
 #include "backend/store/store.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -34,6 +35,10 @@ class LevelDBStoreTestAdapter {
   void Flush() { store_.Flush().IgnoreError(); }
 
   void Close() { store_.Close().IgnoreError(); }
+
+  MemoryFootprint GetMemoryFootprint() const {
+    return store_.GetMemoryFootprint();
+  }
 
  private:
   LevelDBStore<K, V, page_size> store_;

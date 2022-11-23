@@ -5,6 +5,7 @@ cc_library(
         "//backend/index",
         "//common:type",
         "//common:hash",
+        "//common:memory_usage",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
     visibility = ["//visibility:public"],
@@ -28,6 +29,7 @@ cc_library(
         ":linear_hash_map",
         "//common:type",
         "//common:hash",
+        "//common:memory_usage",
         "@com_google_absl//absl/hash",
     ],
     visibility = ["//visibility:public"],
@@ -48,6 +50,7 @@ cc_library(
     name = "linear_hash_map",
     hdrs = ["linear_hash_map.h"],
     deps = [
+        "//common:memory_usage",
         "@com_google_absl//absl/hash",
     ],
 )

@@ -6,6 +6,7 @@
 #include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::depot {
@@ -55,6 +56,18 @@ class InMemoryDepot {
 
   // Ignored, since depot does not maintain any resources.
   absl::Status Close() { return absl::OkStatus(); }
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    Memory sum;
+    for (const auto& box : *boxes_) {
+      sum += Memory(box.size());
+    }
+    res.Add("boxes", sum);
+    res.Add("hashes", hashes_.GetMemoryFootprint());
+    return res;
+  }
 
  private:
   using Box = std::vector<std::byte>;

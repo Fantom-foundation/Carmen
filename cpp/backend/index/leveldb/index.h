@@ -11,6 +11,7 @@
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/level_db.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -79,6 +80,14 @@ class LevelDBIndexBase {
 
   // Close this index and release resources.
   void Close() { assert(false && "Not implemented"); }
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("unhashed_keys", SizeOf(keys_));
+    res.Add("db", GetDB().GetMemoryFootprint());
+    return res;
+  }
 
  protected:
   explicit LevelDBIndexBase() = default;

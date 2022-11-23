@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "common/memory_usage.h"
 
 namespace carmen::backend::index {
 
@@ -75,6 +76,14 @@ class LeastRecentlyUsedCache {
       cur = cur->succ;
     }
     return keys;
+  }
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("entries", SizeOf(entries_));
+    res.Add("index", SizeOf(index_));
+    return res;
   }
 
  private:

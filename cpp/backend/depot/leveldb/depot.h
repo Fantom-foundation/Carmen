@@ -9,6 +9,7 @@
 #include "backend/store/hash_tree.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -66,6 +67,15 @@ class LevelDBDepot {
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
     return absl::OkStatus();
+  }
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("db", db_->GetMemoryFootprint());
+    res.Add("hashes", hashes_);
+    res.Add("buffer", SizeOf(get_data_));
+    return res;
   }
 
  private:

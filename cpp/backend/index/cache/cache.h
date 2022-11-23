@@ -70,6 +70,14 @@ class Cached {
   // Close this index and release resources.
   void Close() { index_.Close(); }
 
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("index", index_.GetMemoryFootprint());
+    res.Add("cache", cache_.GetMemoryFootprint());
+    return res;
+  }
+
  private:
   constexpr static std::size_t kDefaultSize = 1 << 20;  // ~1 million
 

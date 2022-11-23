@@ -4,6 +4,7 @@ cc_library(
     srcs = ["level_db.cc"],
     deps = [
         "//common:status_util",
+        "//common:memory_usage",
         "@com_github_google_leveldb//:leveldb",
         "@com_google_absl//absl/status:statusor"
     ],

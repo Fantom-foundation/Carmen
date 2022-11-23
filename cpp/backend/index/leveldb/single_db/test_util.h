@@ -4,6 +4,7 @@
 #include "backend/index/leveldb/single_db/index.h"
 #include "common/file_util.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -41,6 +42,10 @@ class SingleLevelDBIndexTestAdapter {
   void Flush() { key_space_.Flush(); }
 
   void Close() { key_space_.Close(); }
+
+  MemoryFootprint GetMemoryFootprint() const {
+    return key_space_.GetMemoryFootprint();
+  }
 
  private:
   LevelDBKeySpace<K, I> key_space_;

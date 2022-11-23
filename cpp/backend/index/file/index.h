@@ -13,6 +13,7 @@
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -86,6 +87,9 @@ class FileIndex {
   // Prints the content of this index to std::cout. Mainly intended for manual
   // inspection and debugging.
   void Dump() const;
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   // A type used to index buckets.
@@ -400,6 +404,17 @@ void FileIndex<K, I, F, page_size>::Dump() const {
       page = next == 0 ? nullptr : &overflow_pool_.Get(next);
     }
   }
+}
+
+template <Trivial K, std::integral I, template <typename> class F,
+          std::size_t page_size>
+MemoryFootprint FileIndex<K, I, F, page_size>::GetMemoryFootprint() const {
+  MemoryFootprint res(*this);
+  res.Add("primary_pool", primary_pool_.GetMemoryFootprint());
+  res.Add("overflow_pool", overflow_pool_.GetMemoryFootprint());
+  res.Add("bucket_tails", SizeOf(bucket_tails_));
+  res.Add("free_list", SizeOf(overflow_page_free_list_));
+  return res;
 }
 
 template <Trivial K, std::integral I, template <typename> class F,

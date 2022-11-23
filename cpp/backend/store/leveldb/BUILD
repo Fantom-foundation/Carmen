@@ -23,6 +23,7 @@ cc_library(
         "//backend/store",
         "//common:hash",
         "//common:type",
+        "//common:memory_usage",
     ],
     visibility = ["//backend/store:__subpackages__"],
     testonly = True,

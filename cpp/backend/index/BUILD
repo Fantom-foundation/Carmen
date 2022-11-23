@@ -3,6 +3,7 @@ cc_library(
     hdrs = ["index.h"],
     deps = [
         "//common:type",
+        "//common:memory_usage",
     ],
     visibility = ["//visibility:public"],
 )

@@ -9,6 +9,7 @@
 #include "backend/common/leveldb/level_db.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -92,6 +93,9 @@ class HashTree {
   // loading, the internal tree structure is updated, and the file verified for
   // consistency.
   absl::Status LoadFromLevelDB(const LevelDB& level_db);
+
+  // Computes a summary of the memory usage of this tree.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   // Fetches the hashes of a given layer of the reduction tree. If the layer

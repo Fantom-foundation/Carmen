@@ -6,6 +6,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "backend/common/file.h"
+#include "common/memory_usage.h"
 
 namespace carmen::backend {
 
@@ -61,6 +62,9 @@ class PagePool {
 
   // Flushes the content of this pool and released the underlying file.
   void Close();
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   // Obtains a free slot in the pool. If all are occupied, a page is evicted to
@@ -182,6 +186,19 @@ requires File<F<P>>
 void PagePool<P, F>::Close() {
   Flush();
   if (file_) file_->Close();
+}
+
+template <typename P, template <typename> class F>
+requires File<F<P>> MemoryFootprint PagePool<P, F>::GetMemoryFootprint()
+const {
+  MemoryFootprint res(*this);
+  res.Add("pool", SizeOf(pool_));
+  res.Add("dirty", Memory(dirty_.size() / 8 + 1));
+  res.Add("pages_to_index", SizeOf(pages_to_index_));
+  res.Add("index_to_pages", SizeOf(index_to_pages_));
+  res.Add("free_list", SizeOf(free_list_));
+  res.Add("listeners", SizeOf(listeners_));
+  return res;
 }
 
 template <typename P, template <typename> class F>

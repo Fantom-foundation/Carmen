@@ -6,6 +6,7 @@
 
 #include "common/account_state.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen {
@@ -90,6 +91,9 @@ class State {
   // references. After the state has been closed, no more operations may be
   // performed on it.
   void Close();
+
+  // Summarizes the memory usage of this state object.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   // Indexes for mapping address, keys, and slots to dense, numeric IDs.
@@ -305,6 +309,23 @@ void State<IndexType, StoreType, DepotType>::Close() {
   value_store_.Close();
   codes_.Close().IgnoreError();  // until function returns error itself
   code_hashes_.Close();
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+MemoryFootprint State<IndexType, StoreType, DepotType>::GetMemoryFootprint()
+    const {
+  MemoryFootprint res(*this);
+  res.Add("address_index", address_index_.GetMemoryFootprint());
+  res.Add("key_index", key_index_.GetMemoryFootprint());
+  res.Add("slot_index", slot_index_.GetMemoryFootprint());
+  res.Add("balances", balances_.GetMemoryFootprint());
+  res.Add("nonces", nonces_.GetMemoryFootprint());
+  res.Add("value_store", value_store_.GetMemoryFootprint());
+  res.Add("codes", codes_.GetMemoryFootprint());
+  res.Add("code_hashes", code_hashes_.GetMemoryFootprint());
+  return res;
 }
 
 }  // namespace carmen

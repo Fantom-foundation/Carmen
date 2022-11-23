@@ -2,6 +2,7 @@
 
 #include "backend/index/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -39,6 +40,10 @@ class MultiLevelDBIndexTestAdapter {
   void Flush() { index_.Flush(); }
 
   void Close() { index_.Close(); }
+
+  MemoryFootprint GetMemoryFootprint() const {
+    return index_.GetMemoryFootprint();
+  }
 
  private:
   MultiLevelDBIndex<K, I> index_;

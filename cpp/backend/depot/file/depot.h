@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
 #include "common/hash.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -145,6 +146,14 @@ class FileDepot {
     data_fs_->close();
     offset_fs_->close();
     return absl::OkStatus();
+  }
+
+  // Summarizes the memory usage of this instance.
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("hashes", hashes_);
+    res.Add("buffer", SizeOf(get_data_));
+    return res;
   }
 
  private:

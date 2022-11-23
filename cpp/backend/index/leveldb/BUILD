@@ -6,6 +6,7 @@ cc_library(
         "//common:hash",
         "//backend/common/leveldb:level_db",
         "//common:status_util",
+        "//common:memory_usage",
         "@com_google_absl//absl/status:statusor"
     ],
     visibility = ["//backend/index/leveldb:__subpackages__"],
