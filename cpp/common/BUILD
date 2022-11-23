@@ -143,6 +143,25 @@ cc_binary(
 )
 
 cc_library(
+    name="memory_usage",
+    hdrs=["memory_usage.h"],
+    srcs=["memory_usage.cc"],
+    deps=[
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "memory_usage_test",
+    srcs = ["memory_usage_test.cc"],
+    deps = [
+        ":memory_usage",
+        ":test_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name="status_util",
     hdrs=["status_util.h"],
     deps=[
