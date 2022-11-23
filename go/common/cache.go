@@ -72,9 +72,11 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
 		if c.tail == nil {
 			c.tail = c.head
 		}
+	} else {
+		// if the entry exists, set the value only and move it to the head
+		item.val = val
+		c.touch(item)
 	}
-
-	c.touch(item)
 	return
 }
 
