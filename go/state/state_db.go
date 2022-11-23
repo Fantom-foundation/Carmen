@@ -70,6 +70,21 @@ type StateDB interface {
 	// Flushes committed state to disk.
 	Flush() error
 	Close() error
+
+	// StartBulkLoad initiates a bulk load operation by-passing internal caching and
+	// snapshot, transaction, block, or epoch handling to support faster initialization
+	// of StateDB instances. BulkLoads must not run while there open blocks.
+	StartBulkLoad() BulkLoad
+}
+
+// BulkLoad serves as the public interface for loading preset data into the state DB.
+type BulkLoad interface {
+	CreateAccount(common.Address)
+	SetBalance(common.Address, *big.Int)
+	SetNonce(common.Address, uint64)
+	SetState(common.Address, common.Key, common.Value)
+	SetCode(common.Address, []byte)
+	Close() error
 }
 
 // stateDB is the internal implementation of the StateDB interface.
@@ -726,6 +741,11 @@ func (s *stateDB) Close() error {
 	return s.state.Close()
 }
 
+func (s *stateDB) StartBulkLoad() BulkLoad {
+	s.EndBlock()
+	return &bulkLoad{s.state}
+}
+
 func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
@@ -739,4 +759,41 @@ func (s *stateDB) reset() {
 	s.data.Clear()
 	s.codes = make(map[common.Address]*codeValue)
 	s.resetTransactionContext()
+}
+
+type bulkLoad struct {
+	s State
+}
+
+func (l *bulkLoad) CreateAccount(addr common.Address) {
+	l.s.CreateAccount(addr)
+}
+
+func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
+	new_balance, err := common.ToBalance(value)
+	if err != nil {
+		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
+	}
+	l.s.SetBalance(addr, new_balance)
+}
+
+func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
+	l.s.SetNonce(addr, common.ToNonce(value))
+}
+
+func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
+	l.s.SetStorage(addr, key, value)
+}
+func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
+	l.s.SetCode(addr, code)
+}
+
+func (l *bulkLoad) Close() error {
+	// Flush out all inserted data.
+	if err := l.s.Flush(); err != nil {
+		return err
+	}
+	// Compute hash to bring cached hashes up-to-date.
+	_, err := l.s.GetHash()
+	return err
 }
