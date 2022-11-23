@@ -8,7 +8,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-// StateDB serves as the public interface defintion of a Carmen StateDB.
+// StateDB serves as the public interface definition of a Carmen StateDB.
 type StateDB interface {
 	// Account management.
 	CreateAccount(common.Address)
@@ -114,10 +114,10 @@ type stateDB struct {
 	refund uint64
 
 	// A set of accessed addresses in the current transaction.
-	accessed_addresses map[common.Address]int
+	accessedAddresses map[common.Address]int
 
 	// A set of accessed slots in the current transaction.
-	accessed_slots map[slotId]int
+	accessedSlots map[slotId]int
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -130,15 +130,15 @@ type accountState struct {
 
 // balanceVale maintains a balance during a transaction.
 type balanceValue struct {
-	// The commited balance of an account, missing if never fetched.
+	// The committed balance of an account, missing if never fetched.
 	original *big.Int
-	// The current value of the account balance visibile to the state DB users.
+	// The current value of the account balance visible to the state DB users.
 	current big.Int
 }
 
 // nonceValue maintains a nonce during a transaction.
 type nonceValue struct {
-	// The commited nonce of an account, missing if never fetched.
+	// The committed nonce of an account, missing if never fetched.
 	original *uint64
 	// The current nonce of an account visible to the state DB users.
 	current uint64
@@ -197,16 +197,16 @@ func CreateStateDB(directory string) (StateDB, error) {
 
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
-		state:              state,
-		accounts:           map[common.Address]*accountState{},
-		balances:           map[common.Address]*balanceValue{},
-		nonces:             map[common.Address]*nonceValue{},
-		data:               common.NewFastMap[slotId, *slotValue](slotHasher{}),
-		codes:              map[common.Address]*codeValue{},
-		refund:             0,
-		accessed_addresses: map[common.Address]int{},
-		accessed_slots:     map[slotId]int{},
-		undo:               make([]func(), 0, 100),
+		state:             state,
+		accounts:          map[common.Address]*accountState{},
+		balances:          map[common.Address]*balanceValue{},
+		nonces:            map[common.Address]*nonceValue{},
+		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
+		codes:             map[common.Address]*codeValue{},
+		refund:            0,
+		accessedAddresses: map[common.Address]int{},
+		accessedSlots:     map[slotId]int{},
+		undo:              make([]func(), 0, 100),
 	}
 }
 
@@ -215,10 +215,10 @@ func (s *stateDB) SetAccountState(addr common.Address, state common.AccountState
 		if val.current == state {
 			return
 		}
-		old_state := val.current
+		oldState := val.current
 		val.current = state
 		s.undo = append(s.undo, func() {
-			val.current = old_state
+			val.current = oldState
 		})
 	} else {
 		val = &accountState{
@@ -269,8 +269,7 @@ func (s *stateDB) HasSuicided(addr common.Address) bool {
 
 func (s *stateDB) Empty(addr common.Address) bool {
 	// Defined as balance == nonce == code == 0
-	// TODO: check for empty code once available.
-	return s.GetBalance(addr).Sign() == 0 && s.GetNonce(addr) == 0
+	return s.GetBalance(addr).Sign() == 0 && s.GetNonce(addr) == 0 && s.GetCodeSize(addr) == 0
 }
 
 func clone(val *big.Int) *big.Int {
@@ -306,12 +305,12 @@ func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
 		return
 	}
 
-	old_value := s.GetBalance(addr)
-	new_value := new(big.Int).Add(old_value, diff)
+	oldValue := s.GetBalance(addr)
+	newValue := new(big.Int).Add(oldValue, diff)
 
-	s.balances[addr].current = *new_value
+	s.balances[addr].current = *newValue
 	s.undo = append(s.undo, func() {
-		s.balances[addr].current = *old_value
+		s.balances[addr].current = *oldValue
 	})
 }
 
@@ -324,12 +323,12 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 		return
 	}
 
-	old_value := s.GetBalance(addr)
-	new_value := new(big.Int).Sub(old_value, diff)
+	oldValue := s.GetBalance(addr)
+	newValue := new(big.Int).Sub(oldValue, diff)
 
-	s.balances[addr].current = *new_value
+	s.balances[addr].current = *newValue
 	s.undo = append(s.undo, func() {
-		s.balances[addr].current = *old_value
+		s.balances[addr].current = *oldValue
 	})
 }
 
@@ -355,10 +354,10 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
 	if val, exists := s.nonces[addr]; exists {
 		if val.current != nonce {
-			old_value := val.current
+			oldValue := val.current
 			val.current = nonce
 			s.undo = append(s.undo, func() {
-				val.current = old_value
+				val.current = oldValue
 			})
 		}
 	} else {
@@ -416,10 +415,10 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 	sid := slotId{addr, key}
 	if entry, exists := s.data.Get(sid); exists {
 		if entry.current != value {
-			old_value := entry.current
+			oldValue := entry.current
 			entry.current = value
 			s.undo = append(s.undo, func() {
-				entry.current = old_value
+				entry.current = oldValue
 			})
 		}
 	} else {
@@ -535,20 +534,20 @@ func (s *stateDB) GetRefund() uint64 {
 }
 
 func (s *stateDB) ClearAccessList() {
-	if len(s.accessed_addresses) > 0 {
-		s.accessed_addresses = make(map[common.Address]int)
+	if len(s.accessedAddresses) > 0 {
+		s.accessedAddresses = make(map[common.Address]int)
 	}
-	if len(s.accessed_slots) > 0 {
-		s.accessed_slots = make(map[slotId]int)
+	if len(s.accessedSlots) > 0 {
+		s.accessedSlots = make(map[slotId]int)
 	}
 }
 
 func (s *stateDB) AddAddressToAccessList(addr common.Address) {
-	_, found := s.accessed_addresses[addr]
+	_, found := s.accessedAddresses[addr]
 	if !found {
-		s.accessed_addresses[addr] = 0
+		s.accessedAddresses[addr] = 0
 		s.undo = append(s.undo, func() {
-			delete(s.accessed_addresses, addr)
+			delete(s.accessedAddresses, addr)
 		})
 	}
 }
@@ -556,22 +555,22 @@ func (s *stateDB) AddAddressToAccessList(addr common.Address) {
 func (s *stateDB) AddSlotToAccessList(addr common.Address, key common.Key) {
 	s.AddAddressToAccessList(addr)
 	sid := slotId{addr, key}
-	_, found := s.accessed_slots[sid]
+	_, found := s.accessedSlots[sid]
 	if !found {
-		s.accessed_slots[sid] = 0
+		s.accessedSlots[sid] = 0
 		s.undo = append(s.undo, func() {
-			delete(s.accessed_slots, sid)
+			delete(s.accessedSlots, sid)
 		})
 	}
 }
 
 func (s *stateDB) IsAddressInAccessList(addr common.Address) bool {
-	_, found := s.accessed_addresses[addr]
+	_, found := s.accessedAddresses[addr]
 	return found
 }
 
 func (s *stateDB) IsSlotInAccessList(addr common.Address, key common.Key) (addressPresent bool, slotPresent bool) {
-	_, found := s.accessed_slots[slotId{addr, key}]
+	_, found := s.accessedSlots[slotId{addr, key}]
 	if found {
 		return true, true
 	}
@@ -607,8 +606,8 @@ func (s *stateDB) EndTransaction() {
 	// Updated committed state of storage.
 	s.data.ForEach(func(_ slotId, value *slotValue) {
 		// We need a copy here to avoid aliasing with the current value that might get updated later.
-		copy := value.current
-		value.committed = &copy
+		currentValueCopy := value.current
+		value.committed = &currentValueCopy
 	})
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
@@ -632,7 +631,7 @@ func (s *stateDB) EndBlock() {
 
 	// Update account stats in deterministic order in state DB
 	addresses := make([]common.Address, 0, max(max(len(s.accounts), len(s.balances)), len(s.nonces)))
-	sort_addresses := func() {
+	sortAddresses := func() {
 		sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(&addresses[j]) < 0 })
 	}
 	for addr, value := range s.accounts {
@@ -651,7 +650,7 @@ func (s *stateDB) EndBlock() {
 			}
 		}
 	}
-	sort_addresses()
+	sortAddresses()
 	for _, address := range addresses {
 		err := s.state.CreateAccount(address)
 		if err != nil {
@@ -666,13 +665,16 @@ func (s *stateDB) EndBlock() {
 			addresses = append(addresses, addr)
 		}
 	}
-	sort_addresses()
+	sortAddresses()
 	for _, addr := range addresses {
-		new_balance, err := common.ToBalance(&s.balances[addr].current)
+		newBalance, err := common.ToBalance(&s.balances[addr].current)
 		if err != nil {
 			panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 		}
-		s.state.SetBalance(addr, new_balance)
+		err = s.state.SetBalance(addr, newBalance)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to set account balance: %v", err))
+		}
 	}
 
 	// Update nonces in a deterministic order.
@@ -682,9 +684,12 @@ func (s *stateDB) EndBlock() {
 			addresses = append(addresses, addr)
 		}
 	}
-	sort_addresses()
+	sortAddresses()
 	for _, addr := range addresses {
-		s.state.SetNonce(addr, common.ToNonce(s.nonces[addr].current))
+		err := s.state.SetNonce(addr, common.ToNonce(s.nonces[addr].current))
+		if err != nil {
+			panic(fmt.Sprintf("Failed to set account nonce: %v", err))
+		}
 	}
 
 	// Update storage values in state DB
@@ -697,7 +702,10 @@ func (s *stateDB) EndBlock() {
 	sort.Slice(slots, func(i, j int) bool { return slots[i].Compare(&slots[j]) < 0 })
 	for _, slot := range slots {
 		value, _ := s.data.Get(slot)
-		s.state.SetStorage(slot.addr, slot.key, value.current)
+		err := s.state.SetStorage(slot.addr, slot.key, value.current)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to set storage: %v", err))
+		}
 	}
 
 	// Update modified codes.
@@ -707,9 +715,12 @@ func (s *stateDB) EndBlock() {
 			addresses = append(addresses, addr)
 		}
 	}
-	sort_addresses()
+	sortAddresses()
 	for _, addr := range addresses {
-		s.state.SetCode(addr, s.codes[addr].code)
+		err := s.state.SetCode(addr, s.codes[addr].code)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to set contract code: %v", err))
+		}
 	}
 
 	// Reset internal state for next block
@@ -766,26 +777,41 @@ type bulkLoad struct {
 }
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
-	l.s.CreateAccount(addr)
+	err := l.s.CreateAccount(addr)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create account: %v", err))
+	}
 }
 
 func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
-	new_balance, err := common.ToBalance(value)
+	newBalance, err := common.ToBalance(value)
 	if err != nil {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
-	l.s.SetBalance(addr, new_balance)
+	err = l.s.SetBalance(addr, newBalance)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to set balance: %v", err))
+	}
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
-	l.s.SetNonce(addr, common.ToNonce(value))
+	err := l.s.SetNonce(addr, common.ToNonce(value))
+	if err != nil {
+		panic(fmt.Sprintf("Failed to set nonce: %v", err))
+	}
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
-	l.s.SetStorage(addr, key, value)
+	err := l.s.SetStorage(addr, key, value)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to set storage: %v", err))
+	}
 }
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
-	l.s.SetCode(addr, code)
+	err := l.s.SetCode(addr, code)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to set code: %v", err))
+	}
 }
 
 func (l *bulkLoad) Close() error {
