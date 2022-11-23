@@ -1497,6 +1497,33 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 	}
 }
 
+func TestCarmenBulkLoadReachesState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	balance, _ := common.ToBalance(big.NewInt(12))
+	code := []byte{1, 2, 3}
+
+	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
+	mock.EXPECT().SetBalance(gomock.Eq(address1), gomock.Eq(balance)).Return(nil)
+	mock.EXPECT().SetNonce(gomock.Eq(address1), gomock.Eq(common.ToNonce(14))).Return(nil)
+	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val1)).Return(nil)
+	mock.EXPECT().SetCode(gomock.Eq(address1), gomock.Eq(code)).Return(nil)
+	mock.EXPECT().Flush().Return(nil)
+	mock.EXPECT().GetHash().Return(common.Hash{}, nil)
+
+	load := db.StartBulkLoad()
+	load.CreateAccount(address1)
+	load.SetBalance(address1, big.NewInt(12))
+	load.SetNonce(address1, 14)
+	load.SetState(address1, key1, val1)
+	load.SetCode(address1, code)
+
+	load.Close()
+}
+
 func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	ref_state, err := NewMemory()
 	if err != nil {
