@@ -147,6 +147,9 @@ cc_library(
     hdrs=["memory_usage.h"],
     srcs=["memory_usage.cc"],
     deps=[
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/functional:function_ref",
     ],
     visibility = ["//visibility:public"],
 )
