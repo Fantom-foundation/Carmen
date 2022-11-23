@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	cachedDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/cache"
 	fileDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/file"
 	ldbDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
@@ -12,9 +13,10 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
-	"github.com/Fantom-foundation/Carmen/go/backend/index/cache"
+	cachedIndex "github.com/Fantom-foundation/Carmen/go/backend/index/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
+	cachedStore "github.com/Fantom-foundation/Carmen/go/backend/store/cache"
 	ldbstore "github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
@@ -223,10 +225,16 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 	}
 
 	state := &GoState{
-		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
+		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+		cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -320,10 +328,16 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 	}
 
 	state := &GoState{
-		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanup, nil}
+		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+		cleanup, nil}
 
 	return state, nil
 }
@@ -431,12 +445,17 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 
-	// TODO no support for cached stores yet - create it
 	state := &GoState{
-		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
+		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+		cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -503,12 +522,17 @@ func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 		},
 	}
 
-	// TODO no support for cached stores yet - create it
 	state := &GoState{
-		cache.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cache.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cache.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
-		accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanup, nil}
+		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+		cleanup, nil}
 
 	return state, nil
 }

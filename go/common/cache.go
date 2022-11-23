@@ -72,9 +72,11 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
 		if c.tail == nil {
 			c.tail = c.head
 		}
+	} else {
+		// if the entry exists, set the value only and move it to the head
+		item.val = val
+		c.touch(item)
 	}
-
-	c.touch(item)
 	return
 }
 
@@ -115,9 +117,20 @@ func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 
 // GetMemoryFootprint provides the size of the cache in memory in bytes
 // If V is a pointer type, it needs to provide the size of a referenced value.
+// If the size is different for individual values, use GetDynamicMemoryFootprint instead.
 func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
 	entrySize := unsafe.Sizeof(entry[K, V]{})
 	return NewMemoryFootprint(uintptr(c.capacity) * (entrySize + referencedValueSize))
+}
+
+// GetDynamicMemoryFootprint provides the size of the cache in memory in bytes for values,
+// which reference dynamic amount of memory - like slices.
+func (c *Cache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintptr) *MemoryFootprint {
+	size := uintptr(c.capacity) * unsafe.Sizeof(entry[K, V]{})
+	for _, value := range c.cache {
+		size += valueSizeProvider(value.val)
+	}
+	return NewMemoryFootprint(size)
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

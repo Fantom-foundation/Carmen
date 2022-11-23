@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
+	"github.com/Fantom-foundation/Carmen/go/backend/depot/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
@@ -57,6 +58,17 @@ func getDepotsFactories(tb testing.TB, branchingFactor int, hashItems int) (stor
 					tb.Fatalf("failed to create depot; %s", err)
 				}
 				return &ldbDepotWrapper{dep, db}
+			},
+		},
+		{
+			label: "CachedFile",
+			getDepot: func(tempDir string) depot.Depot[uint32] {
+				hashTree := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
+				wrapped, err := file.NewDepot[uint32](tempDir, common.Identifier32Serializer{}, hashTree, hashItems)
+				if err != nil {
+					tb.Fatalf("failed to create wrapped depot; %s", err)
+				}
+				return cache.NewDepot[uint32](wrapped, 10, 50)
 			},
 		},
 	}

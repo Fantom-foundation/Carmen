@@ -91,6 +91,18 @@ func TestLRUOrder(t *testing.T) {
 
 }
 
+func TestSettingExisting(t *testing.T) {
+	c := initCache(3)
+
+	c.Set(1, 11)
+	c.Set(1, 67)
+
+	value, exists := c.Get(1)
+	if !exists || value != 67 {
+		t.Errorf("Item value invalid")
+	}
+}
+
 func initCache(capacity int) *Cache[int, int] {
 	return NewCache[int, int](capacity)
 }
