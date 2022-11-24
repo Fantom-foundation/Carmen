@@ -20,6 +20,13 @@ func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 	}
 }
 
+// Clear removes the whole content of the cache
+func (c *Cache[K, V]) Clear() {
+	c.cache = make(map[K]*entry[K, V], c.capacity)
+	c.head = nil
+	c.tail = nil
+}
+
 // Iterate all cached entries - calls the callback for each key-value pair in the cache
 func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 	for key, value := range c.cache {

@@ -122,6 +122,9 @@ type stateDB struct {
 
 	// A set of accessed slots in the current transaction.
 	accessedSlots map[slotId]int
+
+	// A non-transactional local cache of stored storage values (not affected by rollbacks)
+	storedDataCache *common.Cache[slotId, common.Value]
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -199,6 +202,8 @@ func CreateStateDB(directory string) (StateDB, error) {
 	return CreateStateDBUsing(state), nil
 }
 
+const StoredDataCacheSize = 200
+
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
 		state:             state,
@@ -206,6 +211,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
+		storedDataCache:   common.NewCache[slotId, common.Value](StoredDataCacheSize),
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
 		accessedAddresses: map[common.Address]int{},
@@ -387,9 +393,14 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 }
 
 func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
-	stored, err := s.state.GetStorage(sid.addr, sid.key)
-	if err != nil {
-		panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
+	stored, found := s.storedDataCache.Get(sid)
+	if !found {
+		var err error
+		stored, err = s.state.GetStorage(sid.addr, sid.key)
+		if err != nil {
+			panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
+		}
+		s.storedDataCache.Set(sid, stored)
 	}
 
 	// Remember the stored value for future accesses.
@@ -710,6 +721,7 @@ func (s *stateDB) EndBlock() {
 		if err != nil {
 			panic(fmt.Sprintf("Failed to set storage: %v", err))
 		}
+		s.storedDataCache.Set(slot, value.current)
 	}
 
 	// Update modified codes.
@@ -758,7 +770,7 @@ func (s *stateDB) Close() error {
 
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock()
-	return &bulkLoad{s.state}
+	return &bulkLoad{s.state, s}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -821,11 +833,12 @@ func (s *stateDB) reset() {
 }
 
 type bulkLoad struct {
-	s State
+	state   State
+	stateDb *stateDB
 }
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
-	err := l.s.CreateAccount(addr)
+	err := l.state.CreateAccount(addr)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create account: %v", err))
 	}
@@ -836,27 +849,27 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
-	err = l.s.SetBalance(addr, newBalance)
+	err = l.state.SetBalance(addr, newBalance)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set balance: %v", err))
 	}
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
-	err := l.s.SetNonce(addr, common.ToNonce(value))
+	err := l.state.SetNonce(addr, common.ToNonce(value))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set nonce: %v", err))
 	}
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
-	err := l.s.SetStorage(addr, key, value)
+	err := l.state.SetStorage(addr, key, value)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set storage: %v", err))
 	}
 }
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
-	err := l.s.SetCode(addr, code)
+	err := l.state.SetCode(addr, code)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set code: %v", err))
 	}
@@ -864,10 +877,11 @@ func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
 
 func (l *bulkLoad) Close() error {
 	// Flush out all inserted data.
-	if err := l.s.Flush(); err != nil {
+	if err := l.state.Flush(); err != nil {
 		return err
 	}
 	// Compute hash to bring cached hashes up-to-date.
-	_, err := l.s.GetHash()
+	_, err := l.state.GetHash()
+	l.stateDb.storedDataCache.Clear()
 	return err
 }
