@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -75,6 +76,9 @@ type StateDB interface {
 	// snapshot, transaction, block, or epoch handling to support faster initialization
 	// of StateDB instances. BulkLoads must not run while there open blocks.
 	StartBulkLoad() BulkLoad
+
+	// GetMemoryFootprint computes an approximation of the memory used by this state.
+	GetMemoryFootprint() *common.MemoryFootprint
 }
 
 // BulkLoad serves as the public interface for loading preset data into the state DB.
@@ -755,6 +759,50 @@ func (s *stateDB) Close() error {
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock()
 	return &bulkLoad{s.state}
+}
+
+func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
+	const addressSize = 20
+	const keySize = 32
+	const valueSize = 32
+	const hashSize = 32
+	const slotIdSize = addressSize + keySize
+
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
+	mf.AddChild("state", s.state.GetMemoryFootprint())
+
+	// For account-states, balances, and nonces an over-approximation should be sufficient.
+	mf.AddChild("accounts", common.NewMemoryFootprint(uintptr(len(s.accounts))*(addressSize+unsafe.Sizeof(accountState{})+unsafe.Sizeof(common.AccountState(0)))))
+	mf.AddChild("balances", common.NewMemoryFootprint(uintptr(len(s.balances))*(addressSize+unsafe.Sizeof(balanceValue{}))))
+	mf.AddChild("nonces", common.NewMemoryFootprint(uintptr(len(s.nonces))*(addressSize+unsafe.Sizeof(nonceValue{})+8)))
+
+	var sum uintptr = 0
+	s.data.ForEach(func(slot slotId, value *slotValue) {
+		sum += slotIdSize
+		sum += unsafe.Sizeof(*value)
+		if value.stored != nil {
+			sum += valueSize
+		}
+		if value.committed != nil && value.committed != value.stored {
+			sum += valueSize
+		}
+	})
+	mf.AddChild("slots", common.NewMemoryFootprint(sum))
+
+	sum = 0
+	for _, value := range s.codes {
+		sum += addressSize
+		if value.hash != nil {
+			sum += hashSize
+		}
+		sum += uintptr(len(value.code))
+	}
+	mf.AddChild("codes", common.NewMemoryFootprint(sum))
+
+	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+unsafe.Sizeof(int(5)))))
+	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+unsafe.Sizeof(int(5)))))
+
+	return mf
 }
 
 func (s *stateDB) resetTransactionContext() {
