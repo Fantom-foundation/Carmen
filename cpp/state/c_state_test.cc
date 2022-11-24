@@ -319,6 +319,17 @@ TEST_P(CStateTest, StateCanBeClosed) {
   Carmen_Close(state);
 }
 
+TEST_P(CStateTest, MemoryFootprintCanBeObtained) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+  char* data = nullptr;
+  uint64_t length;
+  Carmen_GetMemoryFootprint(state, &data, &length);
+  EXPECT_NE(data, nullptr);
+  EXPECT_GT(length, 0);
+  free(data);
+}
+
 INSTANTIATE_TEST_SUITE_P(
     All, CStateTest, testing::Values(Config::kInMemory, Config::kFileBased),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {

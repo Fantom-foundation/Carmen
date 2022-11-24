@@ -2,15 +2,18 @@
 
 #include <cstdint>
 #include <deque>
+#include <istream>
 #include <ostream>
 #include <queue>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/functional/function_ref.h"
+#include "absl/status/statusor.h"
 
 namespace carmen {
 
@@ -101,21 +104,14 @@ constexpr static const Memory EiB = 1024 * PiB;
 // edge is labeled by a field name.
 class MemoryFootprint {
  public:
-  using ObjectId = const void*;
-
   // Initializes a memory footprint description for the given object.
   template <typename T>
-  MemoryFootprint(const T& obj) : MemoryFootprint(&obj, SizeOf<T>()) {}
+  MemoryFootprint(const T& obj)
+      : MemoryFootprint({&obj, &typeid(T)}, SizeOf<T>()) {}
 
   // Creates a new memory footprint object describing the memory usage of a
   // unique object.
-  MemoryFootprint(Memory self = Memory()) : self_(self) {}
-
-  // Creates a new memory footprint object describing the memory usage of a
-  // potentially shared object. The source pointer is used to identify common
-  // shared objects.
-  MemoryFootprint(ObjectId source, Memory self)
-      : source_(source), self_(self) {}
+  MemoryFootprint(Memory self = Memory()) : MemoryFootprint(kUnique, self) {}
 
   // Computes the total memory footprint of the DAG rooted by this node.
   Memory GetTotal() const;
@@ -123,14 +119,30 @@ class MemoryFootprint {
   // Adds a field with the given footprint to this node.
   MemoryFootprint& Add(std::string_view label, MemoryFootprint footprint);
 
+  // Loads a memory footprint from the given stream.
+  static absl::StatusOr<MemoryFootprint> ReadFrom(std::istream& in);
+
+  // Writes a binary version of this object to the given stream.
+  std::ostream& WriteTo(std::ostream& out) const;
+
   // Prints a summary of the memory described memory usage.
   friend std::ostream& operator<<(std::ostream& out, const MemoryFootprint&);
 
  private:
+  // An object is described by its location and type.
+  using ObjectId = std::pair<const void*, const std::type_info*>;
+
+  // Constant for an ID to be used to identify a unique object not to be shared.
+  constexpr static const ObjectId kUnique = {nullptr, nullptr};
+
+  // Internal constructor accepting an object ID and a size.
+  MemoryFootprint(ObjectId source, Memory self)
+      : source_(source), self_(self) {}
+
   void PrintTo(std::ostream& out, std::string_view prefix) const;
 
   // A unique identifier for shared objects or null, if unique.
-  ObjectId source_ = nullptr;
+  ObjectId source_;
 
   // The memory usage of the described object.
   Memory self_;
