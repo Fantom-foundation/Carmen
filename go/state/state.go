@@ -55,4 +55,7 @@ type State interface {
 
 	// Close flushes the store and closes it.
 	Close() error
+
+	// GetMemoryFootprint computes an approximation of the memory used by this state.
+	GetMemoryFootprint() *common.MemoryFootprint
 }
