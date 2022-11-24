@@ -202,6 +202,7 @@ func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
 	// An empty account must have its balance and nonce set to zero.
 	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
 
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
@@ -217,6 +218,7 @@ func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	// An empty account must have its balance and nonce set to zero.
 	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
 
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
@@ -236,6 +238,7 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	// An empty account must have its balance and nonce set to zero.
 	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
 
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
