@@ -123,7 +123,7 @@ type stateDB struct {
 	// A set of accessed slots in the current transaction.
 	accessedSlots map[slotId]int
 
-	// A non-transactional local cache of stored storage values (not affected by rollbacks)
+	// A non-transactional local cache of stored storage values.
 	storedDataCache *common.Cache[slotId, common.Value]
 }
 
@@ -770,7 +770,8 @@ func (s *stateDB) Close() error {
 
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock()
-	return &bulkLoad{s.state, s}
+	s.storedDataCache.Clear()
+	return &bulkLoad{s.state}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -813,6 +814,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 
 	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+unsafe.Sizeof(int(5)))))
 	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+unsafe.Sizeof(int(5)))))
+	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
 
 	return mf
 }
@@ -833,8 +835,7 @@ func (s *stateDB) reset() {
 }
 
 type bulkLoad struct {
-	state   State
-	stateDb *stateDB
+	state State
 }
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
@@ -882,6 +883,5 @@ func (l *bulkLoad) Close() error {
 	}
 	// Compute hash to bring cached hashes up-to-date.
 	_, err := l.state.GetHash()
-	l.stateDb.storedDataCache.Clear()
 	return err
 }
