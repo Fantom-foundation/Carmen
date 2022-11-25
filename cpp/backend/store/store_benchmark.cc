@@ -20,7 +20,7 @@ using LazyFileStore = FileStore<K, V, F, page_size, false>;
 // Defines the list of configurations to be benchmarked.
 BENCHMARK_TYPE_LIST(StoreConfigList, (ReferenceStore<kPageSize>),
                     (InMemoryStore<int, Value, kPageSize>),
-                    (LevelDBStore<int, Value, kPageSize>),
+                    (LevelDbStore<int, Value, kPageSize>),
                     (FileStore<int, Value, InMemoryFile, kPageSize>),
                     (FileStore<int, Value, SingleFile, kPageSize>),
                     (LazyFileStore<int, Value, SingleFile, kPageSize>));

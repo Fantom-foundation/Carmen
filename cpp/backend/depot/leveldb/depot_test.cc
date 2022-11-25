@@ -13,9 +13,9 @@ using ::testing::_;
 using ::testing::ElementsAreArray;
 using ::testing::StatusIs;
 
-using Depot = LevelDBDepot<unsigned long>;
+using Depot = LevelDbDepot<unsigned long>;
 
-TEST(LevelDBDepotTest, TestIsPersistent) {
+TEST(LevelDbDepotTest, TestIsPersistent) {
   auto dir = TempDir();
   auto elements = std::array{std::byte{1}, std::byte{2}, std::byte{3}};
   Hash hash;

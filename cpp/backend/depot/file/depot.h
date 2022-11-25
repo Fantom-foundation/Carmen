@@ -169,7 +169,9 @@ class FileDepot {
         data_fs_(std::make_unique<std::fstream>(std::move(data_fs))),
         hashes_(std::make_unique<PageProvider>(*data_fs_, *offset_fs_,
                                                num_hash_boxes_),
-                hash_branching_factor) {}
+                hash_branching_factor) {
+    assert(num_hash_boxes_ > 0 && "num_hash_boxes must be > 0");
+  }
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
@@ -220,14 +222,12 @@ class FileDepot {
 
       // calculate start and end of the hash group
       auto start = id * num_hash_boxes_;
-      auto end = start + num_hash_boxes_ - 1;
-
-      if (start > end) return empty;
+      auto end = start + num_hash_boxes_;
 
       metadata.resize(num_hash_boxes_);
 
       // read metadata for all boxes in the group
-      for (K i = 0; start + i <= end; ++i) {
+      for (K i = 0; start + i < end; ++i) {
         auto meta = GetBoxOffsetAndSize(start + i, offset_fs_);
         metadata[i] = meta.value_or(std::pair<Offset, Size>{0, 0});
       }

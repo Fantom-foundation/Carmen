@@ -55,7 +55,7 @@ cc_library(
     deps = [
         "//backend/common:page",
         "//backend/common:page_id",
-        "//backend/common/leveldb:level_db",
+        "//backend/common/leveldb:leveldb",
         "//common:type",
         "//common:hash",
         "//common:status_util",

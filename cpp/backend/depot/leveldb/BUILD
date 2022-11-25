@@ -7,7 +7,7 @@ cc_library(
         "//common:type",
         "//common:byte_util",
         "//common:status_util",
-        "//backend/common/leveldb:level_db",
+        "//backend/common/leveldb:leveldb",
         "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -25,3 +25,4 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+

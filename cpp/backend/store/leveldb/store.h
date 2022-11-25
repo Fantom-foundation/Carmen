@@ -6,7 +6,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 #include "backend/store/hash_tree.h"
 #include "backend/store/store.h"
 #include "common/byte_util.h"
@@ -16,28 +16,28 @@
 
 namespace carmen::backend::store {
 
-// The LevelDBStore is a leveldb implementation of a mutable key/value
+// The LevelDbStore is a leveldb implementation of a mutable key/value
 // store. It maps provided mutation and lookup support, as well as global
 // state hashing support enabling to obtain a quick hash for the entire
 // content.
 template <std::integral K, Trivial V, std::size_t page_size = 32>
-class LevelDBStore {
+class LevelDbStore {
  public:
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
 
   // Open connection to the store. If the store does not exist, it will be
   // created. If the depot store, it will be opened.
-  static absl::StatusOr<LevelDBStore> Open(
+  static absl::StatusOr<LevelDbStore> Open(
       const std::filesystem::path& path,
       std::size_t hash_branching_factor = 32) {
     auto is_new =
         !std::filesystem::exists(path) || std::filesystem::is_empty(path);
-    ASSIGN_OR_RETURN(auto db, LevelDB::Open(path, /*create_if_missing=*/true));
-    auto store = LevelDBStore(std::move(db), hash_branching_factor);
+    ASSIGN_OR_RETURN(auto db, LevelDb::Open(path, /*create_if_missing=*/true));
+    auto store = LevelDbStore(std::move(db), hash_branching_factor);
 
     if (!is_new) {
-      RETURN_IF_ERROR(store.hashes_.LoadFromLevelDB(*store.db_));
+      RETURN_IF_ERROR(store.hashes_.LoadFromLevelDb(*store.db_));
     }
 
     return store;
@@ -63,12 +63,12 @@ class LevelDBStore {
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
   // Flush all pending changes to disk.
-  absl::Status Flush() { return hashes_.SaveToLevelDB(*db_); }
+  absl::Status Flush() { return hashes_.SaveToLevelDb(*db_); }
 
   // Close the store.
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
-    db_.reset(nullptr);
+    db_.reset();
     return absl::OkStatus();
   }
 
@@ -85,10 +85,10 @@ class LevelDBStore {
   // elements per page has to be greater than 0
   static_assert(elements_per_page > 0);
 
-  // Creates a new LevelDBStore using the leveldb instance and provided value
+  // Creates a new LevelDbStore using the leveldb instance and provided value
   // as the branching factor for hash computation.
-  LevelDBStore(LevelDB db, std::size_t hash_branching_factor)
-      : db_(std::make_unique<LevelDB>(std::move(db))),
+  LevelDbStore(LevelDb db, std::size_t hash_branching_factor)
+      : db_(std::make_unique<LevelDb>(std::move(db))),
         hashes_(std::make_unique<PageProvider>(*db_), hash_branching_factor) {}
 
   // Get the page id for a given key.
@@ -97,7 +97,7 @@ class LevelDBStore {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public PageSource {
    public:
-    PageProvider(LevelDB& db) : db_(db) {}
+    PageProvider(LevelDb& db) : db_(db) {}
 
     // Get data for given page. The data is valid until the next call to
     // this function.
@@ -119,13 +119,13 @@ class LevelDBStore {
     }
 
    private:
-    const LevelDB& db_;
+    const LevelDb& db_;
     std::array<std::byte, kPageSize> page_buffer_;
   };
 
-  // The underlying LevelDB instance. Wrapped in a unique_ptr to allow
+  // The underlying LevelDb instance. Wrapped in a unique_ptr to allow
   // for move semantics.
-  std::unique_ptr<LevelDB> db_;
+  std::unique_ptr<LevelDb> db_;
 
   // The data structure managing the hashing of states.
   mutable HashTree hashes_;

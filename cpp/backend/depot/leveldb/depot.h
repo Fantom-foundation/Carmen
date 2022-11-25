@@ -5,7 +5,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 #include "backend/store/hash_tree.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
@@ -15,26 +15,26 @@
 
 namespace carmen::backend::depot {
 
-// LevelDB implementation of a Depot.
+// LevelDb implementation of a Depot.
 template <std::integral K>
-class LevelDBDepot {
+class LevelDbDepot {
  public:
   // The type of the depot key.
   using key_type = K;
 
   // Open connection to the depot. If the depot does not exist, it will be
   // created. If the depot exists, it will be opened.
-  static absl::StatusOr<LevelDBDepot> Open(
+  static absl::StatusOr<LevelDbDepot> Open(
       const std::filesystem::path& path, std::size_t hash_branching_factor = 32,
       std::size_t num_hash_boxes = 4) {
     auto is_new =
         !std::filesystem::exists(path) || std::filesystem::is_empty(path);
-    ASSIGN_OR_RETURN(auto db, LevelDB::Open(path, /*create_if_missing=*/true));
+    ASSIGN_OR_RETURN(auto db, LevelDb::Open(path, /*create_if_missing=*/true));
     auto depot =
-        LevelDBDepot(std::move(db), hash_branching_factor, num_hash_boxes);
+        LevelDbDepot(std::move(db), hash_branching_factor, num_hash_boxes);
 
     if (!is_new) {
-      RETURN_IF_ERROR(depot.hashes_.LoadFromLevelDB(*depot.db_));
+      RETURN_IF_ERROR(depot.hashes_.LoadFromLevelDb(*depot.db_));
     }
 
     return depot;
@@ -61,11 +61,12 @@ class LevelDBDepot {
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
   // Flush all pending changes to disk.
-  absl::Status Flush() { return hashes_.SaveToLevelDB(*db_); }
+  absl::Status Flush() { return hashes_.SaveToLevelDb(*db_); }
 
   // Close the depot.
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
+    db_->Close();
     return absl::OkStatus();
   }
 
@@ -79,11 +80,11 @@ class LevelDBDepot {
   }
 
  private:
-  // Creates a new LevelDBDepot using the provided leveldb path, branching
+  // Creates a new LevelDbDepot using the provided leveldb path, branching
   // factor and number of boxes per group for hash computation.
-  LevelDBDepot(LevelDB level_db, std::size_t hash_branching_factor,
+  LevelDbDepot(LevelDb leveldb, std::size_t hash_branching_factor,
                std::size_t num_hash_boxes)
-      : db_(std::make_unique<LevelDB>(std::move(level_db))),
+      : db_(std::make_unique<LevelDb>(std::move(leveldb))),
         num_hash_boxes_(num_hash_boxes),
         hashes_(std::make_unique<PageProvider>(num_hash_boxes, *db_),
                 hash_branching_factor) {}
@@ -96,7 +97,7 @@ class LevelDBDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public store::PageSource {
    public:
-    PageProvider(std::size_t num_hash_boxes, const LevelDB& db)
+    PageProvider(std::size_t num_hash_boxes, const LevelDb& db)
         : db_(db), num_hash_boxes_(num_hash_boxes) {}
 
     // Get data for given page. The data is valid until the next call to
@@ -129,13 +130,13 @@ class LevelDBDepot {
     }
 
    private:
-    const LevelDB& db_;
+    const LevelDb& db_;
     std::size_t num_hash_boxes_;
     std::vector<std::byte> page_data_;
   };
 
-  // The underlying LevelDB instance.
-  std::unique_ptr<LevelDB> db_;
+  // The underlying LevelDb instance.
+  std::unique_ptr<LevelDb> db_;
 
   // The amount of boxes that will be grouped into a single hashing group.
   const std::size_t num_hash_boxes_;

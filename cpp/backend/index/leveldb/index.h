@@ -9,7 +9,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -40,10 +40,10 @@ std::array<char, sizeof(I)> ToDBValue(const I& value) {
 // used for storing data into single leveldb file to distinct data from
 // different indexes.
 template <Trivial K, std::integral I, std::size_t KPL>
-class LevelDBIndexBase {
+class LevelDbIndexBase {
  public:
-  LevelDBIndexBase(LevelDBIndexBase&&) noexcept = default;
-  virtual ~LevelDBIndexBase() = default;
+  LevelDbIndexBase(LevelDbIndexBase&&) noexcept = default;
+  virtual ~LevelDbIndexBase() = default;
 
   // Get index for given key.
   absl::StatusOr<I> Get(const K& key) const {
@@ -76,10 +76,12 @@ class LevelDBIndexBase {
   }
 
   // Flush unsafed index keys to disk.
-  void Flush() { assert(false && "Not implemented"); }
+  void Flush() {
+    // nothing to do
+  }
 
   // Close this index and release resources.
-  void Close() { assert(false && "Not implemented"); }
+  void Close() { GetDB().Close(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {
@@ -90,7 +92,7 @@ class LevelDBIndexBase {
   }
 
  protected:
-  explicit LevelDBIndexBase() = default;
+  explicit LevelDbIndexBase() = default;
 
  private:
   // Get hash key into leveldb.
@@ -103,8 +105,8 @@ class LevelDBIndexBase {
   virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
 
   // Get leveldb handle.
-  virtual LevelDB& GetDB() = 0;
-  virtual const LevelDB& GetDB() const = 0;
+  virtual LevelDb& GetDB() = 0;
+  virtual const LevelDb& GetDB() const = 0;
 
   // Get last index value.
   absl::StatusOr<I> GetLastIndexFromDB() const {

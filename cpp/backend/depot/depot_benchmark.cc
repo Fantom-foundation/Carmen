@@ -20,7 +20,7 @@ constexpr const auto kInsertValue = std::array<std::byte, 4>{
 
 // Defines the list of configurations to be benchmarked.
 BENCHMARK_TYPE_LIST(DepotConfigList, InMemoryDepot<unsigned int>,
-                    FileDepot<unsigned int>, LevelDBDepot<unsigned int>);
+                    FileDepot<unsigned int>, LevelDbDepot<unsigned int>);
 
 // Defines the list of problem sizes.
 const auto kSizes = std::vector<int64_t>({1 << 20, 1 << 24});

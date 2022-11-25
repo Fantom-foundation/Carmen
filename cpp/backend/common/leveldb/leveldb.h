@@ -11,18 +11,18 @@
 namespace carmen::backend {
 using LDBEntry = std::pair<std::span<const char>, std::span<const char>>;
 
-// Forward declaration. See level_db.cc for implementation.
-class LevelDBImpl;
+// Forward declaration. See leveldb.cc for implementation.
+class LevelDbImpl;
 
-// LevelDB provides a simple interface to interact with leveldb.
-class LevelDB {
+// LevelDb provides a simple interface to interact with leveldb.
+class LevelDb {
  public:
-  LevelDB(LevelDB&&) noexcept;
-  ~LevelDB();
+  LevelDb(LevelDb&&) noexcept;
+  ~LevelDb();
 
-  // Open a LevelDB database at given path. If create_if_missing is true, then
+  // Open a LevelDb database at given path. If create_if_missing is true, then
   // create a new database if one does not exist.
-  static absl::StatusOr<LevelDB> Open(const std::filesystem::path& path,
+  static absl::StatusOr<LevelDb> Open(const std::filesystem::path& path,
                                       bool create_if_missing = true);
 
   // Get value for given key.
@@ -34,13 +34,16 @@ class LevelDB {
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(std::span<LDBEntry> batch);
 
+  // Close the database.
+  void Close();
+
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const;
 
  private:
-  explicit LevelDB(std::unique_ptr<LevelDBImpl> db);
+  explicit LevelDb(std::unique_ptr<LevelDbImpl> db);
 
   // Pointer to implementation.
-  std::unique_ptr<LevelDBImpl> impl_;
+  std::unique_ptr<LevelDbImpl> impl_;
 };
 }  // namespace carmen::backend

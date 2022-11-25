@@ -1,7 +1,7 @@
 cc_library(
-    name = "level_db",
-    hdrs = ["level_db.h"],
-    srcs = ["level_db.cc"],
+    name = "leveldb",
+    hdrs = ["leveldb.h"],
+    srcs = ["leveldb.cc"],
     deps = [
         "//common:status_util",
         "//common:memory_usage",
@@ -12,10 +12,10 @@ cc_library(
 )
 
 cc_test(
-    name = "level_db_test",
-    srcs = ["level_db_test.cc"],
+    name = "leveldb_test",
+    srcs = ["leveldb_test.cc"],
     deps = [
-        ":level_db",
+        ":leveldb",
         "//common:file_util",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
