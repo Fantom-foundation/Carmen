@@ -39,7 +39,7 @@ using FileBasedIndex =
 
 template <typename K, typename V>
 using FileBasedStore =
-    backend::store::FileStore<K, V, backend::SingleFile, kPageSize>;
+    backend::store::EagerFileStore<K, V, backend::SingleFile, kPageSize>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
