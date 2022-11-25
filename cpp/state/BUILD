@@ -25,6 +25,7 @@ cc_library(
     srcs = ["c_state.cc"],
     deps = [
         ":state",
+        "//backend/index/cache",
         "//backend/index/file:index",
         "//backend/index/memory:index",
         "//backend/store/file:store",

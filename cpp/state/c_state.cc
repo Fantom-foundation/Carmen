@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "backend/depot/memory/depot.h"
+#include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
@@ -34,8 +35,8 @@ template <typename K>
 using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 
 template <typename K, typename I>
-using FileBasedIndex =
-    backend::index::FileIndex<K, I, backend::SingleFile, kPageSize>;
+using FileBasedIndex = backend::index::Cached<
+    backend::index::FileIndex<K, I, backend::SingleFile, kPageSize>>;
 
 template <typename K, typename V>
 using FileBasedStore =
