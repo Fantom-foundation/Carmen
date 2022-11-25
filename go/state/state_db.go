@@ -123,6 +123,9 @@ type stateDB struct {
 	// A set of accessed slots in the current transaction.
 	accessedSlots map[slotId]int
 
+	// A set of slots with current value (possibly) different from the committed value - for needs of committing.
+	writtenSlots map[slotId]*slotValue
+
 	// A non-transactional local cache of stored storage values.
 	storedDataCache *common.Cache[slotId, common.Value]
 }
@@ -220,6 +223,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		refund:            0,
 		accessedAddresses: map[common.Address]int{},
 		accessedSlots:     map[slotId]int{},
+		writtenSlots:      map[slotId]*slotValue{},
 		undo:              make([]func(), 0, 100),
 	}
 }
@@ -438,12 +442,15 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		if entry.current != value {
 			oldValue := entry.current
 			entry.current = value
+			s.writtenSlots[sid] = entry
 			s.undo = append(s.undo, func() {
 				entry.current = oldValue
 			})
 		}
 	} else {
-		s.data.Set(sid, &slotValue{current: value})
+		entry = &slotValue{current: value}
+		s.data.Set(sid, entry)
+		s.writtenSlots[sid] = entry
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
 			if entry.committedKnown {
@@ -451,6 +458,7 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 			} else {
 				s.data.Delete(sid)
 			}
+			delete(s.writtenSlots, sid)
 		})
 	}
 }
@@ -625,9 +633,10 @@ func (s *stateDB) BeginTransaction() {
 
 func (s *stateDB) EndTransaction() {
 	// Updated committed state of storage.
-	s.data.ForEach(func(_ slotId, value *slotValue) {
+	for _, value := range s.writtenSlots {
 		value.committed, value.committedKnown = value.current, true
-	})
+	}
+	s.writtenSlots = map[slotId]*slotValue{}
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
 }
@@ -792,21 +801,9 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("accounts", common.NewMemoryFootprint(uintptr(len(s.accounts))*(addressSize+unsafe.Sizeof(accountState{})+unsafe.Sizeof(common.AccountState(0)))))
 	mf.AddChild("balances", common.NewMemoryFootprint(uintptr(len(s.balances))*(addressSize+unsafe.Sizeof(balanceValue{}))))
 	mf.AddChild("nonces", common.NewMemoryFootprint(uintptr(len(s.nonces))*(addressSize+unsafe.Sizeof(nonceValue{})+8)))
+	mf.AddChild("slots", common.NewMemoryFootprint(uintptr(s.data.Length())*(slotIdSize+unsafe.Sizeof(slotValue{}))))
 
 	var sum uintptr = 0
-	s.data.ForEach(func(slot slotId, value *slotValue) {
-		sum += slotIdSize
-		sum += unsafe.Sizeof(*value)
-		if value.stored != nil {
-			sum += valueSize
-		}
-		if value.committed != nil && value.committed != value.stored {
-			sum += valueSize
-		}
-	})
-	mf.AddChild("slots", common.NewMemoryFootprint(sum))
-
-	sum = 0
 	for _, value := range s.codes {
 		sum += addressSize
 		if value.hash != nil {
@@ -818,6 +815,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 
 	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+unsafe.Sizeof(int(5)))))
 	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+unsafe.Sizeof(int(5)))))
+	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(slotIdSize+unsafe.Sizeof(&slotValue{}))))
 	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
 
 	return mf
