@@ -1,9 +1,9 @@
-#include "backend/index/cache/lru_cache.h"
+#include "backend/common/cache/lru_cache.h"
 
 #include <type_traits>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "include/gmock/gmock.h"
+#include "include/gtest/gtest.h"
 
 namespace carmen::backend::index {
 namespace {

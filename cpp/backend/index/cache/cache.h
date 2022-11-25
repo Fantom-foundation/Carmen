@@ -1,7 +1,7 @@
 #pragma once
 
 #include "absl/container/flat_hash_map.h"
-#include "backend/index/cache/lru_cache.h"
+#include "backend/common/cache/lru_cache.h"
 #include "backend/index/index.h"
 
 namespace carmen::backend::index {

@@ -1,5 +1,5 @@
 
-#include "backend/index/cache/lru_cache.h"
+#include "backend/common/cache/lru_cache.h"
 #include "benchmark/benchmark.h"
 
 namespace carmen::backend::index {
