@@ -177,11 +177,15 @@ func (s *slotId) Compare(other *slotId) int {
 // slotValue maintains the value of a slot.
 type slotValue struct {
 	// The value in the DB, missing if never fetched.
-	stored *common.Value
+	stored common.Value
 	// The value committed by the last completed transaction.
-	committed *common.Value
+	committed common.Value
 	// The current value as visible to the state DB users.
 	current common.Value
+	// Whether the stored value is known.
+	storedKnown bool
+	// Whether the committed value is known.
+	committedKnown bool
 }
 
 // codeValue maintains the code associated to a given address.
@@ -385,8 +389,8 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 	// Check cache first.
 	sid := slotId{addr, key}
 	val, exists := s.data.Get(sid)
-	if exists && val.committed != nil {
-		return *val.committed
+	if exists && val.committedKnown {
+		return val.committed
 	}
 	// If the value is not present, fetch it from the store.
 	return s.LoadStoredState(sid, val)
@@ -405,12 +409,14 @@ func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
 
 	// Remember the stored value for future accesses.
 	if val != nil {
-		val.stored = &stored
+		val.stored, val.storedKnown = stored, true
 	} else {
 		s.data.Set(sid, &slotValue{
-			stored:    &stored,
-			committed: &stored,
-			current:   stored,
+			stored:         stored,
+			committed:      stored,
+			current:        stored,
+			storedKnown:    true,
+			committedKnown: true,
 		})
 	}
 	return stored
@@ -440,8 +446,8 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		s.data.Set(sid, &slotValue{current: value})
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
-			if entry.committed != nil {
-				entry.current = *entry.committed
+			if entry.committedKnown {
+				entry.current = entry.committed
 			} else {
 				s.data.Delete(sid)
 			}
@@ -620,9 +626,7 @@ func (s *stateDB) BeginTransaction() {
 func (s *stateDB) EndTransaction() {
 	// Updated committed state of storage.
 	s.data.ForEach(func(_ slotId, value *slotValue) {
-		// We need a copy here to avoid aliasing with the current value that might get updated later.
-		currentValueCopy := value.current
-		value.committed = &currentValueCopy
+		value.committed, value.committedKnown = value.current, true
 	})
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
@@ -710,7 +714,7 @@ func (s *stateDB) EndBlock() {
 	// Update storage values in state DB
 	slots := make([]slotId, 0, s.data.Length())
 	s.data.ForEach(func(slot slotId, value *slotValue) {
-		if value.stored == nil || *value.stored != value.current {
+		if !value.storedKnown || value.stored != value.current {
 			slots = append(slots, slot)
 		}
 	})
