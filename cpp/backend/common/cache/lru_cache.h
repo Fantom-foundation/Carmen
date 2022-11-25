@@ -6,7 +6,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "common/memory_usage.h"
 
-namespace carmen::backend::index {
+namespace carmen::backend {
 
 // A simple cache implementation retaining a fixed number of least-recently-used
 // elements. This cache will never retain more than a specified capacity +1
@@ -141,4 +141,4 @@ class LeastRecentlyUsedCache {
   Entry* tail_ = nullptr;
 };
 
-}  // namespace carmen::backend::index
+}  // namespace carmen::backend
