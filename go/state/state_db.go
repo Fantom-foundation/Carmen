@@ -118,13 +118,13 @@ type stateDB struct {
 	refund uint64
 
 	// A set of accessed addresses in the current transaction.
-	accessedAddresses map[common.Address]int
+	accessedAddresses map[common.Address]bool
 
 	// A set of accessed slots in the current transaction.
-	accessedSlots map[slotId]int
+	accessedSlots map[slotId]bool
 
 	// A set of slots with current value (possibly) different from the committed value - for needs of committing.
-	writtenSlots map[slotId]*slotValue
+	writtenSlots map[*slotValue]bool
 
 	// A non-transactional local cache of stored storage values.
 	storedDataCache *common.Cache[slotId, common.Value]
@@ -221,9 +221,9 @@ func CreateStateDBUsing(state State) *stateDB {
 		storedDataCache:   common.NewCache[slotId, common.Value](StoredDataCacheSize),
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
-		accessedAddresses: map[common.Address]int{},
-		accessedSlots:     map[slotId]int{},
-		writtenSlots:      map[slotId]*slotValue{},
+		accessedAddresses: map[common.Address]bool{},
+		accessedSlots:     map[slotId]bool{},
+		writtenSlots:      map[*slotValue]bool{},
 		undo:              make([]func(), 0, 100),
 	}
 }
@@ -442,7 +442,7 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		if entry.current != value {
 			oldValue := entry.current
 			entry.current = value
-			s.writtenSlots[sid] = entry
+			s.writtenSlots[entry] = true
 			s.undo = append(s.undo, func() {
 				entry.current = oldValue
 			})
@@ -450,7 +450,7 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 	} else {
 		entry = &slotValue{current: value}
 		s.data.Set(sid, entry)
-		s.writtenSlots[sid] = entry
+		s.writtenSlots[entry] = true
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
 			if entry.committedKnown {
@@ -458,7 +458,7 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 			} else {
 				s.data.Delete(sid)
 			}
-			delete(s.writtenSlots, sid)
+			delete(s.writtenSlots, entry)
 		})
 	}
 }
@@ -564,17 +564,17 @@ func (s *stateDB) GetRefund() uint64 {
 
 func (s *stateDB) ClearAccessList() {
 	if len(s.accessedAddresses) > 0 {
-		s.accessedAddresses = make(map[common.Address]int)
+		s.accessedAddresses = make(map[common.Address]bool)
 	}
 	if len(s.accessedSlots) > 0 {
-		s.accessedSlots = make(map[slotId]int)
+		s.accessedSlots = make(map[slotId]bool)
 	}
 }
 
 func (s *stateDB) AddAddressToAccessList(addr common.Address) {
 	_, found := s.accessedAddresses[addr]
 	if !found {
-		s.accessedAddresses[addr] = 0
+		s.accessedAddresses[addr] = true
 		s.undo = append(s.undo, func() {
 			delete(s.accessedAddresses, addr)
 		})
@@ -586,7 +586,7 @@ func (s *stateDB) AddSlotToAccessList(addr common.Address, key common.Key) {
 	sid := slotId{addr, key}
 	_, found := s.accessedSlots[sid]
 	if !found {
-		s.accessedSlots[sid] = 0
+		s.accessedSlots[sid] = true
 		s.undo = append(s.undo, func() {
 			delete(s.accessedSlots, sid)
 		})
@@ -633,10 +633,10 @@ func (s *stateDB) BeginTransaction() {
 
 func (s *stateDB) EndTransaction() {
 	// Updated committed state of storage.
-	for _, value := range s.writtenSlots {
+	for value := range s.writtenSlots {
 		value.committed, value.committedKnown = value.current, true
 	}
-	s.writtenSlots = map[slotId]*slotValue{}
+	s.writtenSlots = map[*slotValue]bool{}
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
 }
@@ -813,9 +813,11 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	}
 	mf.AddChild("codes", common.NewMemoryFootprint(sum))
 
-	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+unsafe.Sizeof(int(5)))))
-	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+unsafe.Sizeof(int(5)))))
-	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(slotIdSize+unsafe.Sizeof(&slotValue{}))))
+	var boolean bool
+	const boolSize = unsafe.Sizeof(boolean)
+	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+boolSize)))
+	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+boolSize)))
+	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(boolSize+unsafe.Sizeof(&slotValue{}))))
 	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
 
 	return mf
