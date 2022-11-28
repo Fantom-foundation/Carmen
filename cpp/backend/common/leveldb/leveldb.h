@@ -34,6 +34,9 @@ class LevelDb {
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(std::span<LDBEntry> batch);
 
+  // Flush all pending writes to database.
+  absl::Status Flush();
+
   // Close the database.
   void Close();
 

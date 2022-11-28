@@ -82,7 +82,7 @@ class State {
 
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
-  Hash GetHash() const;
+  Hash GetHash();
 
   // Syncs internally modified write-buffers to disk.
   void Flush();
@@ -274,7 +274,7 @@ Hash State<IndexType, StoreType, DepotType>::GetCodeHash(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-Hash State<IndexType, StoreType, DepotType>::GetHash() const {
+Hash State<IndexType, StoreType, DepotType>::GetHash() {
   return GetSha256Hash(address_index_.GetHash(), key_index_.GetHash(),
                        slot_index_.GetHash(), balances_.GetHash(),
                        nonces_.GetHash(), value_store_.GetHash(),

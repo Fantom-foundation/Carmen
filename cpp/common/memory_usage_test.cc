@@ -2,6 +2,7 @@
 
 #include <type_traits>
 
+#include "common/status_test_util.h"
 #include "common/test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -79,6 +80,13 @@ TEST(MemoryTest, Printing) {
   EXPECT_EQ(Print(6 * EiB), "6.0 EiB");
 }
 
+TEST(MemoryFootprintTest, MemoryUsageReportsSizeOf) {
+  int a;
+  std::string s;
+  EXPECT_EQ(MemoryFootprint(a).GetTotal(), Memory(sizeof(a)));
+  EXPECT_EQ(MemoryFootprint(s).GetTotal(), Memory(sizeof(s)));
+}
+
 TEST(MemoryFootprintTest, SelfIsIncludedInTotal) {
   MemoryFootprint a(Memory(12));
   EXPECT_EQ(a.GetTotal(), Memory(12));
@@ -109,11 +117,11 @@ TEST(MemoryFootprintTest, DeeperHierarchiesAreCovered) {
 
 TEST(MemoryFootprintTest, CommonSubComponentsAreOnlyCountedOnce) {
   int obj;
-  MemoryFootprint o(&obj, Memory(10));
+  MemoryFootprint o(obj);
   MemoryFootprint r;
   r.Add("l", o);
   r.Add("r", o);
-  EXPECT_EQ(r.GetTotal(), Memory(10));
+  EXPECT_EQ(r.GetTotal(), Memory(sizeof(obj)));
 }
 
 TEST(MemoryFootprintTest, PrintingListsComponents) {
@@ -141,6 +149,23 @@ TEST(MemoryFootprintTest, PrintingListsComponents) {
   EXPECT_THAT(print, HasSubstr("15 byte\t."));
 }
 
+TEST(MemoryFootprintTest, ObjectsAtSameLocationAreDifferentiated) {
+  struct Data {
+    int32_t a;
+  };
+
+  Data data;
+  ASSERT_EQ(reinterpret_cast<void*>(&data), reinterpret_cast<void*>(&data.a));
+  ASSERT_EQ(sizeof(data), sizeof(data.a));
+
+  // This example is not what should actually be done since it computes the
+  // memory usage of field 'a' twice, but it demonstrates that the memory
+  // footprint infra can distinguish between the parent object and the field.
+  MemoryFootprint res(data);
+  res.Add("a", MemoryFootprint(data.a));
+  EXPECT_EQ(res.GetTotal(), 2 * Memory(sizeof(data)));
+}
+
 TEST(MemoryFootprintTest, PrintingListsSharedComponents) {
   MemoryFootprint s;
   s.Add("s1", Memory(1));
@@ -158,6 +183,22 @@ TEST(MemoryFootprintTest, PrintingListsSharedComponents) {
   EXPECT_THAT(print, HasSubstr("2 byte\t./r/s2"));
   EXPECT_THAT(print, HasSubstr("3 byte\t./r"));
   EXPECT_THAT(print, HasSubstr("3 byte\t."));
+}
+
+TEST(MemoryFootprintTest, CanBeSerializedAndReloaded) {
+  MemoryFootprint s;
+  s.Add("s1", Memory(1));
+  s.Add("s2", Memory(2));
+
+  MemoryFootprint t;
+  t.Add("l", s);
+  t.Add("r", s);
+
+  std::stringstream buffer;
+  t.WriteTo(buffer);
+
+  ASSERT_OK_AND_ASSIGN(auto reloaded, MemoryFootprint::ReadFrom(buffer));
+  EXPECT_EQ(Print(t), Print(reloaded));
 }
 
 }  // namespace

@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -55,7 +56,33 @@ func (mf *MemoryFootprint) ToString(name string) (str string, err error) {
 	return sb.String(), err
 }
 
+// Allow memory footprints to be used in format strings.
+func (mf *MemoryFootprint) String() string {
+	str, err := mf.ToString(".")
+	if err != nil {
+		panic(fmt.Sprintf("error printing memory usage to string: %v", err))
+	}
+	return str
+}
+
 func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) (err error) {
+	// Print children in order for simpler comparison.
+	names := make([]string, 0, len(mf.children))
+	for name := range mf.children {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
+
+	for _, name := range names {
+		footprint := mf.children[name]
+		fullPath := path + "/" + name
+		err = footprint.toStringBuilder(sb, fullPath)
+		if err != nil {
+			return
+		}
+	}
+
+	// Show sum at the bottom.
 	err = memoryAmountToString(sb, mf.Total())
 	if err != nil {
 		return
@@ -63,24 +90,18 @@ func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) (er
 	sb.WriteRune(' ')
 	sb.WriteString(path)
 	sb.WriteRune('\n')
-	for name, footprint := range mf.children {
-		fullPath := path + "/" + name
-		err = footprint.toStringBuilder(sb, fullPath)
-		if err != nil {
-			return
-		}
-	}
+
 	return
 }
 
 func memoryAmountToString(sb *strings.Builder, bytes uintptr) (err error) {
 	const unit = 1024
-	const prefixes = "KMGTPE"
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit && exp+1 < len(prefixes); n /= unit {
+	const prefixes = " KMGTPE"
+	div, exp := 1, 0
+	for n := bytes; n >= unit && exp+1 < len(prefixes); n /= unit {
 		div *= unit
 		exp++
 	}
-	_, err = fmt.Fprintf(sb, "%.1f %cB", float64(bytes)/float64(div), prefixes[exp])
+	_, err = fmt.Fprintf(sb, "%6.1f %cB", float64(bytes)/float64(div), prefixes[exp])
 	return err
 }

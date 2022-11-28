@@ -24,10 +24,10 @@ class FileDepot {
   using key_type = K;
 
   // Creates a new FileDepot using the provided directory path, branching factor
-  // and number of boxes per group for hash computation.
+  // and number of items per group for hash computation.
   static absl::StatusOr<FileDepot> Open(const std::filesystem::path& path,
                                         std::size_t hash_branching_factor = 32,
-                                        std::size_t num_hash_boxes = 4) {
+                                        std::size_t hash_box_size = 4) {
     auto offset_file = path / "offset.dat";
     auto data_file = path / "data.dat";
 
@@ -56,7 +56,7 @@ class FileDepot {
 
     auto depot =
         FileDepot(path / "hash.dat", std::move(offset_fs), std::move(data_fs),
-                  hash_branching_factor, num_hash_boxes);
+                  hash_branching_factor, hash_box_size);
 
     // Load the hash tree from the file.
     if (std::filesystem::exists(depot.hash_file_)) {
@@ -162,20 +162,20 @@ class FileDepot {
 
   FileDepot(std::filesystem::path hash_file, std::fstream offset_fs,
             std::fstream data_fs, std::size_t hash_branching_factor,
-            std::size_t num_hash_boxes)
-      : num_hash_boxes_(num_hash_boxes),
+            std::size_t hash_box_size)
+      : hash_box_size_(hash_box_size),
         hash_file_(std::move(hash_file)),
         offset_fs_(std::make_unique<std::fstream>(std::move(offset_fs))),
         data_fs_(std::make_unique<std::fstream>(std::move(data_fs))),
         hashes_(std::make_unique<PageProvider>(*data_fs_, *offset_fs_,
-                                               num_hash_boxes_),
+                                               hash_box_size_),
                 hash_branching_factor) {
-    assert(num_hash_boxes_ > 0 && "num_hash_boxes must be > 0");
+    assert(hash_box_size_ > 0 && "hash_box_size must be > 0");
   }
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
-    return key / num_hash_boxes_;
+    return key / hash_box_size_;
   }
 
   // Get position of the given key in the offset file.
@@ -209,10 +209,10 @@ class FileDepot {
   class PageProvider : public store::PageSource {
    public:
     PageProvider(std::fstream& data_fs, std::fstream& offset_fs,
-                 std::size_t num_hash_boxes)
+                 std::size_t hash_box_size)
         : data_fs_(data_fs),
           offset_fs_(offset_fs),
-          num_hash_boxes_(num_hash_boxes) {}
+          hash_box_size_(hash_box_size) {}
 
     // Get data for given page. The data is valid until the next call to
     // this function.
@@ -221,10 +221,10 @@ class FileDepot {
       static std::vector<std::pair<Offset, Size>> metadata;
 
       // calculate start and end of the hash group
-      auto start = id * num_hash_boxes_;
-      auto end = start + num_hash_boxes_;
+      auto start = id * hash_box_size_;
+      auto end = start + hash_box_size_;
 
-      metadata.resize(num_hash_boxes_);
+      metadata.resize(hash_box_size_);
 
       // read metadata for all boxes in the group
       for (K i = 0; start + i < end; ++i) {
@@ -235,7 +235,7 @@ class FileDepot {
       data_fs_.clear();
 
       std::size_t len = 0;
-      for (std::size_t i = 0; i < num_hash_boxes_; ++i) {
+      for (std::size_t i = 0; i < hash_box_size_; ++i) {
         if (metadata[i].second == 0) continue;
         data_fs_.seekg(metadata[i].first, std::ios::beg);
         page_data_.resize(len + metadata[i].second);
@@ -250,12 +250,12 @@ class FileDepot {
    private:
     std::fstream& data_fs_;
     std::fstream& offset_fs_;
-    const std::size_t num_hash_boxes_;
+    const std::size_t hash_box_size_;
     std::vector<char> page_data_;
   };
 
-  // The amount of boxes that will be grouped into a single hashing group.
-  const std::size_t num_hash_boxes_;
+  // The amount of items that will be grouped into a single hashing group.
+  const std::size_t hash_box_size_;
 
   // The name of the file to save hashes to.
   std::filesystem::path hash_file_;

@@ -4,14 +4,17 @@
 #include <cstring>
 #include <filesystem>
 #include <span>
+#include <sstream>
 #include <string_view>
 
 #include "backend/depot/memory/depot.h"
+#include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 #include "state/state.h"
 
@@ -32,12 +35,12 @@ template <typename K>
 using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 
 template <typename K, typename I>
-using FileBasedIndex =
-    backend::index::FileIndex<K, I, backend::SingleFile, kPageSize>;
+using FileBasedIndex = backend::index::Cached<
+    backend::index::FileIndex<K, I, backend::SingleFile, kPageSize>>;
 
 template <typename K, typename V>
 using FileBasedStore =
-    backend::store::FileStore<K, V, backend::SingleFile, kPageSize>;
+    backend::store::EagerFileStore<K, V, backend::SingleFile, kPageSize>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
@@ -62,6 +65,8 @@ class WorldState {
   virtual void SetCode(const Address&, std::span<const std::byte>) = 0;
 
   virtual Hash GetHash() = 0;
+
+  virtual MemoryFootprint GetMemoryFootprint() const = 0;
 
   virtual void Flush() = 0;
   virtual void Close() = 0;
@@ -129,6 +134,10 @@ class WorldStateBase : public WorldState {
   void Flush() override { state_.Flush(); }
 
   void Close() override { state_.Close(); }
+
+  MemoryFootprint GetMemoryFootprint() const override {
+    return state_.GetMemoryFootprint();
+  }
 
  protected:
   State state_;
@@ -284,4 +293,17 @@ void Carmen_GetHash(C_State state, C_Hash out_hash) {
   auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);
   h = s.GetHash();
 }
+
+void Carmen_GetMemoryFootprint(C_State state, char** out,
+                               uint64_t* out_length) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  auto fp = s.GetMemoryFootprint();
+  std::stringstream buffer;
+  fp.WriteTo(buffer);
+  auto data = std::move(buffer).str();
+  *out_length = data.size();
+  *out = reinterpret_cast<char*>(malloc(data.size()));
+  std::memcpy(*out, data.data(), data.size());
+}
+
 }  // extern "C"

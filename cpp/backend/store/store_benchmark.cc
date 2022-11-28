@@ -13,16 +13,12 @@ constexpr const std::size_t kBranchFactor = 32;
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/store:store_benchmark
 
-template <typename K, Trivial V, template <typename> class F,
-          std::size_t page_size>
-using LazyFileStore = FileStore<K, V, F, page_size, false>;
-
 // Defines the list of configurations to be benchmarked.
 BENCHMARK_TYPE_LIST(StoreConfigList, (ReferenceStore<kPageSize>),
                     (InMemoryStore<int, Value, kPageSize>),
                     (LevelDbStore<int, Value, kPageSize>),
-                    (FileStore<int, Value, InMemoryFile, kPageSize>),
-                    (FileStore<int, Value, SingleFile, kPageSize>),
+                    (EagerFileStore<int, Value, InMemoryFile, kPageSize>),
+                    (EagerFileStore<int, Value, SingleFile, kPageSize>),
                     (LazyFileStore<int, Value, SingleFile, kPageSize>));
 
 // Defines the list of problem sizes.

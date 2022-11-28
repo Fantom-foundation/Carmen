@@ -11,6 +11,7 @@ package state
 */
 import "C"
 import (
+	"encoding/binary"
 	"fmt"
 	"unsafe"
 
@@ -132,4 +133,90 @@ func (cs *CppState) Close() error {
 		cs.state = nil
 	}
 	return nil
+}
+
+func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
+	if cs.state == nil {
+		return nil
+	}
+
+	// Fetch footprint data from C++.
+	var buffer *C.char
+	var size C.uint64_t
+	C.Carmen_GetMemoryFootprint(cs.state, &buffer, &size)
+	defer func() {
+		C.free(unsafe.Pointer(buffer))
+	}()
+
+	data := C.GoBytes(unsafe.Pointer(buffer), C.int(size))
+
+	// Use an index map mapping object IDs to memory footprints to facilitate
+	// sharing of sub-structures.
+	index := map[objectId]*common.MemoryFootprint{}
+	res, unusedData := parseCMemoryFootprint(data, index)
+	if len(unusedData) != 0 {
+		panic("Failed to consume all of the provided footprint data")
+	}
+	return res
+
+}
+
+type objectId struct {
+	obj_loc, obj_type uint64
+}
+
+func (o *objectId) isUnique() bool {
+	return o.obj_loc == 0 && o.obj_type == 0
+}
+
+func readUint32(data []byte) (uint32, []byte) {
+	return binary.LittleEndian.Uint32(data[:4]), data[4:]
+}
+
+func readUint64(data []byte) (uint64, []byte) {
+	return binary.LittleEndian.Uint64(data[:8]), data[8:]
+}
+
+func readObjectId(data []byte) (objectId, []byte) {
+	obj_loc, data := readUint64(data)
+	obj_type, data := readUint64(data)
+	return objectId{obj_loc, obj_type}, data
+}
+
+func readString(data []byte) (string, []byte) {
+	length, data := readUint32(data)
+	return string(data[:length]), data[length:]
+}
+
+func parseCMemoryFootprint(data []byte, index map[objectId]*common.MemoryFootprint) (*common.MemoryFootprint, []byte) {
+	// 1) read object ID
+	objId, data := readObjectId(data)
+
+	// 2) read memory usage
+	memUsage, data := readUint64(data)
+	res := common.NewMemoryFootprint(uintptr(memUsage))
+
+	// 3) read number of sub-components
+	num_components, data := readUint32(data)
+
+	// 4) read sub-components
+	for i := 0; i < int(num_components); i++ {
+		var label string
+		label, data = readString(data)
+		var child *common.MemoryFootprint
+		child, data = parseCMemoryFootprint(data, index)
+		res.AddChild(label, child)
+	}
+
+	// Unique objects are not cached since they shall not be reused.
+	if objId.isUnique() {
+		return res, data
+	}
+
+	// Return representative instance based on object ID.
+	if represent, exists := index[objId]; exists {
+		return represent, data
+	}
+	index[objId] = res
+	return res, data
 }
