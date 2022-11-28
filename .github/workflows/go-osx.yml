@@ -1,49 +1,47 @@
-name: Go
+name: Go-OSX
 
 on:
   push:
     branches: [ "master" ]
     paths:
-      - '.github/workflows/go.yml'
+      - '.github/workflows/go-osx.yml'
       - 'cpp/**'
       - 'go/**'
   pull_request:
     branches: [ "master" ]
     paths:
-      - '.github/workflows/go.yml'
+      - '.github/workflows/go-osx.yml'
       - 'cpp/**'
       - 'go/**'
 
 jobs:
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
+    env:
+      TEST_TMPDIR: "/Users/runner/.cache/bazel"
     steps:
     - uses: actions/checkout@v3
     - uses: bazelbuild/setup-bazelisk@v2
     - name: Mount bazel cache
       uses: actions/cache@v3
       with:
-       path: "~/.cache/bazel"
-       key: bazel-go-linux
+       path: "/Users/runner/.cache/bazel"
+       key: bazel-go-osx
 
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
         go-version: 1.19
 
-    - name: Check Go sources formatting
-      working-directory: ./go
-      run: diff=`gofmt -s -d .`; echo "$diff"; test -z "$diff"
-
-    - name: Build C++ libraries
+    - name: Build C++ library for Go
       working-directory: ./go/lib
       run: ./build_libcarmen.sh
 
-    - name: Build
+    - name: Build Go
       working-directory: ./go
       run: go build -v ./...
 
-    - name: Test
+    - name: Run Go tests
       working-directory: ./go
       run: go test -v ./...
