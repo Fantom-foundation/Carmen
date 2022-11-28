@@ -83,7 +83,7 @@ class Cached {
  private:
   constexpr static std::size_t kDefaultSize = 1 << 18;  // ~260k
 
-  // The underlying index to be wrapped.
+  // The underlying depot to be wrapped.
   D depot_;
 
   // The maintained in-memory value cache.
