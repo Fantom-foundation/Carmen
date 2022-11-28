@@ -24,6 +24,11 @@ cc_test(
 )
 
 cc_library(
+    name = "access_pattern",
+    hdrs = ["access_pattern.h"],
+)
+
+cc_library(
     name = "file",
     hdrs = ["file.h"],
     srcs = ["file.cc"],
@@ -79,6 +84,7 @@ cc_binary(
     name = "eviction_policy_benchmark",
     srcs = ["eviction_policy_benchmark.cc"],
     deps = [
+        ":access_pattern",
         ":eviction_policy",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
@@ -104,5 +110,17 @@ cc_test(
         ":page",
         ":page_pool",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "page_pool_benchmark",
+    srcs = ["page_pool_benchmark.cc"],
+    deps = [
+        ":access_pattern",
+        ":eviction_policy",
+        ":page_pool",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
     ],
 )
