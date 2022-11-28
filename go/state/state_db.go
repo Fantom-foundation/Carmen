@@ -209,7 +209,7 @@ func CreateStateDB(directory string) (StateDB, error) {
 	return CreateStateDBUsing(state), nil
 }
 
-const StoredDataCacheSize = 200
+const StoredDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
 
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
