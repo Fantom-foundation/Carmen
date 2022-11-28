@@ -41,8 +41,8 @@ class Cached {
         cache_.Set(key, std::nullopt);
         return result.status();
       case absl::StatusCode::kOk:
-        cache_.Set(key, std::vector<std::byte>((*result).begin(),
-                                               (*result).end()));
+        cache_.Set(key,
+                   std::vector<std::byte>((*result).begin(), (*result).end()));
         return *result;
       default:
         return result.status();
@@ -51,8 +51,7 @@ class Cached {
 
   absl::Status Set(const key_type& key, std::span<const std::byte> data) {
     RETURN_IF_ERROR(depot_.Set(key, data));
-    cache_.Set(key, std::vector<std::byte>(data.begin(),
-                                           data.end()));
+    cache_.Set(key, std::vector<std::byte>(data.begin(), data.end()));
     hash_ = std::nullopt;
     return absl::OkStatus();
   }

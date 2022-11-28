@@ -1,7 +1,7 @@
 #include "backend/depot/memory/depot.h"
 
-#include "backend/depot/depot_handler.h"
 #include "backend/depot/cache/cache.h"
+#include "backend/depot/depot_handler.h"
 #include "backend/depot/file/depot.h"
 #include "backend/depot/leveldb/depot.h"
 #include "common/status_test_util.h"
