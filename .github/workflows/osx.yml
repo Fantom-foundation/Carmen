@@ -4,13 +4,13 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - '.github/workflow/osx.yml'
+      - '.github/workflows/osx.yml'
       - 'cpp/**'
       - 'go/**'
   pull_request:
     branches: [ "master" ]
     paths:
-      - '.github/workflow/osx.yml'
+      - '.github/workflows/osx.yml'
       - 'cpp/**'
       - 'go/**'
 

@@ -4,10 +4,12 @@ on:
   push:
     branches: [ "master" ]
     paths:
+      - '.github/workflows/cpp-linter.yml'
       - 'cpp/**'
   pull_request:
     branches: [ "master" ]
     paths:
+      - '.github/workflows/cpp-linter.yml'
       - 'cpp/**'
 
 jobs:

@@ -4,13 +4,13 @@ on:
   push:
     branches: [ "master" ]
     paths:
-      - '.github/workflow/go.yml'
+      - '.github/workflows/go.yml'
       - 'cpp/**'
       - 'go/**'
   pull_request:
     branches: [ "master" ]
     paths:
-      - '.github/workflow/go.yml'
+      - '.github/workflows/go.yml'
       - 'cpp/**'
       - 'go/**'
 
