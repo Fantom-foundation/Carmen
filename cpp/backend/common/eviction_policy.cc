@@ -4,26 +4,39 @@
 #include <cstdlib>
 #include <optional>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/btree_set.h"
+#include "backend/common/access_pattern.h"
 
 namespace carmen::backend {
 
 namespace {
 
-std::size_t PickRandom(const absl::flat_hash_set<std::size_t> values) {
-  auto pos = rand() % values.size();
-  auto iter = values.begin();
-  for (std::size_t i = 0; i < pos; i++) {
-    iter++;
+// Selects a alement for the given set to be evicted according to the provided
+// eviction pattern. The EvictionPattern needs to provide a Next() function
+// providing a random slot to be evicted. The next higher value present in the
+// set is then chosen to be evicted.
+template <typename EvictionPattern>
+std::optional<std::size_t> PickElementToEvict(
+    EvictionPattern& pattern, const absl::btree_set<std::size_t>& values) {
+  // We pick a random element to evict and look for the first element in the set
+  // that is <= that selection.
+  auto res = pattern.Next();
+  auto pos = values.lower_bound(res);
+  // If we selected the end, we wrap arround.
+  if (pos == values.end()) {
+    pos = values.begin();
   }
-  return *iter;
+  if (pos == values.end()) {
+    // In this case the set is empty.
+    return std::nullopt;
+  }
+  return *pos;
 }
 
 }  // namespace
 
 RandomEvictionPolicy::RandomEvictionPolicy(std::size_t size)
-    : clean_(size), dirty_(size) {}
+    : eviction_pattern_(size) {}
 
 void RandomEvictionPolicy::Read(std::size_t position) {
   if (!dirty_.contains(position)) {
@@ -43,10 +56,10 @@ void RandomEvictionPolicy::Removed(std::size_t position) {
 
 std::optional<std::size_t> RandomEvictionPolicy::GetPageToEvict() {
   if (!clean_.empty()) {
-    return PickRandom(clean_);
+    return PickElementToEvict(eviction_pattern_, clean_);
   }
   if (!dirty_.empty()) {
-    return PickRandom(dirty_);
+    return PickElementToEvict(eviction_pattern_, dirty_);
   }
   return std::nullopt;
 }

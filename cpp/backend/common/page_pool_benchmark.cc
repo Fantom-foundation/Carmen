@@ -1,9 +1,9 @@
 #include <random>
 
 #include "backend/common/access_pattern.h"
-#include "backend/common/page_pool.h"
-#include "backend/common/page.h"
 #include "backend/common/eviction_policy.h"
+#include "backend/common/page.h"
+#include "backend/common/page_pool.h"
 #include "benchmark/benchmark.h"
 
 namespace carmen::backend {
@@ -13,17 +13,15 @@ namespace {
 //    bazel run -c opt //backend/common:page_pool_benchmark
 
 constexpr long kMinPoolSize = 4;
-constexpr long kMaxPoolSize = 1 << 20;   // = 4 GiB page pool (with 4 per KiB page)
-constexpr long kFileSize = 1 << 30;      // = 4 TiB file size (with 4 per KiB page)
+constexpr long kMaxPoolSize = 1 << 20;  // = 4 GiB page pool with 4 KiB pages
+constexpr long kFileSize = 1 << 30;     // = 4 TiB file size with 4 KiB pages
 
-template<typename Page>
+template <typename Page>
 class DummyFile {
-  public:
+ public:
   using page_type = Page;
 
-  std::size_t GetNumPages() {
-    return kFileSize;
-  }
+  std::size_t GetNumPages() { return kFileSize; }
 
   void LoadPage(PageId, Page&) {}
   void StorePage(PageId, const Page&) {}
@@ -31,7 +29,7 @@ class DummyFile {
   void Close() {}
 };
 
-template<EvictionPolicy Policy>
+template <EvictionPolicy Policy>
 using TestPool = PagePool<ArrayPage<int>, DummyFile, Policy>;
 
 // Evaluates the performance of reading pages from page pools.
@@ -66,7 +64,6 @@ BENCHMARK(BM_ReadTest<Exponential, RandomEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 BENCHMARK(BM_ReadTest<Exponential, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
-
 
 // Evaluates the performance of writing to pages in page pools.
 template <typename AccessOrder, EvictionPolicy Policy>

@@ -68,7 +68,7 @@ class PagePool {
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const;
-  
+
   // Returns the access to the utilized eviction policicy, mainly for testing.
   EvictionPolicy& GetEvictionPolicy() { return eviction_policy_; }
 
