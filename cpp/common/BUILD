@@ -147,6 +147,8 @@ cc_library(
     hdrs=["memory_usage.h"],
     srcs=["memory_usage.cc"],
     deps=[
+        ":status_util",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
@@ -160,6 +162,7 @@ cc_test(
     deps = [
         ":memory_usage",
         ":test_util",
+        ":status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

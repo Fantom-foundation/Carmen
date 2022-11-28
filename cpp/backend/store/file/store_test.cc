@@ -8,8 +8,13 @@
 namespace carmen::backend::store {
 namespace {
 
-TEST(FileStoreTest, StoreCanBeSavedAndRestored) {
-  using Store = FileStore<int, int, SingleFile>;
+template <typename T>
+class FileStoreTest : public testing::Test {};
+
+TYPED_TEST_SUITE_P(FileStoreTest);
+
+TYPED_TEST_P(FileStoreTest, StoreCanBeSavedAndRestored) {
+  using Store = TypeParam;
   const auto kNumElements = static_cast<int>(Store::kPageSize * 10);
   TempDir dir;
   Hash hash;
@@ -28,6 +33,15 @@ TEST(FileStoreTest, StoreCanBeSavedAndRestored) {
     }
   }
 }
+
+REGISTER_TYPED_TEST_SUITE_P(FileStoreTest, StoreCanBeSavedAndRestored);
+
+using FileStoreVariants =
+    ::testing::Types<EagerFileStore<int, int, SingleFile>,
+                     LazyFileStore<int, int, SingleFile> >;
+
+INSTANTIATE_TYPED_TEST_SUITE_P(FileStoreTests, FileStoreTest,
+                               FileStoreVariants);
 
 }  // namespace
 }  // namespace carmen::backend::store

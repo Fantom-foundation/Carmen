@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -75,6 +76,9 @@ type StateDB interface {
 	// snapshot, transaction, block, or epoch handling to support faster initialization
 	// of StateDB instances. BulkLoads must not run while there open blocks.
 	StartBulkLoad() BulkLoad
+
+	// GetMemoryFootprint computes an approximation of the memory used by this state.
+	GetMemoryFootprint() *common.MemoryFootprint
 }
 
 // BulkLoad serves as the public interface for loading preset data into the state DB.
@@ -114,10 +118,16 @@ type stateDB struct {
 	refund uint64
 
 	// A set of accessed addresses in the current transaction.
-	accessedAddresses map[common.Address]int
+	accessedAddresses map[common.Address]bool
 
 	// A set of accessed slots in the current transaction.
-	accessedSlots map[slotId]int
+	accessedSlots map[slotId]bool
+
+	// A set of slots with current value (possibly) different from the committed value - for needs of committing.
+	writtenSlots map[*slotValue]bool
+
+	// A non-transactional local cache of stored storage values.
+	storedDataCache *common.Cache[slotId, common.Value]
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -170,11 +180,15 @@ func (s *slotId) Compare(other *slotId) int {
 // slotValue maintains the value of a slot.
 type slotValue struct {
 	// The value in the DB, missing if never fetched.
-	stored *common.Value
+	stored common.Value
 	// The value committed by the last completed transaction.
-	committed *common.Value
+	committed common.Value
 	// The current value as visible to the state DB users.
 	current common.Value
+	// Whether the stored value is known.
+	storedKnown bool
+	// Whether the committed value is known.
+	committedKnown bool
 }
 
 // codeValue maintains the code associated to a given address.
@@ -195,6 +209,8 @@ func CreateStateDB(directory string) (StateDB, error) {
 	return CreateStateDBUsing(state), nil
 }
 
+const StoredDataCacheSize = 200
+
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
 		state:             state,
@@ -202,10 +218,12 @@ func CreateStateDBUsing(state State) *stateDB {
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
+		storedDataCache:   common.NewCache[slotId, common.Value](StoredDataCacheSize),
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
-		accessedAddresses: map[common.Address]int{},
-		accessedSlots:     map[slotId]int{},
+		accessedAddresses: map[common.Address]bool{},
+		accessedSlots:     map[slotId]bool{},
+		writtenSlots:      map[*slotValue]bool{},
 		undo:              make([]func(), 0, 100),
 	}
 }
@@ -375,27 +393,34 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 	// Check cache first.
 	sid := slotId{addr, key}
 	val, exists := s.data.Get(sid)
-	if exists && val.committed != nil {
-		return *val.committed
+	if exists && val.committedKnown {
+		return val.committed
 	}
 	// If the value is not present, fetch it from the store.
 	return s.LoadStoredState(sid, val)
 }
 
 func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
-	stored, err := s.state.GetStorage(sid.addr, sid.key)
-	if err != nil {
-		panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
+	stored, found := s.storedDataCache.Get(sid)
+	if !found {
+		var err error
+		stored, err = s.state.GetStorage(sid.addr, sid.key)
+		if err != nil {
+			panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
+		}
+		s.storedDataCache.Set(sid, stored)
 	}
 
 	// Remember the stored value for future accesses.
 	if val != nil {
-		val.stored = &stored
+		val.stored, val.storedKnown = stored, true
 	} else {
 		s.data.Set(sid, &slotValue{
-			stored:    &stored,
-			committed: &stored,
-			current:   stored,
+			stored:         stored,
+			committed:      stored,
+			current:        stored,
+			storedKnown:    true,
+			committedKnown: true,
 		})
 	}
 	return stored
@@ -417,19 +442,23 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		if entry.current != value {
 			oldValue := entry.current
 			entry.current = value
+			s.writtenSlots[entry] = true
 			s.undo = append(s.undo, func() {
 				entry.current = oldValue
 			})
 		}
 	} else {
-		s.data.Set(sid, &slotValue{current: value})
+		entry = &slotValue{current: value}
+		s.data.Set(sid, entry)
+		s.writtenSlots[entry] = true
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
-			if entry.committed != nil {
-				entry.current = *entry.committed
+			if entry.committedKnown {
+				entry.current = entry.committed
 			} else {
 				s.data.Delete(sid)
 			}
+			delete(s.writtenSlots, entry)
 		})
 	}
 }
@@ -535,17 +564,17 @@ func (s *stateDB) GetRefund() uint64 {
 
 func (s *stateDB) ClearAccessList() {
 	if len(s.accessedAddresses) > 0 {
-		s.accessedAddresses = make(map[common.Address]int)
+		s.accessedAddresses = make(map[common.Address]bool)
 	}
 	if len(s.accessedSlots) > 0 {
-		s.accessedSlots = make(map[slotId]int)
+		s.accessedSlots = make(map[slotId]bool)
 	}
 }
 
 func (s *stateDB) AddAddressToAccessList(addr common.Address) {
 	_, found := s.accessedAddresses[addr]
 	if !found {
-		s.accessedAddresses[addr] = 0
+		s.accessedAddresses[addr] = true
 		s.undo = append(s.undo, func() {
 			delete(s.accessedAddresses, addr)
 		})
@@ -557,7 +586,7 @@ func (s *stateDB) AddSlotToAccessList(addr common.Address, key common.Key) {
 	sid := slotId{addr, key}
 	_, found := s.accessedSlots[sid]
 	if !found {
-		s.accessedSlots[sid] = 0
+		s.accessedSlots[sid] = true
 		s.undo = append(s.undo, func() {
 			delete(s.accessedSlots, sid)
 		})
@@ -604,11 +633,10 @@ func (s *stateDB) BeginTransaction() {
 
 func (s *stateDB) EndTransaction() {
 	// Updated committed state of storage.
-	s.data.ForEach(func(_ slotId, value *slotValue) {
-		// We need a copy here to avoid aliasing with the current value that might get updated later.
-		currentValueCopy := value.current
-		value.committed = &currentValueCopy
-	})
+	for value := range s.writtenSlots {
+		value.committed, value.committedKnown = value.current, true
+	}
+	s.writtenSlots = map[*slotValue]bool{}
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
 }
@@ -695,7 +723,7 @@ func (s *stateDB) EndBlock() {
 	// Update storage values in state DB
 	slots := make([]slotId, 0, s.data.Length())
 	s.data.ForEach(func(slot slotId, value *slotValue) {
-		if value.stored == nil || *value.stored != value.current {
+		if !value.storedKnown || value.stored != value.current {
 			slots = append(slots, slot)
 		}
 	})
@@ -706,6 +734,7 @@ func (s *stateDB) EndBlock() {
 		if err != nil {
 			panic(fmt.Sprintf("Failed to set storage: %v", err))
 		}
+		s.storedDataCache.Set(slot, value.current)
 	}
 
 	// Update modified codes.
@@ -754,7 +783,44 @@ func (s *stateDB) Close() error {
 
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock()
+	s.storedDataCache.Clear()
 	return &bulkLoad{s.state}
+}
+
+func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
+	const addressSize = 20
+	const keySize = 32
+	const valueSize = 32
+	const hashSize = 32
+	const slotIdSize = addressSize + keySize
+
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
+	mf.AddChild("state", s.state.GetMemoryFootprint())
+
+	// For account-states, balances, and nonces an over-approximation should be sufficient.
+	mf.AddChild("accounts", common.NewMemoryFootprint(uintptr(len(s.accounts))*(addressSize+unsafe.Sizeof(accountState{})+unsafe.Sizeof(common.AccountState(0)))))
+	mf.AddChild("balances", common.NewMemoryFootprint(uintptr(len(s.balances))*(addressSize+unsafe.Sizeof(balanceValue{}))))
+	mf.AddChild("nonces", common.NewMemoryFootprint(uintptr(len(s.nonces))*(addressSize+unsafe.Sizeof(nonceValue{})+8)))
+	mf.AddChild("slots", common.NewMemoryFootprint(uintptr(s.data.Length())*(slotIdSize+unsafe.Sizeof(slotValue{}))))
+
+	var sum uintptr = 0
+	for _, value := range s.codes {
+		sum += addressSize
+		if value.hash != nil {
+			sum += hashSize
+		}
+		sum += uintptr(len(value.code))
+	}
+	mf.AddChild("codes", common.NewMemoryFootprint(sum))
+
+	var boolean bool
+	const boolSize = unsafe.Sizeof(boolean)
+	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+boolSize)))
+	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+boolSize)))
+	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(boolSize+unsafe.Sizeof(&slotValue{}))))
+	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
+
+	return mf
 }
 
 func (s *stateDB) resetTransactionContext() {
@@ -773,11 +839,11 @@ func (s *stateDB) reset() {
 }
 
 type bulkLoad struct {
-	s State
+	state State
 }
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
-	err := l.s.CreateAccount(addr)
+	err := l.state.CreateAccount(addr)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create account: %v", err))
 	}
@@ -788,27 +854,27 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
-	err = l.s.SetBalance(addr, newBalance)
+	err = l.state.SetBalance(addr, newBalance)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set balance: %v", err))
 	}
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
-	err := l.s.SetNonce(addr, common.ToNonce(value))
+	err := l.state.SetNonce(addr, common.ToNonce(value))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set nonce: %v", err))
 	}
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
-	err := l.s.SetStorage(addr, key, value)
+	err := l.state.SetStorage(addr, key, value)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set storage: %v", err))
 	}
 }
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
-	err := l.s.SetCode(addr, code)
+	err := l.state.SetCode(addr, code)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set code: %v", err))
 	}
@@ -816,10 +882,10 @@ func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
 
 func (l *bulkLoad) Close() error {
 	// Flush out all inserted data.
-	if err := l.s.Flush(); err != nil {
+	if err := l.state.Flush(); err != nil {
 		return err
 	}
 	// Compute hash to bring cached hashes up-to-date.
-	_, err := l.s.GetHash()
+	_, err := l.state.GetHash()
 	return err
 }

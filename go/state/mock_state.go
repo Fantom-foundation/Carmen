@@ -180,6 +180,20 @@ func (mr *MockStateMockRecorder) GetHash() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockState)(nil).GetHash))
 }
 
+// GetMemoryFootprint mocks base method.
+func (m *MockState) GetMemoryFootprint() *common.MemoryFootprint {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMemoryFootprint")
+	ret0, _ := ret[0].(*common.MemoryFootprint)
+	return ret0
+}
+
+// GetMemoryFootprint indicates an expected call of GetMemoryFootprint.
+func (mr *MockStateMockRecorder) GetMemoryFootprint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*MockState)(nil).GetMemoryFootprint))
+}
+
 // GetNonce mocks base method.
 func (m *MockState) GetNonce(address common.Address) (common.Nonce, error) {
 	m.ctrl.T.Helper()

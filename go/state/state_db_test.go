@@ -1500,7 +1500,7 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 	}
 }
 
-func TestCarmenBulkLoadReachesState(t *testing.T) {
+func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -1525,6 +1525,20 @@ func TestCarmenBulkLoadReachesState(t *testing.T) {
 	load.SetCode(address1, code)
 
 	load.Close()
+}
+
+func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(0))
+
+	fp := db.GetMemoryFootprint()
+	if fp == nil || fp.Total() == 0 {
+		t.Errorf("invalid memory footpring: %v", fp)
+	}
 }
 
 func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {

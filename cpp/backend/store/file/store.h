@@ -11,12 +11,50 @@
 
 namespace carmen::backend::store {
 
-// The FileStore is a file-backed implementation of a mutable key/value store.
-// It provides mutation, lookup, and global state hashing support.
+// ----------------------------------------------------------------------------
+//                              Declarations
+// ----------------------------------------------------------------------------
+
+namespace internal {
+
+// The FileStoreBase is the common bases of file-backed implementations of a
+// mutable key/value store. It provides mutation, lookup, and global state
+// hashing support. Hashing can occure eager (before evicting pages) or lazy,
+// when requesting hash computations.
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size = 32, bool eager_hashing = true>
 requires File<F<ArrayPage<V, page_size>>>
-class FileStore {
+class FileStoreBase;
+
+}  // namespace internal
+
+// A FileStore implementation configured to perform eager hashing. Thus,
+// before pages are evicted, hashes are computed. This slows down reads
+// and updates, but improves hashing speed.
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size = 32>
+requires File<F<ArrayPage<V, page_size>>>
+using EagerFileStore = internal::FileStoreBase<K, V, F, page_size, true>;
+
+// A FileStore implementation configured to perform lazy hashing. Thus,
+// pages are evicted without being hashes and need to be reloaded for computing
+// hashes when needed. This speeds up read/write operations at the expense of
+// hash performance.
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size = 32>
+requires File<F<ArrayPage<V, page_size>>>
+using LazyFileStore = internal::FileStoreBase<K, V, F, page_size, false>;
+
+// ----------------------------------------------------------------------------
+//                              Definitions
+// ----------------------------------------------------------------------------
+
+namespace internal {
+
+template <typename K, Trivial V, template <typename> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<ArrayPage<V, page_size>>>
+class FileStoreBase {
  public:
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
@@ -26,14 +64,14 @@ class FileStore {
 
   // Creates a new file store meantaining its content in the given directory and
   // using the provided branching factor for its hash computation.
-  FileStore(std::filesystem::path directory,
-            std::size_t hash_branching_factor = 32);
+  FileStoreBase(std::filesystem::path directory,
+                std::size_t hash_branching_factor = 32);
 
-  // FileStore instances support to be moved.
-  FileStore(FileStore&&) = default;
+  // Supports instances to be moved.
+  FileStoreBase(FileStoreBase&&) = default;
 
   // File stores are automatically closed on destruction.
-  ~FileStore() { Close(); }
+  ~FileStoreBase() { Close(); }
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value);
@@ -117,7 +155,7 @@ class FileStore {
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-FileStore<K, V, F, page_size, eager_hashing>::FileStore(
+FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
     std::filesystem::path directory, std::size_t hash_branching_factor)
     : pool_(std::make_unique<PagePool>(
           std::make_unique<F<page_type>>(directory / "data.dat"))),
@@ -133,7 +171,8 @@ FileStore<K, V, F, page_size, eager_hashing>::FileStore(
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-void FileStore<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
+void FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key,
+                                                           V value) {
   auto& trg = pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
@@ -145,20 +184,21 @@ void FileStore<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-const V& FileStore<K, V, F, page_size, eager_hashing>::Get(const K& key) const {
+const V& FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
+    const K& key) const {
   return pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
 }
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>> Hash
-FileStore<K, V, F, page_size, eager_hashing>::GetHash()
+FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
 const { return hashes_->GetHash(); }
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-void FileStore<K, V, F, page_size, eager_hashing>::Flush() {
+void FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) pool_->Flush();
   if (hashes_) hashes_->SaveToFile(hash_file_);
 }
@@ -166,7 +206,7 @@ void FileStore<K, V, F, page_size, eager_hashing>::Flush() {
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>>
-void FileStore<K, V, F, page_size, eager_hashing>::Close() {
+void FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   Flush();
   if (pool_) pool_->Close();
 }
@@ -174,7 +214,7 @@ void FileStore<K, V, F, page_size, eager_hashing>::Close() {
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>> MemoryFootprint
-FileStore<K, V, F, page_size, eager_hashing>::GetMemoryFootprint()
+FileStoreBase<K, V, F, page_size, eager_hashing>::GetMemoryFootprint()
 const {
   MemoryFootprint res(*this);
   res.Add("pool", pool_->GetMemoryFootprint());
@@ -182,4 +222,5 @@ const {
   return res;
 }
 
+}  // namespace internal
 }  // namespace carmen::backend::store

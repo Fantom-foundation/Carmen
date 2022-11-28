@@ -22,6 +22,20 @@ func initStates() []namedStateConfig {
 	return res
 }
 
+func testEachConfiguration(t *testing.T, test func(s State)) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+			defer state.Close()
+
+			test(state)
+		})
+	}
+}
+
 func testHashAfterModification(t *testing.T, mod func(s State)) {
 	ref, err := NewMemory()
 	if err != nil {
@@ -32,24 +46,16 @@ func testHashAfterModification(t *testing.T, mod func(s State)) {
 	if err != nil {
 		t.Fatalf("failed to get hash of reference state: %v", err)
 	}
-	for _, config := range initStates() {
-		t.Run(config.name, func(t *testing.T) {
-			state, err := config.createState(t.TempDir())
-			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
-			}
-			defer state.Close()
-
-			mod(state)
-			got, err := state.GetHash()
-			if err != nil {
-				t.Fatalf("failed to compute hash: %v", err)
-			}
-			if want != got {
-				t.Errorf("Invalid hash, wanted %v, got %v", want, got)
-			}
-		})
-	}
+	testEachConfiguration(t, func(state State) {
+		mod(state)
+		got, err := state.GetHash()
+		if err != nil {
+			t.Fatalf("failed to compute hash: %v", err)
+		}
+		if want != got {
+			t.Errorf("Invalid hash, wanted %v, got %v", want, got)
+		}
+	})
 }
 
 func TestEmptyHash(t *testing.T) {
@@ -138,6 +144,21 @@ func TestLargeStateHashes(t *testing.T) {
 			}
 			s.SetBalance(address, common.Balance{byte(i)})
 			s.SetNonce(address, common.Nonce{byte(i + 1)})
+		}
+	})
+}
+
+func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
+	testEachConfiguration(t, func(s State) {
+		fp := s.GetMemoryFootprint()
+		if fp == nil {
+			t.Fatalf("state produces invalid footprint: %v", fp)
+		}
+		if fp.Total() <= 0 {
+			t.Errorf("memory footprint should not be empty")
+		}
+		if _, err := fp.ToString("top"); err != nil {
+			t.Errorf("Unable to print footprint: %v", err)
 		}
 	})
 }

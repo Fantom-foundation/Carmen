@@ -111,6 +111,13 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
 // Retrieves a global state hash of the given state.
 void Carmen_GetHash(C_State state, C_Hash out_hash);
 
+// --------------------------- Memory Footprint -------------------------------
+
+// Retrieves a summary of the used memory. After the call the out variable will
+// point to a buffer with a serialized summary that needs to be freed by the
+// caller.
+void Carmen_GetMemoryFootprint(C_State state, char** out, uint64_t* out_length);
+
 #if __cplusplus
 }
 #endif
