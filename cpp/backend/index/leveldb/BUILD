@@ -4,7 +4,7 @@ cc_library(
     deps = [
         "//common:type",
         "//common:hash",
-        "//backend/common/leveldb:level_db",
+        "//backend/common/leveldb:leveldb",
         "//common:status_util",
         "//common:memory_usage",
         "@com_google_absl//absl/status:statusor"

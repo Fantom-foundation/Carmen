@@ -1,4 +1,4 @@
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 
 #include <filesystem>
 #include <span>
@@ -17,13 +17,13 @@ constexpr leveldb::WriteOptions kWriteOptions = leveldb::WriteOptions();
 constexpr leveldb::ReadOptions kReadOptions = leveldb::ReadOptions();
 }  // namespace
 
-// LevelDB index implementation. To encapsulate leveldb dependency.
-class LevelDBImpl {
+// LevelDb index implementation. To encapsulate leveldb dependency.
+class LevelDbImpl {
  public:
-  LevelDBImpl(LevelDBImpl&&) noexcept = default;
-  ~LevelDBImpl() = default;
+  LevelDbImpl(LevelDbImpl&&) noexcept = default;
+  ~LevelDbImpl() = default;
 
-  static absl::StatusOr<LevelDBImpl> Open(const std::filesystem::path& path,
+  static absl::StatusOr<LevelDbImpl> Open(const std::filesystem::path& path,
                                           bool create_if_missing = true) {
     leveldb::DB* db;
     leveldb::Options options;
@@ -32,7 +32,7 @@ class LevelDBImpl {
 
     if (!status.ok()) return absl::InternalError(status.ToString());
 
-    return LevelDBImpl(db);
+    return LevelDbImpl(db);
   }
 
   // Get value for given key.
@@ -84,38 +84,45 @@ class LevelDBImpl {
   }
 
  private:
-  explicit LevelDBImpl(leveldb::DB* db) : db_(db) {}
+  explicit LevelDbImpl(leveldb::DB* db) : db_(db) {}
 
   std::unique_ptr<leveldb::DB> db_;
 };
 
 // Open leveldb database connection.
-absl::StatusOr<LevelDB> LevelDB::Open(const std::filesystem::path& path,
+absl::StatusOr<LevelDb> LevelDb::Open(const std::filesystem::path& path,
                                       bool create_if_missing) {
-  ASSIGN_OR_RETURN(auto db, LevelDBImpl::Open(path, create_if_missing));
-  return LevelDB(std::make_unique<LevelDBImpl>(std::move(db)));
+  ASSIGN_OR_RETURN(auto db, LevelDbImpl::Open(path, create_if_missing));
+  return LevelDb(std::make_unique<LevelDbImpl>(std::move(db)));
 }
 
 // Get value for given key.
-absl::StatusOr<std::string> LevelDB::Get(std::span<const char> key) const {
+absl::StatusOr<std::string> LevelDb::Get(std::span<const char> key) const {
   return impl_->Get(key);
 }
 
 // Add single value for given key.
-absl::Status LevelDB::Add(LDBEntry entry) { return impl_->Add(entry); }
+absl::Status LevelDb::Add(LDBEntry entry) { return impl_->Add(entry); }
 
 // Add batch of values. Input is a span of pairs of key and value.
-absl::Status LevelDB::AddBatch(std::span<LDBEntry> batch) {
+absl::Status LevelDb::AddBatch(std::span<LDBEntry> batch) {
   return impl_->AddBatch(batch);
 }
 
-LevelDB::LevelDB(std::unique_ptr<LevelDBImpl> db) : impl_(std::move(db)) {}
+absl::Status LevelDb::Flush() {
+  // No-op for LevelDB.
+  return absl::OkStatus();
+}
 
-LevelDB::LevelDB(LevelDB&&) noexcept = default;
+void LevelDb::Close() { impl_.reset(); }
 
-LevelDB::~LevelDB() = default;
+LevelDb::LevelDb(std::unique_ptr<LevelDbImpl> db) : impl_(std::move(db)) {}
 
-MemoryFootprint LevelDB::GetMemoryFootprint() const {
+LevelDb::LevelDb(LevelDb&&) noexcept = default;
+
+LevelDb::~LevelDb() = default;
+
+MemoryFootprint LevelDb::GetMemoryFootprint() const {
   return impl_->GetMemoryFootprint();
 }
 

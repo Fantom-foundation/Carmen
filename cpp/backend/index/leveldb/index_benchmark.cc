@@ -19,19 +19,19 @@ class SingleIndexBM {
   explicit SingleIndexBM(std::uint8_t num_indexes) {
     assert(num_indexes > 0 && "num_indexes must be greater than 0");
     // initialize index leveldb index
-    auto index = *SingleLevelDBIndex::Open(dir_.GetPath());
+    auto index = *SingleLevelDbIndex::Open(dir_.GetPath());
     for (std::uint8_t i = 0; i < num_indexes; ++i) {
       // create key space
       indexes_.push_back(index.template KeySpace<K, I>(i));
     }
   }
-  LevelDBKeySpace<K, I>& GetIndex(std::uint8_t index) {
+  LevelDbKeySpace<K, I>& GetIndex(std::uint8_t index) {
     return indexes_[index];
   }
 
  private:
   TempDir dir_;
-  std::vector<LevelDBKeySpace<K, I>> indexes_;
+  std::vector<LevelDbKeySpace<K, I>> indexes_;
 };
 
 template <Trivial K, std::integral I>
@@ -41,17 +41,17 @@ class MultiIndexBM {
     assert(num_indexes > 0 && "num_indexes must be greater than 0");
     for (std::uint8_t i = 0; i < num_indexes; ++i) {
       auto dir = TempDir();
-      indexes_.push_back(*MultiLevelDBIndex<K, I>::Open(dir.GetPath()));
+      indexes_.push_back(*MultiLevelDbIndex<K, I>::Open(dir.GetPath()));
       dirs_.push_back(std::move(dir));
     }
   }
-  MultiLevelDBIndex<K, I>& GetIndex(std::uint8_t index) {
+  MultiLevelDbIndex<K, I>& GetIndex(std::uint8_t index) {
     return indexes_[index];
   }
 
  private:
   std::vector<TempDir> dirs_;
-  std::vector<MultiLevelDBIndex<K, I>> indexes_;
+  std::vector<MultiLevelDbIndex<K, I>> indexes_;
 };
 
 using SingleIndex = SingleIndexBM<Key, std::uint64_t>;
@@ -66,11 +66,11 @@ Key ToKey(std::int64_t value) {
 }
 
 // Benchmarks the sequential insertion of keys into indexes.
-template <typename LevelDBIndex>
+template <typename LevelDbIndex>
 void BM_Insert(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDBIndex index(indexes_count);
+  LevelDbIndex index(indexes_count);
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
@@ -105,11 +105,11 @@ BENCHMARK(BM_Insert<MultiIndex>)
     ->Args({1 << 10, 8})
     ->Args({1 << 20, 8});
 
-template <typename LevelDBIndex>
+template <typename LevelDbIndex>
 void BM_SequentialRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDBIndex index(indexes_count);
+  LevelDbIndex index(indexes_count);
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
@@ -144,11 +144,11 @@ BENCHMARK(BM_SequentialRead<MultiIndex>)
     ->Args({1 << 10, 8})
     ->Args({1 << 20, 8});
 
-template <typename LevelDBIndex>
+template <typename LevelDbIndex>
 void BM_UniformRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDBIndex index(indexes_count);
+  LevelDbIndex index(indexes_count);
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
@@ -185,11 +185,11 @@ BENCHMARK(BM_UniformRandomRead<MultiIndex>)
     ->Args({1 << 10, 8})
     ->Args({1 << 20, 8});
 
-template <typename LevelDBIndex>
+template <typename LevelDbIndex>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDBIndex index(indexes_count);
+  LevelDbIndex index(indexes_count);
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {

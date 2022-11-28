@@ -16,7 +16,7 @@ constexpr const std::size_t kBranchFactor = 32;
 // Defines the list of configurations to be benchmarked.
 BENCHMARK_TYPE_LIST(StoreConfigList, (ReferenceStore<kPageSize>),
                     (InMemoryStore<int, Value, kPageSize>),
-                    (LevelDBStore<int, Value, kPageSize>),
+                    (LevelDbStore<int, Value, kPageSize>),
                     (EagerFileStore<int, Value, InMemoryFile, kPageSize>),
                     (EagerFileStore<int, Value, SingleFile, kPageSize>),
                     (LazyFileStore<int, Value, SingleFile, kPageSize>));

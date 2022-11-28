@@ -2,7 +2,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 
 namespace carmen::backend::index {
 namespace internal {
@@ -15,13 +15,13 @@ std::string StrToDBKey(char key_space, std::span<const char> key) {
 }
 }  // namespace internal
 
-absl::StatusOr<SingleLevelDBIndex> SingleLevelDBIndex::Open(
+absl::StatusOr<SingleLevelDbIndex> SingleLevelDbIndex::Open(
     const std::filesystem::path& path) {
-  ASSIGN_OR_RETURN(auto db, LevelDB::Open(path, /*create_if_missing=*/true));
-  return SingleLevelDBIndex(std::make_shared<LevelDB>(std::move(db)));
+  ASSIGN_OR_RETURN(auto db, LevelDb::Open(path, /*create_if_missing=*/true));
+  return SingleLevelDbIndex(std::make_shared<LevelDb>(std::move(db)));
 }
 
-// SingleLevelDBIndex constructor.
-SingleLevelDBIndex::SingleLevelDBIndex(std::shared_ptr<LevelDB> ldb)
+// SingleLevelDbIndex constructor.
+SingleLevelDbIndex::SingleLevelDbIndex(std::shared_ptr<LevelDb> ldb)
     : ldb_(std::move(ldb)) {}
 }  // namespace carmen::backend::index

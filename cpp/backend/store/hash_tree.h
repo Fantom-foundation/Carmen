@@ -6,7 +6,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -76,23 +76,23 @@ class HashTree {
 
   // Saves the hashes of this tree into the given leveldb path. Before saving
   // them, all outdated hashes are implicitely refreshed.
-  absl::Status SaveToLevelDB(const std::filesystem::path& path);
+  absl::Status SaveToLevelDb(const std::filesystem::path& path);
 
   // Saves the hashes of this tree into the given leveldb instance. Before
   // saving them, all outdated hashes are implicitely refreshed.
-  absl::Status SaveToLevelDB(LevelDB& level_db);
+  absl::Status SaveToLevelDb(LevelDb& leveldb);
 
   // Discards the current content of this HashTree and loads all hashes from the
   // given leveldb path. Loaded hashes are considered up-to-date. After loading,
   // the internal tree structure is updated, and the file verified for
   // consistency.
-  absl::Status LoadFromLevelDB(const std::filesystem::path& path);
+  absl::Status LoadFromLevelDb(const std::filesystem::path& path);
 
   // Discards the current content of this HashTree and loads all hashes from the
   // given leveldb instance. Loaded hashes are considered up-to-date. After
   // loading, the internal tree structure is updated, and the file verified for
   // consistency.
-  absl::Status LoadFromLevelDB(const LevelDB& level_db);
+  absl::Status LoadFromLevelDb(const LevelDb& leveldb);
 
   // Computes a summary of the memory usage of this tree.
   MemoryFootprint GetMemoryFootprint() const;

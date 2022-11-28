@@ -8,18 +8,18 @@
 namespace carmen::backend::index {
 namespace {
 
-using TestIndex = MultiLevelDBIndex<int, int>;
+using TestIndex = MultiLevelDbIndex<int, int>;
 
 using ::testing::IsOk;
 using ::testing::Not;
 using ::testing::StrEq;
 
-TEST(LevelDBMultiFileIndex, TestOpen) {
+TEST(LevelDbMultiFileIndex, TestOpen) {
   auto dir = TempDir();
   ASSERT_THAT(TestIndex::Open(dir.GetPath()), IsOk());
 }
 
-TEST(LevelDBMultiFileIndex, IndexIsPersistent) {
+TEST(LevelDbMultiFileIndex, IndexIsPersistent) {
   auto dir = TempDir();
   absl::StatusOr<std::pair<int, bool>> result;
 

@@ -7,13 +7,13 @@
 #include "common/type.h"
 
 namespace carmen::backend::store {
-// LevelDBStoreTestAdapter is a wrapper around LevelDBStore. Providing
+// LevelDbStoreTestAdapter is a wrapper around LevelDbStore. Providing
 // interface for benchmarking and testing. This is subject to be removed
 // once we have store interface updated.
 template <std::integral K, Trivial V, std::size_t page_size>
-class LevelDBStoreTestAdapter {
+class LevelDbStoreTestAdapter {
  public:
-  LevelDBStoreTestAdapter(LevelDBStore<K, V, page_size> store)
+  LevelDbStoreTestAdapter(LevelDbStore<K, V, page_size> store)
       : store_(std::move(store)) {}
 
   void Set(const K& key, V value) { store_.Set(key, value).IgnoreError(); }
@@ -41,6 +41,6 @@ class LevelDBStoreTestAdapter {
   }
 
  private:
-  LevelDBStore<K, V, page_size> store_;
+  LevelDbStore<K, V, page_size> store_;
 };
 }  // namespace carmen::backend::store

@@ -8,7 +8,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "backend/common/leveldb/level_db.h"
+#include "backend/common/leveldb/leveldb.h"
 #include "backend/index/leveldb/index.h"
 #include "common/hash.h"
 #include "common/status_util.h"
@@ -29,10 +29,10 @@ std::string StrToDBKey(char key_space, std::span<const char> key);
 }  // namespace internal
 
 template <Trivial K, std::integral I>
-class LevelDBKeySpace : public internal::LevelDBIndexBase<K, I, 1> {
+class LevelDbKeySpace : public internal::LevelDbIndexBase<K, I, 1> {
  public:
-  LevelDBKeySpace(std::shared_ptr<LevelDB> ldb, char key_space)
-      : internal::LevelDBIndexBase<K, I, 1>(),
+  LevelDbKeySpace(std::shared_ptr<LevelDb> ldb, char key_space)
+      : internal::LevelDbIndexBase<K, I, 1>(),
         ldb_(std::move(ldb)),
         key_space_(key_space) {}
 
@@ -49,30 +49,30 @@ class LevelDBKeySpace : public internal::LevelDBIndexBase<K, I, 1> {
     return internal::ToDBKey(key_space_, key);
   };
 
-  LevelDB& GetDB() override { return *ldb_; }
-  const LevelDB& GetDB() const override { return *ldb_; }
+  LevelDb& GetDB() override { return *ldb_; }
+  const LevelDb& GetDB() const override { return *ldb_; }
 
-  std::shared_ptr<LevelDB> ldb_;
+  std::shared_ptr<LevelDb> ldb_;
   char key_space_;
 };
 
-// SingleLevelDBIndex is an index implementation over leveldb. It uses a single
+// SingleLevelDbIndex is an index implementation over leveldb. It uses a single
 // file to store all the data. Data is stored in the following format:
 // key_space + key -> value.
-class SingleLevelDBIndex {
+class SingleLevelDbIndex {
  public:
-  static absl::StatusOr<SingleLevelDBIndex> Open(
+  static absl::StatusOr<SingleLevelDbIndex> Open(
       const std::filesystem::path& path);
 
   // Returns index for given key space.
   template <Trivial K, std::integral I>
-  LevelDBKeySpace<K, I> KeySpace(char key_space) {
+  LevelDbKeySpace<K, I> KeySpace(char key_space) {
     return {ldb_, key_space};
   }
 
  private:
-  explicit SingleLevelDBIndex(std::shared_ptr<LevelDB> ldb);
-  std::shared_ptr<LevelDB> ldb_;
+  explicit SingleLevelDbIndex(std::shared_ptr<LevelDb> ldb);
+  std::shared_ptr<LevelDb> ldb_;
 };
 
 }  // namespace carmen::backend::index

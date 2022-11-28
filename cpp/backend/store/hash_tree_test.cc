@@ -269,17 +269,17 @@ TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestored) {
   }
 }
 
-TEST(HashTreeTest, EmptyTreeCanBeSavedToLevelDB) {
+TEST(HashTreeTest, EmptyTreeCanBeSavedToLevelDb) {
   auto source = std::make_unique<MockPageSource>();
   HashTree tree(std::move(source));
 
   TempDir dir;
   std::filesystem::remove(dir);
-  ASSERT_OK(tree.SaveToLevelDB(dir));
+  ASSERT_OK(tree.SaveToLevelDb(dir));
   EXPECT_TRUE(std::filesystem::exists(dir));
 }
 
-TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestoredFromLevelDB) {
+TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestoredFromLevelDb) {
   TempDir dir;
   std::filesystem::remove(dir);
   Hash hash;
@@ -287,7 +287,7 @@ TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestoredFromLevelDB) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source));
 
-    ASSERT_OK(tree.SaveToLevelDB(dir));
+    ASSERT_OK(tree.SaveToLevelDb(dir));
     EXPECT_TRUE(std::filesystem::exists(dir));
 
     hash = tree.GetHash();
@@ -297,12 +297,12 @@ TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestoredFromLevelDB) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source));
 
-    ASSERT_OK(tree.LoadFromLevelDB(dir));
+    ASSERT_OK(tree.LoadFromLevelDb(dir));
     EXPECT_EQ(hash, tree.GetHash());
   }
 }
 
-TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestoredFromLevelDB) {
+TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestoredFromLevelDb) {
   TempDir dir;
   std::filesystem::remove(dir);
   Hash hash;
@@ -314,7 +314,7 @@ TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestoredFromLevelDB) {
     tree.UpdateHash(1, Hash{0x03, 0x04});
     tree.UpdateHash(2, Hash{0x05, 0x06});
 
-    ASSERT_OK(tree.SaveToLevelDB(dir));
+    ASSERT_OK(tree.SaveToLevelDb(dir));
     EXPECT_TRUE(std::filesystem::exists(dir));
 
     hash = tree.GetHash();
@@ -324,12 +324,12 @@ TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestoredFromLevelDB) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source));
 
-    ASSERT_OK(tree.LoadFromLevelDB(dir));
+    ASSERT_OK(tree.LoadFromLevelDb(dir));
     EXPECT_EQ(hash, tree.GetHash());
   }
 }
 
-TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestoredFromLevelDB) {
+TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestoredFromLevelDb) {
   TempDir dir;
   std::filesystem::remove(dir);
   Hash hash;
@@ -341,7 +341,7 @@ TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestoredFromLevelDB) {
     tree.UpdateHash(1, Hash{0x03, 0x04});
     tree.UpdateHash(2, Hash{0x05, 0x06});
 
-    ASSERT_OK(tree.SaveToLevelDB(dir));
+    ASSERT_OK(tree.SaveToLevelDb(dir));
     EXPECT_TRUE(std::filesystem::exists(dir));
 
     hash = tree.GetHash();
@@ -351,7 +351,7 @@ TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestoredFromLevelDB) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source), /*branching_factor=*/2);
 
-    ASSERT_OK(tree.LoadFromLevelDB(dir));
+    ASSERT_OK(tree.LoadFromLevelDb(dir));
     EXPECT_EQ(hash, tree.GetHash());
   }
 }

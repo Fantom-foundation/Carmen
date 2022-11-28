@@ -74,25 +74,25 @@ class StoreHandler<InMemoryStore<Key, Value, page_size>, branching_factor>
   InMemoryStore<Key, Value, page_size> store_;
 };
 
-// A specialization of a StoreHandler for LevelDBStores handling
+// A specialization of a StoreHandler for LevelDbStores handling
 // creation/deletion of instances.
 template <std::integral Key, Trivial Value, std::size_t page_size,
           std::size_t branching_factor>
-class StoreHandler<LevelDBStore<Key, Value, page_size>, branching_factor>
+class StoreHandler<LevelDbStore<Key, Value, page_size>, branching_factor>
     : public StoreHandlerBase<page_size, branching_factor> {
  public:
   using StoreHandlerBase<page_size, branching_factor>::GetStoreDirectory;
 
   StoreHandler()
-      : adapter_(*LevelDBStore<Key, Value, page_size>::Open(
+      : adapter_(*LevelDbStore<Key, Value, page_size>::Open(
             GetStoreDirectory(), branching_factor)) {}
 
-  LevelDBStoreTestAdapter<Key, Value, page_size>& GetStore() {
+  LevelDbStoreTestAdapter<Key, Value, page_size>& GetStore() {
     return adapter_;
   }
 
  private:
-  LevelDBStoreTestAdapter<Key, Value, page_size> adapter_;
+  LevelDbStoreTestAdapter<Key, Value, page_size> adapter_;
 };
 
 }  // namespace

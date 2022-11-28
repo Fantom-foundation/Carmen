@@ -8,16 +8,16 @@
 #include "common/type.h"
 
 namespace carmen::backend::index {
-// MultiLevelDBIndexTestAdapter is a wrapper around LevelDBKeySpace. Providing
+// SingleLevelDbIndexTestAdapter is a wrapper around LevelDbKeySpace. Providing
 // interface for benchmarking and testing. This is subject to be removed
 // once we have index interface updated.
 template <Trivial K, std::integral I>
-class SingleLevelDBIndexTestAdapter {
+class SingleLevelDbIndexTestAdapter {
  public:
   using key_type [[maybe_unused]] = K;
   using value_type [[maybe_unused]] = I;
 
-  explicit SingleLevelDBIndexTestAdapter(LevelDBKeySpace<K, I> key_space)
+  explicit SingleLevelDbIndexTestAdapter(LevelDbKeySpace<K, I> key_space)
       : key_space_(std::move(key_space)) {}
 
   std::pair<I, bool> GetOrAdd(const K& key) {
@@ -39,7 +39,7 @@ class SingleLevelDBIndexTestAdapter {
     return Hash{};
   }
 
-  void Flush() { key_space_.Flush(); }
+  void Flush() { key_space_.Flush().IgnoreError(); }
 
   void Close() { key_space_.Close(); }
 
@@ -48,6 +48,6 @@ class SingleLevelDBIndexTestAdapter {
   }
 
  private:
-  LevelDBKeySpace<K, I> key_space_;
+  LevelDbKeySpace<K, I> key_space_;
 };
 }  // namespace carmen::backend::index

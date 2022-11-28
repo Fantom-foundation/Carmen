@@ -2,7 +2,7 @@ cc_library(
     name = "index",
     hdrs = ["index.h"],
     deps = [
-        "//backend/common/leveldb:level_db",
+        "//backend/common/leveldb:leveldb",
         "//backend/index/leveldb:index",
     ],
     visibility = ["//visibility:public"],

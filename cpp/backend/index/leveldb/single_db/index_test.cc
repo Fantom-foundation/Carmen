@@ -13,16 +13,16 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = SingleLevelDBIndexTestAdapter<int, int>;
+using TestIndex = SingleLevelDbIndexTestAdapter<int, int>;
 
 // Instantiates common index tests for the Cached index type.
-INSTANTIATE_TYPED_TEST_SUITE_P(LevelDB, IndexTest, TestIndex);
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
-LevelDBKeySpace<int, int> GetTestIndex(const TempDir& dir) {
-  return (*SingleLevelDBIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
+LevelDbKeySpace<int, int> GetTestIndex(const TempDir& dir) {
+  return (*SingleLevelDbIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
 }
 
-TEST(LevelDBIndexTest, ConvertToLevelDBKey) {
+TEST(LevelDbIndexTest, ConvertToLevelDbKey) {
   int key = 21;
   auto res = internal::ToDBKey('A', key);
   std::stringstream ss;
@@ -31,13 +31,13 @@ TEST(LevelDBIndexTest, ConvertToLevelDBKey) {
   EXPECT_THAT(std::string(res.data(), res.size()), StrEq(ss.str()));
 }
 
-TEST(LevelDBIndexTest, ConvertAndParseLevelDBValue) {
+TEST(LevelDbIndexTest, ConvertAndParseLevelDbValue) {
   std::uint8_t input = 69;
   auto value = internal::ToDBValue(input);
   EXPECT_EQ(input, *internal::ParseDBResult<std::uint8_t>(value));
 }
 
-TEST(LevelDBIndexTest, IndexIsPersistent) {
+TEST(LevelDbIndexTest, IndexIsPersistent) {
   TempDir dir = TempDir();
   absl::StatusOr<std::pair<int, bool>> result;
 

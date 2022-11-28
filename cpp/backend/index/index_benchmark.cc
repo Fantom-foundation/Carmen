@@ -22,10 +22,10 @@ using FileIndexInMemory =
     FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
 using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
-using SingleLevelDBIndex = SingleLevelDBIndexTestAdapter<Key, std::uint32_t>;
-using CachedSingleLevelDBIndex = Cached<SingleLevelDBIndex>;
-using MultiLevelDBIndex = MultiLevelDBIndexTestAdapter<Key, std::uint32_t>;
-using CachedMultiLevelDBIndex = Cached<MultiLevelDBIndex>;
+using SingleLevelDbIndex = SingleLevelDbIndexTestAdapter<Key, std::uint32_t>;
+using CachedSingleLevelDbIndex = Cached<SingleLevelDbIndex>;
+using MultiLevelDbIndex = MultiLevelDbIndexTestAdapter<Key, std::uint32_t>;
+using CachedMultiLevelDbIndex = Cached<MultiLevelDbIndex>;
 
 // To run benchmarks, use the following command:
 //    bazel run -c opt //backend/index:index_benchmark
@@ -33,9 +33,9 @@ using CachedMultiLevelDBIndex = Cached<MultiLevelDBIndex>;
 // Defines the list of configurations to be benchmarked.
 BENCHMARK_TYPE_LIST(IndexConfigList, InMemoryIndex, CachedInMemoryIndex,
                     InMemoryLinearHashIndex, FileIndexInMemory, FileIndexOnDisk,
-                    CachedFileIndexOnDisk, SingleLevelDBIndex,
-                    CachedSingleLevelDBIndex, MultiLevelDBIndex,
-                    CachedMultiLevelDBIndex);
+                    CachedFileIndexOnDisk, SingleLevelDbIndex,
+                    CachedSingleLevelDbIndex, MultiLevelDbIndex,
+                    CachedMultiLevelDbIndex);
 
 // Defines the list of problem sizes.
 const auto kSizes = std::vector<int64_t>({1 << 20, 1 << 24});
