@@ -18,14 +18,16 @@ jobs:
 
   build:
     runs-on: macos-latest
+    env:
+      TEST_TMPDIR: "/Users/runner/.cache/bazel"
     steps:
     - uses: actions/checkout@v3
     - uses: bazelbuild/setup-bazelisk@v2
     - name: Mount bazel cache
       uses: actions/cache@v3
       with:
-       path: "/private/var/tmp"
-       key: bazel
+       path: "/Users/runner/.cache/bazel"
+       key: bazel-osx
 
     - name: Set up Go
       uses: actions/setup-go@v3
