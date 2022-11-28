@@ -23,17 +23,17 @@ class InMemoryDepot {
   InMemoryDepot(std::size_t hash_branching_factor = 32,
                 std::size_t hash_box_size = 4)
       : hash_box_size_(hash_box_size),
-        boxes_(std::make_unique<Boxes>()),
-        hashes_(std::make_unique<PageProvider>(*boxes_, hash_box_size),
+        items_(std::make_unique<Items>()),
+        hashes_(std::make_unique<PageProvider>(*items_, hash_box_size),
                 hash_branching_factor) {}
 
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
-    if (key >= boxes_->size()) {
-      boxes_->resize(key + 1);
+    if (key >= items_->size()) {
+      items_->resize(key + 1);
     }
-    (*boxes_)[key] = Box{data.begin(), data.end()};
+    (*items_)[key] = Item{data.begin(), data.end()};
     hashes_.MarkDirty(GetBoxHashGroup(key));
     return absl::OkStatus();
   }
@@ -42,10 +42,10 @@ class InMemoryDepot {
   // been previously set using the Set(..) function above, not found status
   // is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
-    if (key >= boxes_->size()) {
+    if (key >= items_->size()) {
       return absl::NotFoundError("Key not found");
     }
-    return (*boxes_)[key];
+    return (*items_)[key];
   }
 
   // Computes a hash over the full content of this depot.
@@ -61,17 +61,17 @@ class InMemoryDepot {
   MemoryFootprint GetMemoryFootprint() const {
     MemoryFootprint res(*this);
     Memory sum;
-    for (const auto& box : *boxes_) {
+    for (const auto& box : *items_) {
       sum += Memory(box.size());
     }
-    res.Add("boxes", sum);
+    res.Add("items", sum);
     res.Add("hashes", hashes_.GetMemoryFootprint());
     return res;
   }
 
  private:
-  using Box = std::vector<std::byte>;
-  using Boxes = std::deque<Box>;
+  using Item = std::vector<std::byte>;
+  using Items = std::deque<Item>;
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
@@ -81,17 +81,17 @@ class InMemoryDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public store::PageSource {
    public:
-    explicit PageProvider(Boxes& boxes, std::size_t hash_box_size)
-        : boxes_(boxes), hash_box_size_(hash_box_size) {}
+    explicit PageProvider(Items& items, std::size_t hash_box_size)
+        : items_(items), hash_box_size_(hash_box_size) {}
 
     // Get data for given page. The data is valid until the next call to
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
-      static auto empty = Box{};
+      static auto empty = Item{};
       // calculate start and end of the hash group
-      auto start = boxes_.begin() + id * hash_box_size_;
-      auto end = boxes_.begin() +
-                 std::min(id * hash_box_size_ + hash_box_size_, boxes_.size());
+      auto start = items_.begin() + id * hash_box_size_;
+      auto end = items_.begin() +
+                 std::min(id * hash_box_size_ + hash_box_size_, items_.size());
 
       if (start >= end) return empty;
 
@@ -113,7 +113,7 @@ class InMemoryDepot {
     }
 
    private:
-    Boxes& boxes_;
+    Items& items_;
     std::size_t hash_box_size_;
     std::vector<std::byte> page_data_;
   };
@@ -121,9 +121,9 @@ class InMemoryDepot {
   // The amount of items that will be grouped into a single hashing group.
   const std::size_t hash_box_size_;
 
-  // An indexed list of boxes containing the actual values. The container is
+  // An indexed list of items containing the actual values. The container is
   // wrapped in a unique pointer to facilitate pointer stability under move.
-  std::unique_ptr<Boxes> boxes_;
+  std::unique_ptr<Items> items_;
 
   // The data structure managing the hashing of states.
   mutable store::HashTree hashes_;

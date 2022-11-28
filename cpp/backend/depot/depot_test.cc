@@ -99,10 +99,10 @@ TYPED_TEST_P(DepotTest, HashChangesBack) {
 }
 
 TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
-  if (TypeParam::kBranchingFactor != 3 || TypeParam::kNumHashBoxes != 2) {
+  if (TypeParam::kBranchingFactor != 3 || TypeParam::kHashBoxSize != 2) {
     GTEST_SKIP()
-        << "This test is only valid for branching factor 3 and number of "
-           "hash boxes 2.";
+        << "This test is only valid for branching factor 3 and hash box size "
+           "of 2.";
   }
 
   TypeParam wrapper;
