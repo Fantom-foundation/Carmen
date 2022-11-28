@@ -36,10 +36,10 @@ class PagePool {
 
   // Creates a pool backed by a default instance of the pools File
   // implementation.
-  PagePool(std::size_t pool_size = 100);
+  PagePool(std::size_t pool_size = 100000);
 
   // Creates a pool instance backed by the provided File.
-  PagePool(std::unique_ptr<File> file, std::size_t pool_size = 100);
+  PagePool(std::unique_ptr<File> file, std::size_t pool_size = 100000);
 
   // Returns the maximum number of pages to be retained in this pool.
   std::size_t GetPoolSize() const { return pool_.size(); }
