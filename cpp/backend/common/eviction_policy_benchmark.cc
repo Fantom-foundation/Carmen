@@ -1,5 +1,6 @@
 #include <random>
 
+#include "backend/common/access_pattern.h"
 #include "backend/common/eviction_policy.h"
 #include "benchmark/benchmark.h"
 
@@ -24,11 +25,9 @@ void BM_UniformReadTest(benchmark::State& state) {
     policy.Read(i);
   }
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dist(0, pool_size - 1);
+  Uniform pattern(pool_size);
   for (auto _ : state) {
-    policy.Read(dist(gen));
+    policy.Read(pattern.Next());
   }
 }
 
@@ -49,11 +48,9 @@ void BM_UniformWriteTest(benchmark::State& state) {
     policy.Read(i);
   }
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dist(0, pool_size - 1);
+  Uniform pattern(pool_size);
   for (auto _ : state) {
-    policy.Written(dist(gen));
+    policy.Written(pattern.Next());
   }
 }
 
@@ -73,11 +70,9 @@ void BM_UniformRemoveTest(benchmark::State& state) {
     policy.Read(i);
   }
 
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dist(0, pool_size - 1);
+  Uniform pattern(pool_size);
   for (auto _ : state) {
-    policy.Removed(dist(gen));
+    policy.Removed(pattern.Next());
   }
 }
 
