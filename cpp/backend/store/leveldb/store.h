@@ -63,7 +63,10 @@ class LevelDbStore {
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
   // Flush all pending changes to disk.
-  absl::Status Flush() { return hashes_.SaveToLevelDb(*db_); }
+  absl::Status Flush() {
+    RETURN_IF_ERROR(db_->Flush());
+    return hashes_.SaveToLevelDb(*db_);
+  }
 
   // Close the store.
   absl::Status Close() {

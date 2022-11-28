@@ -37,7 +37,7 @@ class MultiLevelDbIndexTestAdapter {
     return Hash{};
   }
 
-  void Flush() { index_.Flush(); }
+  void Flush() { index_.Flush().IgnoreError(); }
 
   void Close() { index_.Close(); }
 

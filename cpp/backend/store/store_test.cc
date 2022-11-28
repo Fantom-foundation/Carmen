@@ -263,7 +263,7 @@ using StoreTypes = ::testing::Types<
     StoreHandler<EagerFileStore<int, Value, InMemoryFile, 32>, 32>,
     StoreHandler<EagerFileStore<int, Value, SingleFile, 32>, 32>,
     StoreHandler<LazyFileStore<int, Value, SingleFile, 32>, 32>,
-    StoreHandler<LevelDBStore<int, Value, 32>, 32>,
+    StoreHandler<LevelDbStore<int, Value, 32>, 32>,
 
     // Page size 64, branching size 3.
     StoreHandler<ReferenceStore<64>, 3>,
@@ -271,7 +271,7 @@ using StoreTypes = ::testing::Types<
     StoreHandler<EagerFileStore<int, Value, InMemoryFile, 64>, 3>,
     StoreHandler<EagerFileStore<int, Value, SingleFile, 64>, 3>,
     StoreHandler<LazyFileStore<int, Value, SingleFile, 64>, 3>,
-    StoreHandler<LevelDBStore<int, Value, 64>, 3>,
+    StoreHandler<LevelDbStore<int, Value, 64>, 3>,
 
     // Page size 64, branching size 8.
     StoreHandler<ReferenceStore<64>, 8>,
@@ -279,7 +279,7 @@ using StoreTypes = ::testing::Types<
     StoreHandler<EagerFileStore<int, Value, InMemoryFile, 64>, 8>,
     StoreHandler<EagerFileStore<int, Value, SingleFile, 64>, 8>,
     StoreHandler<LazyFileStore<int, Value, SingleFile, 64>, 8>,
-    StoreHandler<LevelDBStore<int, Value, 64>, 8>,
+    StoreHandler<LevelDbStore<int, Value, 64>, 8>,
 
     // Page size 128, branching size 4.
     StoreHandler<ReferenceStore<128>, 4>,
@@ -287,7 +287,7 @@ using StoreTypes = ::testing::Types<
     StoreHandler<EagerFileStore<int, Value, InMemoryFile, 128>, 4>,
     StoreHandler<EagerFileStore<int, Value, SingleFile, 128>, 4>,
     StoreHandler<LazyFileStore<int, Value, SingleFile, 128>, 4>,
-    StoreHandler<LevelDBStore<int, Value, 128>, 4>>;
+    StoreHandler<LevelDbStore<int, Value, 128>, 4>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, StoreTest, StoreTypes);
 

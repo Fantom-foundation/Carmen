@@ -75,9 +75,9 @@ class LevelDbIndexBase {
     return GetLastHash();
   }
 
-  // Flush unsafed index keys to disk.
-  void Flush() {
-    // nothing to do
+  // Flush unsaved index keys to disk.
+  absl::Status Flush() {
+    return GetDB().Flush();
   }
 
   // Close this index and release resources.

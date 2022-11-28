@@ -60,8 +60,11 @@ class LevelDbDepot {
   // Computes a hash over the full content of this depot.
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 
-  // Flush all pending changes to disk.
-  absl::Status Flush() { return hashes_.SaveToLevelDb(*db_); }
+  // Flush all pending changes to database.
+  absl::Status Flush() {
+    RETURN_IF_ERROR(db_->Flush());
+    return hashes_.SaveToLevelDb(*db_);
+  }
 
   // Close the depot.
   absl::Status Close() {

@@ -109,6 +109,11 @@ absl::Status LevelDb::AddBatch(std::span<LDBEntry> batch) {
   return impl_->AddBatch(batch);
 }
 
+absl::Status LevelDb::Flush() {
+  // No-op for LevelDB.
+  return absl::OkStatus();
+}
+
 void LevelDb::Close() { impl_.reset(); }
 
 LevelDb::LevelDb(std::unique_ptr<LevelDbImpl> db) : impl_(std::move(db)) {}
