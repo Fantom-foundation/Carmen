@@ -5,8 +5,8 @@
 #include <deque>
 #include <optional>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/btree_set.h"
+#include "backend/common/access_pattern.h"
 
 namespace carmen::backend {
 
@@ -38,8 +38,9 @@ class RandomEvictionPolicy {
   std::optional<std::size_t> GetPageToEvict();
 
  private:
-  absl::flat_hash_set<std::size_t> clean_;
-  absl::flat_hash_set<std::size_t> dirty_;
+  absl::btree_set<std::size_t> clean_;
+  absl::btree_set<std::size_t> dirty_;
+  Uniform eviction_pattern_;
 };
 
 // Implements a least-recently-used eviction policy. When selecting a page to be

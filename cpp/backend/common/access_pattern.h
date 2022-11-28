@@ -1,3 +1,5 @@
+#pragma once
+
 #include <random>
 
 namespace carmen::backend {
