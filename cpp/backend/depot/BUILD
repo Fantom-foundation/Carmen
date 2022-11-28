@@ -15,6 +15,7 @@ cc_library(
     deps = [
         ":depot",
         "//backend/depot/memory:depot",
+        "//backend/depot/cache:cache",
         "//common:file_util"
     ],
     testonly = True,
@@ -26,6 +27,7 @@ cc_test(
     deps = [
         ":depot",
         ":depot_handler",
+        "//backend/depot/cache:cache",
         "//backend/depot/memory:depot",
         "//backend/depot/leveldb:depot",
         "//backend/depot/file:depot",

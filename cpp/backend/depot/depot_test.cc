@@ -1,6 +1,7 @@
 #include "backend/depot/memory/depot.h"
 
 #include "backend/depot/depot_handler.h"
+#include "backend/depot/cache/cache.h"
 #include "backend/depot/file/depot.h"
 #include "backend/depot/leveldb/depot.h"
 #include "common/status_test_util.h"
@@ -174,6 +175,7 @@ using DepotTypes = ::testing::Types<
     DepotHandler<InMemoryDepot<unsigned int>, 3, 1>,
     DepotHandler<LevelDbDepot<unsigned int>, 3, 1>,
     DepotHandler<FileDepot<unsigned int>, 3, 1>,
+    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 3, 1>,
 
     // Branching size 3, Size of box 2.
     DepotHandler<InMemoryDepot<unsigned int>, 3, 2>,
