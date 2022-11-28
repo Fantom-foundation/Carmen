@@ -1,18 +1,16 @@
-name: OSX
+name: cpp-OSX
 
 on:
   push:
     branches: [ "master" ]
     paths:
-      - '.github/workflows/osx.yml'
+      - '.github/workflows/cpp-osx.yml'
       - 'cpp/**'
-      - 'go/**'
   pull_request:
     branches: [ "master" ]
     paths:
-      - '.github/workflows/osx.yml'
+      - '.github/workflows/cpp-osx.yml'
       - 'cpp/**'
-      - 'go/**'
 
 jobs:
 
@@ -27,25 +25,9 @@ jobs:
       uses: actions/cache@v3
       with:
        path: "/Users/runner/.cache/bazel"
-       key: bazel-osx
-
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.19
+       key: bazel-cpp-osx
 
     - name: Run C++ tests
       working-directory: ./cpp
       run: bazel test //...
 
-    - name: Build C++ library for Go
-      working-directory: ./go/lib
-      run: ./build_libcarmen.sh
-
-    - name: Build Go
-      working-directory: ./go
-      run: go build -v ./...
-
-    - name: Run Go tests
-      working-directory: ./go
-      run: go test -v ./...
