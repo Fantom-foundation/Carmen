@@ -22,7 +22,6 @@ type Index[K comparable, I common.Identifier] struct {
 	indexSerializer common.Serializer[I]
 	hashIndex       *hashindex.HashIndex[K]
 	lastIndex       I
-	hashSerializer  common.HashSerializer
 }
 
 // NewIndex creates a new instance of the index backed by a persisted database
@@ -33,36 +32,32 @@ func NewIndex[K comparable, I common.Identifier](
 	indexSerializer common.Serializer[I]) (p *Index[K, I], err error) {
 
 	// read the last hash from the database
-	var hash []byte
+	var hash common.Hash
 	hashDbKey := table.StrToDBKey(HashKey).ToBytes()
-	if hash, err = db.Get(hashDbKey, nil); err != nil {
-		if err == errors.ErrNotFound {
-			hash = []byte{}
-		} else {
-			return
-		}
+	hashBytes, err := db.Get(hashDbKey, nil)
+	if err != nil && err != errors.ErrNotFound {
+		return
 	}
+	copy(hash[:], hashBytes)
 
 	// read the last index from the database
-	var last []byte
+	var lastIndex I
 	lastDbKey := table.StrToDBKey(LastIndexKey).ToBytes()
-	if last, err = db.Get(lastDbKey, nil); err != nil {
-		if err == errors.ErrNotFound {
-			last = make([]byte, 4)
-		} else {
-			return
-		}
+	lastIndexBytes, err := db.Get(lastDbKey, nil)
+	if err != nil && err != errors.ErrNotFound {
+		return
+	}
+	if err == nil {
+		lastIndex = indexSerializer.FromBytes(lastIndexBytes)
 	}
 
-	hashSerializer := common.HashSerializer{}
 	p = &Index[K, I]{
 		db:              db,
 		table:           table,
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
-		hashIndex:       hashindex.InitHashIndex[K](hashSerializer.FromBytes(hash), keySerializer),
-		lastIndex:       indexSerializer.FromBytes(last),
-		hashSerializer:  hashSerializer,
+		hashIndex:       hashindex.InitHashIndex[K](hash, keySerializer),
+		lastIndex:       lastIndex,
 	}
 
 	// set err to nil as it can contain an ErrNotFound, which we want to suppress
@@ -136,8 +131,8 @@ func (m *Index[K, I]) Flush() error {
 		return err
 	}
 
-	dbKey := m.convertKeyStr(HashKey).ToBytes()
-	return m.db.Put(dbKey, m.hashSerializer.ToBytes(hash), nil)
+	hashDbKey := m.convertKeyStr(HashKey).ToBytes()
+	return m.db.Put(hashDbKey, hash[:], nil)
 }
 
 func (m *Index[K, I]) Close() error {
