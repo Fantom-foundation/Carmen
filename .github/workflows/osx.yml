@@ -24,7 +24,7 @@ jobs:
     - name: Mount bazel cache
       uses: actions/cache@v3
       with:
-       path: "~/.cache/bazel"
+       path: "/private/var/tmp"
        key: bazel
 
     - name: Set up Go
