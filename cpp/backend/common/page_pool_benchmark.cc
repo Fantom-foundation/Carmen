@@ -25,20 +25,21 @@ class DummyFile {
     return kFileSize;
   }
 
-  void LoadPage(PageId, Page& trg) {}
-  void StorePage(PageId, const Page& src) {}
+  void LoadPage(PageId, Page&) {}
+  void StorePage(PageId, const Page&) {}
   void Flush() {}
   void Close() {}
 };
 
-using TestPool = PagePool<ArrayPage<int>, DummyFile>;
+template<EvictionPolicy Policy>
+using TestPool = PagePool<ArrayPage<int>, DummyFile, Policy>;
 
 // Evaluates the performance of reading pages from page pools.
 // pools of different sizes.
-template <typename AccessOrder>
+template <typename AccessOrder, EvictionPolicy Policy>
 void BM_ReadTest(benchmark::State& state) {
   auto pool_size = state.range(0);
-  TestPool pool(pool_size);
+  TestPool<Policy> pool(pool_size);
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
@@ -51,21 +52,27 @@ void BM_ReadTest(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_ReadTest<Sequential>)
+BENCHMARK(BM_ReadTest<Sequential, RandomEvictionPolicy>)
+    ->Range(kMinPoolSize, kMaxPoolSize);
+BENCHMARK(BM_ReadTest<Sequential, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-BENCHMARK(BM_ReadTest<Uniform>)
+BENCHMARK(BM_ReadTest<Uniform, RandomEvictionPolicy>)
+    ->Range(kMinPoolSize, kMaxPoolSize);
+BENCHMARK(BM_ReadTest<Uniform, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-BENCHMARK(BM_ReadTest<Exponential>)
+BENCHMARK(BM_ReadTest<Exponential, RandomEvictionPolicy>)
+    ->Range(kMinPoolSize, kMaxPoolSize);
+BENCHMARK(BM_ReadTest<Exponential, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
 
 // Evaluates the performance of writing to pages in page pools.
-template <typename AccessOrder>
+template <typename AccessOrder, EvictionPolicy Policy>
 void BM_WriteTest(benchmark::State& state) {
   auto pool_size = state.range(0);
-  TestPool pool(pool_size);
+  TestPool<Policy> pool(pool_size);
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
@@ -81,15 +88,20 @@ void BM_WriteTest(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_WriteTest<Sequential>)
+BENCHMARK(BM_WriteTest<Sequential, RandomEvictionPolicy>)
+    ->Range(kMinPoolSize, kMaxPoolSize);
+BENCHMARK(BM_WriteTest<Sequential, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-BENCHMARK(BM_WriteTest<Uniform>)
+BENCHMARK(BM_WriteTest<Uniform, RandomEvictionPolicy>)
+    ->Range(kMinPoolSize, kMaxPoolSize);
+BENCHMARK(BM_WriteTest<Uniform, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-BENCHMARK(BM_WriteTest<Exponential>)
+BENCHMARK(BM_WriteTest<Exponential, RandomEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
-
+BENCHMARK(BM_WriteTest<Exponential, LeastRecentlyUsedEvictionPolicy>)
+    ->Range(kMinPoolSize, kMaxPoolSize);
 
 }  // namespace
 }  // namespace carmen::backend
