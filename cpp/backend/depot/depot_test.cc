@@ -181,16 +181,19 @@ using DepotTypes = ::testing::Types<
     DepotHandler<InMemoryDepot<unsigned int>, 3, 2>,
     DepotHandler<LevelDbDepot<unsigned int>, 3, 2>,
     DepotHandler<FileDepot<unsigned int>, 3, 2>,
+    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 3, 2>,
 
     // Branching size 16, Size of box 8.
     DepotHandler<InMemoryDepot<unsigned int>, 16, 8>,
     DepotHandler<LevelDbDepot<unsigned int>, 16, 8>,
     DepotHandler<FileDepot<unsigned int>, 16, 8>,
+    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 16, 8>,
 
     // Branching size 32, Size of box 16.
     DepotHandler<InMemoryDepot<unsigned int>, 32, 16>,
     DepotHandler<LevelDbDepot<unsigned int>, 32, 16>,
-    DepotHandler<FileDepot<unsigned int>, 32, 16>>;
+    DepotHandler<FileDepot<unsigned int>, 32, 16>,
+    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 32, 16>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
 
