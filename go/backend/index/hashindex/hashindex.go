@@ -15,29 +15,26 @@ const KeyBufferInitialCapacity = 1000
 // used to compute a recursive hash as  H = H1(H2(H3(..., key3), key2), key1) and the list of keys is cleared.
 // This process repeats as many times as needed.
 type HashIndex[K comparable] struct {
-	hash           common.Hash
-	keys           []K
-	serializer     common.Serializer[K]
-	hashSerializer common.HashSerializer
+	hash       common.Hash
+	keys       []K
+	serializer common.Serializer[K]
 }
 
 // NewHashIndex initialises with empty hash and empty keys.
 func NewHashIndex[K comparable](serializer common.Serializer[K]) *HashIndex[K] {
 	return &HashIndex[K]{
-		hash:           common.Hash{},
-		keys:           make([]K, 0, KeyBufferInitialCapacity),
-		serializer:     serializer,
-		hashSerializer: common.HashSerializer{},
+		hash:       common.Hash{},
+		keys:       make([]K, 0, KeyBufferInitialCapacity),
+		serializer: serializer,
 	}
 }
 
 // InitHashIndex creates a new instance with the initial hash
 func InitHashIndex[K comparable](hash common.Hash, serializer common.Serializer[K]) *HashIndex[K] {
 	return &HashIndex[K]{
-		hash:           hash,
-		keys:           make([]K, 0, KeyBufferInitialCapacity),
-		serializer:     serializer,
-		hashSerializer: common.HashSerializer{},
+		hash:       hash,
+		keys:       make([]K, 0, KeyBufferInitialCapacity),
+		serializer: serializer,
 	}
 }
 
@@ -50,7 +47,7 @@ func (hi *HashIndex[K]) AddKey(key K) {
 // The hash is computed as h := hash(h, key) for all keys.
 func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 	h := sha256.New()
-	hashTmp := hi.hashSerializer.ToBytes(hi.hash)
+	hashTmp := hi.hash[:]
 	for _, key := range hi.keys {
 		h.Reset()
 
@@ -67,7 +64,7 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 		hashTmp = h.Sum(nil)
 	}
 
-	hi.hash = hi.hashSerializer.FromBytes(hashTmp)
+	hi.hash = *(*common.Hash)(hashTmp)
 	hi.keys = hi.keys[0:0]
 
 	return hi.hash, nil

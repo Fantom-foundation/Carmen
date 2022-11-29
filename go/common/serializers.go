@@ -71,7 +71,7 @@ func (a HashSerializer) FromBytes(bytes []byte) Hash {
 	return hash
 }
 func (a HashSerializer) Size() int {
-	return 32
+	return HashSize
 }
 
 // AccountStateSerializer is a Serializer of the AccountState type

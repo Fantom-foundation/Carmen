@@ -38,8 +38,11 @@ type Address [20]byte
 // Key is an EVM-like key of a storage slot.
 type Key [32]byte
 
+// HashSize is the byte-size of the Hash type
+const HashSize = 32
+
 // Hash is an Ethereum-like hash of a state.
-type Hash [32]byte
+type Hash [HashSize]byte
 
 // Balance is an Ethereum-like account balance.
 type Balance [16]byte

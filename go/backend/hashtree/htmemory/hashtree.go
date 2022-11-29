@@ -114,7 +114,7 @@ func (ht *HashTree) updateNode(layer int, node int, nodeHash []byte) {
 	if node >= len(ht.tree[layer]) {
 		newLayerSize := (node/ht.factor + 1) * ht.factor
 		for newLayerSize > len(ht.tree[layer]) {
-			ht.tree[layer] = append(ht.tree[layer], make([]byte, common.HashSerializer{}.Size()))
+			ht.tree[layer] = append(ht.tree[layer], make([]byte, common.HashSize))
 		}
 	}
 
