@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include "backend/depot/cache/cache.h"
 #include "backend/depot/depot.h"
 #include "backend/depot/memory/depot.h"
 #include "common/file_util.h"
@@ -69,6 +70,21 @@ class DepotHandler<InMemoryDepot<K>, branching_factor, hash_box_size>
 
  private:
   InMemoryDepot<K> depot_;
+};
+
+// A specialization of a DepotHandler for Cached depot handling ignoring the
+// creation/deletion of temporary files and directories.
+template <Depot Depot, std::size_t branching_factor, std::size_t num_hash_boxes>
+class DepotHandler<Cached<Depot>, branching_factor, num_hash_boxes>
+    : public DepotHandlerBase<typename Depot::key_type, branching_factor,
+                              num_hash_boxes> {
+ public:
+  DepotHandler() : depot_(std::move(nested_.GetDepot())) {}
+  Cached<Depot>& GetDepot() { return depot_; }
+
+ private:
+  DepotHandler<Depot, branching_factor, num_hash_boxes> nested_;
+  Cached<Depot> depot_;
 };
 
 }  // namespace

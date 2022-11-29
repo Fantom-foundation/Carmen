@@ -1,4 +1,4 @@
-#include "backend/index/cache/lru_cache.h"
+#include "backend/common/cache/lru_cache.h"
 
 #include <type_traits>
 

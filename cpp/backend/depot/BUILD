@@ -15,8 +15,21 @@ cc_library(
     deps = [
         ":depot",
         "//backend/depot/memory:depot",
+        "//backend/depot/cache:cache",
         "//common:file_util"
     ],
+    testonly = True,
+)
+
+cc_library(
+    name = "test_util",
+    hdrs = ["test_util.h"],
+    deps = [
+        "//common:type",
+        "//common:memory_usage",
+        "@com_google_googletest//:gtest",
+    ],
+    visibility = ["//backend/depot:__subpackages__"],
     testonly = True,
 )
 
@@ -26,6 +39,7 @@ cc_test(
     deps = [
         ":depot",
         ":depot_handler",
+        "//backend/depot/cache:cache",
         "//backend/depot/memory:depot",
         "//backend/depot/leveldb:depot",
         "//backend/depot/file:depot",
@@ -43,6 +57,7 @@ cc_binary(
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
+        "//backend/depot/cache:cache",
         "//common:benchmark",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
