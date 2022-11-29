@@ -30,23 +30,18 @@ class Cached {
   absl::StatusOr<std::span<const std::byte>> Get(const key_type& key) const {
     auto cached_value = cache_.Get(key);
     if (cached_value != nullptr) {
-      if (cached_value->has_value()) {
-        return **cached_value;
-      }
-      return absl::NotFoundError("Key not found");
+      return *cached_value;
     }
     auto result = depot_.Get(key);
-    switch (result.status().code()) {
-      case absl::StatusCode::kNotFound:
-        cache_.Set(key, std::nullopt);
-        return result.status();
-      case absl::StatusCode::kOk:
-        cache_.Set(key,
-                   std::vector<std::byte>((*result).begin(), (*result).end()));
-        return *result;
-      default:
-        return result.status();
+    if (absl::IsNotFound(result.status())) {
+      cache_.Set(key, result.status());
+      return result.status();
     }
+    if (!result.ok()) {
+      return result.status();
+    }
+    cache_.Set(key, std::vector<std::byte>((*result).begin(), (*result).end()));
+    return result;
   }
 
   absl::Status Set(const key_type& key, std::span<const std::byte> data) {
@@ -88,7 +83,7 @@ class Cached {
 
   // The maintained in-memory value cache.
   mutable LeastRecentlyUsedCache<key_type,
-                                 std::optional<std::vector<std::byte>>>
+                                 absl::StatusOr<std::vector<std::byte>>>
       cache_;
 
   // Set if the hash is up-to-date.

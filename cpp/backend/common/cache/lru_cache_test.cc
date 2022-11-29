@@ -2,8 +2,8 @@
 
 #include <type_traits>
 
-#include "include/gmock/gmock.h"
-#include "include/gtest/gtest.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 namespace carmen::backend::index {
 namespace {
