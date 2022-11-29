@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -81,8 +82,6 @@ func OpenLevelDb(path string, options *opt.Options) (wrapped *LevelDbMemoryFootp
 		return nil, err
 	}
 	mf := NewMemoryFootprint(0)
-	mf.AddChild("blockCache", NewMemoryFootprint(uintptr(options.GetBlockCacheCapacity())))
-	mf.AddChild("openFilesCache", NewMemoryFootprint(uintptr(options.GetOpenFilesCacheCapacity())))
 	mf.AddChild("writeBuffer", NewMemoryFootprint(uintptr(options.GetWriteBuffer())))
 	return &LevelDbMemoryFootprintWrapper{ldb, mf}, nil
 }
@@ -94,6 +93,12 @@ type LevelDbMemoryFootprintWrapper struct {
 }
 
 func (wrapper *LevelDbMemoryFootprintWrapper) GetMemoryFootprint() *MemoryFootprint {
+	var ldbStats leveldb.DBStats
+	err := wrapper.DB.Stats(&ldbStats)
+	if err != nil {
+		panic(fmt.Errorf("failed to get LevelDB Stats; %s", err))
+	}
+	wrapper.mf.AddChild("blockCache", NewMemoryFootprint(uintptr(ldbStats.BlockCacheSize)))
 	return wrapper.mf
 }
 
