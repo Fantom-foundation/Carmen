@@ -38,7 +38,9 @@ func NewIndex[K comparable, I common.Identifier](
 	if err != nil && err != errors.ErrNotFound {
 		return
 	}
-	copy(hash[:], hashBytes)
+	if err == nil {
+		hash = *(*common.Hash)(hashBytes)
+	}
 
 	// read the last index from the database
 	var lastIndex I

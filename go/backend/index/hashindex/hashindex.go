@@ -64,7 +64,7 @@ func (hi *HashIndex[K]) Commit() (common.Hash, error) {
 		hashTmp = h.Sum(nil)
 	}
 
-	copy(hi.hash[:], hashTmp)
+	hi.hash = *(*common.Hash)(hashTmp)
 	hi.keys = hi.keys[0:0]
 
 	return hi.hash, nil
