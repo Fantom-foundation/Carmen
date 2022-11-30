@@ -10,6 +10,7 @@ import (
 type MemoryFootprint struct {
 	value    uintptr
 	children map[string]*MemoryFootprint
+	note     string
 }
 
 // NewMemoryFootprint creates a new MemoryFootprint instance for a database structure
@@ -18,6 +19,11 @@ func NewMemoryFootprint(value uintptr) *MemoryFootprint {
 		value:    value,
 		children: make(map[string]*MemoryFootprint),
 	}
+}
+
+// SetNote allows to attach a string comment to the memory report
+func (mf *MemoryFootprint) SetNote(note string) {
+	mf.note = note
 }
 
 // AddChild allows to attach a MemoryFootprint of the database structure subcomponent
@@ -89,6 +95,10 @@ func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) (er
 	}
 	sb.WriteRune(' ')
 	sb.WriteString(path)
+	if len(mf.note) != 0 {
+		sb.WriteRune(' ')
+		sb.WriteString(mf.note)
+	}
 	sb.WriteRune('\n')
 
 	return

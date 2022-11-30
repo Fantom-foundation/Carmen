@@ -1,8 +1,11 @@
 package common
 
 import (
+	"fmt"
 	"unsafe"
 )
+
+const MissHitMeasuring = true
 
 // Cache implements a memory overlay for the key-value pair
 type Cache[K comparable, V any] struct {
@@ -10,6 +13,8 @@ type Cache[K comparable, V any] struct {
 	capacity int
 	head     *entry[K, V]
 	tail     *entry[K, V]
+	misses   int
+	hits     int
 }
 
 // NewCache returns a new instance
@@ -37,14 +42,22 @@ func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 }
 
 // Get returns a value from the cache or false. If the value exists, its number of use is updated
-func (c *Cache[K, V]) Get(key K) (val V, exists bool) {
+func (c *Cache[K, V]) Get(key K) (V, bool) {
+	var val V
 	item, exists := c.cache[key]
 	if exists {
 		val = item.val
 		c.touch(item)
+		if MissHitMeasuring {
+			c.hits++
+		}
+	} else {
+		if MissHitMeasuring {
+			c.misses++
+		}
 	}
 
-	return
+	return val, exists
 }
 
 // Set associates a key to the cache.
@@ -127,7 +140,11 @@ func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 // If the size is different for individual values, use GetDynamicMemoryFootprint instead.
 func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
 	entrySize := unsafe.Sizeof(entry[K, V]{})
-	return NewMemoryFootprint(uintptr(c.capacity) * (entrySize + referencedValueSize))
+	mf := NewMemoryFootprint(uintptr(c.capacity) * (entrySize + referencedValueSize))
+	if MissHitMeasuring {
+		mf.SetNote(c.getHitRatioReport())
+	}
+	return mf
 }
 
 // GetDynamicMemoryFootprint provides the size of the cache in memory in bytes for values,
@@ -137,7 +154,16 @@ func (c *Cache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintpt
 	for _, value := range c.cache {
 		size += valueSizeProvider(value.val)
 	}
-	return NewMemoryFootprint(size)
+	mf := NewMemoryFootprint(size)
+	if MissHitMeasuring {
+		mf.SetNote(c.getHitRatioReport())
+	}
+	return mf
+}
+
+func (c *Cache[K, V]) getHitRatioReport() string {
+	hitRatio := float32(c.hits) / float32(c.hits+c.misses)
+	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", c.misses, c.hits, hitRatio)
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

@@ -1,6 +1,8 @@
 package common
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestEmpty(t *testing.T) {
 	c := initCache(3)
@@ -100,6 +102,26 @@ func TestSettingExisting(t *testing.T) {
 	value, exists := c.Get(1)
 	if !exists || value != 67 {
 		t.Errorf("Item value invalid")
+	}
+}
+
+func TestHitRatio(t *testing.T) {
+	if !MissHitMeasuring {
+		t.Skip("MissHitMeasuring is disabled - skipping the test")
+	}
+
+	c := initCache(3)
+	c.Set(1, 11)
+	c.Set(2, 22)
+
+	c.Get(1) // hit
+	c.Get(8) // miss
+	c.Get(2) // hit
+	c.Get(9) // miss
+
+	report := c.getHitRatioReport()
+	if report != "(misses: 2, hits: 2, hitRatio: 0.500000)" {
+		t.Errorf("unexpected memory footprint report: %s", report)
 	}
 }
 
