@@ -73,7 +73,7 @@ func (m *Depot[I]) Close() error {
 func (m *Depot[I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("cache", m.cache.GetDynamicMemoryFootprint(func(value []byte) uintptr {
-		return uintptr(len(value))
+		return uintptr(cap(value)) // memory consumed by the code slice
 	}))
 	mf.AddChild("sourceDepot", m.depot.GetMemoryFootprint())
 	return mf
