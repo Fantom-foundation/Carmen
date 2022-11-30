@@ -18,35 +18,46 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+const CodeCacheSize = 8_000 // ~ 200 MiB of memory for go-side code cache
+const CodeMaxSize = 25000   // Contract limit is 24577
+
 // CppState implements the state interface by forwarding all calls to a C++ based implementation.
 type CppState struct {
 	// A pointer to an owned C++ object containing the actual state information.
 	state unsafe.Pointer
+	// cache of contract codes
+	codeCache *common.Cache[common.Address, []byte]
 }
 
 func NewCppInMemoryState(directory string) (State, error) {
-	return &CppState{state: C.Carmen_CreateInMemoryState()}, nil
+	return &CppState{
+		state:     C.Carmen_CreateInMemoryState(),
+		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
+	}, nil
 }
 
 func NewCppFileBasedState(directory string) (State, error) {
 	dir := C.CString(directory)
 	defer C.free(unsafe.Pointer(dir))
-	return &CppState{state: C.Carmen_CreateFileBasedState(dir, C.int(len(directory)))}, nil
+	return &CppState{
+		state:     C.Carmen_CreateFileBasedState(dir, C.int(len(directory))),
+		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
+	}, nil
 }
 
-func (s *CppState) CreateAccount(address common.Address) error {
-	C.Carmen_CreateAccount(s.state, unsafe.Pointer(&address[0]))
+func (cs *CppState) CreateAccount(address common.Address) error {
+	C.Carmen_CreateAccount(cs.state, unsafe.Pointer(&address[0]))
 	return nil
 }
 
-func (s *CppState) GetAccountState(address common.Address) (common.AccountState, error) {
+func (cs *CppState) GetAccountState(address common.Address) (common.AccountState, error) {
 	var res common.AccountState
-	C.Carmen_GetAccountState(s.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&res))
+	C.Carmen_GetAccountState(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&res))
 	return res, nil
 }
 
-func (s *CppState) DeleteAccount(address common.Address) error {
-	C.Carmen_DeleteAccount(s.state, unsafe.Pointer(&address[0]))
+func (cs *CppState) DeleteAccount(address common.Address) error {
+	C.Carmen_DeleteAccount(cs.state, unsafe.Pointer(&address[0]))
 	return nil
 }
 
@@ -84,22 +95,35 @@ func (cs *CppState) SetStorage(address common.Address, key common.Key, value com
 }
 
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
-	const max_size = 25000 // Contract limit is 24577
-	code := make([]byte, max_size)
-	var size C.uint32_t = max_size
-	C.Carmen_GetCode(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&code[0]), &size)
-	if size >= max_size {
-		return nil, fmt.Errorf("Unable to load contract exceeding maximum capacity of %v", max_size)
+	// Try to obtain the code from the cache
+	code, exists := cs.codeCache.Get(address)
+	if exists {
+		return code, nil
 	}
-	return code[0:size], nil
+
+	// Load the code from C++
+	code = make([]byte, CodeMaxSize)
+	var size C.uint32_t = CodeMaxSize
+	C.Carmen_GetCode(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&code[0]), &size)
+	if size >= CodeMaxSize {
+		return nil, fmt.Errorf("unable to load contract exceeding maximum capacity of %d", CodeMaxSize)
+	}
+	if size > 0 {
+		code = code[0:size]
+	} else {
+		code = nil
+	}
+	cs.codeCache.Set(address, code)
+	return code, nil
 }
 
 func (cs *CppState) SetCode(address common.Address, code []byte) error {
-	var code_ptr unsafe.Pointer
+	var codePtr unsafe.Pointer
 	if len(code) > 0 {
-		code_ptr = unsafe.Pointer(&code[0])
+		codePtr = unsafe.Pointer(&code[0])
 	}
-	C.Carmen_SetCode(cs.state, unsafe.Pointer(&address[0]), code_ptr, C.uint32_t(len(code)))
+	C.Carmen_SetCode(cs.state, unsafe.Pointer(&address[0]), codePtr, C.uint32_t(len(code)))
+	cs.codeCache.Set(address, code)
 	return nil
 }
 
@@ -157,6 +181,10 @@ func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 	if len(unusedData) != 0 {
 		panic("Failed to consume all of the provided footprint data")
 	}
+
+	res.AddChild("goCodeCache", cs.codeCache.GetDynamicMemoryFootprint(func(code []byte) uintptr {
+		return uintptr(cap(code)) // memory consumed by the code slice
+	}))
 	return res
 
 }
