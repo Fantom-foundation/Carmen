@@ -13,16 +13,23 @@ namespace carmen::backend::store {
 template <std::integral K, Trivial V, std::size_t page_size>
 class LevelDbStoreTestAdapter {
  public:
+  // The value type used to index elements in this store.
+  using key_type = K;
+
+  // The type of value stored in this store.
+  using value_type = V;
+
   LevelDbStoreTestAdapter(LevelDbStore<K, V, page_size> store)
       : store_(std::move(store)) {}
 
   void Set(const K& key, V value) { store_.Set(key, value).IgnoreError(); }
 
-  V Get(const K& key) const {
+  const V& Get(const K& key) const {
     static auto empty = V{};
     auto res = store_.Get(key);
     if (!res.ok()) return empty;
-    return *res;
+    temp_value_ = *res;
+    return temp_value_;
   }
 
   Hash GetHash() const {
@@ -42,5 +49,6 @@ class LevelDbStoreTestAdapter {
 
  private:
   LevelDbStore<K, V, page_size> store_;
+  mutable V temp_value_;
 };
 }  // namespace carmen::backend::store

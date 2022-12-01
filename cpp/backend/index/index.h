@@ -4,6 +4,7 @@
 #include <optional>
 #include <utility>
 
+#include "backend/structure.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
 
@@ -39,7 +40,7 @@ template <typename I>
 concept Index = requires(I a, const I b) {
   // An index must expose a key type.
   typename I::key_type;
-  // An index must expose a value type.
+  // An index must expose an integral value type.
   std::integral<typename I::value_type>;
   // Looks up the given key and adds it to the index if not present. Returns the
   // associated value and a boolean set to true if the provided key was new,
@@ -51,15 +52,8 @@ concept Index = requires(I a, const I b) {
   {
     b.Get(std::declval<typename I::key_type>())
     } -> std::same_as<std::optional<typename I::value_type>>;
-  // Computes a hash over the full content of this index. The hash of an empty
-  // index is defined to be zero. For every element added, the new hash is to be
-  // computed as Sha256(old_hash, key).
-  { a.GetHash() } -> std::same_as<Hash>;
-  // Indexes must be flushable.
-  { a.Flush() } -> std::same_as<void>;
-  // Indexes must be closeable.
-  { a.Close() } -> std::same_as<void>;
 }
-&&MemoryFootprintProvider<I>;
+// Indexes must satisfy the requirements for backend data structures.
+&&Structure<I>;
 
 }  // namespace carmen::backend::index
