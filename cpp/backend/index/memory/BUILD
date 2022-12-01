@@ -3,10 +3,12 @@ cc_library(
     hdrs = ["index.h"],
     deps = [
         "//backend/index",
+        "//backend:structure",
         "//common:type",
         "//common:hash",
         "//common:memory_usage",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )
@@ -27,10 +29,12 @@ cc_library(
     hdrs = ["linear_hash_index.h"],
     deps = [
         ":linear_hash_map",
+        "//backend:structure",
         "//common:type",
         "//common:hash",
         "//common:memory_usage",
         "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )

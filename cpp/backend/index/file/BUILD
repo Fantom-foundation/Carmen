@@ -24,9 +24,11 @@ cc_library(
         ":hash_page",
         "//backend/common:file",
         "//backend/common:page_pool", 
+        "//backend:structure",
         "//common:type",
         "//common:hash",
         "//common:memory_usage",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )

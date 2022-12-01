@@ -1,10 +1,13 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <queue>
 
 #include "absl/hash/hash.h"
+#include "absl/status/status.h"
 #include "backend/index/memory/linear_hash_map.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -16,6 +19,12 @@ class InMemoryLinearHashIndex {
  public:
   using key_type = K;
   using value_type = I;
+
+  // A factory function creating an instance of this index type.
+  static absl::StatusOr<InMemoryLinearHashIndex> Open(
+      Context&, const std::filesystem::path&) {
+    return InMemoryLinearHashIndex();
+  }
 
   std::pair<I, bool> GetOrAdd(const K& key) {
     auto [entry, new_entry] = data_.Insert({key, 0});

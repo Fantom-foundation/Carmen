@@ -2,12 +2,15 @@
 
 #include <concepts>
 #include <deque>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <queue>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "backend/index/index.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -29,6 +32,10 @@ class InMemoryIndex {
   using key_type = K;
   // The value type of ordinal values mapped to keys.
   using value_type = I;
+
+  // A factory function creating an instance of this index type.
+  static absl::StatusOr<InMemoryIndex> Open(Context&,
+                                            const std::filesystem::path&);
 
   // Initializes an empty index.
   InMemoryIndex();
@@ -144,6 +151,12 @@ class InMemoryIndex {
   mutable Sha256Hasher hasher_;
   mutable Hash hash_;
 };
+
+template <Trivial K, std::integral I>
+absl::StatusOr<InMemoryIndex<K, I>> InMemoryIndex<K, I>::Open(
+    Context&, const std::filesystem::path&) {
+  return InMemoryIndex();
+}
 
 template <Trivial K, std::integral I>
 InMemoryIndex<K, I>::InMemoryIndex()

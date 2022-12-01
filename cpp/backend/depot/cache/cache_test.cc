@@ -4,6 +4,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "backend/depot/depot.h"
 #include "backend/depot/test_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
@@ -16,6 +17,10 @@ using ::testing::_;
 using ::testing::ElementsAreArray;
 using ::testing::Return;
 using ::testing::StatusIs;
+
+TEST(CachedDepot, IsDepot) {
+  EXPECT_TRUE(Depot<Cached<MockDepotWrapper<int>>>);
+}
 
 TEST(CachedDepot, CachedKeysAreNotFetched) {
   MockDepotWrapper<int> wrapper;

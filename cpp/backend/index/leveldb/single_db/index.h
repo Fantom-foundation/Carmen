@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <iostream>
 #include <queue>
 #include <sstream>
@@ -10,12 +11,14 @@
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "backend/index/leveldb/index.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
 namespace internal {
+
 // Converts given key space and key into leveldb key.
 template <Trivial K>
 std::array<char, sizeof(K) + 1> ToDBKey(char key_space, const K& key) {
@@ -31,6 +34,32 @@ std::string StrToDBKey(char key_space, std::span<const char> key);
 template <Trivial K, std::integral I>
 class LevelDbKeySpace : public internal::LevelDbIndexBase<K, I, 1> {
  public:
+  // A factory function creating an instance of this index type.
+  static absl::StatusOr<LevelDbKeySpace> Open(
+      Context& context, const std::filesystem::path& path) {
+    // Obtain shared LevelDB instance from context or create and register one if
+    // there is none so far.
+    using SharedLevelDb = std::shared_ptr<LevelDb>;
+    if (!context.HasComponent<SharedLevelDb>()) {
+      ASSIGN_OR_RETURN(auto db, LevelDb::Open(path / "common_level_db",
+                                              /*create_if_missing=*/true));
+      context.RegisterComponent(std::make_shared<LevelDb>(std::move(db)));
+    }
+    auto ldb = context.GetComponent<SharedLevelDb>();
+
+    // Next, we need to find a proper key space for this instance.
+    // TODO: this is not pretty, should be improved.
+    char key_space;
+    if constexpr (std::is_same_v<K, Address>) {
+      key_space = 'A';
+    } else if constexpr (std::is_same_v<K, Key>) {
+      key_space = 'K';
+    } else {
+      assert(false && "Unable to map value type to keyspace");
+    }
+    return LevelDbKeySpace(std::move(ldb), key_space);
+  }
+
   LevelDbKeySpace(std::shared_ptr<LevelDb> ldb, char key_space)
       : internal::LevelDbIndexBase<K, I, 1>(),
         ldb_(std::move(ldb)),

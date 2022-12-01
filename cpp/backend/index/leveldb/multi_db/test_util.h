@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+
 #include "backend/index/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
 #include "common/memory_usage.h"
@@ -14,6 +16,13 @@ class MultiLevelDbIndexTestAdapter {
  public:
   using key_type [[maybe_unused]] = K;
   using value_type [[maybe_unused]] = I;
+
+  static absl::StatusOr<MultiLevelDbIndexTestAdapter> Open(
+      Context& context, const std::filesystem::path& path) {
+    ASSIGN_OR_RETURN(auto space,
+                     (MultiLevelDbIndex<K, I>::Open(context, path)));
+    return MultiLevelDbIndexTestAdapter(std::move(space));
+  }
 
   explicit MultiLevelDbIndexTestAdapter(MultiLevelDbIndex<K, I> index)
       : index_(std::move(index)) {}

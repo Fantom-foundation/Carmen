@@ -1,9 +1,11 @@
 #pragma once
 
+#include "absl/status/statusor.h"
 #include "backend/store/leveldb/store.h"
 #include "backend/store/store.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -18,6 +20,13 @@ class LevelDbStoreTestAdapter {
 
   // The type of value stored in this store.
   using value_type = V;
+
+  static absl::StatusOr<LevelDbStoreTestAdapter> Open(
+      Context& context, const std::filesystem::path& path) {
+    ASSIGN_OR_RETURN(auto store,
+                     (LevelDbStore<K, V, page_size>::Open(context, path)));
+    return LevelDbStoreTestAdapter(std::move(store));
+  }
 
   LevelDbStoreTestAdapter(LevelDbStore<K, V, page_size> store)
       : store_(std::move(store)) {}

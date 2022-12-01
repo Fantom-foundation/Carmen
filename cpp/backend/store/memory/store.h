@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
 #include "backend/store/store.h"
 #include "common/hash.h"
@@ -32,6 +33,12 @@ class InMemoryStore {
 
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
+
+  // A factory function creating an instance of this store type.
+  static absl::StatusOr<InMemoryStore> Open(Context&,
+                                            const std::filesystem::path&) {
+    return InMemoryStore();
+  }
 
   // Creates a new InMemoryStore using the provided value as the
   // branching factor for hash computation.

@@ -9,9 +9,11 @@
 #include <vector>
 
 #include "absl/hash/hash.h"
+#include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -50,6 +52,10 @@ class FileIndex {
 
   // The file-type used by instances for primiary and overflow pages.
   using File = F<Page>;
+
+  // A factory function creating an instance of this index type.
+  static absl::StatusOr<FileIndex> Open(Context&,
+                                        const std::filesystem::path& directory);
 
   // Creates a new, empty index backed by a default-constructed file.
   FileIndex();
@@ -217,6 +223,16 @@ class FileIndex {
   mutable Sha256Hasher hasher_;
   mutable Hash hash_;
 };
+
+template <Trivial K, std::integral I, template <typename> class F,
+          std::size_t page_size>
+absl::StatusOr<FileIndex<K, I, F, page_size>>
+FileIndex<K, I, F, page_size>::Open(Context&,
+                                    const std::filesystem::path& directory) {
+  // TODO: move directory initialization from constructor to factory and do
+  // proper error handling.
+  return FileIndex(directory);
+}
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <concepts>
+#include <filesystem>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/heterogenous_map.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
 
@@ -24,9 +26,46 @@ concept Void = std::same_as<void, T> || std::same_as<absl::Status, T>;
 
 }  // namespace internal
 
-// Defines universal requirements for all data strucutre implementations.
+// A context provides a common environment for a group of data structures
+// that are intended to be used together, for instance in a combined State
+// involving multiple indexes, stores, and depots. It is mainly intended to
+// provide access to shared components like a page pools or other resources.
+// It is also intended to contain runtime configuration parameters.
+class Context {
+ public:
+  // Tests whether a component of the given type has been registered before.
+  template <typename T>
+  bool HasComponent() const {
+    return components_.Contains<T>();
+  }
+
+  // Retrieves a component of the given type which must have been registered
+  // before.
+  template <typename T>
+  T& GetComponent() {
+    assert(HasComponent<T>());
+    return components_.Get<T>();
+  }
+
+  // Registers a component with the given type.
+  template <typename T>
+  void RegisterComponent(T component) {
+    components_.Set<T>(std::move(component));
+  }
+
+ private:
+  HeterogenousMap components_;
+};
+
+// Defines universal requirements for all data structure implementations.
 template <typename S>
 concept Structure = requires(S a) {
+  // All data structures must be open-able through a static factory function.
+  // The provided context can be used to share elements between structures.
+  {
+    S::Open(std::declval<Context&>(),
+            std::declval<const std::filesystem::path&>())
+    } -> std::same_as<absl::StatusOr<S>>;
   // Computes a hash over the full content of a data structure.
   { a.GetHash() } -> internal::StatusOrHash;
   // Structures must be flushable.

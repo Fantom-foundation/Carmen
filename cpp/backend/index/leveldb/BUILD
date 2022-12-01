@@ -5,6 +5,7 @@ cc_library(
         "//common:type",
         "//common:hash",
         "//backend/common/leveldb:leveldb",
+        "//backend:structure",
         "//common:status_util",
         "//common:memory_usage",
         "@com_google_absl//absl/status:statusor"

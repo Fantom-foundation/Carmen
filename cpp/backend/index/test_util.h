@@ -1,9 +1,12 @@
 #pragma once
 
+#include <filesystem>
 #include <type_traits>
 
+#include "absl/status/status.h"
 #include "backend/index/index.h"
 #include "backend/index/index_handler.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -116,6 +119,8 @@ class MockIndex {
  public:
   using key_type = K;
   using value_type = V;
+  static absl::StatusOr<MockIndex> Open(Context&,
+                                        const std::filesystem::path&){};
   MOCK_METHOD((std::pair<V, bool>), GetOrAdd, (const K& key));
   MOCK_METHOD((std::optional<V>), Get, (const K& key), (const));
   MOCK_METHOD(Hash, GetHash, ());
@@ -131,6 +136,11 @@ class MockIndexWrapper {
  public:
   using key_type = K;
   using value_type = V;
+
+  static absl::StatusOr<MockIndexWrapper> Open(Context&,
+                                               const std::filesystem::path&) {
+    return MockIndexWrapper();
+  }
 
   MockIndexWrapper() : index_(std::make_unique<MockIndex<K, V>>()) {}
 

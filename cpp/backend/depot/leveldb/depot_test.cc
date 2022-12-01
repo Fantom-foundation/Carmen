@@ -1,5 +1,6 @@
 #include "backend/depot/leveldb/depot.h"
 
+#include "backend/depot/depot.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "common/type.h"
@@ -13,7 +14,9 @@ using ::testing::_;
 using ::testing::ElementsAreArray;
 using ::testing::StatusIs;
 
-using Depot = LevelDbDepot<unsigned long>;
+using TestDepot = LevelDbDepot<unsigned long>;
+
+TEST(LevelDbDepotTest, IsDepot) { EXPECT_TRUE(Depot<TestDepot>); }
 
 TEST(LevelDbDepotTest, TestIsPersistent) {
   auto dir = TempDir();
@@ -21,7 +24,7 @@ TEST(LevelDbDepotTest, TestIsPersistent) {
   Hash hash;
 
   {
-    ASSERT_OK_AND_ASSIGN(auto depot, Depot::Open(dir.GetPath()));
+    ASSERT_OK_AND_ASSIGN(auto depot, TestDepot::Open(dir.GetPath()));
     EXPECT_THAT(depot.Get(10), StatusIs(absl::StatusCode::kNotFound, _));
     ASSERT_OK_AND_ASSIGN(auto empty_hash, depot.GetHash());
     EXPECT_EQ(empty_hash, Hash{});
@@ -32,7 +35,7 @@ TEST(LevelDbDepotTest, TestIsPersistent) {
   }
 
   {
-    ASSERT_OK_AND_ASSIGN(auto depot, Depot::Open(dir.GetPath()));
+    ASSERT_OK_AND_ASSIGN(auto depot, TestDepot::Open(dir.GetPath()));
     ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
     EXPECT_THAT(val, ElementsAreArray(elements));
     ASSERT_OK_AND_ASSIGN(auto new_hash, depot.GetHash());

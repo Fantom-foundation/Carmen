@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <filesystem>
 #include <string_view>
 #include <utility>
 
@@ -8,6 +9,7 @@
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "backend/index/leveldb/index.h"
+#include "backend/structure.h"
 
 namespace carmen::backend::index {
 
@@ -21,6 +23,11 @@ class MultiLevelDbIndex : public internal::LevelDbIndexBase<K, I, 0> {
       const std::filesystem::path& path) {
     ASSIGN_OR_RETURN(auto db, LevelDb::Open(path));
     return MultiLevelDbIndex(std::move(db));
+  }
+
+  static absl::StatusOr<MultiLevelDbIndex> Open(
+      Context&, const std::filesystem::path& path) {
+    return Open(path);
   }
 
  private:

@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "backend/store/hash_tree.h"
+#include "backend/structure.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -21,6 +22,13 @@ class LevelDbDepot {
  public:
   // The type of the depot key.
   using key_type = K;
+
+  // Open connection to the depot. If the depot does not exist, it will be
+  // created. If the depot exists, it will be opened.
+  static absl::StatusOr<LevelDbDepot> Open(Context&,
+                                           const std::filesystem::path& path) {
+    return Open(path);
+  }
 
   // Open connection to the depot. If the depot does not exist, it will be
   // created. If the depot exists, it will be opened.
