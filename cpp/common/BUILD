@@ -94,6 +94,24 @@ cc_test(
 )
 
 cc_library(
+    name="heterogenous_map",
+    hdrs=["heterogenous_map.h"],
+    deps=[
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "heterogenous_map_test",
+    srcs = ["heterogenous_map_test.cc"],
+    deps = [
+        ":heterogenous_map",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name="file_util",
     hdrs=["file_util.h"],
     srcs=["file_util.cc"],
