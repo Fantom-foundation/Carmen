@@ -2,6 +2,7 @@ cc_library(
     name = "index",
     hdrs = ["index.h"],
     deps = [
+        "//backend:structure",
         "//common:type",
         "//common:memory_usage",
     ],

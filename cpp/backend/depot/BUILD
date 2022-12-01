@@ -2,9 +2,10 @@ cc_library(
     name = "depot",
     hdrs = ["depot.h"],
     deps = [
+        "//backend:structure",
         "//common:type",
-        "//common:hash",
-        "//common:memory_usage",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )
