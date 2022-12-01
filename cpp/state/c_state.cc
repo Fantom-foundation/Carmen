@@ -41,9 +41,8 @@ template <typename K, typename V>
 using FileBasedStore =
     backend::store::EagerFileStore<K, V, backend::SingleFile, kPageSize>;
 
-// TODO: update to file-based depot.
 template <typename K>
-using FileBasedDepot = backend::depot::InMemoryDepot<K>;
+using FileBasedDepot = backend::depot::FileDepot<K>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {

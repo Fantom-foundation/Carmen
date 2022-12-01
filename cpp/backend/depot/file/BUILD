@@ -2,10 +2,12 @@ cc_library(
     name = "depot",
     hdrs = ["depot.h"],
     deps = [
+        "//backend/common:file",
         "//backend/store:hash_tree",
         "//common:hash",
         "//common:type",
         "//common:status_util",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/status:statusor",
     ],

@@ -15,6 +15,10 @@ namespace carmen::backend {
 
 // ------------------------------- Declarations -------------------------------
 
+// Creates the provided directory file path recursively in case it does not
+// exit. Returns true if the directory exists after the call, false otherwise.
+bool CreateDirectory(std::filesystem::path dir);
+
 // The File concept defines an interface for file implementations supporting the
 // loading and storing of fixed length pages. Pages are expected to be numbered
 // in the range [0..n-1], where n is the number of pages in the file.
