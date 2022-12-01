@@ -2,8 +2,10 @@ cc_library(
     name = "state",
     hdrs = ["state.h"],
     deps = [
+        "//backend:structure",
         "//common:account_state",
         "//common:type",
+        "@com_google_absl//absl/status:statusor",
     ]
 )
 
@@ -31,6 +33,7 @@ cc_library(
         "//backend/store/file:store",
         "//backend/store/memory:store",
         "//backend/depot/memory:depot",
+        "//backend/depot/file:depot",
     ],
     alwayslink = True,
 )
