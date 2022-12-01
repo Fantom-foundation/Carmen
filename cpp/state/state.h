@@ -77,6 +77,9 @@ class State {
   // Updates the code stored under the given address.
   void SetCode(const Address& address, std::span<const std::byte> code);
 
+  // Retrieve the code size stored under the given address.
+  std::uint32_t GetCodeSize(const Address& address) const;
+
   // Retrieves the hash of the code stored under the given address.
   Hash GetCodeHash(const Address& address) const;
 
@@ -259,6 +262,18 @@ void State<IndexType, StoreType, DepotType>::SetCode(
   auto addr_id = address_index_.GetOrAdd(address).first;
   codes_.Set(addr_id, code).IgnoreError();
   code_hashes_.Set(addr_id, code.empty() ? Hash{} : GetKeccak256Hash(code));
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+std::uint32_t State<IndexType, StoreType, DepotType>::GetCodeSize(
+    const Address& address) const {
+  auto addr_id = address_index_.Get(address);
+  if (!addr_id.has_value()) return 0;
+  auto size = codes_.GetSize(*addr_id);
+  if (!size.ok()) return 0;
+  return *size;
 }
 
 template <template <typename K, typename V> class IndexType,

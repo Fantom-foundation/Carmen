@@ -285,6 +285,24 @@ TEST_P(CStateTest, CodeHashesMatchCodes) {
   EXPECT_EQ(hash, Hash{});
 }
 
+TEST_P(CStateTest, CodeSizesMatchCodes) {
+  auto state = GetState();
+  ASSERT_NE(state, nullptr);
+
+  Address addr{0x01};
+  std::vector<std::byte> code({std::byte{12}, std::byte{14}});
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+
+  std::uint32_t size;
+  Carmen_GetCodeSize(state, &addr, &size);
+  EXPECT_EQ(size, 2);
+
+  code.clear();
+  Carmen_SetCode(state, &addr, code.data(), code.size());
+  Carmen_GetCodeSize(state, &addr, &size);
+  EXPECT_EQ(size, 0);
+}
+
 TEST_P(CStateTest, StateCanBeFlushed) {
   auto state = GetState();
   ASSERT_NE(state, nullptr);

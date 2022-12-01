@@ -13,6 +13,7 @@ class MockDepot {
   using key_type = K;
   MOCK_METHOD(absl::StatusOr<std::span<const std::byte>>, Get, (const K& key),
               (const));
+  MOCK_METHOD(absl::StatusOr<std::uint32_t>, GetSize, (const K& key), (const));
   MOCK_METHOD(absl::Status, Set,
               (const K& key, std::span<const std::byte> data));
   MOCK_METHOD(absl::StatusOr<Hash>, GetHash, (), (const));
@@ -36,6 +37,10 @@ class MockDepotWrapper {
 
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     return depot_->Get(key);
+  }
+
+  absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
+    return depot_->GetSize(key);
   }
 
   absl::StatusOr<Hash> GetHash() const { return depot_->GetHash(); }

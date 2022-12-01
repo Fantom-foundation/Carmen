@@ -26,7 +26,8 @@ class Cached {
   // Retrieves the value for the given key. If the key
   // is known, it will return a previously established value
   // for the key. If the key has not been encountered before,
-  // abseil not found status is returned.
+  // it will try to fetch from underlying depot. Otherwise,
+  // abseil status not found is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const key_type& key) const {
     auto cached_value = cache_.Get(key);
     if (cached_value != nullptr) {
@@ -42,6 +43,16 @@ class Cached {
     }
     cache_.Set(key, std::vector<std::byte>((*result).begin(), (*result).end()));
     return result;
+  }
+
+  // Retrieves the code size for the given key. If the key
+  // is known, it will return a previously established value
+  // for the key. If the key has not been encountered before,
+  // it will try to fetch from underlying depot. Otherwise,
+  // abseil status not found is returned.
+  absl::StatusOr<std::uint32_t> GetSize(const key_type& key) const {
+    ASSIGN_OR_RETURN(auto value, Get(key));
+    return value.size();
   }
 
   absl::Status Set(const key_type& key, std::span<const std::byte> data) {

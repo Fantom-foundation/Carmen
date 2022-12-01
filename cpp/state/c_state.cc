@@ -61,6 +61,7 @@ class WorldState {
   virtual void SetValue(const Address&, const Key&, const Value&) = 0;
 
   virtual std::span<const std::byte> GetCode(const Address&) = 0;
+  virtual std::uint32_t GetCodeSize(const Address&) = 0;
   virtual Hash GetCodeHash(const Address&) = 0;
   virtual void SetCode(const Address&, std::span<const std::byte>) = 0;
 
@@ -119,6 +120,10 @@ class WorldStateBase : public WorldState {
 
   std::span<const std::byte> GetCode(const Address& addr) override {
     return state_.GetCode(addr);
+  }
+
+  std::uint32_t GetCodeSize(const Address& addr) override {
+    return state_.GetCodeSize(addr);
   }
 
   Hash GetCodeHash(const Address& addr) override {
@@ -284,8 +289,7 @@ void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
 void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto code = s.GetCode(a);
-  *out_length = code.size();
+  *out_length = s.GetCodeSize(a);
 }
 
 void Carmen_GetHash(C_State state, C_Hash out_hash) {

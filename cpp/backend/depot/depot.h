@@ -33,8 +33,12 @@ concept Depot = requires(D a, const D b) {
   {
     b.Get(std::declval<typename D::key_type>())
     } -> std::same_as<absl::StatusOr<std::span<const std::byte>>>;
+  // Retrieves size of data from Depot. Not found status is returned when not
+  {
+    b.GetSize(std::declval<typename D::key_type>())
+    } -> std::same_as<absl::StatusOr<std::uint32_t>>;
 }
-// Indexes must satisfy the requirements for backend data structures.
+// Depots must satisfy the requirements for backend data structures.
 &&Structure<D>;
 
 }  // namespace carmen::backend::depot

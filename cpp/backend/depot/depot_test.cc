@@ -61,6 +61,16 @@ TYPED_TEST_P(DepotTest, EntriesCanBeUpdated) {
   EXPECT_THAT(val, ElementsAre(std::byte{1}, std::byte{2}, std::byte{3}));
 }
 
+TYPED_TEST_P(DepotTest, SizeCanBeFatched) {
+  TypeParam wrapper;
+  auto& depot = wrapper.GetDepot();
+
+  EXPECT_THAT(depot.GetSize(10), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
+  ASSERT_OK_AND_ASSIGN(auto size, depot.GetSize(10));
+  EXPECT_EQ(size, 2);
+}
+
 TYPED_TEST_P(DepotTest, EmptyDepotHasZeroHash) {
   TypeParam wrapper;
   auto& depot = wrapper.GetDepot();
@@ -166,8 +176,9 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
 
 REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
-                            EmptyDepotHasZeroHash, NonEmptyDepotHasHash,
-                            HashChangesBack, KnownHashesAreReproduced,
+                            SizeCanBeFatched, EmptyDepotHasZeroHash,
+                            NonEmptyDepotHasHash, HashChangesBack,
+                            KnownHashesAreReproduced,
                             HashesEqualReferenceImplementation);
 
 using DepotTypes = ::testing::Types<
