@@ -7,6 +7,7 @@ cc_library(
         "//common:type",
         "//common:hash",
         "//common:memory_usage",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )

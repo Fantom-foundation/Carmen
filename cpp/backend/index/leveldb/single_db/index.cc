@@ -3,6 +3,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
+#include "common/status_util.h"
 
 namespace carmen::backend::index {
 namespace internal {

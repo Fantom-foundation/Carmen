@@ -19,6 +19,7 @@ cc_test(
     srcs = ["depot_test.cc"],
     deps = [
         ":depot",
+        "//backend/depot",
         "//common:status_test_util",
         "//common:file_util",
         "//common:type",

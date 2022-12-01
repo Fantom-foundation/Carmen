@@ -1,5 +1,8 @@
 #pragma once
 
+#include <filesystem>
+
+#include "backend/structure.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
@@ -28,6 +31,11 @@ template <std::integral K>
 class MockDepotWrapper {
  public:
   using key_type = K;
+
+  static absl::StatusOr<MockDepotWrapper> Open(Context&,
+                                               const std::filesystem::path&) {
+    return MockDepotWrapper();
+  }
 
   MockDepotWrapper() : depot_(std::make_unique<MockDepot<K>>()) {}
 

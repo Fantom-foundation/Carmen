@@ -4,6 +4,7 @@ cc_library(
     deps = [
         "//common:memory_usage",
         "//common:type",
+        "//common:heterogenous_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],

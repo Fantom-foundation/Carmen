@@ -4,10 +4,13 @@ cc_library(
     deps = [
         "//backend/common/cache:lru_cache",
         "//backend/index",
+        "//backend:structure",
         "//common:type",
         "//common:hash",
         "//common:memory_usage",
+        "//common:status_util",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )

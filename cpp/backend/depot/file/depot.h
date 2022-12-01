@@ -6,6 +6,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -22,6 +23,12 @@ class FileDepot {
  public:
   // The type of the depot key.
   using key_type = K;
+
+  // Creates a new FileDepot using the provided context and directory path.
+  static absl::StatusOr<FileDepot> Open(Context&,
+                                        const std::filesystem::path& path) {
+    return Open(path);
+  }
 
   // Creates a new FileDepot using the provided directory path, branching factor
   // and number of items per group for hash computation.

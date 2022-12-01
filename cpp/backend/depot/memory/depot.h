@@ -1,10 +1,12 @@
 #pragma once
 
 #include <concepts>
+#include <filesystem>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -17,6 +19,12 @@ class InMemoryDepot {
  public:
   // The type of the depot key.
   using key_type = K;
+
+  // A factory function creating an instance of this depot type.
+  static absl::StatusOr<InMemoryDepot> Open(Context&,
+                                            const std::filesystem::path&) {
+    return InMemoryDepot();
+  }
 
   // Creates a new InMemoryDepot using the provided branching factor and
   // number of items per group for hash computation.

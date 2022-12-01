@@ -2,10 +2,12 @@
 
 #include <filesystem>
 
+#include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "backend/common/page_pool.h"
 #include "backend/store/hash_tree.h"
+#include "backend/structure.h"
 #include "common/hash.h"
 #include "common/type.h"
 
@@ -67,6 +69,14 @@ class FileStoreBase {
 
   // The page type used by this store.
   using page_type = ArrayPage<V, page_size>;
+
+  // A factory function creating an instance of this store type.
+  static absl::StatusOr<FileStoreBase> Open(
+      Context&, const std::filesystem::path& directory) {
+    // TODO: move directory initialization from constructor to factory and do
+    // proper error handling.
+    return FileStoreBase(directory);
+  }
 
   // Creates a new file store meantaining its content in the given directory and
   // using the provided branching factor for its hash computation.

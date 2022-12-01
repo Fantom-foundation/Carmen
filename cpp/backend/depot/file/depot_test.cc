@@ -1,5 +1,6 @@
 #include "backend/depot/file/depot.h"
 
+#include "backend/depot/depot.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "common/type.h"
@@ -14,7 +15,9 @@ using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::StatusIs;
 
-using Depot = FileDepot<unsigned long>;
+using TestDepot = FileDepot<unsigned long>;
+
+TEST(FileDepotTest, IsDepot) { EXPECT_TRUE(Depot<TestDepot>); }
 
 TEST(FileDepotTest, TestIsPersistent) {
   auto dir = TempDir();
@@ -22,7 +25,7 @@ TEST(FileDepotTest, TestIsPersistent) {
   Hash hash;
 
   {
-    ASSERT_OK_AND_ASSIGN(auto depot, Depot::Open(dir.GetPath()));
+    ASSERT_OK_AND_ASSIGN(auto depot, TestDepot::Open(dir.GetPath()));
     EXPECT_THAT(depot.Get(10), StatusIs(absl::StatusCode::kNotFound, _));
     ASSERT_OK_AND_ASSIGN(auto empty_hash, depot.GetHash());
     EXPECT_EQ(empty_hash, Hash{});
@@ -33,7 +36,7 @@ TEST(FileDepotTest, TestIsPersistent) {
   }
 
   {
-    ASSERT_OK_AND_ASSIGN(auto depot, Depot::Open(dir.GetPath()));
+    ASSERT_OK_AND_ASSIGN(auto depot, TestDepot::Open(dir.GetPath()));
     ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
     EXPECT_THAT(val, ElementsAreArray(elements));
     ASSERT_OK_AND_ASSIGN(auto new_hash, depot.GetHash());

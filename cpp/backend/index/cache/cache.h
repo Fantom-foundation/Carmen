@@ -1,8 +1,13 @@
 #pragma once
 
+#include <filesystem>
+
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "backend/common/cache/lru_cache.h"
 #include "backend/index/index.h"
+#include "backend/structure.h"
+#include "common/status_util.h"
 
 namespace carmen::backend::index {
 
@@ -15,6 +20,16 @@ class Cached {
   using key_type = typename I::key_type;
   // The value type of ordinal values mapped to keys.
   using value_type = typename I::value_type;
+
+  // A factory function creating an instance of this index type.
+  template <typename... Args>
+  static absl::StatusOr<Cached> Open(Context& context,
+                                     const std::filesystem::path& path,
+                                     Args&&... args) {
+    ASSIGN_OR_RETURN(auto index,
+                     I::Open(context, path, std::forward<Args>(args)...));
+    return Cached(std::move(index));
+  }
 
   // Creates a new cached index wrapping the given index and using the given
   // maximum cache size.

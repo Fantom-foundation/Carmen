@@ -85,13 +85,14 @@ class StoreHandler<LevelDbStore<Key, Value, page_size>, branching_factor>
 
   StoreHandler()
       : adapter_(*LevelDbStore<Key, Value, page_size>::Open(
-            GetStoreDirectory(), branching_factor)) {}
+            context_, GetStoreDirectory(), branching_factor)) {}
 
   LevelDbStoreTestAdapter<Key, Value, page_size>& GetStore() {
     return adapter_;
   }
 
  private:
+  Context context_;
   LevelDbStoreTestAdapter<Key, Value, page_size> adapter_;
 };
 

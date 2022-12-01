@@ -1,10 +1,15 @@
 #pragma once
 
+#include <filesystem>
+
+#include "absl/status/statusor.h"
 #include "backend/index/index.h"
 #include "backend/index/leveldb/single_db/index.h"
+#include "backend/structure.h"
 #include "common/file_util.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -16,6 +21,12 @@ class SingleLevelDbIndexTestAdapter {
  public:
   using key_type [[maybe_unused]] = K;
   using value_type [[maybe_unused]] = I;
+
+  static absl::StatusOr<SingleLevelDbIndexTestAdapter> Open(
+      Context& context, const std::filesystem::path& path) {
+    ASSIGN_OR_RETURN(auto space, (LevelDbKeySpace<K, I>::Open(context, path)));
+    return SingleLevelDbIndexTestAdapter(std::move(space));
+  }
 
   explicit SingleLevelDbIndexTestAdapter(LevelDbKeySpace<K, I> key_space)
       : key_space_(std::move(key_space)) {}

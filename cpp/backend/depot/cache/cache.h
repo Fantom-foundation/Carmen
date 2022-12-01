@@ -1,10 +1,13 @@
 #pragma once
 
+#include <filesystem>
+
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/common/cache/lru_cache.h"
 #include "backend/depot/depot.h"
+#include "backend/structure.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -17,6 +20,13 @@ class Cached {
  public:
   // The type of the depot key.
   using key_type = typename D::key_type;
+
+  // A factory function creating an instance of this depot type.
+  static absl::StatusOr<Cached> Open(Context& context,
+                                     const std::filesystem::path& directory) {
+    ASSIGN_OR_RETURN(auto depot, D::Open(context, directory));
+    return Cached(std::move(depot));
+  }
 
   // Creates a new cached depot wrapping the given depot and using the given
   // maximum cache size.

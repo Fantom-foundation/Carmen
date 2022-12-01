@@ -35,7 +35,7 @@ class LevelDbStore {
   // Open connection to the store. If the store does not exist, it will be
   // created. If the depot store, it will be opened.
   static absl::StatusOr<LevelDbStore> Open(
-      const std::filesystem::path& path,
+      Context&, const std::filesystem::path& path,
       std::size_t hash_branching_factor = 32) {
     auto is_new =
         !std::filesystem::exists(path) || std::filesystem::is_empty(path);
