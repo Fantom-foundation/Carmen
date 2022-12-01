@@ -5,6 +5,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
+#include "backend/common/file.h"
 #include "backend/store/hash_tree.h"
 #include "backend/structure.h"
 #include "common/hash.h"
@@ -35,6 +37,12 @@ class FileDepot {
   static absl::StatusOr<FileDepot> Open(const std::filesystem::path& path,
                                         std::size_t hash_branching_factor = 32,
                                         std::size_t hash_box_size = 4) {
+    // Make sure the parent directory exists.
+    if (!CreateDirectory(path)) {
+      return absl::InternalError(
+          absl::StrFormat("Unable to create parent directory %s", path));
+    }
+
     auto offset_file = path / "offset.dat";
     auto data_file = path / "data.dat";
 

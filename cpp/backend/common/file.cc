@@ -7,10 +7,6 @@
 
 namespace carmen::backend {
 
-namespace internal {
-
-namespace {
-
 // Creates the provided directory file path recursively. Returns true on
 // success, false otherwise.
 bool CreateDirectory(std::filesystem::path dir) {
@@ -20,7 +16,7 @@ bool CreateDirectory(std::filesystem::path dir) {
          std::filesystem::create_directory(dir);
 }
 
-}  // namespace
+namespace internal {
 
 FStreamFile::FStreamFile(std::filesystem::path file) {
   // Create the parent directory.
