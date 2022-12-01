@@ -289,8 +289,7 @@ void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
 void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto code = s.GetCode(a);
-  *out_length = code.size();
+  *out_length = s.GetCodeSize(a);
 }
 
 void Carmen_GetHash(C_State state, C_Hash out_hash) {
