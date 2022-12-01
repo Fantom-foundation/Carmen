@@ -27,6 +27,5 @@ cc_library(
         "//common:status_util",
         "@com_google_absl//absl/status:statusor",
     ],
-    visibility = ["//backend/store:__subpackages__"],
-    testonly = True,
+    visibility = ["//visibility:public"],
 )

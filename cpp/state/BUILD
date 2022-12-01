@@ -30,10 +30,13 @@ cc_library(
         "//backend/index/cache",
         "//backend/index/file:index",
         "//backend/index/memory:index",
+        "//backend/index/leveldb/multi_db:test_util",
         "//backend/store/file:store",
         "//backend/store/memory:store",
+        "//backend/store/leveldb:test_util",
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",
+        "//backend/depot/leveldb:depot",
     ],
     alwayslink = True,
 )

@@ -8,11 +8,14 @@
 #include <string_view>
 
 #include "backend/depot/file/depot.h"
+#include "backend/depot/leveldb/depot.h"
 #include "backend/depot/memory/depot.h"
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
+#include "backend/index/leveldb/multi_db/test_util.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
+#include "backend/store/leveldb/test_util.h"
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/memory_usage.h"
@@ -43,6 +46,17 @@ using FileBasedStore =
 
 template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
+
+template <typename K, typename I>
+using LevelDbBasedIndex =
+    backend::index::Cached<backend::index::MultiLevelDbIndexTestAdapter<K, I>>;
+
+template <typename K, typename V>
+using LevelDbBasedStore =
+    backend::store::LevelDbStoreTestAdapter<K, V, kPageSize>;
+
+template <typename K>
+using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
@@ -160,6 +174,8 @@ WorldState* Open(const std::filesystem::path& directory) {
 
 using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
 using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot>;
+using LevelDbBasedState =
+    State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot>;
 
 }  // namespace
 }  // namespace carmen
@@ -172,6 +188,11 @@ C_State Carmen_CreateInMemoryState() {
 
 C_State Carmen_CreateFileBasedState(const char* directory, int length) {
   return carmen::Open<carmen::FileBasedState>(
+      std::string_view(directory, length));
+}
+
+C_State Carmen_CreateLevelDbBasedState(const char* directory, int length) {
+  return carmen::Open<carmen::LevelDbBasedState>(
       std::string_view(directory, length));
 }
 

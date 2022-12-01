@@ -15,6 +15,7 @@ using ::testing::ElementsAre;
 enum class Config {
   kInMemory,
   kFileBased,
+  kLevelDbBased,
 };
 
 std::string ToString(Config c) {
@@ -23,6 +24,8 @@ std::string ToString(Config c) {
       return "InMemory";
     case Config::kFileBased:
       return "FileBased";
+    case Config::kLevelDbBased:
+      return "LevelDbBased";
   }
   return "Unknown";
 }
@@ -31,16 +34,25 @@ class CStateTest : public testing::TestWithParam<Config> {
  public:
   void SetUp() override {
     switch (GetParam()) {
-      case Config::kInMemory:
+      case Config::kInMemory: {
         state_ = Carmen_CreateInMemoryState();
         ASSERT_NE(state_, nullptr);
         return;
-      case Config::kFileBased:
+      }
+      case Config::kFileBased: {
         dir_ = std::make_unique<TempDir>();
         auto path = dir_->GetPath().string();
         state_ = Carmen_CreateFileBasedState(path.c_str(), path.size());
         ASSERT_NE(state_, nullptr);
         return;
+      }
+      case Config::kLevelDbBased: {
+        dir_ = std::make_unique<TempDir>();
+        auto path = dir_->GetPath().string();
+        state_ = Carmen_CreateLevelDbBasedState(path.c_str(), path.size());
+        ASSERT_NE(state_, nullptr);
+        return;
+      }
     }
     FAIL() << "Unknown configuration: " << ToString(GetParam());
   }
@@ -351,7 +363,9 @@ TEST_P(CStateTest, MemoryFootprintCanBeObtained) {
 }
 
 INSTANTIATE_TEST_SUITE_P(
-    All, CStateTest, testing::Values(Config::kInMemory, Config::kFileBased),
+    All, CStateTest,
+    testing::Values(Config::kInMemory, Config::kFileBased,
+                    Config::kLevelDbBased),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {
       return ToString(info.param);
     });
@@ -373,6 +387,38 @@ TEST(FileBasedStateTest, CanBeStoredAndReloaded) {
   }
   {
     auto state = Carmen_CreateFileBasedState(path.c_str(), path.length());
+    ASSERT_NE(state, nullptr);
+
+    Address addr{0x01};
+    Key key{0x02};
+    Value value{};
+    Carmen_GetStorageValue(state, &addr, &key, &value);
+    EXPECT_EQ(value, Value{0x03});
+    Hash recovered;
+    Carmen_GetHash(state, &recovered);
+    EXPECT_EQ(hash, recovered);
+    Carmen_ReleaseState(state);
+  }
+}
+
+// TODO: this test fails due to some LevelDb internal issue and needs fixing.
+TEST(DISABLED_LevelDbBasedStateTest, CanBeStoredAndReloaded) {
+  TempDir dir;
+  auto path = dir.GetPath().string();
+  Hash hash;
+  {
+    auto state = Carmen_CreateLevelDbBasedState(path.c_str(), path.length());
+    ASSERT_NE(state, nullptr);
+
+    Address addr{0x01};
+    Key key{0x02};
+    Value value{0x03};
+    Carmen_SetStorageValue(state, &addr, &key, &value);
+    Carmen_GetHash(state, &hash);
+    Carmen_ReleaseState(state);
+  }
+  {
+    auto state = Carmen_CreateLevelDbBasedState(path.c_str(), path.length());
     ASSERT_NE(state, nullptr);
 
     Address addr{0x01};

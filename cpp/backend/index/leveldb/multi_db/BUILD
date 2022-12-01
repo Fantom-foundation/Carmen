@@ -12,11 +12,11 @@ cc_library(
     name = "test_util",
     hdrs = ["test_util.h"],
     deps = [
+        ":index",
         "//common:status_util",
         "@com_google_absl//absl/status:statusor"
     ],
-    visibility = ["//backend/index:__subpackages__"],
-    testonly = True,
+    visibility = ["//visibility:public"],
 )
 
 cc_test(

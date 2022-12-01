@@ -41,6 +41,12 @@ C_State Carmen_CreateInMemoryState();
 // the caller, which is required to release it eventually.
 C_State Carmen_CreateFileBasedState(const char* directory, int length);
 
+// Creates a new state object maintaining data in a LevelDB instance located in
+// the given directory and returns an opaque pointer to it. Ownership of the
+// state is transfered to the caller, which is required to release it
+// eventually.
+C_State Carmen_CreateLevelDbBasedState(const char* directory, int length);
+
 // Flushes all committed state information to disk to gurantee permanent
 // storage. All internally cached modifications is synced to disk.
 void Carmen_Flush(C_State state);
