@@ -56,6 +56,12 @@ template <typename K, Trivial V, template <typename> class F,
 requires File<F<ArrayPage<V, page_size>>>
 class FileStoreBase {
  public:
+  // The value type used to index elements in this store.
+  using key_type = K;
+
+  // The type of value stored in this store.
+  using value_type = V;
+
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
 

@@ -34,6 +34,7 @@ TYPED_TEST_SUITE_P(StoreTest);
 
 TYPED_TEST_P(StoreTest, TypeProperties) {
   TypeParam wrapper;
+  EXPECT_TRUE(Store<std::decay_t<decltype(wrapper.GetStore())>>);
   EXPECT_TRUE(std::is_move_constructible_v<decltype(wrapper.GetStore())>);
 }
 

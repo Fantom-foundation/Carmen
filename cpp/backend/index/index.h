@@ -39,7 +39,7 @@ template <typename I>
 concept Index = requires(I a, const I b) {
   // An index must expose a key type.
   typename I::key_type;
-  // An index must expose a value type.
+  // An index must expose an integral value type.
   std::integral<typename I::value_type>;
   // Looks up the given key and adds it to the index if not present. Returns the
   // associated value and a boolean set to true if the provided key was new,
