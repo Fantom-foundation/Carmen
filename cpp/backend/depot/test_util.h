@@ -40,7 +40,7 @@ class MockDepotWrapper {
   }
 
   absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
-    return depot_->GetCode(key);
+    return depot_->GetSize(key);
   }
 
   absl::StatusOr<Hash> GetHash() const { return depot_->GetHash(); }
