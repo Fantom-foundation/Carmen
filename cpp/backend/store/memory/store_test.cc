@@ -13,7 +13,7 @@ using Store = InMemoryStore<int, int>;
 TEST(InMemoryStoreTest, TypeTraits) {
   EXPECT_TRUE(std::is_default_constructible_v<Store>);
   EXPECT_FALSE(std::is_copy_constructible_v<Store>);
-  EXPECT_FALSE(std::is_move_constructible_v<Store>);
+  EXPECT_TRUE(std::is_move_constructible_v<Store>);
   EXPECT_FALSE(std::is_copy_assignable_v<Store>);
   EXPECT_FALSE(std::is_move_assignable_v<Store>);
 }

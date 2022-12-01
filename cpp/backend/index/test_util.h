@@ -143,6 +143,7 @@ class MockIndexWrapper {
   }
 
   MockIndexWrapper() : index_(std::make_unique<MockIndex<K, V>>()) {}
+  MockIndexWrapper(MockIndexWrapper&&) = default;
 
   std::pair<V, bool> GetOrAdd(const K& key) { return index_->GetOrAdd(key); }
 

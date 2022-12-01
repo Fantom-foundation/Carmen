@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <filesystem>
+#include <type_traits>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -73,7 +74,9 @@ concept Structure = requires(S a) {
   // Structures must be closeable.
   { a.Close() } -> internal::Void;
 }
-// Structures must provide memory-footprint information.
-&&MemoryFootprintProvider<S>;
+// All structures must be moveable.
+&&std::is_move_constructible_v<S>
+    // Structures must provide memory-footprint information.
+    && MemoryFootprintProvider<S>;
 
 }  // namespace carmen::backend
