@@ -49,7 +49,7 @@ class Cached {
   // is known, it will return a previously established value
   // for the key. If the key has not been encountered before,
   // it will try to fetch from underlying depot. Otherwise,
-  // abseil status is returned.
+  // abseil status not found is returned.
   absl::StatusOr<std::uint32_t> GetSize(const key_type& key) const {
     ASSIGN_OR_RETURN(auto value, Get(key));
     return value.size();
