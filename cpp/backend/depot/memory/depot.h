@@ -48,6 +48,16 @@ class InMemoryDepot {
     return (*items_)[key];
   }
 
+  // Retrieves the size of data associated to the given key. If no values has
+  // been previously set using the Set(..) function above, not found status
+  // is returned.
+  absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
+    if (key >= items_->size()) {
+      return absl::NotFoundError("Key not found");
+    }
+    return (*items_)[key].size();
+  }
+
   // Computes a hash over the full content of this depot.
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
 

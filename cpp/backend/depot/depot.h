@@ -32,6 +32,10 @@ concept Depot = requires(D a, const D b) {
   {
     b.Get(std::declval<typename D::key_type>())
     } -> std::same_as<absl::StatusOr<std::span<const std::byte>>>;
+  // Retrieves size of data from Depot. Not found status is returned when not
+  {
+    b.GetSize(std::declval<typename D::key_type>())
+    } -> std::same_as<absl::StatusOr<std::uint32_t>>;
   // Computes a hash over the full content of this depot.
   { b.GetHash() } -> std::same_as<absl::StatusOr<Hash>>;
   // Depots must be flushable.

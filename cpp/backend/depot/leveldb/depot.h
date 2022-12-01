@@ -49,12 +49,21 @@ class LevelDbDepot {
   }
 
   // Retrieves the value associated to the given key. The data is valid
-  // until the next call to this function.
+  // until the next call to this function. If no values has been previously
+  // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     ASSIGN_OR_RETURN(auto value, db_->Get(AsChars(key)));
     get_data_.resize(value.size());
     std::memcpy(get_data_.data(), value.data(), value.size());
     return std::span{get_data_.data(), value.size()};
+  }
+
+  // Retrieves the size of data associated to the given key. If no values has
+  // been previously set using the Set(..) function above, not found status
+  // is returned.
+  absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
+    ASSIGN_OR_RETURN(auto value, db_->Get(AsChars(key)));
+    return value.size();
   }
 
   // Computes a hash over the full content of this depot.

@@ -105,9 +105,9 @@ class FileDepot {
     return absl::OkStatus();
   }
 
-  // Retrieves the value associated to the given key. If no values has
-  // been previously set using the Set(..) function above, not found status
-  // is returned.
+  // Retrieves the value associated to the given key. The data is valid
+  // until the next call to this function. If no values has been previously
+  // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     ASSIGN_OR_RETURN(auto metadata, GetBoxOffsetAndSize(key, *offset_fs_));
     if (metadata.second == 0) return absl::NotFoundError("Key not found");
@@ -127,6 +127,15 @@ class FileDepot {
 
     return std::span<const std::byte>(
         reinterpret_cast<const std::byte*>(get_data_.data()), metadata.second);
+  }
+
+  // Retrieves the size of data associated to the given key. If no values has
+  // been previously set using the Set(..) function above, not found status
+  // is returned.
+  absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
+    ASSIGN_OR_RETURN(auto metadata, GetBoxOffsetAndSize(key, *offset_fs_));
+    if (metadata.second == 0) return absl::NotFoundError("Key not found");
+    return metadata.second;
   }
 
   // Computes a hash over the full content of this depot.
