@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "backend/common/page_id.h"
+#include "backend/structure.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -51,16 +52,8 @@ concept Store = requires(S a, const S b) {
   {
     b.Get(std::declval<typename S::key_type>())
     } -> std::same_as<const typename S::value_type&>;
-  // Computes a hash over the full content of this index. The hash of an empty
-  // index is defined to be zero. For every element added, the new hash is to be
-  // computed as Sha256(old_hash, key).
-  { a.GetHash() } -> std::same_as<Hash>;
-  // Indexes must be flushable.
-  { a.Flush() } -> std::same_as<void>;
-  // Indexes must be closeable.
-  { a.Close() } -> std::same_as<void>;
 }
-// Stores must provide memory-footprint information.
-&&MemoryFootprintProvider<S>;
+// Stores must satisfy the requirements for backend data structures.
+&&Structure<S>;
 
 }  // namespace carmen::backend::store

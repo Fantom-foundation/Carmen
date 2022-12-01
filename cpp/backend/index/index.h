@@ -4,6 +4,7 @@
 #include <optional>
 #include <utility>
 
+#include "backend/structure.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
 
@@ -51,15 +52,8 @@ concept Index = requires(I a, const I b) {
   {
     b.Get(std::declval<typename I::key_type>())
     } -> std::same_as<std::optional<typename I::value_type>>;
-  // Computes a hash over the full content of this index. The hash of an empty
-  // index is defined to be zero. For every element added, the new hash is to be
-  // computed as Sha256(old_hash, key).
-  { a.GetHash() } -> std::same_as<Hash>;
-  // Indexes must be flushable.
-  { a.Flush() } -> std::same_as<void>;
-  // Indexes must be closeable.
-  { a.Close() } -> std::same_as<void>;
 }
-&&MemoryFootprintProvider<I>;
+// Indexes must satisfy the requirements for backend data structures.
+&&Structure<I>;
 
 }  // namespace carmen::backend::index

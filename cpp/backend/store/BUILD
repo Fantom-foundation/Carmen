@@ -3,7 +3,7 @@ cc_library(
     hdrs = ["store.h"],
     deps = [
         "//backend/common:page_id",
-        "//common:type",
+        "//backend:structure",
     ],
     visibility = ["//visibility:public"],
 )
