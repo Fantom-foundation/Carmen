@@ -37,14 +37,8 @@ concept Depot = requires(D a, const D b) {
   {
     b.GetSize(std::declval<typename D::key_type>())
     } -> std::same_as<absl::StatusOr<std::uint32_t>>;
-  // Computes a hash over the full content of this depot.
-  { b.GetHash() } -> std::same_as<absl::StatusOr<Hash>>;
-  // Depots must be flushable.
-  { a.Flush() } -> std::same_as<absl::Status>;
-  // Depots must be closeable.
-  { a.Close() } -> std::same_as<absl::Status>;
 }
-// Indexes must satisfy the requirements for backend data structures.
+// Depots must satisfy the requirements for backend data structures.
 &&Structure<D>;
 
 }  // namespace carmen::backend::depot
