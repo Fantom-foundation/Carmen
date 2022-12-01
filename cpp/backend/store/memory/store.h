@@ -50,6 +50,8 @@ class InMemoryStore {
   // Instances can not be copied.
   InMemoryStore(const InMemoryStore&) = delete;
 
+  InMemoryStore(InMemoryStore&&) = default;
+
   // Initializes a new store instance based on the given snapshot data.
   InMemoryStore(const StoreSnapshot&, std::size_t hash_branching_factor = 32);
 

@@ -8,5 +8,5 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],
-    visibility = ["//backend:__subpackages__"],
+    visibility = ["//visibility:public"],
 )
