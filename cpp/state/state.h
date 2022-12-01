@@ -1,12 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <utility>
 
+#include "absl/status/statusor.h"
+#include "backend/structure.h"
 #include "common/account_state.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen {
@@ -40,7 +44,11 @@ class State {
     }
   };
 
+  // Creates a new state by opening the content stored in the given directory.
+  static absl::StatusOr<State> Open(const std::filesystem::path& directory);
+
   State() = default;
+  State(State&&) = default;
 
   State(IndexType<Address, AddressId> address_index,
         IndexType<Key, KeyId> key_index, IndexType<Slot, SlotId> slot_index,
@@ -124,6 +132,40 @@ class State {
 };
 
 // ----------------------------- Definitions ----------------------------------
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+absl::StatusOr<State<IndexType, StoreType, DepotType>>
+State<IndexType, StoreType, DepotType>::Open(const std::filesystem::path& dir) {
+  backend::Context context;
+  ASSIGN_OR_RETURN(auto address_index, (IndexType<Address, AddressId>::Open(
+                                           context, dir / "addresses")));
+  ASSIGN_OR_RETURN(auto key_index,
+                   (IndexType<Key, KeyId>::Open(context, dir / "keys")));
+  ASSIGN_OR_RETURN(auto slot_index,
+                   (IndexType<Slot, SlotId>::Open(context, dir / "slots")));
+
+  ASSIGN_OR_RETURN(auto balances, (StoreType<AddressId, Balance>::Open(
+                                      context, dir / "balances")));
+  ASSIGN_OR_RETURN(auto nonces, (StoreType<AddressId, Nonce>::Open(
+                                    context, dir / "nonces")));
+  ASSIGN_OR_RETURN(auto values,
+                   (StoreType<SlotId, Value>::Open(context, dir / "values")));
+  ASSIGN_OR_RETURN(auto account_state,
+                   (StoreType<AddressId, AccountState>::Open(
+                       context, dir / "account_states")));
+  ASSIGN_OR_RETURN(auto code_hashes, (StoreType<AddressId, Hash>::Open(
+                                         context, dir / "code_hashes")));
+
+  ASSIGN_OR_RETURN(auto codes,
+                   (DepotType<AddressId>::Open(context, dir / "codes")));
+
+  return State(std::move(address_index), std::move(key_index),
+               std::move(slot_index), std::move(balances), std::move(nonces),
+               std::move(values), std::move(account_state), std::move(codes),
+               std::move(code_hashes));
+}
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,

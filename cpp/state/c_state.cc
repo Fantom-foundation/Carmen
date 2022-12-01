@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string_view>
 
+#include "backend/depot/file/depot.h"
 #include "backend/depot/memory/depot.h"
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
@@ -22,8 +23,6 @@ namespace carmen {
 namespace {
 
 constexpr const std::size_t kPageSize = 1 << 12;  // 4 KiB
-constexpr const std::size_t kHashBranchFactor = 32;
-constexpr const std::size_t kDepotBlockSize = kPageSize;
 
 template <typename K, typename V>
 using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
@@ -41,6 +40,10 @@ using FileBasedIndex = backend::index::Cached<
 template <typename K, typename V>
 using FileBasedStore =
     backend::store::EagerFileStore<K, V, backend::SingleFile, kPageSize>;
+
+// TODO: update to file-based depot.
+template <typename K>
+using FileBasedDepot = backend::depot::InMemoryDepot<K>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
@@ -78,11 +81,9 @@ class WorldState {
 // the static template based state implementations and the polymorth virtual
 // WorldState interface.
 template <typename State>
-class WorldStateBase : public WorldState {
+class WorldStateWrapper : public WorldState {
  public:
-  WorldStateBase() = default;
-
-  WorldStateBase(State state) : state_(std::move(state)) {}
+  WorldStateWrapper(State state) : state_(std::move(state)) {}
 
   void CreateAccount(const Address& addr) override {
     state_.CreateAccount(addr);
@@ -148,24 +149,18 @@ class WorldStateBase : public WorldState {
   State state_;
 };
 
-class InMemoryWorldState
-    : public WorldStateBase<
-          State<InMemoryIndex, InMemoryStore, InMemoryDepot>> {};
+template <typename State>
+WorldState* Open(const std::filesystem::path& directory) {
+  auto state = State::Open(directory);
+  if (!state.ok()) {
+    std::cout << "WARNING: Failed to open state: " << state.status() << "\n";
+    return nullptr;
+  }
+  return new WorldStateWrapper<State>(*std::move(state));
+}
 
-class FileBasedWorldState
-    : public WorldStateBase<
-          State<FileBasedIndex, FileBasedStore, InMemoryDepot>> {
- public:
-  FileBasedWorldState(std::filesystem::path directory)
-      : WorldStateBase(State<FileBasedIndex, FileBasedStore, InMemoryDepot>(
-            {directory / "addresses"}, {directory / "keys"},
-            {directory / "slots"}, {directory / "balances", kHashBranchFactor},
-            {directory / "nonces", kHashBranchFactor},
-            {directory / "values", kHashBranchFactor},
-            {directory / "account_states", kHashBranchFactor},
-            {kHashBranchFactor, kDepotBlockSize},
-            {directory / "code_hashes", kHashBranchFactor})) {}
-};
+using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
+using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot>;
 
 }  // namespace
 }  // namespace carmen
@@ -173,11 +168,12 @@ class FileBasedWorldState
 extern "C" {
 
 C_State Carmen_CreateInMemoryState() {
-  return new carmen::InMemoryWorldState();
+  return carmen::Open<carmen::InMemoryState>("");
 }
 
 C_State Carmen_CreateFileBasedState(const char* directory, int length) {
-  return new carmen::FileBasedWorldState(std::string_view(directory, length));
+  return carmen::Open<carmen::FileBasedState>(
+      std::string_view(directory, length));
 }
 
 void Carmen_Flush(C_State state) {

@@ -33,11 +33,13 @@ class CStateTest : public testing::TestWithParam<Config> {
     switch (GetParam()) {
       case Config::kInMemory:
         state_ = Carmen_CreateInMemoryState();
+        ASSERT_NE(state_, nullptr);
         return;
       case Config::kFileBased:
         dir_ = std::make_unique<TempDir>();
         auto path = dir_->GetPath().string();
         state_ = Carmen_CreateFileBasedState(path.c_str(), path.size());
+        ASSERT_NE(state_, nullptr);
         return;
     }
     FAIL() << "Unknown configuration: " << ToString(GetParam());
@@ -360,6 +362,7 @@ TEST(FileBasedStateTest, CanBeStoredAndReloaded) {
   Hash hash;
   {
     auto state = Carmen_CreateFileBasedState(path.c_str(), path.length());
+    ASSERT_NE(state, nullptr);
 
     Address addr{0x01};
     Key key{0x02};
@@ -370,6 +373,8 @@ TEST(FileBasedStateTest, CanBeStoredAndReloaded) {
   }
   {
     auto state = Carmen_CreateFileBasedState(path.c_str(), path.length());
+    ASSERT_NE(state, nullptr);
+
     Address addr{0x01};
     Key key{0x02};
     Value value{};
