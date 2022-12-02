@@ -280,17 +280,12 @@ TEST_P(CStateTest, CodesAffectHashes) {
 }
 
 TEST_P(CStateTest, CodeHashesMatchCodes) {
-  const Hash zero_hash;
   const Hash hash_of_empty_code = GetKeccak256Hash({});
   auto state = GetState();
   ASSERT_NE(state, nullptr);
 
   Address addr{0x01};
   Hash hash;
-  Carmen_GetCodeHash(state, &addr, &hash);
-  EXPECT_EQ(hash, zero_hash);
-
-  Carmen_CreateAccount(state, &addr);
   Carmen_GetCodeHash(state, &addr, &hash);
   EXPECT_EQ(hash, hash_of_empty_code);
 
@@ -303,10 +298,6 @@ TEST_P(CStateTest, CodeHashesMatchCodes) {
   Carmen_SetCode(state, &addr, code.data(), code.size());
   Carmen_GetCodeHash(state, &addr, &hash);
   EXPECT_EQ(hash, hash_of_empty_code);
-
-  Carmen_DeleteAccount(state, &addr);
-  Carmen_GetCodeHash(state, &addr, &hash);
-  EXPECT_EQ(hash, zero_hash);
 }
 
 TEST_P(CStateTest, CodeSizesMatchCodes) {

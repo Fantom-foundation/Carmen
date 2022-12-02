@@ -265,9 +265,6 @@ func TestSetAndGetCodeHash(t *testing.T) {
 					t.Fatalf("Error fetching code: %v", err)
 				}
 				want := common.GetKeccak256Hash(code)
-				if len(code) == 0 {
-					want = common.Hash{}
-				}
 				if hash != want {
 					t.Errorf("Invalid code hash, got %v, wanted %v", hash, want)
 				}

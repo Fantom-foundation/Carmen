@@ -334,12 +334,12 @@ template <template <typename K, typename V> class IndexType,
 Hash State<IndexType, StoreType, DepotType>::GetCodeHash(
     const Address& address) const {
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value() ||
-      account_states_.Get(*addr_id) != AccountState::kExists) {
-    return {};
-  }
+  if (!addr_id.has_value()) return kEmptyCodeHash;
   auto res = code_hashes_.Get(*addr_id);
-  // For missing codes, use the hash of the empty code.
+  // The default value of hashes in the store is the zero hash.
+  // However, for empty codes, the hash of an empty code should
+  // returned. The only exception would be the very unlikely
+  // case where the hash of the stored code is indeed zero.
   if (res == Hash{} && GetCodeSize(address) == 0) {
     return kEmptyCodeHash;
   }

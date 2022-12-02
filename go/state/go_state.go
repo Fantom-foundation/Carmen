@@ -2,13 +2,14 @@ package state
 
 import (
 	"crypto/sha256"
+	"hash"
+	"io"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
-	"hash"
-	"io"
 )
 
 const (
@@ -182,11 +183,13 @@ func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
 	return s.codeHashesStore.Set(idx, codeHash)
 }
 
+var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
+
 func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
-			return common.Hash{}, nil
+			return emptyCodeHash, nil
 		}
 		return
 	}

@@ -200,6 +200,7 @@ func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
+	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
 	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
@@ -216,6 +217,7 @@ func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
+	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
 	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
@@ -240,6 +242,7 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
 
+	db.CreateAccount(address1)
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
 	}
@@ -456,6 +459,7 @@ func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
 	var want uint64 = 12
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(want), nil)
 
+	db.CreateAccount(address1)
 	if got := db.GetNonce(address1); got != want {
 		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
 	}
@@ -471,6 +475,7 @@ func TestCarmenStateNoncesAreOnlyReadOnce(t *testing.T) {
 	var want uint64 = 12
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(want), nil)
 
+	db.CreateAccount(address1)
 	if got := db.GetNonce(address1); got != want {
 		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
 	}
@@ -485,6 +490,8 @@ func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Mock should never be consulted.
+
+	db.CreateAccount(address1)
 
 	var want uint64 = 12
 	db.SetNonce(address1, want)
@@ -503,6 +510,7 @@ func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
+	db.CreateAccount(address1)
 
 	// Nonce is initially 10. This should only be fetched once.
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(10), nil)
@@ -552,6 +560,7 @@ func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
+	db.CreateAccount(address1)
 
 	// Nonce is initially 10. This should only be fetched once.
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(10), nil)
@@ -611,9 +620,11 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
+	db.CreateAccount(address1)
 
 	// Nonce is only read, never written.
 	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(10), nil)
+	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
 
 	value := db.GetNonce(address1)
 	db.SetNonce(address1, value)
@@ -1053,6 +1064,21 @@ func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
 	}
 }
 
+func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The state DB is asked for the accounts existence, but not for the hash.
+	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Unknown, nil)
+
+	want := common.Hash{}
+	if got := db.GetCodeHash(address1); got != want {
+		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
+	}
+}
+
 func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1062,6 +1088,7 @@ func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 	want := common.Hash{0xAC, 0xDC}
 	mock.EXPECT().GetCodeHash(gomock.Eq(address1)).Return(want, nil)
 
+	db.CreateAccount(address1)
 	if got := db.GetCodeHash(address1); got != want {
 		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
 	}
@@ -1093,6 +1120,8 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
 
 	code := []byte{0xAC, 0xDC}
 	db.SetCode(address1, code)
