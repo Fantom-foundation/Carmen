@@ -202,19 +202,45 @@ TEST(StateTest, CodesCanBeUpdated) {
 }
 
 TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
+  const Hash zero_hash;
+  const Hash hash_of_empty_code = GetKeccak256Hash({});
+  ASSERT_NE(zero_hash, hash_of_empty_code);
+
   Address a{0x01};
   std::vector<std::byte> code{std::byte{1}, std::byte{2}};
 
   InMemoryState state;
 
-  EXPECT_EQ(state.GetCodeHash(a), Hash{});
+  // The creation of an account changes the accounts code hash.
+  EXPECT_EQ(state.GetCodeHash(a), zero_hash);
+  state.CreateAccount(a);
+  EXPECT_EQ(state.GetCodeHash(a), hash_of_empty_code);
 
   state.SetCode(a, code);
   EXPECT_EQ(state.GetCodeHash(a), GetKeccak256Hash(std::span(code)));
 
-  // Resetting code to zero reverts code to zero.
+  // Resetting code to zero updates the hash accordingly.
   state.SetCode(a, {});
-  EXPECT_EQ(state.GetCodeHash(a), Hash{});
+  EXPECT_EQ(state.GetCodeHash(a), hash_of_empty_code);
+}
+
+TEST(StateTest, CodeHashesDependOnAccountState) {
+  const Hash zero_hash;
+  const Hash hash_of_empty_code = GetKeccak256Hash({});
+  ASSERT_NE(zero_hash, hash_of_empty_code);
+
+  Address a{0x01};
+  InMemoryState state;
+  // As long as the account does not exist, the code hash is zero.
+  EXPECT_EQ(state.GetCodeHash(a), zero_hash);
+
+  // Creating the hash causes the hash to be the hash of the empty string.
+  state.CreateAccount(a);
+  EXPECT_EQ(state.GetCodeHash(a), hash_of_empty_code);
+
+  // Deleting the account resets the code hash to zero.
+  state.DeleteAccount(a);
+  EXPECT_EQ(state.GetCodeHash(a), zero_hash);
 }
 
 TEST(StateTest, CodesAreCoveredByGlobalStateHash) {

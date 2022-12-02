@@ -351,6 +351,10 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 }
 
 func (s *stateDB) GetNonce(addr common.Address) uint64 {
+	// The Nonce of a non-existing (or deleted) account is 0.
+	if !s.Exist(addr) {
+		return 0
+	}
 	// Check cache first.
 	if val, exists := s.nonces[addr]; exists {
 		return val.current
@@ -503,6 +507,10 @@ func (s *stateDB) SetCode(addr common.Address, code []byte) {
 }
 
 func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
+	// The hash of the code of a non-existing account is always zero.
+	if !s.Exist(addr) {
+		return common.Hash{}
+	}
 	val, exists := s.codes[addr]
 	if !exists {
 		val = &codeValue{}

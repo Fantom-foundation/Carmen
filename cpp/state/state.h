@@ -107,6 +107,9 @@ class State {
   MemoryFootprint GetMemoryFootprint() const;
 
  private:
+  // A constant for the hash of the empty code.
+  static const Hash kEmptyCodeHash;
+
   // Indexes for mapping address, keys, and slots to dense, numeric IDs.
   IndexType<Address, AddressId> address_index_;
   IndexType<Key, KeyId> key_index_;
@@ -132,6 +135,12 @@ class State {
 };
 
 // ----------------------------- Definitions ----------------------------------
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType>
+const Hash State<IndexType, StoreType, DepotType>::kEmptyCodeHash =
+    GetKeccak256Hash({});
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
@@ -303,7 +312,8 @@ void State<IndexType, StoreType, DepotType>::SetCode(
     const Address& address, std::span<const std::byte> code) {
   auto addr_id = address_index_.GetOrAdd(address).first;
   codes_.Set(addr_id, code).IgnoreError();
-  code_hashes_.Set(addr_id, code.empty() ? Hash{} : GetKeccak256Hash(code));
+  code_hashes_.Set(addr_id,
+                   code.empty() ? kEmptyCodeHash : GetKeccak256Hash(code));
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -324,8 +334,16 @@ template <template <typename K, typename V> class IndexType,
 Hash State<IndexType, StoreType, DepotType>::GetCodeHash(
     const Address& address) const {
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return {};
-  return code_hashes_.Get(*addr_id);
+  if (!addr_id.has_value() ||
+      account_states_.Get(*addr_id) != AccountState::kExists) {
+    return {};
+  }
+  auto res = code_hashes_.Get(*addr_id);
+  // For missing codes, use the hash of the empty code.
+  if (res == Hash{} && GetCodeSize(address) == 0) {
+    return kEmptyCodeHash;
+  }
+  return res;
 }
 
 template <template <typename K, typename V> class IndexType,
