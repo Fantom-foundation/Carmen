@@ -78,8 +78,8 @@ class LevelDbKeySpace : public internal::LevelDbIndexBase<K, I, 1> {
     return internal::ToDBKey(key_space_, key);
   };
 
-  LevelDb& GetDB() override { return *ldb_; }
-  const LevelDb& GetDB() const override { return *ldb_; }
+  LevelDb& GetDb() override { return *ldb_; }
+  const LevelDb& GetDb() const override { return *ldb_; }
 
   std::shared_ptr<LevelDb> ldb_;
   char key_space_;

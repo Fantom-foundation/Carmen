@@ -47,7 +47,7 @@ class LevelDbIndexBase {
 
   // Get index for given key.
   absl::StatusOr<I> Get(const K& key) const {
-    ASSIGN_OR_RETURN(auto data, GetDB().Get(ToDBKey(key)));
+    ASSIGN_OR_RETURN(auto data, GetDb().Get(ToDBKey(key)));
     return ParseDBResult<I>(data);
   }
 
@@ -76,16 +76,16 @@ class LevelDbIndexBase {
   }
 
   // Flush unsaved index keys to disk.
-  absl::Status Flush() { return GetDB().Flush(); }
+  absl::Status Flush() { return GetDb().Flush(); }
 
   // Close this index and release resources.
-  void Close() { GetDB().Close(); }
+  void Close() { GetDb().Close(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {
     MemoryFootprint res(*this);
     res.Add("unhashed_keys", SizeOf(keys_));
-    res.Add("db", GetDB().GetMemoryFootprint());
+    res.Add("db", GetDb().GetMemoryFootprint());
     return res;
   }
 
@@ -103,18 +103,18 @@ class LevelDbIndexBase {
   virtual std::array<char, sizeof(K) + KPL> ToDBKey(const K& key) const = 0;
 
   // Get leveldb handle.
-  virtual LevelDb& GetDB() = 0;
-  virtual const LevelDb& GetDB() const = 0;
+  virtual LevelDb& GetDb() = 0;
+  virtual const LevelDb& GetDb() const = 0;
 
   // Get last index value.
   absl::StatusOr<I> GetLastIndexFromDB() const {
-    ASSIGN_OR_RETURN(auto data, GetDB().Get(GetLastIndexKey()));
+    ASSIGN_OR_RETURN(auto data, GetDb().Get(GetLastIndexKey()));
     return ParseDBResult<I>(data);
   }
 
   // Get actual hash value.
   absl::StatusOr<Hash> GetHashFromDB() const {
-    ASSIGN_OR_RETURN(auto data, GetDB().Get(GetHashKey()));
+    ASSIGN_OR_RETURN(auto data, GetDb().Get(GetHashKey()));
     if (data.size() != sizeof(Hash))
       return absl::InternalError("Invalid hash size.");
     return *reinterpret_cast<Hash*>(data.data());
@@ -127,12 +127,12 @@ class LevelDbIndexBase {
     auto last_index_key = GetLastIndexKey();
     auto batch =
         std::array{LDBEntry{db_key, db_val}, LDBEntry{last_index_key, db_val}};
-    return GetDB().AddBatch(batch);
+    return GetDb().AddBatch(batch);
   }
 
   // Add hash value into database.
   absl::Status AddHashIntoDB(const Hash& hash) {
-    return GetDB().Add(
+    return GetDb().Add(
         {GetHashKey(), {reinterpret_cast<const char*>(&hash), sizeof(hash)}});
   }
 
