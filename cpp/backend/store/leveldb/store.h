@@ -49,6 +49,12 @@ class LevelDbStore {
     return store;
   }
 
+  // Supports instances to be moved.
+  LevelDbStore(LevelDbStore&&) noexcept = default;
+
+  // Store is closed when the instance is destroyed.
+  ~LevelDbStore() { Close().IgnoreError(); }
+
   // Updates the value associated to the given key.
   absl::Status Set(const K& key, V value) {
     RETURN_IF_ERROR(db_->Add({AsChars(key), AsChars(value)}));
@@ -70,14 +76,17 @@ class LevelDbStore {
 
   // Flush all pending changes to disk.
   absl::Status Flush() {
-    RETURN_IF_ERROR(db_->Flush());
-    return hashes_.SaveToLevelDb(*db_);
+    if (db_ && db_->IsOpen()) {
+      RETURN_IF_ERROR(db_->Flush());
+      RETURN_IF_ERROR(hashes_.SaveToLevelDb(*db_));
+    }
+    return absl::OkStatus();
   }
 
   // Close the store.
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
-    db_.reset();
+    if (db_ && db_->IsOpen()) db_->Close();
     return absl::OkStatus();
   }
 

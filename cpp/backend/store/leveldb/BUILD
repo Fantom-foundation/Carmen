@@ -15,6 +15,18 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+cc_test(
+    name = "store_test",
+    srcs = ["store_test.cc"],
+    deps = [
+        ":store",
+        "//common:file_util",
+        "//common:status_test_util",
+        "//backend:structure",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
 cc_library(
     name = "test_util",
     hdrs = ["test_util.h"],
