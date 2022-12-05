@@ -15,7 +15,7 @@ using ::testing::StrEq;
 
 using TestIndex = SingleLevelDbIndexTestAdapter<int, int>;
 
-// Instantiates common index tests for the Cached index type.
+// Instantiates common index tests for the single leveldb index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
 LevelDbKeySpace<int, int> GetTestIndex(const TempDir& dir) {
