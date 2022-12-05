@@ -1,5 +1,6 @@
 #include "backend/index/leveldb/multi_db/index.h"
 
+#include "backend/index/leveldb/multi_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"

@@ -360,30 +360,32 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
 void State<IndexType, StoreType, DepotType>::Flush() {
-  address_index_.Flush();
-  key_index_.Flush();
-  slot_index_.Flush();
-  account_states_.Flush();
-  balances_.Flush();
-  nonces_.Flush();
-  value_store_.Flush();
-  codes_.Flush().IgnoreError();  // until function returns error itself
-  code_hashes_.Flush();
+  // until function returns error itself, it is safe to ignore error
+  address_index_.Flush().IgnoreError();
+  key_index_.Flush().IgnoreError();
+  slot_index_.Flush().IgnoreError();
+  account_states_.Flush().IgnoreError();
+  balances_.Flush().IgnoreError();
+  nonces_.Flush().IgnoreError();
+  value_store_.Flush().IgnoreError();
+  codes_.Flush().IgnoreError();
+  code_hashes_.Flush().IgnoreError();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
 void State<IndexType, StoreType, DepotType>::Close() {
-  address_index_.Close();
-  key_index_.Close();
-  slot_index_.Close();
-  account_states_.Close();
-  balances_.Close();
-  nonces_.Close();
-  value_store_.Close();
-  codes_.Close().IgnoreError();  // until function returns error itself
-  code_hashes_.Close();
+  // until function returns error itself, it is safe to ignore error
+  address_index_.Close().IgnoreError();
+  key_index_.Close().IgnoreError();
+  slot_index_.Close().IgnoreError();
+  account_states_.Close().IgnoreError();
+  balances_.Close().IgnoreError();
+  nonces_.Close().IgnoreError();
+  value_store_.Close().IgnoreError();
+  codes_.Close().IgnoreError();
+  code_hashes_.Close().IgnoreError();
 }
 
 template <template <typename K, typename V> class IndexType,

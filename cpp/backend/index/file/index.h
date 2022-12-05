@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "absl/hash/hash.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
@@ -16,6 +17,7 @@
 #include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -67,7 +69,7 @@ class FileIndex {
   FileIndex(FileIndex&&) = default;
 
   // On destruction file indexes are automatically flushed and closed.
-  ~FileIndex() { Close(); }
+  ~FileIndex() { Close().IgnoreError(); }
 
   // Retrieves the ordinal number for the given key. If the key
   // is known, it it will return a previously established value
@@ -85,10 +87,10 @@ class FileIndex {
   Hash GetHash() const;
 
   // Flush unsafed index keys to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Close this index and release resources.
-  void Close();
+  absl::Status Close();
 
   // Prints the content of this index to std::cout. Mainly intended for manual
   // inspection and debugging.
@@ -361,12 +363,12 @@ Hash FileIndex<K, I, F, page_size>::GetHash() const {
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-void FileIndex<K, I, F, page_size>::Flush() {
+absl::Status FileIndex<K, I, F, page_size>::Flush() {
   primary_pool_.Flush();
   overflow_pool_.Flush();
 
   // Flush metadata if this is an owning instance.
-  if (!metadata_file_ || metadata_file_->empty()) return;
+  if (!metadata_file_ || metadata_file_->empty()) return absl::OkStatus();
 
   // Sync out metadata information.
   std::fstream out(*metadata_file_, std::ios::binary | std::ios::out);
@@ -395,14 +397,16 @@ void FileIndex<K, I, F, page_size>::Flush() {
   for (const auto& page_id : overflow_page_free_list_) {
     write_scalar(page_id);
   }
+  return absl::OkStatus();
 }
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-void FileIndex<K, I, F, page_size>::Close() {
-  Flush();
+absl::Status FileIndex<K, I, F, page_size>::Close() {
+  RETURN_IF_ERROR(Flush());
   primary_pool_.Close();
   overflow_pool_.Close();
+  return absl::OkStatus();
 }
 
 template <Trivial K, std::integral I, template <typename> class F,

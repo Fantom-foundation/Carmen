@@ -114,7 +114,10 @@ absl::Status LevelDb::Flush() {
   return absl::OkStatus();
 }
 
-void LevelDb::Close() { impl_.reset(); }
+absl::Status LevelDb::Close() {
+  impl_.reset();
+  return absl::OkStatus();
+}
 
 bool LevelDb::IsOpen() const { return impl_ != nullptr; }
 

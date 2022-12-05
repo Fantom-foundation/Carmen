@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/index/index.h"
 #include "backend/index/leveldb/single_db/index.h"
@@ -50,9 +51,9 @@ class SingleLevelDbIndexTestAdapter {
     return Hash{};
   }
 
-  void Flush() { key_space_.Flush().IgnoreError(); }
+  absl::Status Flush() { return key_space_.Flush(); }
 
-  void Close() { key_space_.Close(); }
+  absl::Status Close() { return key_space_.Close(); }
 
   MemoryFootprint GetMemoryFootprint() const {
     return key_space_.GetMemoryFootprint();

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
@@ -9,6 +10,7 @@
 #include "backend/store/hash_tree.h"
 #include "backend/structure.h"
 #include "common/hash.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -87,7 +89,7 @@ class FileStoreBase {
   FileStoreBase(FileStoreBase&&) = default;
 
   // File stores are automatically closed on destruction.
-  ~FileStoreBase() { Close(); }
+  ~FileStoreBase() { Close().IgnoreError(); }
 
   // Updates the value associated to the given key.
   void Set(const K& key, V value);
@@ -102,10 +104,10 @@ class FileStoreBase {
   Hash GetHash() const;
 
   // Flushes internally buffered modified data to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the store and closes resource references.
-  void Close();
+  absl::Status Close();
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const;
@@ -213,18 +215,20 @@ const { return hashes_->GetHash(); }
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>>
-void FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
+requires File<F<ArrayPage<V, page_size>>> absl::Status
+FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) pool_->Flush();
   if (hashes_) hashes_->SaveToFile(hash_file_);
+  return absl::OkStatus();
 }
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>>
-void FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
-  Flush();
+requires File<F<ArrayPage<V, page_size>>> absl::Status
+FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
+  RETURN_IF_ERROR(Flush());
   if (pool_) pool_->Close();
+  return absl::OkStatus();
 }
 
 template <typename K, Trivial V, template <typename> class F,

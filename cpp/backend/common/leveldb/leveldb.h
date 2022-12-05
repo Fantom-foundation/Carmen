@@ -38,7 +38,7 @@ class LevelDb {
   absl::Status Flush();
 
   // Close the database.
-  void Close();
+  absl::Status Close();
 
   // Check if database is open.
   bool IsOpen() const;

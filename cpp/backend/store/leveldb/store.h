@@ -86,7 +86,9 @@ class LevelDbStore {
   // Close the store.
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
-    if (db_ && db_->IsOpen()) db_->Close();
+    if (db_ && db_->IsOpen()) {
+      RETURN_IF_ERROR(db_->Close());
+    }
     return absl::OkStatus();
   }
 
