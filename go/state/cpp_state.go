@@ -45,6 +45,15 @@ func NewCppFileBasedState(directory string) (State, error) {
 	}, nil
 }
 
+func NewCppLevelDbBasedState(directory string) (State, error) {
+	dir := C.CString(directory)
+	defer C.free(unsafe.Pointer(dir))
+	return &CppState{
+		state:     C.Carmen_CreateLevelDbBasedState(dir, C.int(len(directory))),
+		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
+	}, nil
+}
+
 func (cs *CppState) CreateAccount(address common.Address) error {
 	C.Carmen_CreateAccount(cs.state, unsafe.Pointer(&address[0]))
 	return nil

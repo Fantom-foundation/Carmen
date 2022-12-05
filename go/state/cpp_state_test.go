@@ -277,5 +277,6 @@ func initCppStates() []namedStateConfig {
 	return []namedStateConfig{
 		{"InMemory", NewCppInMemoryState},
 		{"FileBased", NewCppFileBasedState},
+		{"LevelDbBased", NewCppLevelDbBasedState},
 	}
 }
