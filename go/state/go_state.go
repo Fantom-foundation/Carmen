@@ -193,7 +193,24 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 		}
 		return
 	}
-	return s.codeHashesStore.Get(idx)
+	hash, err = s.codeHashesStore.Get(idx)
+	if err != nil {
+		return hash, err
+	}
+	// Stores use the default value in cases where there is no value present. Thus,
+	// when returning a zero hash, we need to check whether it is indeed the case
+	// that this is the hash of the code or whether we should actually return the
+	// hash of the empty code.
+	if (hash == common.Hash{}) {
+		size, err := s.GetCodeSize(address)
+		if err != nil {
+			return hash, err
+		}
+		if size == 0 {
+			return emptyCodeHash, nil
+		}
+	}
+	return hash, nil
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {

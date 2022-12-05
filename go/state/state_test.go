@@ -162,3 +162,50 @@ func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
 		}
 	})
 }
+
+func TestCodeHashesMatchCodes(t *testing.T) {
+	testEachConfiguration(t, func(s State) {
+		hashOfEmptyCode := common.GetKeccak256Hash([]byte{})
+
+		// For a non-existing account the code is empty and the hash should match.
+		hash, err := s.GetCodeHash(address1)
+		if err != nil {
+			t.Fatalf("error fetching code hash: %v", err)
+		}
+		if hash != hashOfEmptyCode {
+			t.Errorf("Invalid hash, wanted %v, got %v", hashOfEmptyCode, hash)
+		}
+
+		// Creating an account should not change this.
+		s.CreateAccount(address1)
+		hash, err = s.GetCodeHash(address1)
+		if err != nil {
+			t.Fatalf("error fetching code hash: %v", err)
+		}
+		if hash != hashOfEmptyCode {
+			t.Errorf("Invalid hash, wanted %v, got %v", hashOfEmptyCode, hash)
+		}
+
+		// Update code to non-empty code updates hash accordingly.
+		code := []byte{1, 2, 3, 4}
+		hashOfTestCode := common.GetKeccak256Hash(code)
+		s.SetCode(address1, code)
+		hash, err = s.GetCodeHash(address1)
+		if err != nil {
+			t.Fatalf("error fetching code hash: %v", err)
+		}
+		if hash != hashOfTestCode {
+			t.Errorf("Invalid hash, wanted %v, got %v", hashOfTestCode, hash)
+		}
+
+		// Reset code to empty code updates hash accordingly.
+		s.SetCode(address1, []byte{})
+		hash, err = s.GetCodeHash(address1)
+		if err != nil {
+			t.Fatalf("error fetching code hash: %v", err)
+		}
+		if hash != hashOfEmptyCode {
+			t.Errorf("Invalid hash, wanted %v, got %v", hashOfEmptyCode, hash)
+		}
+	})
+}
