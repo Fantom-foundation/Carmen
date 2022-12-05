@@ -31,8 +31,6 @@ TEST(FileDepotTest, TestIsPersistent) {
     EXPECT_EQ(empty_hash, Hash{});
     ASSERT_OK(depot.Set(10, elements));
     ASSERT_OK_AND_ASSIGN(hash, depot.GetHash());
-    ASSERT_OK(depot.Flush());
-    ASSERT_OK(depot.Close());
   }
 
   {

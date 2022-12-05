@@ -40,6 +40,9 @@ class LevelDb {
   // Close the database.
   void Close();
 
+  // Check if database is open.
+  bool IsOpen() const;
+
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const;
 

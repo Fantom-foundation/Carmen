@@ -82,6 +82,12 @@ class FileDepot {
     return depot;
   }
 
+  // Supports instances to be moved.
+  FileDepot(FileDepot&&) noexcept = default;
+
+  // Depot is closed when the instance is destroyed.
+  ~FileDepot() { Close().IgnoreError(); }
+
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
@@ -158,17 +164,23 @@ class FileDepot {
 
   // Flush all pending changes to disk.
   absl::Status Flush() {
-    hashes_.SaveToFile(hash_file_);
-    data_fs_->flush();
-    offset_fs_->flush();
+    if ((data_fs_ && data_fs_->is_open()) &&
+        (offset_fs_ && offset_fs_->is_open())) {
+      hashes_.SaveToFile(hash_file_);
+      data_fs_->flush();
+      offset_fs_->flush();
+    }
     return absl::OkStatus();
   }
 
   // Close the depot.
   absl::Status Close() {
-    RETURN_IF_ERROR(Flush());
-    data_fs_->close();
-    offset_fs_->close();
+    if ((data_fs_ && data_fs_->is_open()) &&
+        (offset_fs_ && offset_fs_->is_open())) {
+      RETURN_IF_ERROR(Flush());
+      data_fs_->close();
+      offset_fs_->close();
+    }
     return absl::OkStatus();
   }
 

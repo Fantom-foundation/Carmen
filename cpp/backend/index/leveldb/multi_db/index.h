@@ -44,8 +44,8 @@ class MultiLevelDbIndex : public internal::LevelDbIndexBase<K, I, 0> {
     return buffer;
   };
 
-  LevelDb& GetDB() override { return ldb_; }
-  const LevelDb& GetDB() const override { return ldb_; }
+  LevelDb& GetDb() override { return ldb_; }
+  const LevelDb& GetDb() const override { return ldb_; }
 
   LevelDb ldb_;
 };

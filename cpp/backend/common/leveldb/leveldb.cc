@@ -116,6 +116,8 @@ absl::Status LevelDb::Flush() {
 
 void LevelDb::Close() { impl_.reset(); }
 
+bool LevelDb::IsOpen() const { return impl_ != nullptr; }
+
 LevelDb::LevelDb(std::unique_ptr<LevelDbImpl> db) : impl_(std::move(db)) {}
 
 LevelDb::LevelDb(LevelDb&&) noexcept = default;

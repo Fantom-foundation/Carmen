@@ -48,6 +48,12 @@ class LevelDbDepot {
     return depot;
   }
 
+  // Supports instances to be moved.
+  LevelDbDepot(LevelDbDepot&&) noexcept = default;
+
+  // Depot is closed when the instance is destroyed.
+  ~LevelDbDepot() { Close().IgnoreError(); }
+
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
@@ -79,14 +85,17 @@ class LevelDbDepot {
 
   // Flush all pending changes to database.
   absl::Status Flush() {
-    RETURN_IF_ERROR(db_->Flush());
-    return hashes_.SaveToLevelDb(*db_);
+    if (db_ && db_->IsOpen()) {
+      RETURN_IF_ERROR(db_->Flush());
+      RETURN_IF_ERROR(hashes_.SaveToLevelDb(*db_));
+    }
+    return absl::OkStatus();
   }
 
   // Close the depot.
   absl::Status Close() {
     RETURN_IF_ERROR(Flush());
-    db_->Close();
+    if (db_ && db_->IsOpen()) db_->Close();
     return absl::OkStatus();
   }
 

@@ -402,8 +402,7 @@ TEST(FileBasedStateTest, CanBeStoredAndReloaded) {
   }
 }
 
-// TODO: this test fails due to some LevelDb internal issue and needs fixing.
-TEST(DISABLED_LevelDbBasedStateTest, CanBeStoredAndReloaded) {
+TEST(LevelDbBasedStateTest, CanBeStoredAndReloaded) {
   TempDir dir;
   auto path = dir.GetPath().string();
   Hash hash;
