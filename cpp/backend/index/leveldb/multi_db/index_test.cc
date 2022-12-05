@@ -1,5 +1,6 @@
 #include "backend/index/leveldb/multi_db/index.h"
 
+#include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
@@ -8,11 +9,15 @@
 namespace carmen::backend::index {
 namespace {
 
-using TestIndex = MultiLevelDbIndex<int, int>;
-
 using ::testing::IsOk;
 using ::testing::Not;
 using ::testing::StrEq;
+
+using TestIndex = MultiLevelDbIndex<int, int>;
+using TestSuiteIndex = MultiLevelDbIndexTestAdapter<int, int>;
+
+// Instantiates common index tests for the multi leveldb index type.
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestSuiteIndex);
 
 TEST(LevelDbMultiFileIndex, TestOpen) {
   auto dir = TempDir();
