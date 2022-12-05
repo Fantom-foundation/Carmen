@@ -107,11 +107,31 @@ TYPED_TEST_P(IndexTest, CanProduceMemoryFootprint) {
   EXPECT_GT(summary.GetTotal(), Memory(0));
 }
 
+TYPED_TEST_P(IndexTest, HashesMatchReferenceImplementation) {
+  IndexHandler<TypeParam> wrapper;
+  auto& index = wrapper.GetIndex();
+  auto& reference_index = wrapper.GetReferenceIndex();
+
+  index.GetOrAdd(1);
+  index.GetOrAdd(2);
+  index.GetOrAdd(3);
+
+  reference_index.GetOrAdd(1);
+  reference_index.GetOrAdd(2);
+  reference_index.GetOrAdd(3);
+
+  auto hash1 = index.GetHash();
+  auto hash2 = reference_index.GetHash();
+
+  EXPECT_EQ(hash1, hash2);
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     IndexTest, TypeProperties, IdentifiersAreAssignedInorder,
     SameKeyLeadsToSameIdentifier, ContainsIdentifiesIndexedElements,
     GetRetrievesPresentKeys, EmptyIndexHasHashEqualsZero,
-    IndexHashIsEqualToInsertionOrder, CanProduceMemoryFootprint);
+    IndexHashIsEqualToInsertionOrder, CanProduceMemoryFootprint,
+    HashesMatchReferenceImplementation);
 
 // A generic mock implementation for mocking out index implementations.
 template <typename K, typename V>
