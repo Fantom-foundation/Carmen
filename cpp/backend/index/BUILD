@@ -15,7 +15,7 @@ cc_test(
     deps = [
         "//backend/index/memory:index",
         "//common:test_util",
-        "//common:type", 
+        "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -28,6 +28,7 @@ cc_library(
         "//backend:structure",
         "//common:hash",
         "//backend/index:index_handler",
+        "//backend/index/memory:index",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
     ],

@@ -9,11 +9,23 @@
 #include "backend/index/leveldb/multi_db/test_util.h"
 #include "backend/index/leveldb/single_db/index.h"
 #include "backend/index/leveldb/single_db/test_util.h"
+#include "backend/index/memory/index.h"
 #include "common/file_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
 namespace {
+
+// A base type for IndexHandlerBase types (see below) exposing common
+// definitions.
+template <Trivial K, std::integral I>
+class IndexHandlerBase {
+ public:
+  auto& GetReferenceIndex() { return reference_; }
+
+ private:
+  InMemoryIndex<K, I> reference_;
+};
 
 // A generic index handler enclosing the setup and tear down of various index
 // implementations in benchmarks handled by index_benchmark.cc. A handler holds
@@ -22,7 +34,8 @@ namespace {
 // This generic IndexHandler is a mere wrapper on a store reference, while
 // specializations may add additional setup and tear-down operations.
 template <Index Index>
-class IndexHandler {
+class IndexHandler : public IndexHandlerBase<typename Index::key_type,
+                                             typename Index::value_type> {
  public:
   IndexHandler() : index_() {}
   Index& GetIndex() { return index_; }
@@ -34,7 +47,9 @@ class IndexHandler {
 // A specialization of the generic IndexHandler for cached index
 // implementations.
 template <Index Index>
-class IndexHandler<Cached<Index>> {
+class IndexHandler<Cached<Index>>
+    : public IndexHandlerBase<typename Index::key_type,
+                              typename Index::value_type> {
  public:
   IndexHandler() : index_(std::move(nested_.GetIndex())) {}
   Cached<Index>& GetIndex() { return index_; }
@@ -46,7 +61,8 @@ class IndexHandler<Cached<Index>> {
 
 // A specialization of the generic IndexHandler for file-based implementations.
 template <Trivial K, std::integral I, std::size_t page_size>
-class IndexHandler<FileIndex<K, I, SingleFile, page_size>> {
+class IndexHandler<FileIndex<K, I, SingleFile, page_size>>
+    : public IndexHandlerBase<K, I> {
  public:
   using File = typename FileIndex<K, I, SingleFile, page_size>::File;
   IndexHandler() : index_(dir_.GetPath()) {}
@@ -60,7 +76,8 @@ class IndexHandler<FileIndex<K, I, SingleFile, page_size>> {
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<SingleLevelDbIndexTestAdapter<K, I>> {
+class IndexHandler<SingleLevelDbIndexTestAdapter<K, I>>
+    : public IndexHandlerBase<K, I> {
  public:
   IndexHandler()
       : index_((*SingleLevelDbIndex::Open(dir_.GetPath()))
@@ -74,7 +91,8 @@ class IndexHandler<SingleLevelDbIndexTestAdapter<K, I>> {
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<MultiLevelDbIndexTestAdapter<K, I>> {
+class IndexHandler<MultiLevelDbIndexTestAdapter<K, I>>
+    : public IndexHandlerBase<K, I> {
  public:
   IndexHandler() : index_(*MultiLevelDbIndex<K, I>::Open(dir_.GetPath())) {}
   MultiLevelDbIndexTestAdapter<K, I>& GetIndex() { return index_; }

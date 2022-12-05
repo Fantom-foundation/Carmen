@@ -189,11 +189,11 @@ class LevelDbIndexBase {
   absl::Status Commit() {
     if (keys_.empty()) return absl::OkStatus();
 
-    ASSIGN_OR_RETURN(auto hash, GetLastHash());
+    ASSIGN_OR_RETURN(hash_, GetLastHash());
 
     // calculate new hash
     while (!keys_.empty()) {
-      hash_ = carmen::GetHash(hasher_, hash, keys_.front());
+      hash_ = carmen::GetHash(hasher_, *hash_, keys_.front());
       keys_.pop();
     }
 
