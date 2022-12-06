@@ -85,13 +85,13 @@ class WorldState {
 
   virtual MemoryFootprint GetMemoryFootprint() const = 0;
 
-  virtual void Flush() = 0;
-  virtual void Close() = 0;
+  virtual absl::Status Flush() = 0;
+  virtual absl::Status Close() = 0;
 };
 
 // A generic implementation of the WorldState interface forwarding member
 // function calls to an owned state instance. This class is the adapter between
-// the static template based state implementations and the polymorth virtual
+// the static template based state implementations and the polymorph virtual
 // WorldState interface.
 template <typename State>
 class WorldStateWrapper : public WorldState {
@@ -150,9 +150,9 @@ class WorldStateWrapper : public WorldState {
 
   Hash GetHash() override { return state_.GetHash(); }
 
-  void Flush() override { state_.Flush(); }
+  absl::Status Flush() override { return state_.Flush(); }
 
-  void Close() override { state_.Close(); }
+  absl::Status Close() override { return state_.Close(); }
 
   MemoryFootprint GetMemoryFootprint() const override {
     return state_.GetMemoryFootprint();
@@ -197,11 +197,11 @@ C_State Carmen_CreateLevelDbBasedState(const char* directory, int length) {
 }
 
 void Carmen_Flush(C_State state) {
-  reinterpret_cast<carmen::WorldState*>(state)->Flush();
+  reinterpret_cast<carmen::WorldState*>(state)->Flush().IgnoreError();
 }
 
 void Carmen_Close(C_State state) {
-  reinterpret_cast<carmen::WorldState*>(state)->Close();
+  reinterpret_cast<carmen::WorldState*>(state)->Close().IgnoreError();
 }
 
 void Carmen_ReleaseState(C_State state) {

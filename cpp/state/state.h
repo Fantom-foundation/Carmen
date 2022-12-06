@@ -5,6 +5,7 @@
 #include <optional>
 #include <utility>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/structure.h"
 #include "common/account_state.h"
@@ -96,12 +97,12 @@ class State {
   Hash GetHash();
 
   // Syncs internally modified write-buffers to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the content of the state to disk and closes all resource
   // references. After the state has been closed, no more operations may be
   // performed on it.
-  void Close();
+  absl::Status Close();
 
   // Summarizes the memory usage of this state object.
   MemoryFootprint GetMemoryFootprint() const;
@@ -359,33 +360,33 @@ Hash State<IndexType, StoreType, DepotType>::GetHash() {
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::Flush() {
-  // until function returns error itself, it is safe to ignore error
-  address_index_.Flush().IgnoreError();
-  key_index_.Flush().IgnoreError();
-  slot_index_.Flush().IgnoreError();
-  account_states_.Flush().IgnoreError();
-  balances_.Flush().IgnoreError();
-  nonces_.Flush().IgnoreError();
-  value_store_.Flush().IgnoreError();
-  codes_.Flush().IgnoreError();
-  code_hashes_.Flush().IgnoreError();
+absl::Status State<IndexType, StoreType, DepotType>::Flush() {
+  RETURN_IF_ERROR(address_index_.Flush());
+  RETURN_IF_ERROR(key_index_.Flush());
+  RETURN_IF_ERROR(slot_index_.Flush());
+  RETURN_IF_ERROR(account_states_.Flush());
+  RETURN_IF_ERROR(balances_.Flush());
+  RETURN_IF_ERROR(nonces_.Flush());
+  RETURN_IF_ERROR(value_store_.Flush());
+  RETURN_IF_ERROR(codes_.Flush());
+  RETURN_IF_ERROR(code_hashes_.Flush());
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::Close() {
-  // until function returns error itself, it is safe to ignore error
-  address_index_.Close().IgnoreError();
-  key_index_.Close().IgnoreError();
-  slot_index_.Close().IgnoreError();
-  account_states_.Close().IgnoreError();
-  balances_.Close().IgnoreError();
-  nonces_.Close().IgnoreError();
-  value_store_.Close().IgnoreError();
-  codes_.Close().IgnoreError();
-  code_hashes_.Close().IgnoreError();
+absl::Status State<IndexType, StoreType, DepotType>::Close() {
+  RETURN_IF_ERROR(address_index_.Close());
+  RETURN_IF_ERROR(key_index_.Close());
+  RETURN_IF_ERROR(slot_index_.Close());
+  RETURN_IF_ERROR(account_states_.Close());
+  RETURN_IF_ERROR(balances_.Close());
+  RETURN_IF_ERROR(nonces_.Close());
+  RETURN_IF_ERROR(value_store_.Close());
+  RETURN_IF_ERROR(codes_.Close());
+  RETURN_IF_ERROR(code_hashes_.Close());
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,

@@ -87,16 +87,10 @@ class InMemoryIndex {
   std::unique_ptr<IndexSnapshot<K>> CreateSnapshot() const;
 
   // Flush unsafed index keys to disk.
-  absl::Status Flush() {
-    // ignored
-    return absl::OkStatus();
-  }
+  absl::Status Flush() { return absl::OkStatus(); }
 
   // Close this index and release resources.
-  absl::Status Close() {
-    return absl::OkStatus();
-    // ignored
-  }
+  absl::Status Close() { return absl::OkStatus(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {

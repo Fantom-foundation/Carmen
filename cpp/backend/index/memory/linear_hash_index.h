@@ -52,15 +52,9 @@ class InMemoryLinearHashIndex {
     return hash_;
   }
 
-  absl::Status Flush() {
-    // ignored
-    return absl::OkStatus();
-  }
+  absl::Status Flush() { return absl::OkStatus(); }
 
-  absl::Status Close() {
-    // ignored
-    return absl::OkStatus();
-  }
+  absl::Status Close() { return absl::OkStatus(); }
 
   MemoryFootprint GetMemoryFootprint() const {
     MemoryFootprint res(*this);

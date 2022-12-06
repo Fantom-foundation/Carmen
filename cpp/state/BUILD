@@ -6,6 +6,7 @@ cc_library(
         "//common:account_state",
         "//common:type",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/status:status",
     ]
 )
 
@@ -37,6 +38,7 @@ cc_library(
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
+        "@com_google_absl//absl/status:status",
     ],
     alwayslink = True,
 )
