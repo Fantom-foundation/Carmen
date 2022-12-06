@@ -2,6 +2,8 @@
 
 #include <filesystem>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/index/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
 #include "common/memory_usage.h"
@@ -46,9 +48,9 @@ class MultiLevelDbIndexTestAdapter {
     return Hash{};
   }
 
-  void Flush() { index_.Flush().IgnoreError(); }
+  absl::Status Flush() { return index_.Flush(); }
 
-  void Close() { index_.Close(); }
+  absl::Status Close() { return index_.Close(); }
 
   MemoryFootprint GetMemoryFootprint() const {
     return index_.GetMemoryFootprint();

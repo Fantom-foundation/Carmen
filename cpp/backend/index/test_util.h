@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/index/index.h"
 #include "backend/index/index_handler.h"
 #include "backend/structure.h"
@@ -144,8 +145,8 @@ class MockIndex {
   MOCK_METHOD((std::pair<V, bool>), GetOrAdd, (const K& key));
   MOCK_METHOD((std::optional<V>), Get, (const K& key), (const));
   MOCK_METHOD(Hash, GetHash, ());
-  MOCK_METHOD(void, Flush, ());
-  MOCK_METHOD(void, Close, ());
+  MOCK_METHOD(absl::Status, Flush, ());
+  MOCK_METHOD(absl::Status, Close, ());
   MOCK_METHOD(MemoryFootprint, GetMemoryFootprint, (), (const));
 };
 
@@ -171,9 +172,9 @@ class MockIndexWrapper {
 
   Hash GetHash() { return index_->GetHash(); }
 
-  void Flush() { return index_->Flush(); }
+  absl::Status Flush() { return index_->Flush(); }
 
-  void Close() { return index_->Close(); }
+  absl::Status Close() { return index_->Close(); }
 
   MemoryFootprint GetMemoryFootprint() const { index_->GetMemoryFootprint(); }
 

@@ -4,6 +4,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/common/cache/lru_cache.h"
 #include "backend/index/index.h"
 #include "backend/structure.h"
@@ -80,10 +81,10 @@ class Cached {
   }
 
   // Flush unsafed index keys to disk.
-  void Flush() { index_.Flush(); }
+  absl::Status Flush() { return index_.Flush(); }
 
   // Close this index and release resources.
-  void Close() { index_.Close(); }
+  absl::Status Close() { return index_.Close(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {

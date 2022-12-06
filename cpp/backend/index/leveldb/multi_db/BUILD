@@ -14,7 +14,8 @@ cc_library(
     deps = [
         ":index",
         "//common:status_util",
-        "@com_google_absl//absl/status:statusor"
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/status:status"
     ],
     visibility = ["//visibility:public"],
 )

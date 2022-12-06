@@ -30,6 +30,7 @@ cc_library(
         "//backend/index:index_handler",
         "//backend/index/memory:index",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/status:status",
         "@com_google_googletest//:gtest",
     ],
     visibility = ["//backend/index:__subpackages__"],

@@ -42,6 +42,9 @@ std::array<char, sizeof(I)> ToDBValue(const I& value) {
 template <Trivial K, std::integral I, std::size_t KPL>
 class LevelDbIndexBase {
  public:
+  using key_type = K;
+  using value_type = I;
+
   LevelDbIndexBase(LevelDbIndexBase&&) noexcept = default;
   virtual ~LevelDbIndexBase() = default;
 
@@ -79,7 +82,7 @@ class LevelDbIndexBase {
   absl::Status Flush() { return GetDb().Flush(); }
 
   // Close this index and release resources.
-  void Close() { GetDb().Close(); }
+  absl::Status Close() { return GetDb().Close(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {

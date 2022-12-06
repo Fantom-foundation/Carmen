@@ -6,6 +6,7 @@
 
 #include "absl/hash/hash.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/index/memory/linear_hash_map.h"
 #include "backend/structure.h"
 #include "common/hash.h"
@@ -51,13 +52,9 @@ class InMemoryLinearHashIndex {
     return hash_;
   }
 
-  void Flush() {
-    // ignored
-  }
+  absl::Status Flush() { return absl::OkStatus(); }
 
-  void Close() {
-    // ignored
-  }
+  absl::Status Close() { return absl::OkStatus(); }
 
   MemoryFootprint GetMemoryFootprint() const {
     MemoryFootprint res(*this);

@@ -9,6 +9,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/index/index.h"
 #include "backend/structure.h"
 #include "common/hash.h"
@@ -86,14 +87,10 @@ class InMemoryIndex {
   std::unique_ptr<IndexSnapshot<K>> CreateSnapshot() const;
 
   // Flush unsafed index keys to disk.
-  void Flush() {
-    // ignored
-  }
+  absl::Status Flush() { return absl::OkStatus(); }
 
   // Close this index and release resources.
-  void Close() {
-    // ignored
-  }
+  absl::Status Close() { return absl::OkStatus(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {

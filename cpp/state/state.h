@@ -5,6 +5,7 @@
 #include <optional>
 #include <utility>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/structure.h"
 #include "common/account_state.h"
@@ -96,12 +97,12 @@ class State {
   Hash GetHash();
 
   // Syncs internally modified write-buffers to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the content of the state to disk and closes all resource
   // references. After the state has been closed, no more operations may be
   // performed on it.
-  void Close();
+  absl::Status Close();
 
   // Summarizes the memory usage of this state object.
   MemoryFootprint GetMemoryFootprint() const;
@@ -359,31 +360,33 @@ Hash State<IndexType, StoreType, DepotType>::GetHash() {
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::Flush() {
-  address_index_.Flush();
-  key_index_.Flush();
-  slot_index_.Flush();
-  account_states_.Flush();
-  balances_.Flush();
-  nonces_.Flush();
-  value_store_.Flush();
-  codes_.Flush().IgnoreError();  // until function returns error itself
-  code_hashes_.Flush();
+absl::Status State<IndexType, StoreType, DepotType>::Flush() {
+  RETURN_IF_ERROR(address_index_.Flush());
+  RETURN_IF_ERROR(key_index_.Flush());
+  RETURN_IF_ERROR(slot_index_.Flush());
+  RETURN_IF_ERROR(account_states_.Flush());
+  RETURN_IF_ERROR(balances_.Flush());
+  RETURN_IF_ERROR(nonces_.Flush());
+  RETURN_IF_ERROR(value_store_.Flush());
+  RETURN_IF_ERROR(codes_.Flush());
+  RETURN_IF_ERROR(code_hashes_.Flush());
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::Close() {
-  address_index_.Close();
-  key_index_.Close();
-  slot_index_.Close();
-  account_states_.Close();
-  balances_.Close();
-  nonces_.Close();
-  value_store_.Close();
-  codes_.Close().IgnoreError();  // until function returns error itself
-  code_hashes_.Close();
+absl::Status State<IndexType, StoreType, DepotType>::Close() {
+  RETURN_IF_ERROR(address_index_.Close());
+  RETURN_IF_ERROR(key_index_.Close());
+  RETURN_IF_ERROR(slot_index_.Close());
+  RETURN_IF_ERROR(account_states_.Close());
+  RETURN_IF_ERROR(balances_.Close());
+  RETURN_IF_ERROR(nonces_.Close());
+  RETURN_IF_ERROR(value_store_.Close());
+  RETURN_IF_ERROR(codes_.Close());
+  RETURN_IF_ERROR(code_hashes_.Close());
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,

@@ -21,10 +21,6 @@ namespace internal {
 template <typename T>
 concept StatusOrHash =
     std::same_as<Hash, T> || std::same_as<absl::StatusOr<Hash>, T>;
-
-template <typename T>
-concept Void = std::same_as<void, T> || std::same_as<absl::Status, T>;
-
 }  // namespace internal
 
 // A context provides a common environment for a group of data structures
@@ -70,9 +66,9 @@ concept Structure = requires(S a) {
   // Computes a hash over the full content of a data structure.
   { a.GetHash() } -> internal::StatusOrHash;
   // Structures must be flushable.
-  { a.Flush() } -> internal::Void;
+  { a.Flush() } -> std::same_as<absl::Status>;
   // Structures must be closeable.
-  { a.Close() } -> internal::Void;
+  { a.Close() } -> std::same_as<absl::Status>;
 }
 // All structures must be moveable.
 &&std::is_move_constructible_v<S>

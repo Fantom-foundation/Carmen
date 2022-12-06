@@ -1,5 +1,6 @@
 #pragma once
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/store/leveldb/store.h"
 #include "backend/store/store.h"
@@ -48,9 +49,9 @@ class LevelDbStoreTestAdapter {
     return *res;
   }
 
-  void Flush() { store_.Flush().IgnoreError(); }
+  absl::Status Flush() { return store_.Flush(); }
 
-  void Close() { store_.Close().IgnoreError(); }
+  absl::Status Close() { return store_.Close(); }
 
   MemoryFootprint GetMemoryFootprint() const {
     return store_.GetMemoryFootprint();

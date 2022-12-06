@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/store/hash_tree.h"
 #include "backend/store/store.h"
@@ -89,10 +90,10 @@ class InMemoryStore {
   Hash GetHash() const;
 
   // Ignored, since store is not backed by disk storage.
-  void Flush() {}
+  absl::Status Flush() { return absl::OkStatus(); }
 
   // Ignored, since store does not maintain any resources.
-  void Close() {}
+  absl::Status Close() { return absl::OkStatus(); }
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {

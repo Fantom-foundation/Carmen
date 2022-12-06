@@ -8,7 +8,9 @@ cc_library(
         "//backend/store:hash_tree",
         "//common:type",
         "//common:hash",
+        "//common:status_util",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/status:status",
     ],
     visibility = ["//visibility:public"],
 )
