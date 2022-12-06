@@ -42,7 +42,7 @@ class MultiLevelDbIndexTestAdapter {
     return std::nullopt;
   }
 
-  Hash GetHash() {
+  absl::StatusOr<Hash> GetHash() {
     auto result = index_.GetHash();
     if (result.ok()) return *result;
     return Hash{};

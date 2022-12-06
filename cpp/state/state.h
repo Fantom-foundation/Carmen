@@ -94,7 +94,7 @@ class State {
 
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
-  Hash GetHash();
+  absl::StatusOr<Hash> GetHash();
 
   // Syncs internally modified write-buffers to disk.
   absl::Status Flush();
@@ -350,11 +350,18 @@ Hash State<IndexType, StoreType, DepotType>::GetCodeHash(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-Hash State<IndexType, StoreType, DepotType>::GetHash() {
-  return GetSha256Hash(address_index_.GetHash(), key_index_.GetHash(),
-                       slot_index_.GetHash(), balances_.GetHash(),
-                       nonces_.GetHash(), value_store_.GetHash(),
-                       account_states_.GetHash(), *codes_.GetHash());
+absl::StatusOr<Hash> State<IndexType, StoreType, DepotType>::GetHash() {
+  ASSIGN_OR_RETURN(auto addr_idx_hash, address_index_.GetHash());
+  ASSIGN_OR_RETURN(auto key_idx_hash, key_index_.GetHash());
+  ASSIGN_OR_RETURN(auto slot_idx_hash, slot_index_.GetHash());
+  ASSIGN_OR_RETURN(auto bal_hash, balances_.GetHash());
+  ASSIGN_OR_RETURN(auto nonces_hash, nonces_.GetHash());
+  ASSIGN_OR_RETURN(auto val_store_hash, value_store_.GetHash());
+  ASSIGN_OR_RETURN(auto acc_states_hash, account_states_.GetHash());
+  ASSIGN_OR_RETURN(auto codes_hash, codes_.GetHash());
+  return GetSha256Hash(addr_idx_hash, key_idx_hash, slot_idx_hash, bal_hash,
+                       nonces_hash, val_store_hash, acc_states_hash,
+                       codes_hash);
 }
 
 template <template <typename K, typename V> class IndexType,

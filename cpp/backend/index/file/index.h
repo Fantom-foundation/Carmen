@@ -84,7 +84,7 @@ class FileIndex {
   std::optional<I> Get(const K& key) const;
 
   // Computes a hash over the full content of this index.
-  Hash GetHash() const;
+  absl::StatusOr<Hash> GetHash() const;
 
   // Flush unsafed index keys to disk.
   absl::Status Flush();
@@ -353,7 +353,7 @@ std::optional<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-Hash FileIndex<K, I, F, page_size>::GetHash() const {
+absl::StatusOr<Hash> FileIndex<K, I, F, page_size>::GetHash() const {
   while (!unhashed_keys_.empty()) {
     hash_ = carmen::GetHash(hasher_, hash_, unhashed_keys_.front());
     unhashed_keys_.pop();
@@ -383,7 +383,7 @@ absl::Status FileIndex<K, I, F, page_size>::Flush() {
   write_scalar(high_mask_);
   write_scalar(num_buckets_);
   write_scalar(num_overflow_pages_);
-  auto hash = GetHash();
+  auto hash = *GetHash();
   write_scalar(hash);
 
   // Write bucket tail list.

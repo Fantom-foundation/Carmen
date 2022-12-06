@@ -30,11 +30,11 @@ TEST(InMemoryIndexTest, SnapshotShieldsMutations) {
 TEST(InMemoryIndexTest, SnapshotRecoveryHasSameHash) {
   TestIndex index;
   index.GetOrAdd(10);
-  auto hash = index.GetHash();
+  auto hash = *index.GetHash();
   auto snapshot = index.CreateSnapshot();
 
   TestIndex restored(*snapshot);
-  EXPECT_EQ(restored.GetHash(), hash);
+  EXPECT_EQ(*restored.GetHash(), hash);
 }
 
 TEST(InMemoryIndexTest, LargeSnapshotRecoveryWorks) {
@@ -44,14 +44,14 @@ TEST(InMemoryIndexTest, LargeSnapshotRecoveryWorks) {
   for (int i = 0; i < kNumElements; i++) {
     EXPECT_THAT(index.GetOrAdd(i + 10), Pair(i, true));
   }
-  auto hash = index.GetHash();
+  auto hash = *index.GetHash();
   auto snapshot = index.CreateSnapshot();
 
   TestIndex restored(*snapshot);
   for (int i = 0; i < kNumElements; i++) {
     EXPECT_EQ(index.Get(i + 10), i);
   }
-  EXPECT_EQ(restored.GetHash(), hash);
+  EXPECT_EQ(*restored.GetHash(), hash);
 }
 
 }  // namespace

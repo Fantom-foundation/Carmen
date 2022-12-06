@@ -75,11 +75,11 @@ TEST(FileIndexTest, StoreCanBeSavedAndRestored) {
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_THAT(index.GetOrAdd(i + 5), Pair(i, true));
     }
-    hash = index.GetHash();
+    hash = *index.GetHash();
   }
   {
     Index restored(dir.GetPath());
-    EXPECT_EQ(hash, restored.GetHash());
+    EXPECT_EQ(hash, *restored.GetHash());
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_EQ(restored.Get(i + 5), i);
     }

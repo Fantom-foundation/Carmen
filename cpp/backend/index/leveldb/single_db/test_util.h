@@ -45,7 +45,7 @@ class SingleLevelDbIndexTestAdapter {
     return std::nullopt;
   }
 
-  Hash GetHash() {
+  absl::StatusOr<Hash> GetHash() {
     auto result = key_space_.GetHash();
     if (result.ok()) return *result;
     return Hash{};

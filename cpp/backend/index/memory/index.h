@@ -73,7 +73,7 @@ class InMemoryIndex {
   bool Contains(const K& key) const { return data_.contains(key); }
 
   // Computes a hash over the full content of this index.
-  Hash GetHash() const {
+  absl::StatusOr<Hash> GetHash() const {
     auto& list = *list_;
     while (next_to_hash_ != list.size()) {
       hash_ = carmen::GetHash(hasher_, hash_, list[next_to_hash_++]);
@@ -172,7 +172,7 @@ InMemoryIndex<K, I>::InMemoryIndex(const IndexSnapshot<K>& snapshot)
     }
   }
   // Refresh the hash.
-  GetHash();
+  GetHash().IgnoreError();
 }
 
 template <Trivial K, std::integral I>

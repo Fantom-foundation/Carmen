@@ -81,7 +81,7 @@ class WorldState {
   virtual Hash GetCodeHash(const Address&) = 0;
   virtual void SetCode(const Address&, std::span<const std::byte>) = 0;
 
-  virtual Hash GetHash() = 0;
+  virtual absl::StatusOr<Hash> GetHash() = 0;
 
   virtual MemoryFootprint GetMemoryFootprint() const = 0;
 
@@ -148,7 +148,7 @@ class WorldStateWrapper : public WorldState {
     state_.SetCode(addr, code);
   }
 
-  Hash GetHash() override { return state_.GetHash(); }
+  absl::StatusOr<Hash> GetHash() override { return state_.GetHash(); }
 
   absl::Status Flush() override { return state_.Flush(); }
 
@@ -311,7 +311,7 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
 void Carmen_GetHash(C_State state, C_Hash out_hash) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);
-  h = s.GetHash();
+  h = *s.GetHash();
 }
 
 void Carmen_GetMemoryFootprint(C_State state, char** out,

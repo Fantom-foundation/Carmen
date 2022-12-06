@@ -44,7 +44,7 @@ class InMemoryLinearHashIndex {
     return pos->second;
   }
 
-  Hash GetHash() const {
+  absl::StatusOr<Hash> GetHash() const {
     while (!unhashed_keys_.empty()) {
       hash_ = carmen::GetHash(hasher_, hash_, unhashed_keys_.front());
       unhashed_keys_.pop();

@@ -24,5 +24,6 @@ cc_test(
         "//backend/index:test_util",
         "//backend/index/memory:index",
         "@com_google_googletest//:gtest_main",
+        "@com_google_absl//absl/status:statusor",
     ],
 )

@@ -30,7 +30,7 @@ void InitStore(Store& store, std::size_t num_elements) {
   for (std::size_t i = 0; i < num_elements; i++) {
     store.Set(i, Value{1, 2, 3, 4});
   }
-  store.GetHash();
+  store.GetHash().IgnoreError();
 }
 
 // Benchmarks the sequential insertion of keys into stores.
@@ -200,7 +200,7 @@ void RunHashSequentialUpdates(benchmark::State& state) {
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
   InitStore(store, num_elements);
-  store.GetHash();
+  store.GetHash().IgnoreError();
 
   int i = 0;
   for (auto _ : state) {
@@ -215,7 +215,7 @@ void RunHashSequentialUpdates(benchmark::State& state) {
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = store.GetHash();
+    auto hash = *store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }
@@ -235,7 +235,7 @@ void RunHashUniformUpdates(benchmark::State& state) {
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
   InitStore(store, num_elements);
-  store.GetHash();
+  store.GetHash().IgnoreError();
 
   int i = 0;
   std::random_device rd;
@@ -254,7 +254,7 @@ void RunHashUniformUpdates(benchmark::State& state) {
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = store.GetHash();
+    auto hash = *store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }
@@ -274,7 +274,7 @@ void RunHashExponentialUpdates(benchmark::State& state) {
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
   InitStore(store, num_elements);
-  store.GetHash();
+  store.GetHash().IgnoreError();
 
   int i = 0;
   std::random_device rd;
@@ -293,7 +293,7 @@ void RunHashExponentialUpdates(benchmark::State& state) {
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = store.GetHash();
+    auto hash = *store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }

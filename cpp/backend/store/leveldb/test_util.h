@@ -42,7 +42,7 @@ class LevelDbStoreTestAdapter {
     return temp_value_;
   }
 
-  Hash GetHash() const {
+  absl::StatusOr<Hash> GetHash() const {
     static auto empty = Hash{};
     auto res = store_.GetHash();
     if (!res.ok()) return empty;

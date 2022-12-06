@@ -101,7 +101,7 @@ class FileStoreBase {
   const V& Get(const K& key) const;
 
   // Computes a hash over the full content of this store.
-  Hash GetHash() const;
+  absl::StatusOr<Hash> GetHash() const;
 
   // Flushes internally buffered modified data to disk.
   absl::Status Flush();
@@ -209,7 +209,7 @@ const V& FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> Hash
+requires File<F<ArrayPage<V, page_size>>> absl::StatusOr<Hash>
 FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
 const { return hashes_->GetHash(); }
 

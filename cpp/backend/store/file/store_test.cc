@@ -23,11 +23,11 @@ TYPED_TEST_P(FileStoreTest, StoreCanBeSavedAndRestored) {
     for (int i = 0; i < kNumElements; i++) {
       store.Set(i, i * i);
     }
-    hash = store.GetHash();
+    hash = *store.GetHash();
   }
   {
     Store restored(dir.GetPath());
-    EXPECT_EQ(hash, restored.GetHash());
+    EXPECT_EQ(hash, *restored.GetHash());
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_EQ(restored.Get(i), i * i);
     }
