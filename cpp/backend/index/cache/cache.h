@@ -70,14 +70,13 @@ class Cached {
   }
 
   // Computes a hash over the full content of this index.
-  Hash GetHash() {
+  absl::StatusOr<Hash> GetHash() {
     if (hash_.has_value()) {
       return *hash_;
     }
     // Cache the hash of the wrapped index.
-    auto hash = index_.GetHash();
-    hash_ = hash;
-    return hash;
+    ASSIGN_OR_RETURN(hash_, index_.GetHash());
+    return *hash_;
   }
 
   // Flush unsafed index keys to disk.

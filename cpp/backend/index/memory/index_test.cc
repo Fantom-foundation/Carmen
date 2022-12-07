@@ -1,12 +1,15 @@
 #include "backend/index/memory/index.h"
 
 #include "backend/index/test_util.h"
+#include "common/status_test_util.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::IsOkAndHolds;
 using ::testing::Pair;
+
 using TestIndex = InMemoryIndex<int, int>;
 
 // Instantiates common index tests for the InMemory index type.
@@ -30,11 +33,11 @@ TEST(InMemoryIndexTest, SnapshotShieldsMutations) {
 TEST(InMemoryIndexTest, SnapshotRecoveryHasSameHash) {
   TestIndex index;
   index.GetOrAdd(10);
-  auto hash = index.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
   auto snapshot = index.CreateSnapshot();
 
   TestIndex restored(*snapshot);
-  EXPECT_EQ(restored.GetHash(), hash);
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }
 
 TEST(InMemoryIndexTest, LargeSnapshotRecoveryWorks) {
@@ -44,14 +47,14 @@ TEST(InMemoryIndexTest, LargeSnapshotRecoveryWorks) {
   for (int i = 0; i < kNumElements; i++) {
     EXPECT_THAT(index.GetOrAdd(i + 10), Pair(i, true));
   }
-  auto hash = index.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
   auto snapshot = index.CreateSnapshot();
 
   TestIndex restored(*snapshot);
   for (int i = 0; i < kNumElements; i++) {
     EXPECT_EQ(index.Get(i + 10), i);
   }
-  EXPECT_EQ(restored.GetHash(), hash);
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }
 
 }  // namespace

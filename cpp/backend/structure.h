@@ -12,17 +12,6 @@
 
 namespace carmen::backend {
 
-namespace internal {
-
-// These are concepts that are temporarily introduced until the migration to
-// all-absl-Status based data structures is performed. After this, those
-// concepts should be removed again.
-
-template <typename T>
-concept StatusOrHash =
-    std::same_as<Hash, T> || std::same_as<absl::StatusOr<Hash>, T>;
-}  // namespace internal
-
 // A context provides a common environment for a group of data structures
 // that are intended to be used together, for instance in a combined State
 // involving multiple indexes, stores, and depots. It is mainly intended to
@@ -64,7 +53,7 @@ concept Structure = requires(S a) {
             std::declval<const std::filesystem::path&>())
     } -> std::same_as<absl::StatusOr<S>>;
   // Computes a hash over the full content of a data structure.
-  { a.GetHash() } -> internal::StatusOrHash;
+  { a.GetHash() } -> std::same_as<absl::StatusOr<Hash>>;
   // Structures must be flushable.
   { a.Flush() } -> std::same_as<absl::Status>;
   // Structures must be closeable.

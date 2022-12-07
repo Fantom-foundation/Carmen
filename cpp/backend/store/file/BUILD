@@ -21,6 +21,7 @@ cc_test(
     deps = [
         ":store",
         "//common:file_util",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

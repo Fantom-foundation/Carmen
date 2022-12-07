@@ -6,7 +6,7 @@
 namespace carmen::backend::index {
 namespace {
 
-// The generic index tests are not explictily tested here.
+// The generic index tests are not explicitly tested here.
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IndexTest);
 
 // Check that the MockIndexWrapper implementation is a valid Index.

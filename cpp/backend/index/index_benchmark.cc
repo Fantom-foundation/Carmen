@@ -143,7 +143,7 @@ void BM_Hash(benchmark::State& state) {
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
     index.GetOrAdd(ToKey(i));
   }
-  index.GetHash();
+  index.GetHash().IgnoreError();
   auto i = pre_loaded_num_elements;
 
   for (auto _ : state) {

@@ -2,11 +2,14 @@
 
 #include <type_traits>
 
+#include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::store {
 namespace {
+
+using ::testing::IsOkAndHolds;
 
 using Store = InMemoryStore<int, int>;
 
@@ -37,11 +40,11 @@ TEST(InMemoryStoreTest, SnapshotShieldsMutations) {
 TEST(InMemoryStoreTest, SnapshotRecoveryHasSameHash) {
   Store store;
   store.Set(10, 12);
-  auto hash = store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
   auto snapshot = store.CreateSnapshot();
 
   Store restored(*snapshot);
-  EXPECT_EQ(restored.GetHash(), hash);
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }
 
 TEST(InMemoryStoreTest, LargeSnapshotRecoveryWorks) {
@@ -51,14 +54,14 @@ TEST(InMemoryStoreTest, LargeSnapshotRecoveryWorks) {
   for (int i = 0; i < kNumElements; i++) {
     store.Set(i, i + 10);
   }
-  auto hash = store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
   auto snapshot = store.CreateSnapshot();
 
   Store restored(*snapshot);
   for (int i = 0; i < kNumElements; i++) {
     EXPECT_EQ(store.Get(i), i + 10);
   }
-  EXPECT_EQ(restored.GetHash(), hash);
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }
 
 }  // namespace

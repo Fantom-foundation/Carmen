@@ -9,6 +9,8 @@
 namespace carmen::backend::store {
 namespace {
 
+using ::testing::IsOkAndHolds;
+
 using TestStore = LevelDbStore<int, int>;
 
 TEST(LevelDbStoreTest, StoreCanBeSavedAndRestored) {
@@ -17,19 +19,17 @@ TEST(LevelDbStoreTest, StoreCanBeSavedAndRestored) {
   Context ctx;
   Hash hash;
   {
-    auto store = TestStore::Open(ctx, dir.GetPath());
-    ASSERT_OK(store);
+    ASSERT_OK_AND_ASSIGN(auto store, TestStore::Open(ctx, dir.GetPath()));
     for (int i = 0; i < kNumElements; i++) {
-      ASSERT_OK((*store).Set(i, i * i));
+      ASSERT_OK(store.Set(i, i * i));
     }
-    hash = *(*store).GetHash();
+    ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
   }
   {
-    auto restored = TestStore::Open(ctx, dir.GetPath());
-    ASSERT_OK(restored);
-    EXPECT_EQ(hash, *(*restored).GetHash());
+    ASSERT_OK_AND_ASSIGN(auto restored, TestStore::Open(ctx, dir.GetPath()));
+    EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
     for (int i = 0; i < kNumElements; i++) {
-      EXPECT_EQ(*(*restored).Get(i), i * i);
+      EXPECT_THAT(restored.Get(i), IsOkAndHolds(i * i));
     }
   }
 }

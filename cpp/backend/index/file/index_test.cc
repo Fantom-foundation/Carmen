@@ -2,13 +2,15 @@
 
 #include "backend/common/file.h"
 #include "backend/index/test_util.h"
+#include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {
 namespace {
 
-using testing::Pair;
+using ::testing::IsOkAndHolds;
+using ::testing::Pair;
 
 using TestIndex = FileIndex<int, int, InMemoryFile, 128>;
 
@@ -75,11 +77,11 @@ TEST(FileIndexTest, StoreCanBeSavedAndRestored) {
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_THAT(index.GetOrAdd(i + 5), Pair(i, true));
     }
-    hash = index.GetHash();
+    ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   }
   {
     Index restored(dir.GetPath());
-    EXPECT_EQ(hash, restored.GetHash());
+    EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_EQ(restored.Get(i + 5), i);
     }

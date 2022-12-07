@@ -30,7 +30,8 @@ cc_test(
         "//backend/store/memory:store",
         "//backend/store/file:store",
         "//common:test_util",
-        "//common:type", 
+        "//common:type",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

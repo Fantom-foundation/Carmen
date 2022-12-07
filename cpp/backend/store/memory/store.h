@@ -87,7 +87,7 @@ class InMemoryStore {
   std::unique_ptr<StoreSnapshot> CreateSnapshot() const;
 
   // Computes a hash over the full content of this store.
-  Hash GetHash() const;
+  absl::StatusOr<Hash> GetHash() const;
 
   // Ignored, since store is not backed by disk storage.
   absl::Status Flush() { return absl::OkStatus(); }
@@ -181,7 +181,7 @@ class InMemoryStore {
 };
 
 template <typename K, Trivial V, std::size_t page_size>
-Hash InMemoryStore<K, V, page_size>::GetHash() const {
+absl::StatusOr<Hash> InMemoryStore<K, V, page_size>::GetHash() const {
   return hashes_.GetHash();
 }
 
