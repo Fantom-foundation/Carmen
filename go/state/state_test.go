@@ -130,6 +130,20 @@ func TestMultipleNonceUpdateHashes(t *testing.T) {
 	})
 }
 
+func TestCodeUpdateHashes(t *testing.T) {
+	testHashAfterModification(t, func(s State) {
+		s.SetCode(address1, []byte{1})
+	})
+}
+
+func TestMultipleCodeUpdateHashes(t *testing.T) {
+	testHashAfterModification(t, func(s State) {
+		s.SetCode(address1, []byte{1})
+		s.SetCode(address2, []byte{1, 2})
+		s.SetCode(address3, []byte{1, 2, 3})
+	})
+}
+
 func TestLargeStateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s State) {
 		for i := 0; i < 100; i++ {
@@ -144,6 +158,7 @@ func TestLargeStateHashes(t *testing.T) {
 			}
 			s.SetBalance(address, common.Balance{byte(i)})
 			s.SetNonce(address, common.Nonce{byte(i + 1)})
+			s.SetCode(address, []byte{byte(i), byte(i * 2), byte(i*3 + 2)})
 		}
 	})
 }
