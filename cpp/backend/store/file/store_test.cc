@@ -2,6 +2,7 @@
 
 #include "backend/common/file.h"
 #include "common/file_util.h"
+#include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -23,11 +24,12 @@ TYPED_TEST_P(FileStoreTest, StoreCanBeSavedAndRestored) {
     for (int i = 0; i < kNumElements; i++) {
       store.Set(i, i * i);
     }
-    hash = *store.GetHash();
+    ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
   }
   {
     Store restored(dir.GetPath());
-    EXPECT_EQ(hash, *restored.GetHash());
+    ASSERT_OK_AND_ASSIGN(auto restored_hash, restored.GetHash());
+    EXPECT_EQ(hash, restored_hash);
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_EQ(restored.Get(i), i * i);
     }

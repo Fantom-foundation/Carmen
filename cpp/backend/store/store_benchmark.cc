@@ -215,7 +215,7 @@ void RunHashSequentialUpdates(benchmark::State& state) {
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = *store.GetHash();
+    auto hash = store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }
@@ -254,7 +254,7 @@ void RunHashUniformUpdates(benchmark::State& state) {
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = *store.GetHash();
+    auto hash = store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }
@@ -293,7 +293,7 @@ void RunHashExponentialUpdates(benchmark::State& state) {
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = *store.GetHash();
+    auto hash = store.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }

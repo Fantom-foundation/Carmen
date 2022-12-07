@@ -152,7 +152,7 @@ void BM_Hash(benchmark::State& state) {
       index.GetOrAdd(ToKey(i++));
     }
     state.ResumeTiming();
-    auto hash = *index.GetHash();
+    auto hash = index.GetHash();
     benchmark::DoNotOptimize(hash);
   }
 }

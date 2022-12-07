@@ -4,11 +4,13 @@
 
 #include "backend/index/memory/index.h"
 #include "backend/index/test_util.h"
+#include "common/status_test_util.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::IsOkAndHolds;
 using ::testing::Return;
 
 using TestIndex = InMemoryIndex<int, int>;
@@ -52,9 +54,9 @@ TEST(CachedIndex, HashesAreCached) {
   Hash hash{0x01, 0x23};
   EXPECT_CALL(mock, GetHash()).WillOnce(Return(absl::StatusOr<Hash>(hash)));
 
-  EXPECT_EQ(hash, *index.GetHash());
-  EXPECT_EQ(hash, *index.GetHash());
-  EXPECT_EQ(hash, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
 }
 
 TEST(CachedIndex, AddNewElementInvalidatesHash) {
@@ -71,11 +73,11 @@ TEST(CachedIndex, AddNewElementInvalidatesHash) {
 
   EXPECT_CALL(mock, GetOrAdd(12)).WillOnce(Return(std::pair{10, true}));
 
-  EXPECT_EQ(hash_a, *index.GetHash());
-  EXPECT_EQ(hash_a, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
   EXPECT_TRUE(index.GetOrAdd(12).second);
-  EXPECT_EQ(hash_b, *index.GetHash());
-  EXPECT_EQ(hash_b, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_b));
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_b));
 }
 
 TEST(CachedIndex, GetExistingElementPreservesHash) {
@@ -89,10 +91,10 @@ TEST(CachedIndex, GetExistingElementPreservesHash) {
 
   EXPECT_CALL(mock, GetOrAdd(12)).WillOnce(Return(std::pair{10, false}));
 
-  EXPECT_EQ(hash_a, *index.GetHash());
-  EXPECT_EQ(hash_a, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
   EXPECT_FALSE(index.GetOrAdd(12).second);
-  EXPECT_EQ(hash_a, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
 }
 
 TEST(CachedIndex, CacheSizeLimitIsEnforced) {

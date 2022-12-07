@@ -8,6 +8,7 @@
 #include "backend/store/leveldb/store.h"
 #include "backend/store/store_handler.h"
 #include "common/hash.h"
+#include "common/status_test_util.h"
 #include "common/test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
@@ -16,6 +17,7 @@
 namespace carmen::backend::store {
 namespace {
 
+using ::testing::IsOkAndHolds;
 using ::testing::StrEq;
 
 Value ToValue(std::int64_t value) {
@@ -74,19 +76,19 @@ TYPED_TEST_P(StoreTest, EntriesCanBeUpdated) {
 TYPED_TEST_P(StoreTest, EmptyStoreHasZeroHash) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
-  EXPECT_EQ(Hash{}, *store.GetHash());
+  EXPECT_THAT(store.GetHash(), IsOkAndHolds(Hash{}));
 }
 
 TYPED_TEST_P(StoreTest, HashesChangeWithUpdates) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
 
-  auto empty_hash = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
   store.Set(1, Value{0xAA});
-  auto hash_a = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash_a, store.GetHash());
   EXPECT_NE(empty_hash, hash_a);
   store.Set(2, Value{0xFF});
-  auto hash_b = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash_b, store.GetHash());
   EXPECT_NE(empty_hash, hash_b);
   EXPECT_NE(hash_a, hash_b);
 }
@@ -95,14 +97,14 @@ TYPED_TEST_P(StoreTest, HashesCoverMultiplePages) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
 
-  auto empty_hash = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
   for (int i = 0; i < 10000; i++) {
     store.Set(i, ToValue(i + 1));
   }
-  auto hash_a = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash_a, store.GetHash());
   EXPECT_NE(empty_hash, hash_a);
   store.Set(5000, Value{});
-  auto hash_b = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto hash_b, store.GetHash());
   EXPECT_NE(empty_hash, hash_b);
   EXPECT_NE(hash_a, hash_b);
 }
@@ -111,27 +113,34 @@ TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
   // We only hard-code hashes for a subset of the configurations.
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
-  EXPECT_EQ(Hash{}, *store.GetHash());
+  EXPECT_THAT(store.GetHash(), IsOkAndHolds(Hash{}));
 
   if (TypeParam::kPageSize == 32 && TypeParam::kBranchingFactor == 32) {
     store.Set(0, Value{});
+    ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
     EXPECT_THAT(
-        Print(*store.GetHash()),
+        Print(hash),
         StrEq("0x66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d"
               "0d5f2925"));
+
     store.Set(0, Value{0xAA});
+    ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(
-        Print(*store.GetHash()),
+        Print(hash),
         StrEq("0xe7ac50af91de0eca8d6805f0cf111ac4f0937e3136292cace6a50392"
               "fe905615"));
+
     store.Set(1, Value{0xBB});
+    ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(
-        Print(*store.GetHash()),
+        Print(hash),
         StrEq("0x1e7272c135640b8d6f1bb58f4887f022eddc7f21d077439c14bfb22f"
               "15952d5d"));
+
     store.Set(2, Value{0xCC});
+    ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(
-        Print(*store.GetHash()),
+        Print(hash),
         StrEq("0xaf87d5bc44995a6d537df52a75ef073ff24581aef087e37ec981035b"
               "6b0072e4"));
   }
@@ -158,9 +167,11 @@ TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
         "0x6f060e465bb1b155a6b4822a13b704d3986ab43d7928c14b178e07a8f7673951",
     };
     int i = 0;
-    for (auto hash : hashes) {
+    Hash hash;
+    for (const auto& expected_hash : hashes) {
       store.Set(i, Value{static_cast<std::uint8_t>(i << 4 | i)});
-      EXPECT_THAT(Print(*store.GetHash()), StrEq(hash));
+      ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
+      EXPECT_THAT(Print(hash), StrEq(expected_hash));
       i++;
     }
   }
@@ -202,7 +213,7 @@ TYPED_TEST_P(StoreTest, HashesRespectBranchingFactor) {
   }
   Hash root_hash = hasher.GetHash();
 
-  EXPECT_EQ(root_hash, *store.GetHash());
+  EXPECT_THAT(store.GetHash(), IsOkAndHolds(root_hash));
 }
 
 TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
@@ -211,8 +222,9 @@ TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
   auto& store = wrapper.GetStore();
   auto& reference = wrapper.GetReferenceStore();
 
-  EXPECT_EQ(Hash{}, *store.GetHash());
+  EXPECT_THAT(store.GetHash(), IsOkAndHolds(Hash{}));
 
+  Hash hash;
   for (int i = 0; i < N; i++) {
     Value value{static_cast<unsigned char>(i >> 6 & 0x3),
                 static_cast<unsigned char>(i >> 4 & 0x3),
@@ -220,7 +232,8 @@ TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
                 static_cast<unsigned char>(i >> 0 & 0x3)};
     store.Set(i, value);
     reference.Set(i, value);
-    EXPECT_EQ(*reference.GetHash(), *store.GetHash());
+    ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
+    EXPECT_THAT(reference.GetHash(), IsOkAndHolds(hash));
   }
 }
 
@@ -234,8 +247,8 @@ TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
   store.Get(10000);
 
   // Hash is computed as if all pages are initialized.
-  auto ref_hash = *reference.GetHash();
-  auto trg_hash = *store.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto ref_hash, reference.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto trg_hash, store.GetHash());
   EXPECT_NE(Hash{}, trg_hash);
   EXPECT_EQ(ref_hash, trg_hash);
 }

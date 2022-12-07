@@ -16,6 +16,7 @@ cc_test(
         "//backend/index/memory:index",
         "//common:test_util",
         "//common:type",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -29,6 +30,7 @@ cc_library(
         "//common:hash",
         "//backend/index:index_handler",
         "//backend/index/memory:index",
+        "//common:status_test_util",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/status:status",
         "@com_google_googletest//:gtest",

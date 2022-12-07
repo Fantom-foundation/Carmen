@@ -311,7 +311,12 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
 void Carmen_GetHash(C_State state, C_Hash out_hash) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);
-  h = *s.GetHash();
+  auto res = s.GetHash();
+  if (!res.ok()) {
+    std::cout << "WARNING: Failed to get hash: " << res.status() << "\n";
+    return;
+  }
+  h = *res;
 }
 
 void Carmen_GetMemoryFootprint(C_State state, char** out,

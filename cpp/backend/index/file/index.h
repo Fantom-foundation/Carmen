@@ -383,7 +383,7 @@ absl::Status FileIndex<K, I, F, page_size>::Flush() {
   write_scalar(high_mask_);
   write_scalar(num_buckets_);
   write_scalar(num_overflow_pages_);
-  auto hash = *GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
   write_scalar(hash);
 
   // Write bucket tail list.

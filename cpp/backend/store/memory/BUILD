@@ -17,7 +17,8 @@ cc_test(
     name = "store_test",
     srcs = ["store_test.cc"],
     deps = [
-        ":store", 
+        ":store",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

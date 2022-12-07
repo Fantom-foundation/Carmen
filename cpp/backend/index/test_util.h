@@ -10,12 +10,14 @@
 #include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
+#include "common/status_test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {
 
+using ::testing::IsOkAndHolds;
 using ::testing::Optional;
 
 // Implements a generic test suite for index implementations checking basic
@@ -82,23 +84,23 @@ TYPED_TEST_P(IndexTest, GetRetrievesPresentKeys) {
 TYPED_TEST_P(IndexTest, EmptyIndexHasHashEqualsZero) {
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
-  EXPECT_EQ(Hash{}, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(Hash{}));
 }
 
 TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
   Hash hash;
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
-  EXPECT_EQ(hash, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
   index.GetOrAdd(12);
   hash = GetSha256Hash(hash, 12);
-  EXPECT_EQ(hash, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
   index.GetOrAdd(14);
   hash = GetSha256Hash(hash, 14);
-  EXPECT_EQ(hash, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
   index.GetOrAdd(16);
   hash = GetSha256Hash(hash, 16);
-  EXPECT_EQ(hash, *index.GetHash());
+  EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
 }
 
 TYPED_TEST_P(IndexTest, CanProduceMemoryFootprint) {
@@ -121,10 +123,8 @@ TYPED_TEST_P(IndexTest, HashesMatchReferenceImplementation) {
   reference_index.GetOrAdd(2);
   reference_index.GetOrAdd(3);
 
-  auto hash1 = *index.GetHash();
-  auto hash2 = *reference_index.GetHash();
-
-  EXPECT_EQ(hash1, hash2);
+  ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
+  EXPECT_THAT(reference_index.GetHash(), IsOkAndHolds(hash));
 }
 
 REGISTER_TYPED_TEST_SUITE_P(
