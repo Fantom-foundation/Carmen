@@ -31,7 +31,7 @@ const CacheCapacity = 1 << 20 // 2 ^ 20 keys -> 32MB for 32-bytes keys
 const TransactBufferMB = 128 * opt.MiB
 
 // PoolSize is the maximum amount of data pages loaded in memory for the paged file store
-const PoolSize = 100
+const PoolSize = 100000
 
 // NewMemory creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
