@@ -33,6 +33,9 @@ const TransactBufferMB = 128 * opt.MiB
 // PoolSize is the maximum amount of data pages loaded in memory for the paged file store
 const PoolSize = 100
 
+// The number of codes grouped together in depots to form one leaf node of the hash tree.
+const CodeHashGroupSize = 4
+
 // NewMemory creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
 func NewMemory() (State, error) {
@@ -57,7 +60,7 @@ func NewMemory() (State, error) {
 		return nil, err
 	}
 
-	codesDepot, err := memory.NewDepot[uint32](PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	codesDepot, err := memory.NewDepot[uint32](CodeHashGroupSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +134,7 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 	if err = os.Mkdir(codesPath, 0777); err != nil {
 		return nil, err
 	}
-	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), PageSize)
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +214,7 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 	if err = os.Mkdir(codesPath, 0777); err != nil {
 		return nil, err
 	}
-	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), PageSize)
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +310,7 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 	if err = os.Mkdir(codesPath, 0777); err != nil {
 		return nil, err
 	}
-	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), PageSize)
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +385,7 @@ func NewLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 
-	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), PageSize)
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +439,7 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 
-	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), PageSize)
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +509,7 @@ func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 	}
 
 	depotHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.DepotCodeKey, HashTreeFactor)
-	codesDepot, err := ldbDepot.NewDepot[uint32](tx, common.DepotCodeKey, common.Identifier32Serializer{}, depotHashTreeFactory, PageSize)
+	codesDepot, err := ldbDepot.NewDepot[uint32](tx, common.DepotCodeKey, common.Identifier32Serializer{}, depotHashTreeFactory, CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
