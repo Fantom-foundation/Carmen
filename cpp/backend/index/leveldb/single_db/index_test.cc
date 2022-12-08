@@ -1,7 +1,6 @@
 #include "backend/index/leveldb/single_db/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/type.h"
@@ -13,7 +12,7 @@ namespace {
 
 using ::testing::StrEq;
 
-using TestIndex = SingleLevelDbIndexTestAdapter<int, int>;
+using TestIndex = LevelDbKeySpace<int, int>;
 
 // Instantiates common index tests for the single leveldb index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);

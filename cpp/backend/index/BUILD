@@ -5,6 +5,7 @@ cc_library(
         "//backend:structure",
         "//common:type",
         "//common:memory_usage",
+        "@com_google_absl//absl/status:statusor",
     ],
     visibility = ["//visibility:public"],
 )
@@ -55,9 +56,7 @@ cc_library(
     deps = [
         ":index",
         "//common:type",
-        "//backend/index/leveldb/single_db:test_util",
         "//backend/index/leveldb/single_db:index",
-        "//backend/index/leveldb/multi_db:test_util",
         "//backend/index/leveldb/multi_db:index",
         "//backend/index/cache:cache",
         "//backend/index/file:index",

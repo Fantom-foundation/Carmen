@@ -45,26 +45,26 @@ class InMemoryIndex {
   InMemoryIndex(const IndexSnapshot<K>& snapshot);
 
   // Retrieves the ordinal number for the given key. If the key
-  // is known, it it will return a previously established value
+  // is known, it will return a previously established value
   // for the key. If the key has not been encountered before,
   // a new ordinal value is assigned to the key and stored
   // internally such that future lookups will return the same
   // value.
-  std::pair<I, bool> GetOrAdd(const K& key) {
+  absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key) {
     auto [pos, is_new] = data_.insert({key, I{}});
     if (is_new) {
       pos->second = data_.size() - 1;
       list_->push_back(key);
     }
-    return {pos->second, is_new};
+    return std::make_pair(pos->second, is_new);
   }
 
   // Retrieves the ordinal number for the given key if previously registered.
-  // Otherwise std::nullopt is returned.
-  std::optional<I> Get(const K& key) const {
+  // Otherwise, returns a not found status.
+  absl::StatusOr<I> Get(const K& key) const {
     auto pos = data_.find(key);
     if (pos == data_.end()) {
-      return std::nullopt;
+      return absl::NotFoundError("Key not found");
     }
     return pos->second;
   }
@@ -168,7 +168,8 @@ InMemoryIndex<K, I>::InMemoryIndex(const IndexSnapshot<K>& snapshot)
   for (std::size_t i = 0; i < num_elements; i += kBlockSize) {
     auto to = std::min(i + kBlockSize, num_elements);
     for (const auto& key : snapshot.GetKeys(i, to)) {
-      GetOrAdd(key);
+      // TODO: Handle errors.
+      GetOrAdd(key).IgnoreError();
     }
   }
   // Refresh the hash.

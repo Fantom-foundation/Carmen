@@ -103,5 +103,4 @@ MATCHER_P(IsOkAndHolds, value,
          ExplainMatchResult(value, ::testing::internal::GetValue(arg),
                             result_listener);
 }
-
 }  // namespace testing

@@ -19,6 +19,9 @@ namespace carmen::backend::index {
 
 using ::testing::IsOkAndHolds;
 using ::testing::Optional;
+using ::testing::IsOk;
+using ::testing::StatusIs;
+using ::testing::_;
 
 // Implements a generic test suite for index implementations checking basic
 // properties like GetOrAdd, contains, and hashing functionality.
@@ -36,49 +39,53 @@ TYPED_TEST_P(IndexTest, TypeProperties) {
 TYPED_TEST_P(IndexTest, IdentifiersAreAssignedInorder) {
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
-  EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
-  EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
-  EXPECT_EQ(std::pair(2, true), index.GetOrAdd(3));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, true)));
+  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, true)));
+  EXPECT_THAT(index.GetOrAdd(3), IsOkAndHolds(std::pair(2, true)));
 }
 
 TYPED_TEST_P(IndexTest, SameKeyLeadsToSameIdentifier) {
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
-  EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
-  EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
-  EXPECT_EQ(std::pair(0, false), index.GetOrAdd(1));
-  EXPECT_EQ(std::pair(1, false), index.GetOrAdd(2));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, true)));
+  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, true)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, false)));
+  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, false)));
 }
 
 TYPED_TEST_P(IndexTest, ContainsIdentifiesIndexedElements) {
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
-  EXPECT_FALSE(index.Get(1));
-  EXPECT_FALSE(index.Get(2));
-  EXPECT_FALSE(index.Get(3));
 
-  EXPECT_EQ(std::pair(0, true), index.GetOrAdd(1));
-  EXPECT_TRUE(index.Get(1));
-  EXPECT_FALSE(index.Get(2));
-  EXPECT_FALSE(index.Get(3));
+  EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(index.Get(2), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(index.Get(3), StatusIs(absl::StatusCode::kNotFound, _));
 
-  EXPECT_EQ(std::pair(1, true), index.GetOrAdd(2));
-  EXPECT_TRUE(index.Get(1));
-  EXPECT_TRUE(index.Get(2));
-  EXPECT_FALSE(index.Get(3));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, true)));
+  EXPECT_THAT(index.Get(1), IsOk());
+  EXPECT_THAT(index.Get(2), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(index.Get(3), StatusIs(absl::StatusCode::kNotFound, _));
+
+  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, true)));
+  EXPECT_THAT(index.Get(1), IsOk());
+  EXPECT_THAT(index.Get(2), IsOk());
+  EXPECT_THAT(index.Get(3), StatusIs(absl::StatusCode::kNotFound, _));
 }
 
 TYPED_TEST_P(IndexTest, GetRetrievesPresentKeys) {
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
-  EXPECT_EQ(index.Get(1), std::nullopt);
-  EXPECT_EQ(index.Get(2), std::nullopt);
-  auto id1 = index.GetOrAdd(1).first;
-  EXPECT_THAT(index.Get(1), Optional(id1));
-  EXPECT_EQ(index.Get(2), std::nullopt);
-  auto id2 = index.GetOrAdd(2).first;
-  EXPECT_THAT(index.Get(1), Optional(id1));
-  EXPECT_THAT(index.Get(2), Optional(id2));
+  EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(index.Get(2), StatusIs(absl::StatusCode::kNotFound, _));
+
+  ASSERT_OK_AND_ASSIGN(auto id1, index.GetOrAdd(1));
+  EXPECT_THAT(index.Get(1), IsOkAndHolds(id1.first));
+
+  EXPECT_THAT(index.Get(2), StatusIs(absl::StatusCode::kNotFound, _));
+  ASSERT_OK_AND_ASSIGN(auto id2, index.GetOrAdd(2));
+
+  EXPECT_THAT(index.Get(2), IsOkAndHolds(id2.first));
+  EXPECT_THAT(index.Get(1), IsOkAndHolds(id1.first));
 }
 
 TYPED_TEST_P(IndexTest, EmptyIndexHasHashEqualsZero) {
@@ -92,13 +99,13 @@ TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
   IndexHandler<TypeParam> wrapper;
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
-  index.GetOrAdd(12);
+  ASSERT_OK(index.GetOrAdd(12));
   hash = GetSha256Hash(hash, 12);
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
-  index.GetOrAdd(14);
+  ASSERT_OK(index.GetOrAdd(14));
   hash = GetSha256Hash(hash, 14);
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
-  index.GetOrAdd(16);
+  ASSERT_OK(index.GetOrAdd(16));
   hash = GetSha256Hash(hash, 16);
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
 }
@@ -115,13 +122,13 @@ TYPED_TEST_P(IndexTest, HashesMatchReferenceImplementation) {
   auto& index = wrapper.GetIndex();
   auto& reference_index = wrapper.GetReferenceIndex();
 
-  index.GetOrAdd(1);
-  index.GetOrAdd(2);
-  index.GetOrAdd(3);
+  ASSERT_OK(index.GetOrAdd(1));
+  ASSERT_OK(index.GetOrAdd(2));
+  ASSERT_OK(index.GetOrAdd(3));
 
-  reference_index.GetOrAdd(1);
-  reference_index.GetOrAdd(2);
-  reference_index.GetOrAdd(3);
+  ASSERT_OK(reference_index.GetOrAdd(1));
+  ASSERT_OK(reference_index.GetOrAdd(2));
+  ASSERT_OK(reference_index.GetOrAdd(3));
 
   ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
   EXPECT_THAT(reference_index.GetHash(), IsOkAndHolds(hash));
@@ -142,8 +149,8 @@ class MockIndex {
   using value_type = V;
   static absl::StatusOr<MockIndex> Open(Context&,
                                         const std::filesystem::path&){};
-  MOCK_METHOD((std::pair<V, bool>), GetOrAdd, (const K& key));
-  MOCK_METHOD((std::optional<V>), Get, (const K& key), (const));
+  MOCK_METHOD((absl::StatusOr<std::pair<V, bool>>), GetOrAdd, (const K& key));
+  MOCK_METHOD((absl::StatusOr<V>), Get, (const K& key), (const));
   MOCK_METHOD(absl::StatusOr<Hash>, GetHash, ());
   MOCK_METHOD(absl::Status, Flush, ());
   MOCK_METHOD(absl::Status, Close, ());
@@ -166,9 +173,9 @@ class MockIndexWrapper {
   MockIndexWrapper() : index_(std::make_unique<MockIndex<K, V>>()) {}
   MockIndexWrapper(MockIndexWrapper&&) = default;
 
-  std::pair<V, bool> GetOrAdd(const K& key) { return index_->GetOrAdd(key); }
+  absl::StatusOr<std::pair<V, bool>> GetOrAdd(const K& key) { return index_->GetOrAdd(key); }
 
-  std::optional<V> Get(const K& key) const { return index_->Get(key); }
+  absl::StatusOr<V> Get(const K& key) const { return index_->Get(key); }
 
   absl::StatusOr<Hash> GetHash() { return index_->GetHash(); }
 

@@ -1,6 +1,5 @@
 #include "backend/index/leveldb/multi_db/index.h"
 
-#include "backend/index/leveldb/multi_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
@@ -15,10 +14,9 @@ using ::testing::Not;
 using ::testing::StrEq;
 
 using TestIndex = MultiLevelDbIndex<int, int>;
-using TestSuiteIndex = MultiLevelDbIndexTestAdapter<int, int>;
 
 // Instantiates common index tests for the multi leveldb index type.
-INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestSuiteIndex);
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
 TEST(LevelDbMultiFileIndex, TestOpen) {
   auto dir = TempDir();
