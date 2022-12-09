@@ -21,6 +21,8 @@ type Depot[I common.Identifier] struct {
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
 	hashItems       int // the amount of items in one hashing group
+	pagesCalls      int // amount of GetPage calls in total
+	fragmentedCalls int // amount of GetPage calls being fragmented
 }
 
 // NewDepot constructs a new instance of Depot.
@@ -69,17 +71,18 @@ func parseOffsetLength(offsetBytes []byte) (offset uint64, length uint32) {
 	return
 }
 
-func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
+func (m *Depot[I]) GetPage(hashGroup int) ([]byte, error) {
 	startKey := I(m.hashItems * hashGroup)
 	offsets := make([]uint64, m.hashItems)
 	lengths := make([]uint32, m.hashItems)
 	totalLen := uint32(0)
+	m.pagesCalls++
 
 	_, startPosition := m.itemPosition(startKey)
 	offsetBytes := make([]byte, (OffsetSize+LengthSize)*m.hashItems)
-	_, err = m.offsetsFile.ReadAt(offsetBytes[:], startPosition)
+	_, err := m.offsetsFile.ReadAt(offsetBytes[:], startPosition)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return
+		return nil, err
 	}
 
 	isFragmented := false
@@ -96,11 +99,16 @@ func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
 		offsetPos += OffsetSize + LengthSize
 	}
 
-	out = make([]byte, totalLen)
+	if totalLen == 0 {
+		return nil, nil
+	}
+
+	out := make([]byte, totalLen)
 	if !isFragmented {
 		_, err = m.contentsFile.ReadAt(out, int64(offsets[0]))
 		return out, err
 	}
+	m.fragmentedCalls++
 
 	itemStart := uint32(0)
 	for i := 0; i < m.hashItems; i++ {
@@ -111,7 +119,7 @@ func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
 		}
 		itemStart += length
 	}
-	return
+	return out, nil
 }
 
 // Set a value of an item
@@ -193,5 +201,11 @@ func (m *Depot[I]) Close() error {
 func (m *Depot[I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	mf.SetNote(m.getFragmentationReport())
 	return mf
+}
+
+func (m *Depot[I]) getFragmentationReport() string {
+	fragRatio := float32(m.fragmentedCalls) / float32(m.pagesCalls)
+	return fmt.Sprintf("(pagesCalls: %d, fragmented: %d, fragRatio: %f)", m.pagesCalls, m.fragmentedCalls, fragRatio)
 }
