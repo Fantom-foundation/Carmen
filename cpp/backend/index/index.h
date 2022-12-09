@@ -4,10 +4,10 @@
 #include <optional>
 #include <utility>
 
+#include "absl/status/statusor.h"
 #include "backend/structure.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
-#include "absl/status/statusor.h"
 
 namespace carmen::backend::index {
 

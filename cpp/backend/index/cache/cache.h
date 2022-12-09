@@ -45,27 +45,20 @@ class Cached {
   // value.
   absl::StatusOr<std::pair<value_type, bool>> GetOrAdd(const key_type& key) {
     const absl::StatusOr<value_type>* value = cache_.Get(key);
-    if (value != nullptr) {
+    if (value != nullptr && !absl::IsNotFound(value->status())) {
       if (value->ok()) {
         return std::pair{**value, false};
       }
       return value->status();
     }
-    auto res = index_.GetOrAdd(key);
-    if (absl::IsNotFound(res.status())) {
-      cache_.Set(key, res.status());
-      return res.status();
+    ASSIGN_OR_RETURN(auto res, index_.GetOrAdd(key));
+    cache_.Set(key, res.first);
+    // If this is a new key, the cached hash needs to be invalidated.
+    if (res.second) {
+      hash_ = std::nullopt;
+      return std::pair{res.first, true};
     }
-    if (res.ok()) {
-      cache_.Set(key, (*res).first);
-      // If this is a new key, the cached hash needs to be invalidated.
-      if ((*res).second) {
-        hash_ = std::nullopt;
-        return std::pair{(*res).first, true};
-      }
-      return std::pair{(*res).first, false};
-    }
-    return res.status();
+    return std::pair{res.first, false};
   }
 
   // Retrieves the ordinal number for the given key if previously registered.
@@ -76,10 +69,13 @@ class Cached {
       return *value;
     }
     auto res = index_.Get(key);
-    if (absl::IsNotFound(res.status()) || res.ok()) {
+    if (absl::IsNotFound(res.status())) {
       cache_.Set(key, res);
+      return res.status();
     }
-    return res;
+    RETURN_IF_ERROR(res);
+    cache_.Set(key, *res);
+    return *res;
   }
 
   // Computes a hash over the full content of this index.

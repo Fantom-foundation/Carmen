@@ -74,8 +74,7 @@ class IndexHandler<FileIndex<K, I, SingleFile, page_size>>
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<LevelDbKeySpace<K, I>>
-    : public IndexHandlerBase<K, I> {
+class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
  public:
   IndexHandler()
       : index_((*SingleLevelDbIndex::Open(dir_.GetPath()))
@@ -89,8 +88,7 @@ class IndexHandler<LevelDbKeySpace<K, I>>
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<MultiLevelDbIndex<K, I>>
-    : public IndexHandlerBase<K, I> {
+class IndexHandler<MultiLevelDbIndex<K, I>> : public IndexHandlerBase<K, I> {
  public:
   IndexHandler() : index_(*MultiLevelDbIndex<K, I>::Open(dir_.GetPath())) {}
   MultiLevelDbIndex<K, I>& GetIndex() { return index_; }

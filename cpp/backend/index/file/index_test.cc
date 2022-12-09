@@ -9,10 +9,10 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::_;
 using ::testing::IsOkAndHolds;
 using ::testing::Pair;
 using ::testing::StatusIs;
-using ::testing::_;
 
 using TestIndex = FileIndex<int, int, InMemoryFile, 128>;
 

@@ -16,7 +16,7 @@
 
 namespace carmen {
 
-// A state maintains all persistent state of the block chain. In particular
+// A state maintains all persistent state of the blockchain. In particular,
 // it maintains the balance of accounts, accounts nonces, and storage.
 //
 // This implementation of the state can be parameterized by the implementation
@@ -59,38 +59,40 @@ class State {
         StoreType<AddressId, AccountState> account_states,
         DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes);
 
-  void CreateAccount(const Address& address);
+  absl::Status CreateAccount(const Address& address);
 
-  AccountState GetAccountState(const Address& address) const;
+  absl::StatusOr<AccountState> GetAccountState(const Address& address) const;
 
-  void DeleteAccount(const Address& address);
+  absl::Status DeleteAccount(const Address& address);
 
-  const Balance& GetBalance(const Address& address) const;
+  absl::StatusOr<Balance> GetBalance(const Address& address) const;
 
-  void SetBalance(const Address& address, Balance value);
+  absl::Status SetBalance(const Address& address, Balance value);
 
-  const Nonce& GetNonce(const Address& address) const;
+  absl::StatusOr<Nonce> GetNonce(const Address& address) const;
 
-  void SetNonce(const Address& address, Nonce value);
+  absl::Status SetNonce(const Address& address, Nonce value);
 
   // Obtains the current value of the given storage slot.
-  const Value& GetStorageValue(const Address& address, const Key& key) const;
+  absl::StatusOr<Value> GetStorageValue(const Address& address,
+                                        const Key& key) const;
 
   // Updates the current value of the given storage slot.
-  void SetStorageValue(const Address& address, const Key& key,
-                       const Value& value);
+  absl::Status SetStorageValue(const Address& address, const Key& key,
+                               const Value& value);
 
   // Retrieve the code stored under the given address.
-  std::span<const std::byte> GetCode(const Address& address) const;
+  absl::StatusOr<std::span<const std::byte>> GetCode(
+      const Address& address) const;
 
   // Updates the code stored under the given address.
-  void SetCode(const Address& address, std::span<const std::byte> code);
+  absl::Status SetCode(const Address& address, std::span<const std::byte> code);
 
   // Retrieve the code size stored under the given address.
-  std::uint32_t GetCodeSize(const Address& address) const;
+  absl::StatusOr<std::uint32_t> GetCodeSize(const Address& address) const;
 
   // Retrieves the hash of the code stored under the given address.
-  Hash GetCodeHash(const Address& address) const;
+  absl::StatusOr<Hash> GetCodeHash(const Address& address) const;
 
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
@@ -200,148 +202,195 @@ State<IndexType, StoreType, DepotType>::State(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::CreateAccount(
+absl::Status State<IndexType, StoreType, DepotType>::CreateAccount(
     const Address& address) {
-  auto addr_id = address_index_.GetOrAdd(address);
+  ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
   account_states_.Set(addr_id.first, AccountState::kExists);
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-AccountState State<IndexType, StoreType, DepotType>::GetAccountState(
+absl::StatusOr<AccountState>
+State<IndexType, StoreType, DepotType>::GetAccountState(
     const Address& address) const {
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return AccountState::kUnknown;
+  if (absl::IsNotFound(addr_id.status())) {
+    return AccountState::kUnknown;
+  }
+  RETURN_IF_ERROR(addr_id);
   return account_states_.Get(*addr_id);
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::DeleteAccount(
+absl::Status State<IndexType, StoreType, DepotType>::DeleteAccount(
     const Address& address) {
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return;
+  if (absl::IsNotFound(addr_id.status())) {
+    return absl::OkStatus();
+  }
+  RETURN_IF_ERROR(addr_id);
   account_states_.Set(*addr_id, AccountState::kDeleted);
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-const Balance& State<IndexType, StoreType, DepotType>::GetBalance(
+absl::StatusOr<Balance> State<IndexType, StoreType, DepotType>::GetBalance(
     const Address& address) const {
   constexpr static const Balance kZero;
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return kZero;
+  if (absl::IsNotFound(addr_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(addr_id);
   return balances_.Get(*addr_id);
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::SetBalance(const Address& address,
-                                                        Balance value) {
-  auto addr_id = address_index_.GetOrAdd(address).first;
-  balances_.Set(addr_id, value);
+absl::Status State<IndexType, StoreType, DepotType>::SetBalance(
+    const Address& address, Balance value) {
+  ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
+  balances_.Set(addr_id.first, value);
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-const Nonce& State<IndexType, StoreType, DepotType>::GetNonce(
+absl::StatusOr<Nonce> State<IndexType, StoreType, DepotType>::GetNonce(
     const Address& address) const {
   constexpr static const Nonce kZero;
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return kZero;
+  if (absl::IsNotFound(addr_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(addr_id);
   return nonces_.Get(*addr_id);
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::SetNonce(const Address& address,
-                                                      Nonce value) {
-  auto addr_id = address_index_.GetOrAdd(address).first;
-  nonces_.Set(addr_id, value);
+absl::Status State<IndexType, StoreType, DepotType>::SetNonce(
+    const Address& address, Nonce value) {
+  ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
+  nonces_.Set(addr_id.first, value);
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-const Value& State<IndexType, StoreType, DepotType>::GetStorageValue(
+absl::StatusOr<Value> State<IndexType, StoreType, DepotType>::GetStorageValue(
     const Address& address, const Key& key) const {
   constexpr static const Value kZero;
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return kZero;
+  if (absl::IsNotFound(addr_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(addr_id);
   auto key_id = key_index_.Get(key);
-  if (!key_id.has_value()) return kZero;
+  if (absl::IsNotFound(key_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(key_id);
   Slot slot{*addr_id, *key_id};
   auto slot_id = slot_index_.Get(slot);
-  if (!slot_id.has_value()) return kZero;
+  if (absl::IsNotFound(slot_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(slot_id);
   return value_store_.Get(*slot_id);
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::SetStorageValue(
+absl::Status State<IndexType, StoreType, DepotType>::SetStorageValue(
     const Address& address, const Key& key, const Value& value) {
-  auto addr_id = address_index_.GetOrAdd(address).first;
-  auto key_id = key_index_.GetOrAdd(key).first;
-  Slot slot{addr_id, key_id};
-  auto slot_id = slot_index_.GetOrAdd(slot).first;
-  value_store_.Set(slot_id, value);
+  ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
+  ASSIGN_OR_RETURN(auto key_id, key_index_.GetOrAdd(key));
+  Slot slot{addr_id.first, key_id.first};
+  ASSIGN_OR_RETURN(auto slot_id, slot_index_.GetOrAdd(slot));
+  value_store_.Set(slot_id.first, value);
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-std::span<const std::byte> State<IndexType, StoreType, DepotType>::GetCode(
-    const Address& address) const {
+absl::StatusOr<std::span<const std::byte>>
+State<IndexType, StoreType, DepotType>::GetCode(const Address& address) const {
+  constexpr static const std::span<const std::byte> kZero;
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return {};
+  if (absl::IsNotFound(addr_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(addr_id);
   auto code = codes_.Get(*addr_id);
-  if (code.ok()) return *code;
-  return {};
+  if (absl::IsNotFound(code.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(code);
+  return *code;
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-void State<IndexType, StoreType, DepotType>::SetCode(
+absl::Status State<IndexType, StoreType, DepotType>::SetCode(
     const Address& address, std::span<const std::byte> code) {
-  auto addr_id = address_index_.GetOrAdd(address).first;
-  codes_.Set(addr_id, code).IgnoreError();
-  code_hashes_.Set(addr_id,
+  ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
+  RETURN_IF_ERROR(codes_.Set(addr_id.first, code));
+  code_hashes_.Set(addr_id.first,
                    code.empty() ? kEmptyCodeHash : GetKeccak256Hash(code));
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-std::uint32_t State<IndexType, StoreType, DepotType>::GetCodeSize(
+absl::StatusOr<std::uint32_t>
+State<IndexType, StoreType, DepotType>::GetCodeSize(
     const Address& address) const {
+  constexpr static const std::uint32_t kZero = 0;
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return 0;
+  if (absl::IsNotFound(addr_id.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(addr_id);
   auto size = codes_.GetSize(*addr_id);
-  if (!size.ok()) return 0;
+  if (absl::IsNotFound(size.status())) {
+    return kZero;
+  }
+  RETURN_IF_ERROR(size);
   return *size;
 }
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-Hash State<IndexType, StoreType, DepotType>::GetCodeHash(
+absl::StatusOr<Hash> State<IndexType, StoreType, DepotType>::GetCodeHash(
     const Address& address) const {
   auto addr_id = address_index_.Get(address);
-  if (!addr_id.has_value()) return kEmptyCodeHash;
+  if (absl::IsNotFound(addr_id.status())) {
+    return kEmptyCodeHash;
+  }
+  RETURN_IF_ERROR(addr_id);
   auto res = code_hashes_.Get(*addr_id);
   // The default value of hashes in the store is the zero hash.
   // However, for empty codes, the hash of an empty code should
-  // returned. The only exception would be the very unlikely
+  // be returned. The only exception would be the very unlikely
   // case where the hash of the stored code is indeed zero.
-  if (res == Hash{} && GetCodeSize(address) == 0) {
+  ASSIGN_OR_RETURN(auto code_size, GetCodeSize(address));
+  if (res == Hash{} && code_size == 0) {
     return kEmptyCodeHash;
   }
   return res;

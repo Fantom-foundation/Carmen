@@ -17,11 +17,11 @@
 
 namespace carmen::backend::index {
 
+using ::testing::_;
+using ::testing::IsOk;
 using ::testing::IsOkAndHolds;
 using ::testing::Optional;
-using ::testing::IsOk;
 using ::testing::StatusIs;
-using ::testing::_;
 
 // Implements a generic test suite for index implementations checking basic
 // properties like GetOrAdd, contains, and hashing functionality.
@@ -173,7 +173,9 @@ class MockIndexWrapper {
   MockIndexWrapper() : index_(std::make_unique<MockIndex<K, V>>()) {}
   MockIndexWrapper(MockIndexWrapper&&) = default;
 
-  absl::StatusOr<std::pair<V, bool>> GetOrAdd(const K& key) { return index_->GetOrAdd(key); }
+  absl::StatusOr<std::pair<V, bool>> GetOrAdd(const K& key) {
+    return index_->GetOrAdd(key);
+  }
 
   absl::StatusOr<V> Get(const K& key) const { return index_->Get(key); }
 

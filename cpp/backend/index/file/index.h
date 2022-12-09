@@ -116,9 +116,9 @@ class FileIndex {
             std::unique_ptr<File> overflow_page_file,
             std::filesystem::path metadata_file = "");
 
-  // A helper function to locate an entry in this map. Returns a tuple containing
-  // the key's hash, the containing bucket, and the containing entry. Only if
-  // the entry pointer is not-null the entry has been found.
+  // A helper function to locate an entry in this map. Returns a tuple
+  // containing the key's hash, the containing bucket, and the containing entry.
+  // Only if the entry pointer is not-null the entry has been found.
   std::tuple<hash_t, bucket_id_t, const Entry*> FindInternal(
       const K& key) const;
 
@@ -299,7 +299,8 @@ FileIndex<K, I, F, page_size>::FileIndex(
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(const K& key) {
+absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
+    const K& key) {
   auto [hash, bucket, entry] = FindInternal(key);
   if (entry != nullptr) {
     return std::pair{entry->value, false};

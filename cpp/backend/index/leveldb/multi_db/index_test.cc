@@ -10,7 +10,9 @@ namespace carmen::backend::index {
 namespace {
 
 using ::testing::IsOk;
+using ::testing::IsOkAndHolds;
 using ::testing::Not;
+using ::testing::StatusIs;
 using ::testing::StrEq;
 
 using TestIndex = MultiLevelDbIndex<int, int>;
@@ -25,22 +27,21 @@ TEST(LevelDbMultiFileIndex, TestOpen) {
 
 TEST(LevelDbMultiFileIndex, IndexIsPersistent) {
   auto dir = TempDir();
-  absl::StatusOr<std::pair<int, bool>> result;
+  std::pair<int, bool> result;
 
   // Insert value in a separate block to ensure that the index is closed.
   {
-    auto index = *TestIndex::Open(dir.GetPath());
-    EXPECT_THAT(index.Get(1).status().code(), absl::StatusCode::kNotFound);
-    result = index.GetOrAdd(1);
-    ASSERT_OK(result);
-    EXPECT_TRUE((*result).second);
-    EXPECT_THAT(*index.Get(1), (*result).first);
+    ASSERT_OK_AND_ASSIGN(auto index, TestIndex::Open(dir.GetPath()));
+    EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
+    ASSERT_OK_AND_ASSIGN(result, index.GetOrAdd(1));
+    EXPECT_TRUE(result.second);
+    EXPECT_THAT(index.Get(1), IsOkAndHolds(result.first));
   }
 
   // Reopen index and check that the value is still present.
   {
-    auto index = *TestIndex::Open(dir.GetPath());
-    EXPECT_THAT(*index.Get(1), (*result).first);
+    ASSERT_OK_AND_ASSIGN(auto index, TestIndex::Open(dir.GetPath()));
+    EXPECT_THAT(index.Get(1), IsOkAndHolds(result.first));
   }
 }
 }  // namespace

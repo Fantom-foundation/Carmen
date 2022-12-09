@@ -56,7 +56,7 @@ class InMemoryIndex {
       pos->second = data_.size() - 1;
       list_->push_back(key);
     }
-    return std::make_pair(pos->second, is_new);
+    return std::pair{pos->second, is_new};
   }
 
   // Retrieves the ordinal number for the given key if previously registered.
