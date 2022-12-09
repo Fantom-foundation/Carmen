@@ -70,7 +70,7 @@ class Cached {
     }
     auto res = index_.Get(key);
     if (absl::IsNotFound(res.status())) {
-      cache_.Set(key, res);
+      cache_.Set(key, res.status());
       return res.status();
     }
     RETURN_IF_ERROR(res);
