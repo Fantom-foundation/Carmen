@@ -6,9 +6,7 @@
 #include "backend/index/file/index.h"
 #include "backend/index/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
-#include "backend/index/leveldb/multi_db/test_util.h"
 #include "backend/index/leveldb/single_db/index.h"
-#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/memory/index.h"
 #include "common/file_util.h"
 #include "common/type.h"
@@ -76,30 +74,28 @@ class IndexHandler<FileIndex<K, I, SingleFile, page_size>>
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<SingleLevelDbIndexTestAdapter<K, I>>
-    : public IndexHandlerBase<K, I> {
+class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
  public:
   IndexHandler()
       : index_((*SingleLevelDbIndex::Open(dir_.GetPath()))
                    .template KeySpace<K, I>('t')) {}
-  SingleLevelDbIndexTestAdapter<K, I>& GetIndex() { return index_; }
+  LevelDbKeySpace<K, I>& GetIndex() { return index_; }
 
  private:
   TempDir dir_;
-  SingleLevelDbIndexTestAdapter<K, I> index_;
+  LevelDbKeySpace<K, I> index_;
 };
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
-class IndexHandler<MultiLevelDbIndexTestAdapter<K, I>>
-    : public IndexHandlerBase<K, I> {
+class IndexHandler<MultiLevelDbIndex<K, I>> : public IndexHandlerBase<K, I> {
  public:
   IndexHandler() : index_(*MultiLevelDbIndex<K, I>::Open(dir_.GetPath())) {}
-  MultiLevelDbIndexTestAdapter<K, I>& GetIndex() { return index_; }
+  MultiLevelDbIndex<K, I>& GetIndex() { return index_; }
 
  private:
   TempDir dir_;
-  MultiLevelDbIndexTestAdapter<K, I> index_;
+  MultiLevelDbIndex<K, I> index_;
 };
 
 }  // namespace

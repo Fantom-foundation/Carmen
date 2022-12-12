@@ -10,7 +10,7 @@ namespace carmen {
 enum class AccountState : std::uint8_t {
   // An unknown account.
   kUnknown = 0,
-  // A active account.
+  // An active account.
   kExists = 1,
   // A deleted account.
   kDeleted = 2,

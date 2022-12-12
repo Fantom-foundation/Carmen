@@ -5,6 +5,7 @@
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/memory_usage.h"
+#include "common/status_test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -13,6 +14,7 @@ namespace carmen {
 
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
+using ::testing::IsOkAndHolds;
 
 template <typename K, typename V>
 using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
@@ -30,8 +32,8 @@ TEST(StateTest, DefaultAccountStateIsUnknown) {
   Address b{0x02};
 
   InMemoryState state;
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(b));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
+  EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 }
 
 TEST(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
@@ -39,51 +41,51 @@ TEST(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
   Address b{0x02};
 
   InMemoryState state;
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(b));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
+  EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 
-  state.CreateAccount(a);
-  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(b));
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
+  EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 
-  state.CreateAccount(b);
-  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
-  EXPECT_EQ(AccountState::kExists, state.GetAccountState(b));
+  EXPECT_OK(state.CreateAccount(b));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
+  EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kExists));
 }
 
 TEST(StateTest, AccountsCanBeDeleted) {
   Address a{0x01};
 
   InMemoryState state;
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 
-  state.CreateAccount(a);
-  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 
-  state.DeleteAccount(a);
-  EXPECT_EQ(AccountState::kDeleted, state.GetAccountState(a));
+  EXPECT_OK(state.DeleteAccount(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
 }
 
 TEST(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
   Address a{0x01};
 
   InMemoryState state;
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 
-  state.DeleteAccount(a);
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
+  EXPECT_OK(state.DeleteAccount(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 }
 
 TEST(StateTest, DeletedAccountsCanBeRecreated) {
   Address a{0x01};
 
   InMemoryState state;
-  EXPECT_EQ(AccountState::kUnknown, state.GetAccountState(a));
-  state.CreateAccount(a);
-  state.DeleteAccount(a);
-  EXPECT_EQ(AccountState::kDeleted, state.GetAccountState(a));
-  state.CreateAccount(a);
-  EXPECT_EQ(AccountState::kExists, state.GetAccountState(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_OK(state.DeleteAccount(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 }
 
 TEST(StateTest, DefaultBalanceIsZero) {
@@ -91,8 +93,8 @@ TEST(StateTest, DefaultBalanceIsZero) {
   Address b{0x02};
 
   InMemoryState state;
-  EXPECT_EQ(Balance{}, state.GetBalance(a));
-  EXPECT_EQ(Balance{}, state.GetBalance(b));
+  EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(Balance{}));
+  EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(Balance{}));
 }
 
 TEST(StateTest, BalancesCanBeUpdated) {
@@ -101,31 +103,31 @@ TEST(StateTest, BalancesCanBeUpdated) {
   Balance zero{};
 
   InMemoryState state;
-  EXPECT_EQ(zero, state.GetBalance(a));
-  EXPECT_EQ(zero, state.GetBalance(b));
+  EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(zero));
+  EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(zero));
 
-  state.SetBalance(a, Balance{0x12});
-  EXPECT_EQ(Balance{0x12}, state.GetBalance(a));
-  EXPECT_EQ(zero, state.GetBalance(b));
+  EXPECT_OK(state.SetBalance(a, Balance{0x12}));
+  EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(Balance{0x12}));
+  EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(zero));
 
-  state.SetBalance(b, Balance{0x14});
-  EXPECT_EQ(Balance{0x12}, state.GetBalance(a));
-  EXPECT_EQ(Balance{0x14}, state.GetBalance(b));
+  EXPECT_OK(state.SetBalance(b, Balance{0x14}));
+  EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(Balance{0x12}));
+  EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(Balance{0x14}));
 }
 
 TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
   InMemoryState state;
-  auto base_hash = state.GetHash();
-  state.SetBalance({}, Balance{0x12});
-  auto value_12_hash = state.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
+  EXPECT_OK(state.SetBalance({}, Balance{0x12}));
+  ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
   EXPECT_NE(base_hash, value_12_hash);
-  state.SetBalance({}, Balance{0x14});
-  auto value_14_hash = state.GetHash();
+  EXPECT_OK(state.SetBalance({}, Balance{0x14}));
+  ASSERT_OK_AND_ASSIGN(auto value_14_hash, state.GetHash());
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  state.SetBalance({}, Balance{0x12});
-  auto value_12_hash_again = state.GetHash();
+  EXPECT_OK(state.SetBalance({}, Balance{0x12}));
+  ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
@@ -135,8 +137,8 @@ TEST(StateTest, DefaultNonceIsZero) {
   Nonce zero;
 
   InMemoryState state;
-  EXPECT_EQ(zero, state.GetNonce(a));
-  EXPECT_EQ(zero, state.GetNonce(b));
+  EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(zero));
+  EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 }
 
 TEST(StateTest, NoncesCanBeUpdated) {
@@ -145,31 +147,31 @@ TEST(StateTest, NoncesCanBeUpdated) {
   Nonce zero;
 
   InMemoryState state;
-  EXPECT_EQ(zero, state.GetNonce(a));
-  EXPECT_EQ(zero, state.GetNonce(b));
+  EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(zero));
+  EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 
-  state.SetNonce(a, Nonce{0x12});
-  EXPECT_EQ(Nonce{0x12}, state.GetNonce(a));
-  EXPECT_EQ(zero, state.GetNonce(b));
+  EXPECT_OK(state.SetNonce(a, Nonce{0x12}));
+  EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(Nonce{0x12}));
+  EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 
-  state.SetNonce(b, Nonce{0x14});
-  EXPECT_EQ(Nonce{0x12}, state.GetNonce(a));
-  EXPECT_EQ(Nonce{0x14}, state.GetNonce(b));
+  EXPECT_OK(state.SetNonce(b, Nonce{0x14}));
+  EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(Nonce{0x12}));
+  EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(Nonce{0x14}));
 }
 
 TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
   InMemoryState state;
-  auto base_hash = state.GetHash();
-  state.SetNonce({}, Nonce{0x12});
-  auto value_12_hash = state.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
+  EXPECT_OK(state.SetNonce({}, Nonce{0x12}));
+  ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
   EXPECT_NE(base_hash, value_12_hash);
-  state.SetNonce({}, Nonce{0x14});
-  auto value_14_hash = state.GetHash();
+  EXPECT_OK(state.SetNonce({}, Nonce{0x14}));
+  ASSERT_OK_AND_ASSIGN(auto value_14_hash, state.GetHash());
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  state.SetNonce({}, Nonce{0x12});
-  auto value_12_hash_again = state.GetHash();
+  EXPECT_OK(state.SetNonce({}, Nonce{0x12}));
+  ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
@@ -178,8 +180,8 @@ TEST(StateTest, DefaultCodeIsEmpty) {
   Address b{0x02};
 
   InMemoryState state;
-  EXPECT_THAT(state.GetCode(a), ElementsAre());
-  EXPECT_THAT(state.GetCode(b), ElementsAre());
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 }
 
 TEST(StateTest, CodesCanBeUpdated) {
@@ -189,16 +191,16 @@ TEST(StateTest, CodesCanBeUpdated) {
   std::vector<std::byte> code2{std::byte{1}, std::byte{2}};
 
   InMemoryState state;
-  EXPECT_THAT(state.GetCode(a), ElementsAre());
-  EXPECT_THAT(state.GetCode(b), ElementsAre());
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 
-  state.SetCode(a, code1);
-  EXPECT_THAT(state.GetCode(a), ElementsAreArray(code1));
-  EXPECT_THAT(state.GetCode(b), ElementsAre());
+  EXPECT_OK(state.SetCode(a, code1));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 
-  state.SetCode(b, code2);
-  EXPECT_THAT(state.GetCode(a), ElementsAreArray(code1));
-  EXPECT_THAT(state.GetCode(b), ElementsAreArray(code2));
+  EXPECT_OK(state.SetCode(b, code2));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
 }
 
 TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
@@ -208,38 +210,39 @@ TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
   std::vector<std::byte> code{std::byte{1}, std::byte{2}};
 
   InMemoryState state;
-  EXPECT_EQ(state.GetCodeHash(a), hash_of_empty_code);
+  EXPECT_THAT(state.GetCodeHash(a), IsOkAndHolds(hash_of_empty_code));
 
-  state.SetCode(a, code);
-  EXPECT_EQ(state.GetCodeHash(a), GetKeccak256Hash(std::span(code)));
+  EXPECT_OK(state.SetCode(a, code));
+  EXPECT_THAT(state.GetCodeHash(a),
+              IsOkAndHolds(GetKeccak256Hash(std::span(code))));
 
   // Resetting code to zero updates the hash accordingly.
-  state.SetCode(a, {});
-  EXPECT_EQ(state.GetCodeHash(a), hash_of_empty_code);
+  EXPECT_OK(state.SetCode(a, {}));
+  EXPECT_THAT(state.GetCodeHash(a), IsOkAndHolds(hash_of_empty_code));
 }
 
 TEST(StateTest, CodesAreCoveredByGlobalStateHash) {
   InMemoryState state;
-  auto base_hash = state.GetHash();
-  state.SetCode({}, std::vector{std::byte{12}});
-  auto value_12_hash = state.GetHash();
+  ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
+  EXPECT_OK(state.SetCode({}, std::vector{std::byte{12}}));
+  ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
   EXPECT_NE(base_hash, value_12_hash);
-  state.SetCode({}, std::vector{std::byte(14)});
-  auto value_14_hash = state.GetHash();
+  EXPECT_OK(state.SetCode({}, std::vector{std::byte{14}}));
+  ASSERT_OK_AND_ASSIGN(auto value_14_hash, state.GetHash());
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  state.SetCode({}, std::vector{std::byte{12}});
-  auto value_12_hash_again = state.GetHash();
+  EXPECT_OK(state.SetCode({}, std::vector{std::byte{12}}));
+  ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
 TEST(StateTest, LookingUpMissingCodeDoesNotChangeGlobalHash) {
   Address a{0x01};
   InMemoryState state;
-  auto base_hash = state.GetHash();
-  state.GetCode(a);
-  EXPECT_EQ(state.GetHash(), base_hash);
+  ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
+  EXPECT_OK(state.GetCode(a));
+  EXPECT_THAT(state.GetHash(), IsOkAndHolds(base_hash));
 }
 
 TEST(StateTest, ValuesAddedCanBeRetrieved) {
@@ -248,12 +251,12 @@ TEST(StateTest, ValuesAddedCanBeRetrieved) {
   Value v{0x01, 0x02};
 
   InMemoryState state;
-  state.SetStorageValue(a, k, v);
-  EXPECT_EQ(v, state.GetStorageValue(a, k));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 
   v = Value{0x03};
-  state.SetStorageValue(a, k, v);
-  EXPECT_EQ(v, state.GetStorageValue(a, k));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 }
 
 TEST(StateTest, CanProduceAMemoryFootprint) {

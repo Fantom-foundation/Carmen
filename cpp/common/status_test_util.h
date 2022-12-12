@@ -60,7 +60,7 @@ absl::string_view GetMessage(const absl::StatusOr<T>& status) {
 
 template <typename T>
 T GetValue(const absl::StatusOr<T>& status) {
-  return status.value();
+  return *status;
 }
 
 }  // namespace internal

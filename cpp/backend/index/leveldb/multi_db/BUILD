@@ -8,18 +8,6 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-cc_library(
-    name = "test_util",
-    hdrs = ["test_util.h"],
-    deps = [
-        ":index",
-        "//common:status_util",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/status:status"
-    ],
-    visibility = ["//visibility:public"],
-)
-
 cc_test(
     name = "index_test",
     srcs = ["index_test.cc"],

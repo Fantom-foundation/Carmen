@@ -216,7 +216,8 @@ cc_library(
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/status:status",
-        "@com_google_absl//absl/status:statusor"
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
     ],
     visibility = ["//visibility:public"],
     testonly = True,

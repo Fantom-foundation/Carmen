@@ -30,7 +30,7 @@ namespace carmen::backend::index {
 // operations only require to access a single page.
 //
 // This implementation is currently incomplete. The following steps are missing:
-//  - implement meta data serialization
+//  - implement metadata serialization
 //  - implement stable hashing
 // Thus, it can currently not be used to open existing data.
 //
@@ -38,7 +38,7 @@ namespace carmen::backend::index {
 // through linked lists of pages. The first, primary, page of each bucket is
 // maintained in one file, while all remaining overflow pages are maintained in
 // a second file. This simplifies the addressing of primary buckets and avoids
-// exessive file growing steps when performing splitting operations.
+// excessive file growing steps when performing splitting operations.
 //
 // see: https://en.wikipedia.org/wiki/Linear_hashing
 template <Trivial K, std::integral I, template <typename> class F,
@@ -52,7 +52,7 @@ class FileIndex {
   // The page type used by this index.
   using Page = HashPage<hash_t, K, I, page_size>;
 
-  // The file-type used by instances for primiary and overflow pages.
+  // The file-type used by instances for primary and overflow pages.
   using File = F<Page>;
 
   // A factory function creating an instance of this index type.
@@ -72,21 +72,21 @@ class FileIndex {
   ~FileIndex() { Close().IgnoreError(); }
 
   // Retrieves the ordinal number for the given key. If the key
-  // is known, it it will return a previously established value
+  // is known, it will return a previously established value
   // for the key. If the key has not been encountered before,
   // a new ordinal value is assigned to the key and stored
   // internally such that future lookups will return the same
   // value.
-  std::pair<I, bool> GetOrAdd(const K& key);
+  absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key);
 
   // Retrieves the ordinal number for the given key if previously registered.
-  // Otherwise std::nullopt is returned.
-  std::optional<I> Get(const K& key) const;
+  // Otherwise, returns a not found status.
+  absl::StatusOr<I> Get(const K& key) const;
 
   // Computes a hash over the full content of this index.
   absl::StatusOr<Hash> GetHash() const;
 
-  // Flush unsafed index keys to disk.
+  // Flush unsaved index keys to disk.
   absl::Status Flush();
 
   // Close this index and release resources.
@@ -116,9 +116,9 @@ class FileIndex {
             std::unique_ptr<File> overflow_page_file,
             std::filesystem::path metadata_file = "");
 
-  // A helper function to locate a entry in this map. Returns a tuple containing
-  // the key's hash, the containing bucket, and the containing entry. Only if
-  // the entry pointer is not-null the entry has been found.
+  // A helper function to locate an entry in this map. Returns a tuple
+  // containing the key's hash, the containing bucket, and the containing entry.
+  // Only if the entry pointer is not-null the entry has been found.
   std::tuple<hash_t, bucket_id_t, const Entry*> FindInternal(
       const K& key) const;
 
@@ -137,7 +137,7 @@ class FileIndex {
   }
 
   // Returns the overflow page being the tail fo the given bucket. Returns
-  // nullopt if the given bucket has no overflow pages.
+  // defined null value if the given bucket has no overflow pages.
   PageId GetTail(bucket_id_t bucket) const {
     if (bucket_tails_.size() <= bucket) {
       return kNullPage;
@@ -299,15 +299,16 @@ FileIndex<K, I, F, page_size>::FileIndex(
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-std::pair<I, bool> FileIndex<K, I, F, page_size>::GetOrAdd(const K& key) {
+absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
+    const K& key) {
   auto [hash, bucket, entry] = FindInternal(key);
   if (entry != nullptr) {
-    return {entry->value, false};
+    return std::pair{entry->value, false};
   }
 
   size_++;
 
-  // Trigger a split if the bucket has a overflow bucket.
+  // Trigger a split if the bucket has an overflow bucket.
   if (GetTail(bucket) != kNullPage) {
     Split();
 
@@ -316,7 +317,7 @@ std::pair<I, bool> FileIndex<K, I, F, page_size>::GetOrAdd(const K& key) {
   }
 
   // Insert a new entry.
-  Page* page = nullptr;
+  Page* page;
   auto tail = GetTail(bucket);
   if (tail == kNullPage) {
     page = &primary_pool_.Get(bucket);
@@ -338,15 +339,15 @@ std::pair<I, bool> FileIndex<K, I, F, page_size>::GetOrAdd(const K& key) {
   }
 
   unhashed_keys_.push(key);
-  return {size_ - 1, true};
+  return std::pair{size_ - 1, true};
 }
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
-std::optional<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
+absl::StatusOr<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
   auto [hash, bucket, entry] = FindInternal(key);
   if (entry == nullptr) {
-    return std::nullopt;
+    return absl::NotFoundError("Key not found.");
   }
   return entry->value;
 }

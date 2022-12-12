@@ -10,8 +10,11 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::_;
 using ::testing::IsOkAndHolds;
+using ::testing::Pair;
 using ::testing::Return;
+using ::testing::StatusIs;
 
 using TestIndex = InMemoryIndex<int, int>;
 using CachedIndex = Cached<TestIndex>;
@@ -25,11 +28,13 @@ TEST(CachedIndex, CachedKeysAreNotFetched) {
   Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
 
   // The underlying index is only accessed once.
-  EXPECT_CALL(mock, GetOrAdd(12)).WillOnce(Return(std::pair{10, true}));
+  EXPECT_CALL(mock, GetOrAdd(12))
+      .WillOnce(
+          Return(absl::StatusOr<std::pair<int, bool>>(std::pair{10, true})));
 
-  EXPECT_EQ((std::pair{10, true}), index.GetOrAdd(12));
-  EXPECT_EQ((std::pair{10, false}), index.GetOrAdd(12));
-  EXPECT_EQ((std::pair{10, false}), index.GetOrAdd(12));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(std::pair(10, true)));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(std::pair(10, false)));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(std::pair(10, false)));
 }
 
 TEST(CachedIndex, MissingEntriesAreCached) {
@@ -38,11 +43,27 @@ TEST(CachedIndex, MissingEntriesAreCached) {
   Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
 
   // The underlying index is only accessed once.
-  EXPECT_CALL(mock, Get(12)).WillOnce(Return(std::nullopt));
+  EXPECT_CALL(mock, Get(12))
+      .WillOnce(Return(absl::NotFoundError("Key not found")));
 
-  EXPECT_EQ(std::nullopt, index.Get(12));
-  EXPECT_EQ(std::nullopt, index.Get(12));
-  EXPECT_EQ(std::nullopt, index.Get(12));
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kNotFound, _));
+}
+
+TEST(CachedIndex, ErrorStatusIsNotCached) {
+  MockIndexWrapper<int, int> wrapper;
+  auto& mock = wrapper.GetMockIndex();
+  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+
+  // The underlying index is accesses repeatedly because error status is not
+  // cached.
+  EXPECT_CALL(mock, Get(12))
+      .Times(2)
+      .WillRepeatedly(Return(absl::InternalError("Internal error")));
+
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kInternal, _));
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kInternal, _));
 }
 
 TEST(CachedIndex, HashesAreCached) {
@@ -71,11 +92,13 @@ TEST(CachedIndex, AddNewElementInvalidatesHash) {
       .WillOnce(Return(absl::StatusOr<Hash>(hash_a)))
       .WillOnce(Return(absl::StatusOr<Hash>(hash_b)));
 
-  EXPECT_CALL(mock, GetOrAdd(12)).WillOnce(Return(std::pair{10, true}));
+  EXPECT_CALL(mock, GetOrAdd(12))
+      .WillOnce(
+          Return(absl::StatusOr<std::pair<int, bool>>(std::pair{10, true})));
 
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
-  EXPECT_TRUE(index.GetOrAdd(12).second);
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(_, true)));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_b));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_b));
 }
@@ -89,11 +112,13 @@ TEST(CachedIndex, GetExistingElementPreservesHash) {
   Hash hash_a{0x01, 0x23};
   EXPECT_CALL(mock, GetHash()).WillOnce(Return(absl::StatusOr<Hash>(hash_a)));
 
-  EXPECT_CALL(mock, GetOrAdd(12)).WillOnce(Return(std::pair{10, false}));
+  EXPECT_CALL(mock, GetOrAdd(12))
+      .WillOnce(
+          Return(absl::StatusOr<std::pair<int, bool>>(std::pair{10, false})));
 
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
-  EXPECT_FALSE(index.GetOrAdd(12).second);
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(_, false)));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
 }
 
@@ -107,24 +132,28 @@ TEST(CachedIndex, CacheSizeLimitIsEnforced) {
   EXPECT_CALL(mock, GetOrAdd(0))
       .WillOnce(Return(std::pair{0, true}))
       .WillOnce(Return(std::pair{0, false}));
-  EXPECT_CALL(mock, GetOrAdd(1)).WillOnce(Return(std::pair{1, true}));
-  EXPECT_CALL(mock, GetOrAdd(2)).WillOnce(Return(std::pair{2, true}));
+  EXPECT_CALL(mock, GetOrAdd(1))
+      .WillOnce(
+          Return(absl::StatusOr<std::pair<int, bool>>(std::pair{1, true})));
+  EXPECT_CALL(mock, GetOrAdd(2))
+      .WillOnce(
+          Return(absl::StatusOr<std::pair<int, bool>>(std::pair{2, true})));
 
-  EXPECT_EQ((std::pair{0, true}), index.GetOrAdd(0));
-  EXPECT_EQ((std::pair{1, true}), index.GetOrAdd(1));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, true)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(1, true)));
 
   // At this point keys 1 and 2 are in the cache, we can query them without
   // reload.
-  EXPECT_EQ((std::pair{0, false}), index.GetOrAdd(0));
-  EXPECT_EQ((std::pair{1, false}), index.GetOrAdd(1));
-  EXPECT_EQ((std::pair{0, false}), index.GetOrAdd(0));
-  EXPECT_EQ((std::pair{1, false}), index.GetOrAdd(1));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, false)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(1, false)));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, false)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(1, false)));
 
   // Asking for key=2 will kick out key 0.
-  EXPECT_EQ((std::pair{2, true}), index.GetOrAdd(2));
+  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(2, true)));
 
   // At this point, key=0 is forgotten. This will trigger a second call.
-  EXPECT_EQ((std::pair{0, false}), index.GetOrAdd(0));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, false)));
 }
 
 }  // namespace
