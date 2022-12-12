@@ -8,6 +8,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
@@ -86,6 +87,10 @@ func (w *ldbDepotWrapper) Close() error {
 		return err
 	}
 	return w.db.Close()
+}
+
+func (w *ldbDepotWrapper) GetPage(page int) ([]byte, error) {
+	return w.Depot.(hashtree.PageProvider).GetPage(page)
 }
 
 var (
@@ -267,6 +272,64 @@ func TestHashAfterChangingBack(t *testing.T) {
 			}
 			if initialHash != hashAfterRevert {
 				t.Errorf("setting into depot have not changed the hash back %x %x", initialHash, hashAfterRevert)
+			}
+		})
+	}
+}
+
+func TestStoresPages(t *testing.T) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
+		t.Run(factory.label, func(t *testing.T) {
+			d := factory.getDepot(t.TempDir())
+			defer d.Close()
+
+			dpp, isPageProvider := d.(hashtree.PageProvider)
+			if !isPageProvider {
+				t.Skip("Does not implement PageProvider")
+			}
+
+			var value []byte
+			for i := 0; i < 5; i++ {
+				value = append(value, byte(i<<4|i))
+				if err := d.Set(uint32(i), value); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+			}
+
+			page, err := dpp.GetPage(0)
+			if err != nil {
+				t.Fatalf("failed to get page 0; %v", err)
+			}
+			if !bytes.Equal(page, []byte{0x00, 0x00, 0x11}) {
+				t.Errorf("unexpected page 0: %v", page)
+			}
+
+			page, err = dpp.GetPage(1)
+			if err != nil {
+				t.Fatalf("failed to get page 1; %v", err)
+			}
+			if !bytes.Equal(page, []byte{0x00, 0x11, 0x22, 0x00, 0x11, 0x22, 0x33}) {
+				t.Errorf("unexpected page 1: %v", page)
+			}
+
+			page, err = dpp.GetPage(2)
+			if err != nil {
+				t.Fatalf("failed to get page 2; %v", err)
+			}
+			if !bytes.Equal(page, []byte{0x00, 0x11, 0x22, 0x33, 0x44}) {
+				t.Errorf("unexpected page 2: %v", page)
+			}
+
+			if err := d.Set(3, []byte{0xAB, 0xCD}); err != nil {
+				t.Fatalf("failed to set store item 3; %s", err)
+			}
+
+			page, err = dpp.GetPage(1)
+			if err != nil {
+				t.Fatalf("failed to get page 1; %v", err)
+			}
+			if !bytes.Equal(page, []byte{0x00, 0x11, 0x22, 0xAB, 0xCD}) {
+				t.Errorf("unexpected page 1: %v", page)
 			}
 		})
 	}
