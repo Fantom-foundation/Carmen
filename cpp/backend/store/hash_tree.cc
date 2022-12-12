@@ -163,6 +163,12 @@ absl::Status HashTree::SaveToFile(const std::filesystem::path& file) {
     RETURN_IF_ERROR(write_scalar(hash));
   }
 
+  out.close();
+  if (!out.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not close file %s.", file));
+  }
+
   return absl::OkStatus();
 }
 
@@ -177,7 +183,17 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
 
   // Check the minimum file length of 4 + 4 + 32 byte.
   in.seekg(0, std::ios::end);
+  if (!in.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not seek to end of file %s.", file));
+  }
+
   auto size = in.tellg();
+  if (size < 0) {
+    return absl::InternalError(
+        absl::StrFormat("Could not read position in file %s.", file));
+  }
+
   if (size < 40) {
     return absl::InternalError(absl::StrFormat(
         "File %s is too short. Needed 40, got %d bytes.", file, size));
@@ -192,8 +208,13 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
     return absl::OkStatus();
   };
 
-  // Load the branching factor.
   in.seekg(0, std::ios::beg);
+  if (!in.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not seek to beginning of file %s.", file));
+  }
+
+  // Load the branching factor.
   std::uint32_t branching_factor;
   RETURN_IF_ERROR(read_scalar(branching_factor));
   if (branching_factor_ != branching_factor) {
@@ -228,6 +249,12 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
           absl::StrFormat("Could not read hashes from file %s.", file));
     }
     hashes_.push_back(std::move(page_hashes));
+  }
+
+  in.close();
+  if (!in.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not close file %s.", file));
   }
 
   // Update hash information.
