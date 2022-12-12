@@ -11,6 +11,7 @@ cc_library(
         "//common:status_util",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/strings:str_format",
     ],
     visibility = ["//visibility:public"],
 )
@@ -21,6 +22,7 @@ cc_test(
     deps = [
         ":store",
         "//common:file_util",
+        "//backend:structure",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],

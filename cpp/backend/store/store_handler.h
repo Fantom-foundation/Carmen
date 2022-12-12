@@ -52,10 +52,12 @@ class StoreHandler
     : public StoreHandlerBase<Store::kPageSize, branching_factor> {
  public:
   using StoreHandlerBase<Store::kPageSize, branching_factor>::GetStoreDirectory;
-  StoreHandler() : store_(GetStoreDirectory(), branching_factor) {}
+  StoreHandler()
+      : store_(*Store::Open(context_, GetStoreDirectory(), branching_factor)) {}
   Store& GetStore() { return store_; }
 
  private:
+  Context context_;
   Store store_;
 };
 

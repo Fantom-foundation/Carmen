@@ -65,14 +65,13 @@ class HashTree {
 
   // Saves the hashes of this tree into the given file. Before saving them, all
   // outdated hashes are implicitely refreshed.
-  void SaveToFile(std::filesystem::path file);
+  absl::Status SaveToFile(const std::filesystem::path& file);
 
   // Discards the current content of this HashTree and loads all hashes from the
   // given file. Loaded hashes are considered up-to-date. After loading, the
   // internal tree structure is updated, and the file verified for consistency.
   // Returns true if the loading was successful, false otherwise.
-  // TODO(herbertjordan): introduce absl::Status for error reporting.
-  bool LoadFromFile(std::filesystem::path file);
+  absl::Status LoadFromFile(const std::filesystem::path& file);
 
   // Saves the hashes of this tree into the given leveldb path. Before saving
   // them, all outdated hashes are implicitely refreshed.

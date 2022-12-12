@@ -4,6 +4,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "backend/common/page_pool.h"
@@ -74,16 +75,19 @@ class FileStoreBase {
 
   // A factory function creating an instance of this store type.
   static absl::StatusOr<FileStoreBase> Open(
-      Context&, const std::filesystem::path& directory) {
-    // TODO: move directory initialization from constructor to factory and do
-    // proper error handling.
-    return FileStoreBase(directory);
+      Context&, const std::filesystem::path& directory,
+      std::size_t hash_branching_factor = 32) {
+    // Make sure the directory exists.
+    if (!CreateDirectory(directory)) {
+      return absl::InternalError(
+          absl::StrFormat("Unable to create parent directory %s", directory));
+    }
+    auto store = FileStoreBase(directory, hash_branching_factor);
+    if (std::filesystem::exists(store.hash_file_)) {
+      RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));
+    }
+    return store;
   }
-
-  // Creates a new file store meantaining its content in the given directory and
-  // using the provided branching factor for its hash computation.
-  FileStoreBase(std::filesystem::path directory,
-                std::size_t hash_branching_factor = 32);
 
   // Supports instances to be moved.
   FileStoreBase(FileStoreBase&&) = default;
@@ -157,6 +161,11 @@ class FileStoreBase {
   constexpr static std::size_t kNumElementsPerPage =
       PagePool::Page::kNumElementsPerPage;
 
+  // Creates a new file store maintaining its content in the given directory and
+  // using the provided branching factor for its hash computation.
+  FileStoreBase(std::filesystem::path directory,
+                std::size_t hash_branching_factor);
+
   // The page pool handling the in-memory buffer of pages fetched from disk. The
   // pool is placed in a unique pointer to ensure pointer stability when the
   // store is moved.
@@ -181,9 +190,6 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
                                          hash_branching_factor)),
       hash_file_(directory / "hash.dat") {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
-  if (std::filesystem::exists(hash_file_)) {
-    hashes_->LoadFromFile(hash_file_);
-  }
 }
 
 template <typename K, Trivial V, template <typename> class F,
@@ -218,7 +224,9 @@ template <typename K, Trivial V, template <typename> class F,
 requires File<F<ArrayPage<V, page_size>>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) pool_->Flush();
-  if (hashes_) hashes_->SaveToFile(hash_file_);
+  if (hashes_) {
+    RETURN_IF_ERROR(hashes_->SaveToFile(hash_file_));
+  }
   return absl::OkStatus();
 }
 

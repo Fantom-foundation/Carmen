@@ -75,8 +75,7 @@ class FileDepot {
 
     // Load the hash tree from the file.
     if (std::filesystem::exists(depot.hash_file_)) {
-      // TODO: introduce absl error handling.
-      depot.hashes_.LoadFromFile(depot.hash_file_);
+      RETURN_IF_ERROR(depot.hashes_.LoadFromFile(depot.hash_file_));
     }
 
     return depot;
@@ -166,7 +165,7 @@ class FileDepot {
   absl::Status Flush() {
     if ((data_fs_ && data_fs_->is_open()) &&
         (offset_fs_ && offset_fs_->is_open())) {
-      hashes_.SaveToFile(hash_file_);
+      RETURN_IF_ERROR(hashes_.SaveToFile(hash_file_));
       data_fs_->flush();
       offset_fs_->flush();
     }

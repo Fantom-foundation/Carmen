@@ -127,7 +127,7 @@ void HashTree::TrackNumPages(PageId page) {
   num_pages_ = page + 1;
 }
 
-void HashTree::SaveToFile(std::filesystem::path file) {
+absl::Status HashTree::SaveToFile(const std::filesystem::path& file) {
   // The following information is stored in the file:
   //  - the branching factor (4 byte, little endian)
   //  - the number of pages (4 byte, little endian)
@@ -141,55 +141,101 @@ void HashTree::SaveToFile(std::filesystem::path file) {
   auto hash = GetHash();
 
   std::fstream out(file, std::ios::binary | std::ios::out);
-  out.write(reinterpret_cast<const char*>(&branching_factor),
-            sizeof(branching_factor));
-  out.write(reinterpret_cast<const char*>(&num_pages), sizeof(num_pages));
-  out.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
+  if (!out) {
+    return absl::InternalError(
+        absl::StrFormat("Could not open file %s for writing.", file));
+  }
+
+  auto write_scalar = [&out, &file](auto& data) {
+    out.write(reinterpret_cast<const char*>(&data), sizeof(data));
+    if (!out.good()) {
+      return absl::InternalError(
+          absl::StrFormat("Could not write to file %s.", file));
+    }
+    return absl::OkStatus();
+  };
+
+  RETURN_IF_ERROR(write_scalar(branching_factor));
+  RETURN_IF_ERROR(write_scalar(num_pages));
+  RETURN_IF_ERROR(write_scalar(hash));
   for (std::size_t i = 0; i < num_pages_; i++) {
     const auto& hash = hashes_[0][i];
-    out.write(reinterpret_cast<const char*>(&hash), sizeof(hash));
+    RETURN_IF_ERROR(write_scalar(hash));
   }
+
+  out.close();
+  if (!out.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not close file %s.", file));
+  }
+
+  return absl::OkStatus();
 }
 
-bool HashTree::LoadFromFile(std::filesystem::path file) {
-  // TODO: introduce absl::Status to report errors
+absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
   std::fstream in(file, std::ios::binary | std::ios::in);
 
   // Fail if the file could not be opened.
-  if (!in) return false;
+  if (!in) {
+    return absl::InternalError(
+        absl::StrFormat("Could not open file %s for reading.", file));
+  }
 
   // Check the minimum file length of 4 + 4 + 32 byte.
   in.seekg(0, std::ios::end);
+  if (!in.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not seek to end of file %s.", file));
+  }
+
   auto size = in.tellg();
+  if (size < 0) {
+    return absl::InternalError(
+        absl::StrFormat("Could not read position in file %s.", file));
+  }
+
   if (size < 40) {
-    std::cout << "File to short - needed 40, got " << size << " byte\n";
-    return false;
+    return absl::InternalError(absl::StrFormat(
+        "File %s is too short. Needed 40, got %d bytes.", file, size));
+  }
+
+  auto read_scalar = [&in, &file](auto& data) {
+    in.read(reinterpret_cast<char*>(&data), sizeof(data));
+    if (!in.good()) {
+      return absl::InternalError(
+          absl::StrFormat("Could not read from file %s.", file));
+    }
+    return absl::OkStatus();
+  };
+
+  in.seekg(0, std::ios::beg);
+  if (!in.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not seek to beginning of file %s.", file));
   }
 
   // Load the branching factor.
-  in.seekg(0, std::ios::beg);
   std::uint32_t branching_factor;
-  in.read(reinterpret_cast<char*>(&branching_factor), sizeof(branching_factor));
+  RETURN_IF_ERROR(read_scalar(branching_factor));
   if (branching_factor_ != branching_factor) {
-    std::cout << "File has wrong branching factor - expected "
-              << branching_factor_ << ", got " << branching_factor << "\n";
-    return false;
+    return absl::InternalError(
+        absl::StrFormat("Branching factor mismatch. Expected %d, got %d.",
+                        branching_factor_, branching_factor));
   }
 
   // Load the number of pages.
   std::uint32_t num_pages;
-  in.read(reinterpret_cast<char*>(&num_pages), sizeof(num_pages));
+  RETURN_IF_ERROR(read_scalar(num_pages));
   if (size != 40 + num_pages * 32) {
-    std::cout << "File has wrong size - for " << num_pages << " a size of "
-              << (40 + num_pages * 32) << " would be needed, but it has "
-              << size << " byte\n";
-    return false;
+    return absl::InternalError(
+        absl::StrFormat("File %s has wrong size. Expected %d, got %d bytes.",
+                        file, 40 + num_pages * 32, size));
   }
   num_pages_ = num_pages;
 
   // Load the global hash.
   Hash file_hash;
-  in.read(reinterpret_cast<char*>(&file_hash), sizeof(file_hash));
+  RETURN_IF_ERROR(read_scalar(file_hash));
 
   // Read the page hashes.
   hashes_.clear();
@@ -198,7 +244,17 @@ bool HashTree::LoadFromFile(std::filesystem::path file) {
     page_hashes.resize(GetPaddedSize(num_pages, branching_factor));
     in.read(reinterpret_cast<char*>(page_hashes.data()),
             sizeof(Hash) * num_pages);
+    if (!in.good()) {
+      return absl::InternalError(
+          absl::StrFormat("Could not read hashes from file %s.", file));
+    }
     hashes_.push_back(std::move(page_hashes));
+  }
+
+  in.close();
+  if (!in.good()) {
+    return absl::InternalError(
+        absl::StrFormat("Could not close file %s.", file));
   }
 
   // Update hash information.
@@ -212,12 +268,13 @@ bool HashTree::LoadFromFile(std::filesystem::path file) {
   auto hash = GetHash();
 
   if (hash != file_hash) {
-    std::cout << "Unable to verify hash:\n - in file:  " << file_hash
-              << "\n - restored: " << hash << "\n";
-    return false;
+    std::stringstream ss;
+    ss << "Unable to verify hash:\n - in file:  " << file_hash
+       << "\n - restored: " << hash << "\n";
+    return absl::InternalError(ss.str());
   }
 
-  return true;
+  return absl::OkStatus();
 }
 
 absl::Status HashTree::SaveToLevelDb(LevelDb& leveldb) {
