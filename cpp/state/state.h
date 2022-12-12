@@ -242,7 +242,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType>
 StatusOrRef<Balance> State<IndexType, StoreType, DepotType>::GetBalance(
     const Address& address) const {
-  static Balance kZero;
+  constexpr static const Balance kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {
     return kZero;
@@ -266,7 +266,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType>
 StatusOrRef<Nonce> State<IndexType, StoreType, DepotType>::GetNonce(
     const Address& address) const {
-  static Nonce kZero;
+  constexpr static const Nonce kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {
     return kZero;
@@ -290,7 +290,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType>
 StatusOrRef<Value> State<IndexType, StoreType, DepotType>::GetStorageValue(
     const Address& address, const Key& key) const {
-  static Value kZero;
+  constexpr static const Value kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {
     return kZero;
