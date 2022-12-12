@@ -1,6 +1,5 @@
 #include "backend/index/leveldb/multi_db/index.h"
 
-#include "backend/index/leveldb/multi_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
@@ -11,14 +10,15 @@ namespace carmen::backend::index {
 namespace {
 
 using ::testing::IsOk;
+using ::testing::IsOkAndHolds;
 using ::testing::Not;
+using ::testing::StatusIs;
 using ::testing::StrEq;
 
 using TestIndex = MultiLevelDbIndex<int, int>;
-using TestSuiteIndex = MultiLevelDbIndexTestAdapter<int, int>;
 
 // Instantiates common index tests for the multi leveldb index type.
-INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestSuiteIndex);
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
 TEST(LevelDbMultiFileIndex, TestOpen) {
   auto dir = TempDir();
@@ -27,22 +27,21 @@ TEST(LevelDbMultiFileIndex, TestOpen) {
 
 TEST(LevelDbMultiFileIndex, IndexIsPersistent) {
   auto dir = TempDir();
-  absl::StatusOr<std::pair<int, bool>> result;
+  std::pair<int, bool> result;
 
   // Insert value in a separate block to ensure that the index is closed.
   {
-    auto index = *TestIndex::Open(dir.GetPath());
-    EXPECT_THAT(index.Get(1).status().code(), absl::StatusCode::kNotFound);
-    result = index.GetOrAdd(1);
-    ASSERT_OK(result);
-    EXPECT_TRUE((*result).second);
-    EXPECT_THAT(*index.Get(1), (*result).first);
+    ASSERT_OK_AND_ASSIGN(auto index, TestIndex::Open(dir.GetPath()));
+    EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
+    ASSERT_OK_AND_ASSIGN(result, index.GetOrAdd(1));
+    EXPECT_TRUE(result.second);
+    EXPECT_THAT(index.Get(1), IsOkAndHolds(result.first));
   }
 
   // Reopen index and check that the value is still present.
   {
-    auto index = *TestIndex::Open(dir.GetPath());
-    EXPECT_THAT(*index.Get(1), (*result).first);
+    ASSERT_OK_AND_ASSIGN(auto index, TestIndex::Open(dir.GetPath()));
+    EXPECT_THAT(index.Get(1), IsOkAndHolds(result.first));
   }
 }
 }  // namespace

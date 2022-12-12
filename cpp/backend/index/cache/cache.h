@@ -38,17 +38,20 @@ class Cached {
       : index_(std::move(index)), cache_(max_entries) {}
 
   // Retrieves the ordinal number for the given key. If the key
-  // is known, it it will return a previously established value
+  // is known, it will return a previously established value
   // for the key. If the key has not been encountered before,
   // a new ordinal value is assigned to the key and stored
   // internally such that future lookups will return the same
   // value.
-  std::pair<value_type, bool> GetOrAdd(const key_type& key) {
-    const std::optional<value_type>* value = cache_.Get(key);
-    if (value != nullptr && *value != std::nullopt) {
-      return {**value, false};
+  absl::StatusOr<std::pair<value_type, bool>> GetOrAdd(const key_type& key) {
+    const absl::StatusOr<value_type>* value = cache_.Get(key);
+    if (value != nullptr && !absl::IsNotFound(value->status())) {
+      if (value->ok()) {
+        return std::pair{**value, false};
+      }
+      return value->status();
     }
-    auto res = index_.GetOrAdd(key);
+    ASSIGN_OR_RETURN(auto res, index_.GetOrAdd(key));
     cache_.Set(key, res.first);
     // If this is a new key, the cached hash needs to be invalidated.
     if (res.second) {
@@ -58,15 +61,20 @@ class Cached {
   }
 
   // Retrieves the ordinal number for the given key if previously registered.
-  // Otherwise std::nullopt is returned.
-  std::optional<value_type> Get(const key_type& key) const {
-    const std::optional<value_type>* value = cache_.Get(key);
+  // Otherwise, returns a not found status.
+  absl::StatusOr<value_type> Get(const key_type& key) const {
+    const absl::StatusOr<value_type>* value = cache_.Get(key);
     if (value != nullptr) {
       return *value;
     }
     auto res = index_.Get(key);
-    cache_.Set(key, res);
-    return res;
+    if (absl::IsNotFound(res.status())) {
+      cache_.Set(key, res.status());
+      return res.status();
+    }
+    RETURN_IF_ERROR(res);
+    cache_.Set(key, *res);
+    return *res;
   }
 
   // Computes a hash over the full content of this index.
@@ -79,7 +87,7 @@ class Cached {
     return *hash_;
   }
 
-  // Flush unsafed index keys to disk.
+  // Flush unsaved index keys to disk.
   absl::Status Flush() { return index_.Flush(); }
 
   // Close this index and release resources.
@@ -99,8 +107,10 @@ class Cached {
   // The underlying index to be wrapped.
   I index_;
 
-  // The maintained in-memory value cache.
-  mutable LeastRecentlyUsedCache<key_type, std::optional<value_type>> cache_;
+  // The maintained in-memory value cache. Only Ok and NotFound values are
+  // cached. Ok status defines a valid value, NotFound status defines a
+  // previously unknown key.
+  mutable LeastRecentlyUsedCache<key_type, absl::StatusOr<value_type>> cache_;
 
   // Set if the hash is up-to-date.
   std::optional<Hash> hash_;

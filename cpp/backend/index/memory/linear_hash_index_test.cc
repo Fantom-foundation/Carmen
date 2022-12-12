@@ -7,6 +7,7 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::IsOkAndHolds;
 using ::testing::Optional;
 
 using TestIndex = InMemoryLinearHashIndex<int, int, 16>;
@@ -18,13 +19,13 @@ TEST(LinearHashingIndexTest, LoadTest) {
   constexpr int N = 1000;
   TestIndex index;
   for (int i = 0; i < N; i++) {
-    EXPECT_EQ((std::pair{i, true}), index.GetOrAdd(i));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
   }
   for (int i = 0; i < N; i++) {
-    EXPECT_EQ((std::pair{i, false}), index.GetOrAdd(i));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, false}));
   }
   for (int i = 0; i < N; i++) {
-    EXPECT_EQ(i, index.Get(i));
+    EXPECT_THAT(index.Get(i), IsOkAndHolds(i));
   }
 }
 

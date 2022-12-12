@@ -1,9 +1,9 @@
 #include "backend/index/leveldb/single_db/index.h"
 
 #include "absl/status/statusor.h"
-#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/test_util.h"
 #include "common/file_util.h"
+#include "common/status_test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -11,15 +11,19 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::_;
+using ::testing::IsOkAndHolds;
+using ::testing::StatusIs;
 using ::testing::StrEq;
 
-using TestIndex = SingleLevelDbIndexTestAdapter<int, int>;
+using TestIndex = LevelDbKeySpace<int, int>;
 
 // Instantiates common index tests for the single leveldb index type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
-LevelDbKeySpace<int, int> GetTestIndex(const TempDir& dir) {
-  return (*SingleLevelDbIndex::Open(dir.GetPath())).KeySpace<int, int>('t');
+absl::StatusOr<LevelDbKeySpace<int, int>> GetTestIndex(const TempDir& dir) {
+  ASSIGN_OR_RETURN(auto index, SingleLevelDbIndex::Open(dir.GetPath()));
+  return index.KeySpace<int, int>('t');
 }
 
 TEST(LevelDbIndexTest, ConvertToLevelDbKey) {
@@ -39,21 +43,22 @@ TEST(LevelDbIndexTest, ConvertAndParseLevelDbValue) {
 
 TEST(LevelDbIndexTest, IndexIsPersistent) {
   TempDir dir = TempDir();
-  absl::StatusOr<std::pair<int, bool>> result;
+  std::pair<int, bool> result;
 
   // Insert value in a separate block to ensure that the index is closed.
   {
-    auto index = GetTestIndex(dir);
-    EXPECT_THAT(index.Get(1).status().code(), absl::StatusCode::kNotFound);
-    result = index.GetOrAdd(1);
-    EXPECT_EQ((*result).second, true);
-    EXPECT_THAT(*index.Get(1), (*result).first);
+    ASSERT_OK_AND_ASSIGN(auto index, GetTestIndex(dir));
+    EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
+    ASSERT_OK_AND_ASSIGN(result, index.GetOrAdd(1));
+    EXPECT_TRUE(result.second);
+    EXPECT_THAT(index.Get(1), IsOkAndHolds(result.first));
   }
 
   // Reopen index and check that the value is still present.
   {
-    auto index = GetTestIndex(dir);
-    EXPECT_THAT(*index.Get(1), (*result).first);
+    ASSERT_OK_AND_ASSIGN(auto index, GetTestIndex(dir));
+    ASSERT_OK_AND_ASSIGN(result, index.GetOrAdd(1));
+    EXPECT_THAT(index.Get(1), IsOkAndHolds(result.first));
   }
 }
 

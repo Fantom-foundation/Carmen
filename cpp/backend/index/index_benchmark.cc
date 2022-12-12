@@ -4,11 +4,11 @@
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index_handler.h"
-#include "backend/index/leveldb/single_db/test_util.h"
 #include "backend/index/memory/index.h"
 #include "backend/index/memory/linear_hash_index.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -22,9 +22,9 @@ using FileIndexInMemory =
     FileIndex<Key, std::uint32_t, InMemoryFile, kPageSize>;
 using FileIndexOnDisk = FileIndex<Key, std::uint32_t, SingleFile, kPageSize>;
 using CachedFileIndexOnDisk = Cached<FileIndexOnDisk>;
-using SingleLevelDbIndex = SingleLevelDbIndexTestAdapter<Key, std::uint32_t>;
+using SingleLevelDbIndex = LevelDbKeySpace<Key, std::uint32_t>;
 using CachedSingleLevelDbIndex = Cached<SingleLevelDbIndex>;
-using MultiLevelDbIndex = MultiLevelDbIndexTestAdapter<Key, std::uint32_t>;
+using MultiLevelDbIndex = MultiLevelDbIndex<Key, std::uint32_t>;
 using CachedMultiLevelDbIndex = Cached<MultiLevelDbIndex>;
 
 // To run benchmarks, use the following command:
@@ -57,7 +57,7 @@ void BM_Insert(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i));
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   auto i = pre_loaded_num_elements;
@@ -77,7 +77,7 @@ void BM_SequentialRead(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i));
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   auto i = 0;
@@ -97,7 +97,7 @@ void BM_UniformRandomRead(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i));
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   std::random_device rd;
@@ -119,7 +119,7 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i));
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   std::random_device rd;
@@ -141,15 +141,15 @@ void BM_Hash(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i));
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
-  index.GetHash().IgnoreError();
+  ASSERT_OK(index.GetHash());
   auto i = pre_loaded_num_elements;
 
   for (auto _ : state) {
     state.PauseTiming();
     for (int j = 0; j < 100; j++) {
-      index.GetOrAdd(ToKey(i++));
+      ASSERT_OK(index.GetOrAdd(ToKey(i++)));
     }
     state.ResumeTiming();
     auto hash = index.GetHash();

@@ -57,12 +57,12 @@ class LevelDbIndexBase {
   // Get index for given key. If key is not found, add it and return new index.
   absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key) {
     auto result = Get(key);
-    if (result.ok()) return std::make_pair(*result, false);
+    if (result.ok()) return std::pair{*result, false};
 
     // If key is not found, add it and return new index.
     if (result.status().code() == absl::StatusCode::kNotFound) {
       auto new_index = GenerateNewIndex(key);
-      if (new_index.ok()) return std::make_pair(*new_index, true);
+      if (new_index.ok()) return std::pair{*new_index, true};
       return new_index.status();
     }
 

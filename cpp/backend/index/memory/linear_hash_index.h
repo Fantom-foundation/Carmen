@@ -27,19 +27,19 @@ class InMemoryLinearHashIndex {
     return InMemoryLinearHashIndex();
   }
 
-  std::pair<I, bool> GetOrAdd(const K& key) {
+  absl::StatusOr<std::pair<I, bool>> GetOrAdd(const K& key) {
     auto [entry, new_entry] = data_.Insert({key, 0});
     if (new_entry) {
       entry->second = data_.Size() - 1;
       unhashed_keys_.push(key);
     }
-    return {entry->second, new_entry};
+    return std::pair{entry->second, new_entry};
   }
 
-  std::optional<I> Get(const K& key) const {
+  absl::StatusOr<I> Get(const K& key) const {
     auto pos = data_.Find(key);
     if (pos == nullptr) {
-      return std::nullopt;
+      return absl::NotFoundError("Key not found.");
     }
     return pos->second;
   }

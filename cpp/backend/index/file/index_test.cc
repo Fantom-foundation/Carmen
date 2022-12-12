@@ -9,8 +9,10 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::_;
 using ::testing::IsOkAndHolds;
 using ::testing::Pair;
+using ::testing::StatusIs;
 
 using TestIndex = FileIndex<int, int, InMemoryFile, 128>;
 
@@ -21,12 +23,13 @@ TEST(FileIndexTest, FillTest) {
   constexpr int N = 1000;
   TestIndex index;
   for (int i = 0; i < N; i++) {
-    EXPECT_EQ((std::pair{i, true}), index.GetOrAdd(i));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
     for (int j = 0; j < N; j++) {
       if (j <= i) {
-        ASSERT_EQ(index.Get(j), j) << "Inserted: " << i << "\n";
+        EXPECT_THAT(index.Get(j), IsOkAndHolds(j)) << "Inserted: " << i << "\n";
       } else {
-        ASSERT_EQ(index.Get(j), std::nullopt) << "Inserted: " << i << "\n";
+        EXPECT_THAT(index.Get(j), StatusIs(absl::StatusCode::kNotFound, _))
+            << "Inserted: " << i << "\n";
       }
     }
   }
@@ -37,9 +40,9 @@ TEST(FileIndexTest, FillTest_SmallPages) {
   constexpr int N = 1000;
   Index index;
   for (std::uint32_t i = 0; i < N; i++) {
-    EXPECT_EQ((std::pair{i, true}), index.GetOrAdd(i));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
     for (std::uint32_t j = 0; j <= i; j++) {
-      ASSERT_EQ(index.Get(j), j) << "Inserted: " << i << "\n";
+      EXPECT_THAT(index.Get(j), IsOkAndHolds(j)) << "Inserted: " << i << "\n";
     }
   }
 }
@@ -49,9 +52,9 @@ TEST(FileIndexTest, FillTest_LargePages) {
   constexpr int N = 1000;
   Index index;
   for (std::uint32_t i = 0; i < N; i++) {
-    EXPECT_EQ((std::pair{i, true}), index.GetOrAdd(i));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
     for (std::uint32_t j = 0; j <= i; j++) {
-      ASSERT_EQ(index.Get(j), j) << "Inserted: " << i << "\n";
+      EXPECT_THAT(index.Get(j), IsOkAndHolds(j)) << "Inserted: " << i << "\n";
     }
   }
 }
@@ -62,8 +65,8 @@ TEST(FileIndexTest, LastInsertedElementIsPresent) {
   constexpr int N = 1000000;
   TestIndex index;
   for (int i = 0; i < N; i++) {
-    EXPECT_EQ((std::pair{i, true}), index.GetOrAdd(i));
-    ASSERT_EQ(index.Get(i), i);
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
+    EXPECT_THAT(index.Get(i), IsOkAndHolds(i));
   }
 }
 
@@ -75,7 +78,7 @@ TEST(FileIndexTest, StoreCanBeSavedAndRestored) {
   {
     Index index(dir.GetPath());
     for (int i = 0; i < kNumElements; i++) {
-      EXPECT_THAT(index.GetOrAdd(i + 5), Pair(i, true));
+      EXPECT_THAT(index.GetOrAdd(i + 5), IsOkAndHolds(std::pair{i, true}));
     }
     ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   }
@@ -83,7 +86,7 @@ TEST(FileIndexTest, StoreCanBeSavedAndRestored) {
     Index restored(dir.GetPath());
     EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
     for (int i = 0; i < kNumElements; i++) {
-      EXPECT_EQ(restored.Get(i + 5), i);
+      EXPECT_THAT(restored.Get(i + 5), IsOkAndHolds(i));
     }
   }
 }
