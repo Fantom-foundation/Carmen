@@ -94,9 +94,12 @@ MATCHER_P2(StatusIs, code, msg,
 // value using EXPECT_THAT.
 // Example use:
 //   EXPECT_THAT(<expr>, IsOkAndHolds(<value>));
-MATCHER_P(IsOkAndHolds, value,
-          absl::StrCat("OK status and value ",
-                       ::testing::DescribeMatcher<arg_type>(value, negation))) {
+MATCHER_P(
+    IsOkAndHolds, value,
+    absl::StrCat(
+        "OK status and value ",
+        ::testing::DescribeMatcher<typename std::decay_t<arg_type>::value_type>(
+            value, negation))) {
   return ExplainMatchResult(absl::StatusCode::kOk,
                             ::testing::internal::GetCode(arg),
                             result_listener) &&
