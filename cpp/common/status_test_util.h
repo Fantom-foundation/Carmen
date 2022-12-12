@@ -94,10 +94,12 @@ MATCHER_P2(StatusIs, code, msg,
 // value using EXPECT_THAT.
 // Example use:
 //   EXPECT_THAT(<expr>, IsOkAndHolds(<value>));
-MATCHER_P(IsOkAndHolds, value,
-          absl::StrCat("OK status and value ",
-                       ::testing::DescribeMatcher<value_type>(value,
-                                                              negation))) {
+MATCHER_P(
+    IsOkAndHolds, value,
+    absl::StrCat(
+        "OK status and value ",
+        ::testing::DescribeMatcher<typename std::decay_t<arg_type>::value_type>(
+            value, negation))) {
   return ExplainMatchResult(absl::StatusCode::kOk,
                             ::testing::internal::GetCode(arg),
                             result_listener) &&
@@ -105,16 +107,4 @@ MATCHER_P(IsOkAndHolds, value,
                             result_listener);
 }
 
-// Defines a IsOkAndMatches matcher for matching StatusOr with ok status and
-// matcher using EXPECT_THAT.
-// Example use:
-//   EXPECT_THAT(<expr>, IsOkAndHolds(<matcher>));
-MATCHER_P(IsOkAndMatches, matcher,
-          absl::StrCat("OK status and given matcher")) {
-  return ExplainMatchResult(absl::StatusCode::kOk,
-                            ::testing::internal::GetCode(arg),
-                            result_listener) &&
-         ExplainMatchResult(matcher, ::testing::internal::GetValue(arg),
-                            result_listener);
-}
 }  // namespace testing
