@@ -51,13 +51,13 @@ func (s *GoState) GetAccountState(address common.Address) (state common.AccountS
 	return s.accountsStore.Get(idx)
 }
 
-func (s *GoState) DeleteAccount(address common.Address) (err error) {
+func (s *GoState) DeleteAccount(address common.Address) error {
 	idx, err := s.addressIndex.Get(address)
-	if err == index.ErrNotFound {
-		err = nil
-	}
 	if err != nil {
-		return
+		if err == index.ErrNotFound {
+			return nil
+		}
+		return err
 	}
 	return s.accountsStore.Set(idx, common.Deleted)
 }

@@ -22,7 +22,7 @@ func initStates() []namedStateConfig {
 	return res
 }
 
-func testEachConfiguration(t *testing.T, test func(s State)) {
+func testEachConfiguration(t *testing.T, test func(t *testing.T, s State)) {
 	for _, config := range initStates() {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
@@ -31,7 +31,7 @@ func testEachConfiguration(t *testing.T, test func(s State)) {
 			}
 			defer state.Close()
 
-			test(state)
+			test(t, state)
 		})
 	}
 }
@@ -46,7 +46,7 @@ func testHashAfterModification(t *testing.T, mod func(s State)) {
 	if err != nil {
 		t.Fatalf("failed to get hash of reference state: %v", err)
 	}
-	testEachConfiguration(t, func(state State) {
+	testEachConfiguration(t, func(t *testing.T, state State) {
 		mod(state)
 		got, err := state.GetHash()
 		if err != nil {
@@ -164,7 +164,7 @@ func TestLargeStateHashes(t *testing.T) {
 }
 
 func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
-	testEachConfiguration(t, func(s State) {
+	testEachConfiguration(t, func(t *testing.T, s State) {
 		fp := s.GetMemoryFootprint()
 		if fp == nil {
 			t.Fatalf("state produces invalid footprint: %v", fp)
@@ -179,7 +179,7 @@ func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
 }
 
 func TestCodeHashesMatchCodes(t *testing.T) {
-	testEachConfiguration(t, func(s State) {
+	testEachConfiguration(t, func(t *testing.T, s State) {
 		hashOfEmptyCode := common.GetKeccak256Hash([]byte{})
 
 		// For a non-existing account the code is empty and the hash should match.
@@ -221,6 +221,24 @@ func TestCodeHashesMatchCodes(t *testing.T) {
 		}
 		if hash != hashOfEmptyCode {
 			t.Errorf("Invalid hash, wanted %v, got %v", hashOfEmptyCode, hash)
+		}
+	})
+}
+
+func TestDeleteNotExistingAccount(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, s State) {
+		if err := s.CreateAccount(address1); err != nil {
+			t.Fatalf("Error: %s", err)
+		}
+		if err := s.DeleteAccount(address2); err != nil { // deleting never-existed account
+			t.Fatalf("Error: %s", err)
+		}
+
+		if newState, err := s.GetAccountState(address1); err != nil || newState != common.Exists {
+			t.Errorf("Unrelated existing state: %d, Error: %s", newState, err)
+		}
+		if newState, err := s.GetAccountState(address2); err != nil || newState != common.Unknown {
+			t.Errorf("Delete never-existing state: %d, Error: %s", newState, err)
 		}
 	})
 }
