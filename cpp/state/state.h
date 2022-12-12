@@ -65,17 +65,17 @@ class State {
 
   absl::Status DeleteAccount(const Address& address);
 
-  absl::StatusOr<Balance> GetBalance(const Address& address) const;
+  StatusOrRef<Balance> GetBalance(const Address& address) const;
 
   absl::Status SetBalance(const Address& address, Balance value);
 
-  absl::StatusOr<Nonce> GetNonce(const Address& address) const;
+  StatusOrRef<Nonce> GetNonce(const Address& address) const;
 
   absl::Status SetNonce(const Address& address, Nonce value);
 
   // Obtains the current value of the given storage slot.
-  absl::StatusOr<Value> GetStorageValue(const Address& address,
-                                        const Key& key) const;
+  StatusOrRef<Value> GetStorageValue(const Address& address,
+                                     const Key& key) const;
 
   // Updates the current value of the given storage slot.
   absl::Status SetStorageValue(const Address& address, const Key& key,
@@ -240,9 +240,9 @@ absl::Status State<IndexType, StoreType, DepotType>::DeleteAccount(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-absl::StatusOr<Balance> State<IndexType, StoreType, DepotType>::GetBalance(
+StatusOrRef<Balance> State<IndexType, StoreType, DepotType>::GetBalance(
     const Address& address) const {
-  constexpr static const Balance kZero;
+  static Balance kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {
     return kZero;
@@ -264,9 +264,9 @@ absl::Status State<IndexType, StoreType, DepotType>::SetBalance(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-absl::StatusOr<Nonce> State<IndexType, StoreType, DepotType>::GetNonce(
+StatusOrRef<Nonce> State<IndexType, StoreType, DepotType>::GetNonce(
     const Address& address) const {
-  constexpr static const Nonce kZero;
+  static Nonce kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {
     return kZero;
@@ -288,9 +288,9 @@ absl::Status State<IndexType, StoreType, DepotType>::SetNonce(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-absl::StatusOr<Value> State<IndexType, StoreType, DepotType>::GetStorageValue(
+StatusOrRef<Value> State<IndexType, StoreType, DepotType>::GetStorageValue(
     const Address& address, const Key& key) const {
-  constexpr static const Value kZero;
+  static Value kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {
     return kZero;

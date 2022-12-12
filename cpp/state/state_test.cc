@@ -45,11 +45,11 @@ TEST(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 
-  ASSERT_OK(state.CreateAccount(a));
+  EXPECT_OK(state.CreateAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 
-  ASSERT_OK(state.CreateAccount(b));
+  EXPECT_OK(state.CreateAccount(b));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kExists));
 }
@@ -60,10 +60,10 @@ TEST(StateTest, AccountsCanBeDeleted) {
   InMemoryState state;
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 
-  ASSERT_OK(state.CreateAccount(a));
+  EXPECT_OK(state.CreateAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 
-  ASSERT_OK(state.DeleteAccount(a));
+  EXPECT_OK(state.DeleteAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
 }
 
@@ -73,7 +73,7 @@ TEST(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
   InMemoryState state;
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 
-  ASSERT_OK(state.DeleteAccount(a));
+  EXPECT_OK(state.DeleteAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 }
 
@@ -82,10 +82,10 @@ TEST(StateTest, DeletedAccountsCanBeRecreated) {
 
   InMemoryState state;
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
-  ASSERT_OK(state.CreateAccount(a));
-  ASSERT_OK(state.DeleteAccount(a));
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_OK(state.DeleteAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
-  ASSERT_OK(state.CreateAccount(a));
+  EXPECT_OK(state.CreateAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 }
 
@@ -107,11 +107,11 @@ TEST(StateTest, BalancesCanBeUpdated) {
   EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(zero));
   EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(zero));
 
-  ASSERT_OK(state.SetBalance(a, Balance{0x12}));
+  EXPECT_OK(state.SetBalance(a, Balance{0x12}));
   EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(Balance{0x12}));
   EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(zero));
 
-  ASSERT_OK(state.SetBalance(b, Balance{0x14}));
+  EXPECT_OK(state.SetBalance(b, Balance{0x14}));
   EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(Balance{0x12}));
   EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(Balance{0x14}));
 }
@@ -119,15 +119,15 @@ TEST(StateTest, BalancesCanBeUpdated) {
 TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
   InMemoryState state;
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
-  ASSERT_OK(state.SetBalance({}, Balance{0x12}));
+  EXPECT_OK(state.SetBalance({}, Balance{0x12}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
   EXPECT_NE(base_hash, value_12_hash);
-  ASSERT_OK(state.SetBalance({}, Balance{0x14}));
+  EXPECT_OK(state.SetBalance({}, Balance{0x14}));
   ASSERT_OK_AND_ASSIGN(auto value_14_hash, state.GetHash());
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  ASSERT_OK(state.SetBalance({}, Balance{0x12}));
+  EXPECT_OK(state.SetBalance({}, Balance{0x12}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
@@ -151,11 +151,11 @@ TEST(StateTest, NoncesCanBeUpdated) {
   EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(zero));
   EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 
-  ASSERT_OK(state.SetNonce(a, Nonce{0x12}));
+  EXPECT_OK(state.SetNonce(a, Nonce{0x12}));
   EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(Nonce{0x12}));
   EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 
-  ASSERT_OK(state.SetNonce(b, Nonce{0x14}));
+  EXPECT_OK(state.SetNonce(b, Nonce{0x14}));
   EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(Nonce{0x12}));
   EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(Nonce{0x14}));
 }
@@ -163,15 +163,15 @@ TEST(StateTest, NoncesCanBeUpdated) {
 TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
   InMemoryState state;
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
-  ASSERT_OK(state.SetNonce({}, Nonce{0x12}));
+  EXPECT_OK(state.SetNonce({}, Nonce{0x12}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
   EXPECT_NE(base_hash, value_12_hash);
-  ASSERT_OK(state.SetNonce({}, Nonce{0x14}));
+  EXPECT_OK(state.SetNonce({}, Nonce{0x14}));
   ASSERT_OK_AND_ASSIGN(auto value_14_hash, state.GetHash());
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  ASSERT_OK(state.SetNonce({}, Nonce{0x12}));
+  EXPECT_OK(state.SetNonce({}, Nonce{0x12}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
@@ -195,11 +195,11 @@ TEST(StateTest, CodesCanBeUpdated) {
   EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAre()));
   EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAre()));
 
-  ASSERT_OK(state.SetCode(a, code1));
+  EXPECT_OK(state.SetCode(a, code1));
   EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAreArray(code1)));
   EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAre()));
 
-  ASSERT_OK(state.SetCode(b, code2));
+  EXPECT_OK(state.SetCode(b, code2));
   EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAreArray(code1)));
   EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAreArray(code2)));
 }
@@ -213,27 +213,27 @@ TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
   InMemoryState state;
   EXPECT_THAT(state.GetCodeHash(a), IsOkAndHolds(hash_of_empty_code));
 
-  ASSERT_OK(state.SetCode(a, code));
+  EXPECT_OK(state.SetCode(a, code));
   EXPECT_THAT(state.GetCodeHash(a),
               IsOkAndHolds(GetKeccak256Hash(std::span(code))));
 
   // Resetting code to zero updates the hash accordingly.
-  ASSERT_OK(state.SetCode(a, {}));
+  EXPECT_OK(state.SetCode(a, {}));
   EXPECT_THAT(state.GetCodeHash(a), IsOkAndHolds(hash_of_empty_code));
 }
 
 TEST(StateTest, CodesAreCoveredByGlobalStateHash) {
   InMemoryState state;
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
-  ASSERT_OK(state.SetCode({}, std::vector{std::byte{12}}));
+  EXPECT_OK(state.SetCode({}, std::vector{std::byte{12}}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
   EXPECT_NE(base_hash, value_12_hash);
-  ASSERT_OK(state.SetCode({}, std::vector{std::byte{14}}));
+  EXPECT_OK(state.SetCode({}, std::vector{std::byte{14}}));
   ASSERT_OK_AND_ASSIGN(auto value_14_hash, state.GetHash());
   EXPECT_NE(base_hash, value_14_hash);
 
   // Resetting value gets us original hash.
-  ASSERT_OK(state.SetCode({}, std::vector{std::byte{12}}));
+  EXPECT_OK(state.SetCode({}, std::vector{std::byte{12}}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
@@ -242,8 +242,8 @@ TEST(StateTest, LookingUpMissingCodeDoesNotChangeGlobalHash) {
   Address a{0x01};
   InMemoryState state;
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
-  ASSERT_OK(state.GetCode(a));
-  ASSERT_THAT(state.GetHash(), IsOkAndHolds(base_hash));
+  EXPECT_OK(state.GetCode(a));
+  EXPECT_THAT(state.GetHash(), IsOkAndHolds(base_hash));
 }
 
 TEST(StateTest, ValuesAddedCanBeRetrieved) {
@@ -252,12 +252,12 @@ TEST(StateTest, ValuesAddedCanBeRetrieved) {
   Value v{0x01, 0x02};
 
   InMemoryState state;
-  ASSERT_OK(state.SetStorageValue(a, k, v));
-  ASSERT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 
   v = Value{0x03};
-  ASSERT_OK(state.SetStorageValue(a, k, v));
-  ASSERT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 }
 
 TEST(StateTest, CanProduceAMemoryFootprint) {

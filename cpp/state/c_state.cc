@@ -67,13 +67,13 @@ class WorldState {
   virtual absl::StatusOr<AccountState> GetAccountState(const Address&) = 0;
   virtual absl::Status DeleteAccount(const Address&) = 0;
 
-  virtual absl::StatusOr<Balance> GetBalance(const Address&) = 0;
+  virtual StatusOrRef<Balance> GetBalance(const Address&) = 0;
   virtual absl::Status SetBalance(const Address&, const Balance&) = 0;
 
-  virtual absl::StatusOr<Nonce> GetNonce(const Address&) = 0;
+  virtual StatusOrRef<Nonce> GetNonce(const Address&) = 0;
   virtual absl::Status SetNonce(const Address&, const Nonce&) = 0;
 
-  virtual absl::StatusOr<Value> GetValue(const Address&, const Key&) = 0;
+  virtual StatusOrRef<Value> GetValue(const Address&, const Key&) = 0;
   virtual absl::Status SetValue(const Address&, const Key&, const Value&) = 0;
 
   virtual absl::StatusOr<std::span<const std::byte>> GetCode(
@@ -111,7 +111,7 @@ class WorldStateWrapper : public WorldState {
     return state_.DeleteAccount(addr);
   }
 
-  absl::StatusOr<Balance> GetBalance(const Address& address) override {
+  StatusOrRef<Balance> GetBalance(const Address& address) override {
     return state_.GetBalance(address);
   }
   absl::Status SetBalance(const Address& address,
@@ -119,14 +119,14 @@ class WorldStateWrapper : public WorldState {
     return state_.SetBalance(address, balance);
   }
 
-  absl::StatusOr<Nonce> GetNonce(const Address& addr) override {
+  StatusOrRef<Nonce> GetNonce(const Address& addr) override {
     return state_.GetNonce(addr);
   }
   absl::Status SetNonce(const Address& addr, const Nonce& nonce) override {
     return state_.SetNonce(addr, nonce);
   }
 
-  absl::StatusOr<Value> GetValue(const Address& addr, const Key& key) override {
+  StatusOrRef<Value> GetValue(const Address& addr, const Key& key) override {
     return state_.GetStorageValue(addr, key);
   }
   absl::Status SetValue(const Address& addr, const Key& key,

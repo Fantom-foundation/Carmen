@@ -60,7 +60,7 @@ absl::string_view GetMessage(const absl::StatusOr<T>& status) {
 
 template <typename T>
 T GetValue(const absl::StatusOr<T>& status) {
-  return status.value();
+  return *status;
 }
 
 }  // namespace internal
@@ -96,7 +96,8 @@ MATCHER_P2(StatusIs, code, msg,
 //   EXPECT_THAT(<expr>, IsOkAndHolds(<value>));
 MATCHER_P(IsOkAndHolds, value,
           absl::StrCat("OK status and value ",
-                       ::testing::DescribeMatcher<arg_type>(value, negation))) {
+                       ::testing::DescribeMatcher<value_type>(value,
+                                                              negation))) {
   return ExplainMatchResult(absl::StatusCode::kOk,
                             ::testing::internal::GetCode(arg),
                             result_listener) &&
@@ -108,7 +109,8 @@ MATCHER_P(IsOkAndHolds, value,
 // matcher using EXPECT_THAT.
 // Example use:
 //   EXPECT_THAT(<expr>, IsOkAndHolds(<matcher>));
-MATCHER_P(IsOkAndMatches, matcher, "OK status and given matcher") {
+MATCHER_P(IsOkAndMatches, matcher,
+          absl::StrCat("OK status and given matcher")) {
   return ExplainMatchResult(absl::StatusCode::kOk,
                             ::testing::internal::GetCode(arg),
                             result_listener) &&
