@@ -188,7 +188,7 @@ TEST(HashTreeTest, EmptyTreeCanBeSavedToFile) {
 
   TempFile file;
   std::filesystem::remove(file);
-  tree.SaveToFile(file);
+  ASSERT_OK(tree.SaveToFile(file));
   EXPECT_TRUE(std::filesystem::exists(file));
 }
 
@@ -200,7 +200,7 @@ TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestored) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source));
 
-    tree.SaveToFile(file);
+    ASSERT_OK(tree.SaveToFile(file));
     EXPECT_TRUE(std::filesystem::exists(file));
 
     hash = tree.GetHash();
@@ -210,7 +210,7 @@ TEST(HashTreeTest, EmptyTreeCanBeSavedAndRestored) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source));
 
-    EXPECT_TRUE(tree.LoadFromFile(file));
+    ASSERT_OK(tree.LoadFromFile(file));
     EXPECT_EQ(hash, tree.GetHash());
   }
 }
@@ -227,7 +227,7 @@ TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestored) {
     tree.UpdateHash(1, Hash{0x03, 0x04});
     tree.UpdateHash(2, Hash{0x05, 0x06});
 
-    tree.SaveToFile(file);
+    ASSERT_OK(tree.SaveToFile(file));
     EXPECT_TRUE(std::filesystem::exists(file));
 
     hash = tree.GetHash();
@@ -237,7 +237,7 @@ TEST(HashTreeTest, TreeWithPagesCanBeSavedAndRestored) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source));
 
-    EXPECT_TRUE(tree.LoadFromFile(file));
+    ASSERT_OK(tree.LoadFromFile(file));
     EXPECT_EQ(hash, tree.GetHash());
   }
 }
@@ -254,7 +254,7 @@ TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestored) {
     tree.UpdateHash(1, Hash{0x03, 0x04});
     tree.UpdateHash(2, Hash{0x05, 0x06});
 
-    tree.SaveToFile(file);
+    ASSERT_OK(tree.SaveToFile(file));
     EXPECT_TRUE(std::filesystem::exists(file));
 
     hash = tree.GetHash();
@@ -264,7 +264,7 @@ TEST(HashTreeTest, TreeWithMultipleLeveslCanBeSavedAndRestored) {
     auto source = std::make_unique<MockPageSource>();
     HashTree tree(std::move(source), /*branching_factor=*/2);
 
-    EXPECT_TRUE(tree.LoadFromFile(file));
+    ASSERT_OK(tree.LoadFromFile(file));
     EXPECT_EQ(hash, tree.GetHash());
   }
 }
