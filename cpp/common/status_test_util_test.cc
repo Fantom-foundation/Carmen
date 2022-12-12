@@ -8,7 +8,9 @@ namespace {
 
 using ::testing::_;
 using ::testing::IsOk;
+using ::testing::IsOkAndHolds;
 using ::testing::Not;
+using ::testing::Pair;
 using ::testing::StatusIs;
 using ::testing::StrEq;
 
@@ -51,6 +53,13 @@ TEST(StatusTestUtilTest, AssertOkAndAssingWorks) {
   EXPECT_EQ(x, 12);
   ASSERT_OK_AND_ASSIGN(x, absl::StatusOr<int>(14));
   EXPECT_EQ(x, 14);
+}
+
+TEST(StatusTestUtilTest, IsOkAndHoldsAcceptsMatcher) {
+  absl::StatusOr<std::pair<int, char>> example(std::make_pair(12, 'a'));
+  EXPECT_THAT(example, IsOkAndHolds(std::make_pair(12, 'a')));
+  EXPECT_THAT(example, IsOkAndHolds(Pair(12, 'a')));
+  EXPECT_THAT(example, IsOkAndHolds(Pair(12, _)));
 }
 
 }  // namespace
