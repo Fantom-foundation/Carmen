@@ -65,17 +65,17 @@ class State {
 
   absl::Status DeleteAccount(const Address& address);
 
-  StatusOrRef<Balance> GetBalance(const Address& address) const;
+  StatusOrRef<const Balance> GetBalance(const Address& address) const;
 
   absl::Status SetBalance(const Address& address, Balance value);
 
-  StatusOrRef<Nonce> GetNonce(const Address& address) const;
+  StatusOrRef<const Nonce> GetNonce(const Address& address) const;
 
   absl::Status SetNonce(const Address& address, Nonce value);
 
   // Obtains the current value of the given storage slot.
-  StatusOrRef<Value> GetStorageValue(const Address& address,
-                                     const Key& key) const;
+  StatusOrRef<const Value> GetStorageValue(const Address& address,
+                                           const Key& key) const;
 
   // Updates the current value of the given storage slot.
   absl::Status SetStorageValue(const Address& address, const Key& key,
@@ -240,7 +240,7 @@ absl::Status State<IndexType, StoreType, DepotType>::DeleteAccount(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-StatusOrRef<Balance> State<IndexType, StoreType, DepotType>::GetBalance(
+StatusOrRef<const Balance> State<IndexType, StoreType, DepotType>::GetBalance(
     const Address& address) const {
   constexpr static const Balance kZero;
   auto addr_id = address_index_.Get(address);
@@ -264,7 +264,7 @@ absl::Status State<IndexType, StoreType, DepotType>::SetBalance(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-StatusOrRef<Nonce> State<IndexType, StoreType, DepotType>::GetNonce(
+StatusOrRef<const Nonce> State<IndexType, StoreType, DepotType>::GetNonce(
     const Address& address) const {
   constexpr static const Nonce kZero;
   auto addr_id = address_index_.Get(address);
@@ -288,8 +288,9 @@ absl::Status State<IndexType, StoreType, DepotType>::SetNonce(
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType>
-StatusOrRef<Value> State<IndexType, StoreType, DepotType>::GetStorageValue(
-    const Address& address, const Key& key) const {
+StatusOrRef<const Value>
+State<IndexType, StoreType, DepotType>::GetStorageValue(const Address& address,
+                                                        const Key& key) const {
   constexpr static const Value kZero;
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {

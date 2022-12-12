@@ -8,6 +8,7 @@
 #include "backend/index/memory/linear_hash_index.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -56,7 +57,7 @@ void BM_Insert(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i)).IgnoreError();
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   auto i = pre_loaded_num_elements;
@@ -76,7 +77,7 @@ void BM_SequentialRead(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i)).IgnoreError();
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   auto i = 0;
@@ -96,7 +97,7 @@ void BM_UniformRandomRead(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i)).IgnoreError();
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   std::random_device rd;
@@ -118,7 +119,7 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i)).IgnoreError();
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
 
   std::random_device rd;
@@ -140,15 +141,15 @@ void BM_Hash(benchmark::State& state) {
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
-    index.GetOrAdd(ToKey(i)).IgnoreError();
+    ASSERT_OK(index.GetOrAdd(ToKey(i)));
   }
-  index.GetHash().IgnoreError();
+  ASSERT_OK(index.GetHash());
   auto i = pre_loaded_num_elements;
 
   for (auto _ : state) {
     state.PauseTiming();
     for (int j = 0; j < 100; j++) {
-      index.GetOrAdd(ToKey(i++)).IgnoreError();
+      ASSERT_OK(index.GetOrAdd(ToKey(i++)));
     }
     state.ResumeTiming();
     auto hash = index.GetHash();

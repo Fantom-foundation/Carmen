@@ -75,6 +75,7 @@ cc_binary(
         "//backend/index/cache",
         "//backend/index/file:index",
         "//backend/index/memory:index",
+        "//common:status_test_util",
         "//backend/index/memory:linear_hash_index",
         "//common:benchmark",
         "@com_github_google_benchmark//:benchmark_main",

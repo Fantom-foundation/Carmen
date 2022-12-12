@@ -35,9 +35,9 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 
 }  // namespace testing::internal
 
-// Wrapper for a StatusOr<T> that can be used with reference types.
+// Alias for a StatusOr<T> that can be used with reference types.
 template <typename T>
-using StatusOrRef = absl::StatusOr<std::reference_wrapper<const T>>;
+using StatusOrRef = absl::StatusOr<std::reference_wrapper<T>>;
 
 // The implementation of RETURN_IF_ERROR below, more compact as if it would be
 // if it would be written inline.

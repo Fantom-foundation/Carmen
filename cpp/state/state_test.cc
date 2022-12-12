@@ -15,7 +15,6 @@ namespace carmen {
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::IsOkAndHolds;
-using ::testing::IsOkAndMatches;
 
 template <typename K, typename V>
 using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
@@ -181,8 +180,8 @@ TEST(StateTest, DefaultCodeIsEmpty) {
   Address b{0x02};
 
   InMemoryState state;
-  EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAre()));
-  EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAre()));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 }
 
 TEST(StateTest, CodesCanBeUpdated) {
@@ -192,16 +191,16 @@ TEST(StateTest, CodesCanBeUpdated) {
   std::vector<std::byte> code2{std::byte{1}, std::byte{2}};
 
   InMemoryState state;
-  EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAre()));
-  EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAre()));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 
   EXPECT_OK(state.SetCode(a, code1));
-  EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAreArray(code1)));
-  EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAre()));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 
   EXPECT_OK(state.SetCode(b, code2));
-  EXPECT_THAT(state.GetCode(a), IsOkAndMatches(ElementsAreArray(code1)));
-  EXPECT_THAT(state.GetCode(b), IsOkAndMatches(ElementsAreArray(code2)));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
 }
 
 TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {

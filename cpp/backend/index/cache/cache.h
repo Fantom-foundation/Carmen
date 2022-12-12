@@ -56,9 +56,8 @@ class Cached {
     // If this is a new key, the cached hash needs to be invalidated.
     if (res.second) {
       hash_ = std::nullopt;
-      return std::pair{res.first, true};
     }
-    return std::pair{res.first, false};
+    return res;
   }
 
   // Retrieves the ordinal number for the given key if previously registered.
@@ -108,7 +107,9 @@ class Cached {
   // The underlying index to be wrapped.
   I index_;
 
-  // The maintained in-memory value cache.
+  // The maintained in-memory value cache. Only Ok and NotFound values are
+  // cached. Ok status defines a valid value, NotFound status defines a
+  // previously unknown key.
   mutable LeastRecentlyUsedCache<key_type, absl::StatusOr<value_type>> cache_;
 
   // Set if the hash is up-to-date.

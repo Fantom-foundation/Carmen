@@ -67,13 +67,13 @@ class WorldState {
   virtual absl::StatusOr<AccountState> GetAccountState(const Address&) = 0;
   virtual absl::Status DeleteAccount(const Address&) = 0;
 
-  virtual StatusOrRef<Balance> GetBalance(const Address&) = 0;
+  virtual StatusOrRef<const Balance> GetBalance(const Address&) = 0;
   virtual absl::Status SetBalance(const Address&, const Balance&) = 0;
 
-  virtual StatusOrRef<Nonce> GetNonce(const Address&) = 0;
+  virtual StatusOrRef<const Nonce> GetNonce(const Address&) = 0;
   virtual absl::Status SetNonce(const Address&, const Nonce&) = 0;
 
-  virtual StatusOrRef<Value> GetValue(const Address&, const Key&) = 0;
+  virtual StatusOrRef<const Value> GetValue(const Address&, const Key&) = 0;
   virtual absl::Status SetValue(const Address&, const Key&, const Value&) = 0;
 
   virtual absl::StatusOr<std::span<const std::byte>> GetCode(
@@ -111,7 +111,7 @@ class WorldStateWrapper : public WorldState {
     return state_.DeleteAccount(addr);
   }
 
-  StatusOrRef<Balance> GetBalance(const Address& address) override {
+  StatusOrRef<const Balance> GetBalance(const Address& address) override {
     return state_.GetBalance(address);
   }
   absl::Status SetBalance(const Address& address,
@@ -119,14 +119,15 @@ class WorldStateWrapper : public WorldState {
     return state_.SetBalance(address, balance);
   }
 
-  StatusOrRef<Nonce> GetNonce(const Address& addr) override {
+  StatusOrRef<const Nonce> GetNonce(const Address& addr) override {
     return state_.GetNonce(addr);
   }
   absl::Status SetNonce(const Address& addr, const Nonce& nonce) override {
     return state_.SetNonce(addr, nonce);
   }
 
-  StatusOrRef<Value> GetValue(const Address& addr, const Key& key) override {
+  StatusOrRef<const Value> GetValue(const Address& addr,
+                                    const Key& key) override {
     return state_.GetStorageValue(addr, key);
   }
   absl::Status SetValue(const Address& addr, const Key& key,
@@ -325,13 +326,13 @@ void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
     return;
   }
   auto capacity = *out_length;
-  *out_length = (*code).size();
-  if ((*code).size() > capacity) {
-    std::cout << "WARNING: Code buffer too small: " << (*code).size() << " > "
+  *out_length = code->size();
+  if (code->size() > capacity) {
+    std::cout << "WARNING: Code buffer too small: " << code->size() << " > "
               << capacity << "\n";
     return;
   }
-  memcpy(out_code, (*code).data(), (*code).size());
+  memcpy(out_code, code->data(), code->size());
 }
 
 void Carmen_SetCode(C_State state, C_Address addr, C_Code code,

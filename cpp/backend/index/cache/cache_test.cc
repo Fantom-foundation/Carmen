@@ -12,6 +12,7 @@ namespace {
 
 using ::testing::_;
 using ::testing::IsOkAndHolds;
+using ::testing::Pair;
 using ::testing::Return;
 using ::testing::StatusIs;
 
@@ -50,6 +51,21 @@ TEST(CachedIndex, MissingEntriesAreCached) {
   EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kNotFound, _));
 }
 
+TEST(CachedIndex, ErrorStatusIsNotCached) {
+  MockIndexWrapper<int, int> wrapper;
+  auto& mock = wrapper.GetMockIndex();
+  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+
+  // The underlying index is accesses repeatedly because error status is not
+  // cached.
+  EXPECT_CALL(mock, Get(12))
+      .Times(2)
+      .WillRepeatedly(Return(absl::InternalError("Internal error")));
+
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kInternal, _));
+  EXPECT_THAT(index.Get(12), StatusIs(absl::StatusCode::kInternal, _));
+}
+
 TEST(CachedIndex, HashesAreCached) {
   MockIndexWrapper<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
@@ -82,8 +98,7 @@ TEST(CachedIndex, AddNewElementInvalidatesHash) {
 
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
-  ASSERT_OK_AND_ASSIGN(auto result, index.GetOrAdd(12));
-  EXPECT_TRUE(result.second);
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(_, true)));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_b));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_b));
 }
@@ -103,8 +118,7 @@ TEST(CachedIndex, GetExistingElementPreservesHash) {
 
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
-  ASSERT_OK_AND_ASSIGN(auto result, index.GetOrAdd(12));
-  EXPECT_FALSE(result.second);
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(_, false)));
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash_a));
 }
 

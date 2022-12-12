@@ -9,6 +9,8 @@
 namespace carmen::backend::index {
 namespace {
 
+using ::testing::_;
+using ::testing::StatusIs;
 using ::testing::StrEq;
 
 TEST(IndexTest, KnownAddresssIndexHashes) {
@@ -19,12 +21,16 @@ TEST(IndexTest, KnownAddresssIndexHashes) {
               StrEq("0x00000000000000000000000000000000000000000000000000000000"
                     "00000000"));
 
+  EXPECT_THAT(index.Get(Address{0x01}),
+              StatusIs(absl::StatusCode::kNotFound, _));
   ASSERT_OK(index.GetOrAdd(Address{0x01}));
   ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   EXPECT_THAT(Print(hash),
               StrEq("0xff9226e320b1deb7fabecff9ac800cd8eb1e3fb7709c003e2effcce3"
                     "7eec68ed"));
 
+  EXPECT_THAT(index.Get(Address{0x02}),
+              StatusIs(absl::StatusCode::kNotFound, _));
   ASSERT_OK(index.GetOrAdd(Address{0x02}));
   ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   EXPECT_THAT(Print(hash),
@@ -40,12 +46,14 @@ TEST(IndexTest, KnownKeyIndexHashes) {
               StrEq("0x00000000000000000000000000000000000000000000000000000000"
                     "00000000"));
 
+  EXPECT_THAT(index.Get(Key{0x01}), StatusIs(absl::StatusCode::kNotFound, _));
   ASSERT_OK(index.GetOrAdd(Key{0x01}));
   ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   EXPECT_THAT(Print(hash),
               StrEq("0xcb592844121d926f1ca3ad4e1d6fb9d8e260ed6e3216361f7732e975"
                     "a0e8bbf6"));
 
+  EXPECT_THAT(index.Get(Key{0x02}), StatusIs(absl::StatusCode::kNotFound, _));
   ASSERT_OK(index.GetOrAdd(Key{0x02}));
   ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   EXPECT_THAT(Print(hash),
