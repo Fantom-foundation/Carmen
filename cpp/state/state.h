@@ -205,8 +205,7 @@ template <template <typename K, typename V> class IndexType,
 absl::Status State<IndexType, StoreType, DepotType>::CreateAccount(
     const Address& address) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
-  account_states_.Set(addr_id.first, AccountState::kExists);
-  return absl::OkStatus();
+  return account_states_.Set(addr_id.first, AccountState::kExists);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -233,8 +232,7 @@ absl::Status State<IndexType, StoreType, DepotType>::DeleteAccount(
     return absl::OkStatus();
   }
   RETURN_IF_ERROR(addr_id);
-  account_states_.Set(*addr_id, AccountState::kDeleted);
-  return absl::OkStatus();
+  return account_states_.Set(*addr_id, AccountState::kDeleted);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -257,8 +255,7 @@ template <template <typename K, typename V> class IndexType,
 absl::Status State<IndexType, StoreType, DepotType>::SetBalance(
     const Address& address, Balance value) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
-  balances_.Set(addr_id.first, value);
-  return absl::OkStatus();
+  return balances_.Set(addr_id.first, value);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -281,8 +278,7 @@ template <template <typename K, typename V> class IndexType,
 absl::Status State<IndexType, StoreType, DepotType>::SetNonce(
     const Address& address, Nonce value) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
-  nonces_.Set(addr_id.first, value);
-  return absl::OkStatus();
+  return nonces_.Set(addr_id.first, value);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -320,8 +316,7 @@ absl::Status State<IndexType, StoreType, DepotType>::SetStorageValue(
   ASSIGN_OR_RETURN(auto key_id, key_index_.GetOrAdd(key));
   Slot slot{addr_id.first, key_id.first};
   ASSIGN_OR_RETURN(auto slot_id, slot_index_.GetOrAdd(slot));
-  value_store_.Set(slot_id.first, value);
-  return absl::OkStatus();
+  return value_store_.Set(slot_id.first, value);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -350,9 +345,8 @@ absl::Status State<IndexType, StoreType, DepotType>::SetCode(
     const Address& address, std::span<const std::byte> code) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
   RETURN_IF_ERROR(codes_.Set(addr_id.first, code));
-  code_hashes_.Set(addr_id.first,
-                   code.empty() ? kEmptyCodeHash : GetKeccak256Hash(code));
-  return absl::OkStatus();
+  return code_hashes_.Set(
+      addr_id.first, code.empty() ? kEmptyCodeHash : GetKeccak256Hash(code));
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -386,15 +380,16 @@ absl::StatusOr<Hash> State<IndexType, StoreType, DepotType>::GetCodeHash(
   }
   RETURN_IF_ERROR(addr_id);
   auto res = code_hashes_.Get(*addr_id);
+  RETURN_IF_ERROR(res);
   // The default value of hashes in the store is the zero hash.
   // However, for empty codes, the hash of an empty code should
   // be returned. The only exception would be the very unlikely
   // case where the hash of the stored code is indeed zero.
   ASSIGN_OR_RETURN(auto code_size, GetCodeSize(address));
-  if (res == Hash{} && code_size == 0) {
+  if (*res == Hash{} && code_size == 0) {
     return kEmptyCodeHash;
   }
-  return res;
+  return *res;
 }
 
 template <template <typename K, typename V> class IndexType,

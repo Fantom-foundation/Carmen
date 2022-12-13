@@ -43,34 +43,34 @@ TYPED_TEST_P(StoreTest, TypeProperties) {
 TYPED_TEST_P(StoreTest, UninitializedValuesAreZero) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
-  EXPECT_EQ(Value{}, store.Get(0));
-  EXPECT_EQ(Value{}, store.Get(10));
-  EXPECT_EQ(Value{}, store.Get(100));
+  EXPECT_THAT(store.Get(0), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.Get(100), IsOkAndHolds(Value{}));
 }
 
 TYPED_TEST_P(StoreTest, DataCanBeAddedAndRetrieved) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
-  EXPECT_EQ(Value{}, store.Get(10));
-  EXPECT_EQ(Value{}, store.Get(12));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.Get(12), IsOkAndHolds(Value{}));
 
-  store.Set(10, Value{12});
-  EXPECT_EQ(Value{12}, store.Get(10));
-  EXPECT_EQ(Value{}, store.Get(12));
+  ASSERT_OK(store.Set(10, Value{12}));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{12}));
+  EXPECT_THAT(store.Get(12), IsOkAndHolds(Value{}));
 
-  store.Set(12, Value{14});
-  EXPECT_EQ(Value{12}, store.Get(10));
-  EXPECT_EQ(Value{14}, store.Get(12));
+  ASSERT_OK(store.Set(12, Value{14}));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{12}));
+  EXPECT_THAT(store.Get(12), IsOkAndHolds(Value{14}));
 }
 
 TYPED_TEST_P(StoreTest, EntriesCanBeUpdated) {
   TypeParam wrapper;
   auto& store = wrapper.GetStore();
-  EXPECT_EQ(Value{}, store.Get(10));
-  store.Set(10, Value{12});
-  EXPECT_EQ(Value{12}, store.Get(10));
-  store.Set(10, Value{14});
-  EXPECT_EQ(Value{14}, store.Get(10));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{}));
+  ASSERT_OK(store.Set(10, Value{12}));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{12}));
+  ASSERT_OK(store.Set(10, Value{14}));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{14}));
 }
 
 TYPED_TEST_P(StoreTest, EmptyStoreHasZeroHash) {
@@ -84,10 +84,10 @@ TYPED_TEST_P(StoreTest, HashesChangeWithUpdates) {
   auto& store = wrapper.GetStore();
 
   ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
-  store.Set(1, Value{0xAA});
+  ASSERT_OK(store.Set(1, Value{0xAA}));
   ASSERT_OK_AND_ASSIGN(auto hash_a, store.GetHash());
   EXPECT_NE(empty_hash, hash_a);
-  store.Set(2, Value{0xFF});
+  ASSERT_OK(store.Set(2, Value{0xFF}));
   ASSERT_OK_AND_ASSIGN(auto hash_b, store.GetHash());
   EXPECT_NE(empty_hash, hash_b);
   EXPECT_NE(hash_a, hash_b);
@@ -99,11 +99,11 @@ TYPED_TEST_P(StoreTest, HashesCoverMultiplePages) {
 
   ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
   for (int i = 0; i < 10000; i++) {
-    store.Set(i, ToValue(i + 1));
+    ASSERT_OK(store.Set(i, ToValue(i + 1)));
   }
   ASSERT_OK_AND_ASSIGN(auto hash_a, store.GetHash());
   EXPECT_NE(empty_hash, hash_a);
-  store.Set(5000, Value{});
+  ASSERT_OK(store.Set(5000, Value{}));
   ASSERT_OK_AND_ASSIGN(auto hash_b, store.GetHash());
   EXPECT_NE(empty_hash, hash_b);
   EXPECT_NE(hash_a, hash_b);
@@ -116,28 +116,32 @@ TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
   EXPECT_THAT(store.GetHash(), IsOkAndHolds(Hash{}));
 
   if (TypeParam::kPageSize == 32 && TypeParam::kBranchingFactor == 32) {
-    store.Set(0, Value{});
+    EXPECT_THAT(store.Get(0), IsOkAndHolds(Value{}));
+    ASSERT_OK(store.Set(0, Value{}));
     ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
     EXPECT_THAT(
         Print(hash),
         StrEq("0x66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d"
               "0d5f2925"));
 
-    store.Set(0, Value{0xAA});
+    EXPECT_THAT(store.Get(0), IsOkAndHolds(Value{}));
+    ASSERT_OK(store.Set(0, Value{0xAA}));
     ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(
         Print(hash),
         StrEq("0xe7ac50af91de0eca8d6805f0cf111ac4f0937e3136292cace6a50392"
               "fe905615"));
 
-    store.Set(1, Value{0xBB});
+    EXPECT_THAT(store.Get(1), IsOkAndHolds(Value{}));
+    ASSERT_OK(store.Set(1, Value{0xBB}));
     ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(
         Print(hash),
         StrEq("0x1e7272c135640b8d6f1bb58f4887f022eddc7f21d077439c14bfb22f"
               "15952d5d"));
 
-    store.Set(2, Value{0xCC});
+    EXPECT_THAT(store.Get(2), IsOkAndHolds(Value{}));
+    ASSERT_OK(store.Set(2, Value{0xCC}));
     ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(
         Print(hash),
@@ -169,7 +173,8 @@ TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
     int i = 0;
     Hash hash;
     for (const auto& expected_hash : hashes) {
-      store.Set(i, Value{static_cast<std::uint8_t>(i << 4 | i)});
+      EXPECT_THAT(store.Get(i), IsOkAndHolds(Value{}));
+      ASSERT_OK(store.Set(i, Value{static_cast<std::uint8_t>(i << 4 | i)}));
       ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
       EXPECT_THAT(Print(hash), StrEq(expected_hash));
       i++;
@@ -186,7 +191,8 @@ TYPED_TEST_P(StoreTest, HashesRespectBranchingFactor) {
   auto& store = wrapper.GetStore();
 
   // Initialize branching_factor * 2 pages.
-  store.Set(kElementsPerPage * TypeParam::kBranchingFactor * 2 - 1, Value{});
+  ASSERT_OK(store.Set(kElementsPerPage * TypeParam::kBranchingFactor * 2 - 1,
+                      Value{}));
 
   // This should result in a hash tree with branching_factor * 2 leaves and one
   // inner node forming the root.
@@ -230,8 +236,8 @@ TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
                 static_cast<unsigned char>(i >> 4 & 0x3),
                 static_cast<unsigned char>(i >> 2 & 0x3),
                 static_cast<unsigned char>(i >> 0 & 0x3)};
-    store.Set(i, value);
-    reference.Set(i, value);
+    ASSERT_OK(store.Set(i, value));
+    ASSERT_OK(reference.Set(i, value));
     ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
     EXPECT_THAT(reference.GetHash(), IsOkAndHolds(hash));
   }
@@ -243,8 +249,8 @@ TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
   auto& reference = wrapper.GetReferenceStore();
 
   // Implictitly create empty pages by asking for an element with a high ID.
-  reference.Get(10000);
-  store.Get(10000);
+  ASSERT_OK(reference.Get(10000));
+  ASSERT_OK(store.Get(10000));
 
   // Hash is computed as if all pages are initialized.
   ASSERT_OK_AND_ASSIGN(auto ref_hash, reference.GetHash());

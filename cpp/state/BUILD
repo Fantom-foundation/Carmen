@@ -34,7 +34,7 @@ cc_library(
         "//backend/index/memory:index",
         "//backend/store/file:store",
         "//backend/store/memory:store",
-        "//backend/store/leveldb:test_util",
+        "//backend/store/leveldb:store",
         "//backend/index/leveldb/multi_db:index",
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",

@@ -57,20 +57,21 @@ class InMemoryStore {
   InMemoryStore(const StoreSnapshot&, std::size_t hash_branching_factor = 32);
 
   // Updates the value associated to the given key.
-  void Set(const K& key, V value) {
+  absl::Status Set(const K& key, V value) {
     auto page_number = key / elements_per_page;
     if (pages_->size() <= page_number) {
       pages_->resize(page_number + 1);
     }
     (*pages_)[page_number][key % elements_per_page] = value;
     hashes_.MarkDirty(page_number);
+    return absl::OkStatus();
   }
 
   // Retrieves the value associated to the given key. If no values has
-  // been previously set using a the Set(..) function above, the default
+  // been previously set using the Set(..) function above, the default
   // value defined during the construction of a store instance is returned.
-  const V& Get(const K& key) const {
-    static const V default_value{};
+  StatusOrRef<const V> Get(const K& key) const {
+    constexpr static const V default_value{};
     auto page_number = key / elements_per_page;
     hashes_.RegisterPage(page_number);
     if (page_number >= pages_->size()) {
