@@ -21,6 +21,7 @@ type Depot[I common.Identifier] struct {
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
 	hashItems       int // the amount of items in one hashing group
+	offsetData      []byte
 	pagesCalls      int // amount of GetPage calls in total
 	fragmentedCalls int // amount of GetPage calls being fragmented
 }
@@ -47,84 +48,89 @@ func NewDepot[I common.Identifier](path string,
 		offsetsFile:     offsetsFile,
 		indexSerializer: indexSerializer,
 		hashItems:       hashItems,
+		offsetData:      make([]byte, (OffsetSize+LengthSize)*hashItems),
 	}
 	m.hashTree = hashtreeFactory.Create(m)
 	return m, nil
 }
 
-// itemHashGroup provides the hash group into which the item belongs
-func (m *Depot[I]) itemHashGroup(id I) (page int) {
+// itemPage provides the page (hash group) into which the item belongs
+func (m *Depot[I]) itemPage(id I) int {
 	// casting to I for division in proper bit width
 	return int(id / I(m.hashItems))
 }
 
 // itemPosition provides the position of an item in data pages
-func (m *Depot[I]) itemPosition(id I) (hashGroup int, position int64) {
-	hashGroup = int(id / I(m.hashItems)) // casting to I for division in proper bit width
-	position = int64(id) * (OffsetSize + LengthSize)
-	return
+func (m *Depot[I]) itemPosition(id I) int64 {
+	return int64(id) * (OffsetSize + LengthSize)
 }
 
-func parseOffsetLength(offsetBytes []byte) (offset uint64, length uint32) {
-	offset = binary.LittleEndian.Uint64(offsetBytes[0:OffsetSize])
-	length = binary.LittleEndian.Uint32(offsetBytes[OffsetSize : OffsetSize+LengthSize])
-	return
+func parseOffsetLength(offsetBytes []byte) (offset int64, length int32) {
+	offset = int64(binary.LittleEndian.Uint64(offsetBytes[0:OffsetSize]))
+	length = int32(binary.LittleEndian.Uint32(offsetBytes[OffsetSize : OffsetSize+LengthSize]))
+	return offset, length
 }
 
-func (m *Depot[I]) GetPage(hashGroup int) ([]byte, error) {
-	startKey := I(m.hashItems * hashGroup)
-	offsets := make([]uint64, m.hashItems)
-	lengths := make([]uint32, m.hashItems)
-	totalLen := uint32(0)
+// GetPage provides all data of one hashing group in a byte slice
+func (m *Depot[I]) GetPage(page int) ([]byte, error) {
+	startKey := I(m.hashItems * page)
 	m.pagesCalls++
 
-	_, startPosition := m.itemPosition(startKey)
-	offsetBytes := make([]byte, (OffsetSize+LengthSize)*m.hashItems)
-	_, err := m.offsetsFile.ReadAt(offsetBytes[:], startPosition)
+	startPosition := m.itemPosition(startKey)
+	offsetsLen, err := m.offsetsFile.ReadAt(m.offsetData, startPosition)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 
-	isFragmented := false
-	offsetPos := 0
-	for i := 0; i < m.hashItems; i++ {
-		offset, length := parseOffsetLength(offsetBytes[offsetPos:])
-		offsets[i] = offset
-		lengths[i] = length
-		totalLen += length
-		// follows the item directly the previous one in the data file?
-		if i > 0 && length != 0 && offsets[i-1]+uint64(lengths[i-1]) != offset {
-			isFragmented = true
-		}
-		offsetPos += OffsetSize + LengthSize
-	}
+	dataStart, dataLength, isFragmented := getRangeFromOffsets(m.offsetData[0:offsetsLen])
 
-	if totalLen == 0 {
+	if dataLength == 0 {
 		return nil, nil
 	}
 
-	out := make([]byte, totalLen)
+	out := make([]byte, dataLength)
 	if !isFragmented {
-		_, err = m.contentsFile.ReadAt(out, int64(offsets[0]))
+		_, err = m.contentsFile.ReadAt(out, dataStart)
 		return out, err
 	}
-	m.fragmentedCalls++
 
-	itemStart := uint32(0)
-	for i := 0; i < m.hashItems; i++ {
-		length := lengths[i]
-		_, err = m.contentsFile.ReadAt(out[itemStart:itemStart+length], int64(offsets[i]))
+	m.fragmentedCalls++
+	outOffset := int32(0)
+	for position := 0; position < offsetsLen; position += OffsetSize + LengthSize {
+		offset, length := parseOffsetLength(m.offsetData[position:offsetsLen])
+		_, err = m.contentsFile.ReadAt(out[outOffset:outOffset+length], offset)
 		if err != nil {
 			return nil, err
 		}
-		itemStart += length
+		outOffset += length
 	}
 	return out, nil
 }
 
+// getRangeFromOffsets parse offset data of one page (hash group) and provides
+// the page data start, length and whether the group is fragmented.
+// If the page is fragmented, dataStart output is irrelevant.
+func getRangeFromOffsets(offsetData []byte) (dataStart, dataLength int64, isFragmented bool) {
+	for position := 0; position < len(offsetData); position += OffsetSize + LengthSize {
+		offset, length := parseOffsetLength(offsetData[position:])
+		if length != 0 { // zero-length values are ignored
+			if dataLength == 0 { // is first not-empty
+				dataStart = offset
+				dataLength = int64(length)
+			} else {
+				// follows the item directly the previous one in the data file?
+				if offset != dataStart+dataLength {
+					isFragmented = true
+				}
+				dataLength += int64(length)
+			}
+		}
+	}
+	return dataStart, dataLength, isFragmented
+}
+
 // Set a value of an item
 func (m *Depot[I]) Set(id I, value []byte) error {
-	hashGroup, itemPosition := m.itemPosition(id)
 	// write the value to the end of data file
 	offset, err := m.contentsFile.Seek(0, io.SeekEnd)
 	if err != nil {
@@ -138,19 +144,18 @@ func (m *Depot[I]) Set(id I, value []byte) error {
 	var offsetBytes [OffsetSize + LengthSize]byte
 	binary.LittleEndian.PutUint64(offsetBytes[0:OffsetSize], uint64(offset))
 	binary.LittleEndian.PutUint32(offsetBytes[OffsetSize:OffsetSize+LengthSize], uint32(len(value)))
-	_, err = m.offsetsFile.WriteAt(offsetBytes[:], itemPosition)
+	_, err = m.offsetsFile.WriteAt(offsetBytes[:], m.itemPosition(id))
 	if err != nil {
 		return err
 	}
-	m.hashTree.MarkUpdated(hashGroup)
+	m.hashTree.MarkUpdated(m.itemPage(id))
 	return nil
 }
 
 // Get a value of the item (or nil if not defined)
 func (m *Depot[I]) Get(id I) (out []byte, err error) {
-	_, itemPosition := m.itemPosition(id)
 	var offsetBytes [OffsetSize + LengthSize]byte
-	_, err = m.offsetsFile.ReadAt(offsetBytes[:], itemPosition)
+	_, err = m.offsetsFile.ReadAt(offsetBytes[:], m.itemPosition(id))
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, nil
@@ -168,9 +173,8 @@ func (m *Depot[I]) Get(id I) (out []byte, err error) {
 
 // GetSize of the item (or 0 if not defined)
 func (m *Depot[I]) GetSize(id I) (length int, err error) {
-	_, itemPosition := m.itemPosition(id)
 	var lengthBytes [LengthSize]byte
-	_, err = m.offsetsFile.ReadAt(lengthBytes[:], itemPosition+OffsetSize)
+	_, err = m.offsetsFile.ReadAt(lengthBytes[:], m.itemPosition(id)+OffsetSize)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return 0, nil
