@@ -127,29 +127,27 @@ func (a NonceSerializer) Size() int {
 }
 
 // SlotIdxSerializer32 is a Serializer of the SlotIdx[uint32] type
-type SlotIdxSerializer32 struct {
-	identifierSerializer32 Identifier32Serializer
-}
+type SlotIdxSerializer32 struct{}
 
 func (a SlotIdxSerializer32) ToBytes(value SlotIdx[uint32]) []byte {
-	res := make([]byte, 0, 8)
-	res = binary.LittleEndian.AppendUint32(res, value.AddressIdx)
-	res = binary.LittleEndian.AppendUint32(res, value.KeyIdx)
-	return res
+	out := make([]byte, 4+32)
+	binary.LittleEndian.PutUint32(out[0:4], value.AddressIdx)
+	copy(out[4:4+32], value.Key[0:32])
+	return out
 }
 func (a SlotIdxSerializer32) CopyBytes(value SlotIdx[uint32], out []byte) {
 	binary.LittleEndian.PutUint32(out[0:4], value.AddressIdx)
-	binary.LittleEndian.PutUint32(out[4:8], value.KeyIdx)
+	copy(out[4:4+32], value.Key[0:32])
 }
 func (a SlotIdxSerializer32) FromBytes(bytes []byte) SlotIdx[uint32] {
 	value := SlotIdx[uint32]{
 		AddressIdx: binary.LittleEndian.Uint32(bytes[0:4]),
-		KeyIdx:     binary.LittleEndian.Uint32(bytes[4:8]),
 	}
+	copy(value.Key[0:32], bytes[4:4+32])
 	return value
 }
 func (a SlotIdxSerializer32) Size() int {
-	return 8 // two 32bit integers
+	return 4 + 32
 }
 
 // Identifier32Serializer is a Serializer of the uint32 Identifier type

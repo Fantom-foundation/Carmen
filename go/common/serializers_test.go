@@ -41,12 +41,20 @@ func TestSlotIdxSerializer32(t *testing.T) {
 	// convert back and forth
 	slotIdx := common.SlotIdx[uint32]{
 		AddressIdx: 123,
-		KeyIdx:     456,
+		Key:        common.Key{0x99, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x34, 0x12, 0x97},
 	}
 	b := s.ToBytes(slotIdx)
 	slotIdx2 := s.FromBytes(b)
 
 	if slotIdx != slotIdx2 {
-		t.Errorf("Conversion fails: %x := %x", slotIdx, slotIdx2)
+		t.Errorf("Conversion fails: %x => %x (%d) => %x", slotIdx, b, len(b), slotIdx2)
+	}
+
+	bb := make([]byte, s.Size())
+	s.CopyBytes(slotIdx, bb)
+	slotIdx3 := s.FromBytes(bb)
+
+	if slotIdx != slotIdx3 {
+		t.Errorf("Conversion fails: %x => %x (%d) => %x", slotIdx, bb, len(bb), slotIdx3)
 	}
 }

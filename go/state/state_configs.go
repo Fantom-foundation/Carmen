@@ -41,7 +41,6 @@ const CodeHashGroupSize = 4
 func NewMemory() (State, error) {
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
-	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
 
 	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
@@ -69,7 +68,7 @@ func NewMemory() (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, nil, nil}
+	state := &GoState{addressIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, nil, nil}
 	return state, nil
 }
 
@@ -89,10 +88,6 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +142,7 @@ func NewLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
+	state := &GoState{addressIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -168,10 +163,6 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +220,6 @@ func NewCachedLeveLIndexFileStore(path string) (State, error) {
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
 		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
@@ -264,10 +254,6 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 		return nil, err
 	}
 	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](tx, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](tx, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +318,6 @@ func NewCachedTransactLeveLIndexFileStore(path string) (State, error) {
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
 		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
@@ -356,10 +341,6 @@ func NewLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +375,7 @@ func NewLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{addressIndex, keyIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
+	state := &GoState{addressIndex, slotIndex, accountsStore, noncesStore, balancesStore, valuesStore, codesDepot, codeHashesStore, cleanUpByClosing(db), nil}
 
 	return state, nil
 }
@@ -410,10 +391,6 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +427,6 @@ func NewCachedLeveLIndexAndStore(path string) (State, error) {
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
 		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
@@ -479,10 +455,6 @@ func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 		return nil, err
 	}
 	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](tx, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](tx, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -527,7 +499,6 @@ func NewTransactCachedLeveLIndexAndStore(path string) (State, error) {
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
 		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),

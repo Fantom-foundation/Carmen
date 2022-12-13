@@ -20,7 +20,6 @@ const (
 // GoState manages dependencies to other interfaces to build this service
 type GoState struct {
 	addressIndex    index.Index[common.Address, uint32]
-	keyIndex        index.Index[common.Key, uint32]
 	slotIndex       index.Index[common.SlotIdx[uint32], uint32]
 	accountsStore   store.Store[uint32, common.AccountState]
 	noncesStore     store.Store[uint32, common.Nonce]
@@ -108,14 +107,7 @@ func (s *GoState) GetStorage(address common.Address, key common.Key) (value comm
 		}
 		return
 	}
-	keyIdx, err := s.keyIndex.Get(key)
-	if err != nil {
-		if err == index.ErrNotFound {
-			return common.Value{}, nil
-		}
-		return
-	}
-	slotIdx, err := s.slotIndex.Get(common.SlotIdx[uint32]{addressIdx, keyIdx})
+	slotIdx, err := s.slotIndex.Get(common.SlotIdx[uint32]{addressIdx, key})
 	if err != nil {
 		if err == index.ErrNotFound {
 			return common.Value{}, nil
@@ -130,11 +122,7 @@ func (s *GoState) SetStorage(address common.Address, key common.Key, value commo
 	if err != nil {
 		return
 	}
-	keyIdx, err := s.keyIndex.GetOrAdd(key)
-	if err != nil {
-		return
-	}
-	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
+	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, key})
 	if err != nil {
 		return
 	}
@@ -216,7 +204,6 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 func (s *GoState) GetHash() (hash common.Hash, err error) {
 	sources := []common.HashProvider{
 		s.addressIndex,
-		s.keyIndex,
 		s.slotIndex,
 		s.balancesStore,
 		s.noncesStore,
@@ -243,7 +230,6 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(0)
 	mf.AddChild("addressIndex", s.addressIndex.GetMemoryFootprint())
-	mf.AddChild("keyIndex", s.keyIndex.GetMemoryFootprint())
 	mf.AddChild("slotIndex", s.slotIndex.GetMemoryFootprint())
 	mf.AddChild("accountsStore", s.accountsStore.GetMemoryFootprint())
 	mf.AddChild("noncesStore", s.noncesStore.GetMemoryFootprint())
@@ -257,7 +243,6 @@ func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 func (s *GoState) Flush() error {
 	flushables := []common.Flusher{
 		s.addressIndex,
-		s.keyIndex,
 		s.slotIndex,
 		s.accountsStore,
 		s.noncesStore,
@@ -279,7 +264,6 @@ func (s *GoState) Flush() error {
 func (s *GoState) Close() error {
 	closeables := []io.Closer{
 		s.addressIndex,
-		s.keyIndex,
 		s.slotIndex,
 		s.accountsStore,
 		s.noncesStore,

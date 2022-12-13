@@ -28,9 +28,9 @@ const (
 	CodeHashStoreKey TableSpace = 'c'
 )
 
-// DbKey expects max size of the 32B key plus at most two bytes
+// DbKey expects max size of the 36B key plus at most two bytes
 // for the table prefix (e.g. balance, nonce, slot, ...) and the domain (e.g. data, hash, ...)
-type DbKey [34]byte
+type DbKey [36 + 2]byte
 
 func (d DbKey) ToBytes() []byte {
 	return d[:]

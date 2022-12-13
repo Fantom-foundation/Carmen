@@ -55,7 +55,7 @@ type Value [32]byte
 
 type SlotIdx[I Identifier] struct {
 	AddressIdx I
-	KeyIdx     I
+	Key        Key
 }
 
 // AccountState is the base type of account states enum.
