@@ -68,6 +68,20 @@ cc_test(
 )
 
 cc_binary(
+    name = "state_benchmark",
+    srcs = ["state_benchmark.cc"],
+    deps = [
+        ":configurations",
+        "//common:benchmark",
+        "//common:file_util",
+        "//common:status_test_util",
+        "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+    testonly = True,
+)
+
+cc_binary(
   name = "libcarmen.so",
   linkshared = True,
   linkopts = select({
