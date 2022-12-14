@@ -379,17 +379,18 @@ absl::StatusOr<Hash> State<IndexType, StoreType, DepotType>::GetCodeHash(
     return kEmptyCodeHash;
   }
   RETURN_IF_ERROR(addr_id);
-  auto res = code_hashes_.Get(*addr_id);
-  RETURN_IF_ERROR(res);
+  ASSIGN_OR_RETURN(auto code_hash, code_hashes_.Get(*addr_id));
   // The default value of hashes in the store is the zero hash.
   // However, for empty codes, the hash of an empty code should
   // be returned. The only exception would be the very unlikely
   // case where the hash of the stored code is indeed zero.
-  ASSIGN_OR_RETURN(auto code_size, GetCodeSize(address));
-  if (*res == Hash{} && code_size == 0) {
-    return kEmptyCodeHash;
+  if (code_hash == Hash{}) {
+    ASSIGN_OR_RETURN(auto code_size, GetCodeSize(address));
+    if (code_size == 0) {
+      return kEmptyCodeHash;
+    }
   }
-  return *res;
+  return code_hash;
 }
 
 template <template <typename K, typename V> class IndexType,

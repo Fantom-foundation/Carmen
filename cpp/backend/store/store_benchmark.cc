@@ -1,5 +1,6 @@
 #include <random>
 
+#include "backend/store/leveldb/store.h"
 #include "backend/store/store_handler.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
