@@ -17,14 +17,14 @@ template <typename P>
 concept Page =
     // Pages must be aligned to a multiple of a file system page.
     alignof(P) >= kFileSystemPageSize &&
-    alignof(P) % kFileSystemPageSize == 0 && requires(const P a, P b) {
+    alignof(P) % kFileSystemPageSize == 0 &&
+    // To be used in page pools, pages must also be trivially default
+    // constructible and destructible.
+    std::is_trivially_default_constructible_v<
+        P>&& std::is_trivially_destructible_v<P>&& requires(const P a, P b) {
   // Pages must support immutable and mutable raw data access.
   { a.AsRawData() } -> std::same_as<std::span<const std::byte, sizeof(P)>>;
   { b.AsRawData() } -> std::same_as<std::span<std::byte, sizeof(P)>>;
-  // To be used in page pools, pages must also be default constructable and
-  // destructible.
-  std::is_default_constructible_v<P>;
-  std::is_destructible_v<P>;
 };
 
 // Computes the required page size based on a use case specific needed page
