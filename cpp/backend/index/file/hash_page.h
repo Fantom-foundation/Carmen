@@ -55,9 +55,6 @@ class alignas(kFileSystemPageSize) HashPage {
       "A HashPage must be at least sizeof(Metadata) + sizeof(Entry) = 16 byte "
       "+ sizeof(Entry) to fit at least a single line in each page.");
 
-  // Creates a new, empty page.
-  HashPage() { Clear(); }
-
   // Resets the size and the next-page reference to zero.
   void Clear() {
     auto& metadata = GetMetadata();

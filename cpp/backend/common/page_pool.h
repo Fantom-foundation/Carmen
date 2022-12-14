@@ -42,7 +42,7 @@ class PagePool {
   PagePool(std::unique_ptr<File> file, std::size_t pool_size = 100000);
 
   // Returns the maximum number of pages to be retained in this pool.
-  std::size_t GetPoolSize() const { return pool_.size(); }
+  std::size_t GetPoolSize() const { return pool_size_; }
 
   // Retrieves a reference to a page within this pool. If the page is present,
   // the existing page is returned. If the page is missing, it is fetched from
@@ -83,8 +83,13 @@ class PagePool {
   // The file used for loading and storing pages.
   std::unique_ptr<File> file_;
 
-  // The page pool, containing the actual data.
-  std::vector<Page> pool_;
+  // The page pool, containing the actual data. It is using a pointer instead of
+  // a vector because this makes its initialization faster (vector is
+  // initializing each individual page).
+  std::unique_ptr<Page[]> pool_;
+
+  // The number of pages in this pool.
+  std::size_t pool_size_;
 
   // The employed eviction policy.
   EvictionPolicy eviction_policy_;
@@ -127,8 +132,10 @@ requires File<F<P>> PagePool<P, F, E>::PagePool(std::size_t pool_size)
 template <typename P, template <typename> class F, EvictionPolicy E>
 requires File<F<P>> PagePool<P, F, E>::PagePool(std::unique_ptr<File> file,
                                                 std::size_t pool_size)
-    : file_(std::move(file)), eviction_policy_(pool_size) {
-  pool_.resize(pool_size);
+    : file_(std::move(file)),
+      pool_(new Page[pool_size]),
+      pool_size_(pool_size),
+      eviction_policy_(pool_size) {
   dirty_.resize(pool_size);
   index_to_pages_.resize(pool_size);
   pages_to_index_.reserve(pool_size);
@@ -186,7 +193,7 @@ template <typename P, template <typename> class F, EvictionPolicy E>
 requires File<F<P>>
 void PagePool<P, F, E>::Flush() {
   if (!file_) return;
-  for (std::size_t i = 0; i < pool_.size(); i++) {
+  for (std::size_t i = 0; i < pool_size_; i++) {
     if (!dirty_[i]) continue;
     file_->StorePage(index_to_pages_[i], pool_[i]);
     dirty_[i] = false;
@@ -204,7 +211,7 @@ template <typename P, template <typename> class F, EvictionPolicy E>
 requires File<F<P>> MemoryFootprint PagePool<P, F, E>::GetMemoryFootprint()
 const {
   MemoryFootprint res(*this);
-  res.Add("pool", SizeOf(pool_));
+  res.Add("pool", Memory(sizeof(P) * pool_size_));
   res.Add("dirty", Memory(dirty_.size() / 8 + 1));
   res.Add("pages_to_index", SizeOf(pages_to_index_));
   res.Add("index_to_pages", SizeOf(index_to_pages_));
@@ -227,7 +234,7 @@ requires File<F<P>> std::size_t PagePool<P, F, E>::GetFreeSlot() {
 
   // Fall-back: if policy can not decide, use a random page.
   if (!trg) {
-    trg = rand() % pool_.size();
+    trg = rand() % pool_size_;
   }
 
   // Evict page to make space.
