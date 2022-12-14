@@ -7,8 +7,10 @@
 #include "common/memory_usage.h"
 #include "common/status_test_util.h"
 #include "common/type.h"
+#include "common/file_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "state/configurations.h"
 
 namespace carmen {
 
@@ -16,31 +18,27 @@ using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
 using ::testing::IsOkAndHolds;
 
-template <typename K, typename V>
-using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
+template <typename T>
+class StateTest : public testing::Test {};
 
-template <typename K, typename V>
-using InMemoryStore = backend::store::InMemoryStore<K, V>;
+TYPED_TEST_SUITE_P(StateTest);
 
-template <typename K>
-using InMemoryDepot = backend::depot::InMemoryDepot<K>;
-
-using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
-
-TEST(StateTest, DefaultAccountStateIsUnknown) {
+TYPED_TEST_P(StateTest, DefaultAccountStateIsUnknown) {
   Address a{0x01};
   Address b{0x02};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 }
 
-TEST(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
+TYPED_TEST_P(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
   Address a{0x01};
   Address b{0x02};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kUnknown));
 
@@ -53,10 +51,11 @@ TEST(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kExists));
 }
 
-TEST(StateTest, AccountsCanBeDeleted) {
+TYPED_TEST_P(StateTest, AccountsCanBeDeleted) {
   Address a{0x01};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 
   EXPECT_OK(state.CreateAccount(a));
@@ -66,20 +65,22 @@ TEST(StateTest, AccountsCanBeDeleted) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
 }
 
-TEST(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
+TYPED_TEST_P(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
   Address a{0x01};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 
   EXPECT_OK(state.DeleteAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 }
 
-TEST(StateTest, DeletedAccountsCanBeRecreated) {
+TYPED_TEST_P(StateTest, DeletedAccountsCanBeRecreated) {
   Address a{0x01};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_OK(state.CreateAccount(a));
   EXPECT_OK(state.DeleteAccount(a));
@@ -88,21 +89,23 @@ TEST(StateTest, DeletedAccountsCanBeRecreated) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 }
 
-TEST(StateTest, DefaultBalanceIsZero) {
+TYPED_TEST_P(StateTest, DefaultBalanceIsZero) {
   Address a{0x01};
   Address b{0x02};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(Balance{}));
   EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(Balance{}));
 }
 
-TEST(StateTest, BalancesCanBeUpdated) {
+TYPED_TEST_P(StateTest, BalancesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
   Balance zero{};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetBalance(a), IsOkAndHolds(zero));
   EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(zero));
 
@@ -115,8 +118,9 @@ TEST(StateTest, BalancesCanBeUpdated) {
   EXPECT_THAT(state.GetBalance(b), IsOkAndHolds(Balance{0x14}));
 }
 
-TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
-  InMemoryState state;
+TYPED_TEST_P(StateTest, BalancesAreCoveredByGlobalStateHash) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
   EXPECT_OK(state.SetBalance({}, Balance{0x12}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
@@ -131,22 +135,24 @@ TEST(StateTest, BalancesAreCoveredByGlobalStateHash) {
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
-TEST(StateTest, DefaultNonceIsZero) {
+TYPED_TEST_P(StateTest, DefaultNonceIsZero) {
   Address a{0x01};
   Address b{0x02};
   Nonce zero;
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(zero));
   EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 }
 
-TEST(StateTest, NoncesCanBeUpdated) {
+TYPED_TEST_P(StateTest, NoncesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
   Nonce zero;
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetNonce(a), IsOkAndHolds(zero));
   EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(zero));
 
@@ -159,8 +165,9 @@ TEST(StateTest, NoncesCanBeUpdated) {
   EXPECT_THAT(state.GetNonce(b), IsOkAndHolds(Nonce{0x14}));
 }
 
-TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
-  InMemoryState state;
+TYPED_TEST_P(StateTest, NoncesAreCoveredByGlobalStateHash) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
   EXPECT_OK(state.SetNonce({}, Nonce{0x12}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
@@ -175,22 +182,24 @@ TEST(StateTest, NoncesAreCoveredByGlobalStateHash) {
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
-TEST(StateTest, DefaultCodeIsEmpty) {
+TYPED_TEST_P(StateTest, DefaultCodeIsEmpty) {
   Address a{0x01};
   Address b{0x02};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
   EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 }
 
-TEST(StateTest, CodesCanBeUpdated) {
+TYPED_TEST_P(StateTest, CodesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
   std::vector<std::byte> code1{std::byte{1}, std::byte{2}};
   std::vector<std::byte> code2{std::byte{1}, std::byte{2}};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
   EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
 
@@ -203,13 +212,14 @@ TEST(StateTest, CodesCanBeUpdated) {
   EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
 }
 
-TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
+TYPED_TEST_P(StateTest, UpdatingCodesUpdatesCodeHashes) {
   const Hash hash_of_empty_code = GetKeccak256Hash({});
 
   Address a{0x01};
   std::vector<std::byte> code{std::byte{1}, std::byte{2}};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_THAT(state.GetCodeHash(a), IsOkAndHolds(hash_of_empty_code));
 
   EXPECT_OK(state.SetCode(a, code));
@@ -221,8 +231,9 @@ TEST(StateTest, UpdatingCodesUpdatesCodeHashes) {
   EXPECT_THAT(state.GetCodeHash(a), IsOkAndHolds(hash_of_empty_code));
 }
 
-TEST(StateTest, CodesAreCoveredByGlobalStateHash) {
-  InMemoryState state;
+TYPED_TEST_P(StateTest, CodesAreCoveredByGlobalStateHash) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
   EXPECT_OK(state.SetCode({}, std::vector{std::byte{12}}));
   ASSERT_OK_AND_ASSIGN(auto value_12_hash, state.GetHash());
@@ -237,20 +248,22 @@ TEST(StateTest, CodesAreCoveredByGlobalStateHash) {
   EXPECT_EQ(value_12_hash, value_12_hash_again);
 }
 
-TEST(StateTest, LookingUpMissingCodeDoesNotChangeGlobalHash) {
+TYPED_TEST_P(StateTest, LookingUpMissingCodeDoesNotChangeGlobalHash) {
   Address a{0x01};
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   ASSERT_OK_AND_ASSIGN(auto base_hash, state.GetHash());
   EXPECT_OK(state.GetCode(a));
   EXPECT_THAT(state.GetHash(), IsOkAndHolds(base_hash));
 }
 
-TEST(StateTest, ValuesAddedCanBeRetrieved) {
+TYPED_TEST_P(StateTest, ValuesAddedCanBeRetrieved) {
   Address a;
   Key k;
   Value v{0x01, 0x02};
 
-  InMemoryState state;
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   EXPECT_OK(state.SetStorageValue(a, k, v));
   EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 
@@ -259,10 +272,28 @@ TEST(StateTest, ValuesAddedCanBeRetrieved) {
   EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 }
 
-TEST(StateTest, CanProduceAMemoryFootprint) {
-  InMemoryState state;
+TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   auto usage = state.GetMemoryFootprint();
   EXPECT_GT(usage.GetTotal(), Memory());
 }
+
+REGISTER_TYPED_TEST_SUITE_P(
+    StateTest, AccountsCanBeDeleted, AccountsCanBeCreatedAndAreDifferentiated,
+    BalancesAreCoveredByGlobalStateHash, BalancesCanBeUpdated,
+    CodesAreCoveredByGlobalStateHash, CodesCanBeUpdated,
+    DefaultAccountStateIsUnknown, DefaultBalanceIsZero, DefaultCodeIsEmpty,
+    DefaultNonceIsZero, DeletedAccountsCanBeRecreated,
+    DeletingAnUnknownAccountDoesNotCreateIt,
+    LookingUpMissingCodeDoesNotChangeGlobalHash,
+    NoncesAreCoveredByGlobalStateHash, NoncesCanBeUpdated,
+    UpdatingCodesUpdatesCodeHashes, ValuesAddedCanBeRetrieved,
+    CanProduceAMemoryFootprint);
+
+using StateConfigurations =
+    ::testing::Types<InMemoryState, FileBasedState, LevelDbBasedState>;
+
+INSTANTIATE_TYPED_TEST_SUITE_P(Config, StateTest, StateConfigurations);
 
 }  // namespace carmen
