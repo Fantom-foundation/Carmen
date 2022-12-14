@@ -365,8 +365,8 @@ absl::StatusOr<Hash> FileIndex<K, I, F, page_size>::GetHash() const {
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Flush() {
-  primary_pool_.Flush();
-  overflow_pool_.Flush();
+  RETURN_IF_ERROR(primary_pool_.Flush());
+  RETURN_IF_ERROR(overflow_pool_.Flush());
 
   // Flush metadata if this is an owning instance.
   if (!metadata_file_ || metadata_file_->empty()) return absl::OkStatus();
@@ -375,28 +375,33 @@ absl::Status FileIndex<K, I, F, page_size>::Flush() {
   std::fstream out(*metadata_file_, std::ios::binary | std::ios::out);
   auto write_scalar = [&](auto scalar) {
     out.write(reinterpret_cast<const char*>(&scalar), sizeof(scalar));
+    if (!out.good()) {
+      return absl::InternalError("Failed to write metadata. Error: " +
+                                 std::string(std::strerror(errno)));
+    }
+    return absl::OkStatus();
   };
 
   // Start with scalars.
-  write_scalar(size_);
-  write_scalar(next_to_split_);
-  write_scalar(low_mask_);
-  write_scalar(high_mask_);
-  write_scalar(num_buckets_);
-  write_scalar(num_overflow_pages_);
+  RETURN_IF_ERROR(write_scalar(size_));
+  RETURN_IF_ERROR(write_scalar(next_to_split_));
+  RETURN_IF_ERROR(write_scalar(low_mask_));
+  RETURN_IF_ERROR(write_scalar(high_mask_));
+  RETURN_IF_ERROR(write_scalar(num_buckets_));
+  RETURN_IF_ERROR(write_scalar(num_overflow_pages_));
   ASSIGN_OR_RETURN(auto hash, GetHash());
-  write_scalar(hash);
+  RETURN_IF_ERROR(write_scalar(hash));
 
   // Write bucket tail list.
-  write_scalar(bucket_tails_.size());
+  RETURN_IF_ERROR(write_scalar(bucket_tails_.size()));
   for (const auto& page_id : bucket_tails_) {
-    write_scalar(page_id);
+    RETURN_IF_ERROR(write_scalar(page_id));
   }
 
   // Write free list.
-  write_scalar(overflow_page_free_list_.size());
+  RETURN_IF_ERROR(write_scalar(overflow_page_free_list_.size()));
   for (const auto& page_id : overflow_page_free_list_) {
-    write_scalar(page_id);
+    RETURN_IF_ERROR(write_scalar(page_id));
   }
   return absl::OkStatus();
 }
@@ -405,8 +410,8 @@ template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Close() {
   RETURN_IF_ERROR(Flush());
-  primary_pool_.Close();
-  overflow_pool_.Close();
+  RETURN_IF_ERROR(primary_pool_.Close());
+  RETURN_IF_ERROR(overflow_pool_.Close());
   return absl::OkStatus();
 }
 

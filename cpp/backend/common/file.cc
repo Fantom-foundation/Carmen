@@ -5,6 +5,9 @@
 
 #include <cassert>
 
+#include "absl/status/status.h"
+#include "common/status_util.h"
+
 namespace carmen::backend {
 
 // Creates the provided directory file path recursively. Returns true on
@@ -31,7 +34,7 @@ FStreamFile::FStreamFile(std::filesystem::path file) {
   file_size_ = data_.tellg();
 }
 
-FStreamFile::~FStreamFile() { Close(); }
+FStreamFile::~FStreamFile() { Close().IgnoreError(); }
 
 std::size_t FStreamFile::GetFileSize() { return file_size_; }
 
@@ -52,11 +55,25 @@ void FStreamFile::Write(std::size_t pos, std::span<const std::byte> span) {
   data_.write(reinterpret_cast<const char*>(span.data()), span.size());
 }
 
-void FStreamFile::Flush() { std::flush(data_); }
+absl::Status FStreamFile::Flush() {
+  data_.flush();
+  if (!data_.good()) {
+    return absl::InternalError("Failed to flush file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  return absl::OkStatus();
+}
 
-void FStreamFile::Close() {
-  Flush();
-  data_.close();
+absl::Status FStreamFile::Close() {
+  RETURN_IF_ERROR(Flush());
+  if (data_.is_open()) {
+    data_.close();
+    if (!data_.good()) {
+      return absl::InternalError("Failed to close file. Error: " +
+                                 std::string(std::strerror(errno)));
+    }
+  }
+  return absl::OkStatus();
 }
 
 void FStreamFile::GrowFileIfNeeded(std::size_t needed) {
@@ -77,7 +94,7 @@ void FStreamFile::GrowFileIfNeeded(std::size_t needed) {
 CFile::CFile(std::filesystem::path file) {
   // Create the parent directory.
   CreateDirectory(file.parent_path());
-  // Append mode will create the file if does not exist.
+  // Append mode will create the file if it does not exist.
   file_ = std::fopen(file.string().c_str(), "a");
   std::fclose(file_);
   // But for read/write we need the file to be openend in expended read mode.
@@ -88,7 +105,7 @@ CFile::CFile(std::filesystem::path file) {
   file_size_ = std::ftell(file_);
 }
 
-CFile::~CFile() { Close(); }
+CFile::~CFile() { Close().IgnoreError(); }
 
 std::size_t CFile::GetFileSize() { return file_size_; }
 
@@ -117,16 +134,24 @@ void CFile::Write(std::size_t pos, std::span<const std::byte> span) {
   assert(len == span.size());
 }
 
-void CFile::Flush() {
-  if (file_ == nullptr) return;
-  std::fflush(file_);
+absl::Status CFile::Flush() {
+  if (file_ != nullptr && std::fflush(file_) == EOF) {
+    return absl::InternalError("Failed to flush file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  return absl::OkStatus();
 }
 
-void CFile::Close() {
-  if (file_ == nullptr) return;
-  Flush();
-  fclose(file_);
-  file_ = nullptr;
+absl::Status CFile::Close() {
+  if (file_ != nullptr) {
+    RETURN_IF_ERROR(Flush());
+    if (std::fclose(file_) == EOF) {
+      return absl::InternalError("Failed to close file. Error: " +
+                                 std::string(std::strerror(errno)));
+    }
+    file_ = nullptr;
+  }
+  return absl::OkStatus();
 }
 
 void CFile::GrowFileIfNeeded(std::size_t needed) {
@@ -163,7 +188,7 @@ PosixFile::PosixFile(std::filesystem::path file) {
   file_size_ = size;
 }
 
-PosixFile::~PosixFile() { Close(); }
+PosixFile::~PosixFile() { Close().IgnoreError(); }
 
 std::size_t PosixFile::GetFileSize() { return file_size_; }
 
@@ -189,16 +214,24 @@ void PosixFile::Write(std::size_t pos, std::span<const std::byte> span) {
   assert(len == static_cast<ssize_t>(span.size()));
 }
 
-void PosixFile::Flush() {
-  if (fd_ < 0) return;
-  fsync(fd_);
+absl::Status PosixFile::Flush() {
+  if (fd_ >= 0 && fsync(fd_) == -1) {
+    return absl::InternalError("Failed to flush file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  return absl::OkStatus();
 }
 
-void PosixFile::Close() {
-  if (fd_ < 0) return;
-  Flush();
-  close(fd_);
-  fd_ = -1;
+absl::Status PosixFile::Close() {
+  if (fd_ >= 0) {
+    RETURN_IF_ERROR(Flush());
+    if (close(fd_) == -1) {
+      return absl::InternalError("Failed to close file. Error: " +
+                                 std::string(std::strerror(errno)));
+    }
+    fd_ = -1;
+  }
+  return absl::OkStatus();
 }
 
 void PosixFile::GrowFileIfNeeded(std::size_t needed) {

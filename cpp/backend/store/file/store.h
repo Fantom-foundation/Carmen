@@ -223,7 +223,9 @@ template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<ArrayPage<V, page_size>>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
-  if (pool_) pool_->Flush();
+  if (pool_) {
+    RETURN_IF_ERROR(pool_->Flush());
+  }
   if (hashes_) {
     RETURN_IF_ERROR(hashes_->SaveToFile(hash_file_));
   }
@@ -235,7 +237,9 @@ template <typename K, Trivial V, template <typename> class F,
 requires File<F<ArrayPage<V, page_size>>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   RETURN_IF_ERROR(Flush());
-  if (pool_) pool_->Close();
+  if (pool_) {
+    RETURN_IF_ERROR(pool_->Close());
+  }
   return absl::OkStatus();
 }
 

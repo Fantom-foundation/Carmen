@@ -5,9 +5,11 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "backend/common/eviction_policy.h"
 #include "backend/common/file.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 
 namespace carmen::backend {
 
@@ -22,7 +24,7 @@ class PagePoolListener;
 //
 // Each PagePool is backed by a file instance from which it fetches pages and to
 // which it writes modifications to. Furthermore, listeners may be registered,
-// enabling the incjection of extra operations during page load and eviction
+// enabling the injection of extra operations during page load and eviction
 // steps.
 template <typename P, template <typename> class F,
           EvictionPolicy E = LeastRecentlyUsedEvictionPolicy>
@@ -58,18 +60,18 @@ class PagePool {
   // Registers a page pool listener monitoring events.
   void AddListener(std::unique_ptr<Listener> listener);
 
-  // Syncronizes all pages in the pool by writing all dirty pages out to disk.
+  // Synchronizes all pages in the pool by writing all dirty pages out to disk.
   // Does not affect the content of the pool, nor are page accesses reported to
   // the pool policies.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the content of this pool and released the underlying file.
-  void Close();
+  absl::Status Close();
 
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const;
 
-  // Returns the access to the utilized eviction policicy, mainly for testing.
+  // Returns the access to the utilized eviction policy, mainly for testing.
   EvictionPolicy& GetEvictionPolicy() { return eviction_policy_; }
 
  private:
@@ -93,7 +95,7 @@ class PagePool {
   // stored to disk before being evicted.
   std::vector<bool> dirty_;
 
-  // Indexes recording which page is in which pool postion.
+  // Indexes recording which page is in which pool position.
   absl::flat_hash_map<PageId, int> pages_to_index_;
   std::vector<PageId> index_to_pages_;
 
@@ -183,21 +185,25 @@ void PagePool<P, F, E>::AddListener(std::unique_ptr<Listener> listener) {
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::Flush() {
-  if (!file_) return;
+requires File<F<P>> absl::Status PagePool<P, F, E>::Flush() {
+  if (!file_) {
+    return absl::OkStatus();
+  }
   for (std::size_t i = 0; i < pool_.size(); i++) {
     if (!dirty_[i]) continue;
     file_->StorePage(index_to_pages_[i], pool_[i]);
     dirty_[i] = false;
   }
+  return absl::OkStatus();
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::Close() {
-  Flush();
-  if (file_) file_->Close();
+requires File<F<P>> absl::Status PagePool<P, F, E>::Close() {
+  RETURN_IF_ERROR(Flush());
+  if (file_) {
+    RETURN_IF_ERROR(file_->Close());
+  }
+  return absl::OkStatus();
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>

@@ -1,5 +1,6 @@
 #include <random>
 
+#include "absl/status/status.h"
 #include "backend/common/access_pattern.h"
 #include "backend/common/eviction_policy.h"
 #include "backend/common/page.h"
@@ -25,8 +26,8 @@ class DummyFile {
 
   void LoadPage(PageId, Page&) {}
   void StorePage(PageId, const Page&) {}
-  void Flush() {}
-  void Close() {}
+  absl::Status Flush() {}
+  absl::Status Close() {}
 };
 
 template <EvictionPolicy Policy>
@@ -65,7 +66,7 @@ BENCHMARK(BM_ReadTest<Exponential, RandomEvictionPolicy>)
 BENCHMARK(BM_ReadTest<Exponential, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-// Evaluates the performance of writing to pages in page pools.
+// Evaluates the performance of writing on pages in page pools.
 template <typename AccessOrder, EvictionPolicy Policy>
 void BM_WriteTest(benchmark::State& state) {
   auto pool_size = state.range(0);

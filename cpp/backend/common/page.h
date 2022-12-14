@@ -47,8 +47,8 @@ constexpr std::size_t GetRequiredPageSize(std::size_t needed_page_size) {
 // typed version of a page in a file containing a fixed length array of trivial
 // elements. Furthermore, it provides index based access to the contained data.
 //
-// The trival type V is the type of value stored in this page, in the form of an
-// array. The provided pages_size_in_byte is the number of bytes each page is
+// The trivial type V is the type of value stored in this page, in the form of
+// an array. The provided pages_size_in_byte is the number of bytes each page is
 // comprising. Note that, if page_size_in_byte is not a multiple of sizeof(V)
 // some extra bytes per page may be kept in memory and on disk.
 template <Trivial V, std::size_t page_size_in_byte = kFileSystemPageSize>

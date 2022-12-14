@@ -8,6 +8,7 @@
 #include <fstream>
 #include <span>
 
+#include "absl/status/status.h"
 #include "backend/common/page.h"
 #include "backend/common/page_id.h"
 
@@ -45,10 +46,10 @@ concept File = requires(F a) {
     } -> std::same_as<void>;
   // Each file has to support a flush operation after which data previously
   // written must be persisted on disk.
-  { a.Flush() } -> std::same_as<void>;
+  { a.Flush() } -> std::same_as<absl::Status>;
   // Each file has to support a close operation, flushing buffered data and
   // releasing file resources. After a file is closed it may no longer be used.
-  { a.Close() } -> std::same_as<void>;
+  { a.Close() } -> std::same_as<absl::Status>;
 };
 
 // An InMemoryFile implement is provided to for testing purposes, where actual
@@ -68,12 +69,14 @@ class InMemoryFile {
 
   void StorePage(PageId id, const Page& src);
 
-  void Flush() const {
+  absl::Status Flush() const {
     // Nothing to do.
+    return absl::OkStatus();
   }
 
-  void Close() const {
+  absl::Status Close() const {
     // Nothing to do.
+    return absl::OkStatus();
   }
 
  private:
@@ -108,10 +111,10 @@ class FStreamFile {
   void Write(std::size_t pos, std::span<const std::byte> span);
 
   // Flushes all pending/buffered writes to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the file and closes the underlying resource.
-  void Close();
+  absl::Status Close();
 
  private:
   // Grows the underlying file to the given size.
@@ -144,10 +147,10 @@ class CFile {
   void Write(std::size_t pos, std::span<const std::byte> span);
 
   // Flushes all pending/buffered writes to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the file and closes the underlying resource.
-  void Close();
+  absl::Status Close();
 
  private:
   // Grows the underlying file to the given size.
@@ -180,10 +183,10 @@ class PosixFile {
   void Write(std::size_t pos, std::span<const std::byte> span);
 
   // Flushes all pending/buffered writes to disk.
-  void Flush();
+  absl::Status Flush();
 
   // Flushes the file and closes the underlying resource.
-  void Close();
+  absl::Status Close();
 
  private:
   // Grows the underlying file to the given size.
@@ -214,9 +217,9 @@ class SingleFileBase {
     file_.Write(id * sizeof(Page), src.AsRawData());
   }
 
-  void Flush() { file_.Flush(); }
+  absl::Status Flush() { return file_.Flush(); }
 
-  void Close() { file_.Close(); }
+  absl::Status Close() { return file_.Close(); }
 
  private:
   mutable RawFile file_;

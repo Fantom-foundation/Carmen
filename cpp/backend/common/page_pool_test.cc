@@ -4,8 +4,10 @@
 #include <optional>
 #include <sstream>
 
+#include "absl/status/status.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
+#include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -127,8 +129,8 @@ class MockFile {
   MOCK_METHOD(std::size_t, GetNumPages, ());
   MOCK_METHOD(void, LoadPage, (PageId id, P& dest));
   MOCK_METHOD(void, StorePage, (PageId id, const P& src));
-  MOCK_METHOD(void, Flush, ());
-  MOCK_METHOD(void, Close, ());
+  MOCK_METHOD(absl::Status, Flush, ());
+  MOCK_METHOD(absl::Status, Close, ());
 };
 
 TEST(MockFileTest, IsFile) { EXPECT_TRUE(File<MockFile<Page>>); }
@@ -148,7 +150,7 @@ TEST(PagePoolTest, FlushWritesDirtyPages) {
   pool.MarkAsDirty(10);
   pool.MarkAsDirty(20);
 
-  pool.Flush();
+  ASSERT_OK(pool.Flush());
 }
 
 TEST(PagePoolTest, FlushResetsPageState) {
@@ -162,8 +164,8 @@ TEST(PagePoolTest, FlushResetsPageState) {
   pool.Get(10);
   pool.MarkAsDirty(10);
 
-  pool.Flush();
-  pool.Flush();  // < not written a second time
+  ASSERT_OK(pool.Flush());
+  ASSERT_OK(pool.Flush());  // < not written a second time
 }
 
 TEST(PagePoolTest, CleanPagesAreNotFlushed) {
@@ -179,7 +181,7 @@ TEST(PagePoolTest, CleanPagesAreNotFlushed) {
   pool.Get(20);
   pool.MarkAsDirty(20);
 
-  pool.Flush();
+  ASSERT_OK(pool.Flush());
 }
 
 TEST(PagePoolTest, ClosingPoolFlushesPagesAndClosesFile) {
@@ -196,7 +198,7 @@ TEST(PagePoolTest, ClosingPoolFlushesPagesAndClosesFile) {
   pool.Get(20);
   pool.MarkAsDirty(20);
 
-  pool.Close();
+  ASSERT_OK(pool.Close());
 }
 
 class MockEvictionPolicy {

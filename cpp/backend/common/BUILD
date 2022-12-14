@@ -35,6 +35,8 @@ cc_library(
     deps = [
         ":page_id",
         ":page",
+        "//common:status_util",
+        "@com_google_absl//absl/status:status",
     ],
     visibility = ["//backend:__subpackages__"],
 )
@@ -99,6 +101,8 @@ cc_library(
         ":file",
         ":page_id",
         "//common:memory_usage",
+        "//common:status_util",
+        "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
     visibility = ["//backend:__subpackages__"],
@@ -110,6 +114,7 @@ cc_test(
     deps = [
         ":page",
         ":page_pool",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -121,7 +126,10 @@ cc_binary(
         ":access_pattern",
         ":eviction_policy",
         ":page_pool",
+        "//common:status_test_util",
         "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_absl//absl/status:status",
         "//third_party/gperftools:profiler",
     ],
+    testonly = True,
 )

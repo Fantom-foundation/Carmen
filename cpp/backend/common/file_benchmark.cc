@@ -40,7 +40,7 @@ class FileWrapper {
  public:
   FileWrapper() : file_(std::make_unique<F>(temp_file_)) {}
   ~FileWrapper() {
-    file_->Flush();
+    file_->Flush().IgnoreError();
     file_.reset();
     std::filesystem::remove(temp_file_);
   }
