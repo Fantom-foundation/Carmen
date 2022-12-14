@@ -94,6 +94,47 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	}
 }
 
+func TestCarmenStateSuicideIsExecutedAtEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// the nonce and code will be set at the end of the block since suicide is canceled.
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+
+	db.SetNonce(address1, 5)
+	db.SetCode(address1, []byte{1, 2, 3})
+
+	db.Suicide(address1)
+
+	db.EndTransaction()
+	db.EndBlock()
+}
+
+func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// the nonce and code will be set at the end of the block since suicide is canceled.
+	mock.EXPECT().SetNonce(address1, common.ToNonce(5)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{1, 2, 3}).Return(nil)
+
+	db.SetNonce(address1, 5)
+	db.SetCode(address1, []byte{1, 2, 3})
+
+	snapshot := db.Snapshot()
+	db.Suicide(address1)
+	db.RevertToSnapshot(snapshot)
+
+	db.EndTransaction()
+	db.EndBlock()
+}
+
 func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -154,6 +195,43 @@ func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 
 	db.Suicide(address1)
 	db.EndTransaction()
+	db.EndBlock()
+}
+
+func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The new account is deleted at the end of the transaction.
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+
+	code := []byte{1, 2, 3}
+	db.CreateAccount(address1)
+	db.SetCode(address1, code)
+	db.EndTransaction()
+
+	if got := db.GetCode(address1); bytes.Compare(got, code) != 0 {
+		t.Errorf("retrieved wrong code, got %v, wanted %v", got, code)
+	}
+
+	db.Suicide(address1)
+
+	// Now the code should still exist
+	if got := db.GetCode(address1); bytes.Compare(got, code) != 0 {
+		t.Errorf("retrieved wrong code, got %v, wanted %v", got, code)
+	}
+
+	db.EndTransaction()
+
+	// Now the code should be gone.
+	if got := db.GetCode(address1); len(got) != 0 {
+		t.Errorf("retrieved wrong code, got %v, wanted empty code", got)
+	}
+
 	db.EndBlock()
 }
 
@@ -556,13 +634,22 @@ func TestCarmenStateNoncesOfADeletedAccountIsZero(t *testing.T) {
 
 	db.Suicide(address1)
 
+	// The suicide is delayed until the end of the transaction.
+	want = 12
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+
+	db.EndTransaction()
+
+	// The suicide was completed and the nonce is zero.
 	want = 0
 	if got := db.GetNonce(address1); got != want {
 		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
 	}
 }
 
-func TestCarmenStateNoncesOfAnAccountDeletedInTheSnapshotIsZero(t *testing.T) {
+func TestCarmenStateNonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -583,6 +670,16 @@ func TestCarmenStateNoncesOfAnAccountDeletedInTheSnapshotIsZero(t *testing.T) {
 	}
 
 	db.Suicide(address1)
+
+	// The destruction is delayed until the end of the transaction.
+	want = 12
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+
+	db.EndTransaction()
+
+	// After the end of the transaction, the nonce is zero.
 	want = 0
 	if got := db.GetNonce(address1); got != want {
 		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
@@ -1158,7 +1255,7 @@ func TestCarmenStateCodeSizeOfANonExistingAccountIsZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeSizeOfADeletedAccountIsZero(t *testing.T) {
+func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
@@ -1167,7 +1264,16 @@ func TestCarmenStateCodeSizeOfADeletedAccountIsZero(t *testing.T) {
 	db.SetCode(address1, []byte{1, 2, 3})
 	db.Suicide(address1)
 
-	want := 0
+	// The destruction is delayed until the end of the transaction.
+	want := 3
+	if got := db.GetCodeSize(address1); got != want {
+		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
+	}
+
+	db.EndTransaction()
+
+	// Now the code should be gone.
+	want = 0
 	if got := db.GetCodeSize(address1); got != want {
 		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
 	}

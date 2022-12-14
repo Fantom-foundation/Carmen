@@ -111,6 +111,9 @@ type stateDB struct {
 	// A transaction local cache of contract codes and their properties.
 	codes map[common.Address]*codeValue
 
+	// A list of accounts to be deleted at the end of the transaction.
+	accountsToDelete []common.Address
+
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
 
@@ -224,6 +227,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		accessedAddresses: map[common.Address]bool{},
 		accessedSlots:     map[slotId]bool{},
 		writtenSlots:      map[*slotValue]bool{},
+		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
 	}
 }
@@ -282,11 +286,11 @@ func (s *stateDB) Exist(addr common.Address) bool {
 
 func (s *stateDB) Suicide(addr common.Address) {
 	s.SetAccountState(addr, common.Deleted)
-	s.SetNonce(addr, 0)
-	s.SetCode(addr, []byte{})
-	// Note: balance is not reset implicitly, this is to be done explicitly to transfere
-	// its value to some target account. If this is missed, the balance remains unchanged.
-	// TODO: delete all the storage of the account
+	deleteListLength := len(s.accountsToDelete)
+	s.accountsToDelete = append(s.accountsToDelete, addr)
+	s.undo = append(s.undo, func() {
+		s.accountsToDelete = s.accountsToDelete[0:deleteListLength]
+	})
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
@@ -648,6 +652,17 @@ func (s *stateDB) EndTransaction() {
 	for value := range s.writtenSlots {
 		value.committed, value.committedKnown = value.current, true
 	}
+
+	// Delete accounts scheduled for deletion.
+	for _, addr := range s.accountsToDelete {
+		s.SetNonce(addr, 0)
+		s.SetCode(addr, []byte{})
+		// Note: balance is not reset implicitly, this is to be done explicitly to transfere
+		// its value to some target account. If this is missed, the balance remains unchanged.
+		// TODO: delete all the storage of the account
+	}
+	s.accountsToDelete = s.accountsToDelete[0:0]
+
 	s.writtenSlots = map[*slotValue]bool{}
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
