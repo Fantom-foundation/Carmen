@@ -15,10 +15,12 @@ cc_test(
     srcs = ["state_test.cc"],
     deps = [
         ":state",
+        ":configurations",
         "//backend/index/memory:index",
         "//backend/store/memory:store",
         "//backend/depot/memory:depot",
         "//common:status_test_util",
+        "//common:file_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
