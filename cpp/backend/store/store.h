@@ -4,8 +4,10 @@
 #include <span>
 #include <type_traits>
 
+#include "absl/status/status.h"
 #include "backend/common/page_id.h"
 #include "backend/structure.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::store {
@@ -44,14 +46,14 @@ concept Store = requires(S a, const S b) {
   {
     a.Set(std::declval<typename S::key_type>(),
           std::declval<typename S::value_type>())
-    } -> std::same_as<void>;
+    } -> std::same_as<absl::Status>;
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, a zero-initialized
   // value is returned. The returned reference might only be valid until the
   // next operation on the store.
   {
     b.Get(std::declval<typename S::key_type>())
-    } -> std::same_as<const typename S::value_type&>;
+    } -> std::same_as<StatusOrRef<const typename S::value_type>>;
 }
 // Stores must satisfy the requirements for backend data structures.
 &&Structure<S>;

@@ -26,19 +26,3 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
-
-cc_library(
-    name = "test_util",
-    hdrs = ["test_util.h"],
-    deps = [
-        ":store",
-        "//backend/store",
-        "//common:hash",
-        "//common:type",
-        "//common:memory_usage",
-        "//common:status_util",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/status:status"
-    ],
-    visibility = ["//visibility:public"],
-)

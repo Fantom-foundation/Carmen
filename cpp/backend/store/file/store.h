@@ -96,13 +96,13 @@ class FileStoreBase {
   ~FileStoreBase() { Close().IgnoreError(); }
 
   // Updates the value associated to the given key.
-  void Set(const K& key, V value);
+  absl::Status Set(const K& key, V value);
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, a zero-initialized
   // value is returned. The returned reference is only valid until the next
   // operation on the store.
-  const V& Get(const K& key) const;
+  StatusOrRef<const V> Get(const K& key) const;
 
   // Computes a hash over the full content of this store.
   absl::StatusOr<Hash> GetHash() const;
@@ -194,22 +194,22 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>>
-void FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key,
-                                                           V value) {
+requires File<F<ArrayPage<V, page_size>>> absl::Status
+FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   auto& trg = pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
     pool_->MarkAsDirty(key / kNumElementsPerPage);
     hashes_->MarkDirty(key / kNumElementsPerPage);
   }
+  return absl::OkStatus();
 }
 
 template <typename K, Trivial V, template <typename> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>>
-const V& FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
-    const K& key) const {
+requires File<F<ArrayPage<V, page_size>>> StatusOrRef<const V>
+FileStoreBase<K, V, F, page_size, eager_hashing>::Get(const K& key)
+const {
   return pool_->Get(key / kNumElementsPerPage)[key % kNumElementsPerPage];
 }
 

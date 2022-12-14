@@ -24,22 +24,22 @@ TEST(InMemoryStoreTest, TypeTraits) {
 TEST(InMemoryStoreTest, SnapshotShieldsMutations) {
   Store store;
 
-  store.Set(10, 12);
-  EXPECT_EQ(store.Get(10), 12);
+  ASSERT_OK(store.Set(10, 12));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(12));
 
   auto snapshot = store.CreateSnapshot();
 
-  store.Set(10, 14);
-  EXPECT_EQ(store.Get(10), 14);
+  ASSERT_OK(store.Set(10, 14));
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(14));
 
   Store restored(*snapshot);
-  EXPECT_EQ(store.Get(10), 14);
-  EXPECT_EQ(restored.Get(10), 12);
+  EXPECT_THAT(store.Get(10), IsOkAndHolds(14));
+  EXPECT_THAT(restored.Get(10), IsOkAndHolds(12));
 }
 
 TEST(InMemoryStoreTest, SnapshotRecoveryHasSameHash) {
   Store store;
-  store.Set(10, 12);
+  ASSERT_OK(store.Set(10, 12));
   ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
   auto snapshot = store.CreateSnapshot();
 
@@ -52,14 +52,14 @@ TEST(InMemoryStoreTest, LargeSnapshotRecoveryWorks) {
 
   Store store;
   for (int i = 0; i < kNumElements; i++) {
-    store.Set(i, i + 10);
+    ASSERT_OK(store.Set(i, i + 10));
   }
   ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
   auto snapshot = store.CreateSnapshot();
 
   Store restored(*snapshot);
   for (int i = 0; i < kNumElements; i++) {
-    EXPECT_EQ(store.Get(i), i + 10);
+    EXPECT_THAT(restored.Get(i), IsOkAndHolds(i + 10));
   }
   EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }

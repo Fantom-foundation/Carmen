@@ -10,6 +10,8 @@
 namespace carmen::backend::store {
 namespace {
 
+using ::testing::IsOkAndHolds;
+
 template <typename T>
 class FileStoreTest : public testing::Test {};
 
@@ -24,7 +26,7 @@ TYPED_TEST_P(FileStoreTest, StoreCanBeSavedAndRestored) {
   {
     ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir.GetPath()));
     for (int i = 0; i < kNumElements; i++) {
-      store.Set(i, i * i);
+      ASSERT_OK(store.Set(i, i * i));
     }
     ASSERT_OK_AND_ASSIGN(hash, store.GetHash());
   }
@@ -33,7 +35,7 @@ TYPED_TEST_P(FileStoreTest, StoreCanBeSavedAndRestored) {
     ASSERT_OK_AND_ASSIGN(auto restored_hash, restored.GetHash());
     EXPECT_EQ(hash, restored_hash);
     for (int i = 0; i < kNumElements; i++) {
-      EXPECT_EQ(restored.Get(i), i * i);
+      EXPECT_THAT(restored.Get(i), IsOkAndHolds(i * i));
     }
   }
 }

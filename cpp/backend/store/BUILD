@@ -4,6 +4,8 @@ cc_library(
     deps = [
         "//backend/common:page_id",
         "//backend:structure",
+        "//common:status_util",
+        "@com_google_absl//absl/status:status",
     ],
     visibility = ["//visibility:public"],
 )
@@ -14,8 +16,6 @@ cc_library(
     deps = [
         "//backend/store/memory:store",
         "//backend/store/file:store",
-        "//backend/store/leveldb:store",
-        "//backend/store/leveldb:test_util",
         "//common:file_util",
         "//common:type", 
     ],
@@ -28,6 +28,7 @@ cc_test(
     deps = [
         ":store_handler",
         "//backend/store/memory:store",
+        "//backend/store/leveldb:store",
         "//backend/store/file:store",
         "//common:test_util",
         "//common:type",
@@ -43,7 +44,9 @@ cc_binary(
         ":store_handler",
         "//backend/store/memory:store",
         "//backend/store/file:store",
+        "//backend/store/leveldb:store",
         "//common:benchmark",
+        "//common:status_test_util",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],

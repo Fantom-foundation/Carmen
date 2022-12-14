@@ -15,7 +15,7 @@
 #include "backend/index/leveldb/multi_db/index.h"
 #include "backend/index/memory/index.h"
 #include "backend/store/file/store.h"
-#include "backend/store/leveldb/test_util.h"
+#include "backend/store/leveldb/store.h"
 #include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/memory_usage.h"
@@ -52,8 +52,7 @@ using LevelDbBasedIndex =
     backend::index::Cached<backend::index::MultiLevelDbIndex<K, I>>;
 
 template <typename K, typename V>
-using LevelDbBasedStore =
-    backend::store::LevelDbStoreTestAdapter<K, V, kPageSize>;
+using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
 
 template <typename K>
 using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;

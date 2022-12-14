@@ -1,8 +1,10 @@
 #include <random>
 
+#include "backend/store/leveldb/store.h"
 #include "backend/store/store_handler.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend::store {
 namespace {
@@ -28,9 +30,9 @@ const auto kSizes = std::vector<int64_t>({1 << 20, 1 << 24});
 template <typename Store>
 void InitStore(Store& store, std::size_t num_elements) {
   for (std::size_t i = 0; i < num_elements; i++) {
-    store.Set(i, Value{1, 2, 3, 4});
+    ASSERT_OK(store.Set(i, Value{1, 2, 3, 4}));
   }
-  store.GetHash().IgnoreError();
+  ASSERT_OK(store.GetHash());
 }
 
 // Benchmarks the sequential insertion of keys into stores.
@@ -41,7 +43,7 @@ void BM_SequentialInsert(benchmark::State& state) {
     StoreHandler<Store, kBranchFactor> wrapper;
     auto& store = wrapper.GetStore();
     for (int i = 0; i < num_elements; i++) {
-      store.Set(i, Value{});
+      ASSERT_OK(store.Set(i, Value{}));
     }
   }
 }
@@ -62,13 +64,13 @@ void BM_Insert(benchmark::State& state) {
   // Append additional elements to the end of the store.
   auto i = num_elements;
   for (auto _ : state) {
-    store.Set(i++, Value{});
+    ASSERT_OK(store.Set(i++, Value{}));
   }
 }
 
 BENCHMARK_ALL(BM_Insert, StoreConfigList)->ArgList(kSizes);
 
-// Benchmarks sequential read of read of keys.
+// Benchmarks sequential read of keys.
 template <typename Store>
 void BM_SequentialRead(benchmark::State& state) {
   auto num_elements = state.range(0);
@@ -142,7 +144,7 @@ void BM_SequentialWrite(benchmark::State& state) {
   int i = 0;
   for (auto _ : state) {
     Value value{static_cast<std::uint8_t>(i)};
-    store.Set(i++ % num_elements, value);
+    ASSERT_OK(store.Set(i++ % num_elements, value));
   }
 }
 
@@ -164,13 +166,13 @@ void BM_UniformRandomWrite(benchmark::State& state) {
   std::uniform_int_distribution<> dist(0, num_elements - 1);
   for (auto _ : state) {
     Value value{static_cast<std::uint8_t>(i++)};
-    store.Set(dist(gen), value);
+    ASSERT_OK(store.Set(dist(gen), value));
   }
 }
 
 BENCHMARK_ALL(BM_UniformRandomWrite, StoreConfigList)->ArgList(kSizes);
 
-// Benchmarks sequential read of read of keys.
+// Benchmarks sequential read of keys.
 template <typename Store>
 void BM_ExponentialRandomWrite(benchmark::State& state) {
   auto num_elements = state.range(0);
@@ -186,7 +188,7 @@ void BM_ExponentialRandomWrite(benchmark::State& state) {
   std::exponential_distribution<> dist(double(10) / num_elements);
   for (auto _ : state) {
     Value value{static_cast<std::uint8_t>(i++)};
-    store.Set(dist(gen), value);
+    ASSERT_OK(store.Set(dist(gen), value));
   }
 }
 
@@ -200,7 +202,7 @@ void RunHashSequentialUpdates(benchmark::State& state) {
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
   InitStore(store, num_elements);
-  store.GetHash().IgnoreError();
+  ASSERT_OK(store.GetHash());
 
   int i = 0;
   for (auto _ : state) {
@@ -211,7 +213,7 @@ void RunHashSequentialUpdates(benchmark::State& state) {
                   static_cast<std::uint8_t>(i >> 16),
                   static_cast<std::uint8_t>(i >> 8),
                   static_cast<std::uint8_t>(i)};
-      store.Set(i++ % num_elements, value);
+      ASSERT_OK(store.Set(i++ % num_elements, value));
     }
     if (!include_write_time) state.ResumeTiming();
 
@@ -235,7 +237,7 @@ void RunHashUniformUpdates(benchmark::State& state) {
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
   InitStore(store, num_elements);
-  store.GetHash().IgnoreError();
+  ASSERT_OK(store.GetHash());
 
   int i = 0;
   std::random_device rd;
@@ -250,7 +252,7 @@ void RunHashUniformUpdates(benchmark::State& state) {
                   static_cast<std::uint8_t>(i >> 8),
                   static_cast<std::uint8_t>(i)};
       i++;
-      store.Set(dist(gen), value);
+      ASSERT_OK(store.Set(dist(gen), value));
     }
     if (!include_write_time) state.ResumeTiming();
 
@@ -274,7 +276,7 @@ void RunHashExponentialUpdates(benchmark::State& state) {
   // Initialize the store with the total number of elements.
   auto& store = wrapper.GetStore();
   InitStore(store, num_elements);
-  store.GetHash().IgnoreError();
+  ASSERT_OK(store.GetHash());
 
   int i = 0;
   std::random_device rd;
@@ -289,7 +291,7 @@ void RunHashExponentialUpdates(benchmark::State& state) {
                   static_cast<std::uint8_t>(i >> 8),
                   static_cast<std::uint8_t>(i)};
       i++;
-      store.Set(std::size_t(dist(gen)) % num_elements, value);
+      ASSERT_OK(store.Set(std::size_t(dist(gen)) % num_elements, value));
     }
     if (!include_write_time) state.ResumeTiming();
 
