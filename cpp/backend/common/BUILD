@@ -37,6 +37,7 @@ cc_library(
         ":page",
         "//common:status_util",
         "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/strings:str_format",
     ],
     visibility = ["//backend:__subpackages__"],
 )
@@ -47,6 +48,7 @@ cc_test(
     deps = [
         ":file",
         "//common:file_util",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -57,6 +59,7 @@ cc_binary(
     deps = [
         ":file",
         "//common:file_util",
+        "//common:status_test_util",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],
@@ -103,6 +106,7 @@ cc_library(
         "//common:memory_usage",
         "//common:status_util",
         "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
     visibility = ["//backend:__subpackages__"],

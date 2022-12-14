@@ -38,16 +38,18 @@ TEST(PagePoolTest, PoolSizeCanBeDefined) {
 
 TEST(PagePoolTest, PagesCanBeFetched) {
   TestPool pool(2);
-  auto& page_12 = pool.Get(12);
-  auto& page_14 = pool.Get(14);
-  EXPECT_NE(&page_12, &page_14);
+  ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get(12));
+  ASSERT_OK_AND_ASSIGN(auto page_14, pool.Get(14));
+  auto& page_12_ref = std::unwrap_reference_t<decltype(page_12)>(page_12);
+  auto& page_14_ref = std::unwrap_reference_t<decltype(page_12)>(page_14);
+  EXPECT_NE(&page_12_ref, &page_14_ref);
 }
 
 TEST(PagePoolTest, FreshFetchedPagesAreZeroInitialized) {
   TestPool pool(2);
-  auto& page_12 = pool.Get(12);
+  ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get(12));
   for (int i = 0; i < 4; i++) {
-    EXPECT_EQ(0, page_12[i]);
+    EXPECT_EQ(0, std::unwrap_reference_t<decltype(page_12)>(page_12)[i]);
   }
 }
 
@@ -58,17 +60,19 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
 
   // Write data to kNumSteps pages;
   for (int i = 0; i < kNumSteps; i++) {
-    auto& page = pool.Get(i);
-    page[0] = i;
-    page[1] = i + 1;
+    ASSERT_OK_AND_ASSIGN(auto page, pool.Get(i));
+    auto& ref = std::unwrap_reference_t<decltype(page)>(page);
+    ref[0] = i;
+    ref[1] = i + 1;
     pool.MarkAsDirty(i);
   }
 
   // Fetch those kNumSteps pages and check the content
   for (int i = 0; i < kNumSteps; i++) {
-    auto& page = pool.Get(i);
-    EXPECT_EQ(i, page[0]);
-    EXPECT_EQ(i + 1, page[1]);
+    ASSERT_OK_AND_ASSIGN(auto page, pool.Get(i));
+    auto& ref = std::unwrap_reference_t<decltype(page)>(page);
+    EXPECT_EQ(i, ref[0]);
+    EXPECT_EQ(i + 1, ref[1]);
   }
 }
 
@@ -92,13 +96,13 @@ TEST(PagePoolTest, ListenersAreNotifiedOnLoad) {
   EXPECT_CALL(mock, AfterLoad(0, _)).InSequence(s);
 
   // Loads page 0 into pool, no eviction.
-  pool.Get(0);
+  ASSERT_OK(pool.Get(0));
 
   // Loads page 1 into pool, evicts page 0, which is not dirty.
-  pool.Get(1);
+  ASSERT_OK(pool.Get(1));
 
   // Loads page 0 into pool, evicts page 1, which is not dirty.
-  pool.Get(0);
+  ASSERT_OK(pool.Get(0));
 }
 
 TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
@@ -113,13 +117,13 @@ TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
   EXPECT_CALL(mock, BeforeEvict(1, _, false)).InSequence(s);
 
   // Loads page 0 into pool, no eviction.
-  pool.Get(0);
+  ASSERT_OK(pool.Get(0));
 
   // Loads page 1 into pool, evicts page 0, which is not dirty.
-  pool.Get(1);
+  ASSERT_OK(pool.Get(1));
 
   // Loads page 0 into pool, evicts page 1, which is not dirty.
-  pool.Get(0);
+  ASSERT_OK(pool.Get(0));
 }
 
 template <carmen::backend::Page P>
@@ -127,8 +131,8 @@ class MockFile {
  public:
   using page_type = P;
   MOCK_METHOD(std::size_t, GetNumPages, ());
-  MOCK_METHOD(void, LoadPage, (PageId id, P& dest));
-  MOCK_METHOD(void, StorePage, (PageId id, const P& src));
+  MOCK_METHOD(absl::Status, LoadPage, (PageId id, P& dest));
+  MOCK_METHOD(absl::Status, StorePage, (PageId id, const P& src));
   MOCK_METHOD(absl::Status, Flush, ());
   MOCK_METHOD(absl::Status, Close, ());
 };
@@ -145,8 +149,8 @@ TEST(PagePoolTest, FlushWritesDirtyPages) {
   EXPECT_CALL(mock, StorePage(10, _));
   EXPECT_CALL(mock, StorePage(20, _));
 
-  pool.Get(10);
-  pool.Get(20);
+  ASSERT_OK(pool.Get(10));
+  ASSERT_OK(pool.Get(20));
   pool.MarkAsDirty(10);
   pool.MarkAsDirty(20);
 
@@ -161,7 +165,7 @@ TEST(PagePoolTest, FlushResetsPageState) {
   EXPECT_CALL(mock, LoadPage(10, _));
   EXPECT_CALL(mock, StorePage(10, _));
 
-  pool.Get(10);
+  ASSERT_OK(pool.Get(10));
   pool.MarkAsDirty(10);
 
   ASSERT_OK(pool.Flush());
@@ -177,8 +181,8 @@ TEST(PagePoolTest, CleanPagesAreNotFlushed) {
   EXPECT_CALL(mock, LoadPage(20, _));
   EXPECT_CALL(mock, StorePage(20, _));
 
-  pool.Get(10);
-  pool.Get(20);
+  ASSERT_OK(pool.Get(10));
+  ASSERT_OK(pool.Get(20));
   pool.MarkAsDirty(20);
 
   ASSERT_OK(pool.Flush());
@@ -194,8 +198,8 @@ TEST(PagePoolTest, ClosingPoolFlushesPagesAndClosesFile) {
   EXPECT_CALL(mock, StorePage(20, _));
   EXPECT_CALL(mock, Close());
 
-  pool.Get(10);
-  pool.Get(20);
+  ASSERT_OK(pool.Get(10));
+  ASSERT_OK(pool.Get(20));
   pool.MarkAsDirty(20);
 
   ASSERT_OK(pool.Close());
@@ -224,9 +228,9 @@ TEST(PagePoolTest, EvictionPolicyIsInformedAboutRead) {
   EXPECT_CALL(mock, Read(1)).InSequence(s);
   EXPECT_CALL(mock, Read(0)).InSequence(s);
 
-  pool.Get(10);
-  pool.Get(20);
-  pool.Get(10);
+  ASSERT_OK(pool.Get(10));
+  ASSERT_OK(pool.Get(20));
+  ASSERT_OK(pool.Get(10));
 }
 
 TEST(PagePoolTest, EvictionPolicyIsInformedAboutWrite) {
@@ -242,9 +246,9 @@ TEST(PagePoolTest, EvictionPolicyIsInformedAboutWrite) {
     EXPECT_CALL(mock, Written(1));
   }
 
-  pool.Get(10);
+  ASSERT_OK(pool.Get(10));
   pool.MarkAsDirty(10);
-  pool.Get(20);
+  ASSERT_OK(pool.Get(20));
   pool.MarkAsDirty(20);
 }
 
@@ -265,10 +269,10 @@ TEST(PagePoolTest, OnEvictionPolicyIsConsultedAndInformed) {
     EXPECT_CALL(mock, Read(0));
   }
 
-  pool.Get(10);
-  pool.Get(20);
-  pool.Get(30);
-  pool.Get(40);
+  ASSERT_OK(pool.Get(10));
+  ASSERT_OK(pool.Get(20));
+  ASSERT_OK(pool.Get(30));
+  ASSERT_OK(pool.Get(40));
 }
 
 TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
@@ -285,9 +289,9 @@ TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
     EXPECT_CALL(mock, Read(_));
   }
 
-  pool.Get(10);
-  pool.Get(20);
-  pool.Get(30);
+  ASSERT_OK(pool.Get(10));
+  ASSERT_OK(pool.Get(20));
+  ASSERT_OK(pool.Get(30));
 }
 
 }  // namespace

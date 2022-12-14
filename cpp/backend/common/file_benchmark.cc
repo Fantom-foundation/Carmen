@@ -6,6 +6,7 @@
 #include "backend/common/page.h"
 #include "benchmark/benchmark.h"
 #include "common/file_util.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend::store {
 namespace {
@@ -28,8 +29,8 @@ namespace {
 template <std::size_t page_size>
 using Page = ArrayPage<std::byte, page_size>;
 
-// An utility wrapper to be specialized for various file implementations to
-// handle them uniformely within benchmarks.
+// A utility wrapper to be specialized for various file implementations to
+// handle them uniformly within benchmarks.
 //
 // The default implementation maintains a File instance and the ownership of a
 // temporary file on disk backing the owned file instance. In particular, it
@@ -87,7 +88,7 @@ void BM_FileInit(benchmark::State& state) {
     FileWrapper<F> wrapper;
     F& file = wrapper.GetFile();
     Page trg;
-    file.StorePage(target_size / sizeof(Page) - 1, trg);
+    ASSERT_OK(file.StorePage(target_size / sizeof(Page) - 1, trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }
@@ -124,7 +125,7 @@ void BM_SequentialFileFilling(benchmark::State& state) {
     F& file = wrapper.GetFile();
     for (std::size_t i = 0; i < target_size / sizeof(Page); i++) {
       Page trg;
-      file.StorePage(i, trg);
+      ASSERT_OK(file.StorePage(i, trg));
       benchmark::DoNotOptimize(trg[0]);
     }
   }
@@ -176,12 +177,12 @@ void BM_SequentialFileRead(benchmark::State& state) {
   F& file = wrapper.GetFile();
   Page trg;
   const auto num_pages = target_size / sizeof(Page);
-  file.StorePage(num_pages - 1, trg);
+  ASSERT_OK(file.StorePage(num_pages - 1, trg));
 
   int i = 0;
   for (auto _ : state) {
     // Load all pages in order.
-    file.LoadPage(i++ % num_pages, trg);
+    ASSERT_OK(file.LoadPage(i++ % num_pages, trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }
@@ -229,7 +230,7 @@ void BM_RandomFileRead(benchmark::State& state) {
   F& file = wrapper.GetFile();
   Page trg;
   const auto num_pages = target_size / sizeof(Page);
-  file.StorePage(num_pages - 1, trg);
+  ASSERT_OK(file.StorePage(num_pages - 1, trg));
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -237,7 +238,7 @@ void BM_RandomFileRead(benchmark::State& state) {
 
   for (auto _ : state) {
     // Load pages in random order.
-    file.LoadPage(distribution(gen), trg);
+    ASSERT_OK(file.LoadPage(distribution(gen), trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }

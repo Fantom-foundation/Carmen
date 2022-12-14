@@ -39,11 +39,11 @@ concept File = requires(F a) {
   {
     a.LoadPage(PageId{}, const_cast<typename F::page_type&>(
                              std::declval<typename F::page_type&>()))
-    } -> std::same_as<void>;
+    } -> std::same_as<absl::Status>;
   // StorePage is intended to be used for fetching a single page from the file.
   {
     a.StorePage(PageId{}, std::declval<typename F::page_type>())
-    } -> std::same_as<void>;
+    } -> std::same_as<absl::Status>;
   // Each file has to support a flush operation after which data previously
   // written must be persisted on disk.
   { a.Flush() } -> std::same_as<absl::Status>;
@@ -65,9 +65,9 @@ class InMemoryFile {
 
   std::size_t GetNumPages() const { return data_.size(); }
 
-  void LoadPage(PageId id, Page& trg) const;
+  absl::Status LoadPage(PageId id, Page& trg) const;
 
-  void StorePage(PageId id, const Page& src);
+  absl::Status StorePage(PageId id, const Page& src);
 
   absl::Status Flush() const {
     // Nothing to do.
@@ -103,12 +103,12 @@ class FStreamFile {
   // Reads a range of bytes from the file to the given span. The provided
   // position is the starting position. The number of bytes to be read is taken
   // from the length of the provided span.
-  void Read(std::size_t pos, std::span<std::byte> span);
+  absl::Status Read(std::size_t pos, std::span<std::byte> span);
 
   // Writes a span of bytes to the file at the given position. If needed, the
   // file is grown to fit all the data of the span. Additional bytes between the
   // current end and the starting position are initialized with zeros.
-  void Write(std::size_t pos, std::span<const std::byte> span);
+  absl::Status Write(std::size_t pos, std::span<const std::byte> span);
 
   // Flushes all pending/buffered writes to disk.
   absl::Status Flush();
@@ -118,7 +118,7 @@ class FStreamFile {
 
  private:
   // Grows the underlying file to the given size.
-  void GrowFileIfNeeded(std::size_t needed);
+  absl::Status GrowFileIfNeeded(std::size_t needed);
 
   std::size_t file_size_;
   std::fstream data_;
@@ -139,12 +139,12 @@ class CFile {
   // Reads a range of bytes from the file to the given span. The provided
   // position is the starting position. The number of bytes to be read is taken
   // from the length of the provided span.
-  void Read(std::size_t pos, std::span<std::byte> span);
+  absl::Status Read(std::size_t pos, std::span<std::byte> span);
 
   // Writes a span of bytes to the file at the given position. If needed, the
   // file is grown to fit all the data of the span. Additional bytes between the
   // current end and the starting position are initialized with zeros.
-  void Write(std::size_t pos, std::span<const std::byte> span);
+  absl::Status Write(std::size_t pos, std::span<const std::byte> span);
 
   // Flushes all pending/buffered writes to disk.
   absl::Status Flush();
@@ -154,7 +154,7 @@ class CFile {
 
  private:
   // Grows the underlying file to the given size.
-  void GrowFileIfNeeded(std::size_t needed);
+  absl::Status GrowFileIfNeeded(std::size_t needed);
 
   std::size_t file_size_;
   std::FILE* file_;
@@ -175,12 +175,12 @@ class PosixFile {
   // Reads a range of bytes from the file to the given span. The provided
   // position is the starting position. The number of bytes to be read is taken
   // from the length of the provided span.
-  void Read(std::size_t pos, std::span<std::byte> span);
+  absl::Status Read(std::size_t pos, std::span<std::byte> span);
 
   // Writes a span of bytes to the file at the given position. If needed, the
   // file is grown to fit all the data of the span. Additional bytes between the
   // current end and the starting position are initialized with zeros.
-  void Write(std::size_t pos, std::span<const std::byte> span);
+  absl::Status Write(std::size_t pos, std::span<const std::byte> span);
 
   // Flushes all pending/buffered writes to disk.
   absl::Status Flush();
@@ -190,7 +190,7 @@ class PosixFile {
 
  private:
   // Grows the underlying file to the given size.
-  void GrowFileIfNeeded(std::size_t needed);
+  absl::Status GrowFileIfNeeded(std::size_t needed);
 
   std::size_t file_size_;
   int fd_;
@@ -209,12 +209,12 @@ class SingleFileBase {
 
   std::size_t GetNumPages() const { return file_.GetFileSize() / sizeof(Page); }
 
-  void LoadPage(PageId id, Page& trg) const {
-    file_.Read(id * sizeof(Page), trg.AsRawData());
+  absl::Status LoadPage(PageId id, Page& trg) const {
+    return file_.Read(id * sizeof(Page), trg.AsRawData());
   }
 
-  void StorePage(PageId id, const Page& src) {
-    file_.Write(id * sizeof(Page), src.AsRawData());
+  absl::Status StorePage(PageId id, const Page& src) {
+    return file_.Write(id * sizeof(Page), src.AsRawData());
   }
 
   absl::Status Flush() { return file_.Flush(); }
@@ -234,18 +234,20 @@ using SingleFile = SingleFileBase<Page, internal::CFile>;
 // ------------------------------- Definitions --------------------------------
 
 template <Page Page>
-void InMemoryFile<Page>::LoadPage(PageId id, Page& trg) const {
+absl::Status InMemoryFile<Page>::LoadPage(PageId id, Page& trg) const {
   static const Block zero{};
   auto src = id >= data_.size() ? &zero : &data_[id];
   std::memcpy(&trg, src, sizeof(Page));
+  return absl::OkStatus();
 }
 
 template <Page Page>
-void InMemoryFile<Page>::StorePage(PageId id, const Page& src) {
+absl::Status InMemoryFile<Page>::StorePage(PageId id, const Page& src) {
   while (data_.size() <= id) {
     data_.resize(id + 1);
   }
   std::memcpy(&data_[id], &src, sizeof(Page));
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend

@@ -6,6 +6,7 @@
 #include <cassert>
 
 #include "absl/status/status.h"
+#include "absl/strings/str_format.h"
 #include "common/status_util.h"
 
 namespace carmen::backend {
@@ -38,21 +39,42 @@ FStreamFile::~FStreamFile() { Close().IgnoreError(); }
 
 std::size_t FStreamFile::GetFileSize() { return file_size_; }
 
-void FStreamFile::Read(std::size_t pos, std::span<std::byte> span) {
+absl::Status FStreamFile::Read(std::size_t pos, std::span<std::byte> span) {
   if (pos + span.size() > file_size_) {
-    assert(pos >= file_size_ && "Reading non-aligned pages!");
-    memset(span.data(), 0, span.size());
-    return;
+    if (pos < file_size_) {
+      return absl::InternalError("Reading non-aligned pages!");
+    }
+    std::memset(span.data(), 0, span.size());
+    return absl::OkStatus();
   }
   data_.seekg(pos);
+  if (!data_.good()) {
+    return absl::InternalError("Failed to seek to position. Error: " +
+                               std::string(std::strerror(errno)));
+  }
   data_.read(reinterpret_cast<char*>(span.data()), span.size());
+  if (!data_.good()) {
+    return absl::InternalError("Failed to read from file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  return absl::OkStatus();
 }
 
-void FStreamFile::Write(std::size_t pos, std::span<const std::byte> span) {
+absl::Status FStreamFile::Write(std::size_t pos,
+                                std::span<const std::byte> span) {
   // Grow file as needed.
-  GrowFileIfNeeded(pos + span.size());
+  RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
   data_.seekp(pos);
+  if (!data_.good()) {
+    return absl::InternalError("Failed to seek to position. Error: " +
+                               std::string(std::strerror(errno)));
+  }
   data_.write(reinterpret_cast<const char*>(span.data()), span.size());
+  if (!data_.good()) {
+    return absl::InternalError("Failed to write to file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status FStreamFile::Flush() {
@@ -76,19 +98,28 @@ absl::Status FStreamFile::Close() {
   return absl::OkStatus();
 }
 
-void FStreamFile::GrowFileIfNeeded(std::size_t needed) {
+absl::Status FStreamFile::GrowFileIfNeeded(std::size_t needed) {
   // Retain a 256 KiB buffer of zeros for initializing disk space.
   constexpr static std::size_t kStepSize = 1 << 18;
   static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
-    return;
+    return absl::OkStatus();
   }
   data_.seekp(0, std::ios::end);
+  if (!data_.good()) {
+    return absl::InternalError("Failed to seek to end of file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
   while (file_size_ < needed) {
     auto step = std::min(kStepSize, needed - file_size_);
     data_.write(kZeros->data(), step);
+    if (!data_.good()) {
+      return absl::InternalError("Failed to write to file. Error: " +
+                                 std::string(std::strerror(errno)));
+    }
     file_size_ += step;
   }
+  return absl::OkStatus();
 }
 
 CFile::CFile(std::filesystem::path file) {
@@ -109,29 +140,57 @@ CFile::~CFile() { Close().IgnoreError(); }
 
 std::size_t CFile::GetFileSize() { return file_size_; }
 
-void CFile::Read(std::size_t pos, std::span<std::byte> span) {
-  if (file_ == nullptr) return;
-  if (pos + span.size() > file_size_) {
-    assert(pos >= file_size_ && "Reading non-aligned pages!");
-    memset(span.data(), 0, span.size());
-    return;
+absl::Status CFile::Read(std::size_t pos, std::span<std::byte> span) {
+  if (file_ == nullptr) {
+    return absl::InternalError("File is not open.");
   }
-  [[maybe_unused]] auto succ = std::fseek(file_, pos, SEEK_SET);
-  assert(succ == 0);
-  [[maybe_unused]] auto len =
-      std::fread(span.data(), sizeof(std::byte), span.size(), file_);
-  assert(len == span.size());
+  if (pos + span.size() > file_size_) {
+    if (pos < file_size_) {
+      return absl::InternalError("Reading non-aligned pages!");
+    }
+    std::memset(span.data(), 0, span.size());
+    return absl::OkStatus();
+  }
+  if (std::fseek(file_, pos, SEEK_SET) != 0) {
+    return absl::InternalError("Failed to seek to position. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  auto len = std::fread(span.data(), sizeof(std::byte), span.size(), file_);
+  if (std::ferror(file_)) {
+    return absl::InternalError("Failed to read from file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  if (len != span.size()) {
+    return absl::InternalError(
+        absl::StrFormat("Read different number of bytes than requested."
+                        " Requested: %d, Read: %d",
+                        span.size(), len));
+  }
+  return absl::OkStatus();
 }
 
-void CFile::Write(std::size_t pos, std::span<const std::byte> span) {
-  if (file_ == nullptr) return;
+absl::Status CFile::Write(std::size_t pos, std::span<const std::byte> span) {
+  if (file_ == nullptr) {
+    return absl::InternalError("File is not open.");
+  }
   // Grow file as needed.
-  GrowFileIfNeeded(pos + span.size());
-  [[maybe_unused]] auto succ = std::fseek(file_, pos, SEEK_SET);
-  assert(succ == 0);
-  [[maybe_unused]] auto len =
-      std::fwrite(span.data(), sizeof(std::byte), span.size(), file_);
-  assert(len == span.size());
+  RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
+  if (std::fseek(file_, pos, SEEK_SET) != 0) {
+    return absl::InternalError("Failed to seek to position. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  auto len = std::fwrite(span.data(), sizeof(std::byte), span.size(), file_);
+  if (std::ferror(file_)) {
+    return absl::InternalError("Failed to write to file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  if (len != span.size()) {
+    return absl::InternalError(
+        absl::StrFormat("Wrote different number of bytes than requested."
+                        " Requested: %d, Written: %d",
+                        span.size(), len));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status CFile::Flush() {
@@ -154,21 +213,31 @@ absl::Status CFile::Close() {
   return absl::OkStatus();
 }
 
-void CFile::GrowFileIfNeeded(std::size_t needed) {
+absl::Status CFile::GrowFileIfNeeded(std::size_t needed) {
   // Retain a 256 KiB buffer of zeros for initializing disk space.
   constexpr static std::size_t kStepSize = 1 << 18;
   static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
-    return;
+    return absl::OkStatus();
   }
-  std::fseek(file_, 0, SEEK_END);
+  if (std::fseek(file_, 0, SEEK_END) != 0) {
+    return absl::InternalError("Failed to seek to end of file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
   while (file_size_ < needed) {
     auto step = std::min(kStepSize, needed - file_size_);
-    [[maybe_unused]] auto len =
-        fwrite(kZeros->data(), sizeof(std::byte), step, file_);
-    assert(len == step);
+    auto len = std::fwrite(kZeros->data(), sizeof(std::byte), step, file_);
+    if (std::ferror(file_)) {
+      return absl::InternalError("Failed to write to file. Error: " +
+                                 std::string(std::strerror(errno)));
+    }
+    if (len != step) {
+      return absl::InternalError(
+          "Wrote different number of bytes than requested.");
+    }
     file_size_ += step;
   }
+  return absl::OkStatus();
 }
 
 PosixFile::PosixFile(std::filesystem::path file) {
@@ -192,26 +261,59 @@ PosixFile::~PosixFile() { Close().IgnoreError(); }
 
 std::size_t PosixFile::GetFileSize() { return file_size_; }
 
-void PosixFile::Read(std::size_t pos, std::span<std::byte> span) {
-  if (fd_ < 0) return;
-  if (pos + span.size() > file_size_) {
-    assert(pos >= file_size_ && "Reading non-aligned pages!");
-    memset(span.data(), 0, span.size());
-    return;
+absl::Status PosixFile::Read(std::size_t pos, std::span<std::byte> span) {
+  if (fd_ < 0) {
+    return absl::InternalError("File is not open.");
   }
-  GrowFileIfNeeded(pos + span.size());
-  lseek(fd_, pos, SEEK_SET);
-  [[maybe_unused]] auto len = read(fd_, span.data(), span.size());
-  assert(len == static_cast<ssize_t>(span.size()));
+  if (pos + span.size() > file_size_) {
+    if (pos < file_size_) {
+      return absl::InternalError("Reading non-aligned pages!");
+    }
+    std::memset(span.data(), 0, span.size());
+    return absl::OkStatus();
+  }
+  RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
+  if (lseek(fd_, pos, SEEK_SET) == -1) {
+    return absl::InternalError("Failed to seek to position. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  auto len = read(fd_, span.data(), span.size());
+  if (len == -1) {
+    return absl::InternalError("Failed to read from file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  if (len != static_cast<ssize_t>(span.size())) {
+    return absl::InternalError(
+        absl::StrFormat("Read different number of bytes than requested."
+                        " Requested: %d, Read: %d",
+                        span.size(), len));
+  }
+  return absl::OkStatus();
 }
 
-void PosixFile::Write(std::size_t pos, std::span<const std::byte> span) {
-  if (fd_ < 0) return;
+absl::Status PosixFile::Write(std::size_t pos,
+                              std::span<const std::byte> span) {
+  if (fd_ < 0) {
+    return absl::InternalError("File is not open.");
+  }
   // Grow file as needed.
-  GrowFileIfNeeded(pos + span.size());
-  lseek(fd_, pos, SEEK_SET);
-  [[maybe_unused]] auto len = write(fd_, span.data(), span.size());
-  assert(len == static_cast<ssize_t>(span.size()));
+  RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
+  if (lseek(fd_, pos, SEEK_SET) == -1) {
+    return absl::InternalError("Failed to seek to position. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  auto len = write(fd_, span.data(), span.size());
+  if (len == -1) {
+    return absl::InternalError("Failed to write to file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  if (len != static_cast<ssize_t>(span.size())) {
+    return absl::InternalError(
+        absl::StrFormat("Wrote different number of bytes than requested."
+                        "Wrote %d, requested %d",
+                        len, span.size()));
+  }
+  return absl::OkStatus();
 }
 
 absl::Status PosixFile::Flush() {
@@ -234,24 +336,40 @@ absl::Status PosixFile::Close() {
   return absl::OkStatus();
 }
 
-void PosixFile::GrowFileIfNeeded(std::size_t needed) {
+absl::Status PosixFile::GrowFileIfNeeded(std::size_t needed) {
   // Retain a 256 KiB buffer of zeros for initializing disk space.
   constexpr static std::size_t kStepSize = 1 << 18;
   static auto kZeros = std::make_unique<ArrayPage<int, kStepSize>>();
   if (file_size_ >= needed) {
-    return;
+    return absl::OkStatus();
   }
-  [[maybe_unused]] auto offset = lseek(fd_, 0, SEEK_END);
-  assert(offset == static_cast<off_t>(file_size_));
+  auto offset = lseek(fd_, 0, SEEK_END);
+  if (offset == -1) {
+    return absl::InternalError("Failed to seek to end of file. Error: " +
+                               std::string(std::strerror(errno)));
+  }
+  if (offset != static_cast<off_t>(file_size_)) {
+    return absl::InternalError(
+        absl::StrFormat("Failed to seek to end of file. Expected position: %d, "
+                        "actual position: %d",
+                        file_size_, offset));
+  }
   while (file_size_ < needed) {
     auto step = std::min(kStepSize, needed - file_size_);
     auto len = write(fd_, kZeros->AsRawData().data(), step);
     if (len < 0) {
-      perror("Error growing file");
+      return absl::InternalError("Failed to write to file. Error: " +
+                                 std::string(std::strerror(errno)));
     }
-    assert(len == static_cast<ssize_t>(step));
+    if (len != static_cast<ssize_t>(step)) {
+      return absl::InternalError(
+          absl::StrFormat("Wrote different number of bytes than requested."
+                          "Expected: %d, actual: %d",
+                          step, len));
+    }
     file_size_ += step;
   }
+  return absl::OkStatus();
 }
 
 }  // namespace internal

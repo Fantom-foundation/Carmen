@@ -6,6 +6,7 @@
 #include "backend/common/page.h"
 #include "backend/common/page_pool.h"
 #include "benchmark/benchmark.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend {
 namespace {
@@ -24,10 +25,10 @@ class DummyFile {
 
   std::size_t GetNumPages() { return kFileSize; }
 
-  void LoadPage(PageId, Page&) {}
-  void StorePage(PageId, const Page&) {}
-  absl::Status Flush() {}
-  absl::Status Close() {}
+  absl::Status LoadPage(PageId, Page&) { return absl::OkStatus(); }
+  absl::Status StorePage(PageId, const Page&) { return absl::OkStatus(); }
+  absl::Status Flush() { return absl::OkStatus(); }
+  absl::Status Close() { return absl::OkStatus(); }
 };
 
 template <EvictionPolicy Policy>
@@ -42,12 +43,12 @@ void BM_ReadTest(benchmark::State& state) {
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
-    pool.Get(i);
+    ASSERT_OK(pool.Get(i));
   }
 
   AccessOrder order(kFileSize);
   for (auto _ : state) {
-    pool.Get(order.Next());
+    ASSERT_OK(pool.Get(order.Next()));
   }
 }
 
@@ -74,14 +75,14 @@ void BM_WriteTest(benchmark::State& state) {
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
-    pool.Get(i);
+    ASSERT_OK(pool.Get(i));
     pool.MarkAsDirty(i);
   }
 
   AccessOrder order(kFileSize);
   for (auto _ : state) {
     auto pos = order.Next();
-    pool.Get(pos);
+    ASSERT_OK(pool.Get(pos));
     pool.MarkAsDirty(pos);
   }
 }

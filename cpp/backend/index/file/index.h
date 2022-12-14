@@ -320,17 +320,20 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   Page* page;
   auto tail = GetTail(bucket);
   if (tail == kNullPage) {
-    page = &primary_pool_.Get(bucket);
+    ASSIGN_OR_RETURN(auto result, primary_pool_.GetPage(bucket));
+    page = &result;
     primary_pool_.MarkAsDirty(bucket);
   } else {
-    page = &overflow_pool_.Get(tail);
+    ASSIGN_OR_RETURN(auto result, overflow_pool_.GetPage(tail));
+    page = &result;
     overflow_pool_.MarkAsDirty(tail);
   }
 
   if (page->Insert(hash, key, size_ - 1) == nullptr) {
     auto new_overflow_id = GetFreeOverflowPageId();
     page->SetNext(new_overflow_id);
-    auto overflow_page = &overflow_pool_.Get(new_overflow_id);
+    ASSIGN_OR_RETURN(auto result, overflow_pool_.GetPage(new_overflow_id));
+    auto overflow_page = &result;
     assert(overflow_page->Size() == 0);
     assert(overflow_page->GetNext() == 0);
     SetTail(bucket, new_overflow_id);
@@ -423,7 +426,12 @@ void FileIndex<K, I, F, page_size>::Dump() const {
             << num_buckets_ << " buckets\n";
   for (std::size_t i = 0; i < num_buckets_; i++) {
     std::cout << "\tBucket " << i << ":\n";
-    Page* page = &primary_pool_.Get(i);
+    auto result = primary_pool_.Get(i);
+    if (!result.ok()) {
+      std::cout << "\t\tError: " << result.status() << "\n";
+      continue;
+    }
+    Page* page = &(*result);
     while (page != nullptr) {
       page->Dump();
       auto next = page->GetNext();
@@ -453,13 +461,13 @@ FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
   auto bucket = GetBucket(hash);
 
   // Search within that bucket.
-  Page* cur = &primary_pool_.Get(bucket);
+  Page* cur = &(*primary_pool_.Get(bucket));
   while (cur != nullptr) {
     if (auto entry = cur->Find(hash, key)) {
       return {hash, bucket, entry};
     }
     PageId next = cur->GetNext();
-    cur = next != 0 ? &overflow_pool_.Get(next) : nullptr;
+    cur = next != 0 ? &(*overflow_pool_.Get(next)) : nullptr;
   }
 
   // Report a nullpointer if nothing was found.
@@ -496,14 +504,14 @@ void FileIndex<K, I, F, page_size>::Split() {
 
   // Load data from page to be split into memory.
   std::deque<Entry> entries;
-  Page* page = &primary_pool_.Get(old_bucket_id);
+  Page* page = &(*primary_pool_.Get(old_bucket_id));
   while (page != nullptr) {
     for (std::size_t i = 0; i < page->Size(); i++) {
       entries.push_back((*page)[i]);
     }
     auto next = page->GetNext();
     if (next != 0) {
-      page = &overflow_pool_.Get(next);
+      page = &(*overflow_pool_.Get(next));
     } else {
       page = nullptr;
     }
@@ -530,7 +538,7 @@ void FileIndex<K, I, F, page_size>::Split() {
   std::sort(new_bucket.begin(), new_bucket.end());
 
   // Write old entries into old bucket.
-  page = &primary_pool_.Get(old_bucket_id);
+  page = &(*primary_pool_.Get(old_bucket_id));
   primary_pool_.MarkAsDirty(old_bucket_id);
   int i = 0;
   ResetTail(old_bucket_id);
@@ -540,7 +548,7 @@ void FileIndex<K, I, F, page_size>::Split() {
       page->Resize(Page::kNumEntries);
       auto next = page->GetNext();
       assert(next != 0);
-      page = &overflow_pool_.Get(next);
+      page = &(*overflow_pool_.Get(next));
       overflow_pool_.MarkAsDirty(next);
       SetTail(old_bucket_id, next);
       i = 0;
@@ -556,7 +564,7 @@ void FileIndex<K, I, F, page_size>::Split() {
     if (next != 0) {
       page->SetNext(0);
       ReturnOverflowPage(next);
-      page = &overflow_pool_.Get(next);
+      page = &(*overflow_pool_.Get(next));
       page->Resize(0);
       overflow_pool_.MarkAsDirty(next);
     } else {
@@ -565,7 +573,7 @@ void FileIndex<K, I, F, page_size>::Split() {
   }
 
   // Write new entries into new bucket.
-  page = &primary_pool_.Get(new_bucket_id);
+  page = &(*primary_pool_.Get(new_bucket_id));
   i = 0;
   primary_pool_.MarkAsDirty(new_bucket_id);
   for (const Entry& entry : new_bucket) {
@@ -574,7 +582,7 @@ void FileIndex<K, I, F, page_size>::Split() {
       page->Resize(Page::kNumEntries);
       auto next = GetFreeOverflowPageId();
       page->SetNext(next);
-      page = &overflow_pool_.Get(next);
+      page = &(*overflow_pool_.Get(next));
       overflow_pool_.MarkAsDirty(next);
       assert(page->GetNext() == 0);
       SetTail(new_bucket_id, next);

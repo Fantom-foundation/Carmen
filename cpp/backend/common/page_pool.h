@@ -6,6 +6,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/common/eviction_policy.h"
 #include "backend/common/file.h"
 #include "common/memory_usage.h"
@@ -50,7 +51,7 @@ class PagePool {
   // the existing page is returned. If the page is missing, it is fetched from
   // the disk. This may require the eviction of another page.
   // Note: the returned reference is only valid until the next Get() call.
-  Page& Get(PageId id);
+  StatusOrRef<Page> Get(PageId id);
 
   // Marks the given page as being modified. Thus, before it gets evicted from
   // the pool, it needs to be written back to the file.
@@ -77,10 +78,10 @@ class PagePool {
  private:
   // Obtains a free slot in the pool. If all are occupied, a page is evicted to
   // make space.
-  std::size_t GetFreeSlot();
+  absl::StatusOr<std::size_t> GetFreeSlot();
 
   // Performs the eviction of a page at the given position.
-  void EvictSlot(int position);
+  absl::Status EvictSlot(int position);
 
   // The file used for loading and storing pages.
   std::unique_ptr<File> file_;
@@ -142,7 +143,7 @@ requires File<F<P>> PagePool<P, F, E>::PagePool(std::unique_ptr<File> file,
 
 template <typename P, template <typename> class F, EvictionPolicy E>
 requires File<F<P>>
-typename PagePool<P, F, E>::Page& PagePool<P, F, E>::Get(PageId id) {
+StatusOrRef<typename PagePool<P, F, E>::Page> PagePool<P, F, E>::Get(PageId id) {
   // Try to locate the page in the pool first.
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
@@ -151,9 +152,9 @@ typename PagePool<P, F, E>::Page& PagePool<P, F, E>::Get(PageId id) {
   }
 
   // The page is missing, so we need to load it from disk.
-  auto idx = GetFreeSlot();
+  ASSIGN_OR_RETURN(auto idx, GetFreeSlot());
   Page& page = pool_[idx];
-  file_->LoadPage(id, page);
+  RETURN_IF_ERROR(file_->LoadPage(id, page));
   pages_to_index_[id] = idx;
   index_to_pages_[idx] = id;
   eviction_policy_.Read(idx);
@@ -191,7 +192,7 @@ requires File<F<P>> absl::Status PagePool<P, F, E>::Flush() {
   }
   for (std::size_t i = 0; i < pool_.size(); i++) {
     if (!dirty_[i]) continue;
-    file_->StorePage(index_to_pages_[i], pool_[i]);
+    RETURN_IF_ERROR(file_->StorePage(index_to_pages_[i], pool_[i]));
     dirty_[i] = false;
   }
   return absl::OkStatus();
@@ -220,7 +221,7 @@ const {
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>> std::size_t PagePool<P, F, E>::GetFreeSlot() {
+requires File<F<P>> absl::StatusOr<std::size_t> PagePool<P, F, E>::GetFreeSlot() {
   // If there are unused pages, use those first.
   if (!free_list_.empty()) {
     std::size_t res = free_list_.back();
@@ -237,13 +238,13 @@ requires File<F<P>> std::size_t PagePool<P, F, E>::GetFreeSlot() {
   }
 
   // Evict page to make space.
-  EvictSlot(*trg);
+  RETURN_IF_ERROR(EvictSlot(*trg));
   return *trg;
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
 requires File<F<P>>
-void PagePool<P, F, E>::EvictSlot(int pos) {
+absl::Status PagePool<P, F, E>::EvictSlot(int pos) {
   // Notify listeners about pending eviction.
   auto page_id = index_to_pages_[pos];
   bool is_dirty = dirty_[pos];
@@ -253,13 +254,14 @@ void PagePool<P, F, E>::EvictSlot(int pos) {
 
   // Write to file if dirty.
   if (is_dirty) {
-    file_->StorePage(page_id, pool_[pos]);
+    RETURN_IF_ERROR(file_->StorePage(page_id, pool_[pos]));
     dirty_[pos] = false;
   }
 
   // Erase page ID association of slot.
   pages_to_index_.erase(page_id);
   eviction_policy_.Removed(pos);
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend
