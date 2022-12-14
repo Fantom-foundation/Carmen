@@ -31,7 +31,6 @@ using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 
 using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
 
-
 // ----------------------------------------------------------------------------
 //                         File-Based Configuration
 // ----------------------------------------------------------------------------
@@ -48,7 +47,6 @@ template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
 using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot>;
-
 
 // ----------------------------------------------------------------------------
 //                         LevelDB-Based Configuration
