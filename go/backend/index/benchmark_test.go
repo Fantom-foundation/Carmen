@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/cache"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -54,7 +55,7 @@ type testConfig[K comparable, I common.Identifier] struct {
 
 // BenchmarkInsert benchmark inserts N keys into index implementations and measures addition of a sample .
 func BenchmarkInsert(b *testing.B) {
-	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{})
+	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
 	for _, c := range config {
 		for _, initialSize := range c.initialSizes {
 			idx := c.getIndex() // create the Index instance
@@ -73,7 +74,7 @@ func BenchmarkInsert(b *testing.B) {
 
 // BenchmarkRead benchmark inserts N keys into index implementations and measures read of a sample .
 func BenchmarkRead(b *testing.B) {
-	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{})
+	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
 	for _, c := range config {
 		for _, initialSize := range c.initialSizes {
 			idx := c.getIndex() // create the Index instance
@@ -92,7 +93,7 @@ func BenchmarkRead(b *testing.B) {
 
 // BenchmarkHash benchmark inserts N keys into index implementations and measures hashing of addition sample.
 func BenchmarkHash(b *testing.B) {
-	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{})
+	config := createConfiguration[common.Key, uint32](b, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
 	for _, c := range config {
 		for _, initialSize := range c.initialSizes {
 			idx := c.getIndex() // create the Index instance
@@ -172,11 +173,36 @@ func createMemoryIndex[K comparable, I common.Identifier](keySerializer common.S
 	return newIndexWrapper[K, I](keySerializer, memory.NewIndex[K, I](keySerializer))
 }
 
+// createMemoryIndex creates instance of memory index
+func createLinearHashMemoryIndex[K comparable, I common.Identifier](keySerializer common.Serializer[K], indexSerializer common.Serializer[I], hasher common.Hasher[K], comparator common.Comparator[K]) indexWrapper[K, I] {
+	return newIndexWrapper[K, I](keySerializer, memory.NewLinearHashIndex[K, I](keySerializer, indexSerializer, hasher, comparator))
+}
+
+// createFileIndex creates instance of file index
+func createFileIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I], hasher common.Hasher[K], comparator common.Comparator[K]) indexWrapper[K, I] {
+	idx, err := file.NewIndex[K, I](b.TempDir(), keySerializer, indexSerializer, hasher, comparator)
+	if err != nil {
+		b.Fatalf("failed to init file index; %s", err)
+	}
+	wrapper := newIndexWrapper[K, I](keySerializer, idx)
+	wrapper.cleanUp(idx.Close)
+	return wrapper
+}
+
+// createFileIndex creates instance of file index
+func createCachedFileIndex[K comparable, I common.Identifier](b *testing.B, cacheSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I], hasher common.Hasher[K], comparator common.Comparator[K]) indexWrapper[K, I] {
+	idx := createFileIndex[K, I](b, keySerializer, indexSerializer, hasher, comparator)
+	cached := cache.NewIndex[K, I](idx.idx, cacheSize)
+	wrapper := newIndexWrapper[K, I](keySerializer, cached)
+	wrapper.cleanUp(cached.Close)
+	return wrapper
+}
+
 // createLevelDbIndex create instance of LevelDB index
 func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
 	db, err := common.OpenLevelDb(b.TempDir(), nil)
 	if err != nil {
-		b.Errorf("failed to init leveldb; %s", err)
+		b.Fatalf("failed to init leveldb; %s", err)
 	}
 
 	idx, err := ldb.NewIndex[K, I](db, common.SlotStoreKey, keySerializer, indexSerializer)
@@ -195,7 +221,7 @@ func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing
 	// database instance shared by all index instances
 	db, err := common.OpenLevelDb(b.TempDir(), nil)
 	if err != nil {
-		b.Errorf("failed to init leveldb; %s", err)
+		b.Fatalf("failed to init leveldb; %s", err)
 	}
 
 	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.SlotStoreKey, common.ValueStoreKey}
@@ -309,18 +335,27 @@ var sinkHash common.Hash
 
 // toKey converts the key from an input uint32 to the generic Key
 func (iw *indexWrapper[K, I]) toKey(key uint32) K {
-	keyBytes := binary.BigEndian.AppendUint32(make([]byte, 0, 32), key)
+	keyBytes := make([]byte, 32)
+	binary.BigEndian.PutUint32(keyBytes, key)
 	return iw.keySerializer.FromBytes(keyBytes)
 }
 
-func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) []testConfig[K, I] {
+func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I], hasher common.Hasher[K], comparator common.Comparator[K]) []testConfig[K, I] {
 
 	// the size of buffer for transaction execution
 	transactWriteBuffer := 1024 * opt.MiB
-
 	cacheCapacity := 1 << 25 // number of items: 2 ^ 25 * 32B = 1GB
 
 	memoryIndexFunc := func() indexWrapper[K, I] { return createMemoryIndex[K, I](keySerializer) }
+	linearHashMemoryIndexFunc := func() indexWrapper[K, I] {
+		return createLinearHashMemoryIndex[K, I](keySerializer, indexSerializer, hasher, comparator)
+	}
+	linearHashFileIndexFunc := func() indexWrapper[K, I] {
+		return createFileIndex[K, I](b, keySerializer, indexSerializer, hasher, comparator)
+	}
+	linearHashCachedFileIndexFunc := func() indexWrapper[K, I] {
+		return createCachedFileIndex[K, I](b, cacheCapacity, keySerializer, indexSerializer, hasher, comparator)
+	}
 	levelDbIndexFunc := func() indexWrapper[K, I] { return createLevelDbIndex[K, I](b, keySerializer, indexSerializer) }
 	sharedLevelDbIndexFunc := func() indexWrapper[K, I] {
 		return createSharedMultiLevelDbIndex[K, I](b, keySerializer, indexSerializer)
@@ -339,11 +374,11 @@ func createConfiguration[K comparable, I common.Identifier](b *testing.B, keySer
 	initialSizes := []uint32{1 << 20, 1 << 24, 1 << 30}
 	updateSizes := []uint32{100}
 
-	//initialSizes := []uint32{1 << 5, 1 << 10} // debug Ns
-	//updateSizes := []uint32{1, 2}             // debug Ms
-
 	return []testConfig[K, I]{
 		{"Memory", initialSizes, updateSizes, memoryIndexFunc},
+		{"MemoryLinearHash", initialSizes, updateSizes, linearHashMemoryIndexFunc},
+		{"File", initialSizes, updateSizes, linearHashFileIndexFunc},
+		{"CachedFile", initialSizes, updateSizes, linearHashCachedFileIndexFunc},
 		{"LevelDb", initialSizes, updateSizes, levelDbIndexFunc},
 		{"SharedLevelDb", initialSizes, updateSizes, sharedLevelDbIndexFunc},
 		{"EachLevelDb", initialSizes, updateSizes, eachLevelDbIndexFunc},

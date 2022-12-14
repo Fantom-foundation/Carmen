@@ -3,6 +3,7 @@ package index_test
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -19,15 +20,19 @@ func initIndexes(t *testing.T) (indexes []index.Index[common.Address, uint32]) {
 	idSerializer := common.Identifier32Serializer{}
 
 	memindex := memory.NewIndex[common.Address, uint32](keySerializer)
+	memLinearHashIndex := memory.NewLinearHashIndex[common.Address, uint32](keySerializer, idSerializer, common.AddressHasher{}, common.AddressComparator{})
 	ldbindex, _ := ldb.NewIndex[common.Address, uint32](db, common.BalanceStoreKey, keySerializer, idSerializer)
+	fileIndex, _ := file.NewIndex[common.Address, uint32](t.TempDir(), keySerializer, idSerializer, common.AddressHasher{}, common.AddressComparator{})
 
 	t.Cleanup(func() {
-		memindex.Close()
-		ldbindex.Close()
-		db.Close()
+		_ = memindex.Close()
+		_ = ldbindex.Close()
+		_ = db.Close()
+		_ = memLinearHashIndex.Close()
+		_ = fileIndex.Close()
 	})
 
-	return []index.Index[common.Address, uint32]{memindex, ldbindex}
+	return []index.Index[common.Address, uint32]{memindex, memLinearHashIndex, ldbindex, fileIndex}
 }
 
 func TestIndexesInitialHash(t *testing.T) {

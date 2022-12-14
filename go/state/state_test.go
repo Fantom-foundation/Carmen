@@ -37,7 +37,7 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, s State)) {
 }
 
 func testHashAfterModification(t *testing.T, mod func(s State)) {
-	ref, err := NewMemory()
+	ref, err := NewGoMemoryState()
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}

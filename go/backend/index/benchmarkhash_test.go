@@ -3,7 +3,7 @@ package index_test
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 )
@@ -15,15 +15,15 @@ var hashSink common.Hash
 // hashWrapper wraps an instance of the hash index to have serializers and the hash index available at hand
 type hashWrapper[K comparable] struct {
 	serializer common.Serializer[K]
-	hashIdx    *hashindex.HashIndex[K]
+	hashIdx    *indexhash.IndexHash[K]
 }
 
 // BenchmarkHashTree benchmarks only computation of the hash for the index
 func BenchmarkHashIndex(b *testing.B) {
 	serializer := common.KeySerializer{}
-	hw := hashWrapper[common.Key]{serializer, hashindex.NewHashIndex[common.Key](serializer)}
+	hw := hashWrapper[common.Key]{serializer, indexhash.NewIndexHash[common.Key](serializer)}
 	for _, updateHashSize := range updateKeysSizes {
-		b.Run(fmt.Sprintf("HashIndex updsteSize %d", updateHashSize), func(b *testing.B) {
+		b.Run(fmt.Sprintf("IndexHash updsteSize %d", updateHashSize), func(b *testing.B) {
 			hw.benchmarkHash(b, updateHashSize)
 		})
 	}
@@ -47,6 +47,7 @@ func (hw hashWrapper[K]) benchmarkHash(b *testing.B, updateKeys int) {
 
 // toKey converts the key from an input uint32 to the generic Key
 func (hw hashWrapper[K]) toKey(key uint32) K {
-	keyBytes := binary.BigEndian.AppendUint32([]byte{}, key)
+	keyBytes := make([]byte, 32)
+	binary.BigEndian.PutUint32(keyBytes, key)
 	return hw.serializer.FromBytes(keyBytes)
 }

@@ -1571,7 +1571,7 @@ func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 }
 
 func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
-	ref_state, err := NewMemory()
+	ref_state, err := NewGoMemoryState()
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}

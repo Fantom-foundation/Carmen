@@ -1,4 +1,4 @@
-package hashindex
+package indexhash
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ const (
 )
 
 func TestCommit(t *testing.T) {
-	hashIndex := NewHashIndex[common.Address](common.AddressSerializer{})
+	hashIndex := NewIndexHash[common.Address](common.AddressSerializer{})
 
 	// the hash is the default one first
 	h0, _ := hashIndex.Commit()

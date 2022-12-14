@@ -419,7 +419,7 @@ func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
 	if val != nil {
 		val.stored, val.storedKnown = stored, true
 	} else {
-		s.data.Set(sid, &slotValue{
+		s.data.Put(sid, &slotValue{
 			stored:         stored,
 			committed:      stored,
 			current:        stored,
@@ -453,14 +453,14 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		}
 	} else {
 		entry = &slotValue{current: value}
-		s.data.Set(sid, entry)
+		s.data.Put(sid, entry)
 		s.writtenSlots[entry] = true
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
 			if entry.committedKnown {
 				entry.current = entry.committed
 			} else {
-				s.data.Delete(sid)
+				s.data.Remove(sid)
 			}
 			delete(s.writtenSlots, entry)
 		})
@@ -729,7 +729,7 @@ func (s *stateDB) EndBlock() {
 	}
 
 	// Update storage values in state DB
-	slots := make([]slotId, 0, s.data.Length())
+	slots := make([]slotId, 0, s.data.Size())
 	s.data.ForEach(func(slot slotId, value *slotValue) {
 		if !value.storedKnown || value.stored != value.current {
 			slots = append(slots, slot)
@@ -809,7 +809,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("accounts", common.NewMemoryFootprint(uintptr(len(s.accounts))*(addressSize+unsafe.Sizeof(accountState{})+unsafe.Sizeof(common.AccountState(0)))))
 	mf.AddChild("balances", common.NewMemoryFootprint(uintptr(len(s.balances))*(addressSize+unsafe.Sizeof(balanceValue{}))))
 	mf.AddChild("nonces", common.NewMemoryFootprint(uintptr(len(s.nonces))*(addressSize+unsafe.Sizeof(nonceValue{})+8)))
-	mf.AddChild("slots", common.NewMemoryFootprint(uintptr(s.data.Length())*(slotIdSize+unsafe.Sizeof(slotValue{}))))
+	mf.AddChild("slots", common.NewMemoryFootprint(uintptr(s.data.Size())*(slotIdSize+unsafe.Sizeof(slotValue{}))))
 
 	var sum uintptr = 0
 	for _, value := range s.codes {

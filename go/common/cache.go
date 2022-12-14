@@ -1,7 +1,8 @@
 package common
 
+import "fmt"
+
 import (
-	"fmt"
 	"unsafe"
 )
 
@@ -23,13 +24,6 @@ func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 		cache:    make(map[K]*entry[K, V], capacity),
 		capacity: capacity,
 	}
-}
-
-// Clear removes the whole content of the cache
-func (c *Cache[K, V]) Clear() {
-	c.cache = make(map[K]*entry[K, V], c.capacity)
-	c.head = nil
-	c.tail = nil
 }
 
 // Iterate all cached entries - calls the callback for each key-value pair in the cache
@@ -100,6 +94,47 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
 	return
 }
 
+// Remove deletes the key from the map and returns the deleted value
+func (c *Cache[K, V]) Remove(key K) (original V, exists bool) {
+	item, exists := c.cache[key]
+	if exists {
+		original = item.val
+		delete(c.cache, key)
+
+		// single item list
+		if c.head == c.tail {
+			c.head = nil
+			c.tail = nil
+		}
+
+		// update not in the tail
+		if item.next != nil {
+			item.next.prev = item.prev
+
+			if item == c.head {
+				c.head = item.next
+			}
+		}
+
+		// update not in the head
+		if item.prev != nil {
+			item.prev.next = item.next
+
+			if item == c.tail {
+				c.tail = item.prev
+			}
+		}
+	}
+
+	return
+}
+
+func (c *Cache[K, V]) Clear() {
+	c.cache = make(map[K]*entry[K, V], c.capacity)
+	c.head = nil
+	c.tail = nil
+}
+
 // touch marks the entry used
 func (c *Cache[K, V]) touch(item *entry[K, V]) {
 	// already head
@@ -139,8 +174,9 @@ func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 // If V is a pointer type, it needs to provide the size of a referenced value.
 // If the size is different for individual values, use GetDynamicMemoryFootprint instead.
 func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
+	selfSize := unsafe.Sizeof(*c)
 	entrySize := unsafe.Sizeof(entry[K, V]{})
-	mf := NewMemoryFootprint(uintptr(c.capacity) * (entrySize + referencedValueSize))
+	mf := NewMemoryFootprint(selfSize + uintptr(c.capacity)*(entrySize+referencedValueSize))
 	if MissHitMeasuring {
 		mf.SetNote(c.getHitRatioReport())
 	}
@@ -150,11 +186,14 @@ func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFoo
 // GetDynamicMemoryFootprint provides the size of the cache in memory in bytes for values,
 // which reference dynamic amount of memory - like slices.
 func (c *Cache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintptr) *MemoryFootprint {
-	size := uintptr(c.capacity) * unsafe.Sizeof(entry[K, V]{})
+	selfSize := unsafe.Sizeof(*c)
+	entryPointerSize := unsafe.Sizeof(&entry[K, V]{})
+	size := uintptr(c.capacity) * entryPointerSize
 	for _, value := range c.cache {
+		size += unsafe.Sizeof(entry[K, V]{})
 		size += valueSizeProvider(value.val)
 	}
-	mf := NewMemoryFootprint(size)
+	mf := NewMemoryFootprint(selfSize + size)
 	if MissHitMeasuring {
 		mf.SetNote(c.getHitRatioReport())
 	}
@@ -172,4 +211,8 @@ type entry[K comparable, V any] struct {
 	val  V
 	prev *entry[K, V]
 	next *entry[K, V]
+}
+
+func (e entry[K, V]) String() string {
+	return fmt.Sprintf("Entry: %v -> %v", e.key, e.val)
 }

@@ -12,10 +12,9 @@ func (a AddressSerializer) CopyBytes(address Address, out []byte) {
 	copy(out, address[:])
 }
 func (a AddressSerializer) FromBytes(bytes []byte) Address {
-	var address Address
-	copy(address[:], bytes)
-	return address
+	return *(*Address)(bytes)
 }
+
 func (a AddressSerializer) Size() int {
 	return 20
 }
@@ -30,9 +29,7 @@ func (a KeySerializer) CopyBytes(key Key, out []byte) {
 	copy(out, key[:])
 }
 func (a KeySerializer) FromBytes(bytes []byte) Key {
-	var key Key
-	copy(key[:], bytes)
-	return key
+	return *(*Key)(bytes)
 }
 func (a KeySerializer) Size() int {
 	return 32
@@ -48,9 +45,7 @@ func (a ValueSerializer) CopyBytes(value Value, out []byte) {
 	copy(out, value[:])
 }
 func (a ValueSerializer) FromBytes(bytes []byte) Value {
-	var value Value
-	copy(value[:], bytes)
-	return value
+	return *(*Value)(bytes)
 }
 func (a ValueSerializer) Size() int {
 	return 32
@@ -66,9 +61,7 @@ func (a HashSerializer) CopyBytes(hash Hash, out []byte) {
 	copy(out, hash[:])
 }
 func (a HashSerializer) FromBytes(bytes []byte) Hash {
-	var hash Hash
-	copy(hash[:], bytes)
-	return hash
+	return *(*Hash)(bytes)
 }
 func (a HashSerializer) Size() int {
 	return HashSize
@@ -100,9 +93,7 @@ func (a BalanceSerializer) CopyBytes(value Balance, out []byte) {
 	copy(out, value[:])
 }
 func (a BalanceSerializer) FromBytes(bytes []byte) Balance {
-	var value Balance
-	copy(value[:], bytes)
-	return value
+	return *(*Balance)(bytes)
 }
 func (a BalanceSerializer) Size() int {
 	return 16
@@ -118,9 +109,7 @@ func (a NonceSerializer) CopyBytes(value Nonce, out []byte) {
 	copy(out, value[:])
 }
 func (a NonceSerializer) FromBytes(bytes []byte) Nonce {
-	var value Nonce
-	copy(value[:], bytes)
-	return value
+	return *(*Nonce)(bytes)
 }
 func (a NonceSerializer) Size() int {
 	return 8
@@ -159,7 +148,7 @@ func (a Identifier32Serializer) ToBytes(value uint32) []byte {
 	return binary.BigEndian.AppendUint32([]byte{}, value)
 }
 func (a Identifier32Serializer) CopyBytes(value uint32, out []byte) {
-	binary.LittleEndian.PutUint32(out, value)
+	binary.BigEndian.PutUint32(out, value)
 }
 func (a Identifier32Serializer) FromBytes(bytes []byte) uint32 {
 	return binary.BigEndian.Uint32(bytes)
