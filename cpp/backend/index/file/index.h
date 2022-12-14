@@ -8,12 +8,12 @@
 #include <queue>
 #include <vector>
 
-#include "absl/hash/hash.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
+#include "backend/index/file/stable_hash.h"
 #include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -188,7 +188,7 @@ class FileIndex {
   std::unique_ptr<std::filesystem::path> metadata_file_;
 
   // A hasher to compute hashes for keys.
-  absl::Hash<K> key_hasher_;
+  StableHash<K> key_hasher_;
 
   // The number of elements in this index.
   std::size_t size_ = 0;
