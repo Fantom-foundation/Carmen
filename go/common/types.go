@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"hash/maphash"
 	"math/big"
 
 	"golang.org/x/crypto/sha3"
@@ -205,26 +204,78 @@ func GetHash(h hash.Hash, data []byte) (res Hash) {
 	return
 }
 
-var hashSeed = maphash.MakeSeed() // TODO this is a stable seed only within one runtime
+const prime = 31
 
 type AddressHasher struct{}
 
 // Hash implements non-cryptographical hash to be used in maps
-func (s AddressHasher) Hash(a *Address) uint64 {
-	var h maphash.Hash
-	h.SetSeed(hashSeed)
-	_, _ = h.Write(a[:])
-	return h.Sum64()
+func (s AddressHasher) Hash(data *Address) uint64 {
+	// enumerate all indexes for the best performance, even a for-loop adds 25% overhead
+	h := uint64(17)
+	h = h*prime + uint64(data[0])
+	h = h*prime + uint64(data[1])
+	h = h*prime + uint64(data[2])
+	h = h*prime + uint64(data[3])
+	h = h*prime + uint64(data[4])
+	h = h*prime + uint64(data[5])
+	h = h*prime + uint64(data[6])
+	h = h*prime + uint64(data[7])
+	h = h*prime + uint64(data[8])
+	h = h*prime + uint64(data[9])
+	h = h*prime + uint64(data[10])
+	h = h*prime + uint64(data[11])
+	h = h*prime + uint64(data[12])
+	h = h*prime + uint64(data[13])
+	h = h*prime + uint64(data[14])
+	h = h*prime + uint64(data[15])
+	h = h*prime + uint64(data[16])
+	h = h*prime + uint64(data[17])
+	h = h*prime + uint64(data[18])
+	h = h*prime + uint64(data[19])
+
+	return h
 }
 
 type KeyHasher struct{}
 
 // Hash implements non-cryptographical hash to be used in maps
-func (s KeyHasher) Hash(a *Key) uint64 {
-	var h maphash.Hash
-	h.SetSeed(hashSeed)
-	_, _ = h.Write(a[:])
-	return h.Sum64()
+func (s KeyHasher) Hash(data *Key) uint64 {
+	// enumerate all indexes for the best performance, even a for-loop adds 25% overhead
+	h := uint64(17)
+	h = h*prime + uint64(data[0])
+	h = h*prime + uint64(data[1])
+	h = h*prime + uint64(data[2])
+	h = h*prime + uint64(data[3])
+	h = h*prime + uint64(data[4])
+	h = h*prime + uint64(data[5])
+	h = h*prime + uint64(data[6])
+	h = h*prime + uint64(data[7])
+	h = h*prime + uint64(data[8])
+	h = h*prime + uint64(data[9])
+	h = h*prime + uint64(data[10])
+	h = h*prime + uint64(data[11])
+	h = h*prime + uint64(data[12])
+	h = h*prime + uint64(data[13])
+	h = h*prime + uint64(data[14])
+	h = h*prime + uint64(data[15])
+	h = h*prime + uint64(data[16])
+	h = h*prime + uint64(data[17])
+	h = h*prime + uint64(data[18])
+	h = h*prime + uint64(data[19])
+	h = h*prime + uint64(data[20])
+	h = h*prime + uint64(data[21])
+	h = h*prime + uint64(data[22])
+	h = h*prime + uint64(data[23])
+	h = h*prime + uint64(data[24])
+	h = h*prime + uint64(data[25])
+	h = h*prime + uint64(data[26])
+	h = h*prime + uint64(data[27])
+	h = h*prime + uint64(data[28])
+	h = h*prime + uint64(data[29])
+	h = h*prime + uint64(data[30])
+	h = h*prime + uint64(data[31])
+
+	return h
 }
 
 type SlotIdxHasher struct{}

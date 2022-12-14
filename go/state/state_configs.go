@@ -82,7 +82,7 @@ func NewGoFileState(path string) (State, error) {
 	}
 
 	addressIndexPath := indexPath + string(filepath.Separator) + "addresses"
-	if err = os.Mkdir(addressIndexPath, 0700); err != nil {
+	if err = os.MkdirAll(addressIndexPath, 0700); err != nil {
 		return nil, err
 	}
 	addressIndex, err := file.NewIndex[common.Address, uint32](addressIndexPath, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressHasher{}, common.AddressComparator{})
@@ -90,7 +90,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 	slotsIndexPath := indexPath + string(filepath.Separator) + "slots"
-	if err = os.Mkdir(slotsIndexPath, 0700); err != nil {
+	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
 		return nil, err
 	}
 	slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdxHasher{}, common.Identifier32Comparator{})
@@ -98,7 +98,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 	keysIndexPath := indexPath + string(filepath.Separator) + "keys"
-	if err = os.Mkdir(keysIndexPath, 0700); err != nil {
+	if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
 		return nil, err
 	}
 	keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
@@ -107,7 +107,7 @@ func NewGoFileState(path string) (State, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(accountStorePath, 0700); err != nil {
+	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
 	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
@@ -115,7 +115,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(noncesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
@@ -123,7 +123,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(balancesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
@@ -131,7 +131,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(valuesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
@@ -140,7 +140,7 @@ func NewGoFileState(path string) (State, error) {
 	}
 
 	codesPath := storePath + string(filepath.Separator) + "codes"
-	if err = os.Mkdir(codesPath, 0700); err != nil {
+	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
 	}
 	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
@@ -148,7 +148,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
-	if err = os.Mkdir(codeHashesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
@@ -179,7 +179,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	}
 
 	addressIndexPath := indexPath + string(filepath.Separator) + "addresses"
-	if err = os.Mkdir(addressIndexPath, 0700); err != nil {
+	if err = os.MkdirAll(addressIndexPath, 0700); err != nil {
 		return nil, err
 	}
 	addressIndex, err := file.NewIndex[common.Address, uint32](addressIndexPath, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressHasher{}, common.AddressComparator{})
@@ -187,7 +187,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 	slotsIndexPath := indexPath + string(filepath.Separator) + "slots"
-	if err = os.Mkdir(slotsIndexPath, 0700); err != nil {
+	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
 		return nil, err
 	}
 	slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdxHasher{}, common.Identifier32Comparator{})
@@ -195,7 +195,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 	keysIndexPath := indexPath + string(filepath.Separator) + "keys"
-	if err = os.Mkdir(keysIndexPath, 0700); err != nil {
+	if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
 		return nil, err
 	}
 	keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
@@ -204,7 +204,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(accountStorePath, 0700); err != nil {
+	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
 	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
@@ -212,7 +212,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(noncesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
@@ -220,7 +220,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(balancesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
@@ -228,7 +228,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(valuesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
@@ -237,7 +237,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	}
 
 	codesPath := storePath + string(filepath.Separator) + "codes"
-	if err = os.Mkdir(codesPath, 0700); err != nil {
+	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
 	}
 	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
@@ -245,7 +245,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
-	if err = os.Mkdir(codeHashesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
@@ -293,7 +293,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(accountStorePath, 0700); err != nil {
+	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
 	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
@@ -301,7 +301,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(noncesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
@@ -309,7 +309,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(balancesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
@@ -317,7 +317,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(valuesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
@@ -326,7 +326,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	codesPath := storePath + string(filepath.Separator) + "codes"
-	if err = os.Mkdir(codesPath, 0700); err != nil {
+	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
 	}
 	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
@@ -334,7 +334,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
-	if err = os.Mkdir(codeHashesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
@@ -372,7 +372,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(accountStorePath, 0700); err != nil {
+	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
 	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
@@ -380,7 +380,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(noncesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
@@ -388,7 +388,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(balancesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
@@ -397,7 +397,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(valuesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
@@ -406,7 +406,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	codesPath := storePath + string(filepath.Separator) + "codes"
-	if err = os.Mkdir(codesPath, 0700); err != nil {
+	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
 	}
 	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
@@ -414,7 +414,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
-	if err = os.Mkdir(codeHashesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
@@ -468,7 +468,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
-	if err = os.Mkdir(accountStorePath, 0700); err != nil {
+	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
 	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
@@ -476,7 +476,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
-	if err = os.Mkdir(noncesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
@@ -484,7 +484,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	balancesStorePath := storePath + string(filepath.Separator) + "balances"
-	if err = os.Mkdir(balancesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
@@ -493,7 +493,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.Mkdir(valuesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
@@ -502,7 +502,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	}
 
 	codesPath := storePath + string(filepath.Separator) + "codes"
-	if err = os.Mkdir(codesPath, 0700); err != nil {
+	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
 	}
 	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
@@ -510,7 +510,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
-	if err = os.Mkdir(codeHashesStorePath, 0700); err != nil {
+	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
 	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
@@ -738,12 +738,12 @@ func NewGoTransactCachedLeveLIndexAndStoreState(path string) (State, error) {
 // createSubDirs creates two subdirectories of the given for the Store and the Index
 func createSubDirs(rootPath string) (indexPath, storePath string, err error) {
 	indexPath = rootPath + string(filepath.Separator) + "index"
-	if err = os.Mkdir(indexPath, 0700); err != nil {
+	if err = os.MkdirAll(indexPath, 0700); err != nil {
 		return
 	}
 
 	storePath = rootPath + string(filepath.Separator) + "store"
-	err = os.Mkdir(storePath, 0700)
+	err = os.MkdirAll(storePath, 0700)
 
 	return
 }
