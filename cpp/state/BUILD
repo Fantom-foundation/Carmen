@@ -24,9 +24,7 @@ cc_test(
 )
 
 cc_library(
-    name = "c_state",
-    hdrs = ["c_state.h"],
-    srcs = ["c_state.cc"],
+    name = "configurations",
     deps = [
         ":state",
         "//backend/index/cache",
@@ -39,6 +37,17 @@ cc_library(
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
+    ],
+    hdrs = ["configurations.h"],
+)
+
+cc_library(
+    name = "c_state",
+    hdrs = ["c_state.h"],
+    srcs = ["c_state.cc"],
+    deps = [
+        ":state",
+        ":configurations",
         "@com_google_absl//absl/status:status",
     ],
     alwayslink = True,
