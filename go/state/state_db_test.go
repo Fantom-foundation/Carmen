@@ -46,7 +46,7 @@ func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
-	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Unknown, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
 
 	snapshot := db.Snapshot()
 
@@ -68,7 +68,7 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
-	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
 
 	if !db.Exist(address1) {
 		t.Errorf("Account state is not loaded from underlying state")
@@ -101,7 +101,9 @@ func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The new account is created at the end of the transaction.
-	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	db.CreateAccount(address1)
 	db.EndTransaction()
@@ -114,8 +116,10 @@ func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	// The created account is only created once.
-	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
+	// The created account is only created once, and nonces and code are initialized.
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	db.CreateAccount(address1)
 	db.EndTransaction()
@@ -144,7 +148,9 @@ func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
-	mock.EXPECT().DeleteAccount(gomock.Eq(address1)).Return(nil)
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	db.Suicide(address1)
 	db.EndTransaction()
@@ -171,7 +177,9 @@ func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *tes
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
-	mock.EXPECT().DeleteAccount(gomock.Eq(address1)).Return(nil)
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	db.CreateAccount(address1)
 	db.Suicide(address1)
@@ -200,10 +208,9 @@ func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
-	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
-	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
@@ -217,10 +224,9 @@ func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
-	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
-	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
@@ -237,10 +243,12 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	// An empty account must have its balance and nonce set to zero.
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(common.Balance{}, nil)
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.Nonce{}, nil)
-	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(0, nil)
+	// An empty account must have its nonce and code set to zero.
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(1)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	db.CreateAccount(address1)
 	if !db.Empty(address1) {
@@ -250,6 +258,8 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	if db.Empty(address1) {
 		t.Errorf("Account with nonce != 0 is still considered empty")
 	}
+	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
@@ -261,7 +271,7 @@ func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
 	// Set up the expectation that the store will be called once.
 	want := big.NewInt(12)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	val1 := db.GetBalance(address1)
 	val2 := db.GetBalance(address1)
@@ -294,7 +304,7 @@ func TestCarmenStateBalancesAreReadFromState(t *testing.T) {
 	// Set up the expectation that the store will be called once.
 	want := big.NewInt(12)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	if got := db.GetBalance(address1); got.Cmp(want) != 0 {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
@@ -310,7 +320,7 @@ func TestCarmenStateBalancesAreOnlyReadOnce(t *testing.T) {
 	// Set up the expectation that the store will be called once.
 	want := big.NewInt(12)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	if got := db.GetBalance(address1); got.Cmp(want) != 0 {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
@@ -328,7 +338,7 @@ func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	// Balance is initially 10. This should only be fetched once.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -380,9 +390,9 @@ func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	// The balance is expected to be read and the updated value to be written to the state.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	balance, _ = common.ToBalance(big.NewInt(12))
-	mock.EXPECT().SetBalance(gomock.Eq(address1), gomock.Eq(balance)).Return(nil)
+	mock.EXPECT().SetBalance(address1, balance).Return(nil)
 
 	db.AddBalance(address1, big.NewInt(2))
 	db.EndTransaction()
@@ -403,9 +413,9 @@ func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	// The balance is expected to be read and the updated value to be written to the state.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	balance, _ = common.ToBalance(big.NewInt(14))
-	mock.EXPECT().SetBalance(gomock.Eq(address1), gomock.Eq(balance)).Return(nil)
+	mock.EXPECT().SetBalance(address1, balance).Return(nil)
 
 	db.AddBalance(address1, big.NewInt(5))
 	db.SubBalance(address1, big.NewInt(3))
@@ -424,7 +434,7 @@ func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	// Balance is only read, never written.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	db.AddBalance(address1, big.NewInt(10))
 	db.SubBalance(address1, big.NewInt(5))
@@ -442,7 +452,7 @@ func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.
 	// Balance is only read, never written.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetBalance(gomock.Eq(address1)).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	db.AddBalance(address1, big.NewInt(10))
 	db.AbortTransaction()
@@ -457,9 +467,8 @@ func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
 
 	// Set up the expectation that the store will be called once.
 	var want uint64 = 12
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(want), nil)
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(want), nil)
 
-	db.CreateAccount(address1)
 	if got := db.GetNonce(address1); got != want {
 		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
 	}
@@ -473,9 +482,8 @@ func TestCarmenStateNoncesAreOnlyReadOnce(t *testing.T) {
 
 	// Set up the expectation that the store will be called once.
 	var want uint64 = 12
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(want), nil)
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(want), nil)
 
-	db.CreateAccount(address1)
 	if got := db.GetNonce(address1); got != want {
 		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
 	}
@@ -505,15 +513,90 @@ func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 	}
 }
 
+func TestCarmenStateNoncesOfANonExistingAccountIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The nonce is fetched, and its default is zero.
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(0), nil)
+
+	var want uint64 = 0
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateNoncesOfADeletedAccountIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The side-effects of the creation of the account in the first transactions are expected.
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(12)).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+
+	// Also the fetch of the Nonce value in the second transaction is expected.
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(12), nil)
+
+	// Create an account and set the nonce.
+	db.CreateAccount(address1)
+	db.SetNonce(address1, 12)
+	db.EndTransaction()
+	db.EndBlock()
+
+	// Fetch the nonce in a new transaction.
+	var want uint64 = 12
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+
+	db.Suicide(address1)
+
+	want = 0
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateNoncesOfAnAccountDeletedInTheSnapshotIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Mock should never be consulted.
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+
+	var want uint64 = 0
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+
+	db.SetNonce(address1, 12)
+	want = 12
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+
+	db.Suicide(address1)
+	want = 0
+	if got := db.GetNonce(address1); got != want {
+		t.Errorf("error retrieving nonce, wanted %v, got %v", want, got)
+	}
+}
+
 func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
-	db.CreateAccount(address1)
 
 	// Nonce is initially 10. This should only be fetched once.
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(10), nil)
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -560,10 +643,9 @@ func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
-	db.CreateAccount(address1)
 
 	// Nonce is initially 10. This should only be fetched once.
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(10), nil)
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -587,7 +669,7 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The updated value is expected to be written to the state.
-	mock.EXPECT().SetNonce(gomock.Eq(address1), gomock.Eq(common.ToNonce(10))).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(10)).Return(nil)
 
 	db.SetNonce(address1, 10)
 	db.EndTransaction()
@@ -605,7 +687,7 @@ func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Only the last value is to be written to the state.
-	mock.EXPECT().SetNonce(gomock.Eq(address1), gomock.Eq(common.ToNonce(12))).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(12)).Return(nil)
 
 	db.SetNonce(address1, 10)
 	db.SetNonce(address1, 11)
@@ -620,11 +702,9 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	defer ctrl.Finish()
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
-	db.CreateAccount(address1)
 
 	// Nonce is only read, never written.
-	mock.EXPECT().GetNonce(gomock.Eq(address1)).Return(common.ToNonce(10), nil)
-	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
+	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
 
 	value := db.GetNonce(address1)
 	db.SetNonce(address1, value)
@@ -652,7 +732,7 @@ func TestCarmenStateValuesAreReadFromState(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	if got := db.GetState(address1, key1); got != val1 {
 		t.Errorf("error retrieving state value, wanted %v, got %v", val1, got)
@@ -666,7 +746,7 @@ func TestCarmenStateCommittedValuesAreReadFromState(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	if got := db.GetCommittedState(address1, key1); got != val1 {
 		t.Errorf("error retrieving state value, wanted %v, got %v", val1, got)
@@ -680,7 +760,7 @@ func TestCarmenStateCommittedValuesAreOnlyFetchedOnce(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	db.GetCommittedState(address1, key1)
 	db.GetCommittedState(address1, key1)
@@ -692,7 +772,7 @@ func TestCarmenStateCommittedValuesCanBeFetchedAfterValueBeingWritten(t *testing
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	db.SetState(address1, key1, val2)
 	if got := db.GetCommittedState(address1, key1); got != val1 {
@@ -710,7 +790,7 @@ func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The commited state is only read ones
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	snapshot := db.Snapshot()
 	if got := db.GetCommittedState(address1, key1); got != val1 {
@@ -757,7 +837,7 @@ func TestCarmenStateWrittenValuesCanBeRolledBack(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val0, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -803,8 +883,8 @@ func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val1))
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key2), gomock.Eq(val2))
+	mock.EXPECT().SetStorage(address1, key1, val1)
+	mock.EXPECT().SetStorage(address1, key2, val2)
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
@@ -818,7 +898,7 @@ func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val1))
+	mock.EXPECT().SetStorage(address1, key1, val1)
 
 	db.SetState(address1, key1, val1)
 	snapshot := db.Snapshot()
@@ -848,7 +928,7 @@ func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val3))
+	mock.EXPECT().SetStorage(address1, key1, val3)
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key1, val2)
@@ -865,7 +945,7 @@ func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Only expect a read but no update.
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	val := db.GetState(address1, key1)
 	db.SetState(address1, key1, val2)
@@ -882,7 +962,7 @@ func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Only expect a read but no update.
-	mock.EXPECT().GetStorage(gomock.Eq(address1), gomock.Eq(key1)).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	if got := db.GetState(address1, key1); got != val1 {
 		t.Errorf("expected initial value to be %v, got %v", val1, got)
@@ -918,9 +998,9 @@ func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val1))
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val2))
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val3))
+	mock.EXPECT().SetStorage(address1, key1, val1)
+	mock.EXPECT().SetStorage(address1, key1, val2)
+	mock.EXPECT().SetStorage(address1, key1, val3)
 
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
@@ -940,7 +1020,7 @@ func TestCarmenStateCodesCanBeRead(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	want := []byte{0xAC, 0xDC}
-	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+	mock.EXPECT().GetCode(address1).Return(want, nil)
 
 	if got := db.GetCode(address1); !bytes.Equal(got, want) {
 		t.Errorf("error retrieving code, wanted %v, got %v", want, got)
@@ -997,7 +1077,7 @@ func TestCarmenStateReadCodesAreNotStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	want := []byte{0xAC, 0xDC}
-	mock.EXPECT().GetCode(gomock.Eq(address1)).Return(want, nil)
+	mock.EXPECT().GetCode(address1).Return(want, nil)
 
 	db.GetCode(address1)
 	db.EndTransaction()
@@ -1011,7 +1091,7 @@ func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	want := []byte{0xAC, 0xDC}
-	mock.EXPECT().SetCode(gomock.Eq(address1), gomock.Eq(want)).Return(nil)
+	mock.EXPECT().SetCode(address1, want).Return(nil)
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
@@ -1025,7 +1105,7 @@ func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	want := []byte{0xAC, 0xDC}
-	mock.EXPECT().SetCode(gomock.Eq(address1), gomock.Eq(want)).Return(nil)
+	mock.EXPECT().SetCode(address1, want).Return(nil)
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
@@ -1043,7 +1123,7 @@ func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	want := 2
-	mock.EXPECT().GetCodeSize(gomock.Eq(address1)).Return(want, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(want, nil)
 
 	if got := db.GetCodeSize(address1); got != want {
 		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
@@ -1064,6 +1144,35 @@ func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
 	}
 }
 
+func TestCarmenStateCodeSizeOfANonExistingAccountIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	want := 0
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+
+	if got := db.GetCodeSize(address1); got != want {
+		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateCodeSizeOfADeletedAccountIsZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.SetCode(address1, []byte{1, 2, 3})
+	db.Suicide(address1)
+
+	want := 0
+	if got := db.GetCodeSize(address1); got != want {
+		t.Errorf("error retrieving code size, wanted %v, got %v", want, got)
+	}
+}
+
 func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1071,9 +1180,25 @@ func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The state DB is asked for the accounts existence, but not for the hash.
-	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Unknown, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
 
 	want := common.Hash{}
+	if got := db.GetCodeHash(address1); got != want {
+		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenStateCodeHashOfOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The state DB is asked for the accounts existence, but not for the hash.
+	//mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+
+	db.CreateAccount(address1)
+	want := common.GetKeccak256Hash([]byte{})
 	if got := db.GetCodeHash(address1); got != want {
 		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
 	}
@@ -1086,9 +1211,9 @@ func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	want := common.Hash{0xAC, 0xDC}
-	mock.EXPECT().GetCodeHash(gomock.Eq(address1)).Return(want, nil)
+	mock.EXPECT().GetCodeHash(address1).Return(want, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
 
-	db.CreateAccount(address1)
 	if got := db.GetCodeHash(address1); got != want {
 		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
 	}
@@ -1121,7 +1246,7 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetAccountState(gomock.Eq(address1)).Return(common.Exists, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
 
 	code := []byte{0xAC, 0xDC}
 	db.SetCode(address1, code)
@@ -1538,11 +1663,11 @@ func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	balance, _ := common.ToBalance(big.NewInt(12))
 	code := []byte{1, 2, 3}
 
-	mock.EXPECT().CreateAccount(gomock.Eq(address1)).Return(nil)
-	mock.EXPECT().SetBalance(gomock.Eq(address1), gomock.Eq(balance)).Return(nil)
-	mock.EXPECT().SetNonce(gomock.Eq(address1), gomock.Eq(common.ToNonce(14))).Return(nil)
-	mock.EXPECT().SetStorage(gomock.Eq(address1), gomock.Eq(key1), gomock.Eq(val1)).Return(nil)
-	mock.EXPECT().SetCode(gomock.Eq(address1), gomock.Eq(code)).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, balance).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(14)).Return(nil)
+	mock.EXPECT().SetStorage(address1, key1, val1).Return(nil)
+	mock.EXPECT().SetCode(address1, code).Return(nil)
 	mock.EXPECT().Flush().Return(nil)
 	mock.EXPECT().GetHash().Return(common.Hash{}, nil)
 

@@ -271,6 +271,9 @@ func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
 
 func (s *stateDB) CreateAccount(addr common.Address) {
 	s.SetAccountState(addr, common.Exists)
+	s.SetNonce(addr, 0)
+	s.SetCode(addr, []byte{})
+	// Note: balance is not (re-)initialized; it is preserved in case the account existed before.
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
@@ -279,6 +282,11 @@ func (s *stateDB) Exist(addr common.Address) bool {
 
 func (s *stateDB) Suicide(addr common.Address) {
 	s.SetAccountState(addr, common.Deleted)
+	s.SetNonce(addr, 0)
+	s.SetCode(addr, []byte{})
+	// Note: balance is not reset implicitly, this is to be done explicitly to transfere
+	// its value to some target account. If this is missed, the balance remains unchanged.
+	// TODO: delete all the storage of the account
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
@@ -351,10 +359,6 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 }
 
 func (s *stateDB) GetNonce(addr common.Address) uint64 {
-	// The Nonce of a non-existing (or deleted) account is 0.
-	if !s.Exist(addr) {
-		return 0
-	}
 	// Check cache first.
 	if val, exists := s.nonces[addr]; exists {
 		return val.current
