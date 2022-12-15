@@ -155,7 +155,7 @@ class FileStoreBase {
       if (!page.ok()) {
         return kEmpty;
       }
-      return std::as_bytes(std::span(page->AsArray()));
+      return std::as_bytes(std::span(page->get().AsArray()));
     }
 
    private:
@@ -202,7 +202,8 @@ template <typename K, Trivial V, template <typename> class F,
 requires File<F<ArrayPage<V, page_size>>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   ASSIGN_OR_RETURN(auto page, pool_->Get(key / kNumElementsPerPage));
-  auto& trg = std::unwrap_reference<decltype(page)>(page)[key % kNumElementsPerPage];
+  auto& trg =
+      std::unwrap_reference_t<decltype(page)>(page)[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
     pool_->MarkAsDirty(key / kNumElementsPerPage);
@@ -217,7 +218,8 @@ requires File<F<ArrayPage<V, page_size>>> StatusOrRef<const V>
 FileStoreBase<K, V, F, page_size, eager_hashing>::Get(const K& key)
 const {
   ASSIGN_OR_RETURN(auto page, pool_->Get(key / kNumElementsPerPage));
-  return std::unwrap_reference<decltype(page)>(page)[key % kNumElementsPerPage];
+  return std::unwrap_reference_t<decltype(page)>(
+      page)[key % kNumElementsPerPage];
 }
 
 template <typename K, Trivial V, template <typename> class F,

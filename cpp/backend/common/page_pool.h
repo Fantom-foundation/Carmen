@@ -142,8 +142,8 @@ requires File<F<P>> PagePool<P, F, E>::PagePool(std::unique_ptr<File> file,
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-StatusOrRef<typename PagePool<P, F, E>::Page> PagePool<P, F, E>::Get(PageId id) {
+requires File<F<P>> StatusOrRef<typename PagePool<P, F, E>::Page>
+PagePool<P, F, E>::Get(PageId id) {
   // Try to locate the page in the pool first.
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
@@ -221,7 +221,8 @@ const {
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>> absl::StatusOr<std::size_t> PagePool<P, F, E>::GetFreeSlot() {
+requires File<F<P>> absl::StatusOr<std::size_t>
+PagePool<P, F, E>::GetFreeSlot() {
   // If there are unused pages, use those first.
   if (!free_list_.empty()) {
     std::size_t res = free_list_.back();
@@ -243,8 +244,7 @@ requires File<F<P>> absl::StatusOr<std::size_t> PagePool<P, F, E>::GetFreeSlot()
 }
 
 template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-absl::Status PagePool<P, F, E>::EvictSlot(int pos) {
+requires File<F<P>> absl::Status PagePool<P, F, E>::EvictSlot(int pos) {
   // Notify listeners about pending eviction.
   auto page_id = index_to_pages_[pos];
   bool is_dirty = dirty_[pos];

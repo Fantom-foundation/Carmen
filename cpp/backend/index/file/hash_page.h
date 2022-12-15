@@ -128,9 +128,9 @@ class alignas(kFileSystemPageSize) HashPage {
   // Gets the number of elements in this page.
   std::size_t Size() const { return GetMetadata().size; }
 
-  // Updates the size of this page. If the new size is less then the current
+  // Updates the size of this page. If the new size is less, then the current
   // size, entries are dropped. If the new size is larger, the additional
-  // elements will have a unspecified, yet valid value.
+  // elements will have an unspecified, yet valid value.
   void Resize(std::size_t new_size) {
     assert(0 <= new_size && new_size <= kNumEntries);
     GetMetadata().size = new_size;
