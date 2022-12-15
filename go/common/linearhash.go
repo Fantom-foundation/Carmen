@@ -86,6 +86,19 @@ func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
 	return
 }
 
+func (h *LinearHashMap[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err error) {
+	bucket := h.bucket(key, uint(len(h.list)))
+	value, exists, err = h.list[bucket].GetOrAdd(key, val)
+	if err != nil {
+		return
+	}
+	if !exists {
+		h.records += 1
+		return value, exists, h.checkSplit()
+	}
+	return
+}
+
 func (h *LinearHashMap[K, V]) GetAll(key K) ([]V, error) {
 	bucket := h.bucket(key, uint(len(h.list)))
 	return h.list[bucket].GetAll(key)

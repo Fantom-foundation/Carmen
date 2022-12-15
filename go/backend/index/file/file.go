@@ -106,15 +106,11 @@ func NewParamIndex[K comparable, I common.Identifier](
 
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *Index[K, I]) GetOrAdd(key K) (val I, err error) {
-	val, exists, err := m.table.Get(key)
+	val, exists, err := m.table.GetOrAdd(key, m.maxIndex)
 	if err != nil {
 		return
 	}
 	if !exists {
-		if err = m.table.Put(key, m.maxIndex); err != nil {
-			return val, err
-		}
-
 		val = m.maxIndex
 		m.maxIndex += 1 // increment to next index
 		m.hashIndex.AddKey(key)

@@ -131,6 +131,55 @@ func TestLinearHashOverflow(t *testing.T) {
 	}
 }
 
+func TestLinearHashGetOrAddOverflow(t *testing.T) {
+	h := NewLinearHashMap[Address, uint32](BucketSize, NumBuckets, AddressHasher{}, AddressComparator{}, mapFactory)
+
+	// fill-in all pages we have
+	for i := uint32(0); i < BucketSize*NumBuckets; i++ {
+		address := AddressFromNumber(int(i + 1))
+		_, _, _ = h.GetOrAdd(address, i+1)
+	}
+
+	// check properties are correct
+	if h.bits != log2(NumBuckets) {
+		t.Errorf("Property is not correct %d", h.bits)
+	}
+	if h.records != BucketSize*NumBuckets {
+		t.Errorf("Property is not correct %d", h.records)
+	}
+	if len(h.list) != NumBuckets {
+		t.Errorf("Property is not correct %d", len(h.list))
+	}
+
+	if size := h.Size(); size != BucketSize*NumBuckets {
+		t.Errorf("Invalid size: %d", size)
+	}
+
+	// this will not overflow - key exists
+	if val, exists, _ := h.GetOrAdd(AddressFromNumber(1), 99999); !exists || val != 1 {
+		t.Errorf("Wrong result: val: %d, exists: %v", val, exists)
+	}
+
+	// this will  overflow - a new key
+	if val, exists, _ := h.GetOrAdd(AddressFromNumber(9999), 99999); exists || val != 99999 {
+		t.Errorf("Wrong result: val: %d, exists: %v", val, exists)
+	}
+
+	//check properties are correct - number of buckets have increased
+	if h.bits != log2(NumBuckets+1) {
+		t.Errorf("Property is not correct %d", h.bits)
+	}
+	if h.records != BucketSize*NumBuckets+1 {
+		t.Errorf("Property is not correct %d", h.records)
+	}
+	if len(h.list) != NumBuckets+1 {
+		t.Errorf("Property is not correct %d", len(h.list))
+	}
+	if size := h.Size(); size != BucketSize*NumBuckets+1 {
+		t.Errorf("Invalid size: %d", size)
+	}
+}
+
 func TestLinearHashSize(t *testing.T) {
 	h := NewLinearHashMap[Address, uint32](BucketSize, NumBuckets, AddressHasher{}, AddressComparator{}, mapFactory)
 

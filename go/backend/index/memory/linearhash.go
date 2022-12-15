@@ -42,12 +42,13 @@ func NewLinearHashParamsIndex[K comparable, I common.Identifier](numBuckets int,
 
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *LinearHashIndex[K, I]) GetOrAdd(key K) (val I, err error) {
-	val, exists, _ := m.table.Get(key)
+	val, exists, err := m.table.GetOrAdd(key, m.maxIndex)
+	if err != nil {
+		return
+	}
 	if !exists {
-		_ = m.table.Put(key, m.maxIndex)
 		val = m.maxIndex
 		m.maxIndex += 1 // increment to next index
-
 		m.hashIndex.AddKey(key)
 	}
 	return

@@ -160,6 +160,65 @@ func TestMapMultiMap(t *testing.T) {
 	}
 }
 
+func TestMapsGetOrAdd(t *testing.T) {
+	// run the test for various map implementations
+	for _, max := range inputSizes {
+		for name, factory := range initMapFactories(t) {
+			t.Run(fmt.Sprintf("%s %d", name, max), func(t *testing.T) {
+				capacity := 10
+				m := factory(0, capacity)
+
+				// insert data
+				data := make([]common.MapEntry[common.Address, uint32], 0, max)
+				dataMap := make(map[common.Address]uint32)
+				for i := 0; i < max; i++ {
+					key := convert[common.Address](i+1, common.AddressSerializer{})
+					value := convert[uint32](i+1, common.Identifier32Serializer{})
+					data = append(data, common.MapEntry[common.Address, uint32]{key, value})
+					dataMap[key] = value
+
+					if val, exists, err := m.GetOrAdd(key, value); exists || err != nil || val != value {
+						t.Errorf("Cannot GetOrAdd: val: %v, exists: %v, err: %v", val, exists, err)
+					}
+				}
+
+				// add the same keys trying to replace values with the value += 1
+				for i := 0; i < max; i++ {
+					key := convert[common.Address](i+1, common.AddressSerializer{})
+					value := convert[uint32](i+2, common.Identifier32Serializer{})
+
+					// original value must be returned, no replace happens
+					if val, exists, err := m.GetOrAdd(key, value); !exists || err != nil || val != value-1 {
+						t.Errorf("Cannot GetOrAdd: val: %v, exists: %v, err: %v", val, exists, err)
+					}
+				}
+
+				// verify data present by iterator
+				visited := make(map[common.Address]bool)
+				err := m.ForEach(func(actKey common.Address, actVal uint32) {
+					expVal, exists := dataMap[actKey]
+					if !exists || expVal != actVal {
+						t.Errorf("Values does not match for key: %v, %d != %d", actKey, actVal, expVal)
+					}
+					if _, exists := visited[actKey]; exists {
+						t.Errorf("the key has been already visited: %v", actKey)
+					}
+					visited[actKey] = true
+				})
+
+				// verify the size of visited elements
+				if size := m.Size(); size != len(visited) {
+					t.Errorf("Sizes does not match: %d != %d", size, len(visited))
+				}
+
+				if err != nil {
+					t.Errorf("error: %s", err)
+				}
+			})
+		}
+	}
+}
+
 // TestMapBulkInsert tests bulk operations on various maps we provide
 func TestMapBulkInsert(t *testing.T) {
 	// run the test for various map implementations
@@ -434,6 +493,16 @@ func (c *noErrMapWrapper[K, V]) Put(key K, val V) error {
 	return nil
 }
 
+func (c *noErrMapWrapper[K, V]) GetOrAdd(key K, val V) (existingVal V, exists bool, err error) {
+	existingVal, exists = c.m.Get(key)
+	if !exists {
+		existingVal = val
+		c.m.Put(key, val)
+	}
+	return
+}
+
+// Remove deletes the key from the map and returns whether an element was removed.
 func (c *noErrMapWrapper[K, V]) Add(key K, val V) error {
 	c.m.Add(key, val)
 	return nil
