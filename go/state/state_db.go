@@ -16,7 +16,7 @@ type StateDB interface {
 	Exist(common.Address) bool
 	Empty(common.Address) bool
 
-	Suicide(common.Address)
+	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
 
 	// Balance
@@ -274,23 +274,36 @@ func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
 }
 
 func (s *stateDB) CreateAccount(addr common.Address) {
+	prevState := s.GetAccountState(addr)
 	s.SetAccountState(addr, common.Exists)
 	s.SetNonce(addr, 0)
 	s.SetCode(addr, []byte{})
-	// Note: balance is not (re-)initialized; it is preserved in case the account existed before.
+	// Initialize the balance with 0, unless the account existed before.
+	// Thus, accounts previously marked as unknown (default) or deleted
+	// will get their balance reset. In particular, deleted accounts that
+	// are restored will have an empty balance. However, for accounts that
+	// already existed before this create call the balance is preserved.
+	if prevState != common.Exists {
+		s.resetBalance(addr)
+	}
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
 	return s.GetAccountState(addr) == common.Exists
 }
 
-func (s *stateDB) Suicide(addr common.Address) {
+func (s *stateDB) Suicide(addr common.Address) bool {
+	if !s.Exist(addr) {
+		return false
+	}
 	s.SetAccountState(addr, common.Deleted)
+	s.resetBalance(addr)
 	deleteListLength := len(s.accountsToDelete)
 	s.accountsToDelete = append(s.accountsToDelete, addr)
 	s.undo = append(s.undo, func() {
 		s.accountsToDelete = s.accountsToDelete[0:deleteListLength]
 	})
+	return true
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
@@ -360,6 +373,26 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	s.undo = append(s.undo, func() {
 		s.balances[addr].current = *oldValue
 	})
+}
+
+func (s *stateDB) resetBalance(addr common.Address) {
+	if val, exists := s.balances[addr]; exists {
+		if val.current.Sign() != 0 {
+			oldValue := val.current
+			val.current = *big.NewInt(0)
+			s.undo = append(s.undo, func() {
+				val.current = oldValue
+			})
+		}
+	} else {
+		s.balances[addr] = &balanceValue{
+			original: nil,
+			current:  *big.NewInt(0),
+		}
+		s.undo = append(s.undo, func() {
+			delete(s.balances, addr)
+		})
+	}
 }
 
 func (s *stateDB) GetNonce(addr common.Address) uint64 {
@@ -657,8 +690,7 @@ func (s *stateDB) EndTransaction() {
 	for _, addr := range s.accountsToDelete {
 		s.SetNonce(addr, 0)
 		s.SetCode(addr, []byte{})
-		// Note: balance is not reset implicitly, this is to be done explicitly to transfere
-		// its value to some target account. If this is missed, the balance remains unchanged.
+		// Note: balance was already set to zero during suicide call.
 		// TODO: delete all the storage of the account
 	}
 	s.accountsToDelete = s.accountsToDelete[0:0]
