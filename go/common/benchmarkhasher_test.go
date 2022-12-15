@@ -100,6 +100,7 @@ func BenchmarkKeccak256(b *testing.B) {
 
 // BenchmarkMapHash hashes a number of bytes testing performance of a map (non-cryptographical) hash
 func BenchmarkMapHash(b *testing.B) {
+	hashSeed := maphash.MakeSeed()
 	for i := 1; i <= numBytes; i = i << step {
 		data := make([]byte, i)
 		b.Run(fmt.Sprintf("MapHash EveryLoop dataSize: %d", i), func(b *testing.B) {
@@ -111,5 +112,107 @@ func BenchmarkMapHash(b *testing.B) {
 				intSink = hash
 			}
 		})
+	}
+}
+
+// BenchmarkMapHashFromBytes hashes a map (non-cryptographical) hash using the build-in library
+func BenchmarkMapHashAllBytes(b *testing.B) {
+	key := KeySerializer{}
+	data := GetKeccak256Hash(key.ToBytes(Key{})).ToBytes()
+	hashSeed := maphash.MakeSeed()
+
+	for i := 1; i <= b.N; i++ {
+		var h maphash.Hash
+		h.SetSeed(hashSeed)
+		_, _ = h.Write(data)
+		hash := h.Sum64()
+		intSink = hash
+	}
+}
+
+func BenchmarkMapHashComputeEach32Byte(b *testing.B) {
+	key := KeySerializer{}
+	data := GetKeccak256Hash(key.ToBytes(Key{}))
+
+	for j := 1; j <= b.N; j++ {
+
+		hash := uint64(17)
+		hash = hash*prime + uint64(data[0])
+		hash = hash*prime + uint64(data[1])
+		hash = hash*prime + uint64(data[2])
+		hash = hash*prime + uint64(data[3])
+		hash = hash*prime + uint64(data[4])
+		hash = hash*prime + uint64(data[5])
+		hash = hash*prime + uint64(data[6])
+		hash = hash*prime + uint64(data[7])
+		hash = hash*prime + uint64(data[8])
+		hash = hash*prime + uint64(data[9])
+		hash = hash*prime + uint64(data[10])
+		hash = hash*prime + uint64(data[11])
+		hash = hash*prime + uint64(data[12])
+		hash = hash*prime + uint64(data[13])
+		hash = hash*prime + uint64(data[14])
+		hash = hash*prime + uint64(data[15])
+		hash = hash*prime + uint64(data[16])
+		hash = hash*prime + uint64(data[17])
+		hash = hash*prime + uint64(data[18])
+		hash = hash*prime + uint64(data[19])
+		hash = hash*prime + uint64(data[20])
+		hash = hash*prime + uint64(data[21])
+		hash = hash*prime + uint64(data[22])
+		hash = hash*prime + uint64(data[23])
+		hash = hash*prime + uint64(data[24])
+		hash = hash*prime + uint64(data[25])
+		hash = hash*prime + uint64(data[26])
+		hash = hash*prime + uint64(data[27])
+		hash = hash*prime + uint64(data[28])
+		hash = hash*prime + uint64(data[29])
+		hash = hash*prime + uint64(data[30])
+		hash = hash*prime + uint64(data[31])
+
+		intSink = hash
+	}
+}
+
+func BenchmarkMapHashCompute32BytesInLoop(b *testing.B) {
+	key := KeySerializer{}
+	data := GetKeccak256Hash(key.ToBytes(Key{}))
+
+	for j := 1; j <= b.N; j++ {
+
+		hash := uint64(17)
+		for i := 0; i < 32; i++ {
+			hash = hash*prime + uint64(data[i])
+		}
+
+		intSink = hash
+	}
+}
+
+func BenchmarkMapHashComputeEach32ByteShifts(b *testing.B) {
+	key := KeySerializer{}
+	data := GetKeccak256Hash(key.ToBytes(Key{})).ToBytes()
+
+	for j := 1; j <= b.N; j++ {
+
+		a := uint64(data[0]) | uint64(data[1])<<8 | uint64(data[2])<<16 | uint64(data[3])<<24 |
+			uint64(data[4])<<32 | uint64(data[5])<<40 | uint64(data[6])<<48 | uint64(data[7])<<56
+
+		b := uint64(data[8]) | uint64(data[9])<<8 | uint64(data[10])<<16 | uint64(data[11])<<24 |
+			uint64(data[12])<<32 | uint64(data[13])<<40 | uint64(data[14])<<48 | uint64(data[15])<<56
+
+		c := uint64(data[16]) | uint64(data[17])<<8 | uint64(data[18])<<16 | uint64(data[19])<<24 |
+			uint64(data[20])<<32 | uint64(data[21])<<40 | uint64(data[22])<<48 | uint64(data[23])<<56
+
+		d := uint64(data[24]) | uint64(data[25])<<8 | uint64(data[26])<<16 | uint64(data[27])<<24 |
+			uint64(data[28])<<32 | uint64(data[29])<<40 | uint64(data[30])<<48 | uint64(data[31])<<56
+
+		hash := uint64(17)
+		hash = hash*prime + a
+		hash = hash*prime + b
+		hash = hash*prime + c
+		hash = hash*prime + d
+
+		intSink = hash
 	}
 }

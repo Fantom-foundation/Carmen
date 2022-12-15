@@ -1,6 +1,9 @@
 package state
 
 import (
+	"bytes"
+	"flag"
+	"os/exec"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -241,4 +244,110 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 			t.Errorf("Delete never-existing state: %d, Error: %s", newState, err)
 		}
 	})
+}
+
+// TestPersistentState inserts data into the state and closes it first, then the state
+// is re-opened in another process, and it is tested that data are available, i.e. all was successfully persisted
+func TestPersistentState(t *testing.T) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+
+			// skip in-memory
+			if config.name == "cpp-InMemory" || config.name == "go-Memory" {
+				return
+			}
+
+			dir := t.TempDir()
+			s, err := config.createState(dir)
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+
+			// init state data
+			if err := s.CreateAccount(address1); err != nil {
+				t.Errorf("Error to init state: %v", err)
+			}
+			if err := s.SetBalance(address1, balance1); err != nil {
+				t.Errorf("Error to init state: %v", err)
+			}
+			if err := s.SetNonce(address1, nonce1); err != nil {
+				t.Errorf("Error to init state: %v", err)
+			}
+			if err := s.SetStorage(address1, key1, val1); err != nil {
+				t.Errorf("Error to init state: %v", err)
+			}
+			if err := s.SetCode(address1, []byte{1, 2, 3}); err != nil {
+				t.Errorf("Error to init state: %v", err)
+			}
+
+			if err := s.Close(); err != nil {
+				t.Errorf("Cannot close state: %e", err)
+			}
+
+			execReadStateTest(t, dir, config.name)
+		})
+	}
+}
+
+var stateDir = flag.String("statedir", "DEFAULT", "directory where the state is persisted")
+var stateImpl = flag.String("stateimpl", "DEFAULT", "name of the state implementation")
+
+// TestReadState verifies data are available in a state.
+// The give state reads the data from the given directory and verifies the data are present.
+// Name of the index and directory is provided as command line arguments
+func TestReadState(t *testing.T) {
+	// do not runt this test stand-alone
+	if *stateDir == "DEFAULT" {
+		return
+	}
+
+	s := createState(t, *stateImpl, *stateDir)
+	defer func() {
+		_ = s.Close()
+	}()
+
+	if state, err := s.GetAccountState(address1); err != nil || state != common.Exists {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, common.Exists, err)
+	}
+	if balance, err := s.GetBalance(address1); err != nil || balance != balance1 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", balance, balance1, err)
+	}
+	if nonce, err := s.GetNonce(address1); err != nil || nonce != nonce1 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", nonce, nonce1, err)
+	}
+	if storage, err := s.GetStorage(address1, key1); err != nil || storage != val1 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", storage, val1, err)
+	}
+	if code, err := s.GetCode(address1); err != nil || bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", code, []byte{1, 2, 3}, err)
+	}
+}
+
+func execReadStateTest(t *testing.T, dir, stateImpl string) {
+	cmd := exec.Command("go", "test", "-v", "-run", "TestReadState", "-args", "-statedir="+dir, "-stateimpl="+stateImpl)
+
+	errBuf := new(bytes.Buffer)
+	cmd.Stderr = errBuf
+	stdBuf := new(bytes.Buffer)
+	cmd.Stdout = stdBuf
+
+	if err := cmd.Run(); err != nil {
+		t.Errorf("Subprocess finished with error: %v\n stdout:\n%s stderr:\n%s", err, stdBuf.String(), errBuf.String())
+	}
+}
+
+// createState creates a state with the given name and directory
+func createState(t *testing.T, name, dir string) State {
+	for _, s := range initStates() {
+		if s.name == name {
+			state, err := s.createState(dir)
+			if err != nil {
+				t.Fatalf("Cannot init state: %s, err: %v", name, err)
+			}
+			return state
+		}
+	}
+
+	t.Fatalf("State with name %s not found", name)
+	return nil
 }
