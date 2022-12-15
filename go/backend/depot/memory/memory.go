@@ -1,12 +1,15 @@
 package memory
 
 import (
+	"encoding/binary"
 	"fmt"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
+
+const LengthSize = 4 // uint32
 
 // Depot is an in-memory store.Depot implementation - it maps IDs to values
 type Depot[I common.Identifier] struct {
@@ -36,22 +39,25 @@ func (m *Depot[I]) itemHashGroup(id I) (page int) {
 	return int(id / I(m.hashItems))
 }
 
-// hashGroupRange provides range of data indexes of given hashing group
-func (m *Depot[I]) hashGroupRange(page int) (start int, end int) {
-	return m.hashItems * page, (m.hashItems * page) + m.hashItems
-}
-
+// GetPage provides all data of one hashing group in a byte slice
 func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
-	start, end := m.hashGroupRange(hashGroup)
+	start := m.hashItems * hashGroup
+	end := start + m.hashItems
 	if end > len(m.data) {
 		end = len(m.data)
 	}
-	groupLen := 0
+	outLen := m.hashItems * LengthSize
 	for i := start; i < end; i++ {
-		groupLen += len(m.data[i])
+		outLen += len(m.data[i])
 	}
-	out = make([]byte, groupLen)
+	out = make([]byte, outLen)
 	outIt := 0
+	for i := start; i < start+m.hashItems; i++ {
+		if i < end {
+			binary.LittleEndian.PutUint32(out[outIt:], uint32(len(m.data[i])))
+		}
+		outIt += LengthSize
+	}
 	for i := start; i < end; i++ {
 		copy(out[outIt:], m.data[i])
 		outIt += len(m.data[i])

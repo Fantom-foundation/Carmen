@@ -1,12 +1,15 @@
 package ldb
 
 import (
+	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"unsafe"
 )
+
+const LengthSize = 4 // uint32
 
 // Depot is an LevelDB backed store.Depot implementation
 type Depot[I common.Identifier] struct {
@@ -45,7 +48,7 @@ func (m *Depot[I]) hashGroupRange(page int) (start int, end int) {
 	return m.hashItems * page, (m.hashItems * page) + m.hashItems
 }
 
-func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
+func (m *Depot[I]) GetPage(hashGroup int) ([]byte, error) {
 	startKey, endKey := m.hashGroupRange(hashGroup)
 	startDbKey := m.convertKey(I(startKey)).ToBytes()
 	endDbKey := m.convertKey(I(endKey)).ToBytes()
@@ -53,13 +56,17 @@ func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
 	iter := m.db.NewIterator(&keysRange, nil)
 	defer iter.Release()
 
+	out := make([]byte, m.hashItems*LengthSize)
+	outIt := 0
 	for iter.Next() {
-		out = append(out, iter.Value()...)
+		value := iter.Value() // returned slice valid only in this iteration
+		if len(value) != 0 {
+			binary.LittleEndian.PutUint32(out[outIt:], uint32(len(value)))
+			out = append(out, value...)
+		}
+		outIt += LengthSize
 	}
-
-	err = iter.Error()
-
-	return
+	return out, iter.Error()
 }
 
 // Set a value of an item

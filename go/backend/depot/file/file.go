@@ -20,10 +20,11 @@ type Depot[I common.Identifier] struct {
 	offsetsFile     *os.File
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
-	hashItems       int // the amount of items in one hashing group
-	offsetData      []byte
-	pagesCalls      int // amount of GetPage calls in total
-	fragmentedCalls int // amount of GetPage calls being fragmented
+	hashItems       int    // the amount of items in one hashing group
+	offsetData      []byte // recycled slice for offsets data in GetPage call
+	emptyHashPage   []byte // pre-generated slice for empty hashing pages
+	pagesCalls      int    // amount of GetPage calls in total
+	fragmentedCalls int    // amount of GetPage calls being fragmented
 }
 
 // NewDepot constructs a new instance of Depot.
@@ -49,6 +50,7 @@ func NewDepot[I common.Identifier](path string,
 		indexSerializer: indexSerializer,
 		hashItems:       hashItems,
 		offsetData:      make([]byte, (OffsetSize+LengthSize)*hashItems),
+		emptyHashPage:   make([]byte, LengthSize*hashItems),
 	}
 	m.hashTree = hashtreeFactory.Create(m)
 	return m, nil
@@ -65,12 +67,6 @@ func (m *Depot[I]) itemPosition(id I) int64 {
 	return int64(id) * (OffsetSize + LengthSize)
 }
 
-func parseOffsetLength(offsetBytes []byte) (offset int64, length int32) {
-	offset = int64(binary.LittleEndian.Uint64(offsetBytes[0:OffsetSize]))
-	length = int32(binary.LittleEndian.Uint32(offsetBytes[OffsetSize : OffsetSize+LengthSize]))
-	return offset, length
-}
-
 // GetPage provides all data of one hashing group in a byte slice
 func (m *Depot[I]) GetPage(page int) ([]byte, error) {
 	startKey := I(m.hashItems * page)
@@ -81,34 +77,62 @@ func (m *Depot[I]) GetPage(page int) ([]byte, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
+	offsetData := m.offsetData[0:offsetsLen]
 
-	dataStart, dataLength, isFragmented := getRangeFromOffsets(m.offsetData[0:offsetsLen])
+	dataStart, dataLength, isFragmented := getRangeFromOffsets(offsetData)
 
 	if dataLength == 0 {
-		return nil, nil
+		return m.emptyHashPage, nil
 	}
 
-	out := make([]byte, dataLength)
-	if !isFragmented {
-		_, err = m.contentsFile.ReadAt(out, dataStart)
+	// lengths prefix
+	lengthsLength := m.hashItems * LengthSize
+	out := make([]byte, dataLength+int64(lengthsLength))
+	copyOffsetsToLengths(out[0:lengthsLength], offsetData)
+
+	if isFragmented { // slow path for fragmented data
+		m.fragmentedCalls++
+		err = readFragmentedPageItems(m.contentsFile, offsetData, out[lengthsLength:])
 		return out, err
 	}
 
-	m.fragmentedCalls++
+	// fast path
+	_, err = m.contentsFile.ReadAt(out[lengthsLength:], dataStart)
+	return out, err
+}
+
+// copyOffsetsToLengths copy values lengths from the offsets slice
+func copyOffsetsToLengths(out []byte, offsets []byte) {
+	outOffset := 0
+	for position := OffsetSize; position < len(offsets); position += OffsetSize + LengthSize {
+		copy(out[outOffset:outOffset+LengthSize], offsets[position:])
+		outOffset += LengthSize
+	}
+}
+
+// parseOffsetLength parse the offsets slice to obtain the first offsets and length
+func parseOffsetLength(offsetBytes []byte) (offset int64, length int32) {
+	offset = int64(binary.LittleEndian.Uint64(offsetBytes[0:OffsetSize]))
+	length = int32(binary.LittleEndian.Uint32(offsetBytes[OffsetSize : OffsetSize+LengthSize]))
+	return offset, length
+}
+
+// readFragmentedPageItems reads the page data by the offsets slice
+func readFragmentedPageItems(contentsFile *os.File, offsets []byte, out []byte) error {
 	outOffset := int32(0)
-	for position := 0; position < offsetsLen; position += OffsetSize + LengthSize {
-		offset, length := parseOffsetLength(m.offsetData[position:offsetsLen])
-		_, err = m.contentsFile.ReadAt(out[outOffset:outOffset+length], offset)
+	for position := 0; position < len(offsets); position += OffsetSize + LengthSize {
+		offset, length := parseOffsetLength(offsets[position:])
+		_, err := contentsFile.ReadAt(out[outOffset:outOffset+length], offset)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		outOffset += length
 	}
-	return out, nil
+	return nil
 }
 
 // getRangeFromOffsets parse offset data of one page (hash group) and provides
-// the page data start, length and whether the group is fragmented.
+// the page data start, length and whether the page is fragmented.
 // If the page is fragmented, dataStart output is irrelevant.
 func getRangeFromOffsets(offsetData []byte) (dataStart, dataLength int64, isFragmented bool) {
 	for position := 0; position < len(offsetData); position += OffsetSize + LengthSize {
