@@ -284,7 +284,7 @@ func TestPersistentState(t *testing.T) {
 				t.Errorf("Cannot close state: %e", err)
 			}
 
-			execReadStateTest(t, dir, config.name)
+			execSubProcessTest(t, dir, config.name, "TestStateRead")
 		})
 	}
 }
@@ -293,9 +293,9 @@ var stateDir = flag.String("statedir", "DEFAULT", "directory where the state is 
 var stateImpl = flag.String("stateimpl", "DEFAULT", "name of the state implementation")
 
 // TestReadState verifies data are available in a state.
-// The give state reads the data from the given directory and verifies the data are present.
+// The given state reads the data from the given directory and verifies the data are present.
 // Name of the index and directory is provided as command line arguments
-func TestReadState(t *testing.T) {
+func TestStateRead(t *testing.T) {
 	// do not runt this test stand-alone
 	if *stateDir == "DEFAULT" {
 		return
@@ -323,8 +323,8 @@ func TestReadState(t *testing.T) {
 	}
 }
 
-func execReadStateTest(t *testing.T, dir, stateImpl string) {
-	cmd := exec.Command("go", "test", "-v", "-run", "TestReadState", "-args", "-statedir="+dir, "-stateimpl="+stateImpl)
+func execSubProcessTest(t *testing.T, dir, stateImpl, execTestName string) {
+	cmd := exec.Command("go", "test", "-v", "-run", execTestName, "-args", "-statedir="+dir, "-stateimpl="+stateImpl)
 
 	errBuf := new(bytes.Buffer)
 	cmd.Stderr = errBuf

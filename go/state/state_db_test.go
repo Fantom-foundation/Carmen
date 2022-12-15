@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"testing"
@@ -1917,4 +1918,146 @@ func TestSlotIdOrder(t *testing.T) {
 			t.Errorf("Comparison of %v and %v failed, wanted %d, got %d", input.a, input.b, input.want, got)
 		}
 	}
+}
+
+const numSlots = 1000
+
+// TestPersistentStateDB modifies stateDB first, then it is closed and is re-opened in another process,
+// and it is tested that data are available, i.e. all was successfully persisted
+func TestPersistentStateDB(t *testing.T) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+
+			// skip in-memory
+			if config.name == "cpp-InMemory" || config.name == "go-Memory" {
+				return
+			}
+
+			dir := t.TempDir()
+			s, err := config.createState(dir)
+			if err != nil {
+				t.Fatalf("failed to initialize state %s", config.name)
+			}
+
+			stateDb := CreateStateDBUsing(s)
+
+			stateDb.BeginEpoch()
+			stateDb.BeginBlock()
+			stateDb.BeginTransaction()
+
+			// init state DB data
+			stateDb.CreateAccount(address1)
+			stateDb.AddBalance(address1, big.NewInt(153))
+			stateDb.SetNonce(address1, 58)
+			stateDb.SetCode(address1, []byte{1, 2, 3})
+
+			// insert number of slots to address 1
+			for i := 0; i < numSlots; i++ {
+				val := toVal(uint64(i))
+				stateDb.SetState(address1, toKey(uint64(i)), val)
+			}
+
+			stateDb.EndTransaction()
+			stateDb.EndBlock()
+			stateDb.BeginBlock()
+			stateDb.BeginTransaction()
+
+			stateDb.CreateAccount(address2)
+			stateDb.AddBalance(address2, big.NewInt(6789))
+			stateDb.SetNonce(address2, 91)
+			stateDb.SetCode(address2, []byte{3, 2, 1})
+
+			// insert number of slots to address 2
+			for i := 0; i < numSlots; i++ {
+				val := toVal(uint64(i + numSlots))
+				stateDb.SetState(address2, toKey(uint64(i)), val)
+			}
+
+			stateDb.EndTransaction()
+			stateDb.EndBlock()
+			stateDb.EndEpoch(1)
+
+			if err := stateDb.Close(); err != nil {
+				t.Errorf("Cannot close state: %e", err)
+			}
+
+			execSubProcessTest(t, dir, config.name, "TestStateDBRead")
+		})
+	}
+}
+
+// TestStateDBRead verifies data are available in a stateDB.
+// The given state reads the data from the given directory and verifies the data are present.
+// Name of the index and directory is provided as command line arguments
+func TestStateDBRead(t *testing.T) {
+	// do not runt this test stand-alone
+	if *stateDir == "DEFAULT" {
+		return
+	}
+
+	s := createState(t, *stateImpl, *stateDir)
+	defer func() {
+		_ = s.Close()
+	}()
+
+	stateDb := CreateStateDBUsing(s)
+
+	if state := stateDb.GetAccountState(address1); state != common.Exists {
+		t.Errorf("Unexpected value, val: %v != %v", state, common.Exists)
+	}
+	if state := stateDb.GetAccountState(address2); state != common.Exists {
+		t.Errorf("Unexpected value, val: %v != %v", state, common.Exists)
+	}
+
+	if balance := stateDb.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
+	}
+	if balance := stateDb.GetBalance(address2); balance.Cmp(big.NewInt(6789)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 6789)
+	}
+
+	if nonce := stateDb.GetNonce(address1); nonce != 58 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 58)
+	}
+	if nonce := stateDb.GetNonce(address2); nonce != 91 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 91)
+	}
+
+	if code := stateDb.GetCode(address1); bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{1, 2, 3})
+	}
+	if code := stateDb.GetCode(address2); bytes.Compare(code, []byte{3, 2, 1}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{3, 2, 1})
+	}
+
+	// slots in address 1
+	for i := 0; i < numSlots; i++ {
+		val := toVal(uint64(i))
+		key := toKey(uint64(i))
+		if storage := stateDb.GetState(address1, key); storage != val {
+			t.Errorf("Unexpected value, val: %v != %v", storage, val)
+		}
+	}
+
+	// slots in address 2
+	for i := 0; i < numSlots; i++ {
+		val := toVal(uint64(i + numSlots))
+		key := toKey(uint64(i))
+		if storage := stateDb.GetState(address2, key); storage != val {
+			t.Errorf("Unexpected value, val: %v != %v", storage, val)
+		}
+	}
+
+}
+
+func toVal(key uint64) common.Value {
+	keyBytes := make([]byte, 32)
+	binary.BigEndian.PutUint64(keyBytes, key)
+	return common.ValueSerializer{}.FromBytes(keyBytes)
+}
+
+func toKey(key uint64) common.Key {
+	keyBytes := make([]byte, 32)
+	binary.BigEndian.PutUint64(keyBytes, key)
+	return common.KeySerializer{}.FromBytes(keyBytes)
 }
