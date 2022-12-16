@@ -16,9 +16,6 @@ cc_test(
     deps = [
         ":state",
         ":configurations",
-        "//backend/index/memory:index",
-        "//backend/store/memory:store",
-        "//backend/depot/memory:depot",
         "//common:status_test_util",
         "//common:file_util",
         "@com_google_googletest//:gtest_main",
@@ -39,6 +36,7 @@ cc_library(
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
+        "//backend/multimap/memory:multimap",
     ],
     hdrs = ["configurations.h"],
 )
