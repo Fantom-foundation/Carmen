@@ -1,8 +1,7 @@
 package common
 
-import "fmt"
-
 import (
+	"fmt"
 	"unsafe"
 )
 
@@ -30,6 +29,15 @@ func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 	for key, value := range c.cache {
 		if !callback(key, value.val) {
+			return // terminate iteration if false returned from the callback
+		}
+	}
+}
+
+// Iterate all cached entries by passing a mutable value reference to the provided callback.
+func (c *Cache[K, V]) IterateMutable(callback func(K, *V) bool) {
+	for key, value := range c.cache {
+		if !callback(key, &value.val) {
 			return // terminate iteration if false returned from the callback
 		}
 	}

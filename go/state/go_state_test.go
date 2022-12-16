@@ -339,7 +339,6 @@ func TestGetMemoryFootprint(t *testing.T) {
 			if !strings.Contains(str, "hashTree") {
 				t.Errorf("memory footprint string does not contain any hashTree")
 			}
-			fmt.Printf("Memory footprint:\n%s", str)
 		})
 	}
 }
