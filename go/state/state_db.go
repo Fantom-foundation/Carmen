@@ -114,6 +114,11 @@ type stateDB struct {
 	// A list of accounts to be deleted at the end of the transaction.
 	accountsToDelete []common.Address
 
+	// A set of accounts that have been reset during an ongoing block. Since the backend is only informed
+	// about this at the end of the block, no storage information must be fetched for those until then.
+	// An account is only considered to be a member of this set if it is contained as a key and its value is true.
+	clearedAccounts map[common.Address]bool
+
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
 
@@ -229,6 +234,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		writtenSlots:      map[*slotValue]bool{},
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
+		clearedAccounts:   make(map[common.Address]bool),
 	}
 }
 
@@ -303,6 +309,33 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 	s.undo = append(s.undo, func() {
 		s.accountsToDelete = s.accountsToDelete[0:deleteListLength]
 	})
+
+	// Clear cached value states for the targeted account.
+	// TODO: this full-map iteration may be slow; if so, some index may be required.
+	s.data.ForEach(func(slot slotId, value *slotValue) {
+		if slot.addr == addr {
+			// Support rollback of account destruction.
+			backup := slotValue(*value)
+			s.undo = append(s.undo, func() {
+				*value = backup
+			})
+
+			// Clear cached values.
+			value.stored = common.Value{}
+			value.storedKnown = true
+			value.committed = common.Value{}
+			value.committedKnown = true
+			value.current = common.Value{}
+		}
+	})
+
+	// Mark account as a cleared account to avoid fetching new data into the cache
+	// during the ongoing block.
+	s.clearedAccounts[addr] = true
+	s.undo = append(s.undo, func() {
+		s.clearedAccounts[addr] = false
+	})
+
 	return true
 }
 
@@ -446,6 +479,12 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 }
 
 func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
+	if cleared, found := s.clearedAccounts[sid.addr]; found && cleared {
+		// If the account has been cleared in this block, the effects are not yet
+		// updated in the data base. So it must not be read from the DB before
+		// the next block.
+		return common.Value{}
+	}
 	stored, found := s.storedDataCache.Get(sid)
 	if !found {
 		var err error
@@ -687,13 +726,17 @@ func (s *stateDB) EndTransaction() {
 	}
 
 	// Delete accounts scheduled for deletion.
-	for _, addr := range s.accountsToDelete {
-		s.SetNonce(addr, 0)
-		s.SetCode(addr, []byte{})
-		// Note: balance was already set to zero during suicide call.
-		// TODO: delete all the storage of the account
+	if len(s.accountsToDelete) > 0 {
+		for _, addr := range s.accountsToDelete {
+			// Note: balance was already set to zero during suicide call.
+			// Note: storage state is handled through the clearedAccount map
+			// the clearing of the data and storedDataCache at various phases
+			// of the block processing.
+			s.SetNonce(addr, 0)
+			s.SetCode(addr, []byte{})
+		}
+		s.accountsToDelete = s.accountsToDelete[0:0]
 	}
-	s.accountsToDelete = s.accountsToDelete[0:0]
 
 	s.writtenSlots = map[*slotValue]bool{}
 	// Reset state, in particular seal effects by forgetting undo list.
@@ -716,6 +759,34 @@ func (s *stateDB) EndBlock() {
 	// order and are deliberately randomized. Thus, updates need to be ordered before being written
 	// to the underlying state.
 
+	// Clear all accounts that have been deleted at some point during this block.
+	// This will cause all storage slots of that accounts to be reset before new
+	// values may be written in the subsequent updates.
+	clearedAccounts := map[common.Address]bool{}
+	for addr, cleared := range s.clearedAccounts {
+		if cleared {
+			// We can delete accounts in an arbitrary order since deleting does not
+			// introduce new values in the address -> addr_id map.
+			if err := s.state.DeleteAccount(addr); err != nil {
+				panic(fmt.Sprintf("failed to delete account: %v", err))
+			}
+			clearedAccounts[addr] = true
+		}
+	}
+
+	// Clear stored data of cleared accounts in stored data cache to reflect account deletion.
+	if len(clearedAccounts) > 0 {
+		// TODO: this full-cache iteration may be slow; if so, the index structure needs to be improved.
+		s.storedDataCache.IterateMutable(func(id slotId, value *common.Value) bool {
+			if _, cleared := clearedAccounts[id.addr]; cleared {
+				// If the value got already updated again since the account deletion, the new
+				// value will be set when processing modified state values below.
+				*value = common.Value{}
+			}
+			return true
+		})
+	}
+
 	// Update account stats in deterministic order in state DB
 	addresses := make([]common.Address, 0, max(max(len(s.accounts), len(s.balances)), len(s.nonces)))
 	sortAddresses := func() {
@@ -726,12 +797,7 @@ func (s *stateDB) EndBlock() {
 			if value.current == common.Exists {
 				addresses = append(addresses, addr)
 			} else if value.current == common.Deleted {
-				// We can delete accounts in an arbitrary order since deleting does not
-				// introduce new values in the address -> addr_id map.
-				err := s.state.DeleteAccount(addr)
-				if err != nil {
-					panic(fmt.Sprintf("Failed to delete account: %v", err))
-				}
+				// Delete was already conducted above.
 			} else {
 				panic(fmt.Sprintf("Unknown account state: %v", value.current))
 			}
@@ -893,6 +959,7 @@ func (s *stateDB) reset() {
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data.Clear()
+	s.clearedAccounts = make(map[common.Address]bool)
 	s.codes = make(map[common.Address]*codeValue)
 	s.resetTransactionContext()
 }

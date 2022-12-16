@@ -97,6 +97,156 @@ func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T)
 	}
 }
 
+func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+	zero := common.Value{}
+
+	// Initially the account is non-exisiting, it gets destroyed, and recreated.
+	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+
+	// First transaction creates an account and sets some storage values.
+	db.BeginTransaction()
+	db.CreateAccount(address1)
+	db.SetState(address1, key1, val1)
+	db.SetState(address1, key2, val2)
+	db.EndTransaction()
+
+	// In the second transaction we delete and restore the account.
+	db.BeginTransaction()
+
+	// Initially the old values should be present.
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("Wrong state value, wanted %v, got %v", val1, got)
+	}
+	if got := db.GetState(address1, key2); got != val2 {
+		t.Errorf("Wrong state value, wanted %v, got %v", val2, got)
+	}
+
+	db.Suicide(address1)
+	// Note: after suicide processing of the contract ends. However, the enclosing call
+	// may immediately re-create the account in the same transaction.
+
+	db.CreateAccount(address1)
+
+	// The values should still be gone.
+	if got := db.GetState(address1, key1); got != zero {
+		t.Errorf("Wrong state value, wanted %v, got %v", zero, got)
+	}
+	if got := db.GetState(address1, key2); got != zero {
+		t.Errorf("Wrong state value, wanted %v, got %v", zero, got)
+	}
+	if got := db.GetState(address1, key3); got != zero {
+		t.Errorf("Wrong state value, wanted %v, got %v", zero, got)
+	}
+
+	db.EndTransaction()
+	db.EndBlock()
+}
+
+func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+	zero := common.Value{}
+
+	// Initially the account exists and has a slot value set.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
+
+	// During the processing the account is deleted.
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+	mock.EXPECT().SetStorage(address1, key2, val2).Return(nil)
+
+	// In the first transaction key1 is fetched, ending up in the store data cache.
+	db.BeginTransaction()
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("unexpected value, wanted %v, got %v", val1, got)
+	}
+	db.EndTransaction()
+	db.EndBlock() // < stored value remains in store data cache
+
+	// In the next block the account is destroyed
+	db.BeginTransaction()
+	db.Suicide(address1)
+	db.EndTransaction()
+	db.BeginTransaction()
+	// This value is zero because within this block the address1 was cleared.
+	if got := db.GetState(address1, key1); got != zero {
+		t.Errorf("unexpected value, wanted %v, got %v", zero, got)
+	}
+	db.SetState(address1, key2, val2)
+	db.EndTransaction()
+	db.EndBlock() // < here the stored data cache is reset to forget the old state; also, key2/val2 is stored in DB
+
+	// In this block we try to read the value again. This time it is not cached
+	// in the snapshot state nor is the account marked as being cleared. The value
+	// is retrieved from the store data cache.
+	db.BeginTransaction()
+	// This value is now fetched from the value store, which is supposed to be cleared
+	// at the end of the block deleting the account.
+	if got := db.GetState(address1, key1); got != zero {
+		t.Errorf("unexpected value, wanted %v, got %v", zero, got)
+	}
+	// The value for key2 is also retrieved from the value store (no expected GetStorage call for this).
+	if got := db.GetState(address1, key2); got != val2 {
+		t.Errorf("unexpected value, wanted %v, got %v", val2, got)
+	}
+	db.EndTransaction()
+	db.EndBlock()
+}
+
+func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Initially the account is exisiting with a view stored values.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
+
+	// In the transaction we delete and restore the account.
+	db.BeginTransaction()
+
+	// Initially the old values should be present.
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("Wrong state value, wanted %v, got %v", val1, got)
+	}
+	if got := db.GetState(address1, key2); got != val2 {
+		t.Errorf("Wrong state value, wanted %v, got %v", val2, got)
+	}
+
+	snapshot := db.Snapshot()
+	db.Suicide(address1)
+	// Note: after a suicide of a contract execution ends but enclosing call may continue and roll back.
+
+	db.RevertToSnapshot(snapshot)
+
+	// The values should still be restored.
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("Wrong state value, wanted %v, got %v", val1, got)
+	}
+	if got := db.GetState(address1, key2); got != val2 {
+		t.Errorf("Wrong state value, wanted %v, got %v", val2, got)
+	}
+
+	db.EndTransaction()
+	db.EndBlock() // < no change is send to the DB
+}
+
 func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
