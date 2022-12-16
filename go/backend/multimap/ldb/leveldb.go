@@ -2,6 +2,7 @@ package ldb
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"unsafe"
 )
@@ -56,16 +57,18 @@ func (m *MultiMap[K, V]) getRangeForKey(key K) util.Range {
 // RemoveAll removes all entries with the given key.
 func (m *MultiMap[K, V]) RemoveAll(key K) error {
 	keysRange := m.getRangeForKey(key)
+	batch := new(leveldb.Batch)
 	iter := m.db.NewIterator(&keysRange, nil)
 	defer iter.Release()
 
 	for iter.Next() {
-		err := m.db.Delete(iter.Key(), nil)
-		if err != nil {
-			return err
-		}
+		batch.Delete(iter.Key())
 	}
-	return iter.Error()
+	if err := iter.Error(); err != nil {
+		return err
+	}
+
+	return m.db.Write(batch, nil)
 }
 
 // GetAll provides all values associated with the given key.
