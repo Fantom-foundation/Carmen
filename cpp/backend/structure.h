@@ -52,8 +52,6 @@ concept Structure = requires(S a) {
     S::Open(std::declval<Context&>(),
             std::declval<const std::filesystem::path&>())
     } -> std::same_as<absl::StatusOr<S>>;
-  // Computes a hash over the full content of a data structure.
-  { a.GetHash() } -> std::same_as<absl::StatusOr<Hash>>;
   // Structures must be flushable.
   { a.Flush() } -> std::same_as<absl::Status>;
   // Structures must be closeable.
@@ -63,5 +61,13 @@ concept Structure = requires(S a) {
 &&std::is_move_constructible_v<S>
     // Structures must provide memory-footprint information.
     && MemoryFootprintProvider<S>;
+
+// Extends the requiremetns of a data structure by an additional need for
+// supporting effective full-state hashing.
+template <typename S>
+concept HashableStructure = Structure<S> && requires(S a) {
+  // Computes a hash over the full content of a data structure.
+  { a.GetHash() } -> std::same_as<absl::StatusOr<Hash>>;
+};
 
 }  // namespace carmen::backend

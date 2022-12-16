@@ -14,6 +14,7 @@ cc_test(
     srcs = ["multimap_test.cc"],
     deps = [
         ":multimap",
+        "//backend/multimap",
         "//common:type",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
