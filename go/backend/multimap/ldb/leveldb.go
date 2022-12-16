@@ -8,14 +8,14 @@ import (
 )
 
 // MultiMap is a LevelDB multimap.MultiMap implementation - it maps IDs to values
-type MultiMap[K common.Identifier, V common.Identifier] struct {
+type MultiMap[K any, V any] struct {
 	db              common.LevelDB
 	table           common.TableSpace
 	keySerializer   common.Serializer[K]
 	valueSerializer common.Serializer[V]
 }
 
-func NewMultiMap[K common.Identifier, V common.Identifier](
+func NewMultiMap[K any, V any](
 	db common.LevelDB,
 	table common.TableSpace,
 	keySerializer common.Serializer[K],

@@ -160,11 +160,7 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 
-	db, err := common.OpenLevelDb(storePath+string(filepath.Separator)+"addressToSlots", nil)
-	if err != nil {
-		return nil, err
-	}
-	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+	addressToSlots := mapmem.NewMultiMap[uint32, uint32]() // TODO this must be done persistent
 
 	state := &GoState{
 		addressIndex,
@@ -177,7 +173,7 @@ func NewGoFileState(path string) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		cleanUpByClosing(db), nil}
+		nil, nil}
 
 	return state, nil
 }
@@ -264,11 +260,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 
-	db, err := common.OpenLevelDb(storePath+string(filepath.Separator)+"addressToSlots", nil)
-	if err != nil {
-		return nil, err
-	}
-	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+	addressToSlots := mapmem.NewMultiMap[uint32, uint32]() // TODO this must be done persistent
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
@@ -281,7 +273,7 @@ func NewGoCachedFileState(path string) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanUpByClosing(db), nil}
+		nil, nil}
 
 	return state, nil
 }
@@ -541,7 +533,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+	addressToSlots := mapldb.NewMultiMap[uint32, uint32](tx, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
 	cleanup := []func(){
 		func() {
@@ -744,7 +736,7 @@ func NewGoTransactCachedLeveLIndexAndStoreState(path string) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+	addressToSlots := mapldb.NewMultiMap[uint32, uint32](tx, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
 	cleanup := []func(){
 		func() {

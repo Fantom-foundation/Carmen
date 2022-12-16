@@ -2,9 +2,7 @@ package multimap
 
 import "github.com/Fantom-foundation/Carmen/go/common"
 
-// MultiMap defines the interface for mapping keys to sets of values.
-// It serves as a specialized index structure enabling the fast
-// accessing of a set of values associated to a given key.
+// MultiMap defines the interface for mapping keys to sets of multiple values.
 type MultiMap[K common.Identifier, V common.Identifier] interface {
 	// Add adds the given key/value pair.
 	Add(key K, value V) error

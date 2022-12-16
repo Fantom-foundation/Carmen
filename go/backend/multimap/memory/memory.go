@@ -6,11 +6,11 @@ import (
 )
 
 // MultiMap is an in-memory multimap.MultiMap implementation - it maps IDs to values
-type MultiMap[K common.Identifier, V common.Identifier] struct {
+type MultiMap[K comparable, V comparable] struct {
 	data map[K]map[V]bool
 }
 
-func NewMultiMap[K common.Identifier, V common.Identifier]() *MultiMap[K, V] {
+func NewMultiMap[K comparable, V comparable]() *MultiMap[K, V] {
 	return &MultiMap[K, V]{
 		data: make(map[K]map[V]bool),
 	}

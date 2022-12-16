@@ -5,7 +5,7 @@ import "github.com/Fantom-foundation/Carmen/go/common"
 const KeySize = 8
 const ValueSize = 8
 
-type DbKey[K common.Identifier, V common.Identifier] [1 + KeySize + ValueSize]byte
+type DbKey[K any, V any] [1 + KeySize + ValueSize]byte
 
 func (k *DbKey[K, V]) SetTableKey(table common.TableSpace, key K, keySerializer common.Serializer[K]) {
 	k[0] = byte(table)
