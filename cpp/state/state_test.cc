@@ -89,6 +89,23 @@ TYPED_TEST_P(StateTest, DeletedAccountsCanBeRecreated) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 }
 
+TYPED_TEST_P(StateTest, DeletingAnAccountDeletesItsStorage) {
+  Address a{0x01};
+  Key k{0x01, 0x02};
+  Value v{0x02, 0x03, 0x04};
+
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
+
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+
+  EXPECT_OK(state.DeleteAccount(a));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+}
+
 TYPED_TEST_P(StateTest, DefaultBalanceIsZero) {
   Address a{0x01};
   Address b{0x02};
@@ -285,7 +302,7 @@ REGISTER_TYPED_TEST_SUITE_P(
     CodesAreCoveredByGlobalStateHash, CodesCanBeUpdated,
     DefaultAccountStateIsUnknown, DefaultBalanceIsZero, DefaultCodeIsEmpty,
     DefaultNonceIsZero, DeletedAccountsCanBeRecreated,
-    DeletingAnUnknownAccountDoesNotCreateIt,
+    DeletingAnAccountDeletesItsStorage, DeletingAnUnknownAccountDoesNotCreateIt,
     LookingUpMissingCodeDoesNotChangeGlobalHash,
     NoncesAreCoveredByGlobalStateHash, NoncesCanBeUpdated,
     UpdatingCodesUpdatesCodeHashes, ValuesAddedCanBeRetrieved,

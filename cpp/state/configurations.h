@@ -7,6 +7,7 @@
 #include "backend/index/file/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
 #include "backend/index/memory/index.h"
+#include "backend/multimap/memory/multimap.h"
 #include "backend/store/file/store.h"
 #include "backend/store/leveldb/store.h"
 #include "backend/store/memory/store.h"
@@ -29,7 +30,11 @@ using InMemoryStore = backend::store::InMemoryStore<K, V, kPageSize>;
 template <typename K>
 using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 
-using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
+template <typename K, typename V>
+using InMemoryMultiMap = backend::multimap::InMemoryMultiMap<K, V>;
+
+using InMemoryState =
+    State<InMemoryIndex, InMemoryStore, InMemoryDepot, InMemoryMultiMap>;
 
 // ----------------------------------------------------------------------------
 //                         File-Based Configuration
@@ -46,7 +51,8 @@ using FileBasedStore =
 template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
-using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot>;
+using FileBasedState =
+    State<FileBasedIndex, FileBasedStore, FileBasedDepot, InMemoryMultiMap>;
 
 // ----------------------------------------------------------------------------
 //                         LevelDB-Based Configuration
@@ -62,7 +68,7 @@ using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
 template <typename K>
 using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
-using LevelDbBasedState =
-    State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot>;
+using LevelDbBasedState = State<LevelDbBasedIndex, LevelDbBasedStore,
+                                LevelDbBasedDepot, InMemoryMultiMap>;
 
 }  // namespace carmen
