@@ -15,8 +15,8 @@ type MultiMap[K common.Identifier, V common.Identifier] interface {
 	// RemoveAll removes all entries with the given key.
 	RemoveAll(key K) error
 
-	// ForEach applies the given operation on each value associated to the given key.
-	ForEach(key K, callback func(V)) error
+	// GetAll provides all values associated with the given key.
+	GetAll(key K) ([]V, error)
 
 	// provides the size of the store in memory in bytes
 	common.MemoryFootprintProvider

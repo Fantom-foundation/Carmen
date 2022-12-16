@@ -76,16 +76,17 @@ func (m *MultiMap[K, V]) RemoveAll(key K) error {
 	return iter.Error()
 }
 
-// ForEach applies the given operation on each value associated to the given key.
-func (m *MultiMap[K, V]) ForEach(key K, callback func(V)) error {
+// GetAll provides all values associated with the given key.
+func (m *MultiMap[K, V]) GetAll(key K) ([]V, error) {
 	keysRange := m.getRangeForKey(key)
 	iter := m.db.NewIterator(&keysRange, nil)
 	defer iter.Release()
 
+	values := make([]V, 0, 64)
 	for iter.Next() {
-		callback(m.valueSerializer.FromBytes(iter.Key()[9:]))
+		values = append(values, m.valueSerializer.FromBytes(iter.Key()[9:]))
 	}
-	return iter.Error()
+	return values, iter.Error()
 }
 
 // Flush the store

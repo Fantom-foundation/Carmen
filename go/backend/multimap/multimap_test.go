@@ -151,8 +151,8 @@ func TestMultiMapRemoveAll(t *testing.T) {
 }
 
 func assertValues(m MultiMap[uint32, uint64], key uint32, expectedValues []uint64) error {
-	content := make([]uint64, 0)
-	if err := m.ForEach(key, func(x uint64) { content = append(content, x) }); err != nil {
+	content, err := m.GetAll(key)
+	if err != nil {
 		return err
 	}
 	sort.Slice(content, func(i, j int) bool { return content[i] < content[j] })

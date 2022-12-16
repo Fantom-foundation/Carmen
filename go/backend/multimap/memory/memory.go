@@ -43,16 +43,17 @@ func (m *MultiMap[K, V]) RemoveAll(key K) error {
 	return nil
 }
 
-// ForEach applies the given operation on each value associated to the given key.
-func (m *MultiMap[K, V]) ForEach(key K, callback func(V)) error {
+// GetAll provides all values associated with the given key.
+func (m *MultiMap[K, V]) GetAll(key K) ([]V, error) {
 	set, exists := m.data[key]
 	if !exists {
-		return nil
+		return nil, nil
 	}
+	values := make([]V, 0, len(set))
 	for value := range set {
-		callback(value)
+		values = append(values, value)
 	}
-	return nil
+	return values, nil
 }
 
 // Flush the store
