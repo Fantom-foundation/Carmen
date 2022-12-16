@@ -6,9 +6,6 @@ import (
 	"unsafe"
 )
 
-const KeySize = 8
-const ValueSize = 8
-
 // MultiMap is a LevelDB multimap.MultiMap implementation - it maps IDs to values
 type MultiMap[K common.Identifier, V common.Identifier] struct {
 	db              common.LevelDB
@@ -33,30 +30,25 @@ func NewMultiMap[K common.Identifier, V common.Identifier](
 
 // Add adds the given key/value pair.
 func (m *MultiMap[K, V]) Add(key K, value V) error {
-	var dbKey [1 + KeySize + ValueSize]byte
-	dbKey[0] = byte(m.table)
-	m.keySerializer.CopyBytes(key, dbKey[1:1+KeySize])
-	m.valueSerializer.CopyBytes(value, dbKey[1+KeySize:])
+	var dbKey DbKey[K, V]
+	dbKey.SetTableKey(m.table, key, m.keySerializer)
+	dbKey.SetValue(value, m.valueSerializer)
 	return m.db.Put(dbKey[:], nil, nil)
 }
 
 // Remove removes a single key/value entry.
 func (m *MultiMap[K, V]) Remove(key K, value V) error {
-	var dbKey [17]byte
-	dbKey[0] = byte(m.table)
-	m.keySerializer.CopyBytes(key, dbKey[1:1+KeySize])
-	m.valueSerializer.CopyBytes(value, dbKey[1+KeySize:])
+	var dbKey DbKey[K, V]
+	dbKey.SetTableKey(m.table, key, m.keySerializer)
+	dbKey.SetValue(value, m.valueSerializer)
 	return m.db.Delete(dbKey[:], nil)
 }
 
 func (m *MultiMap[K, V]) getRangeForKey(key K) util.Range {
-	var startDbKey, endDbKey [17]byte
-	startDbKey[0] = byte(m.table)
-	m.keySerializer.CopyBytes(key, startDbKey[1:1+KeySize])
-	copy(endDbKey[0:1+KeySize], startDbKey[0:1+KeySize])
-	for i := 1 + KeySize; i < 1+KeySize+ValueSize; i++ {
-		endDbKey[i] = 0xFF
-	}
+	var startDbKey, endDbKey DbKey[K, V]
+	startDbKey.SetTableKey(m.table, key, m.keySerializer)
+	endDbKey.CopyFrom(&startDbKey)
+	endDbKey.SetMaxValue()
 
 	return util.Range{Start: startDbKey[:], Limit: endDbKey[:]}
 }
