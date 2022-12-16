@@ -39,6 +39,6 @@ concept Depot = requires(D a, const D b) {
     } -> std::same_as<absl::StatusOr<std::uint32_t>>;
 }
 // Depots must satisfy the requirements for backend data structures.
-&&Structure<D>;
+&&HashableStructure<D>;
 
 }  // namespace carmen::backend::depot
