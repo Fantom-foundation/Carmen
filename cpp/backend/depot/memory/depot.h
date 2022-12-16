@@ -90,6 +90,7 @@ class InMemoryDepot {
  private:
   using Item = std::vector<std::byte>;
   using Items = std::deque<Item>;
+  using ItemLength = std::uint32_t;
 
   // Get hash group for the given key.
   std::size_t GetBoxHashGroup(const K& key) const {
@@ -105,7 +106,9 @@ class InMemoryDepot {
     // Get data for given page. The data is valid until the next call to
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
-      static auto empty = Item{};
+      static const auto empty = Item{};
+      const std::size_t lengths_size = hash_box_size_ * sizeof(ItemLength);
+
       // calculate start and end of the hash group
       auto start = items_.begin() + id * hash_box_size_;
       auto end = items_.begin() +
@@ -114,15 +117,23 @@ class InMemoryDepot {
       if (start >= end) return empty;
 
       // calculate the size of the hash group
-      std::size_t len = 0;
+      std::size_t len = lengths_size;
       for (auto it = start; it != end; ++it) {
         len += it->size();
       }
 
       page_data_.resize(len);
-      std::size_t pos = 0;
+
+      // set lengths to zero default value
+      std::memset(page_data_.data(), 0, lengths_size);
+
+      std::size_t pos = lengths_size;
       for (auto it = start; it != end; ++it) {
         if (it->empty()) continue;
+        // set the length of the item
+        reinterpret_cast<ItemLength*>(page_data_.data())[it - start] =
+            it->size();
+        // copy the item
         std::memcpy(page_data_.data() + pos, it->data(), it->size());
         pos += it->size();
       }
