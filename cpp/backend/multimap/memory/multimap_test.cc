@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "backend/multimap/multimap.h"
+#include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -39,7 +40,10 @@ TEST(InMemoryMultiMap, IsMultiMap) {
 }
 
 TEST(InMemoryMultiMap, InsertedElementsCanBeFound) {
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
   EXPECT_THAT(map.Contains(1, 2), IsOkAndHolds(false));
   EXPECT_THAT(map.Contains(1, 3), IsOkAndHolds(false));
   EXPECT_THAT(map.Contains(2, 2), IsOkAndHolds(false));
@@ -62,7 +66,10 @@ TEST(InMemoryMultiMap, InsertedElementsCanBeFound) {
 
 TEST(InMemoryMultiMap, InsertedElementsCanBeEnumerated) {
   using E = std::pair<int, int>;
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
   EXPECT_THAT(Enumerate(map), UnorderedElementsAre());
 
   EXPECT_THAT(map.Insert(1, 2), IsOkAndHolds(true));
@@ -77,7 +84,10 @@ TEST(InMemoryMultiMap, InsertedElementsCanBeEnumerated) {
 
 TEST(InMemoryMultiMap, InsertedElementsCanBeEnumeratedByKey) {
   using E = std::pair<int, int>;
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
   EXPECT_THAT(Enumerate(1, map), UnorderedElementsAre());
   EXPECT_THAT(Enumerate(2, map), UnorderedElementsAre());
 
@@ -96,7 +106,10 @@ TEST(InMemoryMultiMap, InsertedElementsCanBeEnumeratedByKey) {
 
 TEST(InMemoryMultiMap, SameElementCanNotBeInsertedTwice) {
   using E = std::pair<int, int>;
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
 
   EXPECT_THAT(map.Insert(1, 1), IsOkAndHolds(true));
   EXPECT_THAT(Enumerate(1, map), UnorderedElementsAre(E{1, 1}));
@@ -107,7 +120,10 @@ TEST(InMemoryMultiMap, SameElementCanNotBeInsertedTwice) {
 
 TEST(InMemoryMultiMap, ElementsCanBeErasedSelectively) {
   using E = std::pair<int, int>;
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
 
   EXPECT_THAT(map.Insert(1, 1), IsOkAndHolds(true));
   EXPECT_THAT(map.Insert(1, 2), IsOkAndHolds(true));
@@ -123,7 +139,10 @@ TEST(InMemoryMultiMap, ElementsCanBeErasedSelectively) {
 
 TEST(InMemoryMultiMap, ElementsCanBeErasedByKey) {
   using E = std::pair<int, int>;
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
 
   EXPECT_THAT(map.Insert(1, 1), IsOkAndHolds(true));
   EXPECT_THAT(map.Insert(1, 2), IsOkAndHolds(true));
@@ -138,10 +157,35 @@ TEST(InMemoryMultiMap, ElementsCanBeErasedByKey) {
 }
 
 TEST(InMemoryMultiMap, NonExistingElementsCanBeErased) {
-  InMemoryMultiMap<int, int> map;
+  TempDir dir;
+  Context context;
+  ASSERT_OK_AND_ASSIGN(auto map,
+                       (InMemoryMultiMap<int, int>::Open(context, dir)));
 
   EXPECT_OK(map.Erase(1, 2));
   EXPECT_THAT(Enumerate(map), UnorderedElementsAre());
+}
+
+TEST(InMemoryMultiMap, CanBeStoredAndReloaded) {
+  TempDir dir;
+  Context context;
+
+  {
+    ASSERT_OK_AND_ASSIGN(auto map,
+                         (InMemoryMultiMap<int, int>::Open(context, dir)));
+    EXPECT_OK(map.Insert(1, 2));
+    EXPECT_OK(map.Insert(1, 3));
+    EXPECT_OK(map.Insert(2, 4));
+    EXPECT_OK(map.Close());
+  }
+
+  {
+    using E = std::pair<int, int>;
+    ASSERT_OK_AND_ASSIGN(auto map,
+                         (InMemoryMultiMap<int, int>::Open(context, dir)));
+    EXPECT_THAT(Enumerate(map),
+                UnorderedElementsAre(E{1, 2}, E{1, 3}, E{2, 4}));
+  }
 }
 
 }  // namespace carmen::backend::multimap
