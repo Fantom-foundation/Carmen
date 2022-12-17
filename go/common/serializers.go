@@ -156,3 +156,19 @@ func (a Identifier32Serializer) FromBytes(bytes []byte) uint32 {
 func (a Identifier32Serializer) Size() int {
 	return 4
 }
+
+// Identifier64Serializer is a Serializer of the uint64 Identifier type
+type Identifier64Serializer struct{}
+
+func (a Identifier64Serializer) ToBytes(value uint64) []byte {
+	return binary.BigEndian.AppendUint64([]byte{}, value)
+}
+func (a Identifier64Serializer) CopyBytes(value uint64, out []byte) {
+	binary.BigEndian.PutUint64(out, value)
+}
+func (a Identifier64Serializer) FromBytes(bytes []byte) uint64 {
+	return binary.BigEndian.Uint64(bytes)
+}
+func (a Identifier64Serializer) Size() int {
+	return 8
+}
