@@ -21,6 +21,7 @@ cc_test(
         ":depot",
         "//backend/depot",
         "//common:status_test_util",
+        "//backend/depot/memory:depot",
         "//common:file_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",

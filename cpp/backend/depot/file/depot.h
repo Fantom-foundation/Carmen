@@ -276,15 +276,22 @@ class FileDepot {
       }
       std::memset(page_data_.data(), 0, lengths_size);
 
+      const auto& get_offset = [&](const auto& i) {
+        return *reinterpret_cast<const Offset*>(offset_buffer.data() +
+                                                i * kOffsetEntrySize);
+      };
+      const auto& get_length = [&](const auto& i) {
+        return *reinterpret_cast<const Size*>(
+            offset_buffer.data() + i * kOffsetEntrySize + sizeof(Offset));
+      };
+
       // parse offsets and sizes
       std::size_t total_length = 0;
       auto is_fragmented = false;
       std::size_t start = 0;
       for (std::size_t i = 0; i < hash_box_size_; i++) {
-        auto& offset = *reinterpret_cast<Offset*>(offset_buffer.data() +
-                                                  i * kOffsetEntrySize);
-        auto& length = *reinterpret_cast<Size*>(
-            offset_buffer.data() + i * kOffsetEntrySize + sizeof(Offset));
+        const auto& offset = get_offset(i);
+        const auto& length = get_length(i);
         if (length == 0) continue;
         if (total_length == 0) {
           start = offset;
@@ -323,10 +330,8 @@ class FileDepot {
       // slow path for fragmented data
       std::size_t position = 0;
       for (std::size_t i = 0; i < hash_box_size_; i++) {
-        auto& offset = *reinterpret_cast<Offset*>(offset_buffer.data() +
-                                                  i * kOffsetEntrySize);
-        auto& length = *reinterpret_cast<Size*>(
-            offset_buffer.data() + i * kOffsetEntrySize + sizeof(Offset));
+        const auto& offset = get_offset(i);
+        const auto& length = get_length(i);
         if (length == 0) continue;
         data_fs_.seekg(offset, std::ios::beg);
         data_fs_.read(page_data_.data() + lengths_size + position, length);
