@@ -150,7 +150,7 @@ func (c *Storage[K, I]) Store(pageId pagepool.PageId, page *pagepool.Page[K, I])
 	keySize := c.keySerializer.Size()
 	valueSize := c.indexSerializer.Size()
 
-	for _, item := range page.GetAll() {
+	for _, item := range page.GetEntries() {
 		c.keySerializer.CopyBytes(item.Key, pageData[offset:offset+keySize])
 		c.indexSerializer.CopyBytes(item.Val, pageData[offset+keySize:offset+keySize+valueSize])
 		offset += keySize + valueSize

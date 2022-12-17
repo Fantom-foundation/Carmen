@@ -76,13 +76,13 @@ func TestSortedMapBulk(t *testing.T) {
 	}
 
 	// inserted data must much returned data
-	for i, entry := range h.GetAll() {
+	for i, entry := range h.GetEntries() {
 		if entry.Key != data[i].Key || entry.Val != data[i].Val {
 			t.Errorf("Entries do not match: %v, %d != %v, %d", entry.Key, entry.Val, data[i].Key, data[i].Val)
 		}
 	}
 
-	if size := len(h.GetAll()); size != int(max) {
+	if size := len(h.GetEntries()); size != int(max) {
 		t.Errorf("Size does not match: %d != %d", size, max)
 	}
 
@@ -115,13 +115,13 @@ func TestSortedMapBulkMultipleTimes(t *testing.T) {
 
 	allData := append(data, nextData...)
 	// inserted data must much returned data
-	for i, entry := range b.GetAll() {
+	for i, entry := range b.GetEntries() {
 		if entry.Key != allData[i].Key || entry.Val != allData[i].Val {
 			t.Errorf("Entries do not match: %v, %d != %v, %d", entry.Key, entry.Val, allData[i].Key, allData[i].Val)
 		}
 	}
 
-	if size := len(b.GetAll()); size != int(max+nextMax) {
+	if size := len(b.GetEntries()); size != int(max+nextMax) {
 		t.Errorf("Size does not match: %d != %d", size, max+nextMax)
 	}
 
@@ -131,7 +131,7 @@ func TestSortedMapBulkMultipleTimes(t *testing.T) {
 		arr = append(arr, k)
 	})
 
-	verifySort(t, arr)
+	AssertArraySorted[Address](t, arr, AddressComparator{})
 }
 
 func TestSortedMapInverseGetPut(t *testing.T) {
@@ -198,7 +198,7 @@ func TestSortedMapSorting(t *testing.T) {
 		arr = append(arr, k)
 	})
 
-	verifySort(t, arr)
+	AssertArraySorted[Address](t, arr, AddressComparator{})
 
 	if size := h.Size(); size != len(arr) {
 		t.Errorf("Size does not fit: %d", size)
@@ -211,8 +211,8 @@ func TestSortedMapSize(t *testing.T) {
 	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
 
 	n := rand.Intn(9999)
-	for i := uint32(0); i < uint32(n); i++ {
-		h.Put(toAddress(i), i)
+	for i := 0; i < n; i++ {
+		h.Put(AddressFromNumber(i), uint32(i))
 	}
 
 	if size := h.Size(); size != n {
@@ -252,15 +252,5 @@ func TestSortedMapRemove(t *testing.T) {
 
 	if exists := h.Remove(A); !exists {
 		t.Errorf("Remove failed:  %v", B)
-	}
-}
-
-func verifySort(t *testing.T, arr []Address) {
-	var prev Address
-	for i := 0; i < len(arr); i++ {
-		if prev.Compare(&arr[i]) >= 0 {
-			t.Errorf("Unsorted: %d < %d", prev, arr[i])
-		}
-		prev = arr[i]
 	}
 }

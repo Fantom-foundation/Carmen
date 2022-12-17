@@ -7,7 +7,7 @@ import (
 
 // Page is key-value structure that can be evicted, persisted, and reloaded from the disk.
 // it tracks its updates and can tell if the stored values have been updated
-type Page[K comparable, V any] struct {
+type Page[K comparable, V comparable] struct {
 	list       []common.MapEntry[K, V]
 	comparator common.Comparator[K]
 	size       int
@@ -18,7 +18,7 @@ type Page[K comparable, V any] struct {
 	hasNext bool
 }
 
-func NewPage[K comparable, V any](capacity int, comparator common.Comparator[K]) *Page[K, V] {
+func NewPage[K comparable, V comparable](capacity int, comparator common.Comparator[K]) *Page[K, V] {
 	list := make([]common.MapEntry[K, V], capacity)
 	for i := 0; i < capacity; i++ {
 		list[i] = common.MapEntry[K, V]{}
@@ -50,14 +50,37 @@ func (c *Page[K, V]) Get(key K) (val V, exists bool) {
 // Put associates a key to the list.
 // If the key is already present, the value is updated.
 func (c *Page[K, V]) Put(key K, val V) {
-	c.isDirty = true
-
 	index, exists := c.findItem(key)
 	if exists {
-		c.list[index].Val = val
+		c.update(index, val)
 		return
 	}
 
+	c.insert(index, key, val)
+}
+
+func (c *Page[K, V]) Add(key K, val V) {
+	index, exists := c.findValue(key, val)
+	if !exists {
+		c.insert(index, key, val)
+	}
+}
+
+// update only replaces the value at the input index
+func (c *Page[K, V]) update(index int, val V) {
+	c.isDirty = true
+	c.list[index].Val = val
+}
+
+// update returns a value at the input index
+func (c *Page[K, V]) get(index int) V {
+	return c.list[index].Val
+}
+
+// insert adds the input key and value at the index position in this page
+// items occupying this position and following items are shifted one position
+// towards the end of the page
+func (c *Page[K, V]) insert(index int, key K, val V) {
 	// found insert
 	if index < c.size {
 
@@ -78,7 +101,8 @@ func (c *Page[K, V]) Put(key K, val V) {
 	c.list[c.size].Val = val
 
 	c.size += 1
-	return
+
+	c.isDirty = true
 }
 
 func (c *Page[K, V]) SetNext(next PageId) {
@@ -116,6 +140,23 @@ func (c *Page[K, V]) Remove(key K) (exists bool) {
 	return false
 }
 
+func (c *Page[K, V]) RemoveAll(key K) {
+	c.removeAll(key)
+}
+
+func (c *Page[K, V]) removeAll(key K) (start, end int, exists bool) {
+	if start, end, exists = c.findRange(key); exists {
+		// shift
+		window := end - start
+		for j := start; j < c.size-window; j++ {
+			c.list[j] = c.list[j+window]
+		}
+		c.size -= window
+	}
+
+	return
+}
+
 func (c *Page[K, V]) BulkInsert(data []common.MapEntry[K, V]) {
 	for i := 0; i < len(data); i++ {
 		c.list[i+c.size] = data[i]
@@ -125,8 +166,24 @@ func (c *Page[K, V]) BulkInsert(data []common.MapEntry[K, V]) {
 	c.isDirty = true
 }
 
-func (c *Page[K, V]) GetAll() []common.MapEntry[K, V] {
+func (c *Page[K, V]) GetEntries() []common.MapEntry[K, V] {
 	return c.list[0:c.Size()]
+}
+
+func (c *Page[K, V]) GetAll(key K) []V {
+	return c.appendAll(key, make([]V, 0, c.Size()))
+}
+
+// appendAll appends the input slice with the values matching the input key
+// and returns the updated slice
+func (c *Page[K, V]) appendAll(key K, out []V) []V {
+	if start, end, exists := c.findRange(key); exists {
+		// copy values to the out list
+		for j := start; j < end; j++ {
+			out = append(out, c.list[j].Val)
+		}
+	}
+	return out
 }
 
 // GetRaw provides direct access to the entry list
@@ -157,6 +214,45 @@ func (c *Page[K, V]) Clear() {
 	c.size = 0
 }
 
+// findRange finds a range where the key starts and ends in this page.
+// it also returns true  when the key  exists in the page at all
+func (c *Page[K, V]) findRange(key K) (start, end int, exists bool) {
+	index, exists := c.findItem(key)
+	start = index
+	if exists {
+		// check the same key is not already present after this index
+		end = c.size
+		for i := index; i < c.size-1; i++ {
+			if c.list[i+1].Key != key {
+				end = i + 1
+				break // out of range
+			}
+		}
+	}
+
+	return start, end, exists
+}
+
+// findValue check whether the input value exists in the list,
+// and it returns its position. If the value does not exist,
+// the returned position is the possition where the new key and the value should be inserted
+func (c *Page[K, V]) findValue(key K, val V) (position int, exists bool) {
+	index, keyExists := c.findItem(key)
+	if keyExists {
+		// check the same key is not already present after this index
+		for i := index; i < c.size; i++ {
+			if c.list[i].Key != key {
+				break // out of range
+			}
+			if c.list[i].Val == val {
+				return i, true
+			}
+		}
+	}
+
+	return index, false
+}
+
 // findItem finds a key in the list, if it exists.
 // It returns the index of the key that was found, and it returns true.
 // If the key does not exist, it returns false and the index is equal to the last
@@ -173,7 +269,16 @@ func (c *Page[K, V]) findItem(key K) (index int, exists bool) {
 		mid = (start + end) / 2
 		res = c.comparator.Compare(&c.list[mid].Key, &key)
 		if res == 0 {
-			return mid, true
+			// iterate "left" of this index to find the lower bound of possible
+			// the same keys (for the multimap)
+			var lower int
+			for i := mid; i > 0; i-- {
+				if c.list[i-1].Key != key {
+					lower = i
+					break // out of range
+				}
+			}
+			return lower, true
 		} else if res < 0 {
 			start = mid + 1
 		} else {
@@ -190,7 +295,9 @@ func (c *Page[K, V]) findItem(key K) (index int, exists bool) {
 func (c *Page[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*c)
 	entrySize := unsafe.Sizeof(common.MapEntry[K, V]{})
+	var v V
+	valSize := unsafe.Sizeof(v)
 
 	// the page is always fully allocated - i.e. use the capacity
-	return common.NewMemoryFootprint(selfSize + uintptr(len(c.list))*entrySize)
+	return common.NewMemoryFootprint(selfSize + uintptr(len(c.list))*(entrySize+valSize))
 }

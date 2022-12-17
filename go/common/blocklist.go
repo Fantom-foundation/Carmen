@@ -61,11 +61,11 @@ func (m *BlockList[K, V]) BulkInsert(data []MapEntry[K, V]) error {
 	return nil
 }
 
-// GetAll collects data from all blocks and returns them as one slice
-func (m *BlockList[K, V]) GetAll() ([]MapEntry[K, V], error) {
+// GetEntries collects data from all blocks and returns them as one slice
+func (m *BlockList[K, V]) GetEntries() ([]MapEntry[K, V], error) {
 	data := make([]MapEntry[K, V], 0, m.size)
 	for _, item := range m.list {
-		data = append(data, item.GetAll()...)
+		data = append(data, item.GetEntries()...)
 	}
 
 	return data, nil
@@ -82,12 +82,20 @@ func (m *BlockList[K, V]) Get(key K) (val V, exists bool, err error) {
 	return
 }
 
+func (m *BlockList[K, V]) GetAll(key K) ([]V, error) {
+	panic("Not implemented yet")
+}
+
 // Put associates a key to a value.
 // If the key is already present, the value is updated.
 func (m *BlockList[K, V]) Put(key K, val V) error {
 	item := m.findBlock(key)
 	item.Put(key, val) // associate a new value to tail
 	return nil
+}
+
+func (m *BlockList[K, V]) Add(key K, val V) error {
+	panic("Not implemented yet")
 }
 
 // findBlock iterates blocks and finds the block to insert the key into.
@@ -137,6 +145,10 @@ func (m *BlockList[K, V]) Remove(key K) (exists bool, err error) {
 	return
 }
 
+func (m *BlockList[K, V]) RemoveAll(key K) error {
+	panic("Not implemented yet")
+}
+
 // fillFromTail picks a random item from the tail of this list and inserts it into the input item.
 // It is meant to fill a place in the block caused by deletion of an item.
 // If the input item is the tail, no element is removed, but the tail may be deleted if it is empty.
@@ -163,7 +175,7 @@ func (m *BlockList[K, V]) fillFromTail(item *SortedMap[K, V]) {
 // pickTailEntry picks a random (first) value from tail
 func (m *BlockList[K, V]) pickTailEntry(tail *SortedMap[K, V]) (key K, val V, exists bool) {
 	if tail.Size() > 0 {
-		entry := tail.GetAll()[tail.Size()-1]
+		entry := tail.GetEntries()[tail.Size()-1]
 		key = entry.Key
 		val = entry.Val
 		exists = true

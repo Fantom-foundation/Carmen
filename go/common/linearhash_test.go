@@ -1,7 +1,6 @@
 package common
 
 import (
-	"encoding/binary"
 	"math/rand"
 	"testing"
 )
@@ -77,9 +76,9 @@ func TestLinearHashOverflow(t *testing.T) {
 	h := NewLinearHashMap[Address, uint32](BucketSize, NumBuckets, AddressHasher{}, AddressComparator{}, mapFactory)
 
 	// fill-in all pages we have
-	for i := uint32(0); i < BucketSize*NumBuckets; i++ {
-		address := toAddress(i + 1)
-		_ = h.Put(address, i+1)
+	for i := 0; i < BucketSize*NumBuckets; i++ {
+		address := AddressFromNumber(i + 1)
+		_ = h.Put(address, uint32(i+1))
 	}
 
 	// check properties are correct
@@ -96,9 +95,9 @@ func TestLinearHashOverflow(t *testing.T) {
 	//h.PrintDump()
 
 	// check values properly set
-	for i := uint32(0); i < BucketSize*NumBuckets; i++ {
-		address := toAddress(i + 1)
-		if val, exists, _ := h.Get(address); !exists || val != i+1 {
+	for i := 0; i < BucketSize*NumBuckets; i++ {
+		address := AddressFromNumber(i + 1)
+		if val, exists, _ := h.Get(address); !exists || val != uint32(i+1) {
 			t.Errorf("Value incorrect: %v -> %d  (hash: %x)", address, val, AddressHasher{}.Hash(&address))
 		}
 	}
@@ -120,9 +119,9 @@ func TestLinearHashOverflow(t *testing.T) {
 	//h.PrintDump()
 
 	// check values properly set
-	for i := uint32(0); i < BucketSize*NumBuckets; i++ {
-		address := toAddress(i + 1)
-		if val, exists, _ := h.Get(address); !exists || val != i+1 {
+	for i := 0; i < BucketSize*NumBuckets; i++ {
+		address := AddressFromNumber(i + 1)
+		if val, exists, _ := h.Get(address); !exists || val != uint32(i+1) {
 			t.Errorf("Value incorrect: %v -> %d  (hash: %x)", address, val, AddressHasher{}.Hash(&address))
 		}
 	}
@@ -136,8 +135,8 @@ func TestLinearHashSize(t *testing.T) {
 	h := NewLinearHashMap[Address, uint32](BucketSize, NumBuckets, AddressHasher{}, AddressComparator{}, mapFactory)
 
 	n := rand.Intn(9999)
-	for i := uint32(0); i < uint32(n); i++ {
-		_ = h.Put(toAddress(i), i)
+	for i := 0; i < n; i++ {
+		_ = h.Put(AddressFromNumber(i), uint32(i))
 	}
 
 	if size := h.Size(); size != n {
@@ -160,10 +159,4 @@ func TestLinearHashRemove(t *testing.T) {
 	if size := h.Size(); size != 0 {
 		t.Errorf("Size is wrong")
 	}
-}
-
-func toAddress(num uint32) (address Address) {
-	addr := binary.BigEndian.AppendUint32([]byte{}, num)
-	copy(address[:], addr)
-	return
 }

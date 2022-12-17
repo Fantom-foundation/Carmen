@@ -70,6 +70,42 @@ type ErrMap[K comparable, V any] interface {
 	Clear() error
 }
 
+// MultiMap associates keys and values,
+// and it may return error when adding, iteration or removing fails.
+// Multimap may associate more values to the same key
+// and also return more values for the same key
+type MultiMap[K comparable, V any] interface {
+	Map[K, V]
+
+	//Add associates the input value with the key
+	// it may associate more values with the same key
+	Add(key K, val V)
+
+	// RemoveAll removes all values for the give key
+	RemoveAll(key K)
+
+	// GetAll returns all values associated with the given key
+	GetAll(key K) []V
+}
+
+// ErrMultiMap associates keys and values,
+// and it may return error when adding, iteration or removing fails.
+// Multimap may associate more values to the same key
+// and also return more values for the same key
+type ErrMultiMap[K comparable, V any] interface {
+	ErrMap[K, V]
+
+	//Add associates the input value with the key
+	// it may associate more values with the same key
+	Add(key K, val V) error
+
+	// RemoveAll removes all values for the give key
+	RemoveAll(key K) error
+
+	// GetAll returns all values associated with the given key
+	GetAll(key K) ([]V, error)
+}
+
 // BulkInsert is a map extension that has an extra method to fill this collection with initial key-value pairs
 // This method does not assure any properties on the underlaying map
 // such as uniqueness of the keys, their sort, etc. hold.
@@ -84,14 +120,15 @@ type BulkInsert[K comparable, V any] interface {
 	// would be redundant.
 	BulkInsert(data []MapEntry[K, V]) error
 
-	// GetAll returns a slice with all entries from the map.
-	// If possible, it should provide direct data, not their copy, for fastest possible access
-	GetAll() ([]MapEntry[K, V], error)
+	// GetEntries returns a slice with all entries from the map.
+	// If possible, it should provide direct data, not their copy, for the fastest possible access
+	GetEntries() ([]MapEntry[K, V], error)
 }
 
 // BulkInsertMap is a union of ErrMap, MemoryFootprintProvider and BulkInsert
 type BulkInsertMap[K comparable, V any] interface {
 	ErrMap[K, V]
+	ErrMultiMap[K, V]
 	MemoryFootprintProvider
 	BulkInsert[K, V]
 }

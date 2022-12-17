@@ -1,7 +1,6 @@
 package index_test
 
 import (
-	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
@@ -61,7 +60,7 @@ func TestIndexesLoadTest(t *testing.T) {
 	// generate test data
 	var data = make([]common.MapEntry[common.Address, uint32], 0, n)
 	for i := 0; i < n; i++ {
-		data = append(data, common.MapEntry[common.Address, uint32]{toAddress(i), uint32(i)})
+		data = append(data, common.MapEntry[common.Address, uint32]{common.AddressFromNumber(i), uint32(i)})
 	}
 
 	var prevHash common.Hash
@@ -111,10 +110,4 @@ func TestIndexesLoadTest(t *testing.T) {
 		t.Errorf("Hash did not cache")
 	}
 
-}
-
-func toAddress(num int) (address common.Address) {
-	addr := binary.BigEndian.AppendUint32([]byte{}, uint32(num))
-	copy(address[:], addr)
-	return
 }
