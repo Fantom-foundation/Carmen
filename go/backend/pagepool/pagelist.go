@@ -26,6 +26,7 @@ const (
 	add
 	getOrAdd
 	remove
+	removeVal
 	removeAll
 	unknown
 )
@@ -248,15 +249,19 @@ func (m *PageList[K, V]) GetAll(key K) ([]V, error) {
 
 // Remove deletes the key from the map and returns whether an element was removed.
 func (m *PageList[K, V]) Remove(key K) (exists bool, err error) {
-	return m.remove(key, remove)
+	return m.remove(key, nil, remove)
+}
+
+func (m *PageList[K, V]) RemoveVal(key K, val V) (bool, error) {
+	return m.remove(key, &val, removeVal)
 }
 
 func (m *PageList[K, V]) RemoveAll(key K) error {
-	_, err := m.remove(key, removeAll)
+	_, err := m.remove(key, nil, removeAll)
 	return err
 }
 
-func (m *PageList[K, V]) remove(key K, op opType) (bool, error) {
+func (m *PageList[K, V]) remove(key K, val *V, op opType) (bool, error) {
 
 	// Iterate pages from tail to the beginning,
 	// remove items in the page, and potentially remove the tail if it becomes empty
@@ -274,6 +279,10 @@ func (m *PageList[K, V]) remove(key K, op opType) (bool, error) {
 		switch op {
 		case remove:
 			if removed := item.Remove(key); removed {
+				numRemove = 1
+			}
+		case removeVal:
+			if removed := item.RemoveVal(key, *val); removed {
 				numRemove = 1
 			}
 		case removeAll:
@@ -322,7 +331,7 @@ func (m *PageList[K, V]) remove(key K, op opType) (bool, error) {
 
 			// for single remove, we are done,
 			// for remove all we have to unfortunately iterate all pages
-			if op == remove {
+			if op == remove || op == removeVal {
 				break
 			}
 		}

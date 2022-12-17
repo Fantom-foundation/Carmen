@@ -129,6 +129,19 @@ func (h *LinearHashMap[K, V]) Remove(key K) (bool, error) {
 	return exists, nil
 }
 
+func (h *LinearHashMap[K, V]) RemoveVal(key K, val V) (bool, error) {
+	bucket := h.bucket(key, uint(len(h.list)))
+	exists, err := h.list[bucket].RemoveVal(key, val)
+	if err != nil {
+		return exists, err
+	}
+	if exists {
+		h.records -= 1
+	}
+
+	return exists, nil
+}
+
 func (h *LinearHashMap[K, V]) RemoveAll(key K) error {
 	bucketId := h.bucket(key, uint(len(h.list)))
 	bucket := h.list[bucketId]

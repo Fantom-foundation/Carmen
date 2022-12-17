@@ -127,17 +127,28 @@ func (c *Page[K, V]) NextPage() PageId {
 // Remove deletes the key from the map and returns whether an element was removed.
 func (c *Page[K, V]) Remove(key K) (exists bool) {
 	if index, exists := c.findItem(key); exists {
-		// shift
-		for j := index; j < c.size-1; j++ {
-			c.list[j] = c.list[j+1]
-		}
-		c.size -= 1
-		c.isDirty = true
-
+		c.remove(index)
 		return true
 	}
 
 	return false
+}
+
+func (c *Page[K, V]) RemoveVal(key K, val V) bool {
+	if index, exists := c.findValue(key, val); exists {
+		c.remove(index)
+		return true
+	}
+
+	return false
+}
+
+func (c *Page[K, V]) remove(index int) {
+	c.isDirty = true
+	for j := index; j < c.size-1; j++ {
+		c.list[j] = c.list[j+1]
+	}
+	c.size -= 1
 }
 
 func (c *Page[K, V]) RemoveAll(key K) {

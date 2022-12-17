@@ -23,6 +23,9 @@ type Serializer[T any] interface {
 	Size() int // size in bytes when serialized
 }
 
+// PageSize of 4kB I/O efficient
+const PageSize = 1 << 12
+
 // Comparator is an interface for comparing two items
 type Comparator[T any] interface {
 	Compare(a, b *T) int
@@ -133,6 +136,19 @@ type Identifier32Comparator struct{}
 
 func (c Identifier32Comparator) Compare(a, b *SlotIdx[uint32]) int {
 	return a.Compare(b)
+}
+
+type Uint32Comparator struct{}
+
+func (c Uint32Comparator) Compare(a, b *uint32) int {
+	if *a > *b {
+		return 1
+	}
+	if *a < *b {
+		return -1
+	}
+
+	return 0
 }
 
 var (
@@ -288,6 +304,12 @@ func (s SlotIdxHasher) Hash(a *SlotIdx[uint32]) uint64 {
 	h = h*prime + uint64(a.KeyIdx)
 
 	return h
+}
+
+type UInt32Hasher struct{}
+
+func (s UInt32Hasher) Hash(a *uint32) uint64 {
+	return uint64(*a)
 }
 
 func (h Hash) ToBytes() []byte {

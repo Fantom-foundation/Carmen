@@ -89,6 +89,10 @@ type MultiMap[K comparable, V any] interface {
 	// RemoveAll removes all values for the give key
 	RemoveAll(key K)
 
+	// RemoveVal removes single value associated with the given key
+	// It returns true if the value has existed
+	RemoveVal(key K, val V) bool
+
 	// GetAll returns all values associated with the given key
 	GetAll(key K) []V
 }
@@ -103,6 +107,10 @@ type ErrMultiMap[K comparable, V any] interface {
 	//Add associates the input value with the key
 	// it may associate more values with the same key
 	Add(key K, val V) error
+
+	// RemoveVal removes single value associated with the given key
+	// It returns true if the value has existed
+	RemoveVal(key K, val V) (bool, error)
 
 	// RemoveAll removes all values for the give key
 	RemoveAll(key K) error

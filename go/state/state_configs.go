@@ -18,6 +18,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	mapldb "github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
+	mapfile "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	mapmem "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	cachedStore "github.com/Fantom-foundation/Carmen/go/backend/store/cache"
 	ldbstore "github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -46,19 +47,19 @@ func NewGoMemoryState() (State, error) {
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
 
-	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	noncesStore, err := storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	noncesStore, err := storemem.NewStore[uint32, common.Nonce](common.NonceSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	balancesStore, err := storemem.NewStore[uint32, common.Balance](common.BalanceSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
-	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ func NewGoMemoryState() (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := storemem.NewStore[uint32, common.Hash](common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory())
+	codeHashesStore, err := storemem.NewStore[uint32, common.Hash](common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory())
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +115,7 @@ func NewGoFileState(path string) (State, error) {
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
-	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
+	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func NewGoFileState(path string) (State, error) {
 	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
+	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +131,7 @@ func NewGoFileState(path string) (State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +139,7 @@ func NewGoFileState(path string) (State, error) {
 	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +156,12 @@ func NewGoFileState(path string) (State, error) {
 	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
+	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), PoolSize)
 	if err != nil {
 		return nil, err
 	}
 
-	addressToSlots := mapmem.NewMultiMap[uint32, uint32]() // TODO this must be done persistent
+	addressToSlots := mapfile.NewMultiMap[uint32, uint32]()
 
 	state := &GoState{
 		addressIndex,
@@ -214,7 +215,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
-	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
+	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
+	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +231,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +239,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -255,12 +256,12 @@ func NewGoCachedFileState(path string) (State, error) {
 	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
+	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), PoolSize)
 	if err != nil {
 		return nil, err
 	}
 
-	addressToSlots := mapmem.NewMultiMap[uint32, uint32]() // TODO this must be done persistent
+	addressToSlots := mapfile.NewMultiMap[uint32, uint32]()
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
@@ -306,7 +307,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
-	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
+	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +315,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
+	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +323,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +331,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +348,7 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
+	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +388,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
-	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
+	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +396,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
+	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +404,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +413,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +430,7 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
+	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +487,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
 	}
-	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
+	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +495,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
+	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -502,7 +503,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -511,7 +512,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -528,7 +529,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, PageSize, hashtree.GetNoHashFactory(), PoolSize)
+	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), PoolSize)
 	if err != nil {
 		return nil, err
 	}
@@ -578,22 +579,22 @@ func NewGoLeveLIndexAndStoreState(path string) (State, error) {
 	}
 
 	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
-	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
+	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
-	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
+	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
+	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
-	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
+	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +603,7 @@ func NewGoLeveLIndexAndStoreState(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), PageSize)
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -634,22 +635,22 @@ func NewGoCachedLeveLIndexAndStoreState(path string) (State, error) {
 	}
 
 	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
-	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
+	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
-	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
+	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
+	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
-	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
+	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -658,7 +659,7 @@ func NewGoCachedLeveLIndexAndStoreState(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), PageSize)
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -706,22 +707,22 @@ func NewGoTransactCachedLeveLIndexAndStoreState(path string) (State, error) {
 	}
 
 	accountHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.AccountStoreKey, HashTreeFactor)
-	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](tx, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, PageSize)
+	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](tx, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	nonceHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.NonceStoreKey, HashTreeFactor)
-	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](tx, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, PageSize)
+	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](tx, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	balanceHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](tx, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, PageSize)
+	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](tx, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	valueHashTreeFactory := htldb.CreateHashTreeFactory(tx, common.ValueStoreKey, HashTreeFactor)
-	valuesStore, err := ldbstore.NewStore[uint32, common.Value](tx, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, PageSize)
+	valuesStore, err := ldbstore.NewStore[uint32, common.Value](tx, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -731,7 +732,7 @@ func NewGoTransactCachedLeveLIndexAndStoreState(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](tx, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), PageSize)
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](tx, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
 	if err != nil {
 		return nil, err
 	}
