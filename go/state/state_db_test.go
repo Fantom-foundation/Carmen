@@ -247,6 +247,74 @@ func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
 	db.EndBlock() // < no change is send to the DB
 }
 
+func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDeleteAndCreateAccountOnStateDb(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Initially the account is exisiting with a view stored values.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+
+	// The account is to be deleted and re-created.
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+
+	// In a transaction we destroy the account and recreate it. This should cause
+	// the account to be deleted and re-initialized in the StateDB at the end of
+	// the block.
+	db.BeginTransaction()
+
+	if !db.Exist(address1) {
+		t.Errorf("Account does not initially exist!")
+	}
+
+	db.Suicide(address1)
+	db.CreateAccount(address1)
+
+	db.EndTransaction()
+	db.EndBlock()
+}
+
+func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Initially the account is exisiting with a view stored values.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+
+	// The account is to be deleted and re-created.
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+
+	// In a transaction we destroy the account, re-create it, destroy it and roll back
+	// the second destroy; After this, the account still needs to be cleared at the
+	// end of the block since the first destroy is to be committed.
+	db.BeginTransaction()
+
+	if !db.Exist(address1) {
+		t.Errorf("Account does not initially exist!")
+	}
+
+	db.Suicide(address1)
+	db.CreateAccount(address1)
+
+	snapshot := db.Snapshot()
+	db.Suicide(address1)
+	db.RevertToSnapshot(snapshot)
+
+	db.EndTransaction()
+	db.EndBlock()
+}
+
 func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

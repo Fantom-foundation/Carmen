@@ -331,9 +331,10 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 
 	// Mark account as a cleared account to avoid fetching new data into the cache
 	// during the ongoing block.
+	oldState := s.clearedAccounts[addr]
 	s.clearedAccounts[addr] = true
 	s.undo = append(s.undo, func() {
-		s.clearedAccounts[addr] = false
+		s.clearedAccounts[addr] = oldState
 	})
 
 	return true
@@ -762,6 +763,7 @@ func (s *stateDB) EndBlock() {
 	// Clear all accounts that have been deleted at some point during this block.
 	// This will cause all storage slots of that accounts to be reset before new
 	// values may be written in the subsequent updates.
+	deletedAccountState := common.Deleted
 	clearedAccounts := map[common.Address]bool{}
 	for addr, cleared := range s.clearedAccounts {
 		if cleared {
@@ -771,6 +773,7 @@ func (s *stateDB) EndBlock() {
 				panic(fmt.Sprintf("failed to delete account: %v", err))
 			}
 			clearedAccounts[addr] = true
+			s.accounts[addr].original = &deletedAccountState
 		}
 	}
 
