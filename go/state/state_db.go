@@ -114,10 +114,8 @@ type stateDB struct {
 	// A list of accounts to be deleted at the end of the transaction.
 	accountsToDelete []common.Address
 
-	// A set of accounts that have been reset during an ongoing block. Since the backend is only informed
-	// about this at the end of the block, no storage information must be fetched for those until then.
-	// An account is only considered to be a member of this set if it is contained as a key and its value is true.
-	clearedAccounts map[common.Address]bool
+	// Tracks the clearing state of individual accounts.
+	clearedAccounts map[common.Address]accountClearingState
 
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
@@ -145,6 +143,17 @@ type accountState struct {
 	// The current account state visible to the state DB users.
 	current common.AccountState
 }
+
+type accountClearingState int
+
+const (
+	// noClearing is the state of an account not be to cleared (make sure this has the default value 0)
+	noClearing accountClearingState = 0
+	// pendingClearing is the state of an account that is scheduled for clearing at the end of the current transaction but should still appear like it exists.
+	pendingClearing accountClearingState = 1
+	// cleared is the state of an account that should appear as it has been cleared.
+	cleared accountClearingState = 2
+)
 
 // balanceVale maintains a balance during a transaction.
 type balanceValue struct {
@@ -234,7 +243,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		writtenSlots:      map[*slotValue]bool{},
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
-		clearedAccounts:   make(map[common.Address]bool),
+		clearedAccounts:   make(map[common.Address]accountClearingState),
 	}
 }
 
@@ -292,6 +301,33 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	if prevState != common.Exists {
 		s.resetBalance(addr)
 	}
+	// Reset storage in case this account was destroyed in this transaction.
+	if s.HasSuicided(addr) {
+		// TODO: this full-map iteration may be slow; if so, some index may be required.
+		s.data.ForEach(func(slot slotId, value *slotValue) {
+			if slot.addr == addr {
+				// Support rollback of account creation.
+				backup := slotValue(*value)
+				s.undo = append(s.undo, func() {
+					*value = backup
+				})
+
+				// Clear cached values.
+				value.stored = common.Value{}
+				value.storedKnown = true
+				value.committed = common.Value{}
+				value.committedKnown = true
+				value.current = common.Value{}
+			}
+		})
+
+		// Mark account to be treated like if was already committed.
+		oldState := s.clearedAccounts[addr]
+		s.clearedAccounts[addr] = cleared
+		s.undo = append(s.undo, func() {
+			s.clearedAccounts[addr] = oldState
+		})
+	}
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
@@ -310,29 +346,10 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 		s.accountsToDelete = s.accountsToDelete[0:deleteListLength]
 	})
 
-	// Clear cached value states for the targeted account.
-	// TODO: this full-map iteration may be slow; if so, some index may be required.
-	s.data.ForEach(func(slot slotId, value *slotValue) {
-		if slot.addr == addr {
-			// Support rollback of account destruction.
-			backup := slotValue(*value)
-			s.undo = append(s.undo, func() {
-				*value = backup
-			})
-
-			// Clear cached values.
-			value.stored = common.Value{}
-			value.storedKnown = true
-			value.committed = common.Value{}
-			value.committedKnown = true
-			value.current = common.Value{}
-		}
-	})
-
 	// Mark account as a cleared account to avoid fetching new data into the cache
 	// during the ongoing block.
 	oldState := s.clearedAccounts[addr]
-	s.clearedAccounts[addr] = true
+	s.clearedAccounts[addr] = pendingClearing
 	s.undo = append(s.undo, func() {
 		s.clearedAccounts[addr] = oldState
 	})
@@ -341,7 +358,11 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
-	return s.GetAccountState(addr) == common.Deleted
+	// An account has suicided within the current transaction if its clearing state is
+	// set to 'pending'. If it is 'cleared', it was either in a previous transaction of
+	// the current block or the account has already been re-created within the current
+	// transaction since it was deleted.
+	return s.clearedAccounts[addr] == pendingClearing
 }
 
 func (s *stateDB) Empty(addr common.Address) bool {
@@ -480,10 +501,10 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 }
 
 func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
-	if cleared, found := s.clearedAccounts[sid.addr]; found && cleared {
-		// If the account has been cleared in this block, the effects are not yet
-		// updated in the data base. So it must not be read from the DB before
-		// the next block.
+	if clearingState, found := s.clearedAccounts[sid.addr]; found && clearingState == cleared {
+		// If the account has been cleared in a committed transaction within the current block,
+		// the effects are not yet updated in the data base. So it must not be read from the DB
+		// before the next block.
 		return common.Value{}
 	}
 	stored, found := s.storedDataCache.Get(sid)
@@ -735,7 +756,24 @@ func (s *stateDB) EndTransaction() {
 			// of the block processing.
 			s.SetNonce(addr, 0)
 			s.SetCode(addr, []byte{})
+
+			// Clear cached value states for the targeted account.
+			// TODO: this full-map iteration may be slow; if so, some index may be required.
+			s.data.ForEach(func(slot slotId, value *slotValue) {
+				if slot.addr == addr {
+					// Clear cached values.
+					value.stored = common.Value{}
+					value.storedKnown = true
+					value.committed = common.Value{}
+					value.committedKnown = true
+					value.current = common.Value{}
+				}
+			})
+
+			// Signal to future fetches in this block that this account should be considered cleared.
+			s.clearedAccounts[addr] = cleared
 		}
+
 		s.accountsToDelete = s.accountsToDelete[0:0]
 	}
 
@@ -765,8 +803,8 @@ func (s *stateDB) EndBlock() {
 	// values may be written in the subsequent updates.
 	deletedAccountState := common.Deleted
 	clearedAccounts := map[common.Address]bool{}
-	for addr, cleared := range s.clearedAccounts {
-		if cleared {
+	for addr, clearingState := range s.clearedAccounts {
+		if clearingState == cleared {
 			// We can delete accounts in an arbitrary order since deleting does not
 			// introduce new values in the address -> addr_id map.
 			if err := s.state.DeleteAccount(addr); err != nil {
@@ -962,7 +1000,7 @@ func (s *stateDB) reset() {
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data.Clear()
-	s.clearedAccounts = make(map[common.Address]bool)
+	s.clearedAccounts = make(map[common.Address]accountClearingState)
 	s.codes = make(map[common.Address]*codeValue)
 	s.resetTransactionContext()
 }

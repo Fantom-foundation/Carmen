@@ -151,6 +151,59 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	db.EndBlock()
 }
 
+func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+	zero := common.Value{}
+
+	// Initially the account existis with some values inside.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
+
+	db.BeginTransaction()
+
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("initial value not present, wanted %v, got %v", val1, got)
+	}
+
+	db.Suicide(address1)
+
+	// This one is read from the intra-transaction cache in the StateDB (tests that the cache is not touched)
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("expected no change of value due to suicide till end of transaction, wanted %v, got %v", val1, got)
+	}
+
+	// This one needs to be fetched from the underlying DB
+	if got := db.GetState(address1, key2); got != val2 {
+		t.Errorf("expected no change of value due to suicide till end of transaction, wanted %v, got %v", val2, got)
+	}
+
+	db.EndTransaction()
+
+	db.BeginTransaction()
+
+	// This one is read from the intra-transaction cache in the StateDB (tests that the cache is reset)
+	if got := db.GetState(address1, key1); got != zero {
+		t.Errorf("expected storage to be reset at end of transaction; wanted %v, got %v", zero, got)
+	}
+
+	// This one is read from the intra-transaction cache in the StateDB
+	if got := db.GetState(address1, key2); got != zero {
+		t.Errorf("expected storage to be reset at end of transaction; wanted %v, got %v", zero, got)
+	}
+
+	// This one would have to be fetched from the underlying DB, but since the deletion of the account
+	// is now committed, this should not perform an actual fetch.
+	if got := db.GetState(address1, key3); got != zero {
+		t.Errorf("expected storage to be reset at end of transaction; wanted %v, got %v", zero, got)
+	}
+
+	db.EndTransaction()
+}
+
 func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -421,7 +474,7 @@ func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T
 	// Simulate a deleted account.
 	mock.EXPECT().GetAccountState(address1).Return(common.Deleted, nil)
 
-	// An unknown account is indicated as not being deleted.
+	// An already deleted account is indicated as not being deleted during the suicide.
 	if exists := db.Suicide(address1); exists {
 		t.Errorf("suicide indicates that deleted account existed before delete")
 	}
