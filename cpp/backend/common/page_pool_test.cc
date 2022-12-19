@@ -40,8 +40,8 @@ TEST(PagePoolTest, PagesCanBeFetched) {
   TestPool pool(2);
   ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get(12));
   ASSERT_OK_AND_ASSIGN(auto page_14, pool.Get(14));
-  auto& page_12_ref = std::unwrap_reference_t<decltype(page_12)>(page_12);
-  auto& page_14_ref = std::unwrap_reference_t<decltype(page_12)>(page_14);
+  auto& page_12_ref = page_12.AsReference();
+  auto& page_14_ref = page_14.AsReference();
   EXPECT_NE(&page_12_ref, &page_14_ref);
 }
 
@@ -49,7 +49,7 @@ TEST(PagePoolTest, FreshFetchedPagesAreZeroInitialized) {
   TestPool pool(2);
   ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get(12));
   for (int i = 0; i < 4; i++) {
-    EXPECT_EQ(0, std::unwrap_reference_t<decltype(page_12)>(page_12)[i]);
+    EXPECT_EQ(0, page_12.AsReference()[i]);
   }
 }
 
@@ -61,7 +61,7 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
   // Write data to kNumSteps pages;
   for (int i = 0; i < kNumSteps; i++) {
     ASSERT_OK_AND_ASSIGN(auto page, pool.Get(i));
-    auto& ref = std::unwrap_reference_t<decltype(page)>(page);
+    auto& ref = page.AsReference();
     ref[0] = i;
     ref[1] = i + 1;
     pool.MarkAsDirty(i);
@@ -70,7 +70,7 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
   // Fetch those kNumSteps pages and check the content
   for (int i = 0; i < kNumSteps; i++) {
     ASSERT_OK_AND_ASSIGN(auto page, pool.Get(i));
-    auto& ref = std::unwrap_reference_t<decltype(page)>(page);
+    auto& ref = page.AsReference();
     EXPECT_EQ(i, ref[0]);
     EXPECT_EQ(i + 1, ref[1]);
   }

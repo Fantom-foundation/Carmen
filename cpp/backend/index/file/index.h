@@ -321,11 +321,11 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   auto tail = GetTail(bucket);
   if (tail == kNullPage) {
     ASSIGN_OR_RETURN(auto result, primary_pool_.Get(bucket));
-    page = &std::unwrap_reference_t<decltype(result)>(result);
+    page = result.AsPointer();
     primary_pool_.MarkAsDirty(bucket);
   } else {
     ASSIGN_OR_RETURN(auto result, overflow_pool_.Get(tail));
-    page = &std::unwrap_reference_t<decltype(result)>(result);
+    page = result.AsPointer();
     overflow_pool_.MarkAsDirty(tail);
   }
 
@@ -333,7 +333,7 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
     auto new_overflow_id = GetFreeOverflowPageId();
     page->SetNext(new_overflow_id);
     ASSIGN_OR_RETURN(auto result, overflow_pool_.Get(new_overflow_id));
-    auto overflow_page = &std::unwrap_reference_t<decltype(result)>(result);
+    auto overflow_page = result.AsPointer();
     assert(overflow_page->Size() == 0);
     assert(overflow_page->GetNext() == 0);
     SetTail(bucket, new_overflow_id);
@@ -432,7 +432,7 @@ void FileIndex<K, I, F, page_size>::Dump() const {
       std::cout << "\t\tError: " << result.status() << "\n";
       continue;
     }
-    Page* page = &std::unwrap_reference_t<decltype(*result)>(*result);
+    Page* page = result->AsPointer();
     while (page != nullptr) {
       page->Dump();
       auto next = page->GetNext();
@@ -441,8 +441,7 @@ void FileIndex<K, I, F, page_size>::Dump() const {
         std::cout << "\t\tError: " << result.status() << "\n";
         break;
       }
-      page = next == 0 ? nullptr
-                       : &std::unwrap_reference_t<decltype(*result)>(*result);
+      page = next == 0 ? nullptr : result.AsPointer();
     }
   }
 }
@@ -469,15 +468,14 @@ FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
 
   // Search within that bucket.
   ASSIGN_OR_RETURN(auto page_ref, primary_pool_.Get(bucket));
-  Page* cur = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+  Page* cur = page_ref.AsPointer();
   while (cur != nullptr) {
     if (auto entry = cur->Find(hash, key)) {
       return std::tuple{hash, bucket, entry};
     }
     PageId next = cur->GetNext();
     ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
-    cur = next != 0 ? &std::unwrap_reference_t<decltype(page_ref)>(page_ref)
-                    : nullptr;
+    cur = next != 0 ? page_ref.AsPointer() : nullptr;
   }
 
   // Report a null pointer if nothing was found.
@@ -504,7 +502,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
   // Load data from page to be split into memory.
   std::deque<Entry> entries;
   ASSIGN_OR_RETURN(auto page_ref, primary_pool_.Get(old_bucket_id));
-  Page* page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+  Page* page = page_ref.AsPointer();
   while (page != nullptr) {
     for (std::size_t i = 0; i < page->Size(); i++) {
       entries.push_back((*page)[i]);
@@ -512,7 +510,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
     auto next = page->GetNext();
     if (next != 0) {
       ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
-      page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+      page = page_ref.AsPointer();
     } else {
       page = nullptr;
     }
@@ -540,7 +538,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
 
   // Write old entries into old bucket.
   ASSIGN_OR_RETURN(page_ref, primary_pool_.Get(old_bucket_id));
-  page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+  page = page_ref.AsPointer();
   primary_pool_.MarkAsDirty(old_bucket_id);
   int i = 0;
   ResetTail(old_bucket_id);
@@ -551,7 +549,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
       auto next = page->GetNext();
       assert(next != 0);
       ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
-      page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+      page = page_ref.AsPointer();
       overflow_pool_.MarkAsDirty(next);
       SetTail(old_bucket_id, next);
       i = 0;
@@ -568,7 +566,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
       page->SetNext(0);
       ReturnOverflowPage(next);
       ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
-      page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+      page = page_ref.AsPointer();
       page->Resize(0);
       overflow_pool_.MarkAsDirty(next);
     } else {
@@ -578,7 +576,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
 
   // Write new entries into new bucket.
   ASSIGN_OR_RETURN(page_ref, primary_pool_.Get(new_bucket_id));
-  page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+  page = page_ref.AsPointer();
   i = 0;
   primary_pool_.MarkAsDirty(new_bucket_id);
   for (const Entry& entry : new_bucket) {
@@ -588,7 +586,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
       auto next = GetFreeOverflowPageId();
       page->SetNext(next);
       ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
-      page = &std::unwrap_reference_t<decltype(page_ref)>(page_ref);
+      page = page_ref.AsPointer();
       overflow_pool_.MarkAsDirty(next);
       assert(page->GetNext() == 0);
       SetTail(new_bucket_id, next);

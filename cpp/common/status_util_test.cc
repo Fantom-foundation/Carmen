@@ -89,4 +89,15 @@ TEST(StatusMacroTest, AssignOrReturnCanReturnPlainStatus) {
               StatusIs(absl::StatusCode::kInternal, _));
 }
 
+TEST(ReferenceWraperTest, ReferenceAddressesAreEqual) {
+  int x = 10;
+  auto wrapper = internal::ReferenceWrapper<int>(x);
+  EXPECT_EQ(&x, &wrapper.AsReference());
+}
+
+TEST(ReferenceWraperTest, PointsToSameValue) {
+  int x = 10;
+  auto wrapper = internal::ReferenceWrapper<int>(x);
+  EXPECT_EQ(x, *wrapper.AsPointer());
+}
 }  // namespace

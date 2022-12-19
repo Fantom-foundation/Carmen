@@ -32,12 +32,23 @@ template <typename T>
 absl::Status GetStatus(absl::StatusOr<T> status) {
   return status.status();
 }
-
 }  // namespace testing::internal
 
-// Alias for a StatusOr<T> that can be used with reference types.
+namespace internal {
 template <typename T>
-using StatusOrRef = absl::StatusOr<std::reference_wrapper<T>>;
+class ReferenceWrapper : public std::reference_wrapper<T> {
+ public:
+  using std::reference_wrapper<T>::reference_wrapper;
+  // Returns a reference to the wrapped value.
+  T& AsReference() const { return this->get(); }
+  // Returns a pointer to the wrapped value.
+  T* AsPointer() const { return &AsReference(); }
+};
+}  // namespace internal
+
+// Type definition for a StatusOr<T> that can be used with reference types.
+template <typename T>
+using StatusOrRef = absl::StatusOr<internal::ReferenceWrapper<T>>;
 
 // The implementation of RETURN_IF_ERROR below, more compact as if it would be
 // if it would be written inline.
