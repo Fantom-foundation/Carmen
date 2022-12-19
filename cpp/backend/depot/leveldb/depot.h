@@ -150,19 +150,19 @@ class LevelDbDepot {
       }
       std::memset(page_data_.data(), 0, lengths_size);
 
-      std::size_t size = lengths_size;
+      std::size_t pos = lengths_size;
       for (K i = start; i <= end; ++i) {
         auto result = db_.Get(AsChars(i));
         switch (result.status().code()) {
           case absl::StatusCode::kOk:
-            page_data_.resize(size + result->size());
+            page_data_.resize(pos + result->size());
             // set length of item
             reinterpret_cast<ItemLength*>(page_data_.data())[i - start] =
                 result->size();
             // copy item data
-            std::memcpy(page_data_.data() + size, (*result).data(),
+            std::memcpy(page_data_.data() + pos, (*result).data(),
                         (*result).size());
-            size += result->size();
+            pos += result->size();
             break;
           case absl::StatusCode::kNotFound:
             break;
@@ -171,7 +171,7 @@ class LevelDbDepot {
         }
       }
 
-      return {page_data_.data(), size};
+      return page_data_;
     }
 
    private:

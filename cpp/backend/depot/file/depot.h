@@ -3,6 +3,7 @@
 #include <concepts>
 #include <fstream>
 
+#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -90,8 +91,6 @@ class FileDepot {
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
-    static std::array<char, kOffsetEntrySize> buffer{};
-
     // clear the error state
     data_fs_->clear();
     offset_fs_->clear();
@@ -111,11 +110,12 @@ class FileDepot {
     offset_fs_->seekp(GetOffsetPosition(key), std::ios::beg);
 
     // Prepare data to write to the offset file.
-    *reinterpret_cast<Offset*>(buffer.data()) = eof_pos;
-    *reinterpret_cast<Size*>(buffer.data() + sizeof(Offset)) = data.size();
+    OffsetAndSize write_data{static_cast<Offset>(eof_pos),
+                             static_cast<Size>(data.size())};
 
     // Write data to the offset file.
-    offset_fs_->write(buffer.data(), buffer.size());
+    offset_fs_->write(reinterpret_cast<const char*>(&write_data),
+                      sizeof(write_data));
     if (!offset_fs_->good())
       return absl::InternalError("Failed to write size to offset file");
 
@@ -128,23 +128,23 @@ class FileDepot {
   // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key, *offset_fs_));
-    if (metadata.second == 0) return absl::NotFoundError("Key not found");
+    if (metadata.size == 0) return absl::NotFoundError("Key not found");
 
     // clear the error state
     data_fs_->clear();
 
     // prepare the buffer
-    get_data_.resize(metadata.second);
+    get_data_.resize(metadata.size);
 
     // seek to position in data file
-    data_fs_->seekg(metadata.first, std::ios::beg);
+    data_fs_->seekg(metadata.offset, std::ios::beg);
 
     // read actual data
-    data_fs_->read(get_data_.data(), metadata.second);
+    data_fs_->read(get_data_.data(), metadata.size);
     if (!data_fs_->good()) return absl::InternalError("Failed to read data");
 
     return std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(get_data_.data()), metadata.second);
+        reinterpret_cast<const std::byte*>(get_data_.data()), metadata.size);
   }
 
   // Retrieves the size of data associated to the given key. If no values has
@@ -152,8 +152,8 @@ class FileDepot {
   // is returned.
   absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
     ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key, *offset_fs_));
-    if (metadata.second == 0) return absl::NotFoundError("Key not found");
-    return metadata.second;
+    if (metadata.size == 0) return absl::NotFoundError("Key not found");
+    return metadata.size;
   }
 
   // Computes a hash over the full content of this depot.
@@ -193,7 +193,11 @@ class FileDepot {
   using Offset = std::uint64_t;
   using Size = std::uint32_t;
 
-  constexpr static const auto kOffsetEntrySize = sizeof(Offset) + sizeof(Size);
+  // The offset and size of each entry in the data file stored in offset file.
+  struct OffsetAndSize {
+    Offset offset = 0;
+    Size size = 0;
+  } ABSL_ATTRIBUTE_PACKED;
 
   FileDepot(std::filesystem::path hash_file, std::fstream offset_fs,
             std::fstream data_fs, std::size_t hash_branching_factor,
@@ -210,14 +214,12 @@ class FileDepot {
 
   // Get position of the given key in the offset file.
   static std::size_t GetOffsetPosition(const K& key) {
-    return key * kOffsetEntrySize;
+    return key * sizeof(OffsetAndSize);
   }
 
   // Get offset and size for given key from the offset file into the data file.
-  static absl::StatusOr<std::pair<Offset, Size>> GetOffsetAndSize(
+  static absl::StatusOr<OffsetAndSize> GetOffsetAndSize(
       const K& key, std::fstream& offset_fs) {
-    static std::array<char, kOffsetEntrySize> buffer{};
-
     // clear the error state
     offset_fs.clear();
 
@@ -225,15 +227,14 @@ class FileDepot {
     offset_fs.seekg(GetOffsetPosition(key), std::ios::beg);
 
     // Read offset and size.
-    offset_fs.read(buffer.data(), buffer.max_size());
+    OffsetAndSize metadata;
+    offset_fs.read(reinterpret_cast<char*>(&metadata), sizeof(metadata));
 
     if (offset_fs.eof()) return absl::NotFoundError("Key not found");
     if (offset_fs.fail())
       return absl::InternalError("Failed to read offset and size");
 
-    return std::pair<Offset, Size>{
-        *reinterpret_cast<const Offset*>(buffer.data()),
-        *reinterpret_cast<const Size*>(buffer.data() + sizeof(Offset))};
+    return metadata;
   }
 
   // Get hash group for the given key.
@@ -253,18 +254,15 @@ class FileDepot {
     // Get data for given page. The data is valid until the next call to
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
-      auto static empty = std::span<const std::byte>();
-      static std::vector<char> offset_buffer;
+      const auto empty = std::span<const std::byte>();
+      std::vector<OffsetAndSize> offset_buffer(hash_box_size_);
       const std::size_t lengths_size = hash_box_size_ * sizeof(Size);
-
-      // clear out the buffer
-      offset_buffer.resize(hash_box_size_ * kOffsetEntrySize);
-      offset_buffer = {};
 
       // read all offsets and sizes for the hash group
       offset_fs_.clear();
       offset_fs_.seekg(GetOffsetPosition(id * hash_box_size_), std::ios::beg);
-      offset_fs_.read(offset_buffer.data(), hash_box_size_ * kOffsetEntrySize);
+      offset_fs_.read(reinterpret_cast<char*>(offset_buffer.data()),
+                      hash_box_size_ * sizeof(OffsetAndSize));
       // TODO: Do proper error handling
       if (!offset_fs_.eof() && offset_fs_.fail()) {
         return empty;
@@ -276,31 +274,21 @@ class FileDepot {
       }
       std::memset(page_data_.data(), 0, lengths_size);
 
-      const auto& get_offset = [&](const auto& i) {
-        return *reinterpret_cast<const Offset*>(offset_buffer.data() +
-                                                i * kOffsetEntrySize);
-      };
-      const auto& get_length = [&](const auto& i) {
-        return *reinterpret_cast<const Size*>(
-            offset_buffer.data() + i * kOffsetEntrySize + sizeof(Offset));
-      };
-
       // parse offsets and sizes
       std::size_t total_length = 0;
-      auto is_fragmented = false;
       std::size_t start = 0;
-      for (std::size_t i = 0; i < hash_box_size_; i++) {
-        const auto& offset = get_offset(i);
-        const auto& length = get_length(i);
-        if (length == 0) continue;
+      auto is_fragmented = false;
+      for (std::size_t i = 0; i < hash_box_size_; ++i) {
+        if (offset_buffer[i].size == 0) continue;
         if (total_length == 0) {
-          start = offset;
-        } else if (start + total_length != offset) {
+          start = offset_buffer[i].offset;
+        } else if (start + total_length != offset_buffer[i].offset) {
           is_fragmented = true;
         }
-        total_length += length;
+        total_length += offset_buffer[i].size;
         // set length for this key
-        *reinterpret_cast<Size*>(page_data_.data() + i * sizeof(Size)) = length;
+        *reinterpret_cast<Size*>(page_data_.data() + i * sizeof(Size)) =
+            offset_buffer[i].size;
       }
 
       if (total_length == 0) {
@@ -329,16 +317,15 @@ class FileDepot {
 
       // slow path for fragmented data
       std::size_t position = 0;
-      for (std::size_t i = 0; i < hash_box_size_; i++) {
-        const auto& offset = get_offset(i);
-        const auto& length = get_length(i);
-        if (length == 0) continue;
-        data_fs_.seekg(offset, std::ios::beg);
-        data_fs_.read(page_data_.data() + lengths_size + position, length);
+      for (std::size_t i = 0; i < hash_box_size_; ++i) {
+        if (offset_buffer[i].size == 0) continue;
+        data_fs_.seekg(offset_buffer[i].offset, std::ios::beg);
+        data_fs_.read(page_data_.data() + lengths_size + position,
+                      offset_buffer[i].size);
         if (!data_fs_.good()) {
           return empty;
         }
-        position += length;
+        position += offset_buffer[i].size;
       }
 
       return {reinterpret_cast<const std::byte*>(page_data_.data()),

@@ -138,7 +138,7 @@ class InMemoryDepot {
         pos += it->size();
       }
 
-      return {page_data_.data(), len};
+      return page_data_;
     }
 
    private:
