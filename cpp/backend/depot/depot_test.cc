@@ -15,6 +15,7 @@ namespace {
 
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 using ::testing::StrEq;
 
@@ -38,13 +39,13 @@ TYPED_TEST_P(DepotTest, DataCanBeAddedAndRetrieved) {
   EXPECT_THAT(depot.Get(100), StatusIs(absl::StatusCode::kNotFound, _));
 
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
-  ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
-  EXPECT_THAT(val, ElementsAre(std::byte{1}, std::byte{2}));
+  EXPECT_THAT(depot.Get(10),
+              IsOkAndHolds(ElementsAre(std::byte{1}, std::byte{2})));
 
   EXPECT_OK(
       depot.Set(100, std::array{std::byte{1}, std::byte{2}, std::byte{3}}));
-  ASSERT_OK_AND_ASSIGN(val, depot.Get(100));
-  EXPECT_THAT(val, ElementsAre(std::byte{1}, std::byte{2}, std::byte{3}));
+  EXPECT_THAT(depot.Get(100), IsOkAndHolds(ElementsAre(
+                                  std::byte{1}, std::byte{2}, std::byte{3})));
 }
 
 TYPED_TEST_P(DepotTest, EntriesCanBeUpdated) {
@@ -52,13 +53,13 @@ TYPED_TEST_P(DepotTest, EntriesCanBeUpdated) {
   auto& depot = wrapper.GetDepot();
 
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
-  ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
-  EXPECT_THAT(val, ElementsAre(std::byte{1}, std::byte{2}));
+  EXPECT_THAT(depot.Get(10),
+              IsOkAndHolds(ElementsAre(std::byte{1}, std::byte{2})));
 
   EXPECT_OK(
       depot.Set(10, std::array{std::byte{1}, std::byte{2}, std::byte{3}}));
-  ASSERT_OK_AND_ASSIGN(val, depot.Get(10));
-  EXPECT_THAT(val, ElementsAre(std::byte{1}, std::byte{2}, std::byte{3}));
+  EXPECT_THAT(depot.Get(10), IsOkAndHolds(ElementsAre(
+                                 std::byte{1}, std::byte{2}, std::byte{3})));
 }
 
 TYPED_TEST_P(DepotTest, SizeCanBeFatched) {
@@ -68,14 +69,13 @@ TYPED_TEST_P(DepotTest, SizeCanBeFatched) {
   EXPECT_THAT(depot.GetSize(10), StatusIs(absl::StatusCode::kNotFound, _));
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
   ASSERT_OK_AND_ASSIGN(auto size, depot.GetSize(10));
-  EXPECT_EQ(size, 2);
+  EXPECT_EQ(size, std::uint32_t{2});
 }
 
 TYPED_TEST_P(DepotTest, EmptyDepotHasZeroHash) {
   TypeParam wrapper;
   auto& depot = wrapper.GetDepot();
-  ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
-  EXPECT_EQ(Hash{}, hash);
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(Hash{}));
 }
 
 TYPED_TEST_P(DepotTest, NonEmptyDepotHasHash) {
@@ -104,9 +104,7 @@ TYPED_TEST_P(DepotTest, HashChangesBack) {
   ASSERT_NE(initial_hash, new_hash);
 
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
-  ASSERT_OK_AND_ASSIGN(new_hash, depot.GetHash());
-
-  ASSERT_EQ(initial_hash, new_hash);
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(initial_hash));
 }
 
 TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
@@ -122,22 +120,22 @@ TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
   // Tests the hashes for values [0x00], [0x00, 0x11] ... [..., 0xFF] inserted
   // in sequence.
   std::vector<std::string> hashes{
-      "0x6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
-      "0xaea3b18a4991da51ab201722c233c967e9c5d726cbc9a327c42b17d24268303b",
-      "0xe136dc145513327cf5846ea5cbb3b9d30543d27963288dd7bf6ad63360085df8",
-      "0xa98672f2a05a5b71b49451e85238e3f4ebc6fb8cedb00d55d8bc4ea6e52d0117",
-      "0x1e7f4c505dd16f8537bdad064b49a8c0a64a707725fbf09ad4311f280781e9e4",
-      "0xb07ee4eec6d898d88ec3ef9c66c64f3f0896cd1c7e759b825baf541d42e77784",
-      "0x9346102f81ac75e583499081d9ab10c7050ff682c7dfd4700a9f909ee469a2de",
-      "0x44532b1bcf3840a8bf0ead0a6052d4968c5fac6023cd1f86ad43175e53d25e9c",
-      "0x2de0363a6210fca91e2143b945a86f42ae90cd786e641d51e2a7b9c141b020b0",
-      "0x0c81b39c90852a66f18b0518d36dceb2f889501dc279e759bb2d1253a63caa8e",
-      "0xc9fa5b094c4d964bf6d2b25d7ba1e580a83b9ebf2ea8594e99baa81474be4c47",
-      "0x078fb14729015631017d2d82c844642ec723e92e06eb41f88ca83b36e3a04d30",
-      "0x4f91e8c410a52b53e46f7b787fdc240c3349711108c2a1ac69ddb0c64e51f918",
-      "0x4e0d2c84af4f9e54c2d0864302a72703c656996585ec99f7290a2172617ea0e9",
-      "0x38e68d99bafc836105e88a1092ebdadb6d8a4a1acec29eecc7ec01b885e6f820",
-      "0xf9764b20bf761bd89b3266697fbc1c336548c3bcbb1c81e4ecf3829df53d98ec",
+      "0xa536aa3cede6ea3c1f3e0357c3c60e0f216a8c89b853df13b29daa8f85065dfb",
+      "0xab03063682ff571fbdf1f26e310a09911a9eefb57014b24679c3b0c806a17f86",
+      "0x6a3c781abaa02fe7f794e098db664d0261088dc3ae481ab5451e8b130e6a6eaf",
+      "0x02f47ff7c23929f1ab915a06d1e7b64f7cc77924b33a0fa202f3aee9a94cc1d7",
+      "0x516c2b341e44c4da030c3c285cf4600fa52d9466da8fdfb159654d8190ad704d",
+      "0x493529675023185851f83ca17720e130721a84141292a145e7f7c24b7d50c713",
+      "0xaa541f8619d33f6310ae0ef2ccd4f695a97daaf65e0530c8fc6fdb700cb3d05e",
+      "0x91e7877b25a43d450ee1a41d1d63e3511b21dee519d503f95a150950bfb3c332",
+      "0x1dc2edcabc1a59b9907acfc1679c0755db022df0abc73231186f4cd14004fa60",
+      "0x9b5ddc81a683b80222ad5da9ad8455cd4652319deed5f3da19b27e4ca51a6027",
+      "0x6bebc3e34057d536d3413e2e0e50dd70fa2367f0a66edbc5bcdf56799ce82abf",
+      "0xcc686ef8a6e09a4f337ceb561295a47ce06040536bba221d3d6f3f5930b57424",
+      "0x9c1650d324210e418bbd2963b0197e7dd9cf320af44f14447813f8ebee7fae96",
+      "0xc6fdda270af771daa8516cc118eef1df7a265bccf10c2c3e705838bdcf2180e6",
+      "0xc00a9e2dec151f7c40d5b029c7ea6a3f672fdf389ef6e2db196e20ef7d367ad5",
+      "0x87875b163817fec8174795cb8a61a575b9c0e6e76ce573c5440f97b4a0742b1f",
   };
 
   int i = 0;
@@ -157,8 +155,7 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
   auto& depot = wrapper.GetDepot();
   auto& reference = wrapper.GetReferenceDepot();
 
-  ASSERT_OK_AND_ASSIGN(auto empty_hash, depot.GetHash());
-  EXPECT_EQ(Hash{}, empty_hash);
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(Hash{}));
 
   std::array<std::byte, 4> value{};
   for (int i = 0; i < N; i++) {
@@ -169,8 +166,7 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
     ASSERT_OK(depot.Set(i, value));
     ASSERT_OK(reference.Set(i, value));
     ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
-    ASSERT_OK_AND_ASSIGN(auto reference_hash, reference.GetHash());
-    EXPECT_EQ(hash, reference_hash);
+    EXPECT_THAT(reference.GetHash(), IsOkAndHolds(hash));
   }
 }
 
