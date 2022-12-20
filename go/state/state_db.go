@@ -289,18 +289,24 @@ func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
 }
 
 func (s *stateDB) CreateAccount(addr common.Address) {
-	prevState := s.GetAccountState(addr)
+	s.setNonceInternal(addr, 0)
+	s.setCodeInternal(addr, []byte{})
+	s.createAccountIfNotExists(addr)
+}
+
+func (s *stateDB) createAccountIfNotExists(addr common.Address) {
+	if s.GetAccountState(addr) == common.Exists {
+		return
+	}
 	s.SetAccountState(addr, common.Exists)
-	s.SetNonce(addr, 0)
-	s.SetCode(addr, []byte{})
+
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
 	// will get their balance reset. In particular, deleted accounts that
 	// are restored will have an empty balance. However, for accounts that
 	// already existed before this create call the balance is preserved.
-	if prevState != common.Exists {
-		s.resetBalance(addr)
-	}
+	s.resetBalance(addr)
+
 	// Reset storage in case this account was destroyed in this transaction.
 	if s.HasSuicided(addr) {
 		// TODO: this full-map iteration may be slow; if so, some index may be required.
@@ -403,6 +409,8 @@ func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
 		return
 	}
 
+	s.createAccountIfNotExists(addr)
+
 	oldValue := s.GetBalance(addr)
 	newValue := new(big.Int).Add(oldValue, diff)
 
@@ -470,6 +478,11 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 }
 
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
+	s.createAccountIfNotExists(addr)
+	s.setNonceInternal(addr, nonce)
+}
+
+func (s *stateDB) setNonceInternal(addr common.Address, nonce uint64) {
 	if val, exists := s.nonces[addr]; exists {
 		if val.current != nonce {
 			oldValue := val.current
@@ -587,6 +600,11 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 }
 
 func (s *stateDB) SetCode(addr common.Address, code []byte) {
+	s.createAccountIfNotExists(addr)
+	s.setCodeInternal(addr, code)
+}
+
+func (s *stateDB) setCodeInternal(addr common.Address, code []byte) {
 	val, exists := s.codes[addr]
 	if !exists {
 		val = &codeValue{dirty: true}
@@ -754,8 +772,8 @@ func (s *stateDB) EndTransaction() {
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
 			// of the block processing.
-			s.SetNonce(addr, 0)
-			s.SetCode(addr, []byte{})
+			s.setNonceInternal(addr, 0)
+			s.setCodeInternal(addr, []byte{})
 
 			// Clear cached value states for the targeted account.
 			// TODO: this full-map iteration may be slow; if so, some index may be required.
