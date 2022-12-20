@@ -287,8 +287,7 @@ class FileDepot {
         }
         total_length += offset_buffer[i].size;
         // set length for this key
-        *reinterpret_cast<Size*>(page_data_.data() + i * sizeof(Size)) =
-            offset_buffer[i].size;
+        reinterpret_cast<Size*>(page_data_.data())[i] = offset_buffer[i].size;
       }
 
       if (total_length == 0) {
