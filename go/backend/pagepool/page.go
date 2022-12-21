@@ -81,6 +81,7 @@ func (c *Page[K, V]) get(index int) V {
 // items occupying this position and following items are shifted one position
 // towards the end of the page
 func (c *Page[K, V]) insert(index int, key K, val V) {
+	c.isDirty = true
 	// found insert
 	if index < c.size {
 
@@ -101,8 +102,6 @@ func (c *Page[K, V]) insert(index int, key K, val V) {
 	c.list[c.size].Val = val
 
 	c.size += 1
-
-	c.isDirty = true
 }
 
 func (c *Page[K, V]) SetNext(next PageId) {
@@ -133,6 +132,7 @@ func (c *Page[K, V]) Remove(key K) (exists bool) {
 			c.list[j] = c.list[j+1]
 		}
 		c.size -= 1
+		c.isDirty = true
 
 		return true
 	}
@@ -152,6 +152,7 @@ func (c *Page[K, V]) removeAll(key K) (start, end int, exists bool) {
 			c.list[j] = c.list[j+window]
 		}
 		c.size -= window
+		c.isDirty = true
 	}
 
 	return

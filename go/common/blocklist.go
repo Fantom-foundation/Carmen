@@ -89,9 +89,26 @@ func (m *BlockList[K, V]) GetAll(key K) ([]V, error) {
 // Put associates a key to a value.
 // If the key is already present, the value is updated.
 func (m *BlockList[K, V]) Put(key K, val V) error {
-	item := m.findBlock(key)
-	item.Put(key, val) // associate a new value to tail
+	_, item, exists := m.findBlock(key)
+	if !exists {
+		m.size += 1
+	}
+	// always replace existing value
+	item.Put(key, val)
 	return nil
+}
+
+func (m *BlockList[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err error) {
+	existsVal, page, exists := m.findBlock(key)
+
+	if exists {
+		return existsVal, true, nil
+	}
+
+	m.size += 1
+	page.Put(key, val)
+
+	return val, false, nil
 }
 
 func (m *BlockList[K, V]) Add(key K, val V) error {
@@ -101,21 +118,20 @@ func (m *BlockList[K, V]) Add(key K, val V) error {
 // findBlock iterates blocks and finds the block to insert the key into.
 // It returns the last block if the key is not in any block yet
 // and can even create a new block if there is no space for the new key
-// in existing blocks.
-// This method increases the size of items if the key is not present
-// as it is expected that the key will be added following the call if this method.
-func (m *BlockList[K, V]) findBlock(key K) *SortedMap[K, V] {
+// in existing blocks. True is returned if the key was found in one of the blocks
+// and the value for this key is returned as well.
+// If false is returned, the returned value should be ignored and the output block
+// may be used to associate the key.
+func (m *BlockList[K, V]) findBlock(key K) (val V, block *SortedMap[K, V], exists bool) {
 	if len(m.list) == 0 {
 		newBlock := NewSortedMap[K, V](m.blockCapacity, m.comparator)
-		m.size += 1
 		m.list = append(m.list, newBlock)
-		return newBlock
+		return val, newBlock, false
 	}
 
 	for _, item := range m.list {
-		// replace value if it already exists.
-		if _, update := item.Get(key); update {
-			return item
+		if existingVal, update := item.Get(key); update {
+			return existingVal, item, true
 		}
 	}
 
@@ -126,9 +142,7 @@ func (m *BlockList[K, V]) findBlock(key K) *SortedMap[K, V] {
 		m.list = append(m.list, tail)
 	}
 
-	m.size += 1
-
-	return tail
+	return val, tail, false
 }
 
 // Remove deletes the key from the map

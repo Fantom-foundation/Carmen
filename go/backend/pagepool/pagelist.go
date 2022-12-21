@@ -24,6 +24,7 @@ type opType int
 const (
 	put opType = iota
 	add
+	getOrAdd
 	remove
 	removeAll
 	unknown
@@ -77,6 +78,13 @@ func (m *PageList[K, V]) Get(key K) (val V, exists bool, err error) {
 	}
 	return
 }
+
+func (m *PageList[K, V]) GetOrAdd(key K, val V) (V, bool, error) {
+	return m.addOrPut(key, val, getOrAdd)
+}
+
+// Put associates a key to the list.
+// If the key is already present, the value is updated.
 func (m *PageList[K, V]) Put(key K, val V) error {
 	_, _, err := m.addOrPut(key, val, put)
 	return err
@@ -113,6 +121,11 @@ func (m *PageList[K, V]) addOrPut(key K, val V, op opType) (V, bool, error) {
 			// will be added at the end of this method
 			if position, exists = page.findValue(key, val); exists {
 				return val, true, nil
+			}
+		case getOrAdd:
+			// getOrAdd operation: when the key exists, its value is just returned
+			if position, exists = page.findItem(key); exists {
+				return page.get(position), true, nil
 			}
 		}
 

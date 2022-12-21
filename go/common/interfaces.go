@@ -53,6 +53,11 @@ type ErrMap[K comparable, V any] interface {
 	// Get returns a value associated with the key
 	Get(key K) (val V, exists bool, err error)
 
+	// GetOrAdd either returns a value stored under input key, or it associates the input value
+	// when the key is not stored yet.
+	// It returns true if the key was present, or false otherwise.
+	GetOrAdd(key K, newVal V) (val V, exists bool, err error)
+
 	// Put associates a new value to the key.
 	Put(key K, val V) error
 
