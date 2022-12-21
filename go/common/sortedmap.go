@@ -35,6 +35,10 @@ func (m *SortedMap[K, V]) Get(key K) (val V, exists bool) {
 	return
 }
 
+func (m *SortedMap[K, V]) GetAll(key K) []V {
+	panic("Not implemented yet")
+}
+
 // Put associates a key to a value.
 func (m *SortedMap[K, V]) Put(key K, val V) {
 	index, exists := m.findItem(key)
@@ -73,6 +77,11 @@ func (m *SortedMap[K, V]) Put(key K, val V) {
 	return
 }
 
+func (m *SortedMap[K, V]) Add(key K, val V) {
+	panic("Not implemented yet")
+
+}
+
 // Remove deletes the key from the map and returns whether an element was removed.
 func (m *SortedMap[K, V]) Remove(key K) (exists bool) {
 	if index, exists := m.findItem(key); exists {
@@ -88,6 +97,11 @@ func (m *SortedMap[K, V]) Remove(key K) (exists bool) {
 	return false
 }
 
+func (m *SortedMap[K, V]) RemoveAll(key K) {
+	panic("Not implemented yet")
+
+}
+
 // BulkInsert creates content from the input data
 func (m *SortedMap[K, V]) BulkInsert(data []MapEntry[K, V]) {
 	for i := 0; i < len(data); i++ {
@@ -100,8 +114,8 @@ func (m *SortedMap[K, V]) BulkInsert(data []MapEntry[K, V]) {
 	m.size += len(data)
 }
 
-// GetAll iterates all entries in this map and returns them as a slice.
-func (m *SortedMap[K, V]) GetAll() []MapEntry[K, V] {
+// GetEntries iterates all entries in this map and returns them as a slice.
+func (m *SortedMap[K, V]) GetEntries() []MapEntry[K, V] {
 	return m.list[0:m.Size()]
 }
 

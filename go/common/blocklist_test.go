@@ -66,7 +66,7 @@ func TestBlockListBulk(t *testing.T) {
 	}
 
 	// inserted data must much returned data
-	entries, _ := b.GetAll()
+	entries, _ := b.GetEntries()
 	for i, entry := range entries {
 		if entry.Key != data[i].Key || entry.Val != data[i].Val {
 			t.Errorf("Entries do not match: %v, %d != %v, %d", entry.Key, entry.Val, data[i].Key, data[i].Val)
@@ -122,7 +122,7 @@ func TestBlockListBulkInsertNonEmpty(t *testing.T) {
 	expectedData = append(expectedData, data...)
 
 	// inserted data must much returned data
-	entries, _ := b.GetAll()
+	entries, _ := b.GetEntries()
 	for i, entry := range entries {
 		if entry.Key != expectedData[i].Key || entry.Val != expectedData[i].Val {
 			t.Errorf("Entries do not match: %v, %d != %v, %d", entry.Key, entry.Val, data[i].Key, data[i].Val)
@@ -176,7 +176,7 @@ func TestBlockListBlockSizes(t *testing.T) {
 
 	n := 10000
 	for i := 0; i < n; i++ {
-		_ = b.Put(toAddress(uint32(i)), uint32(i))
+		_ = b.Put(AddressFromNumber(i), uint32(i))
 	}
 
 	for i, item := range b.list {

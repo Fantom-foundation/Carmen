@@ -16,7 +16,7 @@ const (
 // The pool also creates and deletes pages when asked, and it generates new IDs for new pages.
 // It maintains a list of released ID of the removed pages, which are re-claimed for newly created pages.
 // It prevents empty space on the disk, when the pages are stored via PageStorage.
-type PagePool[K comparable, V any] struct {
+type PagePool[K comparable, V comparable] struct {
 	pagePool        *common.Cache[PageId, *Page[K, V]]
 	comparator      common.Comparator[K]
 	pageStore       PageStorage[K, V] // store where the overflown pages will be stored and where they are read from
@@ -31,7 +31,7 @@ type PagePool[K comparable, V any] struct {
 // PageStorage is an interface to be implemented to persistent pages.
 // A page is sent to the persistent storage by this page pool when it is evicted due to the pool exceeding its capacity.
 // In opposite, a page is loaded from the storage when it is requested and not present in the page pool.
-type PageStorage[K comparable, V any] interface {
+type PageStorage[K comparable, V comparable] interface {
 	common.MemoryFootprintProvider
 
 	Load(pageId PageId, page *Page[K, V]) error
@@ -43,7 +43,7 @@ type PageStorage[K comparable, V any] interface {
 // amd the initial capacity of each page. This pool does not check if the capacity of a page actually exceeds,
 // it uses the size just to initialise the page.
 // freeIds are used for allocating IDs for new pages, when they are all used, this pool starts to allocate new IDs.
-func NewPagePool[K comparable, V any](capacity, pageItems int, freeIds []int, pageStore PageStorage[K, V], comparator common.Comparator[K]) *PagePool[K, V] {
+func NewPagePool[K comparable, V comparable](capacity, pageItems int, freeIds []int, pageStore PageStorage[K, V], comparator common.Comparator[K]) *PagePool[K, V] {
 	var freeIdsCopy []int
 	if len(freeIds) == 0 {
 		freeIdsCopy = make([]int, 0, releasedIdsCap)
@@ -188,11 +188,11 @@ func (p *PagePool[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 // MemoryPageStore stores pages in-memory only, its use is mainly for testing.
-type MemoryPageStore[K comparable, V any] struct {
+type MemoryPageStore[K comparable, V comparable] struct {
 	table map[PageId]Page[K, V]
 }
 
-func NewMemoryPageStore[K comparable, V any]() *MemoryPageStore[K, V] {
+func NewMemoryPageStore[K comparable, V comparable]() *MemoryPageStore[K, V] {
 	return &MemoryPageStore[K, V]{
 		table: make(map[PageId]Page[K, V]),
 	}

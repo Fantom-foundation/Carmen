@@ -14,7 +14,7 @@ import (
 // so the map does not have to be fully copied to a new bigger structure.
 // The capacity is verified on each insert and potentially the split is triggered.
 // It is inspired by: https://hackthology.com/linear-hashing.html#fn-5
-type LinearHashMap[K comparable, V any] struct {
+type LinearHashMap[K comparable, V comparable] struct {
 	list []BulkInsertMap[K, V]
 
 	records       uint // current total number of records in the whole table
@@ -28,7 +28,7 @@ type LinearHashMap[K comparable, V any] struct {
 
 // NewLinearHashMap creates a new instance with the initial number of buckets and constant bucket size.
 // The number of buckets will grow as this table grows
-func NewLinearHashMap[K comparable, V any](blockItems, numBuckets int, hasher Hasher[K], comparator Comparator[K], factory BulkInsertMapFactory[K, V]) *LinearHashMap[K, V] {
+func NewLinearHashMap[K comparable, V comparable](blockItems, numBuckets int, hasher Hasher[K], comparator Comparator[K], factory BulkInsertMapFactory[K, V]) *LinearHashMap[K, V] {
 	list := make([]BulkInsertMap[K, V], numBuckets)
 	for i := 0; i < numBuckets; i++ {
 		list[i] = factory(i, blockItems)
@@ -49,29 +49,34 @@ func NewLinearHashMap[K comparable, V any](blockItems, numBuckets int, hasher Ha
 func (h *LinearHashMap[K, V]) Put(key K, value V) error {
 	bucketId := h.bucket(key, uint(len(h.list)))
 	bucket := h.list[bucketId]
-
-	// append or replace
-	_, exists, err := bucket.Get(key)
-	if err != nil {
-		return err
-	}
-
-	if !exists {
-		h.records += 1
-	}
+	beforeSize := bucket.Size()
 
 	if err := bucket.Put(key, value); err != nil {
 		return err
 	}
 
-	// when the number of buckets overflows, split one bucket into two
-	if h.records > uint(len(h.list))*uint(h.blockCapacity) {
-		if err := h.split(); err != nil {
-			return err
-		}
+	if beforeSize < bucket.Size() {
+		h.records += 1
 	}
 
-	return nil
+	// when the number of buckets overflows, split one bucket into two
+	return h.checkSplit()
+}
+
+func (h *LinearHashMap[K, V]) Add(key K, value V) error {
+	bucketId := h.bucket(key, uint(len(h.list)))
+	bucket := h.list[bucketId]
+	beforeSize := bucket.Size()
+
+	if err := bucket.Add(key, value); err != nil {
+		return err
+	}
+
+	if beforeSize < bucket.Size() {
+		h.records += 1
+	}
+
+	return h.checkSplit()
 }
 
 // Get returns value associated to the input key
@@ -79,6 +84,11 @@ func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
 	bucket := h.bucket(key, uint(len(h.list)))
 	value, exists, err = h.list[bucket].Get(key)
 	return
+}
+
+func (h *LinearHashMap[K, V]) GetAll(key K) ([]V, error) {
+	bucket := h.bucket(key, uint(len(h.list)))
+	return h.list[bucket].GetAll(key)
 }
 
 // ForEach iterates all stored key/value pairs
@@ -104,6 +114,23 @@ func (h *LinearHashMap[K, V]) Remove(key K) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+func (h *LinearHashMap[K, V]) RemoveAll(key K) error {
+	bucketId := h.bucket(key, uint(len(h.list)))
+	bucket := h.list[bucketId]
+	beforeSize := bucket.Size()
+
+	if err := bucket.RemoveAll(key); err != nil {
+		return err
+	}
+
+	// modify the number of records from the size diff in the bucket
+	if beforeSize > bucket.Size() {
+		h.records -= uint(beforeSize - bucket.Size())
+	}
+
+	return nil
 }
 
 func (h *LinearHashMap[K, V]) Size() int {
@@ -138,6 +165,14 @@ func (h *LinearHashMap[K, V]) bucket(key K, numBuckets uint) uint {
 	}
 }
 
+func (h *LinearHashMap[K, V]) checkSplit() (err error) {
+	// when the number of buckets overflows, split one bucket into two
+	if h.records > uint(len(h.list))*uint(h.blockCapacity) {
+		err = h.split()
+	}
+	return err
+}
+
 // split creates a new bucket and extends the total number of buckets.
 // It locates a bucket to split, extends the bit mask by adding one more bit
 // and re-distribute keys between the old bucket and the new bucket.
@@ -158,7 +193,7 @@ func (h *LinearHashMap[K, V]) split() error {
 	entriesA := make([]MapEntry[K, V], 0, oldBucket.Size())
 	entriesB := make([]MapEntry[K, V], 0, oldBucket.Size())
 
-	oldEntries, err := oldBucket.GetAll()
+	oldEntries, err := oldBucket.GetEntries()
 	if err != nil {
 		return err
 	}

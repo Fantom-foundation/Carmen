@@ -1,7 +1,6 @@
 package file
 
 import (
-	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
@@ -61,7 +60,7 @@ func TestFileHashIndexGetAddMany(t *testing.T) {
 	data := make(map[common.Address]uint32)
 	for i := 0; i < 999; i++ {
 		n := rand.Intn(10000)
-		key := toAddress(n)
+		key := common.AddressFromNumber(n)
 		if _, err := inst.GetOrAdd(key); err != nil {
 			t.Errorf("Value must exists")
 		}
@@ -78,7 +77,7 @@ func TestFileHashIndexGetAddMany(t *testing.T) {
 	}
 
 	// check +1 index
-	key := toAddress(100009)
+	key := common.AddressFromNumber(100009)
 	expected := uint32(len(data))
 	if idx, err := inst.GetOrAdd(key); err != nil || idx != expected {
 		t.Errorf("Unexpected size: %d != %d", idx, expected)
@@ -102,7 +101,7 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	max := 4096 * 10
 	for i := 0; i < max; i++ {
 		n := rand.Intn(10000)
-		key := toAddress(n)
+		key := common.AddressFromNumber(n)
 		if _, err := inst.GetOrAdd(key); err != nil {
 			t.Errorf("Value must exists")
 		}
@@ -139,7 +138,7 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	}
 
 	// check +1 index
-	key := toAddress(100009)
+	key := common.AddressFromNumber(100009)
 	expected := uint32(len(data))
 	if idx, err := inst.GetOrAdd(key); err != nil || idx != expected {
 		t.Errorf("Unexpected size: %d != %d", idx, expected)
@@ -190,7 +189,7 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 	max := 4096 * 10
 	for i := 0; i < max; i++ {
 		n := rand.Intn(10000)
-		key := toAddress(n)
+		key := common.AddressFromNumber(n)
 		if _, err := inst.GetOrAdd(key); err != nil {
 			t.Errorf("Value must exists")
 		}
@@ -246,10 +245,4 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
 
-}
-
-func toAddress(num int) (address common.Address) {
-	addr := binary.BigEndian.AppendUint32([]byte{}, uint32(num))
-	copy(address[:], addr)
-	return
 }
