@@ -183,6 +183,7 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	memoryFootprint.AddChild("linearHash", m.table.GetMemoryFootprint())
 	memoryFootprint.AddChild("pagePool", m.pagePool.GetMemoryFootprint())
 	memoryFootprint.AddChild("pageStore", m.pageStore.GetMemoryFootprint())
+	memoryFootprint.SetNote(fmt.Sprintf("(items: %d)", m.maxIndex))
 	return memoryFootprint
 }
 

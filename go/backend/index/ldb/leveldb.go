@@ -1,6 +1,7 @@
 package ldb
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -160,5 +161,6 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
 	mf.AddChild("levelDb", m.db.GetMemoryFootprint())
+	mf.SetNote(fmt.Sprintf("(items: %d)", m.lastIndex))
 	return mf
 }

@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -73,5 +74,6 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	}{})
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m) + uintptr(len(m.data))*dataMapItemSize)
 	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
+	mf.SetNote(fmt.Sprintf("(items: %d)", len(m.data)))
 	return mf
 }
