@@ -108,3 +108,35 @@ MATCHER_P(
 }
 
 }  // namespace testing
+
+namespace absl {
+
+namespace internal {
+
+// A concept identifying types that can be written to an output stream.
+template <typename T>
+concept StreamableToOutputStream = requires(T a) {
+  { std::declval<std::ostream&>() << a } -> std::same_as<std::ostream&>;
+};
+
+}  // namespace internal
+
+// Allows StatusOr instances to be printed to output streams. This is most
+// useful in unit tests where values compared in EXPECT_THAT(..) statements
+// are printed by the gunit infrastructure using the << operatore.
+template <typename T>
+std::ostream& operator<<(std::ostream& out, const StatusOr<T>& status) {
+  if (!status.ok()) {
+    return out << status.status();
+  }
+  out << "OK: ";
+  // If supported, use the value's custom output format.
+  if constexpr (internal::StreamableToOutputStream<T>) {
+    return out << *status;
+  }
+  // If there is no output format defined, use gunit's universal printing
+  // format.
+  return out << testing::PrintToString(*status);
+}
+
+}  // namespace absl
