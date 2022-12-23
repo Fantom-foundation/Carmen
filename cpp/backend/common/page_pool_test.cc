@@ -18,9 +18,9 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::Sequence;
 
-using Page = ArrayPage<int, 40>;
-using TestPool = PagePool<Page, InMemoryFile>;
-using TestPoolListener = PagePoolListener<Page>;
+using Page = ArrayPage<int>;
+using TestPool = PagePool<InMemoryFile<kFileSystemPageSize>>;
+using TestPoolListener = PagePoolListener<kFileSystemPageSize>;
 
 TEST(PagePoolTest, TypeProperties) {
   EXPECT_TRUE(std::is_move_constructible_v<TestPool>);
@@ -36,14 +36,14 @@ TEST(PagePoolTest, PoolSizeCanBeDefined) {
 
 TEST(PagePoolTest, PagesCanBeFetched) {
   TestPool pool(2);
-  auto& page_12 = pool.Get(12);
-  auto& page_14 = pool.Get(14);
+  auto& page_12 = pool.Get<Page>(12);
+  auto& page_14 = pool.Get<Page>(14);
   EXPECT_NE(&page_12, &page_14);
 }
 
 TEST(PagePoolTest, FreshFetchedPagesAreZeroInitialized) {
   TestPool pool(2);
-  auto& page_12 = pool.Get(12);
+  auto& page_12 = pool.Get<Page>(12);
   for (int i = 0; i < 4; i++) {
     EXPECT_EQ(0, page_12[i]);
   }
@@ -51,12 +51,12 @@ TEST(PagePoolTest, FreshFetchedPagesAreZeroInitialized) {
 
 TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
   constexpr int kNumSteps = 4;
-  static_assert(TestPool::Page::kNumElementsPerPage >= 2);
+  static_assert(Page::kNumElementsPerPage >= 2);
   TestPool pool(2);
 
   // Write data to kNumSteps pages;
   for (int i = 0; i < kNumSteps; i++) {
-    auto& page = pool.Get(i);
+    auto& page = pool.Get<Page>(i);
     page[0] = i;
     page[1] = i + 1;
     pool.MarkAsDirty(i);
@@ -64,7 +64,7 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
 
   // Fetch those kNumSteps pages and check the content
   for (int i = 0; i < kNumSteps; i++) {
-    auto& page = pool.Get(i);
+    auto& page = pool.Get<Page>(i);
     EXPECT_EQ(i, page[0]);
     EXPECT_EQ(i + 1, page[1]);
   }
@@ -72,8 +72,12 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
 
 class MockListener : public TestPoolListener {
  public:
-  MOCK_METHOD(void, AfterLoad, (PageId id, const Page& page), (override));
-  MOCK_METHOD(void, BeforeEvict, (PageId id, const Page& page, bool is_dirty),
+  MOCK_METHOD(void, AfterLoad,
+              (PageId id, const RawPage<kFileSystemPageSize>& page),
+              (override));
+  MOCK_METHOD(void, BeforeEvict,
+              (PageId id, const RawPage<kFileSystemPageSize>& page,
+               bool is_dirty),
               (override));
 };
 
@@ -90,13 +94,13 @@ TEST(PagePoolTest, ListenersAreNotifiedOnLoad) {
   EXPECT_CALL(mock, AfterLoad(0, _)).InSequence(s);
 
   // Loads page 0 into pool, no eviction.
-  pool.Get(0);
+  pool.Get<Page>(0);
 
   // Loads page 1 into pool, evicts page 0, which is not dirty.
-  pool.Get(1);
+  pool.Get<Page>(1);
 
   // Loads page 0 into pool, evicts page 1, which is not dirty.
-  pool.Get(0);
+  pool.Get<Page>(0);
 }
 
 TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
@@ -111,40 +115,41 @@ TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
   EXPECT_CALL(mock, BeforeEvict(1, _, false)).InSequence(s);
 
   // Loads page 0 into pool, no eviction.
-  pool.Get(0);
+  pool.Get<Page>(0);
 
   // Loads page 1 into pool, evicts page 0, which is not dirty.
-  pool.Get(1);
+  pool.Get<Page>(1);
 
   // Loads page 0 into pool, evicts page 1, which is not dirty.
-  pool.Get(0);
+  pool.Get<Page>(0);
 }
 
-template <carmen::backend::Page P>
 class MockFile {
  public:
-  using page_type = P;
+  constexpr static std::size_t kPageSize = kFileSystemPageSize;
   MOCK_METHOD(std::size_t, GetNumPages, ());
-  MOCK_METHOD(void, LoadPage, (PageId id, P& dest));
-  MOCK_METHOD(void, StorePage, (PageId id, const P& src));
+  MOCK_METHOD(void, LoadPage,
+              (PageId id, (std::span<std::byte, kPageSize> dest)));
+  MOCK_METHOD(void, StorePage,
+              (PageId id, (std::span<const std::byte, kPageSize> src)));
   MOCK_METHOD(void, Flush, ());
   MOCK_METHOD(void, Close, ());
 };
 
-TEST(MockFileTest, IsFile) { EXPECT_TRUE(File<MockFile<Page>>); }
+TEST(MockFileTest, IsFile) { EXPECT_TRUE(File<MockFile>); }
 
 TEST(PagePoolTest, FlushWritesDirtyPages) {
-  auto file = std::make_unique<MockFile<Page>>();
+  auto file = std::make_unique<MockFile>();
   auto& mock = *file;
-  PagePool<Page, MockFile> pool(std::move(file), 2);
+  PagePool<MockFile> pool(std::move(file), 2);
 
   EXPECT_CALL(mock, LoadPage(10, _));
   EXPECT_CALL(mock, LoadPage(20, _));
   EXPECT_CALL(mock, StorePage(10, _));
   EXPECT_CALL(mock, StorePage(20, _));
 
-  pool.Get(10);
-  pool.Get(20);
+  pool.Get<Page>(10);
+  pool.Get<Page>(20);
   pool.MarkAsDirty(10);
   pool.MarkAsDirty(20);
 
@@ -152,14 +157,14 @@ TEST(PagePoolTest, FlushWritesDirtyPages) {
 }
 
 TEST(PagePoolTest, FlushResetsPageState) {
-  auto file = std::make_unique<MockFile<Page>>();
+  auto file = std::make_unique<MockFile>();
   auto& mock = *file;
-  PagePool<Page, MockFile> pool(std::move(file), 2);
+  PagePool<MockFile> pool(std::move(file), 2);
 
   EXPECT_CALL(mock, LoadPage(10, _));
   EXPECT_CALL(mock, StorePage(10, _));
 
-  pool.Get(10);
+  pool.Get<Page>(10);
   pool.MarkAsDirty(10);
 
   pool.Flush();
@@ -167,33 +172,33 @@ TEST(PagePoolTest, FlushResetsPageState) {
 }
 
 TEST(PagePoolTest, CleanPagesAreNotFlushed) {
-  auto file = std::make_unique<MockFile<Page>>();
+  auto file = std::make_unique<MockFile>();
   auto& mock = *file;
-  PagePool<Page, MockFile> pool(std::move(file), 2);
+  PagePool<MockFile> pool(std::move(file), 2);
 
   EXPECT_CALL(mock, LoadPage(10, _));
   EXPECT_CALL(mock, LoadPage(20, _));
   EXPECT_CALL(mock, StorePage(20, _));
 
-  pool.Get(10);
-  pool.Get(20);
+  pool.Get<Page>(10);
+  pool.Get<Page>(20);
   pool.MarkAsDirty(20);
 
   pool.Flush();
 }
 
 TEST(PagePoolTest, ClosingPoolFlushesPagesAndClosesFile) {
-  auto file = std::make_unique<MockFile<Page>>();
+  auto file = std::make_unique<MockFile>();
   auto& mock = *file;
-  PagePool<Page, MockFile> pool(std::move(file), 2);
+  PagePool<MockFile> pool(std::move(file), 2);
 
   EXPECT_CALL(mock, LoadPage(10, _));
   EXPECT_CALL(mock, LoadPage(20, _));
   EXPECT_CALL(mock, StorePage(20, _));
   EXPECT_CALL(mock, Close());
 
-  pool.Get(10);
-  pool.Get(20);
+  pool.Get<Page>(10);
+  pool.Get<Page>(20);
   pool.MarkAsDirty(20);
 
   pool.Close();
@@ -213,7 +218,7 @@ TEST(MockEvictionPolicy, IsEvictionPolicy) {
 }
 
 TEST(PagePoolTest, EvictionPolicyIsInformedAboutRead) {
-  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  PagePool<InMemoryFile<sizeof(Page)>, MockEvictionPolicy> pool(2);
   auto& mock = pool.GetEvictionPolicy();
 
   // This assumes that unused pages are used in order.
@@ -222,13 +227,13 @@ TEST(PagePoolTest, EvictionPolicyIsInformedAboutRead) {
   EXPECT_CALL(mock, Read(1)).InSequence(s);
   EXPECT_CALL(mock, Read(0)).InSequence(s);
 
-  pool.Get(10);
-  pool.Get(20);
-  pool.Get(10);
+  pool.Get<Page>(10);
+  pool.Get<Page>(20);
+  pool.Get<Page>(10);
 }
 
 TEST(PagePoolTest, EvictionPolicyIsInformedAboutWrite) {
-  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  PagePool<InMemoryFile<sizeof(Page)>, MockEvictionPolicy> pool(2);
   auto& mock = pool.GetEvictionPolicy();
 
   // This assumes that unused pages are used in order.
@@ -240,14 +245,14 @@ TEST(PagePoolTest, EvictionPolicyIsInformedAboutWrite) {
     EXPECT_CALL(mock, Written(1));
   }
 
-  pool.Get(10);
+  pool.Get<Page>(10);
   pool.MarkAsDirty(10);
-  pool.Get(20);
+  pool.Get<Page>(20);
   pool.MarkAsDirty(20);
 }
 
 TEST(PagePoolTest, OnEvictionPolicyIsConsultedAndInformed) {
-  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  PagePool<InMemoryFile<sizeof(Page)>, MockEvictionPolicy> pool(2);
   auto& mock = pool.GetEvictionPolicy();
 
   // This assumes that unused pages are used in order.
@@ -263,14 +268,14 @@ TEST(PagePoolTest, OnEvictionPolicyIsConsultedAndInformed) {
     EXPECT_CALL(mock, Read(0));
   }
 
-  pool.Get(10);
-  pool.Get(20);
-  pool.Get(30);
-  pool.Get(40);
+  pool.Get<Page>(10);
+  pool.Get<Page>(20);
+  pool.Get<Page>(30);
+  pool.Get<Page>(40);
 }
 
 TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
-  PagePool<Page, InMemoryFile, MockEvictionPolicy> pool(2);
+  PagePool<InMemoryFile<sizeof(Page)>, MockEvictionPolicy> pool(2);
   auto& mock = pool.GetEvictionPolicy();
 
   // This assumes that unused pages are used in order.
@@ -283,9 +288,9 @@ TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
     EXPECT_CALL(mock, Read(_));
   }
 
-  pool.Get(10);
-  pool.Get(20);
-  pool.Get(30);
+  pool.Get<Page>(10);
+  pool.Get<Page>(20);
+  pool.Get<Page>(30);
 }
 
 }  // namespace

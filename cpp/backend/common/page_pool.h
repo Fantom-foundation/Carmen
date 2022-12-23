@@ -7,13 +7,14 @@
 #include "absl/container/flat_hash_map.h"
 #include "backend/common/eviction_policy.h"
 #include "backend/common/file.h"
+#include "backend/common/page.h"
 #include "common/memory_usage.h"
 
 namespace carmen::backend {
 
 // ------------------------------- Declarations -------------------------------
 
-template <typename P>
+template <std::size_t page_size>
 class PagePoolListener;
 
 // A PagePool implements a fixed sized in-memory cache of pages of a file. It is
@@ -24,14 +25,11 @@ class PagePoolListener;
 // which it writes modifications to. Furthermore, listeners may be registered,
 // enabling the incjection of extra operations during page load and eviction
 // steps.
-template <typename P, template <typename> class F,
-          EvictionPolicy E = LeastRecentlyUsedEvictionPolicy>
-requires File<F<P>>
+template <File F, EvictionPolicy E = LeastRecentlyUsedEvictionPolicy>
 class PagePool {
  public:
-  using Page = P;
-  using File = F<Page>;
-  using Listener = PagePoolListener<P>;
+  using File = F;
+  using Listener = PagePoolListener<F::kPageSize>;
   using EvictionPolicy = E;
 
   // Creates a pool backed by a default instance of the pools File
@@ -48,6 +46,7 @@ class PagePool {
   // the existing page is returned. If the page is missing, it is fetched from
   // the disk. This may require the eviction of another page.
   // Note: the returned reference is only valid until the next Get() call.
+  template <Page Page>
   Page& Get(PageId id);
 
   // Marks the given page as being modified. Thus, before it gets evicted from
@@ -86,7 +85,8 @@ class PagePool {
   // The page pool, containing the actual data. It is using a pointer instead of
   // a vector because this makes its initialization faster (vector is
   // initializing each individual page).
-  std::unique_ptr<Page[]> pool_;
+  // TODO: test whether this is still fast during initialization.
+  std::unique_ptr<RawPage<F::kPageSize>[]> pool_;
 
   // The number of pages in this pool.
   std::size_t pool_size_;
@@ -112,28 +112,27 @@ class PagePool {
 // A PagePoolListener provides an observer interface to the activities within a
 // PagePool. It is intended to be used for injecting operations on page load
 // and/or evict operations.
-template <typename P>
+template <std::size_t page_size>
 class PagePoolListener {
  public:
-  using Page = P;
   virtual ~PagePoolListener() {}
   // Called after a page got loaded from the file.
-  virtual void AfterLoad(PageId id, const Page& page) = 0;
+  virtual void AfterLoad(PageId id, const RawPage<page_size>& page) = 0;
   // Called before a page gets evicted from the page pool.
-  virtual void BeforeEvict(PageId id, const Page& page, bool is_dirty) = 0;
+  virtual void BeforeEvict(PageId id, const RawPage<page_size>& page,
+                           bool is_dirty) = 0;
 };
 
 // ------------------------------- Definitions --------------------------------
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>> PagePool<P, F, E>::PagePool(std::size_t pool_size)
+template <File F, EvictionPolicy E>
+PagePool<F, E>::PagePool(std::size_t pool_size)
     : PagePool(std::make_unique<File>(), pool_size) {}
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>> PagePool<P, F, E>::PagePool(std::unique_ptr<File> file,
-                                                std::size_t pool_size)
+template <File F, EvictionPolicy E>
+PagePool<F, E>::PagePool(std::unique_ptr<File> file, std::size_t pool_size)
     : file_(std::move(file)),
-      pool_(new Page[pool_size]),
+      pool_(new RawPage<F::kPageSize>[pool_size]),
       pool_size_(pool_size),
       eviction_policy_(pool_size) {
   dirty_.resize(pool_size);
@@ -145,19 +144,19 @@ requires File<F<P>> PagePool<P, F, E>::PagePool(std::unique_ptr<File> file,
   }
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-typename PagePool<P, F, E>::Page& PagePool<P, F, E>::Get(PageId id) {
+template <File F, EvictionPolicy E>
+template <Page Page>
+Page& PagePool<F, E>::Get(PageId id) {
   // Try to locate the page in the pool first.
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
     eviction_policy_.Read(pos->second);
-    return pool_[pos->second];
+    return pool_[pos->second].template As<Page>();
   }
 
   // The page is missing, so we need to load it from disk.
   auto idx = GetFreeSlot();
-  Page& page = pool_[idx];
+  Page& page = pool_[idx].template As<Page>();
   file_->LoadPage(id, page);
   pages_to_index_[id] = idx;
   index_to_pages_[idx] = id;
@@ -165,15 +164,14 @@ typename PagePool<P, F, E>::Page& PagePool<P, F, E>::Get(PageId id) {
 
   // Notify listeners about loaded page.
   for (auto& listener : listeners_) {
-    listener->AfterLoad(id, page);
+    listener->AfterLoad(id, pool_[idx]);
   }
 
   return page;
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::MarkAsDirty(PageId id) {
+template <File F, EvictionPolicy E>
+void PagePool<F, E>::MarkAsDirty(PageId id) {
   auto pos = pages_to_index_.find(id);
   if (pos != pages_to_index_.end()) {
     dirty_[pos->second] = true;
@@ -181,17 +179,15 @@ void PagePool<P, F, E>::MarkAsDirty(PageId id) {
   }
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::AddListener(std::unique_ptr<Listener> listener) {
+template <File F, EvictionPolicy E>
+void PagePool<F, E>::AddListener(std::unique_ptr<Listener> listener) {
   if (listener != nullptr) {
     listeners_.push_back(std::move(listener));
   }
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::Flush() {
+template <File F, EvictionPolicy E>
+void PagePool<F, E>::Flush() {
   if (!file_) return;
   for (std::size_t i = 0; i < pool_size_; i++) {
     if (!dirty_[i]) continue;
@@ -200,18 +196,16 @@ void PagePool<P, F, E>::Flush() {
   }
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::Close() {
+template <File F, EvictionPolicy E>
+void PagePool<F, E>::Close() {
   Flush();
   if (file_) file_->Close();
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>> MemoryFootprint PagePool<P, F, E>::GetMemoryFootprint()
-const {
+template <File F, EvictionPolicy E>
+MemoryFootprint PagePool<F, E>::GetMemoryFootprint() const {
   MemoryFootprint res(*this);
-  res.Add("pool", Memory(sizeof(P) * pool_size_));
+  res.Add("pool", Memory(F::kPageSize * pool_size_));
   res.Add("dirty", Memory(dirty_.size() / 8 + 1));
   res.Add("pages_to_index", SizeOf(pages_to_index_));
   res.Add("index_to_pages", SizeOf(index_to_pages_));
@@ -220,8 +214,8 @@ const {
   return res;
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>> std::size_t PagePool<P, F, E>::GetFreeSlot() {
+template <File F, EvictionPolicy E>
+std::size_t PagePool<F, E>::GetFreeSlot() {
   // If there are unused pages, use those first.
   if (!free_list_.empty()) {
     std::size_t res = free_list_.back();
@@ -242,9 +236,8 @@ requires File<F<P>> std::size_t PagePool<P, F, E>::GetFreeSlot() {
   return *trg;
 }
 
-template <typename P, template <typename> class F, EvictionPolicy E>
-requires File<F<P>>
-void PagePool<P, F, E>::EvictSlot(int pos) {
+template <File F, EvictionPolicy E>
+void PagePool<F, E>::EvictSlot(int pos) {
   // Notify listeners about pending eviction.
   auto page_id = index_to_pages_[pos];
   bool is_dirty = dirty_[pos];

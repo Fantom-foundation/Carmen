@@ -3,6 +3,7 @@
 #include <array>
 #include <concepts>
 #include <span>
+#include <type_traits>
 
 #include "common/type.h"
 
@@ -20,12 +21,10 @@ concept Page =
     alignof(P) % kFileSystemPageSize == 0 &&
     // To be used in page pools, pages must also be trivially default
     // constructible and destructible.
-    std::is_trivially_default_constructible_v<
-        P>&& std::is_trivially_destructible_v<P>&& requires(const P a, P b) {
-  // Pages must support immutable and mutable raw data access.
-  { a.AsRawData() } -> std::same_as<std::span<const std::byte, sizeof(P)>>;
-  { b.AsRawData() } -> std::same_as<std::span<std::byte, sizeof(P)>>;
-};
+    std::is_trivially_default_constructible_v<P>&& std::
+        is_trivially_destructible_v<P>&& std::is_convertible_v<
+            P, std::span<std::byte, sizeof(P)>>&& std::
+            is_convertible_v<const P, std::span<const std::byte, sizeof(P)>>;
 
 // Computes the required page size based on a use case specific needed page
 // size. The required page size is the smallest multiple of the file system's
@@ -43,27 +42,66 @@ constexpr std::size_t GetRequiredPageSize(std::size_t needed_page_size) {
                 kFileSystemPageSize);
 }
 
+// A raw page is the simplest page format comprising a fixed-length array of
+// bytes. It implements all page requirements and is used as a type-erased
+// stand-in for generic page handling. Through its As<T>() member functions, a
+// raw page may be interpreted as any specialized page.
+template <std::size_t page_size = kFileSystemPageSize>
+class alignas(kFileSystemPageSize) RawPage final {
+ public:
+  // Can be used to interprate the content of this page using the given page
+  // format. It is a readability wrapper arround a static cast, performing no
+  // dynamic checks on the validity of the cast.
+  template <Page Page>
+  const Page& As() const {
+    return const_cast<RawPage&>(*this).As<Page>();
+  }
+
+  // Same as above, but for mutable instances.
+  template <Page Page>
+  Page& As() {
+    static_assert(sizeof(Page) == sizeof(RawPage));
+    return reinterpret_cast<Page&>(*this);
+  }
+
+  // Provides read-only indexed access to a value in this page.
+  std::byte operator[](std::size_t pos) const { return data_[pos]; }
+
+  // Provides mutable indexed access to a value in this page.
+  std::byte& operator[](std::size_t pos) { return data_[pos]; }
+
+  // Provides read-only access to the raw data stored in this page. The intended
+  // use is for storing data to disk.
+  operator std::span<const std::byte, page_size>() const { return data_; }
+
+  // Provides a mutable raw view of the data stored in this page. The main
+  // intended use case is to replace the content when loading a page from disk.
+  operator std::span<std::byte, page_size>() { return data_; }
+
+ private:
+  std::byte data_[page_size];
+};
+
 // A page containing an array of trivial values. As such, it is the in-memory,
 // typed version of a page in a file containing a fixed length array of trivial
 // elements. Furthermore, it provides index based access to the contained data.
 //
 // The trival type V is the type of value stored in this page, in the form of an
-// array. The provided pages_size_in_byte is the number of bytes each page is
-// comprising. Note that, if page_size_in_byte is not a multiple of sizeof(V)
-// some extra bytes per page may be kept in memory and on disk.
-template <Trivial V, std::size_t page_size_in_byte = kFileSystemPageSize>
+// array. The provided num_elements is the number values per page. Note that, if
+// total size of the array is not a multiple of kFileSystemPageSize some extra
+// bytes per page may be kept in memory and on disk.
+template <Trivial V, std::size_t num_elements = kFileSystemPageSize / sizeof(V)>
 class alignas(kFileSystemPageSize) ArrayPage final {
  public:
   // A constant providing the full size of this page in memory and on disk.
-  // Note that due to alignment constraints, this may exceed the specified
-  // page_size_in_byte.
+  // Note that due to alignment constraints, this may exceed the size of the
+  // specified num_elements.
   constexpr static std::size_t full_page_size_in_byte =
-      GetRequiredPageSize(page_size_in_byte);
+      GetRequiredPageSize(num_elements * sizeof(V));
 
   // A constant defining the number of elements stored in each page of this
   // type.
-  constexpr static std::size_t kNumElementsPerPage =
-      page_size_in_byte / sizeof(V);
+  constexpr static std::size_t kNumElementsPerPage = num_elements;
 
   // Provides read-only indexed access to a value in this page.
   const V& operator[](std::size_t pos) const { return AsArray()[pos]; }
@@ -73,23 +111,29 @@ class alignas(kFileSystemPageSize) ArrayPage final {
 
   // Provides direct access to the stored array.
   const std::array<V, kNumElementsPerPage>& AsArray() const {
-    return *reinterpret_cast<const std::array<V, kNumElementsPerPage>*>(&data_);
+    return *reinterpret_cast<const std::array<V, kNumElementsPerPage>*>(this);
   }
 
   // Provides direct const access to the stored array.
   std::array<V, kNumElementsPerPage>& AsArray() {
-    return *reinterpret_cast<std::array<V, kNumElementsPerPage>*>(&data_);
+    return *reinterpret_cast<std::array<V, kNumElementsPerPage>*>(this);
   }
+
+  // Provides span access to the underlying array.
+  operator std::span<const V, num_elements>() const { return AsArray(); }
+
+  // Provides span access to the underlying array.
+  operator std::span<V, num_elements>() { return AsArray(); }
 
   // Provides read-only access to the raw data stored in this page. The intended
   // use is for storing data to disk.
-  std::span<const std::byte, full_page_size_in_byte> AsRawData() const {
+  operator std::span<const std::byte, full_page_size_in_byte>() const {
     return data_;
   }
 
   // Provides a mutable raw view of the data stored in this page. The main
   // intended use case is to replace the content when loading a page from disk.
-  std::span<std::byte, full_page_size_in_byte> AsRawData() { return data_; }
+  operator std::span<std::byte, full_page_size_in_byte>() { return data_; }
 
  private:
   // Stores element's data in serialized form.

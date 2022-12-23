@@ -147,6 +147,16 @@ class alignas(kFileSystemPageSize) HashPage {
   // its content with data read from secondary storage.
   std::span<std::byte, full_page_size> AsRawData() { return data_; }
 
+  // Returns a span of the raw data of this page, as required by the page
+  // concept.
+  operator std::span<const std::byte, full_page_size>() const {
+    return AsRawData();
+  }
+
+  // Returns a span of the raw data of this page, as required by the page
+  // concept.
+  operator std::span<std::byte, full_page_size>() { return AsRawData(); }
+
   // Debug utility to print the content of a single page.
   void Dump() {
     auto size = Size();
