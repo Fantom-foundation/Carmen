@@ -11,6 +11,7 @@ using ::testing::IsOk;
 using ::testing::IsOkAndHolds;
 using ::testing::Not;
 using ::testing::Pair;
+using ::testing::PrintToString;
 using ::testing::StatusIs;
 using ::testing::StrEq;
 
@@ -60,6 +61,38 @@ TEST(StatusTestUtilTest, IsOkAndHoldsAcceptsMatcher) {
   EXPECT_THAT(example, IsOkAndHolds(std::make_pair(12, 'a')));
   EXPECT_THAT(example, IsOkAndHolds(Pair(12, 'a')));
   EXPECT_THAT(example, IsOkAndHolds(Pair(12, _)));
+}
+
+TEST(StatusPrinting, StatusCanBePrinted) {
+  absl::Status status = absl::OkStatus();
+  EXPECT_THAT(PrintToString(status), StrEq("OK"));
+  status = absl::InternalError("something went wrong");
+  EXPECT_THAT(PrintToString(status), StrEq("INTERNAL: something went wrong"));
+}
+
+TEST(StatusPrinting, StatusOrCanBePrinted) {
+  absl::StatusOr<int> status = 12;
+  EXPECT_THAT(PrintToString(status), StrEq("OK: 12"));
+  status = absl::InternalError("something went wrong");
+  EXPECT_THAT(PrintToString(status), StrEq("INTERNAL: something went wrong"));
+}
+
+TEST(StatusPrinting, StatusOrNonPrintableCanBePrinted) {
+  struct NonPrintable {
+    char x;
+  };
+  absl::StatusOr<NonPrintable> status = NonPrintable{12};
+  EXPECT_THAT(PrintToString(status), StrEq("OK: 1-byte object <0C>"));
+  status = absl::InternalError("something went wrong");
+  EXPECT_THAT(PrintToString(status), StrEq("INTERNAL: something went wrong"));
+}
+
+TEST(StatusPrinting, StatusOrRefCanBePrinted) {
+  int value = 12;
+  StatusOrRef<int> status = value;
+  EXPECT_THAT(PrintToString(status), StrEq("OK: 12"));
+  status = absl::InternalError("something went wrong");
+  EXPECT_THAT(PrintToString(status), StrEq("INTERNAL: something went wrong"));
 }
 
 }  // namespace
