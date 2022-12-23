@@ -5,6 +5,8 @@
 
 #include <cassert>
 
+#include "backend/common/page.h"
+
 namespace carmen::backend {
 
 // Creates the provided directory file path recursively. Returns true on
@@ -201,10 +203,14 @@ void PosixFile::Close() {
   fd_ = -1;
 }
 
+// Retain a 256 KiB buffer of zeros for initializing disk space.
+constexpr static std::size_t kStepSize = 1 << 18;
+
+class alignas(kFileSystemPageSize) ZeroBuffer
+    : public std::array<std::byte, kStepSize> {};
+
 void PosixFile::GrowFileIfNeeded(std::size_t needed) {
-  // Retain a 256 KiB buffer of zeros for initializing disk space.
-  constexpr static std::size_t kStepSize = 1 << 18;
-  static auto kZeros = std::make_unique<ArrayPage<int, kStepSize>>();
+  static auto kZeros = std::make_unique<ZeroBuffer>();
   if (file_size_ >= needed) {
     return;
   }
@@ -212,7 +218,7 @@ void PosixFile::GrowFileIfNeeded(std::size_t needed) {
   assert(offset == static_cast<off_t>(file_size_));
   while (file_size_ < needed) {
     auto step = std::min(kStepSize, needed - file_size_);
-    auto len = write(fd_, kZeros->AsRawData().data(), step);
+    auto len = write(fd_, kZeros->data(), step);
     if (len < 0) {
       perror("Error growing file");
     }
