@@ -85,19 +85,19 @@ func (m *Depot[I]) GetPage(page int) ([]byte, error) {
 		return m.emptyHashPage, nil
 	}
 
-	// lengths prefix
-	lengthsLength := m.hashItems * LengthSize
-	out := make([]byte, dataLength+int64(lengthsLength))
-	copyOffsetsToLengths(out[0:lengthsLength], offsetData)
+	// the output consists of values lengths prefix and the values itself
+	prefixLength := m.hashItems * LengthSize
+	out := make([]byte, int64(prefixLength)+dataLength)
+	copyOffsetsToLengths(out[0:prefixLength], offsetData)
 
 	if isFragmented { // slow path for fragmented data
 		m.fragmentedCalls++
-		err = readFragmentedPageItems(m.contentsFile, offsetData, out[lengthsLength:])
+		err = readFragmentedPageItems(m.contentsFile, offsetData, out[prefixLength:])
 		return out, err
 	}
 
 	// fast path
-	_, err = m.contentsFile.ReadAt(out[lengthsLength:], dataStart)
+	_, err = m.contentsFile.ReadAt(out[prefixLength:], dataStart)
 	return out, err
 }
 

@@ -56,15 +56,20 @@ func (m *Depot[I]) GetPage(hashGroup int) ([]byte, error) {
 	iter := m.db.NewIterator(&keysRange, nil)
 	defer iter.Release()
 
-	out := make([]byte, m.hashItems*LengthSize)
-	outIt := 0
+	// the output consists of values lengths prefix and the values itself
+	// the slice is initialized for the prefix, values are appended as they are read
+	prefixLength := m.hashItems * LengthSize
+	out := make([]byte, prefixLength)
+	prefixIt := 0
 	for iter.Next() {
-		value := iter.Value() // returned slice valid only in this iteration
+		value := iter.Value() // returned slice is valid only in this iteration
 		if len(value) != 0 {
-			binary.LittleEndian.PutUint32(out[outIt:], uint32(len(value)))
+			// length is written into the output prefix section
+			binary.LittleEndian.PutUint32(out[prefixIt:prefixLength], uint32(len(value)))
+			// value is appended at the end of the output slice
 			out = append(out, value...)
 		}
-		outIt += LengthSize
+		prefixIt += LengthSize
 	}
 	return out, iter.Error()
 }
