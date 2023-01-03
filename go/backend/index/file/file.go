@@ -30,7 +30,7 @@ const (
 // pages are evicted, while every use of a page makes it more frequently used with a lower chance to get evicted.
 // The pages are 4kB for an optimal IO when pages are stored/loaded from/to the disk.
 type Index[K comparable, I common.Identifier] struct {
-	table           *common.LinearHashMap[K, I]
+	table           *pagepool.LinearHashMap[K, I]
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
@@ -86,12 +86,9 @@ func NewParamIndex[K comparable, I common.Identifier](
 	}
 
 	pagePool := pagepool.NewPagePool[K, I](pagePoolSize, pageItems, freeIds, pageStorage, comparator)
-	pageListFactory := func(bucket, capacity int) common.BulkInsertMap[K, I] {
-		return pagepool.NewPageList[K, I](bucket, capacity, pagePool)
-	}
 
 	inst = &Index[K, I]{
-		table:           common.NewLinearHashMap[K, I](pageItems, numBuckets, hasher, comparator, pageListFactory),
+		table:           pagepool.NewLinearHashMap[K, I](pageItems, numBuckets, pagePool, hasher, comparator),
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
 		hashIndex:       indexhash.InitIndexHash[K](hash, keySerializer),

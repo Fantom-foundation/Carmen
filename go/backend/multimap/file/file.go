@@ -21,7 +21,7 @@ const (
 
 // MultiMap is a file-based multimap.MultiMap implementation
 type MultiMap[K comparable, V comparable] struct {
-	table     *common.LinearHashMap[K, V]
+	table     *pagepool.LinearHashMultiMap[K, V]
 	pageStore *pagepool.FilePageStorage[K, V]
 	pagePool  *pagepool.PagePool[K, V]
 
@@ -63,12 +63,8 @@ func NewMultiMap[K comparable, V comparable](
 	}
 
 	pagePool := pagepool.NewPagePool[K, V](pagePoolSize, pageItems, freeIds, pageStorage, comparator)
-	pageListFactory := func(bucket, capacity int) common.BulkInsertMap[K, V] {
-		return pagepool.NewPageList[K, V](bucket, capacity, pagePool)
-	}
-
 	return &MultiMap[K, V]{
-		table:     common.NewLinearHashMap[K, V](pageItems, numBuckets, hasher, comparator, pageListFactory),
+		table:     pagepool.NewLinearHashMultiMap[K, V](pageItems, numBuckets, pagePool, hasher, comparator),
 		pageStore: pageStorage,
 		pagePool:  pagePool,
 		path:      path,
@@ -82,7 +78,7 @@ func (m *MultiMap[K, V]) Add(key K, value V) error {
 
 // Remove removes a single key/value entry.
 func (m *MultiMap[K, V]) Remove(key K, value V) error {
-	_, err := m.table.RemoveVal(key, value)
+	_, err := m.table.Remove(key, value)
 	return err
 }
 
@@ -173,7 +169,7 @@ func readMetadata(path string) (numBuckets, lastBucket, lastOverflow int, freeId
 
 func writeMetadata[K comparable, V comparable](
 	path string,
-	linearHash *common.LinearHashMap[K, V],
+	linearHash *pagepool.LinearHashMultiMap[K, V],
 	pagePool *pagepool.PagePool[K, V],
 	pageStore *pagepool.FilePageStorage[K, V]) (err error) {
 

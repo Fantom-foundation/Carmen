@@ -77,7 +77,7 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 		return
 	}
 	if indexA2 != indexA3 {
-		t.Errorf("Get returns different value than GetOrAdd")
+		t.Errorf("get returns different value than GetOrAdd")
 		return
 	}
 }

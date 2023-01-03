@@ -27,13 +27,8 @@ func NewLinearHashIndex[K comparable, I common.Identifier](keySerializer common.
 // NewLinearHashParamsIndex constructs a new Index instance with parameters setting up the number of buckets
 func NewLinearHashParamsIndex[K comparable, I common.Identifier](numBuckets int, keySerializer common.Serializer[K], indexSerializer common.Serializer[I], hasher common.Hasher[K], comparator common.Comparator[K]) *LinearHashIndex[K, I] {
 	pageSize := 1 << 12 / (keySerializer.Size() + indexSerializer.Size()) // about 4kB per page
-
-	blockListFactory := func(bucket, capacity int) common.BulkInsertMap[K, I] {
-		return common.NewBlockList[K, I](capacity, comparator)
-	}
-
 	memory := LinearHashIndex[K, I]{
-		table:         common.NewLinearHashMap[K, I](pageSize, numBuckets, hasher, comparator, blockListFactory),
+		table:         common.NewLinearHashMap[K, I](pageSize, numBuckets, hasher, comparator),
 		keySerializer: keySerializer,
 		hashIndex:     indexhash.NewIndexHash[K](keySerializer),
 	}
@@ -42,10 +37,7 @@ func NewLinearHashParamsIndex[K comparable, I common.Identifier](numBuckets int,
 
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *LinearHashIndex[K, I]) GetOrAdd(key K) (val I, err error) {
-	val, exists, err := m.table.GetOrAdd(key, m.maxIndex)
-	if err != nil {
-		return
-	}
+	val, exists := m.table.GetOrAdd(key, m.maxIndex)
 	if !exists {
 		val = m.maxIndex
 		m.maxIndex += 1 // increment to next index
@@ -56,7 +48,7 @@ func (m *LinearHashIndex[K, I]) GetOrAdd(key K) (val I, err error) {
 
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists
 func (m *LinearHashIndex[K, I]) Get(key K) (val I, err error) {
-	val, exists, _ := m.table.Get(key)
+	val, exists := m.table.Get(key)
 	if !exists {
 		err = index.ErrNotFound
 	}
@@ -65,7 +57,7 @@ func (m *LinearHashIndex[K, I]) Get(key K) (val I, err error) {
 
 // Contains returns whether the key exists in the mapping or not.
 func (m *LinearHashIndex[K, I]) Contains(key K) (exists bool) {
-	_, exists, _ = m.table.Get(key)
+	_, exists = m.table.Get(key)
 	return
 }
 

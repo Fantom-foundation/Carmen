@@ -69,7 +69,7 @@ func TestSortedMapBulk(t *testing.T) {
 		data[i] = MapEntry[Address, uint32]{address, i + 1}
 	}
 
-	h.BulkInsert(data)
+	h.bulkInsert(data)
 
 	if size := h.Size(); size != int(max) {
 		t.Errorf("Size does not match: %d != %d", size, max)
@@ -102,7 +102,7 @@ func TestSortedMapBulkMultipleTimes(t *testing.T) {
 		data = append(data, MapEntry[Address, uint32]{address, i + 1})
 	}
 
-	b.BulkInsert(data)
+	b.bulkInsert(data)
 
 	nextMax := uint32(30)
 	nextData := make([]MapEntry[Address, uint32], 0, nextMax)
@@ -111,7 +111,7 @@ func TestSortedMapBulkMultipleTimes(t *testing.T) {
 		nextData = append(nextData, MapEntry[Address, uint32]{address, i + 1})
 	}
 
-	b.BulkInsert(nextData)
+	b.bulkInsert(nextData)
 
 	allData := append(data, nextData...)
 	// inserted data must much returned data
@@ -225,15 +225,15 @@ func TestSortedMapRemove(t *testing.T) {
 	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
 
 	if exists := h.Remove(C); exists {
-		t.Errorf("Remove from empty map failed")
+		t.Errorf("remove from empty map failed")
 	}
 
 	h.Put(C, 99)
 	if exists := h.Remove(C); !exists {
-		t.Errorf("Remove failed:  %v ", C)
+		t.Errorf("remove failed:  %v ", C)
 	}
 	if actual, exists := h.Get(C); exists || actual == 99 {
-		t.Errorf("Remove failed:  %v -> %v", C, actual)
+		t.Errorf("remove failed:  %v -> %v", C, actual)
 	}
 
 	h.Put(A, 1)
@@ -242,15 +242,15 @@ func TestSortedMapRemove(t *testing.T) {
 
 	// remove from middle
 	if exists := h.Remove(B); !exists {
-		t.Errorf("Remove failed:  %v ", B)
+		t.Errorf("remove failed:  %v ", B)
 	}
 
 	// remove from last
 	if exists := h.Remove(C); !exists {
-		t.Errorf("Remove failed:  %v", B)
+		t.Errorf("remove failed:  %v", B)
 	}
 
 	if exists := h.Remove(A); !exists {
-		t.Errorf("Remove failed:  %v", B)
+		t.Errorf("remove failed:  %v", B)
 	}
 }

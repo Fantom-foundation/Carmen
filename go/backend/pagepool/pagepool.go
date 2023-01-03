@@ -167,7 +167,7 @@ func (p *PagePool[K, V]) createPage() (page *Page[K, V]) {
 	if len(p.freePages) > 0 {
 		page = p.freePages[len(p.freePages)-1]
 		p.freePages = p.freePages[0 : len(p.freePages)-1]
-		page.Clear()
+		page.clear()
 	} else {
 		page = NewPage[K, V](p.maxItemsPerPage, p.comparator)
 	}

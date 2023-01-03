@@ -88,7 +88,7 @@ func NewFilePageStorage[K comparable, I comparable](
 // Load reads a page of the input ID from the persistent storage.
 func (c *FilePageStorage[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 	if !c.shouldLoad(pageId) {
-		page.Clear()
+		page.clear()
 		return nil
 	}
 
@@ -104,7 +104,7 @@ func (c *FilePageStorage[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 	if _, err := file.ReadAt(pageData, offset); err != nil {
 		if err == io.EOF {
 			// page does not yet exist
-			page.Clear()
+			page.clear()
 			return nil // maybe reset page first!
 		}
 		return err
@@ -113,7 +113,7 @@ func (c *FilePageStorage[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 	// read in metadata - link to the next page
 	next := binary.BigEndian.Uint32(pageData[len(pageData)-4:])
 	if next != 0 {
-		page.SetNext(NewPageId(pageId.Bucket(), int(next)))
+		page.setNext(NewPageId(pageId.Bucket(), int(next)))
 	}
 	numItems := binary.BigEndian.Uint16(pageData[len(pageData)-6:])
 
@@ -123,7 +123,7 @@ func (c *FilePageStorage[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 	pairSize := keySize + valSize
 
 	// update directly the entries for the best speed
-	list := page.GetRaw()
+	list := page.list
 	var dataIndex uint16
 	for i := 0; i < c.pageSize-pairSize; i += pairSize {
 		if numItems == dataIndex {
@@ -136,7 +136,7 @@ func (c *FilePageStorage[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 
 		dataIndex += 1
 	}
-	page.SetSize(int(numItems))
+	page.setSize(int(numItems))
 
 	return nil
 }
@@ -149,21 +149,21 @@ func (c *FilePageStorage[K, I]) Store(pageId PageId, page *Page[K, I]) (err erro
 	keySize := c.keySerializer.Size()
 	valueSize := c.indexSerializer.Size()
 
-	for _, item := range page.GetEntries() {
+	for _, item := range page.getEntries() {
 		c.keySerializer.CopyBytes(item.Key, pageData[offset:offset+keySize])
 		c.indexSerializer.CopyBytes(item.Val, pageData[offset+keySize:offset+keySize+valueSize])
 		offset += keySize + valueSize
 	}
 
 	// put in metadata - the link to the next page
-	if page.HasNext() {
-		binary.BigEndian.PutUint32(pageData[len(pageData)-4:], uint32(page.NextPage().Overflow()))
+	if page.hasNext {
+		binary.BigEndian.PutUint32(pageData[len(pageData)-4:], uint32(page.next.Overflow()))
 	} else {
 		binary.BigEndian.PutUint32(pageData[len(pageData)-4:], uint32(0))
 	}
 
 	// number of keys
-	binary.BigEndian.PutUint16(pageData[len(pageData)-6:len(pageData)-4], uint16(page.Size()))
+	binary.BigEndian.PutUint16(pageData[len(pageData)-6:len(pageData)-4], uint16(page.size()))
 
 	file := c.primaryFile
 	pageNumber := pageId.Bucket()
@@ -299,13 +299,13 @@ func (c *MemoryPageStore[K, I]) Store(pageId PageId, page *Page[K, I]) (err erro
 	copyPage := NewPage[K, I](len(page.list), page.comparator)
 	copyPage.hasNext = page.hasNext
 	copyPage.next = page.next
-	list := copyPage.GetRaw()
+	list := copyPage.list
 	var i int
-	page.ForEach(func(k K, v I) {
+	page.forEach(func(k K, v I) {
 		list[i] = common.MapEntry[K, I]{k, v}
 		i += 1
 	})
-	copyPage.SetSize(page.Size())
+	copyPage.setSize(page.size())
 	c.table[pageId] = *copyPage
 	return nil
 }
@@ -313,17 +313,17 @@ func (c *MemoryPageStore[K, I]) Store(pageId PageId, page *Page[K, I]) (err erro
 func (c *MemoryPageStore[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 	storedPage, exists := c.table[pageId]
 	if exists {
-		list := page.GetRaw()
+		list := page.list
 		var i int
-		storedPage.ForEach(func(k K, v I) {
+		storedPage.forEach(func(k K, v I) {
 			list[i] = common.MapEntry[K, I]{k, v}
 			i += 1
 		})
-		page.SetSize(storedPage.Size())
+		page.setSize(storedPage.size())
 		page.hasNext = storedPage.hasNext
 		page.next = storedPage.next
 	} else {
-		page.Clear()
+		page.clear()
 	}
 	return nil
 }
