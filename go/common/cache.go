@@ -66,7 +66,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 // If the key is already present, the value is updated and the key marked as
 // used. If the value is not present, a new entry is added to this
 // cache. This causes another entry to be removed if the cache size is exceeded.
-func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
+func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted bool) {
 	item, exists := c.cache[key]
 
 	// create entry if it does not exist
@@ -75,6 +75,7 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V) {
 			item = c.dropLast() // reuse evicted object for the new entry
 			evictedKey = item.key
 			evictedValue = item.val
+			evicted = true
 		} else {
 			item = new(entry[K, V])
 		}

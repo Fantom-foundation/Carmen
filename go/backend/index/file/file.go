@@ -30,12 +30,12 @@ const (
 // pages are evicted, while every use of a page makes it more frequently used with a lower chance to get evicted.
 // The pages are 4kB for an optimal IO when pages are stored/loaded from/to the disk.
 type Index[K comparable, I common.Identifier] struct {
-	table           *common.LinearHashMap[K, I]
+	table           *pagepool.LinearHashMap[K, I]
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
-	pageStore       *pagepool.FilePageStorage[K, I]
-	pagePool        *pagepool.PagePool[K, I]
+	pageStore       *pagepool.TwoFilesPageStorage
+	pagePool        *pagepool.PagePool[*pagepool.KVPage[K, I]]
 	comparator      common.Comparator[K]
 	path            string
 
@@ -76,22 +76,17 @@ func NewParamIndex[K comparable, I common.Identifier](
 	// Do not customise, unless different size of page, etc. is needed
 	// 4kB is the right fit for disk I/O
 	pageSize := common.PageSize // 4kB
-	// metadata of a page: number of items, index of next overflow page
-	pageMetaSize := 2 + 4
-	pageItems := (pageSize - pageMetaSize) / (keySerializer.Size() + indexSerializer.Size()) // number of key-value pairs per page
-
-	pageStorage, err := pagepool.NewFilePageStorage[K, I](path, pageSize, pageItems, lastBucket, lastOverflow, keySerializer, indexSerializer, comparator)
+	pageStorage, err := pagepool.NewTwoFilesPageStorage(path, pageSize, lastBucket, lastOverflow)
 	if err != nil {
 		return
 	}
 
-	pagePool := pagepool.NewPagePool[K, I](pagePoolSize, pageItems, freeIds, pageStorage, comparator)
-	pageListFactory := func(bucket, capacity int) common.BulkInsertMap[K, I] {
-		return pagepool.NewPageList[K, I](bucket, capacity, pagePool)
-	}
+	pageItems := pagepool.NumKeysPage(pageSize, keySerializer, indexSerializer)
+	pageFactory := pagepool.KVPageFactory(pageSize, keySerializer, indexSerializer, comparator)
+	pagePool := pagepool.NewPagePool[*pagepool.KVPage[K, I]](pagePoolSize, freeIds, pageStorage, pageFactory)
 
 	inst = &Index[K, I]{
-		table:           common.NewLinearHashMap[K, I](pageItems, numBuckets, hasher, comparator, pageListFactory),
+		table:           pagepool.NewLinearHashMap[K, I](pageItems, numBuckets, pagePool, hasher, comparator),
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
 		hashIndex:       indexhash.InitIndexHash[K](hash, keySerializer),

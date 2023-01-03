@@ -26,7 +26,7 @@ func NewFastMap[K comparable, V any](hasher ShortHasher[K]) *FastMap[K, V] {
 		hasher:      hasher,
 		usedBuckets: make([]uint16, 0, kFastMapBuckets),
 	}
-	// Clear is required to bring the map in a valid state.
+	// clear is required to bring the map in a valid state.
 	res.Clear()
 	return res
 }

@@ -240,8 +240,12 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
 
-	removedIds := pageStore.GetChild("removedIds")
-	if size := removedIds.Value(); size == 0 {
+	primaryFile := pageStore.GetChild("primaryFile")
+	if size := primaryFile.Value(); size == 0 {
+		t.Errorf("Mem footprint wrong: %d", size)
+	}
+	overflowFile := pageStore.GetChild("overflowFile")
+	if size := overflowFile.Value(); size == 0 {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
 

@@ -21,9 +21,9 @@ const (
 
 // MultiMap is a file-based multimap.MultiMap implementation
 type MultiMap[K comparable, V comparable] struct {
-	table     *common.LinearHashMap[K, V]
-	pageStore *pagepool.FilePageStorage[K, V]
-	pagePool  *pagepool.PagePool[K, V]
+	table     *pagepool.LinearHashMultiMap[K, V]
+	pageStore *pagepool.TwoFilesPageStorage
+	pagePool  *pagepool.PagePool[*pagepool.KVPage[K, V]]
 
 	path string
 }
@@ -53,22 +53,16 @@ func NewMultiMap[K comparable, V comparable](
 	// Do not customise, unless different size of page, etc. is needed
 	// 4kB is the right fit for disk I/O
 	pageSize := common.PageSize // 4kB
-	// metadata of a page: number of items, index of next overflow page
-	pageMetaSize := 2 + 4
-	pageItems := (pageSize - pageMetaSize) / (indexSerializer.Size() + indexSerializer.Size()) // number of key-value pairs per page
-
-	pageStorage, err := pagepool.NewFilePageStorage[K, V](path, pageSize, pageItems, lastBucket, lastOverflow, keySerializer, indexSerializer, comparator)
+	pageStorage, err := pagepool.NewTwoFilesPageStorage(path, pageSize, lastBucket, lastOverflow)
 	if err != nil {
 		return nil, err
 	}
-
-	pagePool := pagepool.NewPagePool[K, V](pagePoolSize, pageItems, freeIds, pageStorage, comparator)
-	pageListFactory := func(bucket, capacity int) common.BulkInsertMap[K, V] {
-		return pagepool.NewPageList[K, V](bucket, capacity, pagePool)
-	}
+	pageItems := pagepool.NumKeysPage(pageSize, keySerializer, indexSerializer)
+	pageFactory := pagepool.KVPageFactory(pageSize, keySerializer, indexSerializer, comparator)
+	pagePool := pagepool.NewPagePool[*pagepool.KVPage[K, V]](pagePoolSize, freeIds, pageStorage, pageFactory)
 
 	return &MultiMap[K, V]{
-		table:     common.NewLinearHashMap[K, V](pageItems, numBuckets, hasher, comparator, pageListFactory),
+		table:     pagepool.NewLinearHashMultiMap[K, V](pageItems, numBuckets, pagePool, hasher, comparator),
 		pageStore: pageStorage,
 		pagePool:  pagePool,
 		path:      path,
@@ -82,7 +76,7 @@ func (m *MultiMap[K, V]) Add(key K, value V) error {
 
 // Remove removes a single key/value entry.
 func (m *MultiMap[K, V]) Remove(key K, value V) error {
-	_, err := m.table.RemoveVal(key, value)
+	_, err := m.table.Remove(key, value)
 	return err
 }
 
@@ -173,9 +167,9 @@ func readMetadata(path string) (numBuckets, lastBucket, lastOverflow int, freeId
 
 func writeMetadata[K comparable, V comparable](
 	path string,
-	linearHash *common.LinearHashMap[K, V],
-	pagePool *pagepool.PagePool[K, V],
-	pageStore *pagepool.FilePageStorage[K, V]) (err error) {
+	linearHash *pagepool.LinearHashMultiMap[K, V],
+	pagePool *pagepool.PagePool[*pagepool.KVPage[K, V]],
+	pageStore *pagepool.TwoFilesPageStorage) (err error) {
 
 	metadataFile, err := os.OpenFile(path+"/metadata.dat", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {

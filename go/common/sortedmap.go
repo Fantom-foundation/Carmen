@@ -19,6 +19,17 @@ func NewSortedMap[K comparable, V any](capacity int, comparator Comparator[K]) *
 	}
 }
 
+// InitSortedMap creates a new instance wit input data
+func InitSortedMap[K comparable, V any](capacity int, data []MapEntry[K, V], comparator Comparator[K]) *SortedMap[K, V] {
+	list := make([]MapEntry[K, V], 0, capacity)
+	m := &SortedMap[K, V]{
+		list:       list,
+		comparator: comparator,
+	}
+	m.bulkInsert(data)
+	return m
+}
+
 // ForEach all entries - calls the callback for each key-value pair in the table
 func (m *SortedMap[K, V]) ForEach(callback func(K, V)) {
 	for i := 0; i < m.size; i++ {
@@ -33,10 +44,6 @@ func (m *SortedMap[K, V]) Get(key K) (val V, exists bool) {
 	}
 
 	return
-}
-
-func (m *SortedMap[K, V]) GetAll(key K) []V {
-	panic("Not implemented yet")
 }
 
 // Put associates a key to a value.
@@ -77,11 +84,6 @@ func (m *SortedMap[K, V]) Put(key K, val V) {
 	return
 }
 
-func (m *SortedMap[K, V]) Add(key K, val V) {
-	panic("Not implemented yet")
-
-}
-
 // Remove deletes the key from the map and returns whether an element was removed.
 func (m *SortedMap[K, V]) Remove(key K) (exists bool) {
 	if index, exists := m.findItem(key); exists {
@@ -97,16 +99,8 @@ func (m *SortedMap[K, V]) Remove(key K) (exists bool) {
 	return false
 }
 
-func (m *SortedMap[K, V]) RemoveAll(key K) {
-	panic("Not implemented yet")
-}
-
-func (m *SortedMap[K, V]) RemoveVal(key K, val V) bool {
-	panic("Not implemented yet")
-}
-
-// BulkInsert creates content from the input data
-func (m *SortedMap[K, V]) BulkInsert(data []MapEntry[K, V]) {
+// bulkInsert creates content from the input data
+func (m *SortedMap[K, V]) bulkInsert(data []MapEntry[K, V]) {
 	for i := 0; i < len(data); i++ {
 		if i+m.size == len(m.list) {
 			m.list = append(m.list, data[i])
