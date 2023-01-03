@@ -300,36 +300,68 @@ func TestStoresPages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get page 0; %v", err)
 			}
-			if !bytes.Equal(page, []byte{0x00, 0x00, 0x11}) {
-				t.Errorf("unexpected page 0: %v", page)
+			if !bytes.Equal(page, []byte{
+				0x01, 0x00, 0x00, 0x00,
+				0x02, 0x00, 0x00, 0x00,
+				0x00,
+				0x00, 0x11,
+			}) {
+				t.Errorf("unexpected page 0: %x", page)
 			}
 
 			page, err = dpp.GetPage(1)
 			if err != nil {
 				t.Fatalf("failed to get page 1; %v", err)
 			}
-			if !bytes.Equal(page, []byte{0x00, 0x11, 0x22, 0x00, 0x11, 0x22, 0x33}) {
-				t.Errorf("unexpected page 1: %v", page)
+			if !bytes.Equal(page, []byte{
+				0x03, 0x00, 0x00, 0x00,
+				0x04, 0x00, 0x00, 0x00,
+				0x00, 0x11, 0x22,
+				0x00, 0x11, 0x22, 0x33,
+			}) {
+				t.Errorf("unexpected page 1: %x", page)
 			}
 
 			page, err = dpp.GetPage(2)
 			if err != nil {
 				t.Fatalf("failed to get page 2; %v", err)
 			}
-			if !bytes.Equal(page, []byte{0x00, 0x11, 0x22, 0x33, 0x44}) {
-				t.Errorf("unexpected page 2: %v", page)
+			if !bytes.Equal(page, []byte{
+				0x05, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x11, 0x22, 0x33, 0x44,
+			}) {
+				t.Errorf("unexpected page 2: %x", page)
 			}
 
 			if err := d.Set(3, []byte{0xAB, 0xCD}); err != nil {
 				t.Fatalf("failed to set store item 3; %s", err)
 			}
 
+			// test overriding existing value
 			page, err = dpp.GetPage(1)
 			if err != nil {
 				t.Fatalf("failed to get page 1; %v", err)
 			}
-			if !bytes.Equal(page, []byte{0x00, 0x11, 0x22, 0xAB, 0xCD}) {
-				t.Errorf("unexpected page 1: %v", page)
+			if !bytes.Equal(page, []byte{
+				0x03, 0x00, 0x00, 0x00,
+				0x02, 0x00, 0x00, 0x00,
+				0x00, 0x11, 0x22,
+				0xAB, 0xCD,
+			}) {
+				t.Errorf("unexpected page 1: %x", page)
+			}
+
+			// test not-existing page
+			page, err = dpp.GetPage(9)
+			if err != nil {
+				t.Fatalf("failed to get page 9; %v", err)
+			}
+			if !bytes.Equal(page, []byte{
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00,
+			}) {
+				t.Errorf("unexpected page 9: %x", page)
 			}
 		})
 	}
@@ -339,22 +371,22 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 	// Tests the hashes for values [0x00], [0x00, 0x11] ... [..., 0xFF] inserted in sequence.
 	// reference hashes from the C++ implementation
 	expectedHashes := []string{
-		"6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
-		"aea3b18a4991da51ab201722c233c967e9c5d726cbc9a327c42b17d24268303b",
-		"e136dc145513327cf5846ea5cbb3b9d30543d27963288dd7bf6ad63360085df8",
-		"a98672f2a05a5b71b49451e85238e3f4ebc6fb8cedb00d55d8bc4ea6e52d0117",
-		"1e7f4c505dd16f8537bdad064b49a8c0a64a707725fbf09ad4311f280781e9e4",
-		"b07ee4eec6d898d88ec3ef9c66c64f3f0896cd1c7e759b825baf541d42e77784",
-		"9346102f81ac75e583499081d9ab10c7050ff682c7dfd4700a9f909ee469a2de",
-		"44532b1bcf3840a8bf0ead0a6052d4968c5fac6023cd1f86ad43175e53d25e9c",
-		"2de0363a6210fca91e2143b945a86f42ae90cd786e641d51e2a7b9c141b020b0",
-		"0c81b39c90852a66f18b0518d36dceb2f889501dc279e759bb2d1253a63caa8e",
-		"c9fa5b094c4d964bf6d2b25d7ba1e580a83b9ebf2ea8594e99baa81474be4c47",
-		"078fb14729015631017d2d82c844642ec723e92e06eb41f88ca83b36e3a04d30",
-		"4f91e8c410a52b53e46f7b787fdc240c3349711108c2a1ac69ddb0c64e51f918",
-		"4e0d2c84af4f9e54c2d0864302a72703c656996585ec99f7290a2172617ea0e9",
-		"38e68d99bafc836105e88a1092ebdadb6d8a4a1acec29eecc7ec01b885e6f820",
-		"f9764b20bf761bd89b3266697fbc1c336548c3bcbb1c81e4ecf3829df53d98ec",
+		"a536aa3cede6ea3c1f3e0357c3c60e0f216a8c89b853df13b29daa8f85065dfb",
+		"ab03063682ff571fbdf1f26e310a09911a9eefb57014b24679c3b0c806a17f86",
+		"6a3c781abaa02fe7f794e098db664d0261088dc3ae481ab5451e8b130e6a6eaf",
+		"02f47ff7c23929f1ab915a06d1e7b64f7cc77924b33a0fa202f3aee9a94cc1d7",
+		"516c2b341e44c4da030c3c285cf4600fa52d9466da8fdfb159654d8190ad704d",
+		"493529675023185851f83ca17720e130721a84141292a145e7f7c24b7d50c713",
+		"aa541f8619d33f6310ae0ef2ccd4f695a97daaf65e0530c8fc6fdb700cb3d05e",
+		"91e7877b25a43d450ee1a41d1d63e3511b21dee519d503f95a150950bfb3c332",
+		"1dc2edcabc1a59b9907acfc1679c0755db022df0abc73231186f4cd14004fa60",
+		"9b5ddc81a683b80222ad5da9ad8455cd4652319deed5f3da19b27e4ca51a6027",
+		"6bebc3e34057d536d3413e2e0e50dd70fa2367f0a66edbc5bcdf56799ce82abf",
+		"cc686ef8a6e09a4f337ceb561295a47ce06040536bba221d3d6f3f5930b57424",
+		"9c1650d324210e418bbd2963b0197e7dd9cf320af44f14447813f8ebee7fae96",
+		"c6fdda270af771daa8516cc118eef1df7a265bccf10c2c3e705838bdcf2180e6",
+		"c00a9e2dec151f7c40d5b029c7ea6a3f672fdf389ef6e2db196e20ef7d367ad5",
+		"87875b163817fec8174795cb8a61a575b9c0e6e76ce573c5440f97b4a0742b1f",
 	}
 
 	for _, factory := range getDepotsFactories(t, 3, 2) {
