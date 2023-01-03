@@ -114,8 +114,6 @@ class InMemoryDepot {
       auto end = items_.begin() +
                  std::min(id * hash_box_size_ + hash_box_size_, items_.size());
 
-      if (start >= end) return empty;
-
       // calculate the size of the hash group
       std::size_t len = lengths_size;
       for (auto it = start; it != end; ++it) {
@@ -125,7 +123,7 @@ class InMemoryDepot {
       page_data_.resize(len);
 
       // set lengths to zero default value
-      std::memset(page_data_.data(), 0, lengths_size);
+      std::fill_n(page_data_.begin(), lengths_size, std::byte{0});
 
       std::size_t pos = lengths_size;
       for (auto it = start; it != end; ++it) {

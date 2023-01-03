@@ -15,6 +15,7 @@ namespace {
 
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::IsEmpty;
 using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 using ::testing::StrEq;
@@ -149,6 +150,13 @@ TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
   }
 }
 
+TYPED_TEST_P(DepotTest, EmptyCodeCanBeStored) {
+  TypeParam wrapper;
+  auto& depot = wrapper.GetDepot();
+  EXPECT_OK(depot.Set(10, std::span<std::byte>{}));
+  EXPECT_THAT(depot.Get(10), IsOkAndHolds(IsEmpty()));
+}
+
 TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
   constexpr int N = 100;
   TypeParam wrapper;
@@ -156,6 +164,12 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
   auto& reference = wrapper.GetReferenceDepot();
 
   EXPECT_THAT(depot.GetHash(), IsOkAndHolds(Hash{}));
+
+  // assert empty value
+  ASSERT_OK(depot.Set(0, std::span<std::byte>{}));
+  ASSERT_OK(reference.Set(0, std::span<std::byte>{}));
+  ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
+  EXPECT_THAT(reference.GetHash(), IsOkAndHolds(hash));
 
   std::array<std::byte, 4> value{};
   for (int i = 0; i < N; i++) {
@@ -165,12 +179,12 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
              static_cast<std::byte>(i >> 0 & 0x3)};
     ASSERT_OK(depot.Set(i, value));
     ASSERT_OK(reference.Set(i, value));
-    ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
+    ASSERT_OK_AND_ASSIGN(hash, depot.GetHash());
     EXPECT_THAT(reference.GetHash(), IsOkAndHolds(hash));
   }
 }
 
-REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties,
+REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties, EmptyCodeCanBeStored,
                             DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
                             SizeCanBeFatched, EmptyDepotHasZeroHash,
                             NonEmptyDepotHasHash, HashChangesBack,

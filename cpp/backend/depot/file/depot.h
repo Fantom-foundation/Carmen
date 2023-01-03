@@ -128,7 +128,7 @@ class FileDepot {
   // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key, *offset_fs_));
-    if (metadata.size == 0) return absl::NotFoundError("Key not found");
+    if (metadata.size == 0) return std::span<const std::byte>();
 
     // clear the error state
     data_fs_->clear();
@@ -272,7 +272,7 @@ class FileDepot {
       if (page_data_.size() < lengths_size) {
         page_data_.resize(lengths_size);
       }
-      std::memset(page_data_.data(), 0, lengths_size);
+      std::fill_n(page_data_.begin(), lengths_size, 0);
 
       // parse offsets and sizes
       std::size_t total_length = 0;
@@ -291,7 +291,8 @@ class FileDepot {
       }
 
       if (total_length == 0) {
-        return empty;
+        return {reinterpret_cast<const std::byte*>(page_data_.data()),
+                lengths_size};
       }
 
       // add lengths size to total length and prepare buffer
@@ -308,6 +309,7 @@ class FileDepot {
         data_fs_.read(page_data_.data() + lengths_size,
                       total_length - lengths_size);
         if (!data_fs_.good()) {
+          // TODO: Add error handling
           return empty;
         }
         return {reinterpret_cast<const std::byte*>(page_data_.data()),
@@ -322,6 +324,7 @@ class FileDepot {
         data_fs_.read(page_data_.data() + lengths_size + position,
                       offset_buffer[i].size);
         if (!data_fs_.good()) {
+          // TODO: Add error handling
           return empty;
         }
         position += offset_buffer[i].size;

@@ -67,6 +67,7 @@ class LevelDbDepot {
   // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     ASSIGN_OR_RETURN(auto value, db_->Get(AsChars(key)));
+    if (value.empty()) return std::span<const std::byte>();
     get_data_.resize(value.size());
     std::memcpy(get_data_.data(), value.data(), value.size());
     return std::span{get_data_.data(), value.size()};
@@ -142,13 +143,11 @@ class LevelDbDepot {
       auto start = id * hash_box_size_;
       auto end = start + hash_box_size_ - 1;
 
-      if (start > end) return empty;
-
       // set lengths to zero default value
       if (page_data_.size() < lengths_size) {
         page_data_.resize(lengths_size);
       }
-      std::memset(page_data_.data(), 0, lengths_size);
+      std::fill_n(page_data_.begin(), lengths_size, std::byte{0});
 
       std::size_t pos = lengths_size;
       for (K i = start; i <= end; ++i) {
