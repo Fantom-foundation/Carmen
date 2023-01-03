@@ -1,9 +1,8 @@
-package file
+package pagepool
 
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"os"
@@ -12,17 +11,17 @@ import (
 
 const freePagesCap = 10 // initial size of freed pages set.
 
-// Storage receives requests to Load or Store pages identified by PageId.
+// FilePageStorage receives requests to Load or Store pages identified by PageId.
 // The PageId contains two integer IDs and the pages are distributed into two files - primary and overflow.
 // It allows for distinguishing between primary pages, which have the overflow component of the ID set to zero
 // and overflow pages of a primary page.
 // Pages are fixed size and are stored in the files at positions corresponding to their IDs either to the primary
 // secondary files.
-// The Storage maintains a fixed size byte buffer used for reading
+// The FilePageStorage maintains a fixed size byte buffer used for reading
 // and storing pages not to allocate new memory every-time.
 // On Store execution, the stored page memory representation is kept in the free list and reused for a following Load execution.
 // The free list is caped not to exhaust memory when many Store operations is executed without follow-up Load executions.
-type Storage[K comparable, I common.Identifier] struct {
+type FilePageStorage[K comparable, I comparable] struct {
 	path            string // directory to store the files in
 	pageSize        int    // page size in bytes
 	pageItems       int    // max items per page
@@ -41,7 +40,7 @@ type Storage[K comparable, I common.Identifier] struct {
 	buffer []byte // a page binary data shared between Load and Store operations not to allocate memory every time.
 }
 
-func NewStorage[K comparable, I common.Identifier](
+func NewFilePageStorage[K comparable, I comparable](
 	path string,
 	pageSize int,
 	pageItems int,
@@ -50,7 +49,7 @@ func NewStorage[K comparable, I common.Identifier](
 	keySerializer common.Serializer[K],
 	indexSerializer common.Serializer[I],
 	comparator common.Comparator[K],
-) (storage *Storage[K, I], err error) {
+) (storage *FilePageStorage[K, I], err error) {
 
 	primaryFile, err := os.OpenFile(path+"/primaryPages.dat", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
@@ -67,7 +66,7 @@ func NewStorage[K comparable, I common.Identifier](
 		list[i] = &common.MapEntry[K, I]{}
 	}
 
-	storage = &Storage[K, I]{
+	storage = &FilePageStorage[K, I]{
 		path:             path,
 		pageSize:         pageSize,
 		pageItems:        pageItems,
@@ -87,7 +86,7 @@ func NewStorage[K comparable, I common.Identifier](
 }
 
 // Load reads a page of the input ID from the persistent storage.
-func (c *Storage[K, I]) Load(pageId pagepool.PageId, page *pagepool.Page[K, I]) error {
+func (c *FilePageStorage[K, I]) Load(pageId PageId, page *Page[K, I]) error {
 	if !c.shouldLoad(pageId) {
 		page.Clear()
 		return nil
@@ -114,7 +113,7 @@ func (c *Storage[K, I]) Load(pageId pagepool.PageId, page *pagepool.Page[K, I]) 
 	// read in metadata - link to the next page
 	next := binary.BigEndian.Uint32(pageData[len(pageData)-4:])
 	if next != 0 {
-		page.SetNext(pagepool.NewPageId(pageId.Bucket(), int(next)))
+		page.SetNext(NewPageId(pageId.Bucket(), int(next)))
 	}
 	numItems := binary.BigEndian.Uint16(pageData[len(pageData)-6:])
 
@@ -143,7 +142,7 @@ func (c *Storage[K, I]) Load(pageId pagepool.PageId, page *pagepool.Page[K, I]) 
 }
 
 // Store persists the input page under input key.
-func (c *Storage[K, I]) Store(pageId pagepool.PageId, page *pagepool.Page[K, I]) (err error) {
+func (c *FilePageStorage[K, I]) Store(pageId PageId, page *Page[K, I]) (err error) {
 	pageData := c.buffer
 	// convert data from key-value pairs into byte array Page
 	var offset int
@@ -185,7 +184,7 @@ func (c *Storage[K, I]) Store(pageId pagepool.PageId, page *pagepool.Page[K, I])
 
 // shouldLoad returns true it the page under pageId should be loaded.
 // It happens when the page is not deleted and the pageId does not exceed actual size of the file
-func (c *Storage[K, I]) shouldLoad(pageId pagepool.PageId) bool {
+func (c *FilePageStorage[K, I]) shouldLoad(pageId PageId) bool {
 	// do not necessarily query I/O if the page does not exist,
 	// and it allows also for not actually deleting data, it only tracks non-existing items.
 	if pageId.Bucket() > c.lastBucket {
@@ -210,7 +209,7 @@ func (c *Storage[K, I]) shouldLoad(pageId pagepool.PageId) bool {
 
 // updateUse sets that the input pageId is not deleted (if it was set so)
 // and potentially extends markers of last positions in the dataset.
-func (c *Storage[K, I]) updateUse(pageId pagepool.PageId) {
+func (c *FilePageStorage[K, I]) updateUse(pageId PageId) {
 	if removed, exists := c.removedBuckets[pageId.Bucket()]; exists && removed {
 		c.removedBuckets[pageId.Bucket()] = false
 	}
@@ -225,12 +224,12 @@ func (c *Storage[K, I]) updateUse(pageId pagepool.PageId) {
 	}
 }
 
-func (c *Storage[K, I]) GetLastId() pagepool.PageId {
-	return pagepool.NewPageId(c.lastBucket, c.lastOverflow)
+func (c *FilePageStorage[K, I]) GetLastId() PageId {
+	return NewPageId(c.lastBucket, c.lastOverflow)
 }
 
 // Remove deletes the key from the map and returns whether an element was removed.
-func (c *Storage[K, I]) Remove(pageId pagepool.PageId) error {
+func (c *FilePageStorage[K, I]) Remove(pageId PageId) error {
 	if pageId.Overflow() == 0 {
 		c.removedBuckets[pageId.Bucket()] = true
 	}
@@ -239,7 +238,7 @@ func (c *Storage[K, I]) Remove(pageId pagepool.PageId) error {
 }
 
 // Flush all changes to the disk
-func (c *Storage[K, I]) Flush() (err error) {
+func (c *FilePageStorage[K, I]) Flush() (err error) {
 	// flush data file changes to disk
 	primFileErr := c.primaryFile.Sync()
 	overflowFileErr := c.overflowFile.Sync()
@@ -252,7 +251,7 @@ func (c *Storage[K, I]) Flush() (err error) {
 }
 
 // Close the store
-func (c *Storage[K, I]) Close() (err error) {
+func (c *FilePageStorage[K, I]) Close() (err error) {
 	flushErr := c.Flush()
 	primFileErr := c.primaryFile.Close()
 	overflowFileErr := c.overflowFile.Close()
@@ -264,7 +263,7 @@ func (c *Storage[K, I]) Close() (err error) {
 	return
 }
 
-func (c *Storage[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
+func (c *FilePageStorage[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*c)
 	var byteType byte
 	bufferSize := uintptr(len(c.buffer)) * unsafe.Sizeof(byteType)
@@ -277,4 +276,64 @@ func (c *Storage[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	memoryFootprint := common.NewMemoryFootprint(selfSize + bufferSize)
 	memoryFootprint.AddChild("removedIds", common.NewMemoryFootprint(removedBucketsSize+removedOverflowsSize))
 	return memoryFootprint
+}
+
+// MemoryPageStore stores pages in-memory only, its use is mainly for testing.
+type MemoryPageStore[K comparable, V comparable] struct {
+	table map[PageId]Page[K, V]
+}
+
+func NewMemoryPageStore[K comparable, V comparable]() *MemoryPageStore[K, V] {
+	return &MemoryPageStore[K, V]{
+		table: make(map[PageId]Page[K, V]),
+	}
+}
+
+func (c *MemoryPageStore[K, I]) Remove(pageId PageId) error {
+	delete(c.table, pageId)
+	return nil
+}
+
+func (c *MemoryPageStore[K, I]) Store(pageId PageId, page *Page[K, I]) (err error) {
+	// store a pageCopy just like a persistent storage
+	copyPage := NewPage[K, I](len(page.list), page.comparator)
+	copyPage.hasNext = page.hasNext
+	copyPage.next = page.next
+	list := copyPage.GetRaw()
+	var i int
+	page.ForEach(func(k K, v I) {
+		list[i] = common.MapEntry[K, I]{k, v}
+		i += 1
+	})
+	copyPage.SetSize(page.Size())
+	c.table[pageId] = *copyPage
+	return nil
+}
+
+func (c *MemoryPageStore[K, I]) Load(pageId PageId, page *Page[K, I]) error {
+	storedPage, exists := c.table[pageId]
+	if exists {
+		list := page.GetRaw()
+		var i int
+		storedPage.ForEach(func(k K, v I) {
+			list[i] = common.MapEntry[K, I]{k, v}
+			i += 1
+		})
+		page.SetSize(storedPage.Size())
+		page.hasNext = storedPage.hasNext
+		page.next = storedPage.next
+	} else {
+		page.Clear()
+	}
+	return nil
+}
+
+func (c *MemoryPageStore[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
+	selfSize := unsafe.Sizeof(*c)
+	memfootprint := common.NewMemoryFootprint(selfSize)
+	var pageId PageId
+	var page Page[K, V]
+	size := uintptr(len(c.table)) * (unsafe.Sizeof(pageId) + unsafe.Sizeof(page))
+	memfootprint.AddChild("pageStore", common.NewMemoryFootprint(size))
+	return memfootprint
 }

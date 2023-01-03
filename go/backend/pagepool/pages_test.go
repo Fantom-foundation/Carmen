@@ -136,6 +136,54 @@ func TestMultiMapAddGetRemove(t *testing.T) {
 	}
 }
 
+func TestMultiMapRemoveSingleValues(t *testing.T) {
+	for name, mFactory := range initMaps() {
+		t.Run(name, func(t *testing.T) {
+			h := mFactory(6)
+			// store a few values under the same key
+			h.Add(A, 10)
+			h.Add(A, 10) // the same value does not change the map
+			h.Add(A, 20)
+			h.Add(A, 30)
+			h.Add(A, 30) // the same value does not change the map
+
+			h.Add(B, 35)
+			h.Add(B, 35) // the same value does not change the map
+			h.Add(B, 25)
+			h.Add(B, 15)
+			h.Add(B, 15) // the same value does not change the map
+
+			if size := h.Size(); size != 6 {
+				t.Errorf("Size does not match: %d", size)
+			}
+
+			// remove
+			h.RemoveVal(A, 10)
+			h.RemoveVal(B, 35)
+			h.RemoveVal(B, 25)
+
+			common.AssertEqualArrays(t, h.GetAll(A), []uint32{20, 30})
+			common.AssertEqualArrays(t, h.GetAll(B), []uint32{15})
+
+			if size := h.Size(); size != 3 {
+				t.Errorf("Size does not match: %d", size)
+			}
+
+			// remove non existing values
+			h.RemoveVal(A, 100)
+			h.RemoveVal(B, 350)
+
+			// the properties of the array should not change
+			common.AssertEqualArrays(t, h.GetAll(A), []uint32{20, 30})
+			common.AssertEqualArrays(t, h.GetAll(B), []uint32{15})
+
+			if size := h.Size(); size != 3 {
+				t.Errorf("Size does not match: %d", size)
+			}
+		})
+	}
+}
+
 func TestMapInverseGetPut(t *testing.T) {
 	for name, mFactory := range initMaps() {
 		t.Run(name, func(t *testing.T) {
@@ -438,6 +486,11 @@ func (c *noErrMapWrapper[K, V]) RemoveAll(key K) {
 	_ = c.m.RemoveAll(key)
 }
 
+func (c *noErrMapWrapper[K, V]) RemoveVal(key K, val V) bool {
+	exists, _ := c.m.RemoveVal(key, val)
+	return exists
+}
+
 func (c *noErrMapWrapper[K, V]) Remove(key K) (exists bool) {
 	exists, _ = c.m.Remove(key)
 	return
@@ -499,9 +552,12 @@ func (c *noErrBulkInsertWrapper[K, V]) Add(key K, val V) {
 	c.m.Add(key, val)
 }
 
-// Remove deletes the key from the map and returns whether an element was removed.
 func (c *noErrBulkInsertWrapper[K, V]) RemoveAll(key K) {
 	c.m.RemoveAll(key)
+}
+
+func (c *noErrBulkInsertWrapper[K, V]) RemoveVal(key K, val V) bool {
+	return c.m.RemoveVal(key, val)
 }
 
 func (c *noErrBulkInsertWrapper[K, V]) Remove(key K) (exists bool) {

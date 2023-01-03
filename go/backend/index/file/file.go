@@ -34,7 +34,7 @@ type Index[K comparable, I common.Identifier] struct {
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
-	pageStore       *Storage[K, I]
+	pageStore       *pagepool.FilePageStorage[K, I]
 	pagePool        *pagepool.PagePool[K, I]
 	comparator      common.Comparator[K]
 	path            string
@@ -75,12 +75,12 @@ func NewParamIndex[K comparable, I common.Identifier](
 
 	// Do not customise, unless different size of page, etc. is needed
 	// 4kB is the right fit for disk I/O
-	pageSize := 1 << 12 // 4kB
+	pageSize := common.PageSize // 4kB
 	// metadata of a page: number of items, index of next overflow page
 	pageMetaSize := 2 + 4
 	pageItems := (pageSize - pageMetaSize) / (keySerializer.Size() + indexSerializer.Size()) // number of key-value pairs per page
 
-	pageStorage, err := NewStorage[K, I](path, pageSize, pageItems, lastBucket, lastOverflow, keySerializer, indexSerializer, comparator)
+	pageStorage, err := pagepool.NewFilePageStorage[K, I](path, pageSize, pageItems, lastBucket, lastOverflow, keySerializer, indexSerializer, comparator)
 	if err != nil {
 		return
 	}

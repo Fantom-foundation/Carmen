@@ -163,6 +163,10 @@ func (m *BlockList[K, V]) RemoveAll(key K) error {
 	panic("Not implemented yet")
 }
 
+func (m *BlockList[K, V]) RemoveVal(key K, val V) (bool, error) {
+	panic("Not implemented yet")
+}
+
 // fillFromTail picks a random item from the tail of this list and inserts it into the input item.
 // It is meant to fill a place in the block caused by deletion of an item.
 // If the input item is the tail, no element is removed, but the tail may be deleted if it is empty.

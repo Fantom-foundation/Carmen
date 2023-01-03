@@ -99,7 +99,10 @@ func (m *SortedMap[K, V]) Remove(key K) (exists bool) {
 
 func (m *SortedMap[K, V]) RemoveAll(key K) {
 	panic("Not implemented yet")
+}
 
+func (m *SortedMap[K, V]) RemoveVal(key K, val V) bool {
+	panic("Not implemented yet")
 }
 
 // BulkInsert creates content from the input data
