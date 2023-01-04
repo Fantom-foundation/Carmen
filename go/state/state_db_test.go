@@ -112,12 +112,13 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	mock.EXPECT().DeleteAccount(address1).Return(nil)
 	mock.EXPECT().CreateAccount(address1).Return(nil)
 	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
-	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	// First transaction creates an account and sets some storage values.
 	db.BeginTransaction()
 	db.CreateAccount(address1)
+	db.SetNonce(address1, 1)
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
 	db.EndTransaction()
@@ -138,6 +139,7 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	// may immediately re-create the account in the same transaction.
 
 	db.CreateAccount(address1)
+	db.SetNonce(address1, 1)
 
 	// The values should still be gone.
 	if got := db.GetState(address1, key1); got != zero {
@@ -375,7 +377,7 @@ func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDel
 	mock.EXPECT().DeleteAccount(address1).Return(nil)
 	mock.EXPECT().CreateAccount(address1).Return(nil)
 	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
-	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	// In a transaction we destroy the account and recreate it. This should cause
@@ -389,6 +391,7 @@ func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDel
 
 	db.Suicide(address1)
 	db.CreateAccount(address1)
+	db.SetNonce(address1, 1)
 
 	db.EndTransaction()
 	db.EndBlock()
@@ -407,7 +410,7 @@ func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *
 	mock.EXPECT().DeleteAccount(address1).Return(nil)
 	mock.EXPECT().CreateAccount(address1).Return(nil)
 	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
-	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 
 	// In a transaction we destroy the account, re-create it, destroy it and roll back
@@ -421,6 +424,7 @@ func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *
 
 	db.Suicide(address1)
 	db.CreateAccount(address1)
+	db.SetNonce(address1, 1)
 
 	snapshot := db.Snapshot()
 	db.Suicide(address1)
@@ -524,6 +528,7 @@ func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
 
 	// Simulate an existing account.
 	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{1}, nil)
 
 	// An existing account is indicated as being deleted.
 	if exists := db.Suicide(address1); !exists {
@@ -758,11 +763,12 @@ func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	// The new account is created at the end of the transaction.
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
 	mock.EXPECT().CreateAccount(address1).Return(nil)
-	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(1)).Return(nil)
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
 
 	db.CreateAccount(address1)
+	db.SetNonce(address1, 1) // the account must not be empty
 	db.EndTransaction()
 	db.EndBlock()
 }
@@ -776,11 +782,12 @@ func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	// The created account is only created once, and nonces and code are initialized.
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
 	mock.EXPECT().CreateAccount(address1).Return(nil)
-	mock.EXPECT().SetNonce(address1, common.ToNonce(0)).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.ToNonce(1)).Return(nil)
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
 
 	db.CreateAccount(address1)
+	db.SetNonce(address1, 1)
 	db.EndTransaction()
 	db.EndBlock()
 	db.EndBlock()
@@ -2501,6 +2508,42 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 	if a, b := db.IsSlotInAccessList(address1, key1); a || b {
 		t.Errorf("Accessed slot not cleared at abort of transaction")
 	}
+}
+
+// EIP-161: At the end of the transaction, any account touched by the execution of that transaction
+// which is now empty SHALL instead become non-existent (i.e. deleted).
+func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	b12, err := common.ToBalance(big.NewInt(12))
+	if err != nil {
+		t.Fatalf("failed to set up test case: %v", err)
+	}
+
+	// Initially the account exists, its balance is non-zero
+	mock.EXPECT().GetBalance(address1).Return(b12, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+
+	// Set the account balance to zero - the account becomes empty
+	db.SubBalance(address1, big.NewInt(12))
+
+	// The account should be deleted at the end of the transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+	if db.Exist(address1) {
+		t.Errorf("Empty account have not beed deleted at the end of the transaction")
+	}
+	db.EndTransaction()
+
+	// The account is deleted in the state at the end of the block
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+	db.EndBlock()
 }
 
 func TestCarmenStateBulkLoadReachesState(t *testing.T) {

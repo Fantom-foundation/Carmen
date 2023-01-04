@@ -138,6 +138,9 @@ type stateDB struct {
 	// A non-transactional reincarnation counter for accounts. This is used to efficiently invalidate data in
 	// the storedDataCache upon account deletion. The maintained values are internal information only.
 	reincarnation map[common.Address]uint64
+
+	// A set of addresses, which possibly become empty in this transaction
+	emptyCandidates []common.Address
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -249,6 +252,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
+		emptyCandidates:   make([]common.Address, 0, 100),
 	}
 }
 
@@ -303,6 +307,9 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 		return
 	}
 	s.setAccountState(addr, common.Exists)
+
+	// Created because touched - will be deleted at the end of the transaction if it stays empty
+	s.emptyCandidates = append(s.emptyCandidates, addr)
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -458,6 +465,9 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	s.undo = append(s.undo, func() {
 		s.balances[addr].current = *oldValue
 	})
+	if newValue.Sign() == 0 {
+		s.emptyCandidates = append(s.emptyCandidates, addr)
+	}
 }
 
 func (s *stateDB) resetBalance(addr common.Address) {
@@ -502,6 +512,9 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
 	s.createAccountIfNotExists(addr)
 	s.setNonceInternal(addr, nonce)
+	if nonce == 0 {
+		s.emptyCandidates = append(s.emptyCandidates, addr)
+	}
 }
 
 func (s *stateDB) setNonceInternal(addr common.Address, nonce uint64) {
@@ -631,6 +644,9 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 func (s *stateDB) SetCode(addr common.Address, code []byte) {
 	s.createAccountIfNotExists(addr)
 	s.setCodeInternal(addr, code)
+	if len(code) == 0 {
+		s.emptyCandidates = append(s.emptyCandidates, addr)
+	}
 }
 
 func (s *stateDB) setCodeInternal(addr common.Address, code []byte) {
@@ -792,6 +808,14 @@ func (s *stateDB) EndTransaction() {
 	// Updated committed state of storage.
 	for value := range s.writtenSlots {
 		value.committed, value.committedKnown = value.current, true
+	}
+
+	// EIP-161: At the end of the transaction, any account touched by the execution of that transaction
+	// which is now empty SHALL instead become non-existent (i.e. deleted).
+	for _, addr := range s.emptyCandidates {
+		if s.Empty(addr) {
+			s.accountsToDelete = append(s.accountsToDelete, addr)
+		}
 	}
 
 	// Delete accounts scheduled for deletion.
@@ -1040,6 +1064,7 @@ func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
 	s.undo = s.undo[0:0]
+	s.emptyCandidates = s.emptyCandidates[0:0]
 }
 
 func (s *stateDB) reset() {
