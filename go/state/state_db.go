@@ -218,14 +218,6 @@ type codeValue struct {
 	sizeValid bool // < set if size is loaded from the state (or written as dirty)
 }
 
-func CreateStateDB(directory string) (StateDB, error) {
-	state, err := NewCppFileBasedState(directory)
-	if err != nil {
-		return nil, err
-	}
-	return CreateStateDBUsing(state), nil
-}
-
 const StoredDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
 
 func CreateStateDBUsing(state State) *stateDB {
@@ -247,7 +239,7 @@ func CreateStateDBUsing(state State) *stateDB {
 	}
 }
 
-func (s *stateDB) SetAccountState(addr common.Address, state common.AccountState) {
+func (s *stateDB) setAccountState(addr common.Address, state common.AccountState) {
 	if val, exists := s.accounts[addr]; exists {
 		if val.current == state {
 			return
@@ -273,7 +265,7 @@ func (s *stateDB) SetAccountState(addr common.Address, state common.AccountState
 	}
 }
 
-func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
+func (s *stateDB) getAccountState(addr common.Address) common.AccountState {
 	if val, exists := s.accounts[addr]; exists {
 		return val.current
 	}
@@ -295,10 +287,10 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 }
 
 func (s *stateDB) createAccountIfNotExists(addr common.Address) {
-	if s.GetAccountState(addr) == common.Exists {
+	if s.getAccountState(addr) == common.Exists {
 		return
 	}
-	s.SetAccountState(addr, common.Exists)
+	s.setAccountState(addr, common.Exists)
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -337,14 +329,14 @@ func (s *stateDB) createAccountIfNotExists(addr common.Address) {
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
-	return s.GetAccountState(addr) == common.Exists
+	return s.getAccountState(addr) == common.Exists
 }
 
 func (s *stateDB) Suicide(addr common.Address) bool {
 	if !s.Exist(addr) {
 		return false
 	}
-	s.SetAccountState(addr, common.Deleted)
+	s.setAccountState(addr, common.Deleted)
 	s.resetBalance(addr)
 	deleteListLength := len(s.accountsToDelete)
 	s.accountsToDelete = append(s.accountsToDelete, addr)
