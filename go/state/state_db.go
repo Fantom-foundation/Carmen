@@ -287,7 +287,7 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 }
 
 func (s *stateDB) createAccountIfNotExists(addr common.Address) {
-	if s.getAccountState(addr) == common.Exists {
+	if s.getAccountState(addr) == common.Exists && !s.HasSuicided(addr) {
 		return
 	}
 	s.setAccountState(addr, common.Exists)
@@ -332,11 +332,13 @@ func (s *stateDB) Exist(addr common.Address) bool {
 	return s.getAccountState(addr) == common.Exists
 }
 
+// Suicide marks the given account as suicided.
+// This clears the account balance.
+// The account still exist until the state is committed.
 func (s *stateDB) Suicide(addr common.Address) bool {
 	if !s.Exist(addr) {
 		return false
 	}
-	s.setAccountState(addr, common.Deleted)
 	s.resetBalance(addr)
 	deleteListLength := len(s.accountsToDelete)
 	s.accountsToDelete = append(s.accountsToDelete, addr)
@@ -344,8 +346,8 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 		s.accountsToDelete = s.accountsToDelete[0:deleteListLength]
 	})
 
-	// Mark account as a cleared account to avoid fetching new data into the cache
-	// during the ongoing block.
+	// Mark account for clearing to plan its removing on commit and
+	// to avoid fetching new data into the cache during the ongoing block.
 	oldState := s.clearedAccounts[addr]
 	s.clearedAccounts[addr] = pendingClearing
 	s.undo = append(s.undo, func() {
@@ -768,6 +770,7 @@ func (s *stateDB) EndTransaction() {
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
 			// of the block processing.
+			s.setAccountState(addr, common.Deleted)
 			s.setNonceInternal(addr, 0)
 			s.setCodeInternal(addr, []byte{})
 

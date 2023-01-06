@@ -33,11 +33,14 @@ func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 		t.Errorf("New account is considered deleted")
 	}
 	db.Suicide(address1)
-	if db.Exist(address1) {
-		t.Errorf("Account still exists after suicide")
-	}
 	if !db.HasSuicided(address1) {
 		t.Errorf("Destroyed account is still considered alive")
+	}
+	// The account should stop existing at the end of the transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+	if db.Exist(address1) {
+		t.Errorf("Account still exists after suicide")
 	}
 }
 
@@ -498,6 +501,10 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 		t.Errorf("suicide indicates that existing account did not exist before delete")
 	}
 
+	// The account should stop existing at the end of the transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+
 	// Deleting it a second time indicates the account as already deleted.
 	if exists := db.Suicide(address1); exists {
 		t.Errorf("suicide indicates deleted account still existed")
@@ -592,9 +599,6 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	snapshot := db.Snapshot()
 
 	db.Suicide(address1)
-	if db.Exist(address1) {
-		t.Errorf("Account does still exist after deletion")
-	}
 
 	if !db.HasSuicided(address1) {
 		t.Errorf("Account is not marked as suicided after suicide")
