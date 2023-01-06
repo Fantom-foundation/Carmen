@@ -2596,10 +2596,10 @@ func TestStateDBRead(t *testing.T) {
 
 	stateDb := CreateStateDBUsing(s)
 
-	if state := stateDb.GetAccountState(address1); state != common.Exists {
+	if state := stateDb.getAccountState(address1); state != common.Exists {
 		t.Errorf("Unexpected value, val: %v != %v", state, common.Exists)
 	}
-	if state := stateDb.GetAccountState(address2); state != common.Exists {
+	if state := stateDb.getAccountState(address2); state != common.Exists {
 		t.Errorf("Unexpected value, val: %v != %v", state, common.Exists)
 	}
 
