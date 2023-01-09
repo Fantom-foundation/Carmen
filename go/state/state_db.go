@@ -284,7 +284,9 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	s.setNonceInternal(addr, 0)
 	s.setCodeInternal(addr, []byte{})
 
-	if s.getAccountState(addr) == common.Exists && !s.HasSuicided(addr) {
+	exists := s.getAccountState(addr) == common.Exists
+	suicided := s.HasSuicided(addr)
+	if exists && !suicided {
 		return
 	}
 	s.setAccountState(addr, common.Exists)
@@ -294,10 +296,12 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	// will get their balance reset. In particular, deleted accounts that
 	// are restored will have an empty balance. However, for accounts that
 	// already existed before this create call the balance is preserved.
-	s.resetBalance(addr)
+	if !exists {
+		s.resetBalance(addr)
+	}
 
 	// Reset storage in case this account was destroyed in this transaction.
-	if s.HasSuicided(addr) {
+	if suicided {
 		// TODO: this full-map iteration may be slow; if so, some index may be required.
 		s.data.ForEach(func(slot slotId, value *slotValue) {
 			if slot.addr == addr {
