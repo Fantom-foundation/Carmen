@@ -33,11 +33,14 @@ func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 		t.Errorf("New account is considered deleted")
 	}
 	db.Suicide(address1)
-	if db.Exist(address1) {
-		t.Errorf("Account still exists after suicide")
-	}
 	if !db.HasSuicided(address1) {
 		t.Errorf("Destroyed account is still considered alive")
+	}
+	// The account should stop existing at the end of the transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+	if db.Exist(address1) {
+		t.Errorf("Account still exists after suicide")
 	}
 }
 
@@ -498,10 +501,99 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 		t.Errorf("suicide indicates that existing account did not exist before delete")
 	}
 
+	// A suicided account suicide should still return true - it is being deleted.
+	if exists := db.Suicide(address1); !exists {
+		t.Errorf("suicide indicates that suicided account is not being deleted")
+	}
+
+	// The account should really stop existing at the end of the transaction.
+	db.EndTransaction()
+	db.BeginTransaction()
+
 	// Deleting it a second time indicates the account as already deleted.
 	if exists := db.Suicide(address1); exists {
 		t.Errorf("suicide indicates deleted account still existed")
 	}
+}
+
+func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate an existing account.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+
+	// An existing account is indicated as being deleted.
+	if exists := db.Suicide(address1); !exists {
+		t.Errorf("suicide indicates that existing account did not exist before delete")
+	}
+
+	// Setting the account code in the same tx should not stop account deleting.
+	db.SetCode(address1, []byte{})
+
+	// The account should really stop existing at the end of the transaction.
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	// Deleting it a second time indicates the account as already deleted.
+	if exists := db.Suicide(address1); exists {
+		t.Errorf("suicide indicates deleted account still existed")
+	}
+}
+
+func TestCarmenStateRepeatedSuicide(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate an existing account.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+
+	// An existing account is indicated as being deleted.
+	if exists := db.Suicide(address1); !exists {
+		t.Errorf("suicide indicates that existing account did not exist before delete")
+	}
+
+	// The account start to be considered deleted at the end of a transaction.
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	// Adding balance should re-create the account.
+	db.AddBalance(address1, big.NewInt(123))
+	db.SetState(address1, key1, val1)
+
+	// Deleting it a second time indicates the account as already deleted.
+	if exists := db.Suicide(address1); !exists {
+		t.Errorf("suicide indicates that re-created account does not exist")
+	}
+
+	// Adding balance to already suicided account should be ignored.
+	db.AddBalance(address1, big.NewInt(123))
+	db.SetState(address1, key3, val3)
+
+	// The account start to be considered deleted at the end of a transaction.
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	// Adding balance should re-create the account again.
+	db.AddBalance(address1, big.NewInt(456))
+	db.SetState(address1, key2, val2)
+
+	// The original account is expected to be deleted, the last created one is expected to be really created.
+	newBalance, _ := common.ToBalance(big.NewInt(456))
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, newBalance).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+	mock.EXPECT().SetStorage(address1, key2, val2)
+
+	// The changes are applied to the state at the end of the block.
+	db.EndTransaction()
+	db.EndBlock()
 }
 
 func TestCarmenStateSuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T) {
@@ -592,9 +684,6 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	snapshot := db.Snapshot()
 
 	db.Suicide(address1)
-	if db.Exist(address1) {
-		t.Errorf("Account does still exist after deletion")
-	}
 
 	if !db.HasSuicided(address1) {
 		t.Errorf("Account is not marked as suicided after suicide")
