@@ -133,7 +133,11 @@ type stateDB struct {
 	writtenSlots map[*slotValue]bool
 
 	// A non-transactional local cache of stored storage values.
-	storedDataCache *common.Cache[slotId, common.Value]
+	storedDataCache *common.Cache[slotId, storedDataCacheValue]
+
+	// A non-transactional reincarnation counter for accounts. This is used to efficiently invalidate data in
+	// the storedDataCache upon account deletion. The maintained values are internal information only.
+	reincarnation map[common.Address]uint64
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -220,6 +224,14 @@ type codeValue struct {
 
 const StoredDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
 
+// storedDataCacheValue maintains the cached version of a value in the store. To
+// support the efficient clearing of values cached for accounts being deleted, an
+// additional account reincarnation counter is added.
+type storedDataCacheValue struct {
+	value         common.Value // < the cached version of the value in the store
+	reincarnation uint64       // < the reincarnation the cached value blongs to
+}
+
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
 		state:             state,
@@ -227,7 +239,8 @@ func CreateStateDBUsing(state State) *stateDB {
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
-		storedDataCache:   common.NewCache[slotId, common.Value](StoredDataCacheSize),
+		storedDataCache:   common.NewCache[slotId, storedDataCacheValue](StoredDataCacheSize),
+		reincarnation:     map[common.Address]uint64{},
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
 		accessedAddresses: map[common.Address]bool{},
@@ -512,29 +525,36 @@ func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
 		// before the next block.
 		return common.Value{}
 	}
+	reincarnation := s.reincarnation[sid.addr]
 	stored, found := s.storedDataCache.Get(sid)
 	if !found {
 		var err error
-		stored, err = s.state.GetStorage(sid.addr, sid.key)
+		stored.value, err = s.state.GetStorage(sid.addr, sid.key)
 		if err != nil {
 			panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
 		}
+		stored.reincarnation = reincarnation
 		s.storedDataCache.Set(sid, stored)
+	}
+	// If the cached value is out-dated, the current value is zero. If the same slot would
+	// have been updated since the clearing, it would have also been updated in the cache.
+	if stored.reincarnation < reincarnation {
+		stored.value = common.Value{}
 	}
 
 	// Remember the stored value for future accesses.
 	if val != nil {
-		val.stored, val.storedKnown = stored, true
+		val.stored, val.storedKnown = stored.value, true
 	} else {
 		s.data.Put(sid, &slotValue{
-			stored:         stored,
-			committed:      stored,
-			current:        stored,
+			stored:         stored.value,
+			committed:      stored.value,
+			current:        stored.value,
 			storedKnown:    true,
 			committedKnown: true,
 		})
 	}
-	return stored
+	return stored.value
 }
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
@@ -825,17 +845,10 @@ func (s *stateDB) EndBlock() {
 		}
 	}
 
-	// Clear stored data of cleared accounts in stored data cache to reflect account deletion.
-	if len(clearedAccounts) > 0 {
-		// TODO: this full-cache iteration may be slow; if so, the index structure needs to be improved.
-		s.storedDataCache.IterateMutable(func(id slotId, value *common.Value) bool {
-			if _, cleared := clearedAccounts[id.addr]; cleared {
-				// If the value got already updated again since the account deletion, the new
-				// value will be set when processing modified state values below.
-				*value = common.Value{}
-			}
-			return true
-		})
+	// Increment the reincarnation counter of cleared addresses to invalidate cached entries in
+	// the stored data cache.
+	for addr := range clearedAccounts {
+		s.reincarnation[addr] = s.reincarnation[addr] + 1
 	}
 
 	// Update account stats in deterministic order in state DB
@@ -910,7 +923,8 @@ func (s *stateDB) EndBlock() {
 		if err != nil {
 			panic(fmt.Sprintf("Failed to set storage: %v", err))
 		}
-		s.storedDataCache.Set(slot, value.current)
+
+		s.storedDataCache.Set(slot, storedDataCacheValue{value.current, s.reincarnation[slot.addr]})
 	}
 
 	// Update modified codes.
@@ -995,6 +1009,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+boolSize)))
 	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(boolSize+unsafe.Sizeof(&slotValue{}))))
 	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
+	mf.AddChild("reincarnation", common.NewMemoryFootprint(uintptr(len(s.reincarnation))*(addressSize+unsafe.Sizeof(uint64(0)))))
 
 	return mf
 }
