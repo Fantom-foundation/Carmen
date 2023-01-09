@@ -283,10 +283,7 @@ func (s *stateDB) getAccountState(addr common.Address) common.AccountState {
 func (s *stateDB) CreateAccount(addr common.Address) {
 	s.setNonceInternal(addr, 0)
 	s.setCodeInternal(addr, []byte{})
-	s.createAccountIfNotExists(addr)
-}
 
-func (s *stateDB) createAccountIfNotExists(addr common.Address) {
 	if s.getAccountState(addr) == common.Exists && !s.HasSuicided(addr) {
 		return
 	}
@@ -326,6 +323,20 @@ func (s *stateDB) createAccountIfNotExists(addr common.Address) {
 			s.clearedAccounts[addr] = oldState
 		})
 	}
+}
+
+func (s *stateDB) createAccountIfNotExists(addr common.Address) {
+	if s.getAccountState(addr) == common.Exists {
+		return
+	}
+	s.setAccountState(addr, common.Exists)
+
+	// Initialize the balance with 0, unless the account existed before.
+	// Thus, accounts previously marked as unknown (default) or deleted
+	// will get their balance reset. In particular, deleted accounts that
+	// are restored will have an empty balance. However, for accounts that
+	// already existed before this create call the balance is preserved.
+	s.resetBalance(addr)
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {

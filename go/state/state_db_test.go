@@ -501,7 +501,34 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 		t.Errorf("suicide indicates that existing account did not exist before delete")
 	}
 
-	// The account should stop existing at the end of the transaction
+	// The account should really stop existing at the end of the transaction.
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	// Deleting it a second time indicates the account as already deleted.
+	if exists := db.Suicide(address1); exists {
+		t.Errorf("suicide indicates deleted account still existed")
+	}
+}
+
+func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate an existing account.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+
+	// An existing account is indicated as being deleted.
+	if exists := db.Suicide(address1); !exists {
+		t.Errorf("suicide indicates that existing account did not exist before delete")
+	}
+
+	// Setting the account code in the same tx should not stop account deleting.
+	db.SetCode(address1, []byte{})
+
+	// The account should really stop existing at the end of the transaction.
 	db.EndTransaction()
 	db.BeginTransaction()
 
