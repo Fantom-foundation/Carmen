@@ -151,6 +151,65 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	db.EndBlock()
 }
 
+func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+	zero := common.Value{}
+
+	// Initially the account exists with some state.
+	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
+	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
+
+	// At the end the account is deleted and recreated with the new state.
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().CreateAccount(address1).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+	mock.EXPECT().SetStorage(address1, key1, val2).Return(nil)
+
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("Wrong initial state, wanted %v, got %v", val1, got)
+	}
+
+	// When deleting the account, the state is still present since the suicide only becomes
+	// effective at the end of the transaction.
+	db.Suicide(address1)
+
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("Wrong post-suicide state, wanted %v, got %v", val1, got)
+	}
+	if got := db.GetState(address1, key2); got != val2 {
+		t.Errorf("Wrong post-suicide state, wanted %v, got %v", val2, got)
+	}
+
+	// However, if the account is re-created in the same transaction, the storage is deleted.
+	db.CreateAccount(address1)
+	if got := db.GetState(address1, key1); got != zero {
+		t.Errorf("Wrong post-recreate state, wanted %v, got %v", zero, got)
+	}
+	if got := db.GetState(address1, key2); got != zero {
+		t.Errorf("Wrong post-recreate state, wanted %v, got %v", zero, got)
+	}
+
+	// Values written now are preserved.
+	db.SetState(address1, key1, val2)
+	if got := db.GetState(address1, key1); got != val2 {
+		t.Errorf("Wrong state, wanted %v, got %v", val2, got)
+	}
+	db.EndTransaction()
+
+	if got := db.GetState(address1, key1); got != val2 {
+		t.Errorf("Wrong post-end-of-transaction state, wanted %v, got %v", val2, got)
+	}
+
+	db.EndTransaction()
+	db.EndBlock()
+}
+
 func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

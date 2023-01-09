@@ -760,6 +760,10 @@ func (s *stateDB) EndTransaction() {
 	// Delete accounts scheduled for deletion.
 	if len(s.accountsToDelete) > 0 {
 		for _, addr := range s.accountsToDelete {
+			// If the account was already cleared because it was recreated, we skip this part.
+			if state, found := s.clearedAccounts[addr]; found && state == cleared {
+				continue
+			}
 			// Note: balance was already set to zero during suicide call.
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
