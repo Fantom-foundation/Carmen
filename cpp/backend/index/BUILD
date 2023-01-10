@@ -60,6 +60,8 @@ cc_library(
         "//backend/index/leveldb/multi_db:index",
         "//backend/index/cache:cache",
         "//backend/index/file:index",
+        "@com_google_absl//absl/status:statusor",
+        "//backend:structure",
         "//common:file_util",
     ],
     visibility = ["//backend/index:__subpackages__"],

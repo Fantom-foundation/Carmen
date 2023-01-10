@@ -38,10 +38,7 @@ class FileDepot {
                                         std::size_t hash_branching_factor = 32,
                                         std::size_t hash_box_size = 4) {
     // Make sure the parent directory exists.
-    if (!CreateDirectory(path)) {
-      return absl::InternalError(
-          absl::StrFormat("Unable to create parent directory %s", path));
-    }
+    RETURN_IF_ERROR(CreateDirectory(path));
 
     auto offset_file = path / "offset.dat";
     auto data_file = path / "data.dat";

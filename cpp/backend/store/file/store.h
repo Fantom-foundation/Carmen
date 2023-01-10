@@ -78,10 +78,7 @@ class FileStoreBase {
       Context&, const std::filesystem::path& directory,
       std::size_t hash_branching_factor = 32) {
     // Make sure the directory exists.
-    if (!CreateDirectory(directory)) {
-      return absl::InternalError(
-          absl::StrFormat("Unable to create parent directory %s", directory));
-    }
+    RETURN_IF_ERROR(CreateDirectory(directory));
     auto store = FileStoreBase(directory, hash_branching_factor);
     if (std::filesystem::exists(store.hash_file_)) {
       RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));

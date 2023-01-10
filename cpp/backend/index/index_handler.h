@@ -10,6 +10,8 @@
 #include "backend/index/memory/index.h"
 #include "common/file_util.h"
 #include "common/type.h"
+#include "absl/status/statusor.h"
+#include "backend/structure.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -35,13 +37,22 @@ template <Index Index>
 class IndexHandler : public IndexHandlerBase<typename Index::key_type,
                                              typename Index::value_type> {
  public:
-  IndexHandler() : index_() {}
+  template <typename... Args>
+  absl::StatusOr<IndexHandler> Create(Args&&... args) {
+    auto handler = IndexHandler();
+    ASSIGN_OR_RETURN(handler.index_,
+                     Index::Open(handler.ctx, handler.temp_dir_.GetPath(), std::forward<Args>(args)...));
+    return handler;
+  }
+
   Index& GetIndex() { return index_; }
 
  private:
+  Context ctx_;
+  TempDir temp_dir_;
   Index index_;
 };
-
+/*
 // A specialization of the generic IndexHandler for cached index
 // implementations.
 template <Index Index>
@@ -71,7 +82,7 @@ class IndexHandler<FileIndex<K, I, SingleFile, page_size>>
   TempDir dir_;
   FileIndex<K, I, SingleFile, page_size> index_;
 };
-
+*/
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
 class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
@@ -85,7 +96,7 @@ class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
   TempDir dir_;
   LevelDbKeySpace<K, I> index_;
 };
-
+/*
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
 class IndexHandler<MultiLevelDbIndex<K, I>> : public IndexHandlerBase<K, I> {
@@ -97,6 +108,6 @@ class IndexHandler<MultiLevelDbIndex<K, I>> : public IndexHandlerBase<K, I> {
   TempDir dir_;
   MultiLevelDbIndex<K, I> index_;
 };
-
+*/
 }  // namespace
 }  // namespace carmen::backend::index

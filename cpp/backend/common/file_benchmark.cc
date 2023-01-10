@@ -39,7 +39,7 @@ using Page = ArrayPage<std::byte, page_size>;
 template <typename F>
 class FileWrapper {
  public:
-  FileWrapper() : file_(std::make_unique<F>(temp_file_)) {}
+  FileWrapper() : file_(std::make_unique<F>(*F::Open(temp_file_.GetPath()))) {}
   ~FileWrapper() {
     file_->Flush().IgnoreError();
     file_.reset();

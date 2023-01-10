@@ -7,8 +7,10 @@
 #include <filesystem>
 #include <fstream>
 #include <span>
+#include <concepts>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/common/page.h"
 #include "backend/common/page_id.h"
 
@@ -18,7 +20,11 @@ namespace carmen::backend {
 
 // Creates the provided directory file path recursively in case it does not
 // exit. Returns true if the directory exists after the call, false otherwise.
-bool CreateDirectory(std::filesystem::path dir);
+absl::Status CreateDirectory(const std::filesystem::path& dir);
+
+// Creates empty file at the provided file path. Returns ok status if the file
+// was created successfully, otherwise returns the error status.
+absl::Status CreateFile(const std::filesystem::path& path);
 
 // The File concept defines an interface for file implementations supporting the
 // loading and storing of fixed length pages. Pages are expected to be numbered
@@ -31,6 +37,11 @@ concept File = requires(F a) {
   // Files must be movable.
   std::is_move_constructible_v<F>;
   std::is_move_assignable_v<F>;
+
+  // All files must be open-able through a static factory function.
+  {
+    F::Open(std::declval<const std::filesystem::path&>())
+    } -> std::same_as<absl::StatusOr<F>>;
 
   // Each file implementation must support the extraction of the number of
   // pages.
@@ -60,8 +71,11 @@ class InMemoryFile {
  public:
   using page_type = Page;
 
+  static absl::StatusOr<InMemoryFile> Open(const std::filesystem::path&) {
+    return InMemoryFile();
+  }
+
   InMemoryFile() = default;
-  InMemoryFile(std::filesystem::path){};
 
   std::size_t GetNumPages() const { return data_.size(); }
 
@@ -91,14 +105,18 @@ namespace internal {
 // implementations. Note: FStreamFile is not satisfying any File concept.
 class FStreamFile {
  public:
-  // Opens the given file in read/write mode. If it does not exist, the file is
-  // created. TODO(herbertjordan): add error handling.
-  FStreamFile(std::filesystem::path file);
+  // Opens the file at the provided path. If the file does not exist it will be
+  // created.
+  static absl::StatusOr<FStreamFile> Open(const std::filesystem::path& path);
+
+  // Assure the file is move constructable.
+  FStreamFile(FStreamFile&&) = default;
+
   // Flushes the content and closes the file.
   ~FStreamFile();
 
   // Provides the current file size in bytes.
-  std::size_t GetFileSize();
+  std::size_t GetFileSize() const;
 
   // Reads a range of bytes from the file to the given span. The provided
   // position is the starting position. The number of bytes to be read is taken
@@ -117,6 +135,8 @@ class FStreamFile {
   absl::Status Close();
 
  private:
+  FStreamFile(std::fstream fs, std::size_t file_size);
+
   // Grows the underlying file to the given size.
   absl::Status GrowFileIfNeeded(std::size_t needed);
 
@@ -128,13 +148,17 @@ class FStreamFile {
 class CFile {
  public:
   // Opens the given file in read/write mode. If it does not exist, the file is
-  // created. TODO(herbertjordan): add error handling.
-  CFile(std::filesystem::path file);
+  // created.
+  static absl::StatusOr<CFile> Open(const std::filesystem::path& path);
+
+  // Assure the file is move constructable.
+  CFile(CFile&&) = default;
+
   // Flushes the content and closes the file.
   ~CFile();
 
   // Provides the current file size in bytes.
-  std::size_t GetFileSize();
+  std::size_t GetFileSize() const;
 
   // Reads a range of bytes from the file to the given span. The provided
   // position is the starting position. The number of bytes to be read is taken
@@ -153,6 +177,8 @@ class CFile {
   absl::Status Close();
 
  private:
+  CFile(std::FILE* file, std::size_t file_size);
+
   // Grows the underlying file to the given size.
   absl::Status GrowFileIfNeeded(std::size_t needed);
 
@@ -164,13 +190,17 @@ class CFile {
 class PosixFile {
  public:
   // Opens the given file in read/write mode. If it does not exist, the file is
-  // created. TODO(herbertjordan): add error handling.
-  PosixFile(std::filesystem::path file);
+  // created.
+  static absl::StatusOr<PosixFile> Open(const std::filesystem::path& path);
+
+  // Assure the file is move constructable.
+  PosixFile(PosixFile&&) = default;
+
   // Flushes the content and closes the file.
   ~PosixFile();
 
   // Provides the current file size in bytes.
-  std::size_t GetFileSize();
+  std::size_t GetFileSize() const;
 
   // Reads a range of bytes from the file to the given span. The provided
   // position is the starting position. The number of bytes to be read is taken
@@ -189,6 +219,8 @@ class PosixFile {
   absl::Status Close();
 
  private:
+  PosixFile(int fd, std::size_t file_size);
+
   // Grows the underlying file to the given size.
   absl::Status GrowFileIfNeeded(std::size_t needed);
 
@@ -205,7 +237,10 @@ class SingleFileBase {
  public:
   using page_type = Page;
 
-  SingleFileBase(std::filesystem::path file_path) : file_(file_path) {}
+  static absl::StatusOr<SingleFileBase> Open(const std::filesystem::path& path) {
+    auto file = RawFile::Open(path);
+    return SingleFileBase(std::move(*file));
+  }
 
   std::size_t GetNumPages() const { return file_.GetFileSize() / sizeof(Page); }
 
@@ -222,6 +257,8 @@ class SingleFileBase {
   absl::Status Close() { return file_.Close(); }
 
  private:
+  SingleFileBase(RawFile file) : file_(std::move(file)) {}
+
   mutable RawFile file_;
 };
 

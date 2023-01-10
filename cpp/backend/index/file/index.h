@@ -11,6 +11,7 @@
 #include "absl/hash/hash.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
@@ -59,13 +60,7 @@ class FileIndex {
   static absl::StatusOr<FileIndex> Open(Context&,
                                         const std::filesystem::path& directory);
 
-  // Creates a new, empty index backed by a default-constructed file.
-  FileIndex();
-
-  // Creates an index retaining its data in the given directory.
-  FileIndex(std::filesystem::path directory);
-
-  // File indexes are move-constructible.
+  // File indexes are move-constructable.
   FileIndex(FileIndex&&) = default;
 
   // On destruction file indexes are automatically flushed and closed.
@@ -114,7 +109,7 @@ class FileIndex {
   // Creates an index based on the given files.
   FileIndex(std::unique_ptr<File> primary_page_file,
             std::unique_ptr<File> overflow_page_file,
-            std::filesystem::path metadata_file = "");
+            std::unique_ptr<std::filesystem::path>  metadata_file);
 
   // A helper function to locate an entry in this map. Returns a tuple
   // containing the key's hash, the containing bucket, and the containing entry.
@@ -228,73 +223,75 @@ template <Trivial K, std::integral I, template <typename> class F,
 absl::StatusOr<FileIndex<K, I, F, page_size>>
 FileIndex<K, I, F, page_size>::Open(Context&,
                                     const std::filesystem::path& directory) {
-  // TODO: move directory initialization from constructor to factory and do
-  // proper error handling.
-  return FileIndex(directory);
+  ASSIGN_OR_RETURN(auto primary_page_file,
+                   F<Page>::Open(directory / "primary.dat"));
+  ASSIGN_OR_RETURN(auto overflow_page_file,
+                   F<Page>::Open(directory / "overflow.dat"));
+  auto metadata_file = directory / "metadata.dat";
+
+  auto index = FileIndex(std::move(primary_page_file),
+                         std::move(overflow_page_file), metadata_file);
+  if (!std::filesystem::exists(metadata_file)) {
+    return index;
+  }
+  // Load metadata from file.
+  std::fstream in(metadata_file, std::ios::binary | std::ios::in);
+  if (!in || !in.is_open()) {
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrCat("Failed to open metadata file: ", metadata_file.string()));
+  }
+  auto read_scalar = [&](auto& scalar) {
+    in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
+      if (!in.good()) {
+        return GetStatusWithSystemError(
+                absl::StatusCode::kInternal,
+                absl::StrCat("Failed to read metadata file: ", metadata_file.string()));
+      }
+      return absl::OkStatus();
+  };
+
+  // Start with scalars.
+  RETURN_IF_ERROR(read_scalar(index.size_));
+  RETURN_IF_ERROR(read_scalar(index.next_to_split_));
+  RETURN_IF_ERROR(read_scalar(index.low_mask_));
+  RETURN_IF_ERROR(read_scalar(index.high_mask_));
+  RETURN_IF_ERROR(read_scalar(index.num_buckets_));
+  RETURN_IF_ERROR(read_scalar(index.num_overflow_pages_));
+  RETURN_IF_ERROR(read_scalar(index.hash_));
+
+  // Read bucket tail list.
+  assert(sizeof(index.bucket_tails_.size()) == sizeof(std::size_t));
+  std::size_t size;
+  RETURN_IF_ERROR(read_scalar(size));
+  index.bucket_tails_.resize(size);
+  for (std::size_t i = 0; i < size; i++) {
+    RETURN_IF_ERROR(read_scalar(index.bucket_tails_[i]));
+  }
+
+  // Read free list.
+  assert(sizeof(index.overflow_page_free_list_.size()) == sizeof(std::size_t));
+  RETURN_IF_ERROR(read_scalar(size));
+  index.overflow_page_free_list_.resize(size);
+  for (std::size_t i = 0; i < size; i++) {
+    RETURN_IF_ERROR(read_scalar(index.overflow_page_free_list_[i]));
+  }
+
+  return index;
 }
-
-template <Trivial K, std::integral I, template <typename> class F,
-          std::size_t page_size>
-FileIndex<K, I, F, page_size>::FileIndex()
-    : FileIndex(std::make_unique<File>(), std::make_unique<File>()) {}
-
-template <Trivial K, std::integral I, template <typename> class F,
-          std::size_t page_size>
-FileIndex<K, I, F, page_size>::FileIndex(std::filesystem::path directory)
-    : FileIndex(std::make_unique<File>(directory / "primary.dat"),
-                std::make_unique<File>(directory / "overflow.dat"),
-                directory / "metadata.dat") {}
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>
 FileIndex<K, I, F, page_size>::FileIndex(
     std::unique_ptr<File> primary_page_file,
     std::unique_ptr<File> overflow_page_file,
-    std::filesystem::path metadata_file)
+    std::unique_ptr<std::filesystem::path> metadata_file)
     : primary_pool_(std::move(primary_page_file)),
       overflow_pool_(std::move(overflow_page_file)),
+      metadata_file_(std::move(metadata_file)),
       low_mask_((1 << kInitialHashLength) - 1),
       high_mask_((low_mask_ << 1) | 0x1),
-      num_buckets_(1 << kInitialHashLength) {
-  // Take ownership of the metadata file and track it through a unique ptr.
-  metadata_file_ =
-      std::make_unique<std::filesystem::path>(std::move(metadata_file));
-  if (!std::filesystem::exists(*metadata_file_)) return;
-
-  // TODO: Move from constructor to factory and do proper error handling.
-
-  // Load metadata from file.
-  std::fstream in(*metadata_file_, std::ios::binary | std::ios::in);
-  auto read_scalar = [&](auto& scalar) {
-    in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
-  };
-
-  // Start with scalars.
-  read_scalar(size_);
-  read_scalar(next_to_split_);
-  read_scalar(low_mask_);
-  read_scalar(high_mask_);
-  read_scalar(num_buckets_);
-  read_scalar(num_overflow_pages_);
-  read_scalar(hash_);
-
-  // Read bucket tail list.
-  assert(sizeof(bucket_tails_.size()) == sizeof(std::size_t));
-  std::size_t size;
-  read_scalar(size);
-  bucket_tails_.resize(size);
-  for (std::size_t i = 0; i < size; i++) {
-    read_scalar(bucket_tails_[i]);
-  }
-
-  // Read free list.
-  assert(sizeof(overflow_page_free_list_.size()) == sizeof(std::size_t));
-  read_scalar(size);
-  overflow_page_free_list_.resize(size);
-  for (std::size_t i = 0; i < size; i++) {
-    read_scalar(overflow_page_free_list_[i]);
-  }
-}
+      num_buckets_(1 << kInitialHashLength) {}
 
 template <Trivial K, std::integral I, template <typename> class F,
           std::size_t page_size>

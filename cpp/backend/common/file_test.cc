@@ -28,13 +28,13 @@ TEST(TestPageTest, IsPage) { EXPECT_TRUE(carmen::backend::Page<Page<12>>); }
 TEST(InMemoryFileTest, IsFile) { EXPECT_TRUE((File<InMemoryFile<Page<32>>>)); }
 
 TEST(InMemoryFileTest, InitialFileIsEmpty) {
-  InMemoryFile<Page<32>> file;
+  ASSERT_OK_AND_ASSIGN(auto file, InMemoryFile<Page<32>>::Open(""));
   EXPECT_EQ(0, file.GetNumPages());
 }
 
 TEST(InMemoryFileTest, PagesCanBeWrittenAndRead) {
   using Page = Page<8>;
-  InMemoryFile<Page> file;
+  ASSERT_OK_AND_ASSIGN(auto file, InMemoryFile<Page>::Open(""));
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   ASSERT_OK(file.StorePage(0, page_a));
@@ -47,7 +47,7 @@ TEST(InMemoryFileTest, PagesCanBeWrittenAndRead) {
 
 TEST(InMemoryFileTest, PagesAreDifferentiated) {
   using Page = Page<4>;
-  InMemoryFile<Page> file;
+  ASSERT_OK_AND_ASSIGN(auto file, InMemoryFile<Page>::Open(""));
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   Page page_b{std::byte{0x03}, std::byte{0x04}};
@@ -65,7 +65,7 @@ TEST(InMemoryFileTest, PagesAreDifferentiated) {
 
 TEST(InMemoryFileTest, WritingPagesCreatesImplicitEmptyPages) {
   using Page = Page<8>;
-  InMemoryFile<Page> file;
+  ASSERT_OK_AND_ASSIGN(auto file, InMemoryFile<Page>::Open(""));
 
   // Storing a page at position 2 implicitly creates pages 0 and 1.
   Page page_a{std::byte{0x01}, std::byte{0x02}};
@@ -84,7 +84,7 @@ TEST(InMemoryFileTest, WritingPagesCreatesImplicitEmptyPages) {
 
 TEST(InMemoryFileTest, LoadingUninitializedPagesLeadsToZeros) {
   using Page = Page<4>;
-  InMemoryFile<Page> file;
+  ASSERT_OK_AND_ASSIGN(auto file, InMemoryFile<Page>::Open(""));
   Page zero{};
   Page loaded;
   loaded.fill(std::byte{1});
@@ -104,26 +104,29 @@ TYPED_TEST_P(SingleFileTest, IsFile) {
 }
 
 TYPED_TEST_P(SingleFileTest, ExistingFileCanBeOpened) {
+  using File = SingleFileBase<Page<32>, TypeParam>;
   TempFile temp_file;
   ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
-  SingleFileBase<Page<32>, TypeParam> file(temp_file.GetPath());
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
   EXPECT_EQ(0, file.GetNumPages());
 }
 
 TYPED_TEST_P(SingleFileTest, NonExistingFileIsCreated) {
+  using File = SingleFileBase<Page<32>, TypeParam>;
   TempFile temp_file;
   ASSERT_TRUE(std::filesystem::exists(temp_file.GetPath()));
   std::filesystem::remove(temp_file.GetPath());
   ASSERT_FALSE(std::filesystem::exists(temp_file.GetPath()));
-  SingleFileBase<Page<32>, TypeParam> file(temp_file.GetPath());
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
   EXPECT_TRUE(std::filesystem::exists(temp_file.GetPath()));
   EXPECT_EQ(0, file.GetNumPages());
 }
 
 TYPED_TEST_P(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
+  using File = SingleFileBase<Page<32>, TypeParam>;
   TempDir temp_dir;
-  SingleFileBase<Page<32>, TypeParam> file(temp_dir.GetPath() / "some" / "dir" /
-                                           "file.dat");
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_dir.GetPath() / "some" / "dir" /
+                                             "file.dat"));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath()));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some"));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir"));
@@ -133,15 +136,17 @@ TYPED_TEST_P(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
 }
 
 TYPED_TEST_P(SingleFileTest, InitialFileIsEmpty) {
+  using File = SingleFileBase<Page<32>, TypeParam>;
   TempFile temp_file;
-  SingleFileBase<Page<32>, TypeParam> file(temp_file.GetPath());
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
   EXPECT_EQ(0, file.GetNumPages());
 }
 
 TYPED_TEST_P(SingleFileTest, PagesCanBeWrittenAndRead) {
   using Page = Page<8>;
+  using File = SingleFileBase<Page, TypeParam>;
   TempFile temp_file;
-  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   ASSERT_OK(file.StorePage(0, page_a));
@@ -153,9 +158,10 @@ TYPED_TEST_P(SingleFileTest, PagesCanBeWrittenAndRead) {
 }
 
 TYPED_TEST_P(SingleFileTest, PagesAreDifferentiated) {
-  TempFile temp_file;
   using Page = Page<4>;
-  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
+  using File = SingleFileBase<Page, TypeParam>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
 
   Page page_a{std::byte{0x01}, std::byte{0x02}};
   Page page_b{std::byte{0x03}, std::byte{0x04}};
@@ -172,9 +178,10 @@ TYPED_TEST_P(SingleFileTest, PagesAreDifferentiated) {
 }
 
 TYPED_TEST_P(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
-  TempFile temp_file;
   using Page = Page<8>;
-  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
+  using File = SingleFileBase<Page, TypeParam>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
 
   // Storing a page at position 2 implicitly creates pages 0 and 1.
   Page page_a{std::byte{0x01}, std::byte{0x02}};
@@ -192,9 +199,10 @@ TYPED_TEST_P(SingleFileTest, WritingPagesCreatesImplicitEmptyPages) {
 }
 
 TYPED_TEST_P(SingleFileTest, LoadingUninitializedPagesLeadsToZeros) {
-  TempFile temp_file;
   using Page = Page<4>;
-  SingleFileBase<Page, TypeParam> file(temp_file.GetPath());
+  using File = SingleFileBase<Page, TypeParam>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
   Page zero{};
   Page loaded;
   loaded.fill(std::byte{1});

@@ -130,6 +130,7 @@ template <carmen::backend::Page P>
 class MockFile {
  public:
   using page_type = P;
+  static absl::StatusOr<MockFile> Open(const std::filesystem::path&) {}
   MOCK_METHOD(std::size_t, GetNumPages, ());
   MOCK_METHOD(absl::Status, LoadPage, (PageId id, P& dest));
   MOCK_METHOD(absl::Status, StorePage, (PageId id, const P& src));

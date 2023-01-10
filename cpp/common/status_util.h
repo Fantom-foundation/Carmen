@@ -34,6 +34,15 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 }
 }  // namespace testing::internal
 
+// Get status based on status code. If `errno` error code is set, the error
+// message will be appended to the status message.
+inline absl::Status GetStatusWithSystemError(absl::StatusCode code, std::string_view message) {
+  if (errno == 0) {
+    return {code, message};
+  }
+  return {code, absl::StrCat(message, " Error: ", std::strerror(errno))};
+}
+
 namespace internal {
 template <typename T>
 class ReferenceWrapper : public std::reference_wrapper<T> {
