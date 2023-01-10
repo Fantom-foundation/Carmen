@@ -4,7 +4,11 @@ import os
 import xmltodict
 
 # This scripts downloads all artifacts from the build configuration in TeamCity
-# using Access Token in TOKEN env property into "data" directory.
+# into "data" directory.
+
+# This script needs enviroment property TOKEN with the TeamCity Access Token.
+# The Access Token can be generated in Teamcity in Profile - Access Tokens - Create access token.
+# Required Permission scope is "View build runtime parameters and data" for project Aida.
 
 TOKEN = os.getenv('TOKEN')
 headers = {
