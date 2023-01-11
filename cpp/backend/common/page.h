@@ -79,7 +79,7 @@ class alignas(kFileSystemPageSize) RawPage final {
   operator std::span<std::byte, page_size>() { return data_; }
 
  private:
-  std::byte data_[page_size];
+  std::array<std::byte, page_size> data_;
 };
 
 // A page containing an array of trivial values. As such, it is the in-memory,

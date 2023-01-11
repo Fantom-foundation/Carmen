@@ -67,11 +67,10 @@ class FileStoreBase {
   // The type of value stored in this store.
   using value_type = V;
 
-  // The page size in byte used by this store.
+  // The page size in byte used by this store as configured. This may be less
+  // then the actual page size, which may be larger due to alignment and padding
+  // constraints.
   constexpr static std::size_t kPageSize = page_size;
-
-  // The page type used by this store.
-  using page_type = ArrayPage<V, page_size / sizeof(V)>;
 
   // A factory function creating an instance of this store type.
   static absl::StatusOr<FileStoreBase> Open(
@@ -120,25 +119,28 @@ class FileStoreBase {
   using Page = ArrayPage<V, page_size / sizeof(V)>;
   using PagePool = PagePool<F<sizeof(Page)>>;
 
+  // The actual size of a page, which may be larger than the specified page size
+  // due to padding.
+  constexpr static std::size_t kFilePageSize = sizeof(Page);
+
   // A listener to pool activities to react to loaded and evicted pages and
   // perform necessary hashing steps.
-  class PoolListener : public PagePoolListener<sizeof(Page)> {
+  class PoolListener : public PagePoolListener<kFilePageSize> {
    public:
     PoolListener(HashTree& hashes) : hashes_(hashes) {}
 
-    void AfterLoad(PageId id, const RawPage<sizeof(Page)>&) override {
+    void AfterLoad(PageId id, const RawPage<kFilePageSize>&) override {
       // When a page is loaded, make sure the HashTree is aware of it.
       hashes_.RegisterPage(id);
     }
 
-    void BeforeEvict(PageId id, const RawPage<sizeof(Page)>& page,
+    void BeforeEvict(PageId id, const RawPage<kFilePageSize>& page,
                      bool is_dirty) override {
       // Before we throw away a dirty page to make space for something else we
       // update the hash to avoid having to reload it again later.
       if (eager_hashing && is_dirty) {
         hashes_.UpdateHash(
-            id,
-            std::as_bytes(std::span(page.template As<page_type>().AsArray())));
+            id, std::as_bytes(std::span(page.template As<Page>().AsArray())));
       }
     }
 
@@ -153,8 +155,7 @@ class FileStoreBase {
     PageProvider(PagePool& pool) : pool_(pool) {}
 
     std::span<const std::byte> GetPageData(PageId id) override {
-      return std::as_bytes(
-          std::span(pool_.template Get<page_type>(id).AsArray()));
+      return std::as_bytes(std::span(pool_.template Get<Page>(id).AsArray()));
     }
 
    private:
@@ -162,8 +163,7 @@ class FileStoreBase {
   };
 
   // The number of elements per page, used for page and offset computaiton.
-  constexpr static std::size_t kNumElementsPerPage =
-      page_type::kNumElementsPerPage;
+  constexpr static std::size_t kNumElementsPerPage = Page::kNumElementsPerPage;
 
   // Creates a new file store maintaining its content in the given directory and
   // using the provided branching factor for its hash computation.
@@ -183,24 +183,28 @@ class FileStoreBase {
   std::filesystem::path hash_file_;
 };
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+// Since the template parameter declaration list and concept requirements to
+// preceed the subsequent member function declarations is rather extensive, a
+// macro covering it defined to aid readability.
+#define FILE_STORE_TEMPLATE_PARAMETER                              \
+  template <typename K, Trivial V, template <std::size_t> class F, \
+            std::size_t page_size, bool eager_hashing>             \
+  requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+
+FILE_STORE_TEMPLATE_PARAMETER
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
     std::filesystem::path directory, std::size_t hash_branching_factor)
     : pool_(std::make_unique<PagePool>(
-          std::make_unique<F<sizeof(page_type)>>(directory / "data.dat"))),
+          std::make_unique<F<kFilePageSize>>(directory / "data.dat"))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
       hash_file_(directory / "hash.dat") {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
+FILE_STORE_TEMPLATE_PARAMETER absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
-  auto& trg = pool_->template Get<page_type>(
+  auto& trg = pool_->template Get<Page>(
       key / kNumElementsPerPage)[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
@@ -210,26 +214,20 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   return absl::OkStatus();
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
-    StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
-        const K& key)
-const {
-  return pool_->template Get<page_type>(
+FILE_STORE_TEMPLATE_PARAMETER
+StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
+    const K& key) const {
+  return pool_->template Get<Page>(
       key / kNumElementsPerPage)[key % kNumElementsPerPage];
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
-    absl::StatusOr<Hash>
-    FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
-const { return hashes_->GetHash(); }
+FILE_STORE_TEMPLATE_PARAMETER
+absl::StatusOr<Hash> FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
+    const {
+  return hashes_->GetHash();
+}
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
+FILE_STORE_TEMPLATE_PARAMETER absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) pool_->Flush();
   if (hashes_) {
@@ -238,25 +236,22 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   return absl::OkStatus();
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
+FILE_STORE_TEMPLATE_PARAMETER absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   RETURN_IF_ERROR(Flush());
   if (pool_) pool_->Close();
   return absl::OkStatus();
 }
 
-template <typename K, Trivial V, template <std::size_t> class F,
-          std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> MemoryFootprint
-FileStoreBase<K, V, F, page_size, eager_hashing>::GetMemoryFootprint()
-const {
+FILE_STORE_TEMPLATE_PARAMETER MemoryFootprint
+FileStoreBase<K, V, F, page_size, eager_hashing>::GetMemoryFootprint() const {
   MemoryFootprint res(*this);
   res.Add("pool", pool_->GetMemoryFootprint());
   res.Add("hashes", hashes_->GetMemoryFootprint());
   return res;
 }
+
+#undef FILE_STORE_TEMPLATE_PARAMETER
 
 }  // namespace internal
 }  // namespace carmen::backend::store

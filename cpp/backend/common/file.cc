@@ -20,6 +20,13 @@ bool CreateDirectory(std::filesystem::path dir) {
 
 namespace internal {
 
+namespace {
+
+// Retain a 256 KiB aligned buffer of zeros for initializing disk space.
+alignas(kFileSystemPageSize) static const std::array<char, 1 << 18> kZeros{};
+
+}  // namespace
+
 FStreamFile::FStreamFile(std::filesystem::path file) {
   // Create the parent directory.
   CreateDirectory(file.parent_path());
@@ -62,16 +69,13 @@ void FStreamFile::Close() {
 }
 
 void FStreamFile::GrowFileIfNeeded(std::size_t needed) {
-  // Retain a 256 KiB buffer of zeros for initializing disk space.
-  constexpr static std::size_t kStepSize = 1 << 18;
-  static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
     return;
   }
   data_.seekp(0, std::ios::end);
   while (file_size_ < needed) {
-    auto step = std::min(kStepSize, needed - file_size_);
-    data_.write(kZeros->data(), step);
+    auto step = std::min(kZeros.size(), needed - file_size_);
+    data_.write(kZeros.data(), step);
     file_size_ += step;
   }
 }
@@ -132,17 +136,14 @@ void CFile::Close() {
 }
 
 void CFile::GrowFileIfNeeded(std::size_t needed) {
-  // Retain a 256 KiB buffer of zeros for initializing disk space.
-  constexpr static std::size_t kStepSize = 1 << 18;
-  static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
     return;
   }
   std::fseek(file_, 0, SEEK_END);
   while (file_size_ < needed) {
-    auto step = std::min(kStepSize, needed - file_size_);
+    auto step = std::min(kZeros.size(), needed - file_size_);
     [[maybe_unused]] auto len =
-        fwrite(kZeros->data(), sizeof(std::byte), step, file_);
+        fwrite(kZeros.data(), sizeof(std::byte), step, file_);
     assert(len == step);
     file_size_ += step;
   }
@@ -203,22 +204,15 @@ void PosixFile::Close() {
   fd_ = -1;
 }
 
-// Retain a 256 KiB buffer of zeros for initializing disk space.
-constexpr static std::size_t kStepSize = 1 << 18;
-
-class alignas(kFileSystemPageSize) ZeroBuffer
-    : public std::array<std::byte, kStepSize> {};
-
 void PosixFile::GrowFileIfNeeded(std::size_t needed) {
-  static auto kZeros = std::make_unique<ZeroBuffer>();
   if (file_size_ >= needed) {
     return;
   }
   [[maybe_unused]] auto offset = lseek(fd_, 0, SEEK_END);
   assert(offset == static_cast<off_t>(file_size_));
   while (file_size_ < needed) {
-    auto step = std::min(kStepSize, needed - file_size_);
-    auto len = write(fd_, kZeros->data(), step);
+    auto step = std::min(kZeros.size(), needed - file_size_);
+    auto len = write(fd_, kZeros.data(), step);
     if (len < 0) {
       perror("Error growing file");
     }
