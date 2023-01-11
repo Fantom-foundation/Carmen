@@ -183,15 +183,9 @@ class FileStoreBase {
   std::filesystem::path hash_file_;
 };
 
-// Since the template parameter declaration list and concept requirements to
-// preceed the subsequent member function declarations is rather extensive, a
-// macro covering it defined to aid readability.
-#define FILE_STORE_TEMPLATE_PARAMETER                              \
-  template <typename K, Trivial V, template <std::size_t> class F, \
-            std::size_t page_size, bool eager_hashing>             \
-  requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
-
-FILE_STORE_TEMPLATE_PARAMETER
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
     std::filesystem::path directory, std::size_t hash_branching_factor)
     : pool_(std::make_unique<PagePool>(
@@ -202,7 +196,9 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 
-FILE_STORE_TEMPLATE_PARAMETER absl::Status
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   auto& trg = pool_->template Get<Page>(
       key / kNumElementsPerPage)[key % kNumElementsPerPage];
@@ -214,20 +210,26 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   return absl::OkStatus();
 }
 
-FILE_STORE_TEMPLATE_PARAMETER
-StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
-    const K& key) const {
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+    StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
+        const K& key)
+const {
   return pool_->template Get<Page>(
       key / kNumElementsPerPage)[key % kNumElementsPerPage];
 }
 
-FILE_STORE_TEMPLATE_PARAMETER
-absl::StatusOr<Hash> FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
-    const {
-  return hashes_->GetHash();
-}
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+    absl::StatusOr<Hash>
+    FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
+const { return hashes_->GetHash(); }
 
-FILE_STORE_TEMPLATE_PARAMETER absl::Status
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) pool_->Flush();
   if (hashes_) {
@@ -236,22 +238,25 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   return absl::OkStatus();
 }
 
-FILE_STORE_TEMPLATE_PARAMETER absl::Status
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   RETURN_IF_ERROR(Flush());
   if (pool_) pool_->Close();
   return absl::OkStatus();
 }
 
-FILE_STORE_TEMPLATE_PARAMETER MemoryFootprint
-FileStoreBase<K, V, F, page_size, eager_hashing>::GetMemoryFootprint() const {
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> MemoryFootprint
+FileStoreBase<K, V, F, page_size, eager_hashing>::GetMemoryFootprint()
+const {
   MemoryFootprint res(*this);
   res.Add("pool", pool_->GetMemoryFootprint());
   res.Add("hashes", hashes_->GetMemoryFootprint());
   return res;
 }
-
-#undef FILE_STORE_TEMPLATE_PARAMETER
 
 }  // namespace internal
 }  // namespace carmen::backend::store
