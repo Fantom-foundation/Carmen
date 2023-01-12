@@ -10,6 +10,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/base:core_headers",
     ],
     visibility = ["//visibility:public"],
 )
@@ -21,6 +22,7 @@ cc_test(
         ":depot",
         "//backend/depot",
         "//common:status_test_util",
+        "//backend/depot/memory:depot",
         "//common:file_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",

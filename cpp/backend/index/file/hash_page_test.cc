@@ -25,18 +25,21 @@ TEST(HashPageTest, SizeOfFitsPageConstraints) {
 
 using TestPage = HashPage<std::size_t, int, int, 64>;
 
-TEST(HashPageTest, NewPageIsEmpty) {
+TEST(HashPageTest, ClearedPageIsEmpty) {
   TestPage page;
+  page.Clear();
   EXPECT_EQ(0, page.Size());
 }
 
-TEST(HashPageTest, NewPageHasNoSuccessor) {
+TEST(HashPageTest, ClearedPageHasNoSuccessor) {
   TestPage page;
+  page.Clear();
   EXPECT_EQ(0, page.GetNext());
 }
 
 TEST(HashPageTest, InsertedElementsCanBeFound) {
   TestPage page;
+  page.Clear();
   EXPECT_THAT(page.Find(0, 1), IsNull());
   EXPECT_THAT(page.Find(2, 3), IsNull());
   EXPECT_THAT(page.Find(4, 5), IsNull());
@@ -59,6 +62,7 @@ TEST(HashPageTest, InsertedElementsCanBeFound) {
 
 TEST(HashPageTest, InsertFailsIfSizeLimitIsReached) {
   TestPage page;
+  page.Clear();
   const auto limit = TestPage::kNumEntries;
   for (std::size_t i = 0; i < limit; i++) {
     EXPECT_THAT(page.Insert(i, i, i), Pointee(FieldsAre(i, i, i)));

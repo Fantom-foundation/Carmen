@@ -8,7 +8,6 @@
 #include "backend/common/page_id.h"
 #include "backend/structure.h"
 #include "common/status_util.h"
-#include "common/type.h"
 
 namespace carmen::backend::store {
 
@@ -56,6 +55,6 @@ concept Store = requires(S a, const S b) {
     } -> std::same_as<StatusOrRef<const typename S::value_type>>;
 }
 // Stores must satisfy the requirements for backend data structures.
-&&Structure<S>;
+&&HashableStructure<S>;
 
 }  // namespace carmen::backend::store

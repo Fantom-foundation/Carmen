@@ -15,18 +15,15 @@ cc_test(
     srcs = ["state_test.cc"],
     deps = [
         ":state",
-        "//backend/index/memory:index",
-        "//backend/store/memory:store",
-        "//backend/depot/memory:depot",
+        ":configurations",
         "//common:status_test_util",
+        "//common:file_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
 
 cc_library(
-    name = "c_state",
-    hdrs = ["c_state.h"],
-    srcs = ["c_state.cc"],
+    name = "configurations",
     deps = [
         ":state",
         "//backend/index/cache",
@@ -39,6 +36,18 @@ cc_library(
         "//backend/depot/memory:depot",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
+        "//backend/multimap/memory:multimap",
+    ],
+    hdrs = ["configurations.h"],
+)
+
+cc_library(
+    name = "c_state",
+    hdrs = ["c_state.h"],
+    srcs = ["c_state.cc"],
+    deps = [
+        ":state",
+        ":configurations",
         "@com_google_absl//absl/status:status",
     ],
     alwayslink = True,
@@ -54,6 +63,20 @@ cc_test(
         "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
+)
+
+cc_binary(
+    name = "state_benchmark",
+    srcs = ["state_benchmark.cc"],
+    deps = [
+        ":configurations",
+        "//common:benchmark",
+        "//common:file_util",
+        "//common:status_test_util",
+        "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+    testonly = True,
 )
 
 cc_binary(

@@ -1,4 +1,5 @@
 #include <random>
+#include <span>
 
 #include "absl/status/status.h"
 #include "backend/common/access_pattern.h"
@@ -18,21 +19,22 @@ constexpr long kMinPoolSize = 4;
 constexpr long kMaxPoolSize = 1 << 20;  // = 4 GiB page pool with 4 KiB pages
 constexpr long kFileSize = 1 << 30;     // = 4 TiB file size with 4 KiB pages
 
-template <typename Page>
+using Page = ArrayPage<int>;
+
 class DummyFile {
  public:
-  using page_type = Page;
+  constexpr static const std::size_t kPageSize = sizeof(Page);
 
   std::size_t GetNumPages() { return kFileSize; }
 
-  absl::Status LoadPage(PageId, Page&) { return absl::OkStatus(); }
-  absl::Status StorePage(PageId, const Page&) { return absl::OkStatus(); }
+  absl::Status LoadPage(PageId, std::span<std::byte, kPageSize>) { return absl::OkStatus(); }
+  absl::Status StorePage(PageId, std::span<const std::byte, kPageSize>) { return absl::OkStatus(); }
   absl::Status Flush() { return absl::OkStatus(); }
   absl::Status Close() { return absl::OkStatus(); }
 };
 
 template <EvictionPolicy Policy>
-using TestPool = PagePool<ArrayPage<int>, DummyFile, Policy>;
+using TestPool = PagePool<DummyFile, Policy>;
 
 // Evaluates the performance of reading pages from page pools.
 // pools of different sizes.
@@ -43,12 +45,12 @@ void BM_ReadTest(benchmark::State& state) {
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
-    ASSERT_OK(pool.Get(i));
+    ASSERT_OK(pool.template Get<Page>(i));
   }
 
   AccessOrder order(kFileSize);
   for (auto _ : state) {
-    ASSERT_OK(pool.Get(order.Next()));
+    ASSERT_OK(pool.template Get<Page>(order.Next()));
   }
 }
 
@@ -75,14 +77,14 @@ void BM_WriteTest(benchmark::State& state) {
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
-    ASSERT_OK(pool.Get(i));
+    ASSERT_OK(pool.template Get<Page>(i));
     pool.MarkAsDirty(i);
   }
 
   AccessOrder order(kFileSize);
   for (auto _ : state) {
     auto pos = order.Next();
-    ASSERT_OK(pool.Get(pos));
+    ASSERT_OK(pool.template Get<Page>(pos));
     pool.MarkAsDirty(pos);
   }
 }

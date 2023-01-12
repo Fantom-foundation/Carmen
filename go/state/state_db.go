@@ -16,7 +16,7 @@ type StateDB interface {
 	Exist(common.Address) bool
 	Empty(common.Address) bool
 
-	Suicide(common.Address)
+	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
 
 	// Balance
@@ -111,6 +111,12 @@ type stateDB struct {
 	// A transaction local cache of contract codes and their properties.
 	codes map[common.Address]*codeValue
 
+	// A list of accounts to be deleted at the end of the transaction.
+	accountsToDelete []common.Address
+
+	// Tracks the clearing state of individual accounts.
+	clearedAccounts map[common.Address]accountClearingState
+
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
 
@@ -127,7 +133,11 @@ type stateDB struct {
 	writtenSlots map[*slotValue]bool
 
 	// A non-transactional local cache of stored storage values.
-	storedDataCache *common.Cache[slotId, common.Value]
+	storedDataCache *common.Cache[slotId, storedDataCacheValue]
+
+	// A non-transactional reincarnation counter for accounts. This is used to efficiently invalidate data in
+	// the storedDataCache upon account deletion. The maintained values are internal information only.
+	reincarnation map[common.Address]uint64
 }
 
 // accountState maintains the state of an account during a transaction.
@@ -137,6 +147,17 @@ type accountState struct {
 	// The current account state visible to the state DB users.
 	current common.AccountState
 }
+
+type accountClearingState int
+
+const (
+	// noClearing is the state of an account not be to cleared (make sure this has the default value 0)
+	noClearing accountClearingState = 0
+	// pendingClearing is the state of an account that is scheduled for clearing at the end of the current transaction but should still appear like it exists.
+	pendingClearing accountClearingState = 1
+	// cleared is the state of an account that should appear as it has been cleared.
+	cleared accountClearingState = 2
+)
 
 // balanceVale maintains a balance during a transaction.
 type balanceValue struct {
@@ -201,15 +222,15 @@ type codeValue struct {
 	sizeValid bool // < set if size is loaded from the state (or written as dirty)
 }
 
-func CreateStateDB(directory string) (StateDB, error) {
-	state, err := NewCppFileBasedState(directory)
-	if err != nil {
-		return nil, err
-	}
-	return CreateStateDBUsing(state), nil
-}
-
 const StoredDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
+
+// storedDataCacheValue maintains the cached version of a value in the store. To
+// support the efficient clearing of values cached for accounts being deleted, an
+// additional account reincarnation counter is added.
+type storedDataCacheValue struct {
+	value         common.Value // < the cached version of the value in the store
+	reincarnation uint64       // < the reincarnation the cached value blongs to
+}
 
 func CreateStateDBUsing(state State) *stateDB {
 	return &stateDB{
@@ -218,17 +239,20 @@ func CreateStateDBUsing(state State) *stateDB {
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
-		storedDataCache:   common.NewCache[slotId, common.Value](StoredDataCacheSize),
+		storedDataCache:   common.NewCache[slotId, storedDataCacheValue](StoredDataCacheSize),
+		reincarnation:     map[common.Address]uint64{},
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
 		accessedAddresses: map[common.Address]bool{},
 		accessedSlots:     map[slotId]bool{},
 		writtenSlots:      map[*slotValue]bool{},
+		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
+		clearedAccounts:   make(map[common.Address]accountClearingState),
 	}
 }
 
-func (s *stateDB) SetAccountState(addr common.Address, state common.AccountState) {
+func (s *stateDB) setAccountState(addr common.Address, state common.AccountState) {
 	if val, exists := s.accounts[addr]; exists {
 		if val.current == state {
 			return
@@ -254,7 +278,7 @@ func (s *stateDB) SetAccountState(addr common.Address, state common.AccountState
 	}
 }
 
-func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
+func (s *stateDB) getAccountState(addr common.Address) common.AccountState {
 	if val, exists := s.accounts[addr]; exists {
 		return val.current
 	}
@@ -270,19 +294,103 @@ func (s *stateDB) GetAccountState(addr common.Address) common.AccountState {
 }
 
 func (s *stateDB) CreateAccount(addr common.Address) {
-	s.SetAccountState(addr, common.Exists)
+	s.setNonceInternal(addr, 0)
+	s.setCodeInternal(addr, []byte{})
+
+	exists := s.getAccountState(addr) == common.Exists
+	suicided := s.HasSuicided(addr)
+	if exists && !suicided {
+		return
+	}
+	s.setAccountState(addr, common.Exists)
+
+	// Initialize the balance with 0, unless the account existed before.
+	// Thus, accounts previously marked as unknown (default) or deleted
+	// will get their balance reset. In particular, deleted accounts that
+	// are restored will have an empty balance. However, for accounts that
+	// already existed before this create call the balance is preserved.
+	if !exists {
+		s.resetBalance(addr)
+	}
+
+	// Reset storage in case this account was destroyed in this transaction.
+	if suicided {
+		// TODO: this full-map iteration may be slow; if so, some index may be required.
+		s.data.ForEach(func(slot slotId, value *slotValue) {
+			if slot.addr == addr {
+				// Support rollback of account creation.
+				backup := slotValue(*value)
+				s.undo = append(s.undo, func() {
+					*value = backup
+				})
+
+				// Clear cached values.
+				value.stored = common.Value{}
+				value.storedKnown = true
+				value.committed = common.Value{}
+				value.committedKnown = true
+				value.current = common.Value{}
+			}
+		})
+
+		// Mark account to be treated like if was already committed.
+		oldState := s.clearedAccounts[addr]
+		s.clearedAccounts[addr] = cleared
+		s.undo = append(s.undo, func() {
+			s.clearedAccounts[addr] = oldState
+		})
+	}
+}
+
+func (s *stateDB) createAccountIfNotExists(addr common.Address) {
+	if s.getAccountState(addr) == common.Exists {
+		return
+	}
+	s.setAccountState(addr, common.Exists)
+
+	// Initialize the balance with 0, unless the account existed before.
+	// Thus, accounts previously marked as unknown (default) or deleted
+	// will get their balance reset. In particular, deleted accounts that
+	// are restored will have an empty balance. However, for accounts that
+	// already existed before this create call the balance is preserved.
+	s.resetBalance(addr)
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
-	return s.GetAccountState(addr) == common.Exists
+	return s.getAccountState(addr) == common.Exists
 }
 
-func (s *stateDB) Suicide(addr common.Address) {
-	s.SetAccountState(addr, common.Deleted)
+// Suicide marks the given account as suicided.
+// This clears the account balance.
+// The account still exist until the state is committed.
+func (s *stateDB) Suicide(addr common.Address) bool {
+	if !s.Exist(addr) {
+		return false
+	}
+	s.resetBalance(addr)
+	deleteListLength := len(s.accountsToDelete)
+	s.accountsToDelete = append(s.accountsToDelete, addr)
+	s.undo = append(s.undo, func() {
+		s.accountsToDelete = s.accountsToDelete[0:deleteListLength]
+	})
+
+	// Mark account for clearing to plan its removing on commit and
+	// to avoid fetching new data into the cache during the ongoing block.
+	oldState := s.clearedAccounts[addr]
+	s.clearedAccounts[addr] = pendingClearing
+	s.undo = append(s.undo, func() {
+		s.clearedAccounts[addr] = oldState
+	})
+
+	return true
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
-	return s.GetAccountState(addr) == common.Deleted
+	// An account has suicided within the current transaction if its clearing state is
+	// set to 'pending'. If it is 'cleared', it was either in a previous transaction of
+	// the current block or the account has already been re-created within the current
+	// transaction since it was deleted.
+	return s.clearedAccounts[addr] == pendingClearing
 }
 
 func (s *stateDB) Empty(addr common.Address) bool {
@@ -323,6 +431,8 @@ func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
 		return
 	}
 
+	s.createAccountIfNotExists(addr)
+
 	oldValue := s.GetBalance(addr)
 	newValue := new(big.Int).Add(oldValue, diff)
 
@@ -350,11 +460,27 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	})
 }
 
-func (s *stateDB) GetNonce(addr common.Address) uint64 {
-	// The Nonce of a non-existing (or deleted) account is 0.
-	if !s.Exist(addr) {
-		return 0
+func (s *stateDB) resetBalance(addr common.Address) {
+	if val, exists := s.balances[addr]; exists {
+		if val.current.Sign() != 0 {
+			oldValue := val.current
+			val.current = *big.NewInt(0)
+			s.undo = append(s.undo, func() {
+				val.current = oldValue
+			})
+		}
+	} else {
+		s.balances[addr] = &balanceValue{
+			original: nil,
+			current:  *big.NewInt(0),
+		}
+		s.undo = append(s.undo, func() {
+			delete(s.balances, addr)
+		})
 	}
+}
+
+func (s *stateDB) GetNonce(addr common.Address) uint64 {
 	// Check cache first.
 	if val, exists := s.nonces[addr]; exists {
 		return val.current
@@ -374,6 +500,11 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 }
 
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
+	s.createAccountIfNotExists(addr)
+	s.setNonceInternal(addr, nonce)
+}
+
+func (s *stateDB) setNonceInternal(addr common.Address, nonce uint64) {
 	if val, exists := s.nonces[addr]; exists {
 		if val.current != nonce {
 			oldValue := val.current
@@ -405,29 +536,42 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 }
 
 func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
+	if clearingState, found := s.clearedAccounts[sid.addr]; found && clearingState == cleared {
+		// If the account has been cleared in a committed transaction within the current block,
+		// the effects are not yet updated in the data base. So it must not be read from the DB
+		// before the next block.
+		return common.Value{}
+	}
+	reincarnation := s.reincarnation[sid.addr]
 	stored, found := s.storedDataCache.Get(sid)
 	if !found {
 		var err error
-		stored, err = s.state.GetStorage(sid.addr, sid.key)
+		stored.value, err = s.state.GetStorage(sid.addr, sid.key)
 		if err != nil {
 			panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
 		}
+		stored.reincarnation = reincarnation
 		s.storedDataCache.Set(sid, stored)
+	}
+	// If the cached value is out-dated, the current value is zero. If the same slot would
+	// have been updated since the clearing, it would have also been updated in the cache.
+	if stored.reincarnation < reincarnation {
+		stored.value = common.Value{}
 	}
 
 	// Remember the stored value for future accesses.
 	if val != nil {
-		val.stored, val.storedKnown = stored, true
+		val.stored, val.storedKnown = stored.value, true
 	} else {
-		s.data.Set(sid, &slotValue{
-			stored:         stored,
-			committed:      stored,
-			current:        stored,
+		s.data.Put(sid, &slotValue{
+			stored:         stored.value,
+			committed:      stored.value,
+			current:        stored.value,
 			storedKnown:    true,
 			committedKnown: true,
 		})
 	}
-	return stored
+	return stored.value
 }
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
@@ -453,14 +597,14 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		}
 	} else {
 		entry = &slotValue{current: value}
-		s.data.Set(sid, entry)
+		s.data.Put(sid, entry)
 		s.writtenSlots[entry] = true
 		s.undo = append(s.undo, func() {
 			entry, _ := s.data.Get(sid)
 			if entry.committedKnown {
 				entry.current = entry.committed
 			} else {
-				s.data.Delete(sid)
+				s.data.Remove(sid)
 			}
 			delete(s.writtenSlots, entry)
 		})
@@ -485,6 +629,11 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 }
 
 func (s *stateDB) SetCode(addr common.Address, code []byte) {
+	s.createAccountIfNotExists(addr)
+	s.setCodeInternal(addr, code)
+}
+
+func (s *stateDB) setCodeInternal(addr common.Address, code []byte) {
 	val, exists := s.codes[addr]
 	if !exists {
 		val = &codeValue{dirty: true}
@@ -644,6 +793,42 @@ func (s *stateDB) EndTransaction() {
 	for value := range s.writtenSlots {
 		value.committed, value.committedKnown = value.current, true
 	}
+
+	// Delete accounts scheduled for deletion.
+	if len(s.accountsToDelete) > 0 {
+		for _, addr := range s.accountsToDelete {
+			// If the account was already cleared because it was recreated, we skip this part.
+			if state, found := s.clearedAccounts[addr]; found && state == cleared {
+				continue
+			}
+			// Note: balance was already set to zero during suicide call.
+			// Note: storage state is handled through the clearedAccount map
+			// the clearing of the data and storedDataCache at various phases
+			// of the block processing.
+			s.setAccountState(addr, common.Deleted)
+			s.setNonceInternal(addr, 0)
+			s.setCodeInternal(addr, []byte{})
+
+			// Clear cached value states for the targeted account.
+			// TODO: this full-map iteration may be slow; if so, some index may be required.
+			s.data.ForEach(func(slot slotId, value *slotValue) {
+				if slot.addr == addr {
+					// Clear cached values.
+					value.stored = common.Value{}
+					value.storedKnown = true
+					value.committed = common.Value{}
+					value.committedKnown = true
+					value.current = common.Value{}
+				}
+			})
+
+			// Signal to future fetches in this block that this account should be considered cleared.
+			s.clearedAccounts[addr] = cleared
+		}
+
+		s.accountsToDelete = s.accountsToDelete[0:0]
+	}
+
 	s.writtenSlots = map[*slotValue]bool{}
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
@@ -665,6 +850,29 @@ func (s *stateDB) EndBlock() {
 	// order and are deliberately randomized. Thus, updates need to be ordered before being written
 	// to the underlying state.
 
+	// Clear all accounts that have been deleted at some point during this block.
+	// This will cause all storage slots of that accounts to be reset before new
+	// values may be written in the subsequent updates.
+	deletedAccountState := common.Deleted
+	clearedAccounts := map[common.Address]bool{}
+	for addr, clearingState := range s.clearedAccounts {
+		if clearingState == cleared {
+			// We can delete accounts in an arbitrary order since deleting does not
+			// introduce new values in the address -> addr_id map.
+			if err := s.state.DeleteAccount(addr); err != nil {
+				panic(fmt.Sprintf("failed to delete account: %v", err))
+			}
+			clearedAccounts[addr] = true
+			s.accounts[addr].original = &deletedAccountState
+		}
+	}
+
+	// Increment the reincarnation counter of cleared addresses to invalidate cached entries in
+	// the stored data cache.
+	for addr := range clearedAccounts {
+		s.reincarnation[addr] = s.reincarnation[addr] + 1
+	}
+
 	// Update account stats in deterministic order in state DB
 	addresses := make([]common.Address, 0, max(max(len(s.accounts), len(s.balances)), len(s.nonces)))
 	sortAddresses := func() {
@@ -675,12 +883,7 @@ func (s *stateDB) EndBlock() {
 			if value.current == common.Exists {
 				addresses = append(addresses, addr)
 			} else if value.current == common.Deleted {
-				// We can delete accounts in an arbitrary order since deleting does not
-				// introduce new values in the address -> addr_id map.
-				err := s.state.DeleteAccount(addr)
-				if err != nil {
-					panic(fmt.Sprintf("Failed to delete account: %v", err))
-				}
+				// Delete was already conducted above.
 			} else {
 				panic(fmt.Sprintf("Unknown account state: %v", value.current))
 			}
@@ -729,7 +932,7 @@ func (s *stateDB) EndBlock() {
 	}
 
 	// Update storage values in state DB
-	slots := make([]slotId, 0, s.data.Length())
+	slots := make([]slotId, 0, s.data.Size())
 	s.data.ForEach(func(slot slotId, value *slotValue) {
 		if !value.storedKnown || value.stored != value.current {
 			slots = append(slots, slot)
@@ -742,7 +945,8 @@ func (s *stateDB) EndBlock() {
 		if err != nil {
 			panic(fmt.Sprintf("Failed to set storage: %v", err))
 		}
-		s.storedDataCache.Set(slot, value.current)
+
+		s.storedDataCache.Set(slot, storedDataCacheValue{value.current, s.reincarnation[slot.addr]})
 	}
 
 	// Update modified codes.
@@ -809,7 +1013,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("accounts", common.NewMemoryFootprint(uintptr(len(s.accounts))*(addressSize+unsafe.Sizeof(accountState{})+unsafe.Sizeof(common.AccountState(0)))))
 	mf.AddChild("balances", common.NewMemoryFootprint(uintptr(len(s.balances))*(addressSize+unsafe.Sizeof(balanceValue{}))))
 	mf.AddChild("nonces", common.NewMemoryFootprint(uintptr(len(s.nonces))*(addressSize+unsafe.Sizeof(nonceValue{})+8)))
-	mf.AddChild("slots", common.NewMemoryFootprint(uintptr(s.data.Length())*(slotIdSize+unsafe.Sizeof(slotValue{}))))
+	mf.AddChild("slots", common.NewMemoryFootprint(uintptr(s.data.Size())*(slotIdSize+unsafe.Sizeof(slotValue{}))))
 
 	var sum uintptr = 0
 	for _, value := range s.codes {
@@ -827,6 +1031,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+boolSize)))
 	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(boolSize+unsafe.Sizeof(&slotValue{}))))
 	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
+	mf.AddChild("reincarnation", common.NewMemoryFootprint(uintptr(len(s.reincarnation))*(addressSize+unsafe.Sizeof(uint64(0)))))
 
 	return mf
 }
@@ -842,6 +1047,7 @@ func (s *stateDB) reset() {
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
 	s.data.Clear()
+	s.clearedAccounts = make(map[common.Address]accountClearingState)
 	s.codes = make(map[common.Address]*codeValue)
 	s.resetTransactionContext()
 }

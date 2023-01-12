@@ -23,6 +23,14 @@ type Serializer[T any] interface {
 	Size() int // size in bytes when serialized
 }
 
+// PageSize of 4kB I/O efficient
+const PageSize = 1 << 12
+
+// Comparator is an interface for comparing two items
+type Comparator[T any] interface {
+	Compare(a, b *T) int
+}
+
 type HashProvider interface {
 	GetStateHash() (Hash, error)
 }
@@ -88,6 +96,59 @@ func (a *Address) Compare(b *Address) int {
 
 func (a *Key) Compare(b *Key) int {
 	return bytes.Compare(a[:], b[:])
+}
+
+// Compare slots first by the address and then by the key if the addresses are the same.
+// It returns zero when both addresses and keys are the same
+// otherwise it returns a negative number when A is lower than B
+// or a positive number when A is higher than B.
+func (a *SlotIdx[I]) Compare(b *SlotIdx[I]) int {
+	if a.AddressIdx > b.AddressIdx {
+		return 1
+	}
+	if a.AddressIdx < b.AddressIdx {
+		return -1
+	}
+
+	if a.KeyIdx > b.KeyIdx {
+		return 1
+	}
+	if a.KeyIdx < b.KeyIdx {
+		return -1
+	}
+
+	return 0
+}
+
+type AddressComparator struct{}
+
+func (c AddressComparator) Compare(a, b *Address) int {
+	return a.Compare(b)
+}
+
+type KeyComparator struct{}
+
+func (c KeyComparator) Compare(a, b *Key) int {
+	return a.Compare(b)
+}
+
+type Identifier32Comparator struct{}
+
+func (c Identifier32Comparator) Compare(a, b *SlotIdx[uint32]) int {
+	return a.Compare(b)
+}
+
+type Uint32Comparator struct{}
+
+func (c Uint32Comparator) Compare(a, b *uint32) int {
+	if *a > *b {
+		return 1
+	}
+	if *a < *b {
+		return -1
+	}
+
+	return 0
 }
 
 var (
@@ -157,4 +218,108 @@ func GetHash(h hash.Hash, data []byte) (res Hash) {
 	h.Write(data)
 	copy(res[:], h.Sum(nil)[:])
 	return
+}
+
+const prime = 31
+
+type AddressHasher struct{}
+
+// Hash implements non-cryptographical hash to be used in maps
+func (s AddressHasher) Hash(data *Address) uint64 {
+	// enumerate all indexes for the best performance, even a for-loop adds 25% overhead
+	h := uint64(17)
+	h = h*prime + uint64(data[0])
+	h = h*prime + uint64(data[1])
+	h = h*prime + uint64(data[2])
+	h = h*prime + uint64(data[3])
+	h = h*prime + uint64(data[4])
+	h = h*prime + uint64(data[5])
+	h = h*prime + uint64(data[6])
+	h = h*prime + uint64(data[7])
+	h = h*prime + uint64(data[8])
+	h = h*prime + uint64(data[9])
+	h = h*prime + uint64(data[10])
+	h = h*prime + uint64(data[11])
+	h = h*prime + uint64(data[12])
+	h = h*prime + uint64(data[13])
+	h = h*prime + uint64(data[14])
+	h = h*prime + uint64(data[15])
+	h = h*prime + uint64(data[16])
+	h = h*prime + uint64(data[17])
+	h = h*prime + uint64(data[18])
+	h = h*prime + uint64(data[19])
+
+	return h
+}
+
+type KeyHasher struct{}
+
+// Hash implements non-cryptographical hash to be used in maps
+func (s KeyHasher) Hash(data *Key) uint64 {
+	// enumerate all indexes for the best performance, even a for-loop adds 25% overhead
+	h := uint64(17)
+	h = h*prime + uint64(data[0])
+	h = h*prime + uint64(data[1])
+	h = h*prime + uint64(data[2])
+	h = h*prime + uint64(data[3])
+	h = h*prime + uint64(data[4])
+	h = h*prime + uint64(data[5])
+	h = h*prime + uint64(data[6])
+	h = h*prime + uint64(data[7])
+	h = h*prime + uint64(data[8])
+	h = h*prime + uint64(data[9])
+	h = h*prime + uint64(data[10])
+	h = h*prime + uint64(data[11])
+	h = h*prime + uint64(data[12])
+	h = h*prime + uint64(data[13])
+	h = h*prime + uint64(data[14])
+	h = h*prime + uint64(data[15])
+	h = h*prime + uint64(data[16])
+	h = h*prime + uint64(data[17])
+	h = h*prime + uint64(data[18])
+	h = h*prime + uint64(data[19])
+	h = h*prime + uint64(data[20])
+	h = h*prime + uint64(data[21])
+	h = h*prime + uint64(data[22])
+	h = h*prime + uint64(data[23])
+	h = h*prime + uint64(data[24])
+	h = h*prime + uint64(data[25])
+	h = h*prime + uint64(data[26])
+	h = h*prime + uint64(data[27])
+	h = h*prime + uint64(data[28])
+	h = h*prime + uint64(data[29])
+	h = h*prime + uint64(data[30])
+	h = h*prime + uint64(data[31])
+
+	return h
+}
+
+type SlotIdxHasher struct{}
+
+func (s SlotIdxHasher) Hash(a *SlotIdx[uint32]) uint64 {
+	var h uint64 = 17
+	var prime uint64 = 31
+
+	h = h*prime + uint64(a.AddressIdx)
+	h = h*prime + uint64(a.KeyIdx)
+
+	return h
+}
+
+type UInt32Hasher struct{}
+
+func (s UInt32Hasher) Hash(a *uint32) uint64 {
+	return uint64(*a)
+}
+
+func (h Hash) ToBytes() []byte {
+	return h[:]
+}
+
+func (a Address) String() string {
+	return fmt.Sprintf("%x", a[:])
+}
+
+func (a Key) String() string {
+	return fmt.Sprintf("%x", a[:])
 }

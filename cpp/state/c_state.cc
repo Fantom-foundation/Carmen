@@ -7,55 +7,14 @@
 #include <sstream>
 #include <string_view>
 
-#include "backend/depot/file/depot.h"
-#include "backend/depot/leveldb/depot.h"
-#include "backend/depot/memory/depot.h"
-#include "backend/index/cache/cache.h"
-#include "backend/index/file/index.h"
-#include "backend/index/leveldb/multi_db/index.h"
-#include "backend/index/memory/index.h"
-#include "backend/store/file/store.h"
-#include "backend/store/leveldb/store.h"
-#include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
+#include "state/configurations.h"
 #include "state/state.h"
 
 namespace carmen {
 namespace {
-
-constexpr const std::size_t kPageSize = 1 << 12;  // 4 KiB
-
-template <typename K, typename V>
-using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
-
-template <typename K, typename V>
-using InMemoryStore = backend::store::InMemoryStore<K, V, kPageSize>;
-
-template <typename K>
-using InMemoryDepot = backend::depot::InMemoryDepot<K>;
-
-template <typename K, typename I>
-using FileBasedIndex = backend::index::Cached<
-    backend::index::FileIndex<K, I, backend::SingleFile, kPageSize>>;
-
-template <typename K, typename V>
-using FileBasedStore =
-    backend::store::EagerFileStore<K, V, backend::SingleFile, kPageSize>;
-
-template <typename K>
-using FileBasedDepot = backend::depot::FileDepot<K>;
-
-template <typename K, typename I>
-using LevelDbBasedIndex =
-    backend::index::Cached<backend::index::MultiLevelDbIndex<K, I>>;
-
-template <typename K, typename V>
-using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
-
-template <typename K>
-using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
 // An abstract interface definition of WorldState instances.
 class WorldState {
@@ -175,11 +134,6 @@ WorldState* Open(const std::filesystem::path& directory) {
   }
   return new WorldStateWrapper<State>(*std::move(state));
 }
-
-using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot>;
-using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot>;
-using LevelDbBasedState =
-    State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot>;
 
 }  // namespace
 }  // namespace carmen

@@ -1,8 +1,9 @@
 package memory
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
-	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"unsafe"
 )
@@ -11,7 +12,7 @@ import (
 type Index[K comparable, I common.Identifier] struct {
 	data          map[K]I
 	keySerializer common.Serializer[K]
-	hashIndex     *hashindex.HashIndex[K]
+	hashIndex     *indexhash.IndexHash[K]
 }
 
 // NewIndex constructs a new Index instance.
@@ -19,7 +20,7 @@ func NewIndex[K comparable, I common.Identifier](serializer common.Serializer[K]
 	memory := Index[K, I]{
 		data:          make(map[K]I),
 		keySerializer: serializer,
-		hashIndex:     hashindex.NewHashIndex[K](serializer),
+		hashIndex:     indexhash.NewIndexHash[K](serializer),
 	}
 	return &memory
 }
@@ -73,5 +74,6 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	}{})
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m) + uintptr(len(m.data))*dataMapItemSize)
 	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
+	mf.SetNote(fmt.Sprintf("(items: %d)", len(m.data)))
 	return mf
 }

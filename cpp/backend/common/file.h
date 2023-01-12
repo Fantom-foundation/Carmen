@@ -31,9 +31,6 @@ absl::Status CreateFile(const std::filesystem::path& path);
 // in the range [0..n-1], where n is the number of pages in the file.
 template <typename F>
 concept File = requires(F a) {
-  // Files must expose the page type.
-  typename F::page_type;
-
   // Files must be movable.
   std::is_move_constructible_v<F>;
   std::is_move_assignable_v<F>;
@@ -48,12 +45,11 @@ concept File = requires(F a) {
   { a.GetNumPages() } -> std::same_as<std::size_t>;
   // LoadPage is intended to be used for fetching a single page from the file.
   {
-    a.LoadPage(PageId{}, const_cast<typename F::page_type&>(
-                             std::declval<typename F::page_type&>()))
+    a.LoadPage(PageId{}, std::declval<std::span<std::byte, F::kPageSize>>())
     } -> std::same_as<absl::Status>;
   // StorePage is intended to be used for fetching a single page from the file.
   {
-    a.StorePage(PageId{}, std::declval<typename F::page_type>())
+    a.StorePage(PageId{}, std::declval<std::span<const std::byte, F::kPageSize>>())
     } -> std::same_as<absl::Status>;
   // Each file has to support a flush operation after which data previously
   // written must be persisted on disk.
@@ -66,10 +62,10 @@ concept File = requires(F a) {
 // An InMemoryFile implement is provided to for testing purposes, where actual
 // file operations are not relevant. It may also serve as a reference
 // implementation to compare other implementations to in unit testing.
-template <Page Page>
+template <std::size_t page_size>
 class InMemoryFile {
  public:
-  using page_type = Page;
+  constexpr static std::size_t kPageSize = page_size;
 
   static absl::StatusOr<InMemoryFile> Open(const std::filesystem::path&) {
     return InMemoryFile();
@@ -79,9 +75,9 @@ class InMemoryFile {
 
   std::size_t GetNumPages() const { return data_.size(); }
 
-  absl::Status LoadPage(PageId id, Page& trg) const;
+  absl::Status LoadPage(PageId id, std::span<std::byte, page_size> trg) const;
 
-  absl::Status StorePage(PageId id, const Page& src);
+  absl::Status StorePage(PageId id, std::span<const std::byte, page_size> src);
 
   absl::Status Flush() const {
     // Nothing to do.
@@ -94,7 +90,7 @@ class InMemoryFile {
   }
 
  private:
-  using Block = std::array<std::byte, sizeof(Page)>;
+  using Block = std::array<std::byte, page_size>;
   std::deque<Block> data_;
 };
 
@@ -232,24 +228,24 @@ class PosixFile {
 
 // An implementation of the File concept using a single file as a persistent
 // storage solution.
-template <Page Page, typename RawFile>
+template <std::size_t page_size, typename RawFile>
 class SingleFileBase {
  public:
-  using page_type = Page;
+  constexpr static std::size_t kPageSize = page_size;
 
   static absl::StatusOr<SingleFileBase> Open(const std::filesystem::path& path) {
     auto file = RawFile::Open(path);
     return SingleFileBase(std::move(*file));
   }
 
-  std::size_t GetNumPages() const { return file_.GetFileSize() / sizeof(Page); }
+  std::size_t GetNumPages() const { return file_.GetFileSize() / page_size; }
 
-  absl::Status LoadPage(PageId id, Page& trg) const {
-    return file_.Read(id * sizeof(Page), trg.AsRawData());
+  absl::Status LoadPage(PageId id,std::span<std::byte, page_size> trg) const {
+    file_.Read(id * page_size, trg);
   }
 
-  absl::Status StorePage(PageId id, const Page& src) {
-    return file_.Write(id * sizeof(Page), src.AsRawData());
+  absl::Status StorePage(PageId id, std::span<const std::byte, page_size> src) {
+    file_.Write(id * page_size, src);
   }
 
   absl::Status Flush() { return file_.Flush(); }
@@ -265,25 +261,25 @@ class SingleFileBase {
 // Defines the default SingleFile format to use the C API.
 // Client code like the FileIndex or FileStore depend on the file type exhibit a
 // single template parameter. Thus, this alias definition here is required.
-template <Page Page>
-using SingleFile = SingleFileBase<Page, internal::CFile>;
+template <std::size_t page_size>
+using SingleFile = SingleFileBase<page_size, internal::CFile>;
 
 // ------------------------------- Definitions --------------------------------
 
-template <Page Page>
-absl::Status InMemoryFile<Page>::LoadPage(PageId id, Page& trg) const {
+template <std::size_t page_size>
+absl::Status InMemoryFile<page_size>::LoadPage(PageId id, std::span<std::byte, page_size> trg) const {
   static const Block zero{};
   auto src = id >= data_.size() ? &zero : &data_[id];
-  std::memcpy(&trg, src, sizeof(Page));
+  std::memcpy(trg.data(), src, page_size);
   return absl::OkStatus();
 }
 
-template <Page Page>
-absl::Status InMemoryFile<Page>::StorePage(PageId id, const Page& src) {
+template <std::size_t page_size>
+absl::Status InMemoryFile<page_size>::StorePage(PageId id, const std::span<const std::byte, page_size> src) {
   while (data_.size() <= id) {
     data_.resize(id + 1);
   }
-  std::memcpy(&data_[id], &src, sizeof(Page));
+  std::memcpy(&data_[id], src.data(), page_size);
   return absl::OkStatus();
 }
 

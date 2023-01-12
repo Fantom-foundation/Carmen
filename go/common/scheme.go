@@ -26,6 +26,8 @@ const (
 	DepotCodeKey TableSpace = 'D'
 	// CodeHashStoreKey is a respective "table space" for code hashes store
 	CodeHashStoreKey TableSpace = 'c'
+	// AddressSlotMultiMapKey is a respective "table space"
+	AddressSlotMultiMapKey TableSpace = 'M'
 )
 
 // DbKey expects max size of the 32B key plus at most two bytes

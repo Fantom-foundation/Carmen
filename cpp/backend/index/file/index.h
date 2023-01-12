@@ -8,13 +8,13 @@
 #include <queue>
 #include <vector>
 
-#include "absl/hash/hash.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
+#include "backend/index/file/stable_hash.h"
 #include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -42,7 +42,7 @@ namespace carmen::backend::index {
 // excessive file growing steps when performing splitting operations.
 //
 // see: https://en.wikipedia.org/wiki/Linear_hashing
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size = kFileSystemPageSize>
 class FileIndex {
  public:
@@ -54,7 +54,7 @@ class FileIndex {
   using Page = HashPage<hash_t, K, I, page_size>;
 
   // The file-type used by instances for primary and overflow pages.
-  using File = F<Page>;
+  using File = F<sizeof(Page)>;
 
   // A factory function creating an instance of this index type.
   static absl::StatusOr<FileIndex> Open(Context&,
@@ -170,17 +170,17 @@ class FileIndex {
   void ReturnOverflowPage(PageId id) { overflow_page_free_list_.push_back(id); }
 
   // The page pool wrapping access to the primary page file.
-  mutable PagePool<Page, F> primary_pool_;
+  mutable PagePool<File> primary_pool_;
 
   // The page pool wrapping access to the overflow page file.
-  mutable PagePool<Page, F> overflow_pool_;
+  mutable PagePool<File> overflow_pool_;
 
   // The file used to store meta information covering the values of the fields
   // below. The path is a unique ptr to manage ownership during moves.
   std::unique_ptr<std::filesystem::path> metadata_file_;
 
   // A hasher to compute hashes for keys.
-  absl::Hash<K> key_hasher_;
+  StableHash<K> key_hasher_;
 
   // The number of elements in this index.
   std::size_t size_ = 0;
@@ -218,15 +218,15 @@ class FileIndex {
   mutable Hash hash_;
 };
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<FileIndex<K, I, F, page_size>>
 FileIndex<K, I, F, page_size>::Open(Context&,
                                     const std::filesystem::path& directory) {
   ASSIGN_OR_RETURN(auto primary_page_file,
-                   F<Page>::Open(directory / "primary.dat"));
+                   File::Open(directory / "primary.dat"));
   ASSIGN_OR_RETURN(auto overflow_page_file,
-                   F<Page>::Open(directory / "overflow.dat"));
+                   File::Open(directory / "overflow.dat"));
   auto metadata_file = directory / "metadata.dat";
 
   auto index = FileIndex(std::move(primary_page_file),
@@ -280,7 +280,7 @@ FileIndex<K, I, F, page_size>::Open(Context&,
   return index;
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 FileIndex<K, I, F, page_size>::FileIndex(
     std::unique_ptr<File> primary_page_file,
@@ -293,7 +293,7 @@ FileIndex<K, I, F, page_size>::FileIndex(
       high_mask_((low_mask_ << 1) | 0x1),
       num_buckets_(1 << kInitialHashLength) {}
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
     const K& key) {
@@ -317,11 +317,11 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   Page* page;
   auto tail = GetTail(bucket);
   if (tail == kNullPage) {
-    ASSIGN_OR_RETURN(auto result, primary_pool_.Get(bucket));
+    ASSIGN_OR_RETURN(auto result, primary_pool_.template Get<Page>(bucket));
     page = result.AsPointer();
     primary_pool_.MarkAsDirty(bucket);
   } else {
-    ASSIGN_OR_RETURN(auto result, overflow_pool_.Get(tail));
+    ASSIGN_OR_RETURN(auto result, overflow_pool_.template Get<Page>(tail));
     page = result.AsPointer();
     overflow_pool_.MarkAsDirty(tail);
   }
@@ -329,7 +329,7 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   if (page->Insert(hash, key, size_ - 1) == nullptr) {
     auto new_overflow_id = GetFreeOverflowPageId();
     page->SetNext(new_overflow_id);
-    ASSIGN_OR_RETURN(auto result, overflow_pool_.Get(new_overflow_id));
+    ASSIGN_OR_RETURN(auto result, overflow_pool_.template Get<Page>(new_overflow_id));
     auto overflow_page = result.AsPointer();
     assert(overflow_page->Size() == 0);
     assert(overflow_page->GetNext() == 0);
@@ -342,7 +342,7 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   return std::pair{size_ - 1, true};
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
   ASSIGN_OR_RETURN(auto find_result, FindInternal(key));
@@ -353,7 +353,7 @@ absl::StatusOr<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
   return entry->value;
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<Hash> FileIndex<K, I, F, page_size>::GetHash() const {
   while (!unhashed_keys_.empty()) {
@@ -363,7 +363,7 @@ absl::StatusOr<Hash> FileIndex<K, I, F, page_size>::GetHash() const {
   return hash_;
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Flush() {
   RETURN_IF_ERROR(primary_pool_.Flush());
@@ -407,7 +407,7 @@ absl::Status FileIndex<K, I, F, page_size>::Flush() {
   return absl::OkStatus();
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Close() {
   RETURN_IF_ERROR(Flush());
@@ -416,7 +416,7 @@ absl::Status FileIndex<K, I, F, page_size>::Close() {
   return absl::OkStatus();
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 void FileIndex<K, I, F, page_size>::Dump() const {
   std::cout << "\n-----------------------------------------------------\n";
@@ -424,7 +424,7 @@ void FileIndex<K, I, F, page_size>::Dump() const {
             << num_buckets_ << " buckets\n";
   for (std::size_t i = 0; i < num_buckets_; i++) {
     std::cout << "\tBucket " << i << ":\n";
-    auto result = primary_pool_.Get(i);
+    auto result = primary_pool_.template Get<Page>(i);
     if (!result.ok()) {
       std::cout << "\t\tError: " << result.status() << "\n";
       continue;
@@ -433,7 +433,7 @@ void FileIndex<K, I, F, page_size>::Dump() const {
     while (page != nullptr) {
       page->Dump();
       auto next = page->GetNext();
-      result = overflow_pool_.Get(next);
+      result = overflow_pool_.template Get<Page>(next);
       if (!result.ok()) {
         std::cout << "\t\tError: " << result.status() << "\n";
         break;
@@ -443,7 +443,7 @@ void FileIndex<K, I, F, page_size>::Dump() const {
   }
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 MemoryFootprint FileIndex<K, I, F, page_size>::GetMemoryFootprint() const {
   MemoryFootprint res(*this);
@@ -454,7 +454,7 @@ MemoryFootprint FileIndex<K, I, F, page_size>::GetMemoryFootprint() const {
   return res;
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
                           typename FileIndex<K, I, F, page_size>::bucket_id_t,
@@ -464,14 +464,14 @@ FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
   auto bucket = GetBucket(hash);
 
   // Search within that bucket.
-  ASSIGN_OR_RETURN(auto page_ref, primary_pool_.Get(bucket));
+  ASSIGN_OR_RETURN(auto page_ref, primary_pool_.template Get<Page>(bucket));
   Page* cur = page_ref.AsPointer();
   while (cur != nullptr) {
     if (auto entry = cur->Find(hash, key)) {
       return std::tuple{hash, bucket, entry};
     }
     PageId next = cur->GetNext();
-    ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
+    ASSIGN_OR_RETURN(page_ref, overflow_pool_.template Get<Page>(next));
     cur = next != 0 ? page_ref.AsPointer() : nullptr;
   }
 
@@ -479,7 +479,7 @@ FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
   return std::tuple{hash, bucket, nullptr};
 }
 
-template <Trivial K, std::integral I, template <typename> class F,
+template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Split() {
   assert(next_to_split_ < num_buckets_);
@@ -498,7 +498,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
 
   // Load data from page to be split into memory.
   std::deque<Entry> entries;
-  ASSIGN_OR_RETURN(auto page_ref, primary_pool_.Get(old_bucket_id));
+  ASSIGN_OR_RETURN(auto page_ref, primary_pool_.template Get<Page>(old_bucket_id));
   Page* page = page_ref.AsPointer();
   while (page != nullptr) {
     for (std::size_t i = 0; i < page->Size(); i++) {
@@ -506,7 +506,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
     }
     auto next = page->GetNext();
     if (next != 0) {
-      ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
+      ASSIGN_OR_RETURN(page_ref, overflow_pool_.template Get<Page>(next));
       page = page_ref.AsPointer();
     } else {
       page = nullptr;
@@ -534,7 +534,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
   std::sort(new_bucket.begin(), new_bucket.end());
 
   // Write old entries into old bucket.
-  ASSIGN_OR_RETURN(page_ref, primary_pool_.Get(old_bucket_id));
+  ASSIGN_OR_RETURN(page_ref, primary_pool_.template Get<Page>(old_bucket_id));
   page = page_ref.AsPointer();
   primary_pool_.MarkAsDirty(old_bucket_id);
   int i = 0;
@@ -545,7 +545,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
       page->Resize(Page::kNumEntries);
       auto next = page->GetNext();
       assert(next != 0);
-      ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
+      ASSIGN_OR_RETURN(page_ref, overflow_pool_.template Get<Page>(next));
       page = page_ref.AsPointer();
       overflow_pool_.MarkAsDirty(next);
       SetTail(old_bucket_id, next);
@@ -562,7 +562,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
     if (next != 0) {
       page->SetNext(0);
       ReturnOverflowPage(next);
-      ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
+      ASSIGN_OR_RETURN(page_ref, overflow_pool_.template Get<Page>(next));
       page = page_ref.AsPointer();
       page->Resize(0);
       overflow_pool_.MarkAsDirty(next);
@@ -572,7 +572,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
   }
 
   // Write new entries into new bucket.
-  ASSIGN_OR_RETURN(page_ref, primary_pool_.Get(new_bucket_id));
+  ASSIGN_OR_RETURN(page_ref, primary_pool_.template Get<Page>(new_bucket_id));
   page = page_ref.AsPointer();
   i = 0;
   primary_pool_.MarkAsDirty(new_bucket_id);
@@ -582,7 +582,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
       page->Resize(Page::kNumEntries);
       auto next = GetFreeOverflowPageId();
       page->SetNext(next);
-      ASSIGN_OR_RETURN(page_ref, overflow_pool_.Get(next));
+      ASSIGN_OR_RETURN(page_ref, overflow_pool_.template Get<Page>(next));
       page = page_ref.AsPointer();
       overflow_pool_.MarkAsDirty(next);
       assert(page->GetNext() == 0);

@@ -37,17 +37,19 @@ var (
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
 		{"Memory", newTestingMemory},
-		{"LevelDB Index, File Store", NewLeveLIndexFileStore},
-		{"Cached LevelDB Index, File Store", NewCachedLeveLIndexFileStore},
-		{"Cached Transact LevelDB, Index File Store", NewCachedTransactLeveLIndexFileStore},
-		{"LevelDB Index and Store", NewLeveLIndexAndStore},
-		{"Cached LevelDB Index and Store", NewCachedLeveLIndexAndStore},
-		{"Cached Transact LevelDB Index and Store", NewTransactCachedLeveLIndexAndStore}, // cannot combine transact and non-transact access
+		{"File Index and Store", NewGoFileState},
+		{"Cached File Index and Store", NewGoCachedFileState},
+		{"LevelDB Index, File Store", NewGoLeveLIndexFileStoreState},
+		{"Cached LevelDB Index, File Store", NewGoCachedLeveLIndexFileStoreState},
+		{"Cached Transact LevelDB, Index File Store", NewGoCachedTransactLeveLIndexFileStoreState},
+		{"LevelDB Index and Store", NewGoLeveLIndexAndStoreState},
+		{"Cached LevelDB Index and Store", NewGoCachedLeveLIndexAndStoreState},
+		{"Cached Transact LevelDB Index and Store", NewGoTransactCachedLeveLIndexAndStoreState}, // cannot combine transact and non-transact access
 	}
 }
 
 func newTestingMemory(_ string) (State, error) {
-	return NewMemory()
+	return NewGoMemoryState()
 }
 
 func TestMissingKeys(t *testing.T) {
@@ -267,7 +269,7 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewMemory()
+	state, err := NewGoMemoryState()
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
@@ -297,7 +299,7 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewMemory()
+	state, err := NewGoMemoryState()
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
@@ -337,7 +339,6 @@ func TestGetMemoryFootprint(t *testing.T) {
 			if !strings.Contains(str, "hashTree") {
 				t.Errorf("memory footprint string does not contain any hashTree")
 			}
-			fmt.Printf("Memory footprint:\n%s", str)
 		})
 	}
 }

@@ -1,8 +1,9 @@
 package ldb
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
-	"github.com/Fantom-foundation/Carmen/go/backend/index/hashindex"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -20,7 +21,7 @@ type Index[K comparable, I common.Identifier] struct {
 	table           common.TableSpace
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
-	hashIndex       *hashindex.HashIndex[K]
+	hashIndex       *indexhash.IndexHash[K]
 	lastIndex       I
 }
 
@@ -58,7 +59,7 @@ func NewIndex[K comparable, I common.Identifier](
 		table:           table,
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
-		hashIndex:       hashindex.InitHashIndex[K](hash, keySerializer),
+		hashIndex:       indexhash.InitIndexHash[K](hash, keySerializer),
 		lastIndex:       lastIndex,
 	}
 
@@ -160,5 +161,6 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("hashIndex", m.hashIndex.GetMemoryFootprint())
 	mf.AddChild("levelDb", m.db.GetMemoryFootprint())
+	mf.SetNote(fmt.Sprintf("(items: %d)", m.lastIndex))
 	return mf
 }

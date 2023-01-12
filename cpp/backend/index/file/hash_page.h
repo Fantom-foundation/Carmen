@@ -55,9 +55,6 @@ class alignas(kFileSystemPageSize) HashPage {
       "A HashPage must be at least sizeof(Metadata) + sizeof(Entry) = 16 byte "
       "+ sizeof(Entry) to fit at least a single line in each page.");
 
-  // Creates a new, empty page.
-  HashPage() { Clear(); }
-
   // Resets the size and the next-page reference to zero.
   void Clear() {
     auto& metadata = GetMetadata();
@@ -149,6 +146,16 @@ class alignas(kFileSystemPageSize) HashPage {
   // Returns a mutable raw data view on this page that can be used to replace
   // its content with data read from secondary storage.
   std::span<std::byte, full_page_size> AsRawData() { return data_; }
+
+  // Returns a span of the raw data of this page, as required by the page
+  // concept.
+  operator std::span<const std::byte, full_page_size>() const {
+    return AsRawData();
+  }
+
+  // Returns a span of the raw data of this page, as required by the page
+  // concept.
+  operator std::span<std::byte, full_page_size>() { return AsRawData(); }
 
   // Debug utility to print the content of a single page.
   void Dump() {

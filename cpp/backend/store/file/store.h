@@ -26,9 +26,9 @@ namespace internal {
 // mutable key/value store. It provides mutation, lookup, and global state
 // hashing support. Hashing can occure eager (before evicting pages) or lazy,
 // when requesting hash computations.
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size = 32, bool eager_hashing = true>
-requires File<F<ArrayPage<V, page_size>>>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 class FileStoreBase;
 
 }  // namespace internal
@@ -36,18 +36,18 @@ class FileStoreBase;
 // A FileStore implementation configured to perform eager hashing. Thus,
 // before pages are evicted, hashes are computed. This slows down reads
 // and updates, but improves hashing speed.
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size = 32>
-requires File<F<ArrayPage<V, page_size>>>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 using EagerFileStore = internal::FileStoreBase<K, V, F, page_size, true>;
 
 // A FileStore implementation configured to perform lazy hashing. Thus,
 // pages are evicted without being hashes and need to be reloaded for computing
 // hashes when needed. This speeds up read/write operations at the expense of
 // hash performance.
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size = 32>
-requires File<F<ArrayPage<V, page_size>>>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 using LazyFileStore = internal::FileStoreBase<K, V, F, page_size, false>;
 
 // ----------------------------------------------------------------------------
@@ -56,9 +56,9 @@ using LazyFileStore = internal::FileStoreBase<K, V, F, page_size, false>;
 
 namespace internal {
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 class FileStoreBase {
  public:
   // The value type used to index elements in this store.
@@ -67,11 +67,10 @@ class FileStoreBase {
   // The type of value stored in this store.
   using value_type = V;
 
-  // The page size in byte used by this store.
+  // The page size in byte used by this store as configured. This may be less
+  // than the actual page size, which may be larger due to alignment and padding
+  // constraints.
   constexpr static std::size_t kPageSize = page_size;
-
-  // The page type used by this store.
-  using page_type = ArrayPage<V, page_size>;
 
   // A factory function creating an instance of this store type.
   static absl::StatusOr<FileStoreBase> Open(
@@ -114,25 +113,31 @@ class FileStoreBase {
   MemoryFootprint GetMemoryFootprint() const;
 
  private:
-  using Page = ArrayPage<V, page_size>;
-  using PagePool = PagePool<Page, F>;
+  using Page = ArrayPage<V, page_size / sizeof(V)>;
+  using PagePool = PagePool<F<sizeof(Page)>>;
+
+  // The actual size of a page, which may be larger than the specified page size
+  // due to padding.
+  constexpr static std::size_t kFilePageSize = sizeof(Page);
 
   // A listener to pool activities to react to loaded and evicted pages and
   // perform necessary hashing steps.
-  class PoolListener : public PagePoolListener<Page> {
+  class PoolListener : public PagePoolListener<kFilePageSize> {
    public:
     PoolListener(HashTree& hashes) : hashes_(hashes) {}
 
-    void AfterLoad(PageId id, const Page&) override {
+    void AfterLoad(PageId id, const RawPage<kFilePageSize>&) override {
       // When a page is loaded, make sure the HashTree is aware of it.
       hashes_.RegisterPage(id);
     }
 
-    void BeforeEvict(PageId id, const Page& page, bool is_dirty) override {
+    void BeforeEvict(PageId id, const RawPage<kFilePageSize>& page,
+                     bool is_dirty) override {
       // Before we throw away a dirty page to make space for something else we
       // update the hash to avoid having to reload it again later.
       if (eager_hashing && is_dirty) {
-        hashes_.UpdateHash(id, std::as_bytes(std::span(page.AsArray())));
+        hashes_.UpdateHash(
+            id, std::as_bytes(std::span(page.template As<Page>().AsArray())));
       }
     }
 
@@ -152,7 +157,7 @@ class FileStoreBase {
       if (!page.ok()) {
         return kEmpty;
       }
-      return std::as_bytes(std::span(page->get().AsArray()));
+      return std::as_bytes(std::span(pool_.template Get<Page>(id).AsArray()));
     }
 
    private:
@@ -160,8 +165,7 @@ class FileStoreBase {
   };
 
   // The number of elements per page, used for page and offset computation.
-  constexpr static std::size_t kNumElementsPerPage =
-      PagePool::Page::kNumElementsPerPage;
+  constexpr static std::size_t kNumElementsPerPage = Page::kNumElementsPerPage;
 
   // Creates a new file store maintaining its content in the given directory and
   // using the provided branching factor for its hash computation.
@@ -181,24 +185,24 @@ class FileStoreBase {
   std::filesystem::path hash_file_;
 };
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
     std::filesystem::path directory, std::size_t hash_branching_factor)
     : pool_(std::make_unique<PagePool>(
-          std::make_unique<F<page_type>>(directory / "data.dat"))),
+          std::make_unique<F<kFilePageSize>>(directory / "data.dat"))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
       hash_file_(directory / "hash.dat") {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> absl::Status
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
-  ASSIGN_OR_RETURN(auto page, pool_->Get(key / kNumElementsPerPage));
+  ASSIGN_OR_RETURN(auto page, pool_->template Get<Page>(key / kNumElementsPerPage));
   auto& trg = page.AsReference()[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
@@ -208,24 +212,26 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
   return absl::OkStatus();
 }
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> StatusOrRef<const V>
-FileStoreBase<K, V, F, page_size, eager_hashing>::Get(const K& key)
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+    StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
+        const K& key)
 const {
-  ASSIGN_OR_RETURN(auto page, pool_->Get(key / kNumElementsPerPage));
+  ASSIGN_OR_RETURN(auto page, pool_->template Get<Page>(key / kNumElementsPerPage));
   return page.AsReference()[key % kNumElementsPerPage];
 }
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> absl::StatusOr<Hash>
-FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+    absl::StatusOr<Hash>
+    FileStoreBase<K, V, F, page_size, eager_hashing>::GetHash()
 const { return hashes_->GetHash(); }
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> absl::Status
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   if (pool_) {
     RETURN_IF_ERROR(pool_->Flush());
@@ -236,9 +242,9 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
   return absl::OkStatus();
 }
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> absl::Status
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   RETURN_IF_ERROR(Flush());
   if (pool_) {
@@ -247,9 +253,9 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   return absl::OkStatus();
 }
 
-template <typename K, Trivial V, template <typename> class F,
+template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<ArrayPage<V, page_size>>> MemoryFootprint
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> MemoryFootprint
 FileStoreBase<K, V, F, page_size, eager_hashing>::GetMemoryFootprint()
 const {
   MemoryFootprint res(*this);

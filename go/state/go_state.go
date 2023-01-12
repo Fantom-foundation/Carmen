@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"github.com/Fantom-foundation/Carmen/go/backend/multimap"
 	"hash"
 	"io"
 
@@ -14,7 +15,6 @@ import (
 
 const (
 	HashTreeFactor = 32
-	PageSize       = 1 << 12
 )
 
 // GoState manages dependencies to other interfaces to build this service
@@ -28,6 +28,7 @@ type GoState struct {
 	valuesStore     store.Store[uint32, common.Value]
 	codesDepot      depot.Depot[uint32]
 	codeHashesStore store.Store[uint32, common.Hash]
+	addressToSlots  multimap.MultiMap[uint32, uint32]
 	cleanup         []func()
 	hasher          hash.Hash
 }
@@ -59,7 +60,20 @@ func (s *GoState) DeleteAccount(address common.Address) error {
 		}
 		return err
 	}
-	return s.accountsStore.Set(idx, common.Deleted)
+	err = s.accountsStore.Set(idx, common.Deleted)
+	if err != nil {
+		return err
+	}
+	slotIdxs, err := s.addressToSlots.GetAll(idx)
+	if err != nil {
+		return err
+	}
+	for _, slotIdx := range slotIdxs {
+		if err := s.valuesStore.Set(slotIdx, common.Value{}); err != nil {
+			return err
+		}
+	}
+	return s.addressToSlots.RemoveAll(idx)
 }
 
 func (s *GoState) GetBalance(address common.Address) (balance common.Balance, err error) {
@@ -125,20 +139,29 @@ func (s *GoState) GetStorage(address common.Address, key common.Key) (value comm
 	return s.valuesStore.Get(slotIdx)
 }
 
-func (s *GoState) SetStorage(address common.Address, key common.Key, value common.Value) (err error) {
+func (s *GoState) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	addressIdx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
-		return
+		return err
 	}
 	keyIdx, err := s.keyIndex.GetOrAdd(key)
 	if err != nil {
-		return
+		return err
 	}
 	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
 	if err != nil {
-		return
+		return err
 	}
-	return s.valuesStore.Set(slotIdx, value)
+	err = s.valuesStore.Set(slotIdx, value)
+	if err != nil {
+		return err
+	}
+	if value == (common.Value{}) {
+		err = s.addressToSlots.Remove(addressIdx, slotIdx)
+	} else {
+		err = s.addressToSlots.Add(addressIdx, slotIdx)
+	}
+	return err
 }
 
 func (s *GoState) GetCode(address common.Address) (value []byte, err error) {
@@ -224,6 +247,7 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 		s.accountsStore,
 		s.codesDepot,
 		// codeHashesStore omitted intentionally
+		// addressToSlots omitted intentionally
 	}
 
 	h := sha256.New()
@@ -265,6 +289,7 @@ func (s *GoState) Flush() error {
 		s.valuesStore,
 		s.codesDepot,
 		s.codeHashesStore,
+		s.addressToSlots,
 	}
 
 	var last error = nil
@@ -287,6 +312,7 @@ func (s *GoState) Close() error {
 		s.valuesStore,
 		s.codesDepot,
 		s.codeHashesStore,
+		s.addressToSlots,
 	}
 
 	var last error = nil

@@ -27,7 +27,7 @@ namespace {
 
 // A page format used for the benchmarks.
 template <std::size_t page_size>
-using Page = ArrayPage<std::byte, page_size>;
+using Page = RawPage<page_size>;
 
 // A utility wrapper to be specialized for various file implementations to
 // handle them uniformly within benchmarks.
@@ -55,22 +55,22 @@ class FileWrapper {
 // A specialization of a FileWrapper for the InMemoryFile reference
 // implementation.
 template <std::size_t page_size>
-class FileWrapper<InMemoryFile<Page<page_size>>> {
+class FileWrapper<InMemoryFile<page_size>> {
  public:
-  InMemoryFile<Page<page_size>>& GetFile() { return file_; }
+  InMemoryFile<page_size>& GetFile() { return file_; }
 
  private:
-  InMemoryFile<Page<page_size>> file_;
+  InMemoryFile<page_size> file_;
 };
 
-template <::carmen::backend::Page Page>
-using StreamFile = SingleFileBase<Page, internal::FStreamFile>;
+template <std::size_t page_size>
+using StreamFile = SingleFileBase<page_size, internal::FStreamFile>;
 
-template <::carmen::backend::Page Page>
-using CFile = SingleFileBase<Page, internal::CFile>;
+template <std::size_t page_size>
+using CFile = SingleFileBase<page_size, internal::CFile>;
 
-template <::carmen::backend::Page Page>
-using PosixFile = SingleFileBase<Page, internal::PosixFile>;
+template <std::size_t page_size>
+using PosixFile = SingleFileBase<page_size, internal::PosixFile>;
 
 // Test the creation of files between 1 and 64 MiB.
 constexpr long kMinSize = 1 << 20;
@@ -79,7 +79,6 @@ constexpr long kMaxSize = 1 << 26;
 // A benchmark testing the initialization of an empty file with a given size.
 template <typename F>
 void BM_FileInit(benchmark::State& state) {
-  using Page = typename F::page_type;
   const auto target_size = state.range(0);
 
   for (auto _ : state) {
@@ -87,96 +86,87 @@ void BM_FileInit(benchmark::State& state) {
     // the rest of the file.
     FileWrapper<F> wrapper;
     F& file = wrapper.GetFile();
-    Page trg;
-    ASSERT_OK(file.StorePage(target_size / sizeof(Page) - 1, trg));
+    Page<F::kPageSize> trg;
+    ASSERT_OK(file.StorePage(target_size / sizeof(trg) - 1, trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }
 
-BENCHMARK(BM_FileInit<InMemoryFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<InMemoryFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<InMemoryFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<InMemoryFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<InMemoryFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<InMemoryFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_FileInit<SingleFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<SingleFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<SingleFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<SingleFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<SingleFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<SingleFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_FileInit<StreamFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<StreamFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<StreamFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<StreamFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<StreamFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<StreamFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_FileInit<CFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<CFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<CFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<CFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<CFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<CFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_FileInit<PosixFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<PosixFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_FileInit<PosixFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<PosixFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<PosixFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_FileInit<PosixFile<16384>>)->Range(kMinSize, kMaxSize);
 
 // A benchmark testing the filling of a file with zeros by starting from an
 // empty file and loading new pages in sequence.
 template <typename F>
 void BM_SequentialFileFilling(benchmark::State& state) {
-  using Page = typename F::page_type;
   const auto target_size = state.range(0);
 
   for (auto _ : state) {
     FileWrapper<F> wrapper;
     F& file = wrapper.GetFile();
-    for (std::size_t i = 0; i < target_size / sizeof(Page); i++) {
-      Page trg;
+    for (std::size_t i = 0; i < target_size / F::kPageSize; i++) {
+      Page<F::kPageSize> trg;
       ASSERT_OK(file.StorePage(i, trg));
       benchmark::DoNotOptimize(trg[0]);
     }
   }
 }
 
-BENCHMARK(BM_SequentialFileFilling<InMemoryFile<Page<256>>>)
+BENCHMARK(BM_SequentialFileFilling<InMemoryFile<256>>)
     ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<InMemoryFile<Page<4096>>>)
+BENCHMARK(BM_SequentialFileFilling<InMemoryFile<4096>>)
     ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<InMemoryFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
-
-BENCHMARK(BM_SequentialFileFilling<SingleFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<SingleFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<SingleFile<Page<16384>>>)
+BENCHMARK(BM_SequentialFileFilling<InMemoryFile<16384>>)
     ->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_SequentialFileFilling<StreamFile<Page<256>>>)
+BENCHMARK(BM_SequentialFileFilling<SingleFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<SingleFile<4096>>)
     ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<StreamFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<StreamFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
-
-BENCHMARK(BM_SequentialFileFilling<CFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<CFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<CFile<Page<16384>>>)
+BENCHMARK(BM_SequentialFileFilling<SingleFile<16384>>)
     ->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_SequentialFileFilling<PosixFile<Page<256>>>)
+BENCHMARK(BM_SequentialFileFilling<StreamFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<StreamFile<4096>>)
     ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<PosixFile<Page<4096>>>)
+BENCHMARK(BM_SequentialFileFilling<StreamFile<16384>>)
     ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileFilling<PosixFile<Page<16384>>>)
+
+BENCHMARK(BM_SequentialFileFilling<CFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<CFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<CFile<16384>>)->Range(kMinSize, kMaxSize);
+
+BENCHMARK(BM_SequentialFileFilling<PosixFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<PosixFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileFilling<PosixFile<16384>>)
     ->Range(kMinSize, kMaxSize);
 
 // A benchmark testing the speed of reading pages sequentially.
 template <typename F>
 void BM_SequentialFileRead(benchmark::State& state) {
-  using Page = typename F::page_type;
   const auto target_size = state.range(0);
 
   // Create and initialize the test file.
   FileWrapper<F> wrapper;
   F& file = wrapper.GetFile();
-  Page trg;
-  const auto num_pages = target_size / sizeof(Page);
+  Page<F::kPageSize> trg;
+  const auto num_pages = target_size / F::kPageSize;
   ASSERT_OK(file.StorePage(num_pages - 1, trg));
 
   int i = 0;
@@ -187,49 +177,37 @@ void BM_SequentialFileRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_SequentialFileRead<InMemoryFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<InMemoryFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<InMemoryFile<Page<16384>>>)
+BENCHMARK(BM_SequentialFileRead<InMemoryFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<InMemoryFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<InMemoryFile<16384>>)
     ->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_SequentialFileRead<SingleFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<SingleFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<SingleFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<SingleFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<SingleFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<SingleFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_SequentialFileRead<StreamFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<StreamFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<StreamFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<StreamFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<StreamFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<StreamFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_SequentialFileRead<CFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<CFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<CFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<CFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<CFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<CFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_SequentialFileRead<PosixFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<PosixFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_SequentialFileRead<PosixFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<PosixFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<PosixFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_SequentialFileRead<PosixFile<16384>>)->Range(kMinSize, kMaxSize);
 
 // A benchmark testing the speed of reading pages randomly.
 template <typename F>
 void BM_RandomFileRead(benchmark::State& state) {
-  using Page = typename F::page_type;
   const auto target_size = state.range(0);
 
   // Create and initialize the test file.
   FileWrapper<F> wrapper;
   F& file = wrapper.GetFile();
-  Page trg;
-  const auto num_pages = target_size / sizeof(Page);
+  Page<F::kPageSize> trg;
+  const auto num_pages = target_size / F::kPageSize;
   ASSERT_OK(file.StorePage(num_pages - 1, trg));
 
   std::random_device rd;
@@ -243,30 +221,25 @@ void BM_RandomFileRead(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BM_RandomFileRead<InMemoryFile<Page<256>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<InMemoryFile<Page<4096>>>)
-    ->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<InMemoryFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<InMemoryFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<InMemoryFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<InMemoryFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_RandomFileRead<SingleFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<SingleFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<SingleFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<SingleFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<SingleFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<SingleFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_RandomFileRead<StreamFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<StreamFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<StreamFile<Page<16384>>>)
-    ->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<StreamFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<StreamFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<StreamFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_RandomFileRead<CFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<CFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<CFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<CFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<CFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<CFile<16384>>)->Range(kMinSize, kMaxSize);
 
-BENCHMARK(BM_RandomFileRead<PosixFile<Page<256>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<PosixFile<Page<4096>>>)->Range(kMinSize, kMaxSize);
-BENCHMARK(BM_RandomFileRead<PosixFile<Page<16384>>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<PosixFile<256>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<PosixFile<4096>>)->Range(kMinSize, kMaxSize);
+BENCHMARK(BM_RandomFileRead<PosixFile<16384>>)->Range(kMinSize, kMaxSize);
 
 }  // namespace
 }  // namespace carmen::backend::store

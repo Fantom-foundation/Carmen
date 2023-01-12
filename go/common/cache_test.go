@@ -40,19 +40,19 @@ func TestExceedCapacity(t *testing.T) {
 	c.Set(2, 22)
 	evictedKey, evictedValue := c.Set(3, 33)
 	if evictedKey != 0 || evictedValue != 0 {
-		t.Errorf("No item should have been evicted yet")
+		t.Errorf("No items should have been evicted yet")
 	}
 
-	_, exists := c.Get(1) // one refreshed - first in the cache now
+	_, exists := c.Get(1) // one refreshed - first in the list now
 	if exists == false {
 		t.Errorf("Item should exist")
 	}
 
 	evictedKey, evictedValue = c.Set(4, 44)
 	if evictedKey != 2 || evictedValue != 22 {
-		t.Errorf("Incorrectly evicted item: %d/%d", evictedKey, evictedValue)
+		t.Errorf("Incorrectly evicted items: %d/%d", evictedKey, evictedValue)
 	}
-	_, exists = c.Get(2) // 2 is the oldest in the cache
+	_, exists = c.Get(2) // 2 is the oldest in the table
 	if exists {
 		t.Errorf("Item should be evicted")
 	}
@@ -66,7 +66,7 @@ func TestLRUOrder(t *testing.T) {
 	c.Set(2, 22)
 	c.Set(3, 33)
 
-	_, _ = c.Get(1) // one refreshed - first in the cache now
+	_, _ = c.Get(1) // one refreshed - first in the list now
 	if c.head.key != 1 {
 		t.Errorf("Item should be head")
 	}
@@ -74,7 +74,7 @@ func TestLRUOrder(t *testing.T) {
 		t.Errorf("Item should be tail")
 	}
 
-	c.Set(2, 222) // two refreshed - first in the cache now
+	c.Set(2, 222) // two refreshed - first in the list now
 	if c.head.key != 2 {
 		t.Errorf("Item should be head")
 	}
@@ -91,6 +91,26 @@ func TestLRUOrder(t *testing.T) {
 		t.Errorf("wrong order")
 	}
 
+}
+
+func TestCacheRemove(t *testing.T) {
+	c := initCache(3)
+
+	c.Set(1, 11)
+
+	if removed, exists := c.Remove(1); !exists || removed != 11 {
+		t.Errorf("Item not removed: %v", removed)
+	}
+
+	if removed, exists := c.Get(1); exists {
+		t.Errorf("Item not removed: %v", removed)
+	}
+
+	c.Set(4, 44)
+
+	if actual, exists := c.Get(4); !exists {
+		t.Errorf("Item not present: %v", actual)
+	}
 }
 
 func TestSettingExisting(t *testing.T) {

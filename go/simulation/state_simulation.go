@@ -14,7 +14,7 @@ import (
 const KeysCacheSize = 256
 
 func main() {
-	memState, err := state.NewMemory()
+	memState, err := state.NewGoMemoryState()
 	if err != nil {
 		panic(err)
 	}

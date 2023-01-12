@@ -18,10 +18,44 @@ cc_test(
 )
 
 cc_library(
+    name = "stable_hash",
+    hdrs = ["stable_hash.h"],
+    deps = [
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/numeric:int128",
+    ],
+)
+
+cc_test(
+    name = "stable_hash_test",
+    srcs = ["stable_hash_test.cc"],
+    deps = [
+        ":stable_hash", 
+        "//backend/common:page",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/hash",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "stable_hash_benchmark",
+    srcs = ["stable_hash_benchmark.cc"],
+    deps = [
+        ":stable_hash",
+        "//common:type",
+        "@com_google_absl//absl/hash",
+        "@com_github_google_benchmark//:benchmark_main",
+        "//third_party/gperftools:profiler",
+    ],
+)
+
+cc_library(
     name = "index",
     hdrs = ["index.h"],
     deps = [
         ":hash_page",
+        ":stable_hash",
         "//backend/common:file",
         "//backend/common:page_pool", 
         "//backend:structure",

@@ -6,8 +6,6 @@
 
 #include "absl/status/statusor.h"
 #include "backend/structure.h"
-#include "common/memory_usage.h"
-#include "common/type.h"
 
 namespace carmen::backend::index {
 
@@ -55,6 +53,6 @@ concept Index = requires(I a, const I b) {
     } -> std::same_as<absl::StatusOr<typename I::value_type>>;
 }
 // Indexes must satisfy the requirements for backend data structures.
-&&Structure<I>;
+&&HashableStructure<I>;
 
 }  // namespace carmen::backend::index

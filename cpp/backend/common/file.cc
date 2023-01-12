@@ -5,6 +5,7 @@
 
 #include <cassert>
 
+#include "backend/common/page.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -60,6 +61,26 @@ absl::Status CreateFile(const std::filesystem::path& path) {
 }
 
 namespace internal {
+
+namespace {
+
+// Retain a 256 KiB aligned buffer of zeros for initializing disk space.
+alignas(kFileSystemPageSize) static const std::array<char, 1 << 18> kZeros{};
+
+}  // namespace
+
+FStreamFile::FStreamFile(std::filesystem::path file) {
+  // Create the parent directory.
+  CreateDirectory(file.parent_path());
+  // Opening the file write-only first creates the file in case it does not
+  // exist.
+  data_.open(file, std::ios::binary | std::ios::out);
+  data_.close();
+  // However, we need the file open in read & write mode.
+  data_.open(file, std::ios::binary | std::ios::out | std::ios::in);
+  data_.seekg(0, std::ios::end);
+  file_size_ = data_.tellg();
+}
 
 absl::StatusOr<FStreamFile> FStreamFile::Open(const std::filesystem::path& path) {
   RETURN_IF_ERROR(CreateFile(path));
@@ -147,9 +168,6 @@ absl::Status FStreamFile::Close() {
 }
 
 absl::Status FStreamFile::GrowFileIfNeeded(std::size_t needed) {
-  // Retain a 256 KiB buffer of zeros for initializing disk space.
-  constexpr static std::size_t kStepSize = 1 << 18;
-  static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
     return absl::OkStatus();
   }
@@ -159,8 +177,8 @@ absl::Status FStreamFile::GrowFileIfNeeded(std::size_t needed) {
                                std::string(std::strerror(errno)));
   }
   while (file_size_ < needed) {
-    auto step = std::min(kStepSize, needed - file_size_);
-    data_.write(kZeros->data(), step);
+    auto step = std::min(kZeros.size(), needed - file_size_);
+    data_.write(kZeros.data(), step);
     if (!data_.good()) {
       return absl::InternalError("Failed to write to file. Error: " +
                                  std::string(std::strerror(errno)));
@@ -281,9 +299,6 @@ absl::Status CFile::Close() {
 }
 
 absl::Status CFile::GrowFileIfNeeded(std::size_t needed) {
-  // Retain a 256 KiB buffer of zeros for initializing disk space.
-  constexpr static std::size_t kStepSize = 1 << 18;
-  static auto kZeros = std::make_unique<const std::array<char, kStepSize>>();
   if (file_size_ >= needed) {
     return absl::OkStatus();
   }
@@ -292,8 +307,8 @@ absl::Status CFile::GrowFileIfNeeded(std::size_t needed) {
                                std::string(std::strerror(errno)));
   }
   while (file_size_ < needed) {
-    auto step = std::min(kStepSize, needed - file_size_);
-    auto len = std::fwrite(kZeros->data(), sizeof(std::byte), step, file_);
+    auto step = std::min(kZeros.size(), needed - file_size_);
+    auto len = std::fwrite(kZeros.data(), sizeof(std::byte), step, file_);
     if (std::ferror(file_)) {
       return absl::InternalError("Failed to write to file. Error: " +
                                  std::string(std::strerror(errno)));
@@ -413,9 +428,6 @@ absl::Status PosixFile::Close() {
 }
 
 absl::Status PosixFile::GrowFileIfNeeded(std::size_t needed) {
-  // Retain a 256 KiB buffer of zeros for initializing disk space.
-  constexpr static std::size_t kStepSize = 1 << 18;
-  static auto kZeros = std::make_unique<ArrayPage<int, kStepSize>>();
   if (file_size_ >= needed) {
     return absl::OkStatus();
   }
@@ -431,8 +443,8 @@ absl::Status PosixFile::GrowFileIfNeeded(std::size_t needed) {
                         file_size_, offset));
   }
   while (file_size_ < needed) {
-    auto step = std::min(kStepSize, needed - file_size_);
-    auto len = write(fd_, kZeros->AsRawData().data(), step);
+    auto step = std::min(kZeros.size(), needed - file_size_);
+    auto len = write(fd_, kZeros.data(), step);
     if (len < 0) {
       return absl::InternalError("Failed to write to file. Error: " +
                                  std::string(std::strerror(errno)));

@@ -67,6 +67,7 @@ class LevelDbDepot {
   // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
     ASSIGN_OR_RETURN(auto value, db_->Get(AsChars(key)));
+    if (value.empty()) return std::span<const std::byte>();
     get_data_.resize(value.size());
     std::memcpy(get_data_.data(), value.data(), value.size());
     return std::span{get_data_.data(), value.size()};
@@ -111,6 +112,8 @@ class LevelDbDepot {
   }
 
  private:
+  using ItemLength = std::uint32_t;
+
   // Creates a new LevelDbDepot using the provided leveldb path, branching
   // factor and number of items per group for hash computation.
   LevelDbDepot(LevelDb leveldb, std::size_t hash_branching_factor,
@@ -135,20 +138,30 @@ class LevelDbDepot {
     // this function.
     std::span<const std::byte> GetPageData(PageId id) override {
       static auto empty = std::array<std::byte, 0>{};
+      const std::size_t lengths_size = hash_box_size_ * sizeof(ItemLength);
+
       auto start = id * hash_box_size_;
       auto end = start + hash_box_size_ - 1;
 
-      if (start > end) return empty;
+      // set lengths to zero default value
+      if (page_data_.size() < lengths_size) {
+        page_data_.resize(lengths_size);
+      }
+      std::fill_n(page_data_.begin(), lengths_size, std::byte{0});
 
-      std::size_t size = 0;
+      std::size_t pos = lengths_size;
       for (K i = start; i <= end; ++i) {
         auto result = db_.Get(AsChars(i));
         switch (result.status().code()) {
           case absl::StatusCode::kOk:
-            page_data_.resize(size + result->size());
-            std::memcpy(page_data_.data() + size, (*result).data(),
+            page_data_.resize(pos + result->size());
+            // set length of item
+            reinterpret_cast<ItemLength*>(page_data_.data())[i - start] =
+                result->size();
+            // copy item data
+            std::memcpy(page_data_.data() + pos, (*result).data(),
                         (*result).size());
-            size += result->size();
+            pos += result->size();
             break;
           case absl::StatusCode::kNotFound:
             break;
@@ -157,7 +170,7 @@ class LevelDbDepot {
         }
       }
 
-      return {page_data_.data(), size};
+      return page_data_;
     }
 
    private:
