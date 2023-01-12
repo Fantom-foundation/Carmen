@@ -5,6 +5,7 @@
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "backend/index/index_handler.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -21,7 +22,8 @@ INSTANTIATE_TYPED_TEST_SUITE_P(File, IndexTest, TestIndex);
 
 TEST(FileIndexTest, FillTest) {
   constexpr int N = 1000;
-  TestIndex index;
+  ASSERT_OK_AND_ASSIGN(auto indexHandler, IndexHandler<TestIndex>::Create());
+  auto& index = indexHandler.GetIndex();
   for (int i = 0; i < N; i++) {
     EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
     for (int j = 0; j < N; j++) {
@@ -38,7 +40,8 @@ TEST(FileIndexTest, FillTest) {
 TEST(FileIndexTest, FillTest_SmallPages) {
   using Index = FileIndex<std::uint32_t, std::uint32_t, InMemoryFile, 64>;
   constexpr int N = 1000;
-  Index index;
+  ASSERT_OK_AND_ASSIGN(auto indexHandler, IndexHandler<Index>::Create());
+  auto& index = indexHandler.GetIndex();
   for (std::uint32_t i = 0; i < N; i++) {
     EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
     for (std::uint32_t j = 0; j <= i; j++) {

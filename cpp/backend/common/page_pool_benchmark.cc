@@ -1,4 +1,3 @@
-#include <random>
 #include <span>
 
 #include "absl/status/status.h"
@@ -25,8 +24,10 @@ class DummyFile {
  public:
   constexpr static const std::size_t kPageSize = sizeof(Page);
 
+  static absl::StatusOr<DummyFile> Open(const std::filesystem::path&) {
+    return DummyFile();
+  }
   std::size_t GetNumPages() { return kFileSize; }
-
   absl::Status LoadPage(PageId, std::span<std::byte, kPageSize>) { return absl::OkStatus(); }
   absl::Status StorePage(PageId, std::span<const std::byte, kPageSize>) { return absl::OkStatus(); }
   absl::Status Flush() { return absl::OkStatus(); }

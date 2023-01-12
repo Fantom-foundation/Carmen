@@ -37,7 +37,7 @@ TYPED_TEST_P(IndexTest, TypeProperties) {
 }
 
 TYPED_TEST_P(IndexTest, IdentifiersAreAssignedInorder) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, true)));
   EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, true)));
@@ -157,8 +157,8 @@ class MockIndex {
   MOCK_METHOD(MemoryFootprint, GetMemoryFootprint, (), (const));
 };
 
-// A movable wrapper of a mock index. This may be required when a index needs to
-// be moved into position.
+// A movable wrapper of a mock index. This may be required when an index needs
+// to be moved into position.
 template <typename K, typename V>
 class MockIndexWrapper {
  public:
@@ -171,7 +171,7 @@ class MockIndexWrapper {
   }
 
   MockIndexWrapper() : index_(std::make_unique<MockIndex<K, V>>()) {}
-  MockIndexWrapper(MockIndexWrapper&&) = default;
+  MockIndexWrapper(MockIndexWrapper&&) noexcept = default;
 
   absl::StatusOr<std::pair<V, bool>> GetOrAdd(const K& key) {
     return index_->GetOrAdd(key);

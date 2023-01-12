@@ -117,6 +117,10 @@ class FileIndex {
   absl::StatusOr<std::tuple<hash_t, bucket_id_t, const Entry*>> FindInternal(
       const K& key) const;
 
+  // Same as above, but for non-const instances.
+  absl::StatusOr<std::tuple<hash_t, bucket_id_t, Entry*>> FindInternal(
+      const K& key);
+
   // Splits one bucket in the hash table causing the table to grow by one
   // bucket.
   absl::Status Split();
@@ -229,24 +233,25 @@ FileIndex<K, I, F, page_size>::Open(Context&,
                    File::Open(directory / "overflow.dat"));
   auto metadata_file = directory / "metadata.dat";
 
-  auto index = FileIndex(std::move(primary_page_file),
-                         std::move(overflow_page_file), metadata_file);
-  if (!std::filesystem::exists(metadata_file)) {
+  auto index = FileIndex(std::make_unique<File>(std::move(primary_page_file)),
+                         std::make_unique<File>(std::move(overflow_page_file)),
+                         std::make_unique<std::filesystem::path>(metadata_file));
+  if (!std::filesystem::exists(*index.metadata_file_)) {
     return index;
   }
   // Load metadata from file.
-  std::fstream in(metadata_file, std::ios::binary | std::ios::in);
+  std::fstream in(*index.metadata_file_, std::ios::binary | std::ios::in);
   if (!in || !in.is_open()) {
     return GetStatusWithSystemError(
         absl::StatusCode::kInternal,
-        absl::StrCat("Failed to open metadata file: ", metadata_file.string()));
+        absl::StrCat("Failed to open metadata file: ", index.metadata_file_->string()));
   }
   auto read_scalar = [&](auto& scalar) {
     in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
       if (!in.good()) {
         return GetStatusWithSystemError(
                 absl::StatusCode::kInternal,
-                absl::StrCat("Failed to read metadata file: ", metadata_file.string()));
+                absl::StrCat("Failed to read metadata file: ", index.metadata_file_->string()));
       }
       return absl::OkStatus();
   };
@@ -481,6 +486,17 @@ FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
+absl::StatusOr<std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
+                          typename FileIndex<K, I, F, page_size>::bucket_id_t,
+                          typename FileIndex<K, I, F, page_size>::Entry*>>
+FileIndex<K, I, F, page_size>::FindInternal(const K& key) {
+  ASSIGN_OR_RETURN(auto result, const_cast<const FileIndex*>(this)->FindInternal(key));
+  auto [hash, bucket, entry] = result;
+  return std::tuple{hash, bucket, const_cast<Entry*>(entry)};
+}
+
+template <Trivial K, std::integral I, template <std::size_t> class F,
+          std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Split() {
   assert(next_to_split_ < num_buckets_);
 
@@ -593,7 +609,6 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
   }
   remaining = new_bucket.size() % Page::kNumEntries;
   page->Resize(remaining == 0 ? Page::kNumEntries : remaining);
-  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::index

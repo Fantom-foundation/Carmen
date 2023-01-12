@@ -69,19 +69,6 @@ alignas(kFileSystemPageSize) static const std::array<char, 1 << 18> kZeros{};
 
 }  // namespace
 
-FStreamFile::FStreamFile(std::filesystem::path file) {
-  // Create the parent directory.
-  CreateDirectory(file.parent_path());
-  // Opening the file write-only first creates the file in case it does not
-  // exist.
-  data_.open(file, std::ios::binary | std::ios::out);
-  data_.close();
-  // However, we need the file open in read & write mode.
-  data_.open(file, std::ios::binary | std::ios::out | std::ios::in);
-  data_.seekg(0, std::ios::end);
-  file_size_ = data_.tellg();
-}
-
 absl::StatusOr<FStreamFile> FStreamFile::Open(const std::filesystem::path& path) {
   RETURN_IF_ERROR(CreateFile(path));
   std::fstream fs;
