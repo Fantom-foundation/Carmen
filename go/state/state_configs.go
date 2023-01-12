@@ -17,8 +17,8 @@ import (
 	cachedIndex "github.com/Fantom-foundation/Carmen/go/backend/index/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
+	mapfile "github.com/Fantom-foundation/Carmen/go/backend/multimap/file"
 	mapldb "github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
-	mapfile "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	mapmem "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	cachedStore "github.com/Fantom-foundation/Carmen/go/backend/store/cache"
 	ldbstore "github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -161,7 +161,14 @@ func NewGoFileState(path string) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapfile.NewMultiMap[uint32, uint32]()
+	addressToSlotsPath := storePath + string(filepath.Separator) + "addressToSlots"
+	if err = os.MkdirAll(addressToSlotsPath, 0700); err != nil {
+		return nil, err
+	}
+	addressToSlots, err := mapfile.NewMultiMap[uint32, uint32](addressToSlotsPath, common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.UInt32Hasher{}, common.Uint32Comparator{})
+	if err != nil {
+		return nil, err
+	}
 
 	state := &GoState{
 		addressIndex,
@@ -261,7 +268,14 @@ func NewGoCachedFileState(path string) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapfile.NewMultiMap[uint32, uint32]()
+	addressToSlotsPath := storePath + string(filepath.Separator) + "addressToSlots"
+	if err = os.MkdirAll(addressToSlotsPath, 0700); err != nil {
+		return nil, err
+	}
+	addressToSlots, err := mapfile.NewMultiMap[uint32, uint32](addressToSlotsPath, common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.UInt32Hasher{}, common.Uint32Comparator{})
+	if err != nil {
+		return nil, err
+	}
 
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
