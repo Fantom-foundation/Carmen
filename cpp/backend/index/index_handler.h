@@ -43,8 +43,9 @@ class IndexHandler : public IndexHandlerBase<typename Index::key_type,
     Context ctx;
     ASSIGN_OR_RETURN(auto index,
                      Index::Open(ctx, dir.GetPath(), std::forward<Args>(args)...));
-    return IndexHandler(std::move(ctx), std::move(dir), std::move(index));
+    return {std::move(ctx), std::move(dir), std::move(index)};
   }
+
   Index& GetIndex() { return index_; }
 
  private:
@@ -61,16 +62,17 @@ class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
  public:
   template <typename... Args>
   static absl::StatusOr<IndexHandler> Create(Args&&... args) {
-    auto handler = IndexHandler();
+    TempDir dir;
     ASSIGN_OR_RETURN(auto index,
-                     SingleLevelDbIndex::Open(handler.temp_dir_.GetPath(), std::forward<Args>(args)...));
-    handler.index_ = index.template KeySpace<K, I>('t');
-    return handler;
+                     SingleLevelDbIndex::Open(dir.GetPath(), std::forward<Args>(args)...));;
+    return {std::move(dir), index.template KeySpace<K, I>('t')};
   }
 
   LevelDbKeySpace<K, I>& GetIndex() { return index_; }
 
  private:
+  IndexHandler(TempDir dir, LevelDbKeySpace<K, I> idx) : temp_dir_(std::move(dir)), index_(std::move(idx)) {};
+
   TempDir temp_dir_;
   LevelDbKeySpace<K, I> index_;
 };

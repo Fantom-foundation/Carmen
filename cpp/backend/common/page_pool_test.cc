@@ -39,7 +39,7 @@ TEST(PagePoolTest, PoolSizeCanBeDefined) {
 TEST(PagePoolTest, PagesCanBeFetched) {
   TestPool pool(2);
   ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get<Page>(12));
-  ASSERT_OK_AND_ASSIGN(auto page_14, pool.Get(14));
+  ASSERT_OK_AND_ASSIGN(auto page_14, pool.Get<Page>(14));
   auto& page_12_ref = page_12.AsReference();
   auto& page_14_ref = page_14.AsReference();
   EXPECT_NE(&page_12_ref, &page_14_ref);

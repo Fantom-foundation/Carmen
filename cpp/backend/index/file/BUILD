@@ -76,7 +76,7 @@ cc_test(
     deps = [
         ":index", 
         "//backend/index:test_util",
-        "//backend/index:index_handler",
+        "//backend:structure",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],

@@ -101,10 +101,7 @@ class InMemoryMultiMap {
   // Writes all data to the underlying file.
   absl::Status Flush() {
     // Start by creating the directory.
-    if (!CreateDirectory(file_.parent_path())) {
-      return absl::InternalError(absl::StrFormat(
-          "Unable to create parent directory: %s", file_.parent_path()));
-    }
+    RETURN_IF_ERROR(CreateDirectory(file_.parent_path()));
 
     std::fstream out(file_, std::ios::binary | std::ios::out);
     auto check_stream = [&]() -> absl::Status {
