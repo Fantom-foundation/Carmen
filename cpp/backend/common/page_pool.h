@@ -159,7 +159,7 @@ StatusOrRef<Page> PagePool<F, E>::Get(PageId id) {
 
   // The page is missing, so we need to load it from disk.
   ASSIGN_OR_RETURN(auto idx, GetFreeSlot());
-  Page& page = pool_[idx];
+  Page& page = pool_[idx].template As<Page>();
   RETURN_IF_ERROR(file_->LoadPage(id, page));
   pages_to_index_[id] = idx;
   index_to_pages_[idx] = id;

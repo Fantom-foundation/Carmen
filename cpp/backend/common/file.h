@@ -106,7 +106,7 @@ class FStreamFile {
   static absl::StatusOr<FStreamFile> Open(const std::filesystem::path& path);
 
   // Assure the file is move constructable.
-  FStreamFile(FStreamFile&&) = default;
+  FStreamFile(FStreamFile&&) noexcept = default;
 
   // Flushes the content and closes the file.
   ~FStreamFile();
@@ -148,7 +148,7 @@ class CFile {
   static absl::StatusOr<CFile> Open(const std::filesystem::path& path);
 
   // Assure the file is move constructable.
-  CFile(CFile&&) = default;
+  CFile(CFile&&) noexcept;
 
   // Flushes the content and closes the file.
   ~CFile();
@@ -190,7 +190,7 @@ class PosixFile {
   static absl::StatusOr<PosixFile> Open(const std::filesystem::path& path);
 
   // Assure the file is move constructable.
-  PosixFile(PosixFile&&) = default;
+  PosixFile(PosixFile&&) noexcept;
 
   // Flushes the content and closes the file.
   ~PosixFile();
@@ -241,11 +241,11 @@ class SingleFileBase {
   std::size_t GetNumPages() const { return file_.GetFileSize() / page_size; }
 
   absl::Status LoadPage(PageId id,std::span<std::byte, page_size> trg) const {
-    file_.Read(id * page_size, trg);
+    return file_.Read(id * page_size, trg);
   }
 
   absl::Status StorePage(PageId id, std::span<const std::byte, page_size> src) {
-    file_.Write(id * page_size, src);
+    return file_.Write(id * page_size, src);
   }
 
   absl::Status Flush() { return file_.Flush(); }

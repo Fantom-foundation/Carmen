@@ -210,6 +210,13 @@ absl::StatusOr<CFile> CFile::Open(const std::filesystem::path& path) {
 
 CFile::CFile(std::FILE* file, std::size_t file_size) : file_size_(file_size), file_(file) {}
 
+CFile::CFile(CFile&& file) noexcept {
+  // Swap the file pointers and invalidate the old one.
+  file_ = file.file_;
+  file_size_ = file.file_size_;
+  file.file_ = nullptr;
+}
+
 CFile::~CFile() { Close().IgnoreError(); }
 
 std::size_t CFile::GetFileSize() const { return file_size_; }
@@ -336,6 +343,13 @@ absl::StatusOr<PosixFile> PosixFile::Open(const std::filesystem::path& path) {
 }
 
 PosixFile::PosixFile(int fd, std::size_t file_size) : file_size_(file_size), fd_(fd) {}
+
+PosixFile::PosixFile(PosixFile&& file) noexcept {
+  // Swap the file descriptors and invalidate the old one.
+  file_size_ = file.file_size_;
+  fd_ = file.fd_;
+  file.fd_ = -1;
+}
 
 PosixFile::~PosixFile() { Close().IgnoreError(); }
 

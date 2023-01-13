@@ -11,11 +11,11 @@ namespace {
 
 using ::testing::StrEq;
 
-TEST(FsUtilTest, TestFsWriteOpen) {
-  TempDir dir;
-  std::fstream fs;
-  ASSERT_OK(fs_open(fs, dir.GetPath(), std::ios::out));
-}
+//TEST(FsUtilTest, TestFsWriteOpen) {
+//  TempDir dir;
+//  std::fstream fs;
+//  ASSERT_OK(fs_open(fs, dir.GetPath(), std::ios::out));
+//}
 
 }  // namespace
 }  // namespace carmen

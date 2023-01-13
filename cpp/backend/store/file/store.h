@@ -75,15 +75,7 @@ class FileStoreBase {
   // A factory function creating an instance of this store type.
   static absl::StatusOr<FileStoreBase> Open(
       Context&, const std::filesystem::path& directory,
-      std::size_t hash_branching_factor = 32) {
-    // Make sure the directory exists.
-    RETURN_IF_ERROR(CreateDirectory(directory));
-    auto store = FileStoreBase(directory, hash_branching_factor);
-    if (std::filesystem::exists(store.hash_file_)) {
-      RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));
-    }
-    return store;
-  }
+      std::size_t hash_branching_factor = 32);
 
   // Supports instances to be moved.
   FileStoreBase(FileStoreBase&&) = default;
@@ -153,11 +145,11 @@ class FileStoreBase {
 
     std::span<const std::byte> GetPageData(PageId id) override {
       constexpr std::span<const std::byte> const kEmpty;
-      auto page = pool_.Get(id);
+      auto page = pool_.template Get<Page>(id);
       if (!page.ok()) {
         return kEmpty;
       }
-      return std::as_bytes(std::span(pool_.template Get<Page>(id).AsArray()));
+      return std::as_bytes(std::span(page->AsReference().AsArray()));
     }
 
    private:
@@ -169,15 +161,14 @@ class FileStoreBase {
 
   // Creates a new file store maintaining its content in the given directory and
   // using the provided branching factor for its hash computation.
-  FileStoreBase(std::filesystem::path directory,
-                std::size_t hash_branching_factor);
+  FileStoreBase(std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file, std::size_t hash_branching_factor);
 
   // The page pool handling the in-memory buffer of pages fetched from disk. The
   // pool is placed in a unique pointer to ensure pointer stability when the
   // store is moved.
   mutable std::unique_ptr<PagePool> pool_;
 
-  // The data structure hanaging the hashing of states. The hashes are placed in
+  // The data structure managing the hashing of states. The hashes are placed in
   // a unique pointer to ensure pointer stability when the store is moved.
   mutable std::unique_ptr<HashTree> hashes_;
 
@@ -188,13 +179,29 @@ class FileStoreBase {
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+absl::StatusOr<FileStoreBase<K, V, F, page_size, eager_hashing>> FileStoreBase<K, V, F, page_size, eager_hashing>::Open(
+    Context&, const std::filesystem::path& directory,
+    std::size_t hash_branching_factor) {
+  // Make sure the directory exists.
+  RETURN_IF_ERROR(CreateDirectory(directory));
+  ASSIGN_OR_RETURN(auto file, F<kFilePageSize>::Open(directory / "data.dat"));
+  auto store = FileStoreBase(std::make_unique<F<kFilePageSize>>(std::move(file)),
+                             directory / "hash.dat", hash_branching_factor);
+  if (std::filesystem::exists(store.hash_file_)) {
+    RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));
+  }
+  return store;
+}
+
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
-    std::filesystem::path directory, std::size_t hash_branching_factor)
-    : pool_(std::make_unique<PagePool>(
-          std::make_unique<F<kFilePageSize>>(directory / "data.dat"))),
+    std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file, std::size_t hash_branching_factor)
+    : pool_(std::make_unique<PagePool>(std::move(file))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
-      hash_file_(directory / "hash.dat") {
+      hash_file_(std::move(hash_file)) {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 

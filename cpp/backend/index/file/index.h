@@ -609,6 +609,8 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
   }
   remaining = new_bucket.size() % Page::kNumEntries;
   page->Resize(remaining == 0 ? Page::kNumEntries : remaining);
+
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::index
