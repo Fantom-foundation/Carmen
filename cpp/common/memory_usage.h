@@ -99,8 +99,8 @@ constexpr static const Memory PiB = 1024 * TiB;
 constexpr static const Memory EiB = 1024 * PiB;
 
 // A MemoryFootprint describes the memory usage of a DAG shaped object graph.
-// Each node is the root of a DAG of objects, where each node is a object
-// desribed by a MemoryFootprint instance including its memory usage, and each
+// Each node is the root of a DAG of objects, where each node is an object
+// described by a MemoryFootprint instance including its memory usage, and each
 // edge is labeled by a field name.
 class MemoryFootprint {
  public:

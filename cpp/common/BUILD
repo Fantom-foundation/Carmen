@@ -53,7 +53,6 @@ cc_test(
 cc_library(
     name="type",
     hdrs=["type.h"],
-    srcs=["type.cc"],
     deps=[
         ":hex_util"
     ],
