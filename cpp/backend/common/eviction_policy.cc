@@ -11,7 +11,7 @@ namespace carmen::backend {
 
 namespace {
 
-// Selects a alement for the given set to be evicted according to the provided
+// Selects an element for the given set to be evicted according to the provided
 // eviction pattern. The EvictionPattern needs to provide a Next() function
 // providing a random slot to be evicted. The next higher value present in the
 // set is then chosen to be evicted.
@@ -106,7 +106,7 @@ void LeastRecentlyUsedEvictionPolicy::Read(std::size_t position) {
 }
 
 void LeastRecentlyUsedEvictionPolicy::Written(std::size_t position) {
-  // This policy does not distinguish between read an writes.
+  // This policy does not distinguish between read and writes.
   Read(position);
 }
 

@@ -24,7 +24,7 @@ class Sequential {
   std::size_t next_;
 };
 
-// Simulates an uniformely distributed access pattern to a range of
+// Simulates an uniformly distributed access pattern to a range of
 // [0,...,size).
 class Uniform {
  public:

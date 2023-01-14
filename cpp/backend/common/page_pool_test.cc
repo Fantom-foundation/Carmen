@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <optional>
-#include <sstream>
 
 #include "absl/status/status.h"
 #include "backend/common/file.h"

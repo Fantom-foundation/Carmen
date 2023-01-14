@@ -254,24 +254,3 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
-
-cc_library(
-    name="fs_util",
-    hdrs=["fs_util.h"],
-    deps=[
-        "@com_google_absl//absl/status:status",
-        "@com_google_absl//absl/strings",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-cc_test(
-    name = "fs_util_test",
-    srcs = ["fs_util_test.cc"],
-    deps = [
-        ":fs_util",
-        ":file_util",
-        ":status_test_util",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
