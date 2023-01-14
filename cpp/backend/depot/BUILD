@@ -17,7 +17,9 @@ cc_library(
         ":depot",
         "//backend/depot/memory:depot",
         "//backend/depot/cache:cache",
-        "//common:file_util"
+        "//common:file_util",
+        "//common:status_util",
+        "@com_google_absl//absl/status:statusor",
     ],
     testonly = True,
 )
@@ -60,6 +62,7 @@ cc_binary(
         "//backend/depot/leveldb:depot",
         "//backend/depot/cache:cache",
         "//common:benchmark",
+        "//common:status_test_util",
         "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
     ],

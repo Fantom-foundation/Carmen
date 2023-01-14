@@ -27,13 +27,13 @@ class DepotTest : public testing::Test {};
 TYPED_TEST_SUITE_P(DepotTest);
 
 TYPED_TEST_P(DepotTest, TypeProperties) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
   EXPECT_TRUE(std::is_move_constructible_v<decltype(depot)>);
 }
 
 TYPED_TEST_P(DepotTest, DataCanBeAddedAndRetrieved) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
 
   EXPECT_THAT(depot.Get(10), StatusIs(absl::StatusCode::kNotFound, _));
@@ -50,7 +50,7 @@ TYPED_TEST_P(DepotTest, DataCanBeAddedAndRetrieved) {
 }
 
 TYPED_TEST_P(DepotTest, EntriesCanBeUpdated) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
 
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
@@ -64,7 +64,7 @@ TYPED_TEST_P(DepotTest, EntriesCanBeUpdated) {
 }
 
 TYPED_TEST_P(DepotTest, SizeCanBeFatched) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
 
   EXPECT_THAT(depot.GetSize(10), StatusIs(absl::StatusCode::kNotFound, _));
@@ -74,13 +74,13 @@ TYPED_TEST_P(DepotTest, SizeCanBeFatched) {
 }
 
 TYPED_TEST_P(DepotTest, EmptyDepotHasZeroHash) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
   EXPECT_THAT(depot.GetHash(), IsOkAndHolds(Hash{}));
 }
 
 TYPED_TEST_P(DepotTest, NonEmptyDepotHasHash) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
 
   ASSERT_OK_AND_ASSIGN(auto initial_hash, depot.GetHash());
@@ -90,7 +90,7 @@ TYPED_TEST_P(DepotTest, NonEmptyDepotHasHash) {
 }
 
 TYPED_TEST_P(DepotTest, HashChangesBack) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
 
   EXPECT_OK(depot.Set(10, std::array{std::byte{1}, std::byte{2}}));
@@ -115,7 +115,7 @@ TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
            "of 2.";
   }
 
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
 
   // Tests the hashes for values [0x00], [0x00, 0x11] ... [..., 0xFF] inserted
@@ -151,7 +151,7 @@ TYPED_TEST_P(DepotTest, KnownHashesAreReproduced) {
 }
 
 TYPED_TEST_P(DepotTest, EmptyCodeCanBeStored) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
   EXPECT_OK(depot.Set(10, std::span<std::byte>{}));
   EXPECT_THAT(depot.Get(10), IsOkAndHolds(IsEmpty()));
@@ -159,7 +159,7 @@ TYPED_TEST_P(DepotTest, EmptyCodeCanBeStored) {
 
 TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
   constexpr int N = 100;
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
   auto& reference = wrapper.GetReferenceDepot();
 

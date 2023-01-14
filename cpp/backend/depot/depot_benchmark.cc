@@ -7,6 +7,7 @@
 #include "backend/depot/memory/depot.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend::depot {
 namespace {
@@ -40,12 +41,13 @@ void InitDepot(Depot& depot, std::size_t num_elements) {
 // Benchmarks the sequential insertion of keys into depots.
 template <typename Depot>
 void BM_SequentialInsert(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
   for (auto _ : state) {
-    DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+    ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
     auto& depot = wrapper.GetDepot();
     for (int i = 0; i < num_elements; i++) {
-      auto res = depot.Set(i, kInsertValue);
+      ASSERT_OK(depot.Set(i, kInsertValue));
     }
   }
 }
@@ -55,18 +57,19 @@ BENCHMARK_ALL(BM_SequentialInsert, DepotConfigList)->ArgList(kSizes);
 // Benchmarks the appending of new elements to the depot.
 template <typename Depot>
 void BM_Insert(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   // The size of the depot before the inserts.
   auto num_elements = state.range(0);
 
   // Initialize the depot with the initial number of elements.
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
   auto& depot = wrapper.GetDepot();
   InitDepot(depot, num_elements);
 
   // Append additional elements to the end of the depot.
   auto i = num_elements;
   for (auto _ : state) {
-    auto res = depot.Set(i++, kInsertValue);
+    ASSERT_OK(depot.Set(i++, kInsertValue));
   }
 }
 
@@ -75,8 +78,9 @@ BENCHMARK_ALL(BM_Insert, DepotConfigList)->ArgList(kSizes);
 // Benchmarks sequential read of keys.
 template <typename Depot>
 void BM_SequentialRead(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -84,7 +88,7 @@ void BM_SequentialRead(benchmark::State& state) {
 
   int i = 0;
   for (auto _ : state) {
-    auto value = depot.Get(i++ % num_elements);
+    ASSERT_OK_AND_ASSIGN(auto value, depot.Get(i++ % num_elements));
     benchmark::DoNotOptimize(value);
   }
 }
@@ -94,8 +98,9 @@ BENCHMARK_ALL(BM_SequentialRead, DepotConfigList)->ArgList(kSizes);
 // Benchmarks random, uniformly distributed reads
 template <typename Depot>
 void BM_UniformRandomRead(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -105,7 +110,7 @@ void BM_UniformRandomRead(benchmark::State& state) {
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> dist(0, num_elements - 1);
   for (auto _ : state) {
-    auto value = depot.Get(dist(gen));
+    ASSERT_OK_AND_ASSIGN(auto value, depot.Get(dist(gen)));
     benchmark::DoNotOptimize(value);
   }
 }
@@ -115,8 +120,9 @@ BENCHMARK_ALL(BM_UniformRandomRead, DepotConfigList)->ArgList(kSizes);
 // Benchmarks random, exponentially distributed reads
 template <typename Depot>
 void BM_ExponentialRandomRead(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -126,7 +132,9 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
   std::mt19937 gen(rd());
   std::exponential_distribution<> dist(double(10) / num_elements);
   for (auto _ : state) {
-    auto value = depot.Get(static_cast<std::size_t>(dist(gen)) % num_elements);
+    ASSERT_OK_AND_ASSIGN(
+        auto value,
+        depot.Get(static_cast<std::size_t>(dist(gen)) % num_elements));
     benchmark::DoNotOptimize(value);
   }
 }
@@ -136,8 +144,9 @@ BENCHMARK_ALL(BM_ExponentialRandomRead, DepotConfigList)->ArgList(kSizes);
 // Benchmarks sequential writes of keys.
 template <typename Depot>
 void BM_SequentialWrite(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -146,17 +155,18 @@ void BM_SequentialWrite(benchmark::State& state) {
   int i = 0;
   for (auto _ : state) {
     auto value = std::array<std::byte, 1>{static_cast<std::byte>(i)};
-    auto res = depot.Set(i++ % num_elements, value);
+    ASSERT_OK(depot.Set(i++ % num_elements, value));
   }
 }
 
 BENCHMARK_ALL(BM_SequentialWrite, DepotConfigList)->ArgList(kSizes);
 
-// Benchmarks random, uniformely distributed writes.
+// Benchmarks random, uniformly distributed writes.
 template <typename Depot>
 void BM_UniformRandomWrite(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -168,7 +178,7 @@ void BM_UniformRandomWrite(benchmark::State& state) {
   std::uniform_int_distribution<> dist(0, num_elements - 1);
   for (auto _ : state) {
     auto value = std::array<std::byte, 1>{static_cast<std::byte>(i)};
-    auto res = depot.Set(dist(gen), value);
+    ASSERT_OK(depot.Set(dist(gen), value));
   }
 }
 
@@ -177,8 +187,9 @@ BENCHMARK_ALL(BM_UniformRandomWrite, DepotConfigList)->ArgList(kSizes);
 // Benchmarks sequential read of keys.
 template <typename Depot>
 void BM_ExponentialRandomWrite(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -190,7 +201,7 @@ void BM_ExponentialRandomWrite(benchmark::State& state) {
   std::exponential_distribution<> dist(double(10) / num_elements);
   for (auto _ : state) {
     auto value = std::array<std::byte, 1>{static_cast<std::byte>(i)};
-    auto res = depot.Set(dist(gen), value);
+    ASSERT_OK(depot.Set(dist(gen), value));
   }
 }
 
@@ -198,8 +209,9 @@ BENCHMARK_ALL(BM_ExponentialRandomWrite, DepotConfigList)->ArgList(kSizes);
 
 template <typename Depot, bool include_write_time>
 void RunHashSequentialUpdates(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -213,11 +225,11 @@ void RunHashSequentialUpdates(benchmark::State& state) {
       auto value = std::array<std::byte, 4>{
           static_cast<std::byte>(i >> 24), static_cast<std::byte>(i >> 16),
           static_cast<std::byte>(i >> 8), static_cast<std::byte>(i)};
-      auto res = depot.Set(i++ % num_elements, value);
+      ASSERT_OK(depot.Set(i++ % num_elements, value));
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = depot.GetHash();
+    ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
     benchmark::DoNotOptimize(hash);
   }
 }
@@ -231,8 +243,9 @@ BENCHMARK_ALL(BM_HashSequentialUpdates, DepotConfigList)->ArgList(kSizes);
 
 template <typename Depot, bool include_write_time>
 void RunHashUniformUpdates(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -250,11 +263,11 @@ void RunHashUniformUpdates(benchmark::State& state) {
           static_cast<std::byte>(i >> 24), static_cast<std::byte>(i >> 16),
           static_cast<std::byte>(i >> 8), static_cast<std::byte>(i)};
       i++;
-      auto res = depot.Set(dist(gen), value);
+      ASSERT_OK(depot.Set(dist(gen), value));
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = depot.GetHash();
+    ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
     benchmark::DoNotOptimize(hash);
   }
 }
@@ -268,8 +281,9 @@ BENCHMARK_ALL(BM_HashUniformUpdates, DepotConfigList)->ArgList(kSizes);
 
 template <typename Depot, bool include_write_time>
 void RunHashExponentialUpdates(benchmark::State& state) {
+  using Handler = DepotHandler<Depot, kBranchFactor, kHashBoxSize>;
   auto num_elements = state.range(0);
-  DepotHandler<Depot, kBranchFactor, kHashBoxSize> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the depot with the total number of elements.
   auto& depot = wrapper.GetDepot();
@@ -287,11 +301,11 @@ void RunHashExponentialUpdates(benchmark::State& state) {
           static_cast<std::byte>(i >> 24), static_cast<std::byte>(i >> 16),
           static_cast<std::byte>(i >> 8), static_cast<std::byte>(i)};
       i++;
-      auto res = depot.Set(std::size_t(dist(gen)) % num_elements, value);
+      ASSERT_OK(depot.Set(std::size_t(dist(gen)) % num_elements, value));
     }
     if (!include_write_time) state.ResumeTiming();
 
-    auto hash = depot.GetHash();
+    ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
     benchmark::DoNotOptimize(hash);
   }
 }

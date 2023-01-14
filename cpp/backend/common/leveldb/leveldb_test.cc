@@ -9,9 +9,9 @@ namespace carmen::backend {
 namespace {
 
 using ::testing::IsOk;
+using ::testing::IsOkAndHolds;
 using ::testing::Not;
 using ::testing::StrEq;
-using ::testing::IsOkAndHolds;
 
 TEST(LevelDb, TestOpen) {
   TempDir dir;

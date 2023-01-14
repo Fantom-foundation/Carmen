@@ -2,12 +2,12 @@
 #include <random>
 #include <sstream>
 
+#include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "benchmark/benchmark.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
-#include "absl/status/statusor.h"
 
 namespace carmen::backend::store {
 namespace {
@@ -43,7 +43,8 @@ class FileWrapper {
   static absl::StatusOr<FileWrapper> Create() {
     TempFile temp_file;
     ASSIGN_OR_RETURN(auto file, F::Open(temp_file.GetPath()));
-    return FileWrapper(std::make_unique<F>(std::move(file)), std::move(temp_file));
+    return FileWrapper(std::make_unique<F>(std::move(file)),
+                       std::move(temp_file));
   }
 
   FileWrapper(FileWrapper&&) noexcept = default;
@@ -58,7 +59,8 @@ class FileWrapper {
   F& GetFile() { return *file_; }
 
  private:
-  FileWrapper(std::unique_ptr<F> file, TempFile temp_file) : temp_file_(std::move(temp_file)), file_(std::move(file)) {}
+  FileWrapper(std::unique_ptr<F> file, TempFile temp_file)
+      : temp_file_(std::move(temp_file)), file_(std::move(file)) {}
 
   TempFile temp_file_;
   std::unique_ptr<F> file_;

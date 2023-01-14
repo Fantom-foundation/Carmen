@@ -26,6 +26,12 @@ class InMemoryDepot {
     return InMemoryDepot();
   }
 
+  static absl::StatusOr<InMemoryDepot> Open(
+      const std::filesystem::path&, std::size_t hash_branching_factor = 32,
+      std::size_t hash_box_size = 4) {
+    return InMemoryDepot(hash_branching_factor, hash_box_size);
+  }
+
   // Creates a new InMemoryDepot using the provided branching factor and
   // number of items per group for hash computation.
   InMemoryDepot(std::size_t hash_branching_factor = 32,

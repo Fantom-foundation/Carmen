@@ -7,7 +7,6 @@
 
 #include "benchmark/benchmark.h"
 
-
 // Define a list of types to run generic benchmarks on.
 BENCHMARK_TYPE_LIST(MyList, int, float, std::string);
 
