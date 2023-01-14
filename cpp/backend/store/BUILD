@@ -17,7 +17,8 @@ cc_library(
         "//backend/store/memory:store",
         "//backend/store/file:store",
         "//common:file_util",
-        "//common:type", 
+        "//common:status_util",
+        "//common:type",
     ],
     testonly = True,
 )

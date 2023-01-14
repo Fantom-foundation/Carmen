@@ -109,7 +109,7 @@ class FileIndex {
   // Creates an index based on the given files.
   FileIndex(std::unique_ptr<File> primary_page_file,
             std::unique_ptr<File> overflow_page_file,
-            std::unique_ptr<std::filesystem::path>  metadata_file);
+            std::unique_ptr<std::filesystem::path> metadata_file);
 
   // A helper function to locate an entry in this map. Returns a tuple
   // containing the key's hash, the containing bucket, and the containing entry.
@@ -127,9 +127,9 @@ class FileIndex {
 
   // Obtains the index of the bucket the given hash key is supposed to be
   // located in.
-  bucket_id_t GetBucket(hash_t hashkey) const {
-    bucket_id_t bucket = hashkey & high_mask_;
-    return bucket >= num_buckets_ ? hashkey & low_mask_ : bucket;
+  bucket_id_t GetBucket(hash_t hash_key) const {
+    bucket_id_t bucket = hash_key & high_mask_;
+    return bucket >= num_buckets_ ? hash_key & low_mask_ : bucket;
   }
 
   // Returns the overflow page being the tail fo the given bucket. Returns
@@ -231,11 +231,11 @@ FileIndex<K, I, F, page_size>::Open(Context&,
                    File::Open(directory / "primary.dat"));
   ASSIGN_OR_RETURN(auto overflow_page_file,
                    File::Open(directory / "overflow.dat"));
-  auto metadata_file = directory / "metadata.dat";
 
-  auto index = FileIndex(std::make_unique<File>(std::move(primary_page_file)),
-                         std::make_unique<File>(std::move(overflow_page_file)),
-                         std::make_unique<std::filesystem::path>(metadata_file));
+  auto index = FileIndex(
+      std::make_unique<File>(std::move(primary_page_file)),
+      std::make_unique<File>(std::move(overflow_page_file)),
+      std::make_unique<std::filesystem::path>(directory / "metadata.dat"));
   if (!std::filesystem::exists(*index.metadata_file_)) {
     return index;
   }
@@ -244,16 +244,16 @@ FileIndex<K, I, F, page_size>::Open(Context&,
   if (!in || !in.is_open()) {
     return GetStatusWithSystemError(
         absl::StatusCode::kInternal,
-        absl::StrCat("Failed to open metadata file: ", index.metadata_file_->string()));
+        absl::StrCat("Failed to open metadata file: ",
+                     index.metadata_file_->string()));
   }
-  auto read_scalar = [&](auto& scalar) {
+  auto read_scalar = [&](auto& scalar) -> absl::Status {
     in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
-      if (!in.good()) {
-        return GetStatusWithSystemError(
-                absl::StatusCode::kInternal,
-                absl::StrCat("Failed to read metadata file: ", index.metadata_file_->string()));
-      }
-      return absl::OkStatus();
+    if (in.good()) return absl::OkStatus();
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrCat("Failed to read metadata file: ",
+                     index.metadata_file_->string()));
   };
 
   // Start with scalars.
@@ -334,7 +334,8 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   if (page->Insert(hash, key, size_ - 1) == nullptr) {
     auto new_overflow_id = GetFreeOverflowPageId();
     page->SetNext(new_overflow_id);
-    ASSIGN_OR_RETURN(auto result, overflow_pool_.template Get<Page>(new_overflow_id));
+    ASSIGN_OR_RETURN(auto result,
+                     overflow_pool_.template Get<Page>(new_overflow_id));
     auto overflow_page = result.AsPointer();
     assert(overflow_page->Size() == 0);
     assert(overflow_page->GetNext() == 0);
@@ -379,13 +380,11 @@ absl::Status FileIndex<K, I, F, page_size>::Flush() {
 
   // Sync out metadata information.
   std::fstream out(*metadata_file_, std::ios::binary | std::ios::out);
-  auto write_scalar = [&](auto scalar) {
+  auto write_scalar = [&](auto scalar) -> absl::Status {
     out.write(reinterpret_cast<const char*>(&scalar), sizeof(scalar));
-    if (!out.good()) {
-      return absl::InternalError("Failed to write metadata. Error: " +
-                                 std::string(std::strerror(errno)));
-    }
-    return absl::OkStatus();
+    if (out.good()) return absl::OkStatus();
+    return absl::InternalError("Failed to write metadata. Error: " +
+                               std::string(std::strerror(errno)));
   };
 
   // Start with scalars.
@@ -490,7 +489,8 @@ absl::StatusOr<std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
                           typename FileIndex<K, I, F, page_size>::bucket_id_t,
                           typename FileIndex<K, I, F, page_size>::Entry*>>
 FileIndex<K, I, F, page_size>::FindInternal(const K& key) {
-  ASSIGN_OR_RETURN(auto result, const_cast<const FileIndex*>(this)->FindInternal(key));
+  ASSIGN_OR_RETURN(auto result,
+                   const_cast<const FileIndex*>(this)->FindInternal(key));
   auto [hash, bucket, entry] = result;
   return std::tuple{hash, bucket, const_cast<Entry*>(entry)};
 }
@@ -514,7 +514,8 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
 
   // Load data from page to be split into memory.
   std::deque<Entry> entries;
-  ASSIGN_OR_RETURN(auto page_ref, primary_pool_.template Get<Page>(old_bucket_id));
+  ASSIGN_OR_RETURN(auto page_ref,
+                   primary_pool_.template Get<Page>(old_bucket_id));
   Page* page = page_ref.AsPointer();
   while (page != nullptr) {
     for (std::size_t i = 0; i < page->Size(); i++) {

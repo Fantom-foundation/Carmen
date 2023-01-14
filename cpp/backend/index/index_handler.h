@@ -2,16 +2,16 @@
 
 #include <cstddef>
 
+#include "absl/status/statusor.h"
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
 #include "backend/index/leveldb/single_db/index.h"
 #include "backend/index/memory/index.h"
+#include "backend/structure.h"
 #include "common/file_util.h"
 #include "common/type.h"
-#include "absl/status/statusor.h"
-#include "backend/structure.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -41,15 +41,18 @@ class IndexHandler : public IndexHandlerBase<typename Index::key_type,
   static absl::StatusOr<IndexHandler> Create(Args&&... args) {
     TempDir dir;
     Context ctx;
-    ASSIGN_OR_RETURN(auto index,
-                     Index::Open(ctx, dir.GetPath(), std::forward<Args>(args)...));
+    ASSIGN_OR_RETURN(auto index, Index::Open(ctx, dir.GetPath(),
+                                             std::forward<Args>(args)...));
     return IndexHandler(std::move(ctx), std::move(dir), std::move(index));
   }
 
   Index& GetIndex() { return index_; }
 
  private:
-  IndexHandler(Context ctx, TempDir dir, Index idx) : ctx_(std::move(ctx)), temp_dir_(std::move(dir)), index_(std::move(idx)) {};
+  IndexHandler(Context ctx, TempDir dir, Index idx)
+      : ctx_(std::move(ctx)),
+        temp_dir_(std::move(dir)),
+        index_(std::move(idx)){};
 
   Context ctx_;
   TempDir temp_dir_;
@@ -63,15 +66,17 @@ class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
   template <typename... Args>
   static absl::StatusOr<IndexHandler> Create(Args&&... args) {
     TempDir dir;
-    ASSIGN_OR_RETURN(auto index,
-                     SingleLevelDbIndex::Open(dir.GetPath(), std::forward<Args>(args)...));;
+    ASSIGN_OR_RETURN(
+        auto index,
+        SingleLevelDbIndex::Open(dir.GetPath(), std::forward<Args>(args)...));
     return IndexHandler(std::move(dir), index.template KeySpace<K, I>('t'));
   }
 
   LevelDbKeySpace<K, I>& GetIndex() { return index_; }
 
  private:
-  IndexHandler(TempDir dir, LevelDbKeySpace<K, I> idx) : temp_dir_(std::move(dir)), index_(std::move(idx)) {};
+  IndexHandler(TempDir dir, LevelDbKeySpace<K, I> idx)
+      : temp_dir_(std::move(dir)), index_(std::move(idx)){};
 
   TempDir temp_dir_;
   LevelDbKeySpace<K, I> index_;

@@ -36,9 +36,10 @@ class InMemoryStore {
   constexpr static std::size_t kPageSize = page_size;
 
   // A factory function creating an instance of this store type.
-  static absl::StatusOr<InMemoryStore> Open(Context&,
-                                            const std::filesystem::path&) {
-    return InMemoryStore();
+  static absl::StatusOr<InMemoryStore> Open(
+      Context&, const std::filesystem::path&,
+      std::size_t hash_branching_factor = 32) {
+    return InMemoryStore(hash_branching_factor);
   }
 
   // Creates a new InMemoryStore using the provided value as the
@@ -177,7 +178,7 @@ class InMemoryStore {
   // wrapped in a unique pointer to facilitate pointer stability under move.
   std::unique_ptr<Pages> pages_;
 
-  // The data structure hanaging the hashing of states.
+  // The data structure managing the hashing of states.
   mutable HashTree hashes_;
 };
 

@@ -10,7 +10,7 @@
 namespace carmen::backend::index {
 
 // A snapshot of the state of an index providing access to the contained data
-// frozen at it creation time. This definies an interface for index
+// frozen at it creation time. This defines an interface for index
 // implementation specific implementations.
 //
 // The life cycle of a snapshot defines the duration of its availability.

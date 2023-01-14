@@ -28,8 +28,12 @@ class DummyFile {
     return DummyFile();
   }
   std::size_t GetNumPages() { return kFileSize; }
-  absl::Status LoadPage(PageId, std::span<std::byte, kPageSize>) { return absl::OkStatus(); }
-  absl::Status StorePage(PageId, std::span<const std::byte, kPageSize>) { return absl::OkStatus(); }
+  absl::Status LoadPage(PageId, std::span<std::byte, kPageSize>) {
+    return absl::OkStatus();
+  }
+  absl::Status StorePage(PageId, std::span<const std::byte, kPageSize>) {
+    return absl::OkStatus();
+  }
   absl::Status Flush() { return absl::OkStatus(); }
   absl::Status Close() { return absl::OkStatus(); }
 };

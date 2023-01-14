@@ -137,8 +137,8 @@ TYPED_TEST_P(SingleFileTest, NonExistingFileIsCreated) {
 TYPED_TEST_P(SingleFileTest, NestedDirectoryIsCreatedIfNeeded) {
   using File = SingleFileBase<32, TypeParam>;
   TempDir temp_dir;
-  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_dir.GetPath() / "some" / "dir" /
-                                             "file.dat"));
+  ASSERT_OK_AND_ASSIGN(
+      auto file, File::Open(temp_dir.GetPath() / "some" / "dir" / "file.dat"));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath()));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some"));
   EXPECT_TRUE(std::filesystem::exists(temp_dir.GetPath() / "some" / "dir"));

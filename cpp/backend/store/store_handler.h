@@ -7,6 +7,7 @@
 #include "backend/store/file/store.h"
 #include "backend/store/memory/store.h"
 #include "common/file_util.h"
+#include "common/status_util.h"
 
 namespace carmen::backend::store {
 namespace {
@@ -29,12 +30,8 @@ class StoreHandlerBase {
   // page size and branching factor.
   auto& GetReferenceStore() { return reference_; }
 
-  // A temporary directory files of the maintained store a placed in.
-  std::filesystem::path GetStoreDirectory() const { return dir_; }
-
  private:
   ReferenceStore<page_size> reference_;
-  TempDir dir_;
 };
 
 // A generic store handler enclosing the setup and tear down of various store
@@ -49,29 +46,27 @@ template <typename Store, std::size_t branching_factor>
 class StoreHandler
     : public StoreHandlerBase<Store::kPageSize, branching_factor> {
  public:
-  using StoreHandlerBase<Store::kPageSize, branching_factor>::GetStoreDirectory;
-  StoreHandler()
-      : store_(*Store::Open(context_, GetStoreDirectory(), branching_factor)) {}
+  template <typename... Args>
+  static absl::StatusOr<StoreHandler> Create(Args&&... args) {
+    TempDir dir;
+    Context ctx;
+    ASSIGN_OR_RETURN(auto store,
+                     Store::Open(ctx, dir.GetPath(), branching_factor,
+                                 std::forward<Args>(args)...));
+    return StoreHandler(std::move(store), std::move(ctx), std::move(dir));
+  }
+
   Store& GetStore() { return store_; }
 
  private:
+  StoreHandler(Store store, Context context, TempDir dir)
+      : dir_(std::move(dir)),
+        context_(std::move(context)),
+        store_(std::move(store)) {}
+
+  TempDir dir_;
   Context context_;
   Store store_;
-};
-
-// A specialization of a StoreHandler for InMemoryStores handling ingoring the
-// creation/deletion of temporary files and directories.
-template <typename Key, Trivial Value, std::size_t page_size,
-          std::size_t branching_factor>
-class StoreHandler<InMemoryStore<Key, Value, page_size>, branching_factor>
-    : public StoreHandlerBase<page_size, branching_factor> {
- public:
-  StoreHandler() : store_(branching_factor) {}
-
-  InMemoryStore<Key, Value, page_size>& GetStore() { return store_; }
-
- private:
-  InMemoryStore<Key, Value, page_size> store_;
 };
 }  // namespace
 }  // namespace carmen::backend::store

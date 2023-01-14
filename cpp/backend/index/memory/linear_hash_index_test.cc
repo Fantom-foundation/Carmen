@@ -8,7 +8,6 @@ namespace carmen::backend::index {
 namespace {
 
 using ::testing::IsOkAndHolds;
-using ::testing::Optional;
 
 using TestIndex = InMemoryLinearHashIndex<int, int, 16>;
 

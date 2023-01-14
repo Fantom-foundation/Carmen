@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -7,7 +8,6 @@
 #include <filesystem>
 #include <fstream>
 #include <span>
-#include <concepts>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -49,7 +49,8 @@ concept File = requires(F a) {
     } -> std::same_as<absl::Status>;
   // StorePage is intended to be used for fetching a single page from the file.
   {
-    a.StorePage(PageId{}, std::declval<std::span<const std::byte, F::kPageSize>>())
+    a.StorePage(PageId{},
+                std::declval<std::span<const std::byte, F::kPageSize>>())
     } -> std::same_as<absl::Status>;
   // Each file has to support a flush operation after which data previously
   // written must be persisted on disk.
@@ -233,14 +234,15 @@ class SingleFileBase {
  public:
   constexpr static std::size_t kPageSize = page_size;
 
-  static absl::StatusOr<SingleFileBase> Open(const std::filesystem::path& path) {
+  static absl::StatusOr<SingleFileBase> Open(
+      const std::filesystem::path& path) {
     auto file = RawFile::Open(path);
     return SingleFileBase(std::move(*file));
   }
 
   std::size_t GetNumPages() const { return file_.GetFileSize() / page_size; }
 
-  absl::Status LoadPage(PageId id,std::span<std::byte, page_size> trg) const {
+  absl::Status LoadPage(PageId id, std::span<std::byte, page_size> trg) const {
     return file_.Read(id * page_size, trg);
   }
 
@@ -267,7 +269,8 @@ using SingleFile = SingleFileBase<page_size, internal::CFile>;
 // ------------------------------- Definitions --------------------------------
 
 template <std::size_t page_size>
-absl::Status InMemoryFile<page_size>::LoadPage(PageId id, std::span<std::byte, page_size> trg) const {
+absl::Status InMemoryFile<page_size>::LoadPage(
+    PageId id, std::span<std::byte, page_size> trg) const {
   static const Block zero{};
   auto src = id >= data_.size() ? &zero : &data_[id];
   std::memcpy(trg.data(), src, page_size);
@@ -275,7 +278,8 @@ absl::Status InMemoryFile<page_size>::LoadPage(PageId id, std::span<std::byte, p
 }
 
 template <std::size_t page_size>
-absl::Status InMemoryFile<page_size>::StorePage(PageId id, const std::span<const std::byte, page_size> src) {
+absl::Status InMemoryFile<page_size>::StorePage(
+    PageId id, const std::span<const std::byte, page_size> src) {
   while (data_.size() <= id) {
     data_.resize(id + 1);
   }

@@ -133,7 +133,9 @@ TEST(PagePoolTest, ListenersAreNotifiedOnEviction) {
 class MockFile {
  public:
   constexpr static std::size_t kPageSize = kFileSystemPageSize;
-  static absl::StatusOr<MockFile> Open(const std::filesystem::path&) {}
+  static absl::StatusOr<MockFile> Open(const std::filesystem::path&) {
+    return absl::StatusOr<MockFile>();
+  }
   MOCK_METHOD(std::size_t, GetNumPages, ());
   MOCK_METHOD(absl::Status, LoadPage,
               (PageId id, (std::span<std::byte, kPageSize> dest)));

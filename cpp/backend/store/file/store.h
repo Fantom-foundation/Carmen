@@ -24,7 +24,7 @@ namespace internal {
 
 // The FileStoreBase is the common bases of file-backed implementations of a
 // mutable key/value store. It provides mutation, lookup, and global state
-// hashing support. Hashing can occure eager (before evicting pages) or lazy,
+// hashing support. Hashing can occur eager (before evicting pages) or lazy,
 // when requesting hash computations.
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size = 32, bool eager_hashing = true>
@@ -161,7 +161,9 @@ class FileStoreBase {
 
   // Creates a new file store maintaining its content in the given directory and
   // using the provided branching factor for its hash computation.
-  FileStoreBase(std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file, std::size_t hash_branching_factor);
+  FileStoreBase(std::unique_ptr<F<kFilePageSize>> file,
+                std::filesystem::path hash_file,
+                std::size_t hash_branching_factor);
 
   // The page pool handling the in-memory buffer of pages fetched from disk. The
   // pool is placed in a unique pointer to ensure pointer stability when the
@@ -179,14 +181,16 @@ class FileStoreBase {
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
-absl::StatusOr<FileStoreBase<K, V, F, page_size, eager_hashing>> FileStoreBase<K, V, F, page_size, eager_hashing>::Open(
-    Context&, const std::filesystem::path& directory,
-    std::size_t hash_branching_factor) {
+    absl::StatusOr<FileStoreBase<K, V, F, page_size, eager_hashing>>
+    FileStoreBase<K, V, F, page_size, eager_hashing>::Open(
+        Context&, const std::filesystem::path& directory,
+        std::size_t hash_branching_factor) {
   // Make sure the directory exists.
   RETURN_IF_ERROR(CreateDirectory(directory));
   ASSIGN_OR_RETURN(auto file, F<kFilePageSize>::Open(directory / "data.dat"));
-  auto store = FileStoreBase(std::make_unique<F<kFilePageSize>>(std::move(file)),
-                             directory / "hash.dat", hash_branching_factor);
+  auto store =
+      FileStoreBase(std::make_unique<F<kFilePageSize>>(std::move(file)),
+                    directory / "hash.dat", hash_branching_factor);
   if (std::filesystem::exists(store.hash_file_)) {
     RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));
   }
@@ -197,7 +201,8 @@ template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
-    std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file, std::size_t hash_branching_factor)
+    std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file,
+    std::size_t hash_branching_factor)
     : pool_(std::make_unique<PagePool>(std::move(file))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
@@ -209,7 +214,8 @@ template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
-  ASSIGN_OR_RETURN(auto page, pool_->template Get<Page>(key / kNumElementsPerPage));
+  ASSIGN_OR_RETURN(auto page,
+                   pool_->template Get<Page>(key / kNumElementsPerPage));
   auto& trg = page.AsReference()[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
@@ -225,7 +231,8 @@ requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
     StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
         const K& key)
 const {
-  ASSIGN_OR_RETURN(auto page, pool_->template Get<Page>(key / kNumElementsPerPage));
+  ASSIGN_OR_RETURN(auto page,
+                   pool_->template Get<Page>(key / kNumElementsPerPage));
   return page.AsReference()[key % kNumElementsPerPage];
 }
 

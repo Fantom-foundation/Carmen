@@ -5,10 +5,10 @@
 
 #include <cassert>
 
-#include "backend/common/page.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "backend/common/page.h"
 #include "common/status_util.h"
 
 namespace carmen::backend {
@@ -22,15 +22,15 @@ bool CreateDirectoryInternal(const std::filesystem::path& dir) {
   return CreateDirectoryInternal(dir.parent_path()) &&
          std::filesystem::create_directory(dir);
 }
-} // namespace internal
+}  // namespace internal
 
 // Creates the provided directory file path recursively. If the directory
 // fails to be created, returns an error status.
 absl::Status CreateDirectory(const std::filesystem::path& dir) {
   if (!internal::CreateDirectoryInternal(dir)) {
     return GetStatusWithSystemError(
-            absl::StatusCode::kInternal,
-            absl::StrFormat("Failed to create directory %s.", dir.string()));
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to create directory %s.", dir.string()));
   }
   return absl::OkStatus();
 }
@@ -49,8 +49,8 @@ absl::Status CreateFile(const std::filesystem::path& path) {
   std::fstream fs;
   fs.open(path, std::ios::binary | std::ios::out);
   if (!fs.is_open()) {
-    return absl::InternalError(absl::StrFormat(
-        "Failed to open file %s for writing", path.string()));
+    return absl::InternalError(
+        absl::StrFormat("Failed to open file %s for writing", path.string()));
   }
   fs.close();
   if (!fs.good()) {
@@ -69,28 +69,30 @@ alignas(kFileSystemPageSize) static const std::array<char, 1 << 18> kZeros{};
 
 }  // namespace
 
-absl::StatusOr<FStreamFile> FStreamFile::Open(const std::filesystem::path& path) {
+absl::StatusOr<FStreamFile> FStreamFile::Open(
+    const std::filesystem::path& path) {
   RETURN_IF_ERROR(CreateFile(path));
   std::fstream fs;
   fs.open(path, std::ios::binary | std::ios::out | std::ios::in);
   if (!fs.is_open()) {
-    return absl::InternalError(absl::StrFormat(
-        "Failed to open file %s", path.string()));
+    return absl::InternalError(
+        absl::StrFormat("Failed to open file %s", path.string()));
   }
   fs.seekg(0, std::ios::end);
   if (!fs.good()) {
-  return absl::InternalError(absl::StrFormat(
-          "Failed to seek to end of file %s", path.string()));
+    return absl::InternalError(
+        absl::StrFormat("Failed to seek to end of file %s", path.string()));
   }
   auto file_size = fs.tellg();
   if (file_size == -1) {
-    return absl::InternalError(absl::StrFormat(
-        "Failed to get size of file %s", path.string()));
+    return absl::InternalError(
+        absl::StrFormat("Failed to get size of file %s", path.string()));
   }
   return FStreamFile(std::move(fs), file_size);
 }
 
-FStreamFile::FStreamFile(std::fstream fs, std::size_t file_size) : file_size_(file_size), data_(std::move(fs)) {}
+FStreamFile::FStreamFile(std::fstream fs, std::size_t file_size)
+    : file_size_(file_size), data_(std::move(fs)) {}
 
 FStreamFile::~FStreamFile() { Close().IgnoreError(); }
 
@@ -181,34 +183,40 @@ absl::StatusOr<CFile> CFile::Open(const std::filesystem::path& path) {
   // Append mode will create the file if it does not exist.
   auto file = std::fopen(path.string().c_str(), "a");
   if (file == nullptr) {
-    return GetStatusWithSystemError(absl::StatusCode::kInternal,
-                                    absl::StrFormat("Failed to open file %s", path.string()));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to open file %s", path.string()));
   }
   if (std::fclose(file) == EOF) {
-    return GetStatusWithSystemError(absl::StatusCode::kInternal,
-                                    absl::StrFormat("Failed to close file %s", path.string()));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to close file %s", path.string()));
   }
   // But for read/write we need the file to be opened in expended read mode.
   file = std::fopen(path.string().c_str(), "r+b");
   if (file == nullptr) {
-    return GetStatusWithSystemError(absl::StatusCode::kInternal,
-                                    absl::StrFormat("Failed to open file %s", path.string()));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to open file %s", path.string()));
   }
   // Seek to the end to get the file.
   if (std::fseek(file, 0, SEEK_END) != 0) {
-    return GetStatusWithSystemError(absl::StatusCode::kInternal,
-                                  absl::StrFormat("Failed to seek to end of file %s", path.string()));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to seek to end of file %s", path.string()));
   }
   // Get the file size.
   auto file_size = std::ftell(file);
   if (file_size == -1) {
-    return GetStatusWithSystemError(absl::StatusCode::kInternal,
-                                  absl::StrFormat("Failed to get size of file %s", path.string()));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to get size of file %s", path.string()));
   }
   return CFile(file, file_size);
 }
 
-CFile::CFile(std::FILE* file, std::size_t file_size) : file_size_(file_size), file_(file) {}
+CFile::CFile(std::FILE* file, std::size_t file_size)
+    : file_size_(file_size), file_(file) {}
 
 CFile::CFile(CFile&& file) noexcept {
   // Swap the file pointers and invalidate the old one.
@@ -329,20 +337,21 @@ absl::StatusOr<PosixFile> PosixFile::Open(const std::filesystem::path& path) {
   // Open the file.
   if (fd == -1) {
     return GetStatusWithSystemError(
-            absl::StatusCode::kInternal,
-            absl::StrFormat("Failed to open file %s.", path.string()));
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to open file %s.", path.string()));
   }
   // Seek to the end to get the file.
   off_t size = lseek(fd, 0, SEEK_END);
   if (size == -1) {
     return GetStatusWithSystemError(
-            absl::StatusCode::kInternal,
-            absl::StrFormat("Failed to seek to end of file %s.", path.string()));
+        absl::StatusCode::kInternal,
+        absl::StrFormat("Failed to seek to end of file %s.", path.string()));
   }
   return PosixFile(fd, size);
 }
 
-PosixFile::PosixFile(int fd, std::size_t file_size) : file_size_(file_size), fd_(fd) {}
+PosixFile::PosixFile(int fd, std::size_t file_size)
+    : file_size_(file_size), fd_(fd) {}
 
 PosixFile::PosixFile(PosixFile&& file) noexcept {
   // Swap the file descriptors and invalidate the old one.

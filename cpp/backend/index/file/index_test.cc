@@ -2,10 +2,10 @@
 
 #include "backend/common/file.h"
 #include "backend/index/test_util.h"
+#include "backend/structure.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "backend/structure.h"
 
 namespace carmen::backend::index {
 namespace {
@@ -26,7 +26,7 @@ TEST(FileIndexTest, FillTest) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto index, TestIndex::Open(ctx, dir.GetPath()));
   for (int i = 0; i < N; i++) {
-    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(Pair(i, true)));
     for (int j = 0; j < N; j++) {
       if (j <= i) {
         EXPECT_THAT(index.Get(j), IsOkAndHolds(j)) << "Inserted: " << i << "\n";
@@ -45,7 +45,7 @@ TEST(FileIndexTest, FillTest_SmallPages) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto index, Index::Open(ctx, dir.GetPath()));
   for (std::uint32_t i = 0; i < N; i++) {
-    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(Pair(i, true)));
     for (std::uint32_t j = 0; j <= i; j++) {
       EXPECT_THAT(index.Get(j), IsOkAndHolds(j)) << "Inserted: " << i << "\n";
     }
@@ -59,7 +59,7 @@ TEST(FileIndexTest, FillTest_LargePages) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto index, Index::Open(ctx, dir.GetPath()));
   for (std::uint32_t i = 0; i < N; i++) {
-    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(Pair(i, true)));
     for (std::uint32_t j = 0; j <= i; j++) {
       EXPECT_THAT(index.Get(j), IsOkAndHolds(j)) << "Inserted: " << i << "\n";
     }
@@ -74,7 +74,7 @@ TEST(FileIndexTest, LastInsertedElementIsPresent) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto index, TestIndex::Open(ctx, dir.GetPath()));
   for (int i = 0; i < N; i++) {
-    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(std::pair{i, true}));
+    EXPECT_THAT(index.GetOrAdd(i), IsOkAndHolds(Pair(i, true)));
     EXPECT_THAT(index.Get(i), IsOkAndHolds(i));
   }
 }
@@ -88,7 +88,7 @@ TEST(FileIndexTest, StoreCanBeSavedAndRestored) {
   {
     ASSERT_OK_AND_ASSIGN(auto index, Index::Open(ctx, dir.GetPath()));
     for (int i = 0; i < kNumElements; i++) {
-      EXPECT_THAT(index.GetOrAdd(i + 5), IsOkAndHolds(std::pair{i, true}));
+      EXPECT_THAT(index.GetOrAdd(i + 5), IsOkAndHolds(Pair(i, true)));
     }
     ASSERT_OK_AND_ASSIGN(hash, index.GetHash());
   }

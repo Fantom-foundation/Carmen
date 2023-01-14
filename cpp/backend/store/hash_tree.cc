@@ -146,13 +146,11 @@ absl::Status HashTree::SaveToFile(const std::filesystem::path& file) {
         absl::StrFormat("Could not open file %s for writing.", file));
   }
 
-  auto write_scalar = [&out, &file](auto& data) {
+  auto write_scalar = [&](auto& data) -> absl::Status {
     out.write(reinterpret_cast<const char*>(&data), sizeof(data));
-    if (!out.good()) {
-      return absl::InternalError(
-          absl::StrFormat("Could not write to file %s.", file));
-    }
-    return absl::OkStatus();
+    if (out.good()) return absl::OkStatus();
+    return absl::InternalError(
+        absl::StrFormat("Could not write to file %s.", file));
   };
 
   RETURN_IF_ERROR(write_scalar(branching_factor));
@@ -199,13 +197,11 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
         "File %s is too short. Needed 40, got %d bytes.", file, size));
   }
 
-  auto read_scalar = [&in, &file](auto& data) {
+  auto read_scalar = [&](auto& data) -> absl::Status {
     in.read(reinterpret_cast<char*>(&data), sizeof(data));
-    if (!in.good()) {
-      return absl::InternalError(
-          absl::StrFormat("Could not read from file %s.", file));
-    }
-    return absl::OkStatus();
+    if (in.good()) return absl::OkStatus();
+    return absl::InternalError(
+        absl::StrFormat("Could not read from file %s.", file));
   };
 
   in.seekg(0, std::ios::beg);

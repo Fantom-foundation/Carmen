@@ -86,10 +86,10 @@ class alignas(kFileSystemPageSize) RawPage final {
 // typed version of a page in a file containing a fixed length array of trivial
 // elements. Furthermore, it provides index based access to the contained data.
 //
-// The trivial type V is the type of value stored in this page, in the form of an
-// array. The provided num_elements is the number values per page. Note that, if
-// total size of the array is not a multiple of kFileSystemPageSize some extra
-// bytes per page may be kept in memory and on disk.
+// The trivial type V is the type of value stored in this page, in the form of
+// an array. The provided num_elements is the number values per page. Note that,
+// if total size of the array is not a multiple of kFileSystemPageSize some
+// extra bytes per page may be kept in memory and on disk.
 template <Trivial V, std::size_t num_elements = kFileSystemPageSize / sizeof(V)>
 class alignas(kFileSystemPageSize) ArrayPage final {
  public:

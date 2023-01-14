@@ -208,7 +208,8 @@ absl::Status PagePool<F, E>::Close() {
   if (file_) {
     RETURN_IF_ERROR(file_->Close());
   }
-  return absl::OkStatus();}
+  return absl::OkStatus();
+}
 
 template <File F, EvictionPolicy E>
 MemoryFootprint PagePool<F, E>::GetMemoryFootprint() const {

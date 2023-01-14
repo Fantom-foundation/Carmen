@@ -40,7 +40,7 @@ class MultiLevelDbIndex : public internal::LevelDbIndexBase<K, I, 0> {
 
   std::array<char, sizeof(K)> ToDBKey(const K& key) const override {
     std::array<char, sizeof(K)> buffer;
-    memcpy(buffer.data(), &key, sizeof(K));
+    std::memcpy(buffer.data(), &key, sizeof(K));
     return buffer;
   };
 

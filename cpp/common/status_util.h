@@ -36,7 +36,8 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 
 // Get status based on status code. If `errno` error code is set, the error
 // message will be appended to the status message.
-inline absl::Status GetStatusWithSystemError(absl::StatusCode code, std::string_view message) {
+inline absl::Status GetStatusWithSystemError(absl::StatusCode code,
+                                             std::string_view message) {
   if (errno == 0) {
     return {code, message};
   }

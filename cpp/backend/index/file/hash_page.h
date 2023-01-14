@@ -1,8 +1,7 @@
 #pragma once
 
-#include <assert.h>
-
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 
 #include "backend/common/page.h"

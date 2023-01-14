@@ -25,7 +25,7 @@ class PageSource {
 // A HashTree is managing the hashes of a list of pages as well as the
 // aggregation thereof to a single global hash.
 //
-// This class maintains a hirarchy of partially aggregated page hashes,
+// This class maintains a hierarchy of partially aggregated page hashes,
 // as well as dirty state information. Whenever a full hash is requested, dirty
 // (=outdated) hashes are refreshed, before a new global hash is obtained.
 class HashTree {
@@ -59,12 +59,12 @@ class HashTree {
   void MarkDirty(PageId page);
 
   // Computes a global hash for all pages managed by this HashTree. It will
-  // update outdated partical hashes cached internally, which may imply the need
+  // update outdated partial hashes cached internally, which may imply the need
   // for fetching dirty pages.
   Hash GetHash();
 
   // Saves the hashes of this tree into the given file. Before saving them, all
-  // outdated hashes are implicitely refreshed.
+  // outdated hashes are implicitly refreshed.
   absl::Status SaveToFile(const std::filesystem::path& file);
 
   // Discards the current content of this HashTree and loads all hashes from the
@@ -74,11 +74,11 @@ class HashTree {
   absl::Status LoadFromFile(const std::filesystem::path& file);
 
   // Saves the hashes of this tree into the given leveldb path. Before saving
-  // them, all outdated hashes are implicitely refreshed.
+  // them, all outdated hashes are implicitly refreshed.
   absl::Status SaveToLevelDb(const std::filesystem::path& path);
 
   // Saves the hashes of this tree into the given leveldb instance. Before
-  // saving them, all outdated hashes are implicitely refreshed.
+  // saving them, all outdated hashes are implicitly refreshed.
   absl::Status SaveToLevelDb(LevelDb& leveldb);
 
   // Discards the current content of this HashTree and loads all hashes from the

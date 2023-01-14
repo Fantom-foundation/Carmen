@@ -112,13 +112,13 @@ class LinearHashMap {
  private:
   constexpr static const std::uint8_t kInitialHashLength = 2;
 
-  // An entry is the type of a single line in the table underlying this map.
+  // An entry is the type of single line in the table underlying this map.
   struct Entry {
     // Entries need to be sorted by their hash within pages.
     bool operator<(const Entry& other) const { return hash < other.hash; }
     // The cached hash of this entry.
     std::size_t hash;
-    // The key/value pair of this entry.
+    // The key/value a pair of this entry.
     entry_type value;
   };
 
@@ -128,7 +128,7 @@ class LinearHashMap {
   // Note: while entries within a single page are sorted, no sorting criteria is
   // enforced accross pages of a single bucket.
   struct Page {
-    // Locates a entry within a list of pages. If found in the current page, a
+    // Locates an entry within a list of pages. If found in the current page, a
     // pointer to the corresponding entry is returned. If not found, the
     // following page in the list is consulted. If there is no such page, a
     // nullptr is returned.
@@ -263,9 +263,9 @@ class LinearHashMap {
     return {hash, bucket, bucket.Find(hash, key)};
   }
 
-  // Performs a split of a bucket resulting in the linear grow of the table. In
-  // each split one bucket is selected and devided into two buckets. While doing
-  // so, the old bucket is reused and one additional bucket is created.
+  // Performs a split of a bucket resulting in the linear growth of the table.
+  // In each split one bucket is selected and divided into two buckets. While
+  // doing so, the old bucket is reused and one additional bucket is created.
   // Buckets are split in a round-robbing order.
   void Split() {
     assert(next_to_split_ < buckets_.size());
@@ -353,9 +353,9 @@ class LinearHashMap {
 
   // Obtains the index of the bucket the given hash key is supposed to be
   // located.
-  std::size_t GetBucket(std::size_t hashkey) const {
-    std::size_t bucket = hashkey & high_mask_;
-    return bucket >= buckets_.size() ? hashkey & low_mask_ : bucket;
+  std::size_t GetBucket(std::size_t hash_key) const {
+    std::size_t bucket = hash_key & high_mask_;
+    return bucket >= buckets_.size() ? hash_key & low_mask_ : bucket;
   }
 
   // A hasher to compute hashes for keys.

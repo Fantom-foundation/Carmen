@@ -152,7 +152,7 @@ void BM_Hash(benchmark::State& state) {
       ASSERT_OK(index.GetOrAdd(ToKey(i++)));
     }
     state.ResumeTiming();
-    auto hash = index.GetHash();
+    ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
     benchmark::DoNotOptimize(hash);
   }
 }

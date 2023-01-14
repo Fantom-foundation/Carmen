@@ -12,7 +12,7 @@
 namespace carmen::backend::store {
 
 // A snapshot of the state of a store providing access to the contained data
-// frozen at it creation time. This definies an interface for store
+// frozen at it creation time. This defines an interface for store
 // implementation specific implementations.
 //
 // The life cycle of a snapshot defines the duration of its availability.

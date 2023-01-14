@@ -57,12 +57,12 @@ concept Structure = requires(S a) {
   // Structures must be closeable.
   { a.Close() } -> std::same_as<absl::Status>;
 }
-// All structures must be moveable.
+// All structures must be movable.
 &&std::is_move_constructible_v<S>
     // Structures must provide memory-footprint information.
     && MemoryFootprintProvider<S>;
 
-// Extends the requiremetns of a data structure by an additional need for
+// Extends the requirements of a data structure by an additional need for
 // supporting effective full-state hashing.
 template <typename S>
 concept HashableStructure = Structure<S> && requires(S a) {
