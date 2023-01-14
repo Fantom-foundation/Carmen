@@ -18,7 +18,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	mapldb "github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
-	mapfile "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	mapmem "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	cachedStore "github.com/Fantom-foundation/Carmen/go/backend/store/cache"
 	ldbstore "github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
@@ -160,9 +159,7 @@ func NewGoFileState(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	addressToSlots := mapfile.NewMultiMap[uint32, uint32]()
-
+	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
 	state := &GoState{
 		addressIndex,
 		keyIndex,
@@ -260,9 +257,7 @@ func NewGoCachedFileState(path string) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	addressToSlots := mapfile.NewMultiMap[uint32, uint32]()
-
+	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
 	state := &GoState{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
