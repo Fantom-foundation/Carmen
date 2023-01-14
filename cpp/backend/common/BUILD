@@ -62,6 +62,7 @@ cc_binary(
         "//common:file_util",
         "//common:status_test_util",
         "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_absl//absl/status:statusor",
         "//third_party/gperftools:profiler",
     ],
     testonly = True,
