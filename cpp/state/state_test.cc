@@ -1,11 +1,7 @@
 #include "state/state.h"
 
-#include "backend/depot/memory/depot.h"
-#include "backend/index/memory/index.h"
-#include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/file_util.h"
-#include "common/memory_usage.h"
 #include "common/status_test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"

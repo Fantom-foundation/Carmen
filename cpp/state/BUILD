@@ -17,6 +17,8 @@ cc_test(
         ":state",
         ":configurations",
         "//common:status_test_util",
+        "//common:type",
+        "//common:account_state",
         "//common:file_util",
         "@com_google_googletest//:gtest_main",
     ],
