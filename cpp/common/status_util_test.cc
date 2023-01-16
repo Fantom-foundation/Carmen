@@ -2,6 +2,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "cerrno"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
 
@@ -11,6 +12,7 @@ using ::testing::_;
 using ::testing::IsOk;
 using ::testing::Not;
 using ::testing::StatusIs;
+using ::testing::StrEq;
 
 absl::Status Ok() { return absl::OkStatus(); }
 
@@ -99,5 +101,23 @@ TEST(ReferenceWraperTest, PointsToSameValue) {
   int x = 10;
   auto wrapper = ReferenceWrapper<int>(x);
   EXPECT_EQ(x, *wrapper.AsPointer());
+}
+
+TEST(StatusWithSystemErrorTest, HasNoSystemError) {
+  auto status = GetStatusWithSystemError(absl::StatusCode::kInvalidArgument,
+                                         "Invalid arguments.");
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInvalidArgument,
+                               StrEq("Invalid arguments.")));
+}
+
+TEST(StatusWithSystemErrorTest, HasSystemError) {
+  // set error code to ENOENT
+  errno = ENOENT;
+  auto status =
+      GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
+  EXPECT_THAT(
+      status,
+      StatusIs(absl::StatusCode::kInternal,
+               StrEq("Internal error. Error: No such file or directory")));
 }
 }  // namespace

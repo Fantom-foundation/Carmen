@@ -5,6 +5,7 @@
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "cerrno"
 
 // This header provides a few utility macros for dealing with absl::Status and
 // absl::StatusOr values. The main intention is to make code using Status codes
