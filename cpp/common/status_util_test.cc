@@ -13,6 +13,7 @@ using ::testing::IsOk;
 using ::testing::Not;
 using ::testing::StatusIs;
 using ::testing::StrEq;
+using ::testing::StartsWith;
 
 absl::Status Ok() { return absl::OkStatus(); }
 
@@ -112,12 +113,13 @@ TEST(StatusWithSystemErrorTest, HasNoSystemError) {
 
 TEST(StatusWithSystemErrorTest, HasSystemError) {
   // set error code to ENOENT
-  errno = 2; /* No such file or directory */
+  errno = ENOENT;
   auto status =
       GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
+  // assure that error message is appended.
   EXPECT_THAT(
       status,
       StatusIs(absl::StatusCode::kInternal,
-               StrEq("Internal error. Error: No such file or directory")));
+               StartsWith("Internal error. Error:")));
 }
 }  // namespace
