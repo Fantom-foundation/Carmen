@@ -112,7 +112,7 @@ TEST(StatusWithSystemErrorTest, HasNoSystemError) {
 
 TEST(StatusWithSystemErrorTest, HasSystemError) {
   // set error code to ENOENT
-  errno = ENOENT;
+  errno = 2; /* No such file or directory */
   auto status =
       GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
   EXPECT_THAT(
