@@ -91,13 +91,13 @@ TEST(StatusMacroTest, AssignOrReturnCanReturnPlainStatus) {
 
 TEST(ReferenceWraperTest, ReferenceAddressesAreEqual) {
   int x = 10;
-  auto wrapper = internal::ReferenceWrapper<int>(x);
+  auto wrapper = ReferenceWrapper<int>(x);
   EXPECT_EQ(&x, &wrapper.AsReference());
 }
 
 TEST(ReferenceWraperTest, PointsToSameValue) {
   int x = 10;
-  auto wrapper = internal::ReferenceWrapper<int>(x);
+  auto wrapper = ReferenceWrapper<int>(x);
   EXPECT_EQ(x, *wrapper.AsPointer());
 }
 }  // namespace

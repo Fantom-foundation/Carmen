@@ -44,7 +44,8 @@ inline absl::Status GetStatusWithSystemError(absl::StatusCode code,
   return {code, absl::StrCat(message, " Error: ", std::strerror(errno))};
 }
 
-namespace internal {
+// Wrapper around std::reference_wrapper that provides functions to access the
+// wrapped value as reference or pointer.
 template <typename T>
 class ReferenceWrapper : public std::reference_wrapper<T> {
  public:
@@ -54,11 +55,10 @@ class ReferenceWrapper : public std::reference_wrapper<T> {
   // Returns a pointer to the wrapped value.
   T* AsPointer() const { return &AsReference(); }
 };
-}  // namespace internal
 
 // Type definition for a StatusOr<T> that can be used with reference types.
 template <typename T>
-using StatusOrRef = absl::StatusOr<internal::ReferenceWrapper<T>>;
+using StatusOrRef = absl::StatusOr<ReferenceWrapper<T>>;
 
 // The implementation of RETURN_IF_ERROR below, more compact as if it would be
 // if it would be written inline.
