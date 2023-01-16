@@ -97,6 +97,7 @@ var (
 	A = []byte{0xAA}
 	B = []byte{0xBB, 0xBB}
 	C = []byte{0xCC}
+	D = []byte{0x11, 0x22, 0x33, 0x44}
 )
 
 func TestSetGet(t *testing.T) {
@@ -129,6 +130,19 @@ func TestSetGet(t *testing.T) {
 			}
 			if value, _ := d.Get(2); !bytes.Equal(value, C) {
 				t.Errorf("reading written C returned different value")
+			}
+
+			if value, _ := d.GetSize(5); value != 0 {
+				t.Errorf("not-existing value is not reported as zero-length")
+			}
+			if value, _ := d.GetSize(0); value != len(A) {
+				t.Errorf("reading written A returned different length")
+			}
+			if value, _ := d.GetSize(1); value != len(B) {
+				t.Errorf("reading written B returned different length")
+			}
+			if value, _ := d.GetSize(2); value != len(C) {
+				t.Errorf("reading written C returned different length")
 			}
 		})
 	}
@@ -167,6 +181,37 @@ func TestSetToArbitraryPosition(t *testing.T) {
 			}
 			if value, _ := d.Get(9); !bytes.Equal(value, C) {
 				t.Errorf("reading written C returned different value")
+			}
+		})
+	}
+}
+
+func TestDepotMutability(t *testing.T) {
+	for _, factory := range getDepotsFactories(t, 3, 2) {
+		t.Run(factory.label, func(t *testing.T) {
+			d := factory.getDepot(t.TempDir())
+			defer d.Close()
+
+			err := d.Set(4, B)
+			if err != nil {
+				t.Fatalf("failed to initialize B; %s", err)
+			}
+
+			if value, _ := d.GetSize(4); value != len(B) {
+				t.Errorf("reading written D returned different length")
+			}
+
+			// override B with D
+			err = d.Set(4, D)
+			if err != nil {
+				t.Fatalf("failed to override B with D; %s", err)
+			}
+
+			if value, _ := d.Get(4); !bytes.Equal(value, D) {
+				t.Errorf("reading written D returned different value")
+			}
+			if value, _ := d.GetSize(4); value != len(D) {
+				t.Errorf("reading written D returned different length")
 			}
 		})
 	}
@@ -277,7 +322,7 @@ func TestHashAfterChangingBack(t *testing.T) {
 	}
 }
 
-func TestStoresPages(t *testing.T) {
+func TestDepotPages(t *testing.T) {
 	for _, factory := range getDepotsFactories(t, 3, 2) {
 		t.Run(factory.label, func(t *testing.T) {
 			d := factory.getDepot(t.TempDir())
