@@ -136,8 +136,7 @@ class LevelDbDepot {
 
     // Get data for given page. The data is valid until the next call to
     // this function.
-    std::span<const std::byte> GetPageData(PageId id) override {
-      static auto empty = std::array<std::byte, 0>{};
+    absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
       const std::size_t lengths_size = hash_box_size_ * sizeof(ItemLength);
 
       auto start = id * hash_box_size_;
@@ -166,7 +165,7 @@ class LevelDbDepot {
           case absl::StatusCode::kNotFound:
             break;
           default:
-            return empty;
+            return result.status();
         }
       }
 
