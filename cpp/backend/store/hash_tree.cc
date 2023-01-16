@@ -40,7 +40,7 @@ void HashTree::MarkDirty(PageId page) {
   dirty_pages_.insert(page);
 }
 
-Hash HashTree::GetHash() {
+absl::StatusOr<Hash> HashTree::GetHash() {
   // If there are no pages, the full hash is zero by definition.
   if (num_pages_ == 0) {
     return Hash{};
@@ -55,7 +55,7 @@ Hash HashTree::GetHash() {
   absl::flat_hash_set<int> dirty_parent;
   std::swap(dirty_level_one_positions_, dirty_parent);
   for (PageId i : dirty_pages_) {
-    auto data = page_source_->GetPageData(i);
+    ASSIGN_OR_RETURN(auto data, page_source_->GetPageData(i));
     GetMutableHash(0, i) = carmen::GetHash(hasher_, data);
     dirty_parent.insert(i / branching_factor_);
   }
@@ -138,7 +138,7 @@ absl::Status HashTree::SaveToFile(const std::filesystem::path& file) {
 
   std::uint32_t branching_factor = branching_factor_;
   std::uint32_t num_pages = num_pages_;
-  auto hash = GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
 
   std::fstream out(file, std::ios::binary | std::ios::out);
   if (!out) {
@@ -261,7 +261,7 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
   }
 
   // Recompute hashes.
-  auto hash = GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
 
   if (hash != file_hash) {
     std::stringstream ss;
@@ -274,10 +274,11 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
 }
 
 absl::Status HashTree::SaveToLevelDb(LevelDb& leveldb) {
+  ASSIGN_OR_RETURN(auto hash, GetHash());
   RETURN_IF_ERROR(
       leveldb.Add({"ht_branching_factor", AsChars(branching_factor_)}));
   RETURN_IF_ERROR(leveldb.Add({"ht_num_pages", AsChars(num_pages_)}));
-  RETURN_IF_ERROR(leveldb.Add({"ht_hash", AsChars(GetHash())}));
+  RETURN_IF_ERROR(leveldb.Add({"ht_hash", AsChars(hash)}));
 
   for (std::size_t i = 0; i < num_pages_; i++) {
     RETURN_IF_ERROR(
@@ -336,7 +337,7 @@ absl::Status HashTree::LoadFromLevelDb(const LevelDb& leveldb) {
   }
 
   // Recompute hashes.
-  auto hash = GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
 
   if (hash != file_hash) {
     std::stringstream ss;

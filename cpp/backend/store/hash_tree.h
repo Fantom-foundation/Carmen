@@ -6,6 +6,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "backend/common/page_id.h"
 #include "common/hash.h"
@@ -19,7 +20,7 @@ class PageSource {
  public:
   virtual ~PageSource(){};
   // Requests a view on the data of the given page.
-  virtual std::span<const std::byte> GetPageData(PageId id) = 0;
+  virtual absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) = 0;
 };
 
 // A HashTree is managing the hashes of a list of pages as well as the
@@ -61,7 +62,7 @@ class HashTree {
   // Computes a global hash for all pages managed by this HashTree. It will
   // update outdated partial hashes cached internally, which may imply the need
   // for fetching dirty pages.
-  Hash GetHash();
+  absl::StatusOr<Hash> GetHash();
 
   // Saves the hashes of this tree into the given file. Before saving them, all
   // outdated hashes are implicitly refreshed.

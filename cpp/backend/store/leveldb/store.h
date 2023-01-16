@@ -128,7 +128,7 @@ class LevelDbStore {
 
     // Get data for given page. The data is valid until the next call to
     // this function.
-    std::span<const std::byte> GetPageData(PageId id) override {
+    absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
       K start = id * elements_per_page;
       K end = start + elements_per_page;
 
@@ -136,9 +136,16 @@ class LevelDbStore {
       std::size_t offset = 0;
       for (K i = start; i < end; i++) {
         auto res = db_.Get(AsChars(i));
-        auto src =
-            res.ok() ? reinterpret_cast<std::byte*>(res->data()) : empty.data();
-        std::memcpy(page_buffer_.data() + offset, src, sizeof(V));
+        switch (res.status().code()) {
+          case absl::StatusCode::kOk:
+            std::memcpy(page_buffer_.data() + offset, res->data(), sizeof(V));
+            break;
+          case absl::StatusCode::kNotFound:
+            std::memcpy(page_buffer_.data() + offset, empty.data(), sizeof(V));
+            break;
+          default:
+            return res.status();
+        }
         offset += sizeof(V);
       }
 
