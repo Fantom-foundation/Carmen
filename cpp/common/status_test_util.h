@@ -1,13 +1,14 @@
 #pragma once
 
 #include "absl/strings/str_cat.h"
+#include "common/macro_utils.h"
 #include "common/status_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 // A few additional gtest expectations and assertions.
-#define EXPECT_OK(expr) EXPECT_TRUE((expr).ok())
-#define ASSERT_OK(expr) ASSERT_TRUE((expr).ok())
+#define EXPECT_OK(expr) EXPECT_THAT((expr), ::testing::IsOk())
+#define ASSERT_OK(expr) ASSERT_THAT((expr), ::testing::IsOk())
 
 // The implementation of ASSERT_OK_AND_ASSIGN below, more compact as if it would
 // be if it would be written inline.
@@ -35,8 +36,10 @@
 //
 // to declare and initialize a new variable x in the current scope. The variable
 // X will be of the value type stored inside the StatusOr type.
-#define ASSERT_OK_AND_ASSIGN(lhs, expr) \
-  INTERNAL_ASSERT_OK_AND_ASSIGN_IMPL(lhs, expr, CONCAT(_status_, __LINE__))
+#define ASSERT_OK_AND_ASSIGN(lhs, expr)                                 \
+  INTERNAL_ASSERT_OK_AND_ASSIGN_IMPL(REMOVE_OPTIONAL_PARENTHESIS(lhs),  \
+                                     REMOVE_OPTIONAL_PARENTHESIS(expr), \
+                                     CONCAT(_status_, __LINE__))
 
 namespace testing {
 

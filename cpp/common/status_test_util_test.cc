@@ -56,6 +56,13 @@ TEST(StatusTestUtilTest, AssertOkAndAssingWorks) {
   EXPECT_EQ(x, 14);
 }
 
+TEST(StatusTestUtilTest, AssertOkAndAssingWorksWithDecomposition) {
+  ASSERT_OK_AND_ASSIGN((auto [a, b]),
+                       (absl::StatusOr<std::pair<int, int>>({12, 14})));
+  EXPECT_EQ(a, 12);
+  EXPECT_EQ(b, 14);
+}
+
 TEST(StatusTestUtilTest, IsOkAndHoldsAcceptsMatcher) {
   absl::StatusOr<std::pair<int, char>> example(std::make_pair(12, 'a'));
   EXPECT_THAT(example, IsOkAndHolds(std::make_pair(12, 'a')));
