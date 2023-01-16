@@ -190,6 +190,7 @@ cc_library(
     name="status_util",
     hdrs=["status_util.h"],
     deps=[
+        ":macro_utils",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/status:statusor"

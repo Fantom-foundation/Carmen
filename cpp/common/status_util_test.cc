@@ -89,4 +89,15 @@ TEST(StatusMacroTest, AssignOrReturnCanReturnPlainStatus) {
               StatusIs(absl::StatusCode::kInternal, _));
 }
 
+absl::StatusOr<std::pair<int, int>> CreatePair() { return std::pair{1, 2}; }
+
+absl::StatusOr<int> AssignOrReturnWithDecomposition() {
+  ASSIGN_OR_RETURN((auto [a, b]), CreatePair());
+  return a + b;
+}
+
+TEST(StatusMacroTest, AssignCanHandleDecomposition) {
+  EXPECT_THAT(AssignOrReturnWithDecomposition(), 3);
+}
+
 }  // namespace
