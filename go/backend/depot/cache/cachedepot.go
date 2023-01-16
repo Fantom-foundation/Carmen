@@ -24,6 +24,7 @@ func (m *Depot[I]) Set(id I, value []byte) (err error) {
 		return err
 	}
 	m.cache.Set(id, value)
+	m.sizeCache.Set(id, len(value))
 	return nil
 }
 
@@ -75,6 +76,7 @@ func (m *Depot[I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("cache", m.cache.GetDynamicMemoryFootprint(func(value []byte) uintptr {
 		return uintptr(cap(value)) // memory consumed by the code slice
 	}))
+	mf.AddChild("sizeCache", m.sizeCache.GetMemoryFootprint(0))
 	mf.AddChild("sourceDepot", m.depot.GetMemoryFootprint())
 	return mf
 }
