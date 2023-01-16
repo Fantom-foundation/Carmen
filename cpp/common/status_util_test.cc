@@ -4,6 +4,7 @@
 #include "absl/status/statusor.h"
 #include "cerrno"
 #include "common/status_test_util.h"
+#include "fstream"
 #include "gtest/gtest.h"
 
 namespace {
@@ -11,9 +12,9 @@ namespace {
 using ::testing::_;
 using ::testing::IsOk;
 using ::testing::Not;
+using ::testing::StartsWith;
 using ::testing::StatusIs;
 using ::testing::StrEq;
-using ::testing::StartsWith;
 
 absl::Status Ok() { return absl::OkStatus(); }
 
@@ -113,13 +114,11 @@ TEST(StatusWithSystemErrorTest, HasNoSystemError) {
 
 TEST(StatusWithSystemErrorTest, HasSystemError) {
   // set error code to ENOENT
-  errno = ENOENT;
+  std::fstream file("non_existent_file", std::ios::in);
   auto status =
       GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
   // assure that error message is appended.
-  EXPECT_THAT(
-      status,
-      StatusIs(absl::StatusCode::kInternal,
-               StartsWith("Internal error. Error:")));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
+                               StartsWith("Internal error. Error:")));
 }
 }  // namespace
