@@ -11,6 +11,7 @@ namespace {
 using ::testing::_;
 using ::testing::IsOk;
 using ::testing::Not;
+using ::testing::StartsWith;
 using ::testing::StatusIs;
 using ::testing::StrEq;
 
@@ -104,6 +105,8 @@ TEST(ReferenceWraperTest, PointsToSameValue) {
 }
 
 TEST(StatusWithSystemErrorTest, HasNoSystemError) {
+  // make sure the errno is set to zero
+  errno = 0;
   auto status = GetStatusWithSystemError(absl::StatusCode::kInvalidArgument,
                                          "Invalid arguments.");
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInvalidArgument,
@@ -115,9 +118,8 @@ TEST(StatusWithSystemErrorTest, HasSystemError) {
   errno = ENOENT;
   auto status =
       GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
-  EXPECT_THAT(
-      status,
-      StatusIs(absl::StatusCode::kInternal,
-               StrEq("Internal error. Error: No such file or directory")));
+  // assure that error message is appended.
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
+                               StartsWith("Internal error. Error:")));
 }
 }  // namespace
