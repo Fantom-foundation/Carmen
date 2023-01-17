@@ -118,7 +118,7 @@ namespace internal {
 
 // A concept identifying types that can be written to an output stream.
 template <typename T>
-concept StreamableToOutputStream = requires(T a) {
+concept StreamableToOutputStream = requires(const T a) {
   { std::declval<std::ostream&>() << a } -> std::same_as<std::ostream&>;
 };
 
@@ -139,7 +139,7 @@ std::ostream& operator<<(std::ostream& out, const StatusOr<T>& status) {
   }
   // If there is no output format defined, use gunit's universal printing
   // format.
-  return out << testing::PrintToString(*status);
+  return out << testing::PrintToString<T>(*status);
 }
 
 }  // namespace absl
