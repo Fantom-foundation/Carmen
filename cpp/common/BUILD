@@ -1,7 +1,7 @@
 cc_library(
     name = "test_util",
-    hdrs = ["test_util.h"],
     testonly = True,
+    hdrs = ["test_util.h"],
     visibility = ["//visibility:public"],
 )
 
@@ -14,12 +14,12 @@ cc_library(
 cc_library(
     name = "benchmark",
     hdrs = ["benchmark.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":macro_utils",
-        "@com_google_absl//absl/strings",
         "@com_github_google_benchmark//:benchmark",
+        "@com_google_absl//absl/strings",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_binary(
@@ -27,17 +27,17 @@ cc_binary(
     srcs = ["benchmark_benchmark.cc"],
     deps = [
         ":benchmark",
-        "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
     ],
 )
 
 cc_library(
-    name="hex_util",
-    hdrs=["hex_util.h"],
-    srcs=["hex_util.cc"],
-    deps=[],
+    name = "hex_util",
+    srcs = ["hex_util.cc"],
+    hdrs = ["hex_util.h"],
     visibility = ["//visibility:public"],
+    deps = [],
 )
 
 cc_test(
@@ -51,13 +51,13 @@ cc_test(
 )
 
 cc_library(
-    name="type",
-    hdrs=["type.h"],
-    srcs=["type.cc"],
-    deps=[
-        ":hex_util"
-    ],
+    name = "type",
+    srcs = ["type.cc"],
+    hdrs = ["type.h"],
     visibility = ["//visibility:public"],
+    deps = [
+        ":hex_util",
+    ],
 )
 
 cc_test(
@@ -72,15 +72,15 @@ cc_test(
 )
 
 cc_library(
-    name="hash",
-    hdrs=["hash.h"],
-    srcs=["hash.cc"],
-    deps=[
+    name = "hash",
+    srcs = ["hash.cc"],
+    hdrs = ["hash.h"],
+    visibility = ["//visibility:public"],
+    deps = [
         ":type",
         "@boringssl//:crypto",
         "@ethash//:keccak",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
@@ -94,12 +94,12 @@ cc_test(
 )
 
 cc_library(
-    name="heterogenous_map",
-    hdrs=["heterogenous_map.h"],
-    deps=[
+    name = "heterogenous_map",
+    hdrs = ["heterogenous_map.h"],
+    visibility = ["//visibility:public"],
+    deps = [
         "@com_google_absl//absl/container:flat_hash_map",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
@@ -112,13 +112,13 @@ cc_test(
 )
 
 cc_library(
-    name="file_util",
-    hdrs=["file_util.h"],
-    srcs=["file_util.cc"],
-    deps=[
-    ],
-    visibility = ["//visibility:public"],
+    name = "file_util",
     testonly = True,
+    srcs = ["file_util.cc"],
+    hdrs = ["file_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+    ],
 )
 
 cc_test(
@@ -131,12 +131,12 @@ cc_test(
 )
 
 cc_library(
-    name="account_state",
-    hdrs=["account_state.h"],
-    srcs=["account_state.cc"],
-    deps=[
-    ],
+    name = "account_state",
+    srcs = ["account_state.cc"],
+    hdrs = ["account_state.h"],
     visibility = ["//visibility:public"],
+    deps = [
+    ],
 )
 
 cc_test(
@@ -155,24 +155,24 @@ cc_binary(
     srcs = ["hash_benchmark.cc"],
     deps = [
         ":hash",
-        "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
     ],
 )
 
 cc_library(
-    name="memory_usage",
-    hdrs=["memory_usage.h"],
-    srcs=["memory_usage.cc"],
-    deps=[
+    name = "memory_usage",
+    srcs = ["memory_usage.cc"],
+    hdrs = ["memory_usage.h"],
+    visibility = ["//visibility:public"],
+    deps = [
         ":status_util",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/functional:function_ref",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
@@ -180,49 +180,49 @@ cc_test(
     srcs = ["memory_usage_test.cc"],
     deps = [
         ":memory_usage",
-        ":test_util",
         ":status_test_util",
+        ":test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
 
 cc_library(
-    name="status_util",
-    hdrs=["status_util.h"],
-    deps=[
+    name = "status_util",
+    hdrs = ["status_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [
         ":macro_utils",
         "@com_google_absl//absl/base",
-        "@com_google_absl//absl/status:status",
-        "@com_google_absl//absl/status:statusor"
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
     name = "status_util_test",
     srcs = ["status_util_test.cc"],
     deps = [
-        ":status_util",
         ":status_test_util",
-        "@com_google_absl//absl/status:status",
+        ":status_util",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
 
 cc_library(
-    name="status_test_util",
-    hdrs=["status_test_util.h"],
-    deps=[
+    name = "status_test_util",
+    testonly = True,
+    hdrs = ["status_test_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [
         ":status_util",
         "@com_google_absl//absl/base",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
     ],
-    visibility = ["//visibility:public"],
-    testonly = True,
 )
 
 cc_test(
@@ -230,19 +230,19 @@ cc_test(
     srcs = ["status_test_util_test.cc"],
     deps = [
         ":status_test_util",
-        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
 
 cc_library(
-    name="byte_util",
-    hdrs=["byte_util.h"],
-    deps=[
-        "@com_google_absl//absl/status:statusor"
-    ],
+    name = "byte_util",
+    hdrs = ["byte_util.h"],
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_absl//absl/status:statusor",
+    ],
 )
 
 cc_test(
@@ -258,23 +258,39 @@ cc_test(
 
 cc_library(
     name = "fstream",
-    hdrs = ["fstream.h"],
     srcs = ["fstream.cc"],
-    deps = [
-        "@com_google_absl//absl/status:status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:strings",
-    ],
+    hdrs = ["fstream.h"],
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
 )
 
 cc_test(
     name = "fstream_test",
     srcs = ["fstream_test.cc"],
     deps = [
+        ":file_util",
         ":fstream",
         ":status_test_util",
-        ":file_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "variant_util",
+    hdrs = ["variant_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [],
+)
+
+cc_test(
+    name = "variant_util_test",
+    srcs = ["variant_util_test.cc"],
+    deps = [
+        ":variant_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
