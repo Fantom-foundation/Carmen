@@ -4,7 +4,6 @@
 #include "absl/status/statusor.h"
 #include "cerrno"
 #include "common/status_test_util.h"
-#include "fstream"
 #include "gtest/gtest.h"
 
 namespace {
@@ -106,6 +105,8 @@ TEST(ReferenceWraperTest, PointsToSameValue) {
 }
 
 TEST(StatusWithSystemErrorTest, HasNoSystemError) {
+  // make sure the errno is set to zero
+  errno = 0;
   auto status = GetStatusWithSystemError(absl::StatusCode::kInvalidArgument,
                                          "Invalid arguments.");
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInvalidArgument,
@@ -114,7 +115,7 @@ TEST(StatusWithSystemErrorTest, HasNoSystemError) {
 
 TEST(StatusWithSystemErrorTest, HasSystemError) {
   // set error code to ENOENT
-  std::fstream file("non_existent_file", std::ios::in);
+  errno = ENOENT;
   auto status =
       GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
   // assure that error message is appended.
