@@ -255,3 +255,26 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "fstream",
+    hdrs = ["fstream.h"],
+    srcs = ["fstream.cc"],
+    deps = [
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:strings",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "fstream_test",
+    srcs = ["fstream_test.cc"],
+    deps = [
+        ":fstream",
+        ":status_test_util",
+        ":file_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
