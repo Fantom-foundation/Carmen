@@ -125,3 +125,24 @@ cc_binary(
         "//third_party/gperftools:profiler",
     ],
 )
+
+cc_library(
+    name = "page_manager",
+    hdrs = ["page_manager.h"],
+    deps = [
+        ":page",
+        ":page_id",
+        ":page_pool",
+    ],
+    visibility = ["//backend:__subpackages__"],
+)
+
+cc_test(
+    name = "page_manager_test",
+    srcs = ["page_manager_test.cc"],
+    deps = [
+        ":page_manager",
+        "//common:status_test_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
