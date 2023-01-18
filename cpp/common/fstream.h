@@ -19,39 +19,36 @@ class FStream {
   static absl::StatusOr<FStream> Open(const std::filesystem::path& path,
                                       std::ios::openmode mode);
 
-  // Reads the given number of elements from the file into the given buffer. The
-  // buffer must be large enough to hold the requested number of elements.
+  // Reads the number of elements from file specified by size of the buffer.
   // Returns an error if read failed.
   template <typename T>
-  absl::Status Read(std::span<T> buffer, std::size_t count);
+  absl::Status Read(std::span<T> buffer);
 
-  // Reads the given number of elements from the file into the given buffer. The
-  // buffer must be large enough to hold the requested number of elements. When
-  // the end of the file is reached, the eof flag is swallowed. Returns an error
-  // if read failed.
+  // Reads the number of elements from file specified by size of the buffer.
+  // When the end of the file is reached, the eof flag is swallowed. Returns
+  // number of elements read. Returns an error if read failed.
   template <typename T>
-  absl::Status ReadUntilEof(std::span<T> buffer, std::size_t count);
+  absl::StatusOr<std::size_t> ReadUntilEof(std::span<T> buffer);
 
-  // Writes the given number of elements from the given buffer to the file. The
-  // buffer must contain at least the requested number of elements. Returns an
-  // error if write failed.
+  // Writes the number of elements to file specified by size of the buffer.
+  // Returns an error if write failed.
   template <typename T>
-  absl::Status Write(std::span<const T> data, std::size_t count);
+  absl::Status Write(std::span<const T> data);
 
   // Seek to the given offset in the file. Should be used when reading from file
-  // at certain position. Returns an error if the seek failed.
-  absl::Status Seeekg(std::size_t offset, std::ios::seekdir dir);
+  // at certain position. Returns an error if seekg failed.
+  absl::Status Seekg(std::size_t offset, std::ios::seekdir dir);
 
   // Get the current position in the file. Should be used when reading from
-  // file. Returns an error if tell failed.
+  // file. Returns an error if tellg failed.
   absl::StatusOr<std::size_t> Tellg();
 
   // Seek to the given offset in the file. Should be used when writing to file
-  // at certain position. Returns an error if the seek failed.
-  absl::Status Seeekp(std::size_t offset, std::ios::seekdir dir);
+  // at certain position. Returns an error if seekp failed.
+  absl::Status Seekp(std::size_t offset, std::ios::seekdir dir);
 
   // Get the current position in the file. Should be used when writing to file.
-  // Returns an error if tell failed.
+  // Returns an error if tellp failed.
   absl::StatusOr<std::size_t> Tellp();
 
   // Flush the file. Returns an error if the flush failed.
@@ -72,34 +69,35 @@ class FStream {
 };
 
 template <typename T>
-absl::Status FStream::Read(std::span<T> buffer, std::size_t count) {
-  fs_.read(reinterpret_cast<char*>(buffer.data()), count * sizeof(T));
+absl::Status FStream::Read(std::span<T> buffer) {
+  fs_.read(reinterpret_cast<char*>(buffer.data()), buffer.size() * sizeof(T));
   if (fs_.good()) return absl::OkStatus();
   return absl::InternalError(
       absl::StrFormat("Failed to read from file %s.", path_.string()));
 }
 
 template <typename T>
-absl::Status FStream::ReadUntilEof(std::span<T> buffer, std::size_t count) {
+absl::StatusOr<std::size_t> FStream::ReadUntilEof(std::span<T> buffer) {
   // Reading from closed file returns same flags as reading until eof, so we
   // need to check if the file is open before reading
   if (!fs_.is_open()) {
     return absl::InternalError(
         absl::StrFormat("Failed to read from file %s.", path_.string()));
   }
-  fs_.read(reinterpret_cast<char*>(buffer.data()), count * sizeof(T));
+  fs_.read(reinterpret_cast<char*>(buffer.data()), buffer.size() * sizeof(T));
   // clear the eof flag (on eof the eof flag is set and the fail flag is set)
   if (fs_.eof()) {
     fs_.clear(fs_.rdstate() & ~(std::ios::eofbit | std::ios::failbit));
   }
-  if (fs_.good()) return absl::OkStatus();
+  if (fs_.good()) return fs_.gcount() / sizeof(T);
   return absl::InternalError(
       absl::StrFormat("Failed to read from file %s.", path_.string()));
 }
 
 template <typename T>
-absl::Status FStream::Write(std::span<const T> data, std::size_t count) {
-  fs_.write(reinterpret_cast<const char*>(data.data()), count * sizeof(T));
+absl::Status FStream::Write(std::span<const T> data) {
+  fs_.write(reinterpret_cast<const char*>(data.data()),
+            data.size() * sizeof(T));
   if (fs_.good()) return absl::OkStatus();
   return absl::InternalError(
       absl::StrFormat("Failed to write into file %s.", path_.string()));

@@ -15,7 +15,7 @@ using ::testing::StartsWith;
 using ::testing::StatusIs;
 
 TEST(FStreamTest, TypeTraits) {
-  EXPECT_TRUE(std::is_move_assignable_v<FStream>);
+  EXPECT_TRUE(std::is_move_constructible_v<FStream>);
   EXPECT_TRUE(std::is_move_assignable_v<FStream>);
 }
 
@@ -46,7 +46,7 @@ TEST(FStreamTest, WriteIntoFileIsOk) {
   ASSERT_OK_AND_ASSIGN(
       auto fs, FStream::Open(file.GetPath(), std::ios::binary | std::ios::out));
   auto buffer = std::array{1, 2, 3, 4, 5};
-  ASSERT_OK(fs.Write<int>(buffer, buffer.size()));
+  ASSERT_OK(fs.Write<int>(buffer));
 }
 
 TEST(FStreamTest, WriteIntoClosedFileReturnsError) {
@@ -55,7 +55,7 @@ TEST(FStreamTest, WriteIntoClosedFileReturnsError) {
       auto fs, FStream::Open(file.GetPath(), std::ios::binary | std::ios::out));
   auto buffer = std::array{1, 2, 3, 4, 5};
   ASSERT_OK(fs.Close());
-  auto status = fs.Write<int>(buffer, buffer.size());
+  auto status = fs.Write<int>(buffer);
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Failed to write into file")));
 }
@@ -67,28 +67,28 @@ TEST(FStreamTest, ReadingAndWritingAtPositionIsOk) {
                              std::ios::binary | std::ios::in | std::ios::out));
 
   // position should be 0 because file is empty
-  ASSERT_OK(fs.Seeekg(0, std::ios::beg));
+  ASSERT_OK(fs.Seekg(0, std::ios::beg));
   ASSERT_OK_AND_ASSIGN(auto pos, fs.Tellg());
   EXPECT_EQ(pos, 0);
 
   // write 5 bytes
   std::array<char, 5> buffer = {'a', 'b', 'c', 'd', 'e'};
-  ASSERT_OK(fs.Seeekp(0, std::ios::beg));
-  ASSERT_OK(fs.Write<char>(buffer, buffer.size()));
+  ASSERT_OK(fs.Seekp(0, std::ios::beg));
+  ASSERT_OK(fs.Write<char>(buffer));
 
   // position should be 5
-  ASSERT_OK(fs.Seeekg(0, std::ios::end));
+  ASSERT_OK(fs.Seekg(0, std::ios::end));
   ASSERT_OK_AND_ASSIGN(pos, fs.Tellg());
   EXPECT_EQ(pos, 5);
 
   // seek to position 10 to write 5 more bytes
-  ASSERT_OK(fs.Seeekp(10, std::ios::beg));
+  ASSERT_OK(fs.Seekp(10, std::ios::beg));
   ASSERT_OK_AND_ASSIGN(pos, fs.Tellp());
   EXPECT_EQ(pos, 10);
-  ASSERT_OK(fs.Write<char>(buffer, buffer.size()));
+  ASSERT_OK(fs.Write<char>(buffer));
 
   // position should be 15
-  ASSERT_OK(fs.Seeekg(0, std::ios::end));
+  ASSERT_OK(fs.Seekg(0, std::ios::end));
   ASSERT_OK_AND_ASSIGN(pos, fs.Tellg());
   EXPECT_EQ(pos, 15);
 }
@@ -104,11 +104,11 @@ TEST(FStreamTest, ReadingPositionFromClosedFileReturnsError) {
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Failed to get position")));
 
-  status = fs.Seeekg(0, std::ios::beg);
+  status = fs.Seekg(0, std::ios::beg);
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Failed to seek")));
 
-  status = fs.Seeekp(0, std::ios::beg);
+  status = fs.Seekp(0, std::ios::beg);
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Failed to seek")));
 
@@ -123,12 +123,12 @@ TEST(FStreamTest, ReadFromFileIsOk) {
       auto fs, FStream::Open(file.GetPath(),
                              std::ios::binary | std::ios::out | std::ios::in));
   auto buffer = std::array{1, 2, 3, 4, 5};
-  ASSERT_OK(fs.Write<int>(buffer, buffer.size()));
+  ASSERT_OK(fs.Write<int>(buffer));
   ASSERT_OK(fs.Flush());
 
   auto read_buffer = std::array<int, 5>{};
-  ASSERT_OK(fs.Seeekg(0, std::ios::beg));
-  ASSERT_OK(fs.Read<int>(read_buffer, read_buffer.size()));
+  ASSERT_OK(fs.Seekg(0, std::ios::beg));
+  ASSERT_OK(fs.Read<int>(read_buffer));
   EXPECT_THAT(read_buffer, ElementsAre(1, 2, 3, 4, 5));
 }
 
@@ -138,12 +138,12 @@ TEST(FStreamTest, ReadFromClosedFileReturnsError) {
       auto fs, FStream::Open(file.GetPath(),
                              std::ios::binary | std::ios::out | std::ios::in));
   auto buffer = std::array{1, 2, 3, 4, 5};
-  ASSERT_OK(fs.Write<int>(buffer, buffer.size()));
+  ASSERT_OK(fs.Write<int>(buffer));
   ASSERT_OK(fs.Flush());
   ASSERT_OK(fs.Close());
 
   auto read_buffer = std::array<int, 5>{};
-  auto status = fs.Read<int>(read_buffer, read_buffer.size());
+  auto status = fs.Read<int>(read_buffer);
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Failed to read from file")));
 }
@@ -154,12 +154,13 @@ TEST(FStreamTest, ReadFromFileUntilEofIsOk) {
       auto fs, FStream::Open(file.GetPath(),
                              std::ios::binary | std::ios::out | std::ios::in));
   auto buffer = std::array{1, 2, 3, 4, 5};
-  ASSERT_OK(fs.Write<int>(buffer, buffer.size()));
+  ASSERT_OK(fs.Write<int>(buffer));
   ASSERT_OK(fs.Flush());
 
   auto read_buffer = std::array<int, 6>{};
-  ASSERT_OK(fs.Seeekg(0, std::ios::beg));
-  ASSERT_OK(fs.ReadUntilEof<int>(read_buffer, read_buffer.size()));
+  ASSERT_OK(fs.Seekg(0, std::ios::beg));
+  ASSERT_OK_AND_ASSIGN(auto count, fs.ReadUntilEof<int>(read_buffer));
+  EXPECT_EQ(count, buffer.size());
   EXPECT_THAT(read_buffer, ElementsAre(1, 2, 3, 4, 5, 0));
 }
 
@@ -169,12 +170,12 @@ TEST(FStreamTest, ReadFromClosedFileUntilEofReturnsError) {
       auto fs, FStream::Open(file.GetPath(),
                              std::ios::binary | std::ios::out | std::ios::in));
   auto buffer = std::array{1, 2, 3, 4, 5};
-  ASSERT_OK(fs.Write<int>(buffer, buffer.size()));
+  ASSERT_OK(fs.Write<int>(buffer));
   ASSERT_OK(fs.Flush());
   ASSERT_OK(fs.Close());
 
   auto read_buffer = std::array<int, 6>{};
-  auto status = fs.ReadUntilEof<int>(read_buffer, read_buffer.size());
+  auto status = fs.ReadUntilEof<int>(read_buffer);
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Failed to read from file")));
 }

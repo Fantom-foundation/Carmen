@@ -17,7 +17,7 @@ absl::StatusOr<FStream> FStream::Open(const std::filesystem::path& path,
       absl::StrFormat("Failed to open file %s.", path.string()));
 }
 
-absl::Status FStream::Seeekg(std::size_t offset, std::ios::seekdir dir) {
+absl::Status FStream::Seekg(std::size_t offset, std::ios::seekdir dir) {
   fs_.seekg(offset, dir);
   if (fs_.good()) return absl::OkStatus();
   return absl::InternalError(absl::StrFormat(
@@ -31,7 +31,7 @@ absl::StatusOr<std::size_t> FStream::Tellg() {
       absl::StrFormat("Failed to get position in file %s.", path_.string()));
 }
 
-absl::Status FStream::Seeekp(std::size_t offset, std::ios::seekdir dir) {
+absl::Status FStream::Seekp(std::size_t offset, std::ios::seekdir dir) {
   fs_.seekg(offset, dir);
   if (fs_.good()) return absl::OkStatus();
   return absl::InternalError(absl::StrFormat(
