@@ -32,6 +32,23 @@ ln -s ~/go/bin/bazelisk ~/go/bin/bazel
 ```
 to get access to `bazel` in your command line.
 
+## Installing Formatting Tools
+
+### C++ File Formatting
+Code files are required to be formatted using the rules configured for
+`clang-format` in the repository. These formatting rules are checked and
+enforced during pull requests. To install `clang-format`, please use your 
+platform specific package manager.
+
+### Bazel BUILD File Formatter
+We recommend the usage of `buildifier` which can be installed as a Go tool using
+```
+go install github.com/bazelbuild/buildtools/buildifier@latest
+```
+Once installed, the `buildifier` binary can be found in your go tool folder. If
+`$GOPATH` is set, the binary should be located at `$GOPATH/bin/buildifier`. If
+not, it will default to `~/go/bin/buildifier`.
+
 # Build and Test
 To build the full project, use the following commands:
 ```

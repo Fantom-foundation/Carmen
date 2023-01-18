@@ -1,13 +1,14 @@
 #pragma once
 
 #include "absl/strings/str_cat.h"
+#include "common/macro_utils.h"
 #include "common/status_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 // A few additional gtest expectations and assertions.
-#define EXPECT_OK(expr) EXPECT_TRUE((expr).ok())
-#define ASSERT_OK(expr) ASSERT_TRUE((expr).ok())
+#define EXPECT_OK(expr) EXPECT_THAT((expr), ::testing::IsOk())
+#define ASSERT_OK(expr) ASSERT_THAT((expr), ::testing::IsOk())
 
 // The implementation of ASSERT_OK_AND_ASSIGN below, more compact as if it would
 // be if it would be written inline.
@@ -35,8 +36,10 @@
 //
 // to declare and initialize a new variable x in the current scope. The variable
 // X will be of the value type stored inside the StatusOr type.
-#define ASSERT_OK_AND_ASSIGN(lhs, expr) \
-  INTERNAL_ASSERT_OK_AND_ASSIGN_IMPL(lhs, expr, CONCAT(_status_, __LINE__))
+#define ASSERT_OK_AND_ASSIGN(lhs, expr)                                 \
+  INTERNAL_ASSERT_OK_AND_ASSIGN_IMPL(REMOVE_OPTIONAL_PARENTHESIS(lhs),  \
+                                     REMOVE_OPTIONAL_PARENTHESIS(expr), \
+                                     CONCAT(_status_, __LINE__))
 
 namespace testing {
 
@@ -115,7 +118,7 @@ namespace internal {
 
 // A concept identifying types that can be written to an output stream.
 template <typename T>
-concept StreamableToOutputStream = requires(T a) {
+concept StreamableToOutputStream = requires(const T a) {
   { std::declval<std::ostream&>() << a } -> std::same_as<std::ostream&>;
 };
 
@@ -136,7 +139,7 @@ std::ostream& operator<<(std::ostream& out, const StatusOr<T>& status) {
   }
   // If there is no output format defined, use gunit's universal printing
   // format.
-  return out << testing::PrintToString(*status);
+  return out << testing::PrintToString<T>(*status);
 }
 
 }  // namespace absl

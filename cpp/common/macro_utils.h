@@ -61,3 +61,31 @@
   EVAL(MAP_LIST1(f, __VA_ARGS__, ()()(), ()()(), ()()(), 0))
 
 #endif
+
+// ----------------------------------------------------------------------------
+
+// The following is not related to the content above, but provides additional
+// common macro utilities.
+
+// The following set of macros will remove optional paranthesis from an
+// expression, by following one of the two expansion paths:
+//
+//  Without parenthesis:
+//    REMOVE_OPTIONAL_PARENTHESIS(expr)
+//      -> INTERNAL_REMOVE_PARENT(PEAR expr)
+//      -> INTERNAL_REMOVE_PARENT_(PEAR expr)
+//      -> INTERNAL_DISAPPEAR expr
+//      -> expr
+//
+//  With parenthesis:
+//    REMOVE_OPTIONAL_PARENTHESIS((expr))
+//      -> INTERNAL_REMOVE_PARENT(PEAR(expr))
+//      -> INTERNAL_REMOVE_PARENT_(PEAR expr)
+//      -> INTERNAL_DISAPPEAR expr
+//      -> expr
+
+#define REMOVE_OPTIONAL_PARENTHESIS(expr) INTERNAL_REMOVE_PARENT(PEAR expr)
+#define PEAR(...) PEAR __VA_ARGS__
+#define INTERNAL_REMOVE_PARENT(...) INTERNAL_REMOVE_PARENT_(__VA_ARGS__)
+#define INTERNAL_REMOVE_PARENT_(...) INTERNAL_DISAP##__VA_ARGS__
+#define INTERNAL_DISAPPEAR

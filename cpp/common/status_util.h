@@ -6,6 +6,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "cerrno"
+#include "common/macro_utils.h"
 
 // This header provides a few utility macros for dealing with absl::Status and
 // absl::StatusOr values. The main intention is to make code using Status codes
@@ -107,5 +108,7 @@ using StatusOrRef = absl::StatusOr<ReferenceWrapper<T>>;
 //
 // Note, for this to work, the enclosing function must return a Status or a
 // StatusOr.
-#define ASSIGN_OR_RETURN(lhs, expr) \
-  INTERNAL_ASSIGN_OR_RETURN_IMPL(lhs, expr, CONCAT(_status_, __LINE__))
+#define ASSIGN_OR_RETURN(lhs, expr)                                 \
+  INTERNAL_ASSIGN_OR_RETURN_IMPL(REMOVE_OPTIONAL_PARENTHESIS(lhs),  \
+                                 REMOVE_OPTIONAL_PARENTHESIS(expr), \
+                                 CONCAT(_status_, __LINE__))
