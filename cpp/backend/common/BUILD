@@ -65,7 +65,6 @@ cc_binary(
         "@com_github_google_benchmark//:benchmark_main",
         "@com_google_absl//absl/status:statusor",
         "//third_party/gperftools:profiler",
-        "@com_github_google_benchmark//:benchmark_main",
     ],
 )
 
@@ -133,9 +132,11 @@ cc_binary(
         ":access_pattern",
         ":eviction_policy",
         ":page_pool",
+        "//common:status_test_util",
         "//third_party/gperftools:profiler",
         "@com_github_google_benchmark//:benchmark_main",
     ],
+    testonly = True,
 )
 
 cc_library(
@@ -146,6 +147,7 @@ cc_library(
         ":page",
         ":page_id",
         ":page_pool",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

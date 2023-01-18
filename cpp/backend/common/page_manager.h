@@ -10,7 +10,7 @@ namespace carmen::backend {
 
 // A page manager is like a memory manager organizing the life cycle of pages in
 // a single file, accessed through a page pool. It allows to create (=allocate)
-// new pages, resolve PageIDs to Pages (=dereferencign), and the freeing and
+// new pages, resolve PageIDs to Pages (=dereferencing), and the freeing and
 // reusing of pages.
 //
 // NOTE: this is still work in progress; missing features:
@@ -36,7 +36,8 @@ class PageManager {
   template <Page Page>
   absl::StatusOr<NewPage<Page>> New() {
     PageId id = next_++;
-    return NewPage<Page>{id, pool_.template Get<Page>(id)};
+    ASSIGN_OR_RETURN(Page& page, pool_.template Get<Page>(id));
+    return NewPage<Page>{id, page};
   }
 
   // Resolves a page ID to a page reference. It is the task of the caller to
