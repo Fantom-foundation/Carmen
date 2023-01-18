@@ -2,13 +2,13 @@ load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
 
 cmake(
     name = "profiler",
-    generate_args = [
-        "-Dgperftools_build_benchmark=OFF",
-    ],
     build_args = [
         "--verbose",
         "--",  # <- Pass remaining options to the native tool.
         "-j 8",
+    ],
+    generate_args = [
+        "-Dgperftools_build_benchmark=OFF",
     ],
     lib_source = "@gperftools//:all_srcs",
     out_shared_libs = select({
