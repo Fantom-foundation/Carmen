@@ -30,7 +30,7 @@ cc_library(
             "util/testutil.cc",
             "benchmarks/**",
             "util/*windows*",
-            "db/leveldbutil.cc"
+            "db/leveldbutil.cc",
         ],
     ),
     hdrs = glob(
@@ -39,22 +39,25 @@ cc_library(
             "doc/**",
             "util/*windows*",
             "util/testutil.h",
-            "port/port.h"
+            "port/port.h",
         ],
     ) + [
         ":port_h",
         ":port_config_h",
     ],
-    includes = ["include", "."],
+    copts = ["-Wno-unused-parameter"],
     defines = [
         "LEVELDB_PLATFORM_POSIX=1",
         "LEVELDB_IS_BIG_ENDIAN=0",
-        "NDEBUG"
+        "NDEBUG",
     ],
+    includes = [
+        ".",
+        "include",
+    ],
+    visibility = ["//visibility:public"],
     deps = [
         "@com_github_google_crc32c//:crc32c",
         "@com_github_google_snappy//:snappy",
     ],
-    copts = ["-Wno-unused-parameter"],
-    visibility = ["//visibility:public"],
 )

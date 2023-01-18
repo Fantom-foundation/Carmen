@@ -1,18 +1,18 @@
 cc_library(
     name = "depot",
     hdrs = ["depot.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//backend/common:file",
         "//backend/store:hash_tree",
         "//common:hash",
-        "//common:type",
         "//common:status_util",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/status:status",
-        "@com_google_absl//absl/status:statusor",
+        "//common:type",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
@@ -21,9 +21,9 @@ cc_test(
     deps = [
         ":depot",
         "//backend/depot",
-        "//common:status_test_util",
         "//backend/depot/memory:depot",
         "//common:file_util",
+        "//common:status_test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
