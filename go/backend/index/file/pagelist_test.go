@@ -58,22 +58,22 @@ func TestPageListOverflow(t *testing.T) {
 		_ = p.Put(address, i+1)
 	}
 
-	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems {
-		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems)
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.sizeKeys() != maxItems {
+		t.Errorf("Wrong page size: %d != %d", page.sizeKeys(), maxItems)
 	}
 
 	// add overflow page
 	_ = p.Put(B, 199)
 
-	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems {
-		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems)
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.sizeKeys() != maxItems {
+		t.Errorf("Wrong page size: %d != %d", page.sizeKeys(), maxItems)
 	}
 	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); !page.HasNext() || page.NextPage().Overflow() == 0 {
 		t.Errorf("Wrong has next link: %d ", page.NextPage().Overflow())
 	}
 	// since we have a fresh page pool, next page ID will be one
-	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 1)); page.Size() != 1 {
-		t.Errorf("Wrong page size: %d != %d", page.Size(), 1)
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 1)); page.sizeKeys() != 1 {
+		t.Errorf("Wrong page size: %d != %d", page.sizeKeys(), 1)
 	}
 
 	// remove from the first page
@@ -81,8 +81,8 @@ func TestPageListOverflow(t *testing.T) {
 		t.Errorf("Item not removed")
 	}
 
-	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems {
-		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems)
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.sizeKeys() != maxItems {
+		t.Errorf("Wrong page size: %d != %d", page.sizeKeys(), maxItems)
 	}
 	// link to next page must be removed
 	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.HasNext() || page.NextPage().Overflow() != 0 {
@@ -95,13 +95,13 @@ func TestPageListOverflow(t *testing.T) {
 		t.Errorf("Item not removed")
 	}
 
-	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems-1 {
-		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems-1)
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.sizeKeys() != maxItems-1 {
+		t.Errorf("Wrong page size: %d != %d", page.sizeKeys(), maxItems-1)
 	}
 }
 
 func initPageList() PageList[common.Address, uint32] {
-	// two pages in the pool, two items each
-	pagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, maxItems, nil, pagepool.NewMemoryPageStore[common.Address, uint32](), common.AddressComparator{})
+	pageFactory := PageNumKeysFactory[common.Address, uint32](maxItems, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	pagePool := pagepool.NewPagePool[*Page[common.Address, uint32]](pagePoolSize, nil, pagepool.NewMemoryPageStore(), pageFactory)
 	return NewPageList[common.Address, uint32](33, maxItems, pagePool)
 }

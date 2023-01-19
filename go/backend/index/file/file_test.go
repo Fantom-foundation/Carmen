@@ -11,6 +11,7 @@ var (
 	A = common.Address{0xAA}
 	B = common.Address{0xBB}
 	C = common.Address{0xCC}
+	D = common.Address{0xDD}
 )
 
 func TestFileIndexImplements(t *testing.T) {
