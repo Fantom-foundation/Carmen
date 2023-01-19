@@ -59,13 +59,6 @@ func (c *Page[K, V]) Put(key K, val V) {
 	c.insert(index, key, val)
 }
 
-func (c *Page[K, V]) Add(key K, val V) {
-	index, exists := c.findValue(key, val)
-	if !exists {
-		c.insert(index, key, val)
-	}
-}
-
 // update only replaces the value at the input index
 func (c *Page[K, V]) update(index int, val V) {
 	c.isDirty = true
@@ -134,39 +127,12 @@ func (c *Page[K, V]) Remove(key K) (exists bool) {
 	return false
 }
 
-func (c *Page[K, V]) RemoveVal(key K, val V) bool {
-	if index, exists := c.findValue(key, val); exists {
-		c.remove(index)
-		return true
-	}
-
-	return false
-}
-
 func (c *Page[K, V]) remove(index int) {
 	c.isDirty = true
 	for j := index; j < c.size-1; j++ {
 		c.list[j] = c.list[j+1]
 	}
 	c.size -= 1
-}
-
-func (c *Page[K, V]) RemoveAll(key K) {
-	c.removeAll(key)
-}
-
-func (c *Page[K, V]) removeAll(key K) (start, end int, exists bool) {
-	if start, end, exists = c.findRange(key); exists {
-		// shift
-		window := end - start
-		for j := start; j < c.size-window; j++ {
-			c.list[j] = c.list[j+window]
-		}
-		c.size -= window
-		c.isDirty = true
-	}
-
-	return
 }
 
 func (c *Page[K, V]) BulkInsert(data []common.MapEntry[K, V]) {

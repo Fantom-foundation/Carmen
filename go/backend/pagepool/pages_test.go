@@ -79,111 +79,6 @@ func TestMapGetPut(t *testing.T) {
 	}
 }
 
-func TestMultiMapAddGetRemove(t *testing.T) {
-	for name, mFactory := range initMaps() {
-		t.Run(name, func(t *testing.T) {
-			h := mFactory(6)
-			// store a few values under the same key
-			h.Add(A, 10)
-			h.Add(A, 10) // the same value does not change the map
-			h.Add(A, 20)
-			h.Add(A, 30)
-			h.Add(A, 30) // the same value does not change the map
-
-			h.Add(B, 35)
-			h.Add(B, 35) // the same value does not change the map
-			h.Add(B, 25)
-			h.Add(B, 15)
-			h.Add(B, 15) // the same value does not change the map
-
-			if size := h.Size(); size != 6 {
-				t.Errorf("Size does not match: %d", size)
-			}
-
-			verifyMapSorted(t, name, h)
-
-			common.AssertEqualArrays(t, h.GetAll(A), []uint32{10, 20, 30})
-			common.AssertEqualArrays(t, h.GetAll(B), []uint32{15, 25, 35})
-
-			// pickup values in order
-			keys := make([]common.Address, 0, h.Size())
-			h.ForEach(func(k common.Address, v uint32) {
-				keys = append(keys, k)
-			})
-			if len(keys) != 6 {
-				t.Errorf("Not all items have been iterated")
-			}
-
-			// remove
-			h.RemoveAll(A)
-			if values := h.GetAll(A); len(values) != 0 {
-				t.Errorf("unexpected values returned: %v", values)
-			}
-
-			if size := h.Size(); size != 3 {
-				t.Errorf("Size does not match: %d", size)
-			}
-
-			h.RemoveAll(B)
-			if values := h.GetAll(B); len(values) != 0 {
-				t.Errorf("unexpected values returned: %v", values)
-			}
-
-			if size := h.Size(); size != 0 {
-				t.Errorf("Size does not match: %d", size)
-			}
-		})
-	}
-}
-
-func TestMultiMapRemoveSingleValues(t *testing.T) {
-	for name, mFactory := range initMaps() {
-		t.Run(name, func(t *testing.T) {
-			h := mFactory(6)
-			// store a few values under the same key
-			h.Add(A, 10)
-			h.Add(A, 10) // the same value does not change the map
-			h.Add(A, 20)
-			h.Add(A, 30)
-			h.Add(A, 30) // the same value does not change the map
-
-			h.Add(B, 35)
-			h.Add(B, 35) // the same value does not change the map
-			h.Add(B, 25)
-			h.Add(B, 15)
-			h.Add(B, 15) // the same value does not change the map
-
-			if size := h.Size(); size != 6 {
-				t.Errorf("Size does not match: %d", size)
-			}
-
-			// remove
-			h.RemoveVal(A, 10)
-			h.RemoveVal(B, 35)
-			h.RemoveVal(B, 25)
-
-			common.AssertEqualArrays(t, h.GetAll(A), []uint32{20, 30})
-			common.AssertEqualArrays(t, h.GetAll(B), []uint32{15})
-
-			if size := h.Size(); size != 3 {
-				t.Errorf("Size does not match: %d", size)
-			}
-
-			// remove non existing values
-			h.RemoveVal(A, 100)
-			h.RemoveVal(B, 350)
-
-			// the properties of the array should not change
-			common.AssertEqualArrays(t, h.GetAll(A), []uint32{20, 30})
-			common.AssertEqualArrays(t, h.GetAll(B), []uint32{15})
-
-			if size := h.Size(); size != 3 {
-				t.Errorf("Size does not match: %d", size)
-			}
-		})
-	}
-}
-
 func TestMapInverseGetPut(t *testing.T) {
 	for name, mFactory := range initMaps() {
 		t.Run(name, func(t *testing.T) {
@@ -468,27 +363,8 @@ func (c *noErrMapWrapper[K, V]) Get(key K) (val V, exists bool) {
 	return
 }
 
-func (c *noErrMapWrapper[K, V]) GetAll(key K) (val []V) {
-	val, _ = c.m.GetAll(key)
-	return
-}
-
 func (c *noErrMapWrapper[K, V]) Put(key K, val V) {
 	_ = c.m.Put(key, val)
-}
-
-func (c *noErrMapWrapper[K, V]) Add(key K, val V) {
-	_ = c.m.Add(key, val)
-}
-
-// Remove deletes the key from the map and returns whether an element was removed.
-func (c *noErrMapWrapper[K, V]) RemoveAll(key K) {
-	_ = c.m.RemoveAll(key)
-}
-
-func (c *noErrMapWrapper[K, V]) RemoveVal(key K, val V) bool {
-	exists, _ := c.m.RemoveVal(key, val)
-	return exists
 }
 
 func (c *noErrMapWrapper[K, V]) Remove(key K) (exists bool) {
@@ -514,7 +390,7 @@ func (c *noErrMapWrapper[K, V]) GetEntries() []common.MapEntry[K, V] {
 
 // noErrBulkInsertMap converts methods BulkInsertMap to a variant that returns errors
 type noErrBulkInsertMap[K comparable, V any] interface {
-	common.MultiMap[K, V]
+	common.Map[K, V]
 
 	BulkInsert(data []common.MapEntry[K, V])
 	GetEntries() []common.MapEntry[K, V]
@@ -540,24 +416,8 @@ func (c *noErrBulkInsertWrapper[K, V]) Get(key K) (val V, exists bool) {
 	return c.m.Get(key)
 }
 
-func (c *noErrBulkInsertWrapper[K, V]) GetAll(key K) (val []V) {
-	return c.m.GetAll(key)
-}
-
 func (c *noErrBulkInsertWrapper[K, V]) Put(key K, val V) {
 	c.m.Put(key, val)
-}
-
-func (c *noErrBulkInsertWrapper[K, V]) Add(key K, val V) {
-	c.m.Add(key, val)
-}
-
-func (c *noErrBulkInsertWrapper[K, V]) RemoveAll(key K) {
-	c.m.RemoveAll(key)
-}
-
-func (c *noErrBulkInsertWrapper[K, V]) RemoveVal(key K, val V) bool {
-	return c.m.RemoveVal(key, val)
 }
 
 func (c *noErrBulkInsertWrapper[K, V]) Remove(key K) (exists bool) {

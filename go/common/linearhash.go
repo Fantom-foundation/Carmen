@@ -63,22 +63,6 @@ func (h *LinearHashMap[K, V]) Put(key K, value V) error {
 	return h.checkSplit()
 }
 
-func (h *LinearHashMap[K, V]) Add(key K, value V) error {
-	bucketId := h.bucket(key, uint(len(h.list)))
-	bucket := h.list[bucketId]
-	beforeSize := bucket.Size()
-
-	if err := bucket.Add(key, value); err != nil {
-		return err
-	}
-
-	if beforeSize < bucket.Size() {
-		h.records += 1
-	}
-
-	return h.checkSplit()
-}
-
 // Get returns value associated to the input key
 func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
 	bucket := h.bucket(key, uint(len(h.list)))
@@ -97,11 +81,6 @@ func (h *LinearHashMap[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err 
 		return value, exists, h.checkSplit()
 	}
 	return
-}
-
-func (h *LinearHashMap[K, V]) GetAll(key K) ([]V, error) {
-	bucket := h.bucket(key, uint(len(h.list)))
-	return h.list[bucket].GetAll(key)
 }
 
 // ForEach iterates all stored key/value pairs
@@ -127,36 +106,6 @@ func (h *LinearHashMap[K, V]) Remove(key K) (bool, error) {
 	}
 
 	return exists, nil
-}
-
-func (h *LinearHashMap[K, V]) RemoveVal(key K, val V) (bool, error) {
-	bucket := h.bucket(key, uint(len(h.list)))
-	exists, err := h.list[bucket].RemoveVal(key, val)
-	if err != nil {
-		return exists, err
-	}
-	if exists {
-		h.records -= 1
-	}
-
-	return exists, nil
-}
-
-func (h *LinearHashMap[K, V]) RemoveAll(key K) error {
-	bucketId := h.bucket(key, uint(len(h.list)))
-	bucket := h.list[bucketId]
-	beforeSize := bucket.Size()
-
-	if err := bucket.RemoveAll(key); err != nil {
-		return err
-	}
-
-	// modify the number of records from the size diff in the bucket
-	if beforeSize > bucket.Size() {
-		h.records -= uint(beforeSize - bucket.Size())
-	}
-
-	return nil
 }
 
 func (h *LinearHashMap[K, V]) Size() int {

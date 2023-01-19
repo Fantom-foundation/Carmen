@@ -7,5 +7,5 @@ import (
 
 func TestSortedPageIsMap(t *testing.T) {
 	var instance Page[common.Address, uint32]
-	var _ common.MultiMap[common.Address, uint32] = &instance
+	var _ common.Map[common.Address, uint32] = &instance
 }

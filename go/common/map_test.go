@@ -59,183 +59,6 @@ func TestMapsFetchDataFromInitMap(t *testing.T) {
 	}
 }
 
-func TestMapMultiMap(t *testing.T) {
-	// run the test for various map implementations
-	for _, max := range inputSizes {
-		for name, factory := range initMapFactories(t) {
-			t.Run(fmt.Sprintf("%s %d", name, max), func(t *testing.T) {
-
-				if name == "blockList" || name == "sortedMap" || name == "linearHash" {
-					t.Skipf("no implemented yet")
-				}
-
-				capacity := 10
-				m := factory(0, capacity)
-
-				// divide input size among a few keys
-				numKeys := max/5 + 1
-				keys := make([]common.Address, 0, numKeys)
-				insertedData := make(map[common.Address][]uint32)
-				for i := 0; i < numKeys; i++ {
-					key := convert[common.Address](i+1, common.AddressSerializer{})
-					keys = append(keys, key)
-					insertedData[key] = make([]uint32, 0)
-				}
-
-				// insert data for the keys
-				for i := 0; i < max; i++ {
-					key := keys[i%numKeys]
-					value := convert[uint32](i+1, common.Identifier32Serializer{})
-					if err := m.Add(key, value); err != nil {
-						t.Errorf("Error to add value: %v", err)
-					}
-					insertedData[key] = append(insertedData[key], value)
-				}
-
-				if size := m.Size(); size != max {
-					t.Errorf("Invalied size: %d != %d", size, max)
-				}
-
-				// test fetch values by the keys
-				for _, key := range keys {
-					expected := insertedData[key]
-					actual, err := m.GetAll(key)
-					if err != nil {
-						t.Errorf("Error to get value: %v", err)
-					}
-
-					common.AssertEqualArrays(t, expected, actual)
-				}
-
-				// test all data can be obtained by iteration
-				visitedValues := make(map[uint32]bool)
-				err := m.ForEach(func(actKey common.Address, actVal uint32) {
-					if _, exists := visitedValues[actVal]; exists {
-						t.Errorf("the value has been already visited: %v", actVal)
-					}
-					visitedValues[actVal] = true
-					// check value is for expected key
-					expectedVals := insertedData[actKey]
-					var found bool
-					for _, val := range expectedVals {
-						if val == actVal {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("Value %d does not belong to key: %v", actVal, actKey)
-					}
-				})
-				if err != nil {
-					t.Errorf("error: %s", err)
-				}
-
-				// verify the size of visited elements
-				if size := m.Size(); size != len(visitedValues) {
-					t.Errorf("Sizes does not match: %d != %d", size, len(visitedValues))
-				}
-
-				// remove values, test sizes match, and the data are no more available
-				expectedSize := m.Size()
-				for _, key := range keys {
-					toRemoveSize := len(insertedData[key])
-					if err := m.RemoveAll(key); err != nil {
-						t.Errorf("Error to get value: %v", err)
-					}
-					if actual, err := m.GetAll(key); err != nil || len(actual) != 0 {
-						t.Errorf("Removed key should return empty list: size: %d, err: %v", len(actual), err)
-					}
-
-					expectedSize = expectedSize - toRemoveSize
-					// check sizes
-					if size := m.Size(); size != expectedSize {
-						t.Errorf("Invalied size: %d != %d", size, expectedSize)
-					}
-				}
-			})
-		}
-	}
-}
-
-func TestMapMultiMapRemoveSingleValues(t *testing.T) {
-	// run the test for various map implementations
-	for _, max := range inputSizes {
-		for name, factory := range initMapFactories(t) {
-			t.Run(fmt.Sprintf("%s %d", name, max), func(t *testing.T) {
-
-				if name == "blockList" || name == "sortedMap" || name == "linearHash" {
-					t.Skipf("no implemented yet")
-				}
-
-				capacity := 10
-				m := factory(0, capacity)
-
-				// divide input size among a few keys
-				numKeys := max/5 + 1
-				keys := make([]common.Address, 0, numKeys)
-				insertedData := make(map[common.Address][]uint32)
-				for i := 0; i < numKeys; i++ {
-					key := convert[common.Address](i+1, common.AddressSerializer{})
-					keys = append(keys, key)
-					insertedData[key] = make([]uint32, 0)
-				}
-
-				// insert data for the keys
-				for i := 0; i < max; i++ {
-					key := keys[i%numKeys]
-					value := convert[uint32](i+1, common.Identifier32Serializer{})
-					if err := m.Add(key, value); err != nil {
-						t.Errorf("Error to add value: %v", err)
-					}
-					insertedData[key] = append(insertedData[key], value)
-				}
-
-				if size := m.Size(); size != max {
-					t.Errorf("Invalied size: %d != %d", size, max)
-				}
-
-				// remove three values for every key
-				expectedSize := m.Size()
-				for i, key := range keys {
-					start := 0                        // one value from the beginning
-					inner := i                        // one value within the keys range
-					end := len(insertedData[key]) - 1 // one value from the end
-
-					for _, index := range []int{end, inner, start} {
-						if index < len(insertedData[key]) {
-							val := insertedData[key][index]
-							insertedData[key] = remove(insertedData[key], index)
-							if exists, err := m.RemoveVal(key, val); !exists || err != nil {
-								t.Errorf("Error to remove one val: %v -> %d, err: %s", key, val, err)
-							}
-							expectedSize -= 1
-						}
-					}
-				}
-
-				// test fetch values by the keys
-				for _, key := range keys {
-					expected := insertedData[key]
-					actual, err := m.GetAll(key)
-					if err != nil {
-						t.Errorf("Error to get value: %v", err)
-					}
-					common.AssertEqualArrays(t, expected, actual)
-				}
-
-				if size := m.Size(); size != expectedSize {
-					t.Errorf("Sizes does not match: %d != %d", size, expectedSize)
-				}
-			})
-		}
-	}
-}
-
-func remove[V any](s []V, i int) []V {
-	return append(s[:i], s[i+1:]...)
-}
-
 func TestMapsGetOrAdd(t *testing.T) {
 	// run the test for various map implementations
 	for _, max := range inputSizes {
@@ -477,23 +300,23 @@ func initBulkMapFactories() map[string]func(parameters ...int) common.BulkInsert
 }
 
 // initMapFactories creates tested map factories
-func initMapFactories(t *testing.T) map[string]func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+func initMapFactories(t *testing.T) map[string]func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 	pageItems := 5
 	numBuckets := 3
 
-	sortedMapFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	sortedMapFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		return &noErrMapWrapper[common.Address, uint32]{common.NewSortedMap[common.Address, uint32](pageItems, common.AddressComparator{})}
 	}
 
-	pageFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	pageFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		// page capacity set to never overflow
 		return &noErrMapWrapper[common.Address, uint32]{pagepool.NewPage[common.Address, uint32](1000000, common.AddressComparator{})}
 	}
 
-	blockListFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	blockListFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		return common.NewBlockList[common.Address, uint32](capacity, common.AddressComparator{})
 	}
-	linearHashFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	linearHashFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		blockListFactory := func(bucket, capacity int) common.BulkInsertMap[common.Address, uint32] {
 			return common.NewBlockList[common.Address, uint32](capacity, common.AddressComparator{})
 		}
@@ -502,7 +325,7 @@ func initMapFactories(t *testing.T) map[string]func(bucket, capacity int) common
 
 	sharedPageStore := pagepool.NewMemoryPageStore[common.Address, uint32]()
 	sharedPagePool := pagepool.NewPagePool[common.Address, uint32](numBuckets, pageItems, nil, sharedPageStore, common.AddressComparator{})
-	linearHashPagePoolFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	linearHashPagePoolFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		pageListFactory := func(bucket, capacity int) common.BulkInsertMap[common.Address, uint32] {
 			return pagepool.NewPageList[common.Address, uint32](bucket, capacity, sharedPagePool)
 		}
@@ -516,16 +339,16 @@ func initMapFactories(t *testing.T) map[string]func(bucket, capacity int) common
 		persistedSharedPagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, pageItems, nil, persistedSharedPageStore, common.AddressComparator{})
 		return pagepool.NewPageList[common.Address, uint32](bucket, capacity, persistedSharedPagePool)
 	}
-	persistedLinearHashPagePoolFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	persistedLinearHashPagePoolFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		return common.NewLinearHashMap[common.Address, uint32](pageItems, capacity, common.AddressHasher{}, common.AddressComparator{}, persistedPageListFactory)
 	}
-	singlePageListFactory := func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32] {
+	singlePageListFactory := func(bucket, capacity int) common.ErrMap[common.Address, uint32] {
 		eachPageStore := pagepool.NewMemoryPageStore[common.Address, uint32]()
 		eachPagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, pageItems, nil, eachPageStore, common.AddressComparator{})
 		return pagepool.NewPageList[common.Address, uint32](123, pageItems, eachPagePool)
 	}
 
-	factories := map[string]func(bucket, capacity int) common.ErrMultiMap[common.Address, uint32]{
+	factories := map[string]func(bucket, capacity int) common.ErrMap[common.Address, uint32]{
 		"sortedMap":                    sortedMapFactory,
 		"page":                         pageFactory,
 		"blockList":                    blockListFactory,
@@ -546,7 +369,7 @@ func convert[V any](val int, serializer common.Serializer[V]) V {
 
 // noErrMapWrapper converts the input map to ErrMap
 type noErrMapWrapper[K comparable, V any] struct {
-	m common.MultiMap[K, V]
+	m common.Map[K, V]
 }
 
 func (c *noErrMapWrapper[K, V]) ForEach(callback func(K, V)) error {
@@ -556,11 +379,6 @@ func (c *noErrMapWrapper[K, V]) ForEach(callback func(K, V)) error {
 
 func (c *noErrMapWrapper[K, V]) Get(key K) (val V, exists bool, err error) {
 	val, exists = c.m.Get(key)
-	return
-}
-
-func (c *noErrMapWrapper[K, V]) GetAll(key K) (val []V, err error) {
-	val = c.m.GetAll(key)
 	return
 }
 
@@ -575,21 +393,6 @@ func (c *noErrMapWrapper[K, V]) GetOrAdd(key K, val V) (existingVal V, exists bo
 		existingVal = val
 		c.m.Put(key, val)
 	}
-	return
-}
-
-func (c *noErrMapWrapper[K, V]) Add(key K, val V) error {
-	c.m.Add(key, val)
-	return nil
-}
-
-func (c *noErrMapWrapper[K, V]) RemoveAll(key K) (err error) {
-	c.m.RemoveAll(key)
-	return
-}
-
-func (c *noErrMapWrapper[K, V]) RemoveVal(key K, val V) (exists bool, err error) {
-	exists = c.m.RemoveVal(key, val)
 	return
 }
 
