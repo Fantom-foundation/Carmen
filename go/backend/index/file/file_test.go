@@ -161,7 +161,7 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	}
 
 	// test metadata written
-	hash, buckets, lastBucket, _, records, lastIndex, freeIds, err := readMetadata[uint32](dir, common.Identifier32Serializer{})
+	hash, nBuckets, records, lastIndex, err := readMetadata[uint32](dir, common.Identifier32Serializer{})
 	if err != nil {
 		t.Errorf("Cannot read metadata file: %s", err)
 	}
@@ -172,20 +172,12 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	}
 
 	// default number of buckets
-	if buckets != int(expectedNumBuckets) {
+	if nBuckets == 0 {
 		t.Errorf("Wrong number of buckets: %d ", numBuckets)
-	}
-
-	if lastBucket == 0 {
-		t.Errorf("No free Ids read")
 	}
 
 	if lastIndex != expected {
 		t.Errorf("Last index wrong: %d |= %d", lastIndex, expected)
-	}
-
-	if len(freeIds) == 0 {
-		t.Errorf("No free Ids read")
 	}
 
 	if records != len(data) {
@@ -239,11 +231,6 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 		t.Errorf("Mem footprint wrong")
 	}
 
-	freeIds := pagepool.GetChild("freeIds")
-	if freeIds == nil {
-		t.Errorf("Mem footprint wrong")
-	}
-
 	pagePool := pagepool.GetChild("pagePool")
 	if size := pagePool.Value(); size == 0 {
 		t.Errorf("Mem footprint wrong: %d", size)
@@ -254,9 +241,23 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
 
-	removedIds := pageStore.GetChild("removedIds")
-	if size := removedIds.Value(); size == 0 {
+	primaryFile := pageStore.GetChild("primaryFile")
+	if size := primaryFile.Value(); size == 0 {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
 
+	freeIds := primaryFile.GetChild("freeIds")
+	if freeIds == nil {
+		t.Errorf("Mem footprint wrong")
+	}
+
+	overflowFile := pageStore.GetChild("overflowFile")
+	if size := overflowFile.Value(); size == 0 {
+		t.Errorf("Mem footprint wrong: %d", size)
+	}
+
+	freeIdsOverflow := overflowFile.GetChild("freeIds")
+	if freeIdsOverflow == nil {
+		t.Errorf("Mem footprint wrong")
+	}
 }

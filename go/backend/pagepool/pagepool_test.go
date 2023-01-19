@@ -6,10 +6,10 @@ import (
 )
 
 var (
-	pageA = PageId{0, 0}
-	pageB = PageId{1, 0}
-	pageC = PageId{2, 0}
-	pageD = PageId{3, 0}
+	pageA = 0
+	pageB = 1
+	pageC = 2
+	pageD = 3
 
 	data = []byte{0xAA}
 )
@@ -134,8 +134,16 @@ func TestPageClose(t *testing.T) {
 	}
 }
 
-func initPagePool() *PagePool[*RawPage] {
+func initPagePool() *PagePool[int, *RawPage] {
 	poolSize := 3
 	pageFactory := func() *RawPage { return NewRawPage(common.PageSize) }
-	return NewPagePool[*RawPage](poolSize, nil, NewMemoryPageStore(), pageFactory)
+	return NewPagePool[int, *RawPage](poolSize, NewMemoryPageStore[int](nextIdGenerator()), pageFactory)
+}
+
+func nextIdGenerator() func() int {
+	var id int
+	return func() int {
+		id += 1
+		return id
+	}
 }

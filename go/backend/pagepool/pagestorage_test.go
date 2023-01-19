@@ -1,58 +1,130 @@
 package pagepool
 
 import (
-	"bytes"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 )
 
-func TestPageStorageImplements(t *testing.T) {
+func TestPageStorageSingleFileImplements(t *testing.T) {
 	var inst FilePageStorage
-	var _ PageStorage[PageId] = &inst
+	var _ PageStorage[int] = &inst
 	var _ common.FlushAndCloser = &inst
 }
 
-func TestPageStorageGetPut(t *testing.T) {
-	tempDir := t.TempDir()
-	s, err := NewFilePageStorage(tempDir, 1, 0, 0)
+func TestPageStorageSingleFileStoreLoad(t *testing.T) {
+	tempDir := t.TempDir() + "/file.dat"
+	s, err := NewFilePageStorage(tempDir, common.PageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
 
 	loadPageA := NewRawPage(common.PageSize)
-	idA := NewPageId(0, 0)
-	if err := s.Load(idA, loadPageA); loadPageA.Size() != 0 || err != nil {
+	if err := s.Load(5, loadPageA); loadPageA.Size() != 0 || err != nil {
 		t.Errorf("Page should not exist")
 	}
 
-	_ = s.Store(idA, initPageA())
+	_ = s.Store(5, initPageA())
 
 	loadPageA = NewRawPage(common.PageSize)
-	if err := s.Load(idA, loadPageA); loadPageA.Size() == 0 || err != nil {
+	if err := s.Load(5, loadPageA); loadPageA.Size() == 0 || err != nil {
 		t.Errorf("Page should exist")
 	}
 
 	testPageContent(t, loadPageA, []byte{0xAA})
 
-	idB := NewPageId(0, 1)
-	_ = s.Store(idB, initPageB())
+	if lastId := s.NextId(); lastId != 6 {
+		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
+	}
+}
 
-	loadPageB := NewRawPage(common.PageSize)
-	if err := s.Load(idB, loadPageB); loadPageB.Size() == 0 || err != nil {
+func TestPageStorageSingleFilesDataPersisted(t *testing.T) {
+	tempDir := t.TempDir() + "/file.dat"
+	s, err := NewFilePageStorage(tempDir, common.PageSize)
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+
+	loadPageA := NewRawPage(common.PageSize)
+	if err := s.Load(5, loadPageA); loadPageA.Size() != 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+
+	_ = s.Store(1, initPageA())
+	_ = s.Store(2, initPageA())
+	_ = s.Store(3, initPageA())
+	_ = s.Store(4, initPageA())
+	_ = s.Store(5, initPageA())
+
+	// remove a page
+	_ = s.Remove(1)
+	_ = s.Remove(3)
+
+	// reopen
+	err = s.Close()
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+
+	s, err = NewFilePageStorage(tempDir, common.PageSize)
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+
+	loadPageA = NewRawPage(common.PageSize)
+	if err := s.Load(5, loadPageA); loadPageA.Size() == 0 || err != nil {
 		t.Errorf("Page should exist")
 	}
 
-	testPageContent(t, loadPageB, []byte{0xBB})
+	testPageContent(t, loadPageA, []byte{0xAA})
 
-	idC := NewPageId(1, 0)
-	_ = s.Store(idC, initPageC())
+	// removed pages should not exist
+	loadPageA = NewRawPage(common.PageSize)
+	if err := s.Load(3, loadPageA); loadPageA.Size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+	loadPageA = NewRawPage(common.PageSize)
+	if err := s.Load(1, loadPageA); loadPageA.Size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+}
 
-	loadPageC := NewRawPage(common.PageSize)
-	if err := s.Load(idC, loadPageC); loadPageC.Size() == 0 || err != nil {
-		t.Errorf("Page should exist")
+func TestPageStorageSingleFileRemovePage(t *testing.T) {
+	tempDir := t.TempDir() + "/file.dat"
+	s, err := NewFilePageStorage(tempDir, common.PageSize)
+	if err != nil {
+		t.Fatalf("Error: %s", err)
 	}
 
-	testPageContent(t, loadPageC, []byte{0xCC})
+	err = s.Store(5, initPageA())
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+
+	if lastId := s.NextId(); lastId != 6 {
+		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
+	}
+
+	// remove the page
+	err = s.Remove(5)
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+
+	// last IDs have not changed
+	if lastId := s.NextId(); lastId != 5 {
+		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
+	}
+
+	// removed IDs
+	if removed, exists := s.freeIdsMap[5]; !exists || !removed {
+		t.Errorf("Id not in remoevd list")
+	}
+
+	// try to load removed pages
+	loadPageA := NewRawPage(common.PageSize)
+	if err := s.Load(5, loadPageA); loadPageA.Size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
 }
 
 func initPageA() Page {
@@ -61,22 +133,11 @@ func initPageA() Page {
 	return page
 }
 
-func initPageB() Page {
-	page := NewRawPage(common.PageSize)
-	page.FromBytes([]byte{0xBB})
-	return page
-}
-
-func initPageC() Page {
-	page := NewRawPage(common.PageSize)
-	page.FromBytes([]byte{0xCC})
-	return page
-}
-
 func testPageContent(t *testing.T, a Page, expected []byte) {
 	actual := make([]byte, a.Size())
 	a.ToBytes(actual)
-	if bytes.Compare(actual, expected) != 0 {
+	// check only first byte, not the whole 4kB!
+	if actual[0] != expected[0] {
 		t.Errorf("content does not match: %v != %v", expected, actual)
 	}
 }

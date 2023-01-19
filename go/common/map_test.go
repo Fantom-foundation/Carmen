@@ -172,21 +172,21 @@ func initMapFactories(t *testing.T) map[string]func() common.Map[common.Address,
 	}
 
 	singlePageListFactory := func() common.Map[common.Address, uint32] {
-		eachPageStore := pagepool.NewMemoryPageStore()
-		eachPagePool := pagepool.NewPagePool[*file.IndexPage[common.Address, uint32]](pagePoolSize, nil, eachPageStore, pageFactory)
+		eachPageStore := pagepool.NewMemoryPageStore[file.PageId](file.NextPageIdGenerator())
+		eachPagePool := pagepool.NewPagePool[file.PageId, *file.IndexPage[common.Address, uint32]](pagePoolSize, eachPageStore, pageFactory)
 		pageList := file.NewPageList[common.Address, uint32](123, pageItems, eachPagePool)
 		return &noErrMapWrapper[common.Address, uint32]{&pageList}
 	}
 
-	sharedPageStore := pagepool.NewMemoryPageStore()
-	sharedPagePool := pagepool.NewPagePool[*file.IndexPage[common.Address, uint32]](pagePoolSize, nil, sharedPageStore, pageFactory)
+	sharedPageStore := pagepool.NewMemoryPageStore[file.PageId](file.NextPageIdGenerator())
+	sharedPagePool := pagepool.NewPagePool[file.PageId, *file.IndexPage[common.Address, uint32]](pagePoolSize, sharedPageStore, pageFactory)
 	linearHashPagePoolFactory := func() common.Map[common.Address, uint32] {
 		return &noErrMapWrapper[common.Address, uint32]{file.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, 0, sharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}
 
 	persistedLinearHashPagePoolFactory := func() common.Map[common.Address, uint32] {
-		persistedSharedPageStore, _ := pagepool.NewFilePageStorage(t.TempDir(), pageSize, 0, 0)
-		persistedSharedPagePool := pagepool.NewPagePool[*file.IndexPage[common.Address, uint32]](pagePoolSize, nil, persistedSharedPageStore, pageFactory)
+		persistedSharedPageStore, _ := file.NewTwoFilesPageStorage(t.TempDir(), pageSize)
+		persistedSharedPagePool := pagepool.NewPagePool[file.PageId, *file.IndexPage[common.Address, uint32]](pagePoolSize, persistedSharedPageStore, pageFactory)
 		return &noErrMapWrapper[common.Address, uint32]{file.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, 0, persistedSharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}
 
