@@ -82,10 +82,6 @@ func (m *BlockList[K, V]) Get(key K) (val V, exists bool, err error) {
 	return
 }
 
-func (m *BlockList[K, V]) GetAll(key K) ([]V, error) {
-	panic("Not implemented yet")
-}
-
 // Put associates a key to a value.
 // If the key is already present, the value is updated.
 func (m *BlockList[K, V]) Put(key K, val V) error {
@@ -109,10 +105,6 @@ func (m *BlockList[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err erro
 	page.Put(key, val)
 
 	return val, false, nil
-}
-
-func (m *BlockList[K, V]) Add(key K, val V) error {
-	panic("Not implemented yet")
 }
 
 // findBlock iterates blocks and finds the block to insert the key into.
@@ -157,14 +149,6 @@ func (m *BlockList[K, V]) Remove(key K) (exists bool, err error) {
 	}
 
 	return
-}
-
-func (m *BlockList[K, V]) RemoveAll(key K) error {
-	panic("Not implemented yet")
-}
-
-func (m *BlockList[K, V]) RemoveVal(key K, val V) (bool, error) {
-	panic("Not implemented yet")
 }
 
 // fillFromTail picks a random item from the tail of this list and inserts it into the input item.
