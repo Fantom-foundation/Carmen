@@ -1,78 +1,73 @@
-package common
+package memory
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"unsafe"
 )
 
 // BlockList is a data structure that maintains a list of blocks. Each block maps a fixed number of Key/Value pairs.
 // When the size overflows, a new block is created and linked in this list. Further keys are stored in this block.
 type BlockList[K comparable, V any] struct {
-	list []*SortedMap[K, V]
+	list []*common.SortedMap[K, V]
 
-	comparator    Comparator[K]
+	comparator    common.Comparator[K]
 	blockCapacity int
 	size          int // current size computed during addition for fast read
 }
 
 // NewBlockList creates a new instance, each block will have the given maximal capacity.
 // blockCapacity is maximal size of each block in this list
-func NewBlockList[K comparable, V any](blockCapacity int, comparator Comparator[K]) *BlockList[K, V] {
+func NewBlockList[K comparable, V any](blockCapacity int, comparator common.Comparator[K]) *BlockList[K, V] {
 	return &BlockList[K, V]{
 		blockCapacity: blockCapacity,
 		comparator:    comparator,
-		list:          make([]*SortedMap[K, V], 0, 10),
+		list:          make([]*common.SortedMap[K, V], 0, 10),
 	}
 }
 
-// ForEach all entries - calls the callback for each key-value pair in the table
-func (m *BlockList[K, V]) ForEach(callback func(K, V)) error {
-	for _, item := range m.list {
-		item.ForEach(callback)
-	}
-	return nil
-}
-
-// BulkInsert creates content of this list from the input data.
-func (m *BlockList[K, V]) BulkInsert(data []MapEntry[K, V]) error {
-	var start int
-	// fill-in possible half empty last element
-	if len(m.list) > 0 {
-		tail := m.list[len(m.list)-1]
-		start = m.blockCapacity - tail.Size()
-		if start > 0 {
-			tail.BulkInsert(data[0:start])
-		}
-		m.size += start
-	}
-
-	// segment and bulk insert rest of the data
-	for i := start; i < len(data); i += m.blockCapacity {
-		newBlock := NewSortedMap[K, V](m.blockCapacity, m.comparator)
-		end := i + m.blockCapacity
+// InitBlockList creates a new instance, each block will have the given maximal capacity.
+// blockCapacity is maximal size of each block in this list.
+// This block list will be initialised with input data
+func InitBlockList[K comparable, V any](blockCapacity int, data []common.MapEntry[K, V], comparator common.Comparator[K]) *BlockList[K, V] {
+	list := make([]*common.SortedMap[K, V], 0, len(data))
+	for i := 0; i < len(data); i += blockCapacity {
+		end := i + blockCapacity
 		if end > len(data) {
 			end = len(data)
 		}
-		newBlock.BulkInsert(data[i:end])
-		m.list = append(m.list, newBlock)
-		m.size += end - i
+		newBlock := common.InitSortedMap[K, V](blockCapacity, data[i:end], comparator)
+		list = append(list, newBlock)
 	}
 
-	return nil
+	b := &BlockList[K, V]{
+		blockCapacity: blockCapacity,
+		comparator:    comparator,
+		list:          list,
+	}
+
+	b.size = len(data)
+	return b
 }
 
-// GetEntries collects data from all blocks and returns them as one slice
-func (m *BlockList[K, V]) GetEntries() ([]MapEntry[K, V], error) {
-	data := make([]MapEntry[K, V], 0, m.size)
+// ForEach all entries - calls the callback for each key-value pair in the table.
+func (m *BlockList[K, V]) ForEach(callback func(K, V)) {
+	for _, item := range m.list {
+		item.ForEach(callback)
+	}
+}
+
+// GetEntries collects data from all blocks and returns them as one slice.
+func (m *BlockList[K, V]) GetEntries() []common.MapEntry[K, V] {
+	data := make([]common.MapEntry[K, V], 0, m.size)
 	for _, item := range m.list {
 		data = append(data, item.GetEntries()...)
 	}
-
-	return data, nil
+	return data
 }
 
 // Get returns a value from the table or false.
-func (m *BlockList[K, V]) Get(key K) (val V, exists bool, err error) {
+func (m *BlockList[K, V]) Get(key K) (val V, exists bool) {
 	for _, item := range m.list {
 		val, exists = item.Get(key)
 		if exists {
@@ -84,27 +79,26 @@ func (m *BlockList[K, V]) Get(key K) (val V, exists bool, err error) {
 
 // Put associates a key to a value.
 // If the key is already present, the value is updated.
-func (m *BlockList[K, V]) Put(key K, val V) error {
+func (m *BlockList[K, V]) Put(key K, val V) {
 	_, item, exists := m.findBlock(key)
 	if !exists {
 		m.size += 1
 	}
 	// always replace existing value
 	item.Put(key, val)
-	return nil
 }
 
-func (m *BlockList[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err error) {
+func (m *BlockList[K, V]) GetOrAdd(key K, val V) (value V, exists bool) {
 	existsVal, page, exists := m.findBlock(key)
 
 	if exists {
-		return existsVal, true, nil
+		return existsVal, true
 	}
 
 	m.size += 1
 	page.Put(key, val)
 
-	return val, false, nil
+	return val, false
 }
 
 // findBlock iterates blocks and finds the block to insert the key into.
@@ -114,9 +108,9 @@ func (m *BlockList[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err erro
 // and the value for this key is returned as well.
 // If false is returned, the returned value should be ignored and the output block
 // may be used to associate the key.
-func (m *BlockList[K, V]) findBlock(key K) (val V, block *SortedMap[K, V], exists bool) {
+func (m *BlockList[K, V]) findBlock(key K) (val V, block *common.SortedMap[K, V], exists bool) {
 	if len(m.list) == 0 {
-		newBlock := NewSortedMap[K, V](m.blockCapacity, m.comparator)
+		newBlock := common.NewSortedMap[K, V](m.blockCapacity, m.comparator)
 		m.list = append(m.list, newBlock)
 		return val, newBlock, false
 	}
@@ -130,15 +124,15 @@ func (m *BlockList[K, V]) findBlock(key K) (val V, block *SortedMap[K, V], exist
 	tail := m.list[len(m.list)-1]
 	// add a new block when overflow
 	if tail.Size() == m.blockCapacity {
-		tail = NewSortedMap[K, V](m.blockCapacity, m.comparator)
+		tail = common.NewSortedMap[K, V](m.blockCapacity, m.comparator)
 		m.list = append(m.list, tail)
 	}
 
 	return val, tail, false
 }
 
-// Remove deletes the key from the map
-func (m *BlockList[K, V]) Remove(key K) (exists bool, err error) {
+// Remove deletes the key from the map.
+func (m *BlockList[K, V]) Remove(key K) (exists bool) {
 	for _, item := range m.list {
 		// replace value if it already exists.
 		if exists = item.Remove(key); exists {
@@ -155,7 +149,7 @@ func (m *BlockList[K, V]) Remove(key K) (exists bool, err error) {
 // It is meant to fill a place in the block caused by deletion of an item.
 // If the input item is the tail, no element is removed, but the tail may be deleted if it is empty.
 // If the tail becomes empty, it is removed from the list.
-func (m *BlockList[K, V]) fillFromTail(item *SortedMap[K, V]) {
+func (m *BlockList[K, V]) fillFromTail(item *common.SortedMap[K, V]) {
 	tail := m.list[len(m.list)-1]
 
 	if tail != item {
@@ -174,8 +168,8 @@ func (m *BlockList[K, V]) fillFromTail(item *SortedMap[K, V]) {
 	return
 }
 
-// pickTailEntry picks a random (first) value from tail
-func (m *BlockList[K, V]) pickTailEntry(tail *SortedMap[K, V]) (key K, val V, exists bool) {
+// pickTailEntry picks a random (first) value from tail.
+func (m *BlockList[K, V]) pickTailEntry(tail *common.SortedMap[K, V]) (key K, val V, exists bool) {
 	if tail.Size() > 0 {
 		entry := tail.GetEntries()[tail.Size()-1]
 		key = entry.Key
@@ -190,13 +184,12 @@ func (m *BlockList[K, V]) Size() int {
 	return m.size
 }
 
-func (m *BlockList[K, V]) Clear() error {
+func (m *BlockList[K, V]) Clear() {
 	m.size = 0
 	for i := range m.list {
 		m.list[i] = nil
 	}
 	m.list = m.list[0:0]
-	return nil
 }
 
 func (m *BlockList[K, V]) PrintDump() {
@@ -208,24 +201,24 @@ func (m *BlockList[K, V]) PrintDump() {
 	}
 }
 
-func (m *BlockList[K, V]) GetMemoryFootprint() *MemoryFootprint {
+func (m *BlockList[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*m)
 	var entrySize uintptr
 
 	// items before tail have all the same sizes
 	size := len(m.list)
 	if size > 1 {
-		entrySize += uintptr(size-1) * unsafe.Sizeof(&SortedMap[K, V]{})
+		entrySize += uintptr(size-1) * unsafe.Sizeof(&common.SortedMap[K, V]{})
 		entrySize += uintptr(size-1) * m.list[0].GetMemoryFootprint().Value()
 	}
 	// add size of tail
 	if size > 0 {
 		tail := m.list[size-1]
-		entrySize += unsafe.Sizeof(&SortedMap[K, V]{})
+		entrySize += unsafe.Sizeof(&common.SortedMap[K, V]{})
 		entrySize += tail.GetMemoryFootprint().Value()
 	}
 
-	footprint := NewMemoryFootprint(selfSize)
-	footprint.AddChild("blocks", NewMemoryFootprint(entrySize))
+	footprint := common.NewMemoryFootprint(selfSize)
+	footprint.AddChild("blocks", common.NewMemoryFootprint(entrySize))
 	return footprint
 }

@@ -30,7 +30,7 @@ const (
 // pages are evicted, while every use of a page makes it more frequently used with a lower chance to get evicted.
 // The pages are 4kB for an optimal IO when pages are stored/loaded from/to the disk.
 type Index[K comparable, I common.Identifier] struct {
-	table           *common.LinearHashMap[K, I]
+	table           *LinearHashMap[K, I]
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
@@ -86,12 +86,8 @@ func NewParamIndex[K comparable, I common.Identifier](
 	}
 
 	pagePool := pagepool.NewPagePool[K, I](pagePoolSize, pageItems, freeIds, pageStorage, comparator)
-	pageListFactory := func(bucket, capacity int) common.BulkInsertMap[K, I] {
-		return pagepool.NewPageList[K, I](bucket, capacity, pagePool)
-	}
-
 	inst = &Index[K, I]{
-		table:           common.NewLinearHashMap[K, I](pageItems, numBuckets, hasher, comparator, pageListFactory),
+		table:           NewLinearHashMap[K, I](pageItems, numBuckets, pagePool, hasher, comparator),
 		keySerializer:   keySerializer,
 		indexSerializer: indexSerializer,
 		hashIndex:       indexhash.InitIndexHash[K](hash, keySerializer),
@@ -104,7 +100,7 @@ func NewParamIndex[K comparable, I common.Identifier](
 	return
 }
 
-// GetOrAdd returns an index mapping for the key, or creates the new index
+// GetOrAdd returns an index mapping for the key, or creates the new index.
 func (m *Index[K, I]) GetOrAdd(key K) (val I, err error) {
 	val, exists, err := m.table.GetOrAdd(key, m.maxIndex)
 	if err != nil {
@@ -118,7 +114,7 @@ func (m *Index[K, I]) GetOrAdd(key K) (val I, err error) {
 	return
 }
 
-// Get returns an index mapping for the key, returns index.ErrNotFound if not exists
+// Get returns an index mapping for the key, returns index.ErrNotFound if not exists.
 func (m *Index[K, I]) Get(key K) (val I, err error) {
 	val, exists, err := m.table.Get(key)
 	if err != nil {

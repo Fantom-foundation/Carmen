@@ -183,7 +183,7 @@ func (c *FilePageStorage[K, I]) Store(pageId PageId, page *Page[K, I]) (err erro
 }
 
 // shouldLoad returns true it the page under pageId should be loaded.
-// It happens when the page is not deleted and the pageId does not exceed actual size of the file
+// It happens when the page is not deleted and the pageId does not exceed actual size of the file.
 func (c *FilePageStorage[K, I]) shouldLoad(pageId PageId) bool {
 	// do not necessarily query I/O if the page does not exist,
 	// and it allows also for not actually deleting data, it only tracks non-existing items.

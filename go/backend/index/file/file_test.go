@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	A = common.Address{0x01}
-	B = common.Address{0x02}
+	A = common.Address{0xAA}
+	B = common.Address{0xBB}
+	C = common.Address{0xCC}
 )
 
 func TestFileIndexImplements(t *testing.T) {
