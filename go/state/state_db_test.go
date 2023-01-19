@@ -2546,6 +2546,47 @@ func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
 	db.EndBlock()
 }
 
+func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().GetAccountState(address2).Return(common.Unknown, nil)
+	mock.EXPECT().GetAccountState(address3).Return(common.Unknown, nil)
+	mock.EXPECT().GetNonce(address2).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetNonce(address3).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address2).Return(0, nil)
+
+	db.BeginBlock()
+	db.BeginTransaction()
+	// create account 1 explicitly, keeping it empty
+	db.CreateAccount(address1)
+	// create account 2 by adding balance, but setting it to zero immediately
+	db.AddBalance(address2, big.NewInt(12))
+	db.SubBalance(address2, big.NewInt(12))
+	// create account 3 by setting code, but setting it to empty immediately
+	db.SetCode(address3, []byte{0x12})
+	db.SetCode(address3, []byte{})
+	db.EndTransaction()
+
+	// nonce of account 1 is reset when creating the account
+	mock.EXPECT().SetNonce(address1, common.Nonce{}).Return(nil)
+
+	// empty accounts are set as common.Deleted at the end of the block
+	mock.EXPECT().DeleteAccount(address1).Return(nil)
+	mock.EXPECT().DeleteAccount(address2).Return(nil)
+	mock.EXPECT().DeleteAccount(address3).Return(nil)
+	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().SetBalance(address2, common.Balance{}).Return(nil)
+	mock.EXPECT().SetBalance(address3, common.Balance{}).Return(nil)
+	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
+	mock.EXPECT().SetCode(address2, []byte{}).Return(nil)
+	mock.EXPECT().SetCode(address3, []byte{}).Return(nil)
+	db.EndBlock()
+}
+
 func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -139,7 +139,7 @@ type stateDB struct {
 	// the storedDataCache upon account deletion. The maintained values are internal information only.
 	reincarnation map[common.Address]uint64
 
-	// A set of addresses, which possibly become empty in this transaction
+	// A list of addresses, which have possibly become empty in the transaction
 	emptyCandidates []common.Address
 }
 
