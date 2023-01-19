@@ -40,7 +40,7 @@ func NewMultiMap[K comparable, V comparable](
 	hasher common.Hasher[K],
 	comparator common.Comparator[K]) (*MultiMap[K, V], error) {
 
-	numBuckets, lastBucket, lastOverflow, freeIds, err := readMetadata(path)
+	numBuckets, freeIds, err := readMetadata(path)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func NewMultiMap[K comparable, V comparable](
 	// Do not customise, unless different size of page, etc. is needed
 	// 4kB is the right fit for disk I/O
 	pageSize := common.PageSize // 4kB
-	pageStorage, err := pagepool.NewTwoFilesPageStorage(path, pageSize, lastBucket, lastOverflow)
+	pageStorage, err := pagepool.NewTwoFilesPageStorage(path, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (m *MultiMap[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	return memoryFootprint
 }
 
-func readMetadata(path string) (numBuckets, lastBucket, lastOverflow int, freeIds []int, err error) {
+func readMetadata(path string) (numBuckets int, freeIds []int, err error) {
 	metadataFile, err := os.OpenFile(path+"/metadata.dat", os.O_RDONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return
@@ -140,13 +140,10 @@ func readMetadata(path string) (numBuckets, lastBucket, lastOverflow int, freeId
 	defer metadataFile.Close()
 
 	// read metadata
-	size := 3 * 4
-	data := make([]byte, size)
+	data := make([]byte, 4)
 	_, err = metadataFile.Read(data)
 	if err == nil {
 		numBuckets = int(binary.BigEndian.Uint32(data[0:4]))
-		lastBucket = int(binary.BigEndian.Uint32(data[4:8]))
-		lastOverflow = int(binary.BigEndian.Uint32(data[8:12]))
 	}
 
 	// read metadata - free IDs
@@ -177,12 +174,9 @@ func writeMetadata[K comparable, V comparable](
 	}
 	defer metadataFile.Close()
 
-	size := (3 + len(pagePool.GetFreeIds())) * 4
+	size := (1 + len(pagePool.GetFreeIds())) * 4
 	metadata := make([]byte, 0, size)
-
 	metadata = binary.BigEndian.AppendUint32(metadata, uint32(linearHash.GetBuckets()))
-	metadata = binary.BigEndian.AppendUint32(metadata, uint32(pageStore.GetLastId().Bucket()))
-	metadata = binary.BigEndian.AppendUint32(metadata, uint32(pageStore.GetLastId().Overflow()))
 
 	for _, freeId := range pagePool.GetFreeIds() {
 		metadata = binary.BigEndian.AppendUint32(metadata, uint32(freeId))

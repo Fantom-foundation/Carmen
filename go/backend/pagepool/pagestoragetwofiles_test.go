@@ -13,7 +13,7 @@ func TestPageStorageTwoFilesImplements(t *testing.T) {
 
 func TestPageStorageTwoFilesStoreLoad(t *testing.T) {
 	tempDir := t.TempDir()
-	s, err := NewTwoFilesPageStorage(tempDir, pageSize, 0, 0)
+	s, err := NewTwoFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -78,7 +78,7 @@ func TestPageStorageTwoFilesStoreLoad(t *testing.T) {
 
 func TestPageStorageTwoFilesRemovePage(t *testing.T) {
 	tempDir := t.TempDir()
-	s, err := NewTwoFilesPageStorage(tempDir, pageSize, 0, 0)
+	s, err := NewTwoFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -142,7 +142,7 @@ func TestPageStorageTwoFilesRemovePage(t *testing.T) {
 
 func TestPageStorageTwoFilesDataPersisted(t *testing.T) {
 	tempDir := t.TempDir()
-	s, err := NewTwoFilesPageStorage(tempDir, pageSize, 0, 0)
+	s, err := NewTwoFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -158,13 +158,23 @@ func TestPageStorageTwoFilesDataPersisted(t *testing.T) {
 	idB := NewPageId(5, 3)
 	_ = s.Store(idB, initPageA())
 
+	// create and remove a few items
+	_ = s.Store(NewPageId(4, 0), initPageA())
+	_ = s.Store(NewPageId(5, 0), initPageA())
+	_ = s.Store(NewPageId(5, 1), initPageA())
+	_ = s.Store(NewPageId(5, 2), initPageA())
+
+	_ = s.Remove(NewPageId(4, 0))
+	_ = s.Remove(NewPageId(5, 1))
+	_ = s.Remove(NewPageId(5, 2))
+
 	// reopen
 	err = s.Close()
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
 
-	s, err = NewTwoFilesPageStorage(tempDir, pageSize, 5, 2)
+	s, err = NewTwoFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -182,12 +192,29 @@ func TestPageStorageTwoFilesDataPersisted(t *testing.T) {
 	}
 
 	testPageContent(t, 1, 3, loadPageB)
+
+	// removed pages cannot exist
+	page := NewKVPage[common.Address, uint32](pageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	if err := s.Load(NewPageId(4, 0), page); page.size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+
+	page = NewKVPage[common.Address, uint32](pageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	if err := s.Load(NewPageId(5, 1), page); page.size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+
+	page = NewKVPage[common.Address, uint32](pageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	if err := s.Load(NewPageId(5, 2), page); page.size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+
 }
 
 func testPageContent(t *testing.T, start, expectedSize int, page *KVPage[common.Address, uint32]) {
 	size := page.size()
 	if size != expectedSize {
-		t.Errorf("KVPage size does not match: %d != %d", size, expectedSize)
+		t.Errorf("Page size does not match: %d != %d", size, expectedSize)
 	}
 
 	for i := start; i < start+size; i++ {

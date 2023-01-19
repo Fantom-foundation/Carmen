@@ -145,7 +145,7 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	}
 
 	// test metadata written
-	hash, numBuckets, lastBucket, _, lastIndex, freeIds, err := readMetadata[uint32](dir, common.Identifier32Serializer{})
+	hash, nBuckets, lastIndex, freeIds, err := readMetadata[uint32](dir, common.Identifier32Serializer{})
 	if err != nil {
 		t.Errorf("Cannot read metadata file: %s", err)
 	}
@@ -156,12 +156,8 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	}
 
 	// default number of buckets
-	if numBuckets == 0 {
+	if nBuckets == 0 {
 		t.Errorf("Wrong number of buckets: %d ", numBuckets)
-	}
-
-	if lastBucket == 0 {
-		t.Errorf("No free Ids read")
 	}
 
 	if lastIndex != expected {

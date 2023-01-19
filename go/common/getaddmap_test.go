@@ -90,7 +90,7 @@ func initGetOrAddMapFactories(t *testing.T) map[string]func() getOrAdd[common.Ad
 	}
 
 	persistedLinearHashPagePoolFactory := func() getOrAdd[common.Address, uint32] {
-		persistedSharedPageStore, _ := pagepool.NewTwoFilesPageStorage(t.TempDir(), pageSize, 0, 0)
+		persistedSharedPageStore, _ := pagepool.NewTwoFilesPageStorage(t.TempDir(), pageSize)
 		persistedSharedPagePool := pagepool.NewPagePool[*pagepool.KVPage[common.Address, uint32]](pagePoolSize, nil, persistedSharedPageStore, pageFactory)
 		return &getOrAddWrapper[common.Address, uint32]{pagepool.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, persistedSharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}

@@ -6,8 +6,6 @@ import (
 	"unsafe"
 )
 
-const freePagesCap = 10 // the size of freed pages set.
-
 // TwoFilesPageStorage receives requests to Load or Store pages identified by PageId.
 // The PageId contains two integer IDs and the pages are distributed into two files - primary and overflow.
 // It allows for distinguishing between primary pages, which have the overflow component of the ID set to zero
@@ -26,16 +24,14 @@ type TwoFilesPageStorage struct {
 func NewTwoFilesPageStorage(
 	path string,
 	pageSize int,
-	lastBucket int,
-	lastOverflow int,
 ) (storage *TwoFilesPageStorage, err error) {
 
-	primaryFile, err := NewFilesPageStorage(path+"/primaryPages.dat", pageSize, lastBucket)
+	primaryFile, err := NewFilesPageStorage(path+"/primaryPages.dat", pageSize)
 	if err != nil {
 		return
 	}
 
-	overflowFile, err := NewFilesPageStorage(path+"/overflowPages.dat", pageSize, lastOverflow)
+	overflowFile, err := NewFilesPageStorage(path+"/overflowPages.dat", pageSize)
 	if err != nil {
 		return
 	}
@@ -67,10 +63,6 @@ func (c *TwoFilesPageStorage) Store(pageId PageId, page Page) (err error) {
 	} else {
 		return c.primaryFile.Store(pageId.Bucket(), page)
 	}
-}
-
-func (c *TwoFilesPageStorage) GetLastId() PageId {
-	return NewPageId(c.primaryFile.lastID, c.overflowFile.lastID)
 }
 
 // Remove deletes the key from the map and returns whether an element was removed.

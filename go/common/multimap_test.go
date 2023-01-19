@@ -230,7 +230,7 @@ func initMultiMapMapFactories(t *testing.T) map[string]func() common.MultiMap[co
 	}
 
 	persistedLinearHashPagePoolFactory := func() common.MultiMap[common.Address, uint32] {
-		persistedSharedPageStore, _ := pagepool.NewTwoFilesPageStorage(t.TempDir(), pageSize, 0, 0)
+		persistedSharedPageStore, _ := pagepool.NewTwoFilesPageStorage(t.TempDir(), pageSize)
 		persistedSharedPagePool := pagepool.NewPagePool[*pagepool.KVPage[common.Address, uint32]](pagePoolSize, nil, persistedSharedPageStore, pageFactory)
 		return &noErrMultiMapMapWrapper[common.Address, uint32]{pagepool.NewLinearHashMultiMap[common.Address, uint32](pageItems, numBuckets, persistedSharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}

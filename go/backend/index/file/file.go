@@ -63,7 +63,7 @@ func NewParamIndex[K comparable, I common.Identifier](
 	hasher common.Hasher[K],
 	comparator common.Comparator[K]) (inst *Index[K, I], err error) {
 
-	hash, numBuckets, lastBucket, lastOverflow, lastIndex, freeIds, err := readMetadata[I](path, indexSerializer)
+	hash, numBuckets, lastIndex, freeIds, err := readMetadata[I](path, indexSerializer)
 	if err != nil {
 		return
 	}
@@ -76,7 +76,7 @@ func NewParamIndex[K comparable, I common.Identifier](
 	// Do not customise, unless different size of page, etc. is needed
 	// 4kB is the right fit for disk I/O
 	pageSize := common.PageSize // 4kB
-	pageStorage, err := pagepool.NewTwoFilesPageStorage(path, pageSize, lastBucket, lastOverflow)
+	pageStorage, err := pagepool.NewTwoFilesPageStorage(path, pageSize)
 	if err != nil {
 		return
 	}
@@ -182,7 +182,7 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	return memoryFootprint
 }
 
-func readMetadata[I common.Identifier](path string, indexSerializer common.Serializer[I]) (hash common.Hash, numBuckets, lastBucket, lastOverflow int, lastIndex I, freeIds []int, err error) {
+func readMetadata[I common.Identifier](path string, indexSerializer common.Serializer[I]) (hash common.Hash, numBuckets int, lastIndex I, freeIds []int, err error) {
 	metadataFile, err := os.OpenFile(path+"/metadata.dat", os.O_RDONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return
@@ -190,15 +190,13 @@ func readMetadata[I common.Identifier](path string, indexSerializer common.Seria
 	defer metadataFile.Close()
 
 	// read metadata
-	size := len(hash) + indexSerializer.Size() + 3*4
+	size := len(hash) + indexSerializer.Size() + 4
 	data := make([]byte, size)
 	_, err = metadataFile.Read(data)
 	if err == nil {
 		hash = *(*common.Hash)(data[0:32])
 		numBuckets = int(binary.BigEndian.Uint32(data[32:36]))
-		lastBucket = int(binary.BigEndian.Uint32(data[36:40]))
-		lastOverflow = int(binary.BigEndian.Uint32(data[40:44]))
-		lastIndex = indexSerializer.FromBytes(data[44:48])
+		lastIndex = indexSerializer.FromBytes(data[36:40])
 	}
 
 	// read metadata - free IDs
@@ -230,13 +228,11 @@ func (m *Index[K, I]) writeMetadata() (err error) {
 		return
 	}
 
-	size := len(hash) + m.indexSerializer.Size() + (3+len(m.pagePool.GetFreeIds()))*4
+	size := len(hash) + m.indexSerializer.Size() + (1+len(m.pagePool.GetFreeIds()))*4
 	metadata := make([]byte, 0, size)
 
 	metadata = append(metadata, hash.ToBytes()...)
 	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.table.GetBuckets()))
-	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.pageStore.GetLastId().Bucket()))
-	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.pageStore.GetLastId().Overflow()))
 	metadata = append(metadata, m.indexSerializer.ToBytes(m.maxIndex)...)
 
 	for _, freeId := range m.pagePool.GetFreeIds() {

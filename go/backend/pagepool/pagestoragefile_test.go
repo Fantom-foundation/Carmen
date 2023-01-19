@@ -17,7 +17,7 @@ func TestPageStorageSingleFileImplements(t *testing.T) {
 
 func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 	tempDir := t.TempDir() + "/file.dat"
-	s, err := NewFilesPageStorage(tempDir, pageSize, 0)
+	s, err := NewFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -50,7 +50,7 @@ func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 
 func TestPageStorageSingleFilesDataPersisted(t *testing.T) {
 	tempDir := t.TempDir() + "/file.dat"
-	s, err := NewFilesPageStorage(tempDir, pageSize, 0)
+	s, err := NewFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -60,7 +60,15 @@ func TestPageStorageSingleFilesDataPersisted(t *testing.T) {
 		t.Errorf("Page should not exist")
 	}
 
+	_ = s.Store(1, initPageA())
+	_ = s.Store(2, initPageA())
+	_ = s.Store(3, initPageA())
+	_ = s.Store(4, initPageA())
 	_ = s.Store(5, initPageA())
+
+	// remove a page
+	_ = s.Remove(1)
+	_ = s.Remove(3)
 
 	// reopen
 	err = s.Close()
@@ -68,7 +76,7 @@ func TestPageStorageSingleFilesDataPersisted(t *testing.T) {
 		t.Fatalf("Error: %s", err)
 	}
 
-	s, err = NewFilesPageStorage(tempDir, pageSize, 5)
+	s, err = NewFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
@@ -79,11 +87,21 @@ func TestPageStorageSingleFilesDataPersisted(t *testing.T) {
 	}
 
 	testPageContent(t, 1, 3, loadPageA)
+
+	// removed pages should not exist
+	loadPageA = NewKVPage[common.Address, uint32](pageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	if err := s.Load(3, loadPageA); loadPageA.size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
+	loadPageA = NewKVPage[common.Address, uint32](pageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	if err := s.Load(1, loadPageA); loadPageA.size() > 0 || err != nil {
+		t.Errorf("Page should not exist")
+	}
 }
 
 func TestPageStorageSingleFileRemovePage(t *testing.T) {
 	tempDir := t.TempDir() + "/file.dat"
-	s, err := NewFilesPageStorage(tempDir, pageSize, 0)
+	s, err := NewFilesPageStorage(tempDir, pageSize)
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}

@@ -179,7 +179,7 @@ func initMapFactories(t *testing.T) map[string]func() common.Map[common.Address,
 	}
 
 	persistedLinearHashPagePoolFactory := func() common.Map[common.Address, uint32] {
-		persistedSharedPageStore, _ := pagepool.NewTwoFilesPageStorage(t.TempDir(), pageSize, 0, 0)
+		persistedSharedPageStore, _ := pagepool.NewTwoFilesPageStorage(t.TempDir(), pageSize)
 		persistedSharedPagePool := pagepool.NewPagePool[*pagepool.KVPage[common.Address, uint32]](pagePoolSize, nil, persistedSharedPageStore, pageFactory)
 		return &noErrMapWrapper[common.Address, uint32]{pagepool.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, persistedSharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}
