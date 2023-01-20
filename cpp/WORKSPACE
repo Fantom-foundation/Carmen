@@ -135,3 +135,12 @@ http_archive(
     strip_prefix = "ethash-1.0.0",
     urls = ["https://github.com/chfast/ethash/archive/refs/tags/v1.0.0.tar.gz"],
 )
+
+SQLITE_BAZEL_COMMIT = "dfa87b836d3ed0fb7714450db3ef47dab5372d5a"
+
+http_archive(
+    name = "com_github_rockwotj_sqlite_bazel",
+    strip_prefix = "sqlite-bazel-" + SQLITE_BAZEL_COMMIT,
+    urls = ["https://github.com/rockwotj/sqlite-bazel/archive/%s.zip" % SQLITE_BAZEL_COMMIT],
+    sha256 = "56b23868830600baaf160f0d81fcfcc37efe7f5c12988eb42e70104c38dc2e92",
+)
