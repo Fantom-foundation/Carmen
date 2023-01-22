@@ -37,7 +37,7 @@ class FStream {
 
   // Seek to the given offset in the file. Should be used when reading from file
   // at certain position. Returns an error if seekg failed.
-  absl::Status Seekg(std::size_t offset, std::ios::seekdir dir);
+  absl::Status Seekg(std::size_t offset, std::ios::seekdir dir = std::ios::beg);
 
   // Get the current position in the file. Should be used when reading from
   // file. Returns an error if tellg failed.
@@ -45,7 +45,7 @@ class FStream {
 
   // Seek to the given offset in the file. Should be used when writing to file
   // at certain position. Returns an error if seekp failed.
-  absl::Status Seekp(std::size_t offset, std::ios::seekdir dir);
+  absl::Status Seekp(std::size_t offset, std::ios::seekdir dir = std::ios::beg);
 
   // Get the current position in the file. Should be used when writing to file.
   // Returns an error if tellp failed.

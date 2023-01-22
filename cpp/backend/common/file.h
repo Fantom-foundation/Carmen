@@ -13,6 +13,8 @@
 #include "absl/status/statusor.h"
 #include "backend/common/page.h"
 #include "backend/common/page_id.h"
+#include "common/status_util.h"
+#include "common/fstream.h"
 
 namespace carmen::backend {
 
@@ -132,13 +134,13 @@ class FStreamFile {
   absl::Status Close();
 
  private:
-  FStreamFile(std::fstream fs, std::size_t file_size);
+  FStreamFile(FStream fs, std::size_t file_size);
 
   // Grows the underlying file to the given size.
   absl::Status GrowFileIfNeeded(std::size_t needed);
 
   std::size_t file_size_;
-  std::fstream data_;
+  FStream data_;
 };
 
 // A CFile provides raw read/write access to a file C's stdio.h header.
@@ -236,8 +238,8 @@ class SingleFileBase {
 
   static absl::StatusOr<SingleFileBase> Open(
       const std::filesystem::path& path) {
-    auto file = RawFile::Open(path);
-    return SingleFileBase(std::move(*file));
+    ASSIGN_OR_RETURN(auto file, RawFile::Open(path));
+    return SingleFileBase(std::move(file));
   }
 
   std::size_t GetNumPages() const { return file_.GetFileSize() / page_size; }
@@ -279,7 +281,7 @@ absl::Status InMemoryFile<page_size>::LoadPage(
 
 template <std::size_t page_size>
 absl::Status InMemoryFile<page_size>::StorePage(
-    PageId id, const std::span<const std::byte, page_size> src) {
+    PageId id, std::span<const std::byte, page_size> src) {
   while (data_.size() <= id) {
     data_.resize(id + 1);
   }

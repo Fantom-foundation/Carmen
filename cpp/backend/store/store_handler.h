@@ -16,24 +16,6 @@ namespace {
 template <std::size_t page_size>
 using ReferenceStore = InMemoryStore<int, Value, page_size>;
 
-// A base type for StoreHandler types (see below) exposing common definitions.
-template <std::size_t page_size, std::size_t branching_factor>
-class StoreHandlerBase {
- public:
-  constexpr static std::size_t kPageSize = page_size;
-  constexpr static std::size_t kBranchingFactor = branching_factor;
-
-  StoreHandlerBase() : reference_(branching_factor) {}
-
-  // Obtains access to a reference store implementation to be used to compare
-  // the handled store with. The reference type is configured to use the same
-  // page size and branching factor.
-  auto& GetReferenceStore() { return reference_; }
-
- private:
-  ReferenceStore<page_size> reference_;
-};
-
 // A generic store handler enclosing the setup and tear down of various store
 // implementations for the generic unit tests in store_test.cc and benchmarks in
 // store_benchmark.cc. A handler holds an instance of a store configured with a
@@ -43,9 +25,11 @@ class StoreHandlerBase {
 // This generic StoreHandler is a mere wrapper on a store reference, while
 // specializations may add additional setup and tear-down operations.
 template <typename Store, std::size_t branching_factor>
-class StoreHandler
-    : public StoreHandlerBase<Store::kPageSize, branching_factor> {
+class StoreHandler {
  public:
+  constexpr static std::size_t kPageSize = Store::kPageSize;
+  constexpr static std::size_t kBranchingFactor = branching_factor;
+
   template <typename... Args>
   static absl::StatusOr<StoreHandler> Create(Args&&... args) {
     TempDir dir;
@@ -58,15 +42,19 @@ class StoreHandler
 
   Store& GetStore() { return store_; }
 
+  auto& GetReferenceStore() { return reference_; }
+
  private:
   StoreHandler(Store store, Context context, TempDir dir)
       : dir_(std::move(dir)),
         context_(std::move(context)),
-        store_(std::move(store)) {}
+        store_(std::move(store)),
+        reference_(branching_factor) {}
 
   TempDir dir_;
   Context context_;
   Store store_;
+  ReferenceStore<Store::kPageSize> reference_;
 };
 }  // namespace
 }  // namespace carmen::backend::store

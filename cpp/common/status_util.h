@@ -36,14 +36,14 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 }
 }  // namespace testing::internal
 
-// Get status based on status code. If `errno` error code is set, the error
-// message will be appended to the status message.
-inline absl::Status GetStatusWithSystemError(absl::StatusCode code,
+// Get status based on status code and error code. If error code is not 0, then
+// corresponding error message is set and appended to the status message.
+inline absl::Status GetStatusWithSystemError(absl::StatusCode code, int error_code,
                                              std::string_view message) {
-  if (errno == 0) {
+  if (error_code == 0) {
     return {code, message};
   }
-  return {code, absl::StrCat(message, " Error: ", std::strerror(errno))};
+  return {code, absl::StrCat(message, " Error: ", std::strerror(error_code))};
 }
 
 // Wrapper around std::reference_wrapper that provides functions to access the
@@ -56,6 +56,8 @@ class ReferenceWrapper : public std::reference_wrapper<T> {
   T& AsReference() const { return this->get(); }
   // Returns a pointer to the wrapped value.
   T* AsPointer() const { return &AsReference(); }
+
+  explicit operator T*() const { return AsPointer(); }
 };
 
 // Type definition for a StatusOr<T> that can be used with reference types.

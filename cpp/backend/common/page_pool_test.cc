@@ -37,18 +37,16 @@ TEST(PagePoolTest, PoolSizeCanBeDefined) {
 
 TEST(PagePoolTest, PagesCanBeFetched) {
   TestPool pool(2);
-  ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get<Page>(12));
-  ASSERT_OK_AND_ASSIGN(auto page_14, pool.Get<Page>(14));
-  auto& page_12_ref = page_12.AsReference();
-  auto& page_14_ref = page_14.AsReference();
-  EXPECT_NE(&page_12_ref, &page_14_ref);
+  ASSERT_OK_AND_ASSIGN(Page& page_12, pool.Get<Page>(12));
+  ASSERT_OK_AND_ASSIGN(Page& page_14, pool.Get<Page>(14));
+  EXPECT_NE(&page_12, &page_14);
 }
 
 TEST(PagePoolTest, FreshFetchedPagesAreZeroInitialized) {
   TestPool pool(2);
-  ASSERT_OK_AND_ASSIGN(auto page_12, pool.Get<Page>(12));
+  ASSERT_OK_AND_ASSIGN(Page& page_12, pool.Get<Page>(12));
   for (int i = 0; i < 4; i++) {
-    EXPECT_EQ(0, page_12.AsReference()[i]);
+    EXPECT_EQ(0, page_12[i]);
   }
 }
 
@@ -59,19 +57,17 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
 
   // Write data to kNumSteps pages;
   for (int i = 0; i < kNumSteps; i++) {
-    ASSERT_OK_AND_ASSIGN(auto page, pool.Get<Page>(i));
-    auto& ref = page.AsReference();
-    ref[0] = i;
-    ref[1] = i + 1;
+    ASSERT_OK_AND_ASSIGN(Page& page, pool.Get<Page>(i));
+    page[0] = i;
+    page[1] = i + 1;
     pool.MarkAsDirty(i);
   }
 
   // Fetch those kNumSteps pages and check the content
   for (int i = 0; i < kNumSteps; i++) {
-    ASSERT_OK_AND_ASSIGN(auto page, pool.Get<Page>(i));
-    auto& ref = page.AsReference();
-    EXPECT_EQ(i, ref[0]);
-    EXPECT_EQ(i + 1, ref[1]);
+    ASSERT_OK_AND_ASSIGN(Page& page, pool.Get<Page>(i));
+    EXPECT_EQ(i, page[0]);
+    EXPECT_EQ(i + 1, page[1]);
   }
 }
 

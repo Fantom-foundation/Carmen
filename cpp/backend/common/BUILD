@@ -37,6 +37,7 @@ cc_library(
         ":page",
         ":page_id",
         "//common:status_util",
+        "//common:fstream",
         "@com_google_absl//absl/status:status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
