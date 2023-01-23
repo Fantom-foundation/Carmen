@@ -15,11 +15,10 @@ import (
 // The capacity is verified on each insert and potentially the split is triggered.
 // It is inspired by: https://hackthology.com/linear-hashing.html#fn-5
 type LinearHashMap[K comparable, V comparable] struct {
-	list     []*PageList[K, V]
 	pagePool *pagepool.PagePool[K, V]
 
-	records       uint // current total number of records in the whole table
-	blockCapacity int  //maximal number of elements per block
+	size         uint // total number of keys in the whole map
+	pageCapacity int  //maximal number of elements per block
 
 	comparator common.Comparator[K]
 	common.LinearHashBase[K, V]
@@ -27,15 +26,11 @@ type LinearHashMap[K comparable, V comparable] struct {
 
 // NewLinearHashMap creates a new instance with the initial number of buckets and constant bucket size.
 // The number of buckets will grow as this table grows.
-func NewLinearHashMap[K comparable, V comparable](pageCapacity, numBuckets int, pagePool *pagepool.PagePool[K, V], hasher common.Hasher[K], comparator common.Comparator[K]) *LinearHashMap[K, V] {
-	list := make([]*PageList[K, V], numBuckets)
-	for i := 0; i < numBuckets; i++ {
-		list[i] = NewPageList[K, V](i, pageCapacity, pagePool)
-	}
+func NewLinearHashMap[K comparable, V comparable](pageCapacity, numBuckets, size int, pagePool *pagepool.PagePool[K, V], hasher common.Hasher[K], comparator common.Comparator[K]) *LinearHashMap[K, V] {
 	return &LinearHashMap[K, V]{
-		list:           list,
 		pagePool:       pagePool,
-		blockCapacity:  pageCapacity,
+		size:           uint(size),
+		pageCapacity:   pageCapacity,
 		comparator:     comparator,
 		LinearHashBase: common.NewLinearHashBase[K, V](numBuckets, hasher, comparator),
 	}
@@ -44,7 +39,7 @@ func NewLinearHashMap[K comparable, V comparable](pageCapacity, numBuckets int, 
 // Put assigns the value to the input key.
 func (h *LinearHashMap[K, V]) Put(key K, value V) error {
 	bucketId := h.GetBucketId(key)
-	bucket := h.list[bucketId]
+	bucket := h.pageList(bucketId)
 	beforeSize := bucket.Size()
 
 	if err := bucket.Put(key, value); err != nil {
@@ -52,7 +47,7 @@ func (h *LinearHashMap[K, V]) Put(key K, value V) error {
 	}
 
 	if beforeSize < bucket.Size() {
-		h.records += 1
+		h.size += 1
 	}
 
 	// when the number of buckets overflows, split one bucket into two
@@ -61,8 +56,9 @@ func (h *LinearHashMap[K, V]) Put(key K, value V) error {
 
 // Get returns value associated to the input key.
 func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
-	bucket := h.GetBucketId(key)
-	value, exists, err = h.list[bucket].Get(key)
+	bucketId := h.GetBucketId(key)
+	bucket := h.pageList(bucketId)
+	value, exists, err = bucket.Get(key)
 	return
 }
 
@@ -70,13 +66,14 @@ func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
 // when the key is not stored yet.
 // It returns true if the key was present, or false otherwise.
 func (h *LinearHashMap[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err error) {
-	bucket := h.GetBucketId(key)
-	value, exists, err = h.list[bucket].GetOrAdd(key, val)
+	bucketId := h.GetBucketId(key)
+	bucket := h.pageList(bucketId)
+	value, exists, err = bucket.GetOrAdd(key, val)
 	if err != nil {
 		return
 	}
 	if !exists {
-		h.records += 1
+		h.size += 1
 		return value, exists, h.checkSplit()
 	}
 	return
@@ -84,8 +81,9 @@ func (h *LinearHashMap[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err 
 
 // ForEach iterates all stored key/value pairs.
 func (h *LinearHashMap[K, V]) ForEach(callback func(K, V)) error {
-	for _, v := range h.list {
-		if err := v.ForEach(callback); err != nil {
+	for i := uint(0); i < h.GetNumBuckets(); i++ {
+		bucket := h.pageList(i)
+		if err := bucket.ForEach(callback); err != nil {
 			return err
 		}
 	}
@@ -95,26 +93,28 @@ func (h *LinearHashMap[K, V]) ForEach(callback func(K, V)) error {
 
 // Remove deletes the key from the map and returns whether an element was removed.
 func (h *LinearHashMap[K, V]) Remove(key K) (bool, error) {
-	bucket := h.GetBucketId(key)
-	exists, err := h.list[bucket].Remove(key)
+	bucketId := h.GetBucketId(key)
+	bucket := h.pageList(bucketId)
+	exists, err := bucket.Remove(key)
 	if err != nil {
 		return exists, err
 	}
 	if exists {
-		h.records -= 1
+		h.size -= 1
 	}
 
 	return exists, nil
 }
 
 func (h *LinearHashMap[K, V]) Size() int {
-	return int(h.records)
+	return int(h.size)
 }
 
 func (h *LinearHashMap[K, V]) Clear() error {
-	h.records = 0
-	for _, v := range h.list {
-		if err := v.Clear(); err != nil {
+	h.size = 0
+	for i := uint(0); i < h.GetNumBuckets(); i++ {
+		bucket := h.pageList(i)
+		if err := bucket.Clear(); err != nil {
 			return err
 		}
 	}
@@ -122,14 +122,9 @@ func (h *LinearHashMap[K, V]) Clear() error {
 	return nil
 }
 
-// GetBuckets returns the number of buckets.
-func (h *LinearHashMap[K, V]) GetBuckets() int {
-	return len(h.list)
-}
-
 func (h *LinearHashMap[K, V]) checkSplit() (err error) {
 	// when the number of buckets overflows, split one bucket into two
-	if h.records > uint(len(h.list))*uint(h.blockCapacity) {
+	if h.size > h.GetNumBuckets()*uint(h.pageCapacity) {
 		err = h.split()
 	}
 	return err
@@ -140,7 +135,7 @@ func (h *LinearHashMap[K, V]) checkSplit() (err error) {
 // and re-distribute keys between the old bucket and the new bucket.
 func (h *LinearHashMap[K, V]) split() error {
 	bucketId := h.NextBucketId()
-	oldBucket := h.list[bucketId]
+	oldBucket := h.pageList(bucketId)
 
 	oldEntries, err := oldBucket.GetEntries()
 	if err != nil {
@@ -155,27 +150,24 @@ func (h *LinearHashMap[K, V]) split() error {
 
 	entriesA, entriesB := h.SplitEntries(bucketId, oldEntries)
 
-	bucketA, err := InitPageList[K, V](int(bucketId), h.blockCapacity, h.pagePool, entriesA)
+	err = InitPageList[K, V](int(bucketId), h.pageCapacity, h.pagePool, entriesA)
 	if err != nil {
 		return err
 	}
 
-	bucketB, err := InitPageList[K, V](len(h.list), h.blockCapacity, h.pagePool, entriesB)
+	err = InitPageList[K, V](int(h.GetNumBuckets()-1), h.pageCapacity, h.pagePool, entriesB)
 	if err != nil {
 		return err
 	}
-
-	// append the new one
-	h.list[bucketId] = bucketA
-	h.list = append(h.list, bucketB)
 
 	return nil
 }
 
 func (h *LinearHashMap[K, V]) PrintDump() {
-	for i, v := range h.list {
+	for i := uint(0); i < h.GetNumBuckets(); i++ {
+		bucket := h.pageList(i)
 		fmt.Printf("Bucket: %d\n", i)
-		err := v.ForEach(func(k K, v V) {
+		err := bucket.ForEach(func(k K, v V) {
 			fmt.Printf("%s \n", h.ToString(k, v))
 		})
 		if err != nil {
@@ -184,12 +176,13 @@ func (h *LinearHashMap[K, V]) PrintDump() {
 	}
 }
 
+func (h *LinearHashMap[K, V]) pageList(bucket uint) PageList[K, V] {
+	return NewPageList[K, V](int(bucket), h.pageCapacity, h.pagePool)
+}
+
 func (h *LinearHashMap[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*h)
 	var entrySize uintptr
-	for _, item := range h.list {
-		entrySize += item.GetMemoryFootprint().Value()
-	}
 	footprint := common.NewMemoryFootprint(selfSize)
 	footprint.AddChild("buckets", common.NewMemoryFootprint(entrySize))
 	footprint.AddChild("pagePool", h.pagePool.GetMemoryFootprint())

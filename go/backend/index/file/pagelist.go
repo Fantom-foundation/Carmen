@@ -12,8 +12,7 @@ import (
 // The list receives pages from a page pool.
 type PageList[K comparable, V comparable] struct {
 	pagePool     *pagepool.PagePool[K, V]
-	bucket       int   // bucket this list belongs to, it is used to identify correct first page
-	pageList     []int // IDs of pages in this list
+	bucket       int // bucket this list belongs to, it is used to identify correct first page
 	maxPageItems int
 
 	size int // current size computed during addition for fast read
@@ -28,20 +27,18 @@ const (
 )
 
 // NewPageList creates a new instance, each block will have the given maximal capacity.
-func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[K, V]) *PageList[K, V] {
-	return &PageList[K, V]{
+func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[K, V]) PageList[K, V] {
+	return PageList[K, V]{
 		maxPageItems: pageItems,
 		pagePool:     pagePool,
 		bucket:       bucket,
-		pageList:     make([]int, 1, 100),
 	}
 }
 
 // InitPageList creates a new instance, each block will have the given maximal capacity.
-func InitPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[K, V], data []common.MapEntry[K, V]) (*PageList[K, V], error) {
+func InitPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[K, V], data []common.MapEntry[K, V]) error {
 	pageList := NewPageList[K, V](bucket, pageItems, pagePool)
-	err := pageList.bulkInsert(data)
-	return pageList, err
+	return pageList.bulkInsert(data)
 }
 
 // ForEach all entries - calls the callback for each key-value pair in the list.
@@ -151,29 +148,9 @@ func (m *PageList[K, V]) addOrPut(key K, val V, op opType) (V, bool, error) {
 
 // bulkInsert creates content of this list from the input data.
 func (m *PageList[K, V]) bulkInsert(data []common.MapEntry[K, V]) error {
-	pageId := pagepool.NewPageId(m.bucket, m.pageList[len(m.pageList)-1])
-
-	var start int
-	// fill-in possible half empty last element
-	if m.Size() > 0 {
-		tail, err := m.pagePool.Get(pageId)
-		if err != nil {
-			return err
-		}
-
-		start = m.maxPageItems - tail.Size()
-		if start > len(data) {
-			start = len(data)
-		}
-		if start > 0 {
-			tail.BulkInsert(data[0:start])
-			pageId = m.createNextPage(tail) // create new tail
-		}
-		m.size += start
-	}
-
+	pageId := pagepool.NewPageId(m.bucket, 0)
 	var lastPage bool
-	for i := start; i < len(data); i += m.maxPageItems {
+	for i := 0; i < len(data); i += m.maxPageItems {
 		page, err := m.pagePool.Get(pageId)
 		if err != nil {
 			return err
@@ -192,10 +169,9 @@ func (m *PageList[K, V]) bulkInsert(data []common.MapEntry[K, V]) error {
 		if !lastPage {
 			pageId = m.createNextPage(page)
 		}
-
-		m.size += end - i
 	}
 
+	m.size = len(data)
 	return nil
 }
 
@@ -224,51 +200,71 @@ func (m *PageList[K, V]) Remove(key K) (exists bool, err error) {
 	return m.remove(key)
 }
 
+// remove delete items in the page, and replaces it by an item from the tail,
+// and potentially it removes the tail if it becomes empty.
 func (m *PageList[K, V]) remove(key K) (bool, error) {
-	// Iterate pages from tail to the beginning,
-	// remove items in the page, and potentially remove the tail if it becomes empty
+	// it iterates all pages to find the tail, and last but tail ID
 	var exists bool
-	for i := len(m.pageList) - 1; i >= 0; i-- {
-		itemPageId := pagepool.NewPageId(m.bucket, m.pageList[i])
-		item, err := m.pagePool.Get(itemPageId)
+	var removedFromPageId pagepool.PageId     // ID of a page where an item was removed
+	pageId := pagepool.NewPageId(m.bucket, 0) // ID of current page
+	lastId := pagepool.NewPageId(m.bucket, 0) // ID of last but tail page
+	tailId := pagepool.NewPageId(m.bucket, 0) // ID of tail page
+
+	// iterate all pages finding a key to delete
+	// during the iteration, remember the page where a key was deleted
+	// find the tail page and the page before the tail
+	page, err := m.pagePool.Get(pageId)
+	if err != nil {
+		return false, err
+	}
+	for page != nil {
+		// try to delete if not already found
+		if !exists && page.Remove(key) {
+			exists = true
+			m.size -= 1
+			removedFromPageId = pageId
+		}
+
+		// move to next page and page ID
+		lastId = tailId
+		tailId = pageId
+		page, pageId, err = m.next(page)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	// deletion found
+	if exists {
+		// get required pages from the pool again as they could have been evicted by previous iterations
+		// but still we expect that the pool here can maintain at least two pages
+		// for the page to delete from and for the tail page
+		tailPage, err := m.pagePool.Get(tailId)
 		if err != nil {
 			return false, err
 		}
 
-		// remove value if it already exists.
-		if exists = item.Remove(key); exists {
-			tailIndex := len(m.pageList) - 1
-			tailPageId := pagepool.NewPageId(m.bucket, m.pageList[tailIndex])
-			tail, err := m.pagePool.Get(tailPageId) // tail page
-			m.size -= 1
-
+		if tailId != removedFromPageId {
+			removedFromPage, err := m.pagePool.Get(removedFromPageId)
 			if err != nil {
 				return false, err
 			}
 
-			if itemPageId != tailPageId {
-				fillFromTail[K, V](item, tail)
-			}
+			fillFromTail[K, V](removedFromPage, tailPage)
+		}
 
-			// remove tail if empty
-			if tail.Size() == 0 {
-				_, err = m.pagePool.Remove(tailPageId) // break association with this pageID in the page pool
-				if err != nil {
-					return false, err
-				}
-
-				if tailIndex > 0 {
-					// remove the link from last but the tail
-					m.pageList = m.pageList[:len(m.pageList)-1]
-					prevPageId := pagepool.NewPageId(m.bucket, m.pageList[len(m.pageList)-1])
-					prevPage, err := m.pagePool.Get(prevPageId)
-					if err != nil {
-						return false, err
-					}
-					prevPage.RemoveNext()
-				}
+		// remove tail if it becomes empty
+		if tailPage.Size() == 0 {
+			_, err = m.pagePool.Remove(tailId) // break association with this pageID in the page pool
+			if err != nil {
+				return false, err
 			}
-			break
+			// break association from the page preceding the tail page
+			prevPage, err := m.pagePool.Get(lastId)
+			if err != nil {
+				return false, err
+			}
+			prevPage.RemoveNext()
 		}
 	}
 
@@ -277,7 +273,6 @@ func (m *PageList[K, V]) remove(key K) (bool, error) {
 
 func (m *PageList[K, V]) createNextPage(page *pagepool.Page[K, V]) (nextId pagepool.PageId) {
 	tailPageId := m.pagePool.GenerateNextId()
-	m.pageList = append(m.pageList, tailPageId)
 	pageId := pagepool.NewPageId(m.bucket, tailPageId)
 	page.SetNext(pageId)
 	return pageId
@@ -286,12 +281,9 @@ func (m *PageList[K, V]) createNextPage(page *pagepool.Page[K, V]) (nextId pagep
 // fillFromTail reads a key-value pair from the tail and inserts it into the input page,
 // no item is moved when the tail is empty.
 func fillFromTail[K comparable, V comparable](page, tail *pagepool.Page[K, V]) {
-
 	if tail.Size() > 0 {
-		entries := tail.GetEntries()[tail.Size()-1 : tail.Size()]
-		for _, entry := range entries {
-			page.Put(entry.Key, entry.Val)
-		}
+		tailEntry := tail.GetEntries()[tail.Size()-1]
+		page.Put(tailEntry.Key, tailEntry.Val)
 		// remove from tail by moving the size
 		tail.SetSize(tail.Size() - 1)
 	}
@@ -303,15 +295,20 @@ func (m *PageList[K, V]) Size() int {
 
 func (m *PageList[K, V]) Clear() error {
 	// release pages from the pool
-	for _, overflow := range m.pageList {
-		_, err := m.pagePool.Remove(pagepool.NewPageId(m.bucket, overflow))
+	pageId := pagepool.NewPageId(m.bucket, 0)
+	page, err := m.pagePool.Get(pageId) // fist page from this bucket
+	if err != nil {
+		return err
+	}
+	for page != nil {
+		_, err := m.pagePool.Remove(pageId)
+		// fetch new page if it exists
+		page, pageId, err = m.next(page)
 		if err != nil {
 			return err
 		}
 	}
 	m.size = 0
-	m.pageList = m.pageList[0:1]
-
 	return nil
 }
 
@@ -345,9 +342,7 @@ func (m *PageList[K, V]) PrintDump() {
 
 func (m *PageList[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*m)
-	var x int
-	pageListSize := uintptr(len(m.pageList)) * unsafe.Sizeof(x)
-	memoryFootprint := common.NewMemoryFootprint(selfSize + pageListSize)
+	memoryFootprint := common.NewMemoryFootprint(selfSize)
 	memoryFootprint.AddChild("pagePool", m.pagePool.GetMemoryFootprint())
 	return memoryFootprint
 }

@@ -62,11 +62,11 @@ func TestLinearHashOverflow(t *testing.T) {
 	if h.GetBits() != common.IntLog2(NumBuckets) {
 		t.Errorf("Property is not correct %d", h.GetBits())
 	}
-	if h.records != BucketSize*NumBuckets {
-		t.Errorf("Property is not correct %d", h.records)
+	if h.size != BucketSize*NumBuckets {
+		t.Errorf("Property is not correct %d", h.size)
 	}
-	if len(h.list) != NumBuckets {
-		t.Errorf("Property is not correct %d", len(h.list))
+	if int(h.GetNumBuckets()) != NumBuckets {
+		t.Errorf("Property is not correct %d", h.GetNumBuckets())
 	}
 
 	// check values properly set
@@ -77,6 +77,8 @@ func TestLinearHashOverflow(t *testing.T) {
 		}
 	}
 
+	//h.PrintDump()
+
 	// this will overflow!
 	_ = h.Put(A, 9999)
 
@@ -84,20 +86,20 @@ func TestLinearHashOverflow(t *testing.T) {
 	if h.GetBits() != common.IntLog2(NumBuckets+1) {
 		t.Errorf("Property is not correct %d", h.GetBits())
 	}
-	if h.records != BucketSize*NumBuckets+1 {
-		t.Errorf("Property is not correct %d", h.records)
+	if h.size != BucketSize*NumBuckets+1 {
+		t.Errorf("Property is not correct %d", h.size)
 	}
-	if len(h.list) != NumBuckets+1 {
-		t.Errorf("Property is not correct %d", len(h.list))
+	if int(h.GetNumBuckets()) != NumBuckets+1 {
+		t.Errorf("Property is not correct %d", int(h.GetNumBuckets()))
 	}
 
-	//h.printDump()
+	//h.PrintDump()
 
 	// check values properly set
 	for i := 0; i < BucketSize*NumBuckets; i++ {
 		address := common.AddressFromNumber(i + 1)
 		if val, exists, _ := h.Get(address); !exists || val != uint32(i+1) {
-			t.Errorf("Value incorrect: %v -> %d  (hash: %x)", address, val, common.AddressHasher{}.Hash(&address))
+			t.Errorf("Value incorrect: %v -> %d != %d  (hash: %x)", address, val, uint32(i+1), common.AddressHasher{}.Hash(&address))
 		}
 	}
 
@@ -119,11 +121,11 @@ func TestLinearHashGetOrAddOverflow(t *testing.T) {
 	if h.GetBits() != common.IntLog2(NumBuckets) {
 		t.Errorf("Property is not correct %d", h.GetBits())
 	}
-	if h.records != BucketSize*NumBuckets {
-		t.Errorf("Property is not correct %d", h.records)
+	if h.size != BucketSize*NumBuckets {
+		t.Errorf("Property is not correct %d", h.size)
 	}
-	if len(h.list) != NumBuckets {
-		t.Errorf("Property is not correct %d", len(h.list))
+	if int(h.GetNumBuckets()) != NumBuckets {
+		t.Errorf("Property is not correct %d", h.GetNumBuckets())
 	}
 
 	if size := h.Size(); size != BucketSize*NumBuckets {
@@ -144,11 +146,11 @@ func TestLinearHashGetOrAddOverflow(t *testing.T) {
 	if h.GetBits() != common.IntLog2(NumBuckets+1) {
 		t.Errorf("Property is not correct %d", h.GetBits())
 	}
-	if h.records != BucketSize*NumBuckets+1 {
-		t.Errorf("Property is not correct %d", h.records)
+	if h.size != BucketSize*NumBuckets+1 {
+		t.Errorf("Property is not correct %d", h.size)
 	}
-	if len(h.list) != NumBuckets+1 {
-		t.Errorf("Property is not correct %d", len(h.list))
+	if int(h.GetNumBuckets()) != NumBuckets+1 {
+		t.Errorf("Property is not correct %d", h.GetNumBuckets())
 	}
 	if size := h.Size(); size != BucketSize*NumBuckets+1 {
 		t.Errorf("Invalid size: %d", size)
@@ -188,5 +190,5 @@ func TestLinearHashRemove(t *testing.T) {
 func initLinearHashMap() *LinearHashMap[common.Address, uint32] {
 	// two pages in the pool, two items each
 	pagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, maxItems, nil, pagepool.NewMemoryPageStore[common.Address, uint32](), common.AddressComparator{})
-	return NewLinearHashMap[common.Address, uint32](maxItems, NumBuckets, pagePool, common.AddressHasher{}, common.AddressComparator{})
+	return NewLinearHashMap[common.Address, uint32](maxItems, NumBuckets, 0, pagePool, common.AddressHasher{}, common.AddressComparator{})
 }
