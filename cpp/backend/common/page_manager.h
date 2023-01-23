@@ -36,7 +36,7 @@ class PageManager {
   template <Page Page>
   absl::StatusOr<NewPage<Page>> New() {
     PageId id = next_++;
-    ASSIGN_OR_RETURN(Page& page, pool_.template Get<Page>(id));
+    ASSIGN_OR_RETURN(Page & page, pool_.template Get<Page>(id));
     return NewPage<Page>{id, page};
   }
 

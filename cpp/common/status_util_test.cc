@@ -113,8 +113,8 @@ TEST(StatusWithSystemErrorTest, HasNoSystemError) {
 }
 
 TEST(StatusWithSystemErrorTest, HasSystemError) {
-  auto status =
-      GetStatusWithSystemError(absl::StatusCode::kInternal, ENOENT, "Internal error.");
+  auto status = GetStatusWithSystemError(absl::StatusCode::kInternal, ENOENT,
+                                         "Internal error.");
   // assure that error message is appended.
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Internal error. Error:")));

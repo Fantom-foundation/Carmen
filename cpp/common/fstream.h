@@ -24,6 +24,11 @@ class FStream {
   template <typename T>
   absl::Status Read(std::span<T> buffer);
 
+  // Reads a value of given type from the file.
+  // Returns an error if read failed.
+  template <typename T>
+  absl::Status Read(T& buffer);
+
   // Reads the number of elements from file specified by size of the buffer.
   // When the end of the file is reached, the eof flag is swallowed. Returns
   // number of elements read. Returns an error if read failed.
@@ -34,6 +39,11 @@ class FStream {
   // Returns an error if write failed.
   template <typename T>
   absl::Status Write(std::span<const T> data);
+
+  // Writes value of given type into the file.
+  // Returns an error if write failed.
+  template <typename T>
+  absl::Status Write(const T& data);
 
   // Seek to the given offset in the file. Should be used when reading from file
   // at certain position. Returns an error if seekg failed.
@@ -77,6 +87,14 @@ absl::Status FStream::Read(std::span<T> buffer) {
 }
 
 template <typename T>
+absl::Status FStream::Read(T& buffer) {
+  fs_.read(reinterpret_cast<char*>(&buffer), sizeof(T));
+  if (fs_.good()) return absl::OkStatus();
+  return absl::InternalError(
+      absl::StrFormat("Failed to read from file %s.", path_.string()));
+}
+
+template <typename T>
 absl::StatusOr<std::size_t> FStream::ReadUntilEof(std::span<T> buffer) {
   // Reading from closed file returns same flags as reading until eof, so we
   // need to check if the file is open before reading
@@ -98,6 +116,14 @@ template <typename T>
 absl::Status FStream::Write(std::span<const T> data) {
   fs_.write(reinterpret_cast<const char*>(data.data()),
             data.size() * sizeof(T));
+  if (fs_.good()) return absl::OkStatus();
+  return absl::InternalError(
+      absl::StrFormat("Failed to write into file %s.", path_.string()));
+}
+
+template <typename T>
+absl::Status FStream::Write(const T& data) {
+  fs_.write(reinterpret_cast<const char*>(&data), sizeof(T));
   if (fs_.good()) return absl::OkStatus();
   return absl::InternalError(
       absl::StrFormat("Failed to write into file %s.", path_.string()));

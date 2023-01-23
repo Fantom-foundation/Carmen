@@ -13,8 +13,8 @@
 #include "absl/status/statusor.h"
 #include "backend/common/page.h"
 #include "backend/common/page_id.h"
-#include "common/status_util.h"
 #include "common/fstream.h"
+#include "common/status_util.h"
 
 namespace carmen::backend {
 

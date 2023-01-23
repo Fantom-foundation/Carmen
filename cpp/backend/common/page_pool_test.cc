@@ -37,14 +37,14 @@ TEST(PagePoolTest, PoolSizeCanBeDefined) {
 
 TEST(PagePoolTest, PagesCanBeFetched) {
   TestPool pool(2);
-  ASSERT_OK_AND_ASSIGN(Page& page_12, pool.Get<Page>(12));
-  ASSERT_OK_AND_ASSIGN(Page& page_14, pool.Get<Page>(14));
+  ASSERT_OK_AND_ASSIGN(Page & page_12, pool.Get<Page>(12));
+  ASSERT_OK_AND_ASSIGN(Page & page_14, pool.Get<Page>(14));
   EXPECT_NE(&page_12, &page_14);
 }
 
 TEST(PagePoolTest, FreshFetchedPagesAreZeroInitialized) {
   TestPool pool(2);
-  ASSERT_OK_AND_ASSIGN(Page& page_12, pool.Get<Page>(12));
+  ASSERT_OK_AND_ASSIGN(Page & page_12, pool.Get<Page>(12));
   for (int i = 0; i < 4; i++) {
     EXPECT_EQ(0, page_12[i]);
   }
@@ -57,7 +57,7 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
 
   // Write data to kNumSteps pages;
   for (int i = 0; i < kNumSteps; i++) {
-    ASSERT_OK_AND_ASSIGN(Page& page, pool.Get<Page>(i));
+    ASSERT_OK_AND_ASSIGN(Page & page, pool.Get<Page>(i));
     page[0] = i;
     page[1] = i + 1;
     pool.MarkAsDirty(i);
@@ -65,7 +65,7 @@ TEST(PagePoolTest, PagesAreEvictedAndReloadedCorrectly) {
 
   // Fetch those kNumSteps pages and check the content
   for (int i = 0; i < kNumSteps; i++) {
-    ASSERT_OK_AND_ASSIGN(Page& page, pool.Get<Page>(i));
+    ASSERT_OK_AND_ASSIGN(Page & page, pool.Get<Page>(i));
     EXPECT_EQ(i, page[0]);
     EXPECT_EQ(i + 1, page[1]);
   }

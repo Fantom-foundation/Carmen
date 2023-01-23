@@ -16,6 +16,7 @@
 #include "backend/index/file/hash_page.h"
 #include "backend/index/file/stable_hash.h"
 #include "backend/structure.h"
+#include "common/fstream.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -239,47 +240,34 @@ FileIndex<K, I, F, page_size>::Open(Context&,
   if (!std::filesystem::exists(*index.metadata_file_)) {
     return index;
   }
-  // Load metadata from file.
-  std::fstream in(*index.metadata_file_, std::ios::binary | std::ios::in);
-  if (!in || !in.is_open()) {
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrCat("Failed to open metadata file: ",
-                     index.metadata_file_->string()));
-  }
-  auto read_scalar = [&](auto& scalar) -> absl::Status {
-    in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
-    if (in.good()) return absl::OkStatus();
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrCat("Failed to read metadata file: ",
-                     index.metadata_file_->string()));
-  };
+
+  ASSIGN_OR_RETURN(auto in, FStream::Open(*index.metadata_file_,
+                                          std::ios::binary | std::ios::in));
 
   // Start with scalars.
-  RETURN_IF_ERROR(read_scalar(index.size_));
-  RETURN_IF_ERROR(read_scalar(index.next_to_split_));
-  RETURN_IF_ERROR(read_scalar(index.low_mask_));
-  RETURN_IF_ERROR(read_scalar(index.high_mask_));
-  RETURN_IF_ERROR(read_scalar(index.num_buckets_));
-  RETURN_IF_ERROR(read_scalar(index.num_overflow_pages_));
-  RETURN_IF_ERROR(read_scalar(index.hash_));
+  RETURN_IF_ERROR(in.Read(index.size_));
+  RETURN_IF_ERROR(in.Read(index.next_to_split_));
+  RETURN_IF_ERROR(in.Read(index.low_mask_));
+  RETURN_IF_ERROR(in.Read(index.high_mask_));
+  RETURN_IF_ERROR(in.Read(index.num_buckets_));
+  RETURN_IF_ERROR(in.Read(index.num_overflow_pages_));
+  RETURN_IF_ERROR(in.Read(index.hash_));
 
   // Read bucket tail list.
   assert(sizeof(index.bucket_tails_.size()) == sizeof(std::size_t));
   std::size_t size;
-  RETURN_IF_ERROR(read_scalar(size));
+  RETURN_IF_ERROR(in.Read(size));
   index.bucket_tails_.resize(size);
   for (std::size_t i = 0; i < size; i++) {
-    RETURN_IF_ERROR(read_scalar(index.bucket_tails_[i]));
+    RETURN_IF_ERROR(in.Read(index.bucket_tails_[i]));
   }
 
   // Read free list.
   assert(sizeof(index.overflow_page_free_list_.size()) == sizeof(std::size_t));
-  RETURN_IF_ERROR(read_scalar(size));
+  RETURN_IF_ERROR(in.Read(size));
   index.overflow_page_free_list_.resize(size);
   for (std::size_t i = 0; i < size; i++) {
-    RETURN_IF_ERROR(read_scalar(index.overflow_page_free_list_[i]));
+    RETURN_IF_ERROR(in.Read(index.overflow_page_free_list_[i]));
   }
 
   return index;
@@ -331,7 +319,7 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   if (page->Insert(hash, key, size_ - 1) == nullptr) {
     auto new_overflow_id = GetFreeOverflowPageId();
     page->SetNext(new_overflow_id);
-    ASSIGN_OR_RETURN(Page* overflow_page,
+    ASSIGN_OR_RETURN(Page * overflow_page,
                      overflow_pool_.template Get<Page>(new_overflow_id));
     assert(overflow_page->Size() == 0);
     assert(overflow_page->GetNext() == 0);
@@ -374,34 +362,29 @@ absl::Status FileIndex<K, I, F, page_size>::Flush() {
   if (!metadata_file_ || metadata_file_->empty()) return absl::OkStatus();
 
   // Sync out metadata information.
-  std::fstream out(*metadata_file_, std::ios::binary | std::ios::out);
-  auto write_scalar = [&](auto scalar) -> absl::Status {
-    out.write(reinterpret_cast<const char*>(&scalar), sizeof(scalar));
-    if (out.good()) return absl::OkStatus();
-    return absl::InternalError("Failed to write metadata. Error: " +
-                               std::string(std::strerror(errno)));
-  };
+  ASSIGN_OR_RETURN(auto out, FStream::Open(*metadata_file_,
+                                           std::ios::binary | std::ios::out));
 
   // Start with scalars.
-  RETURN_IF_ERROR(write_scalar(size_));
-  RETURN_IF_ERROR(write_scalar(next_to_split_));
-  RETURN_IF_ERROR(write_scalar(low_mask_));
-  RETURN_IF_ERROR(write_scalar(high_mask_));
-  RETURN_IF_ERROR(write_scalar(num_buckets_));
-  RETURN_IF_ERROR(write_scalar(num_overflow_pages_));
+  RETURN_IF_ERROR(out.Write(size_));
+  RETURN_IF_ERROR(out.Write(next_to_split_));
+  RETURN_IF_ERROR(out.Write(low_mask_));
+  RETURN_IF_ERROR(out.Write(high_mask_));
+  RETURN_IF_ERROR(out.Write(num_buckets_));
+  RETURN_IF_ERROR(out.Write(num_overflow_pages_));
   ASSIGN_OR_RETURN(auto hash, GetHash());
-  RETURN_IF_ERROR(write_scalar(hash));
+  RETURN_IF_ERROR(out.Write(hash));
 
   // Write bucket tail list.
-  RETURN_IF_ERROR(write_scalar(bucket_tails_.size()));
+  RETURN_IF_ERROR(out.Write(bucket_tails_.size()));
   for (const auto& page_id : bucket_tails_) {
-    RETURN_IF_ERROR(write_scalar(page_id));
+    RETURN_IF_ERROR(out.Write(page_id));
   }
 
   // Write free list.
-  RETURN_IF_ERROR(write_scalar(overflow_page_free_list_.size()));
+  RETURN_IF_ERROR(out.Write(overflow_page_free_list_.size()));
   for (const auto& page_id : overflow_page_free_list_) {
-    RETURN_IF_ERROR(write_scalar(page_id));
+    RETURN_IF_ERROR(out.Write(page_id));
   }
   return absl::OkStatus();
 }
@@ -463,7 +446,7 @@ FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
   auto bucket = GetBucket(hash);
 
   // Search within that bucket.
-  ASSIGN_OR_RETURN(Page* cur, primary_pool_.template Get<Page>(bucket));
+  ASSIGN_OR_RETURN(Page * cur, primary_pool_.template Get<Page>(bucket));
   while (cur != nullptr) {
     if (auto entry = cur->Find(hash, key)) {
       return std::tuple{hash, bucket, entry};
@@ -507,7 +490,8 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
 
   // Load data from page to be split into memory.
   std::deque<Entry> entries;
-  ASSIGN_OR_RETURN(Page* page, primary_pool_.template Get<Page>(old_bucket_id));
+  ASSIGN_OR_RETURN(Page * page,
+                   primary_pool_.template Get<Page>(old_bucket_id));
   while (page != nullptr) {
     for (std::size_t i = 0; i < page->Size(); i++) {
       entries.push_back((*page)[i]);
@@ -576,7 +560,7 @@ absl::Status FileIndex<K, I, F, page_size>::Split() {
   }
 
   // Write new entries into new bucket.
-  ASSIGN_OR_RETURN(page ,primary_pool_.template Get<Page>(new_bucket_id));
+  ASSIGN_OR_RETURN(page, primary_pool_.template Get<Page>(new_bucket_id));
   i = 0;
   primary_pool_.MarkAsDirty(new_bucket_id);
   for (const Entry& entry : new_bucket) {

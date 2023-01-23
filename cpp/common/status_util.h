@@ -38,7 +38,8 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 
 // Get status based on status code and error code. If error code is not 0, then
 // corresponding error message is set and appended to the status message.
-inline absl::Status GetStatusWithSystemError(absl::StatusCode code, int error_code,
+inline absl::Status GetStatusWithSystemError(absl::StatusCode code,
+                                             int error_code,
                                              std::string_view message) {
   if (error_code == 0) {
     return {code, message};
@@ -57,7 +58,7 @@ class ReferenceWrapper : public std::reference_wrapper<T> {
   // Returns a pointer to the wrapped value.
   T* AsPointer() const { return &AsReference(); }
 
-  explicit operator T*() const { return AsPointer(); }
+  operator T*() const { return AsPointer(); }
 };
 
 // Type definition for a StatusOr<T> that can be used with reference types.
