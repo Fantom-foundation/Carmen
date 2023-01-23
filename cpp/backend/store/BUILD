@@ -64,6 +64,7 @@ cc_library(
         "//backend/common:page_id",
         "//backend/common/leveldb",
         "//common:byte_util",
+        "//common:fstream",
         "//common:hash",
         "//common:memory_usage",
         "//common:status_util",
