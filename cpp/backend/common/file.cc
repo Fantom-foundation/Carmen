@@ -4,33 +4,29 @@
 #include <unistd.h>
 
 #include <cassert>
+#include <cstdio>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "backend/common/page.h"
+#include "common/fstream.h"
 #include "common/status_util.h"
 
 namespace carmen::backend {
 
-namespace internal {
-// Creates the provided directory file path recursively. Returns true on
-// success, false otherwise.
-bool CreateDirectoryInternal(const std::filesystem::path& dir) {
-  if (std::filesystem::exists(dir)) return true;
-  if (!dir.has_relative_path()) return false;
-  return CreateDirectoryInternal(dir.parent_path()) &&
-         std::filesystem::create_directory(dir);
-}
-}  // namespace internal
-
 // Creates the provided directory file path recursively. If the directory
 // fails to be created, returns an error status.
 absl::Status CreateDirectory(const std::filesystem::path& dir) {
-  if (!internal::CreateDirectoryInternal(dir)) {
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrFormat("Failed to create directory %s.", dir.string()));
+  if (std::filesystem::exists(dir)) return absl::OkStatus();
+  if (!dir.has_relative_path()) {
+    return absl::InternalError(
+        absl::StrFormat("Failed to create directory %s.", dir));
+  }
+  RETURN_IF_ERROR(CreateDirectory(dir.parent_path()));
+  if (!std::filesystem::create_directory(dir)) {
+    return absl::InternalError(
+        absl::StrFormat("Failed to create directory %s.", dir));
   }
   return absl::OkStatus();
 }
@@ -46,17 +42,9 @@ absl::Status CreateFile(const std::filesystem::path& path) {
   RETURN_IF_ERROR(CreateDirectory(path.parent_path()));
   // Opening the file write-only first creates the file in case it does not
   // exist.
-  std::fstream fs;
-  fs.open(path, std::ios::binary | std::ios::out);
-  if (!fs.is_open()) {
-    return absl::InternalError(
-        absl::StrFormat("Failed to open file %s for writing", path.string()));
-  }
-  fs.close();
-  if (!fs.good()) {
-    return absl::InternalError(absl::StrFormat(
-        "Failed to close file %s after writing", path.string()));
-  }
+  ASSIGN_OR_RETURN(auto fs,
+                   FStream::Open(path, std::ios::binary | std::ios::out));
+  RETURN_IF_ERROR(fs.Close());
   return absl::OkStatus();
 }
 
@@ -72,26 +60,15 @@ alignas(kFileSystemPageSize) static const std::array<char, 1 << 18> kZeros{};
 absl::StatusOr<FStreamFile> FStreamFile::Open(
     const std::filesystem::path& path) {
   RETURN_IF_ERROR(CreateFile(path));
-  std::fstream fs;
-  fs.open(path, std::ios::binary | std::ios::out | std::ios::in);
-  if (!fs.is_open()) {
-    return absl::InternalError(
-        absl::StrFormat("Failed to open file %s", path.string()));
-  }
-  fs.seekg(0, std::ios::end);
-  if (!fs.good()) {
-    return absl::InternalError(
-        absl::StrFormat("Failed to seek to end of file %s", path.string()));
-  }
-  auto file_size = fs.tellg();
-  if (file_size == -1) {
-    return absl::InternalError(
-        absl::StrFormat("Failed to get size of file %s", path.string()));
-  }
+  ASSIGN_OR_RETURN(
+      auto fs,
+      FStream::Open(path, std::ios::binary | std::ios::in | std::ios::out));
+  RETURN_IF_ERROR(fs.Seekg(0, std::ios::end));
+  ASSIGN_OR_RETURN(auto file_size, fs.Tellg());
   return FStreamFile(std::move(fs), file_size);
 }
 
-FStreamFile::FStreamFile(std::fstream fs, std::size_t file_size)
+FStreamFile::FStreamFile(FStream fs, std::size_t file_size)
     : file_size_(file_size), data_(std::move(fs)) {}
 
 FStreamFile::~FStreamFile() { Close().IgnoreError(); }
@@ -104,54 +81,24 @@ absl::Status FStreamFile::Read(std::size_t pos, std::span<std::byte> span) {
     std::memset(span.data(), 0, span.size());
     return absl::OkStatus();
   }
-  data_.seekg(pos);
-  if (!data_.good()) {
-    return absl::InternalError("Failed to seek to position. Error: " +
-                               std::string(std::strerror(errno)));
-  }
-  data_.read(reinterpret_cast<char*>(span.data()), span.size());
-  if (!data_.good()) {
-    return absl::InternalError("Failed to read from file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
-  return absl::OkStatus();
+  RETURN_IF_ERROR(data_.Seekg(pos));
+  return data_.Read(span);
 }
 
 absl::Status FStreamFile::Write(std::size_t pos,
                                 std::span<const std::byte> span) {
   // Grow file as needed.
   RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
-  data_.seekp(pos);
-  if (!data_.good()) {
-    return absl::InternalError("Failed to seek to position. Error: " +
-                               std::string(std::strerror(errno)));
-  }
-  data_.write(reinterpret_cast<const char*>(span.data()), span.size());
-  if (!data_.good()) {
-    return absl::InternalError("Failed to write to file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
-  return absl::OkStatus();
+  RETURN_IF_ERROR(data_.Seekp(pos));
+  return data_.Write(span);
 }
 
-absl::Status FStreamFile::Flush() {
-  data_.flush();
-  if (!data_.good()) {
-    return absl::InternalError("Failed to flush file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
-  return absl::OkStatus();
-}
+absl::Status FStreamFile::Flush() { return data_.Flush(); }
 
 absl::Status FStreamFile::Close() {
-  if (!data_ || !data_.is_open()) {
-    return absl::OkStatus();
-  }
-  RETURN_IF_ERROR(Flush());
-  data_.close();
-  if (!data_.good()) {
-    return absl::InternalError("Failed to close file. Error: " +
-                               std::string(std::strerror(errno)));
+  if (data_.IsOpen()) {
+    RETURN_IF_ERROR(Flush());
+    return data_.Close();
   }
   return absl::OkStatus();
 }
@@ -160,57 +107,35 @@ absl::Status FStreamFile::GrowFileIfNeeded(std::size_t needed) {
   if (file_size_ >= needed) {
     return absl::OkStatus();
   }
-  data_.seekp(0, std::ios::end);
-  if (!data_.good()) {
-    return absl::InternalError("Failed to seek to end of file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
+  RETURN_IF_ERROR(data_.Seekp(0, std::ios::end));
   while (file_size_ < needed) {
     auto step = std::min(kZeros.size(), needed - file_size_);
-    data_.write(kZeros.data(), step);
-    if (!data_.good()) {
-      return absl::InternalError("Failed to write to file. Error: " +
-                                 std::string(std::strerror(errno)));
-    }
+    RETURN_IF_ERROR(data_.Write(std::span(kZeros.data(), step)));
     file_size_ += step;
   }
   return absl::OkStatus();
 }
 
 absl::StatusOr<CFile> CFile::Open(const std::filesystem::path& path) {
-  // Create the parent directory.
-  RETURN_IF_ERROR(CreateDirectory(path.parent_path()));
-  // Append mode will create the file if it does not exist.
-  auto file = std::fopen(path.string().c_str(), "a");
+  // Create the file if it does not exist.
+  RETURN_IF_ERROR(CreateFile(path));
+  // Open the file
+  auto file = std::fopen(path.string().c_str(), "r+b");
   if (file == nullptr) {
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrFormat("Failed to open file %s", path.string()));
-  }
-  if (std::fclose(file) == EOF) {
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrFormat("Failed to close file %s", path.string()));
-  }
-  // But for read/write we need the file to be opened in expended read mode.
-  file = std::fopen(path.string().c_str(), "r+b");
-  if (file == nullptr) {
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrFormat("Failed to open file %s", path.string()));
+    return absl::InternalError(
+        absl::StrFormat("Failed to open file %s.", path));
   }
   // Seek to the end to get the file.
   if (std::fseek(file, 0, SEEK_END) != 0) {
-    return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrFormat("Failed to seek to end of file %s", path.string()));
+    return absl::InternalError(
+        absl::StrFormat("Failed to seek to end of file %s.", path));
   }
   // Get the file size.
   auto file_size = std::ftell(file);
   if (file_size == -1) {
     return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
-        absl::StrFormat("Failed to get size of file %s", path.string()));
+        absl::StatusCode::kInternal, errno,
+        absl::StrFormat("Failed to get size of file %s.", path.string()));
   }
   return CFile(file, file_size);
 }
@@ -218,10 +143,8 @@ absl::StatusOr<CFile> CFile::Open(const std::filesystem::path& path) {
 CFile::CFile(std::FILE* file, std::size_t file_size)
     : file_size_(file_size), file_(file) {}
 
-CFile::CFile(CFile&& file) noexcept {
-  // Swap the file pointers and invalidate the old one.
-  file_ = file.file_;
-  file_size_ = file.file_size_;
+CFile::CFile(CFile&& file) noexcept
+    : file_size_(file.file_size_), file_(file.file_) {
   file.file_ = nullptr;
 }
 
@@ -239,18 +162,23 @@ absl::Status CFile::Read(std::size_t pos, std::span<std::byte> span) {
     return absl::OkStatus();
   }
   if (std::fseek(file_, pos, SEEK_SET) != 0) {
-    return absl::InternalError("Failed to seek to position. Error: " +
-                               std::string(std::strerror(errno)));
+    return absl::InternalError(
+        absl::StrFormat("Failed to seek to position %d.", pos));
   }
   auto len = std::fread(span.data(), sizeof(std::byte), span.size(), file_);
-  if (std::ferror(file_)) {
-    return absl::InternalError("Failed to read from file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
   if (len != span.size()) {
+    if (std::feof(file_)) {
+      return absl::InternalError(absl::StrFormat(
+          "Failed to read %d bytes from file. End of file reached.",
+          span.size()));
+    }
+    if (std::ferror(file_)) {
+      return absl::InternalError(
+          absl::StrFormat("Failed to read %d bytes from file.", span.size()));
+    }
     return absl::InternalError(
         absl::StrFormat("Read different number of bytes than requested."
-                        " Requested: %d, Read: %d",
+                        " Requested: %d, Read: %d.",
                         span.size(), len));
   }
   return absl::OkStatus();
@@ -263,18 +191,18 @@ absl::Status CFile::Write(std::size_t pos, std::span<const std::byte> span) {
   // Grow file as needed.
   RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
   if (std::fseek(file_, pos, SEEK_SET) != 0) {
-    return absl::InternalError("Failed to seek to position. Error: " +
-                               std::string(std::strerror(errno)));
+    return absl::InternalError(
+        absl::StrFormat("Failed to seek to position %d.", pos));
   }
   auto len = std::fwrite(span.data(), sizeof(std::byte), span.size(), file_);
-  if (std::ferror(file_)) {
-    return absl::InternalError("Failed to write to file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
   if (len != span.size()) {
+    if (std::ferror(file_)) {
+      return absl::InternalError(
+          absl::StrFormat("Failed to write %d bytes to file.", span.size()));
+    }
     return absl::InternalError(
         absl::StrFormat("Wrote different number of bytes than requested."
-                        " Requested: %d, Written: %d",
+                        " Requested: %d, Written: %d.",
                         span.size(), len));
   }
   return absl::OkStatus();
@@ -282,8 +210,7 @@ absl::Status CFile::Write(std::size_t pos, std::span<const std::byte> span) {
 
 absl::Status CFile::Flush() {
   if (file_ != nullptr && std::fflush(file_) == EOF) {
-    return absl::InternalError("Failed to flush file. Error: " +
-                               std::string(std::strerror(errno)));
+    return absl::InternalError("Failed to flush file.");
   }
   return absl::OkStatus();
 }
@@ -292,8 +219,7 @@ absl::Status CFile::Close() {
   if (file_ != nullptr) {
     RETURN_IF_ERROR(Flush());
     if (std::fclose(file_) == EOF) {
-      return absl::InternalError("Failed to close file. Error: " +
-                                 std::string(std::strerror(errno)));
+      return absl::InternalError("Failed to close file.");
     }
     file_ = nullptr;
   }
@@ -305,19 +231,21 @@ absl::Status CFile::GrowFileIfNeeded(std::size_t needed) {
     return absl::OkStatus();
   }
   if (std::fseek(file_, 0, SEEK_END) != 0) {
-    return absl::InternalError("Failed to seek to end of file. Error: " +
-                               std::string(std::strerror(errno)));
+    return absl::InternalError(
+        absl::StrFormat("Failed to seek to end of file."));
   }
   while (file_size_ < needed) {
     auto step = std::min(kZeros.size(), needed - file_size_);
     auto len = std::fwrite(kZeros.data(), sizeof(std::byte), step, file_);
-    if (std::ferror(file_)) {
-      return absl::InternalError("Failed to write to file. Error: " +
-                                 std::string(std::strerror(errno)));
-    }
     if (len != step) {
+      if (std::ferror(file_)) {
+        return absl::InternalError(
+            absl::StrFormat("Failed to write %d bytes to file.", step));
+      }
       return absl::InternalError(
-          "Wrote different number of bytes than requested.");
+          absl::StrFormat("Wrote different number of bytes than requested."
+                          " Requested: %d, Written: %d.",
+                          step, len));
     }
     file_size_ += step;
   }
@@ -337,14 +265,14 @@ absl::StatusOr<PosixFile> PosixFile::Open(const std::filesystem::path& path) {
   // Open the file.
   if (fd == -1) {
     return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
+        absl::StatusCode::kInternal, errno,
         absl::StrFormat("Failed to open file %s.", path.string()));
   }
   // Seek to the end to get the file.
   off_t size = lseek(fd, 0, SEEK_END);
   if (size == -1) {
     return GetStatusWithSystemError(
-        absl::StatusCode::kInternal,
+        absl::StatusCode::kInternal, errno,
         absl::StrFormat("Failed to seek to end of file %s.", path.string()));
   }
   return PosixFile(fd, size);
@@ -353,10 +281,8 @@ absl::StatusOr<PosixFile> PosixFile::Open(const std::filesystem::path& path) {
 PosixFile::PosixFile(int fd, std::size_t file_size)
     : file_size_(file_size), fd_(fd) {}
 
-PosixFile::PosixFile(PosixFile&& file) noexcept {
-  // Swap the file descriptors and invalidate the old one.
-  file_size_ = file.file_size_;
-  fd_ = file.fd_;
+PosixFile::PosixFile(PosixFile&& file) noexcept
+    : file_size_(file.file_size_), fd_(file.fd_) {
   file.fd_ = -1;
 }
 
@@ -375,19 +301,19 @@ absl::Status PosixFile::Read(std::size_t pos, std::span<std::byte> span) {
   }
   RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
   if (lseek(fd_, pos, SEEK_SET) == -1) {
-    return absl::InternalError("Failed to seek to position. Error: " +
-                               std::string(std::strerror(errno)));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal, errno,
+        absl::StrFormat("Failed to seek to position %d.", pos));
   }
   auto len = read(fd_, span.data(), span.size());
-  if (len == -1) {
-    return absl::InternalError("Failed to read from file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
   if (len != static_cast<ssize_t>(span.size())) {
+    if (len == -1) {
+      return GetStatusWithSystemError(
+          absl::StatusCode::kInternal, errno,
+          absl::StrFormat("Failed to read %d bytes from file.", span.size()));
+    }
     return absl::InternalError(
-        absl::StrFormat("Read different number of bytes than requested."
-                        " Requested: %d, Read: %d",
-                        span.size(), len));
+        absl::StrFormat("Failed to read %d bytes from file.", span.size()));
   }
   return absl::OkStatus();
 }
@@ -400,18 +326,16 @@ absl::Status PosixFile::Write(std::size_t pos,
   // Grow file as needed.
   RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
   if (lseek(fd_, pos, SEEK_SET) == -1) {
-    return absl::InternalError("Failed to seek to position. Error: " +
-                               std::string(std::strerror(errno)));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal, errno,
+        absl::StrFormat("Failed to seek to position %d.", pos));
   }
   auto len = write(fd_, span.data(), span.size());
-  if (len == -1) {
-    return absl::InternalError("Failed to write to file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
   if (len != static_cast<ssize_t>(span.size())) {
-    return absl::InternalError(
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal, errno,
         absl::StrFormat("Wrote different number of bytes than requested."
-                        "Wrote %d, requested %d",
+                        "Wrote %d, requested %d.",
                         len, span.size()));
   }
   return absl::OkStatus();
@@ -419,8 +343,8 @@ absl::Status PosixFile::Write(std::size_t pos,
 
 absl::Status PosixFile::Flush() {
   if (fd_ >= 0 && fsync(fd_) == -1) {
-    return absl::InternalError("Failed to flush file. Error: " +
-                               std::string(std::strerror(errno)));
+    return GetStatusWithSystemError(absl::StatusCode::kInternal, errno,
+                                    "Failed to flush file.");
   }
   return absl::OkStatus();
 }
@@ -429,8 +353,8 @@ absl::Status PosixFile::Close() {
   if (fd_ >= 0) {
     RETURN_IF_ERROR(Flush());
     if (close(fd_) == -1) {
-      return absl::InternalError("Failed to close file. Error: " +
-                                 std::string(std::strerror(errno)));
+      return GetStatusWithSystemError(absl::StatusCode::kInternal, errno,
+                                      "Failed to close file.");
     }
     fd_ = -1;
   }
@@ -442,25 +366,19 @@ absl::Status PosixFile::GrowFileIfNeeded(std::size_t needed) {
     return absl::OkStatus();
   }
   auto offset = lseek(fd_, 0, SEEK_END);
-  if (offset == -1) {
-    return absl::InternalError("Failed to seek to end of file. Error: " +
-                               std::string(std::strerror(errno)));
-  }
   if (offset != static_cast<off_t>(file_size_)) {
-    return absl::InternalError(
-        absl::StrFormat("Failed to seek to end of file. Expected position: %d, "
-                        "actual position: %d",
-                        file_size_, offset));
+    return GetStatusWithSystemError(
+        absl::StatusCode::kInternal, errno,
+        absl::StrFormat(
+            "Failed to seek to end of file. Expected offset %d, got %d.",
+            file_size_, offset));
   }
   while (file_size_ < needed) {
     auto step = std::min(kZeros.size(), needed - file_size_);
     auto len = write(fd_, kZeros.data(), step);
-    if (len < 0) {
-      return absl::InternalError("Failed to write to file. Error: " +
-                                 std::string(std::strerror(errno)));
-    }
     if (len != static_cast<ssize_t>(step)) {
-      return absl::InternalError(
+      return GetStatusWithSystemError(
+          absl::StatusCode::kInternal, errno,
           absl::StrFormat("Wrote different number of bytes than requested."
                           "Expected: %d, actual: %d",
                           step, len));

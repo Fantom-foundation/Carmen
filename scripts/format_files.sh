@@ -4,5 +4,6 @@
 # work directory and its sub-directories.
 #
 find ./ -iname *.h -o -iname *.cc | xargs --no-run-if-empty clang-format -i
+find ./ -iname BUILD -o -iname *.BUILD | xargs --no-run-if-empty buildifier
 gofmt -s -w .
 

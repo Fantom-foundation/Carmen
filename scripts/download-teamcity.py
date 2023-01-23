@@ -26,19 +26,19 @@ dict_data = xmltodict.parse(response.content)
 
 for i, build in enumerate(dict_data['builds']['build']):
 	print(build['@number'])
-	
+
 	if 'comment' in build:
 		print(build['comment']['text'])
 		with open('data/' + build['@number'] + '.comment', 'w') as f:
 			f.write(build['comment']['text'])
-	
+
 	for j, artifact in enumerate(build['artifacts']['file']):
 		name = build['@number'] + '-' + artifact['@name']
 		print(' * ' + name + ': ' + artifact['content']['@href'])
-		
+
 		if os.path.exists('data/' + name):
 			continue
-		
+
 		response = requests.get('https://team.fantom.network' + artifact['content']['@href'], headers=headers)
 		with open('data/' + name, 'wb') as f:
 			f.write(response.content)

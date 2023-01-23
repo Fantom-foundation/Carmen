@@ -27,9 +27,9 @@ cc_library(
         "src/crc32c_internal.h",
         "src/crc32c_prefetch.h",
         "src/crc32c_read_le.h",
+        "src/crc32c_round_up.h",
         "src/crc32c_sse42.h",
         "src/crc32c_sse42_check.h",
-        "src/crc32c_round_up.h",
     ],
     includes = ["include"],
 )

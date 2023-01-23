@@ -101,25 +101,33 @@ TEST(ReferenceWraperTest, ReferenceAddressesAreEqual) {
 TEST(ReferenceWraperTest, PointsToSameValue) {
   int x = 10;
   auto wrapper = ReferenceWrapper<int>(x);
-  EXPECT_EQ(x, *wrapper.AsPointer());
+  EXPECT_EQ(&x, wrapper.AsPointer());
 }
 
 TEST(StatusWithSystemErrorTest, HasNoSystemError) {
   // make sure the errno is set to zero
-  errno = 0;
-  auto status = GetStatusWithSystemError(absl::StatusCode::kInvalidArgument,
+  auto status = GetStatusWithSystemError(absl::StatusCode::kInvalidArgument, 0,
                                          "Invalid arguments.");
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInvalidArgument,
                                StrEq("Invalid arguments.")));
 }
 
 TEST(StatusWithSystemErrorTest, HasSystemError) {
-  // set error code to ENOENT
-  errno = ENOENT;
-  auto status =
-      GetStatusWithSystemError(absl::StatusCode::kInternal, "Internal error.");
+  auto status = GetStatusWithSystemError(absl::StatusCode::kInternal, ENOENT,
+                                         "Internal error.");
   // assure that error message is appended.
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
                                StartsWith("Internal error. Error:")));
+}
+
+absl::StatusOr<std::pair<int, int>> CreatePair() { return std::pair{1, 2}; }
+
+absl::StatusOr<int> AssignOrReturnWithDecomposition() {
+  ASSIGN_OR_RETURN((auto [a, b]), CreatePair());
+  return a + b;
+}
+
+TEST(StatusMacroTest, AssignCanHandleDecomposition) {
+  EXPECT_THAT(AssignOrReturnWithDecomposition(), 3);
 }
 }  // namespace

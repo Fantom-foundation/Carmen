@@ -1,16 +1,16 @@
 cc_library(
     name = "store",
     hdrs = ["store.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//backend/store",
         "//backend/store:hash_tree",
-        "//common:type",
         "//common:hash",
         "//common:memory_usage",
+        "//common:type",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/status:status",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(

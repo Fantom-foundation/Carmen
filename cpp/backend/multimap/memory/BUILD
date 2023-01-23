@@ -1,14 +1,13 @@
-
 cc_library(
     name = "multimap",
     hdrs = ["multimap.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//backend/common:file",
         "//common:type",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/strings",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
@@ -17,9 +16,9 @@ cc_test(
     deps = [
         ":multimap",
         "//backend/multimap",
-        "//common:type",
         "//common:file_util",
         "//common:status_test_util",
+        "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
 )

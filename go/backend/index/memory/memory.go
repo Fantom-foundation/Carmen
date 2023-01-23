@@ -25,7 +25,7 @@ func NewIndex[K comparable, I common.Identifier](serializer common.Serializer[K]
 	return &memory
 }
 
-// GetOrAdd returns an index mapping for the key, or creates the new index
+// GetOrAdd returns an index mapping for the key, or creates the new index.
 func (m *Index[K, I]) GetOrAdd(key K) (I, error) {
 	idx, exists := m.data[key]
 	if !exists {
@@ -36,7 +36,7 @@ func (m *Index[K, I]) GetOrAdd(key K) (I, error) {
 	return idx, nil
 }
 
-// Get returns an index mapping for the key, returns index.ErrNotFound if not exists
+// Get returns an index mapping for the key, returns index.ErrNotFound if not exists.
 func (m *Index[K, I]) Get(key K) (I, error) {
 	idx, exists := m.data[key]
 	if !exists {
@@ -61,12 +61,12 @@ func (m *Index[K, I]) Flush() error {
 	return nil
 }
 
-// Close closes the storage and clean-ups all possible dirty values
+// Close closes the storage and clean-ups all possible dirty values.
 func (m *Index[K, I]) Close() error {
 	return nil
 }
 
-// GetMemoryFootprint provides the size of the index in memory in bytes
+// GetMemoryFootprint provides the size of the index in memory in bytes.
 func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	dataMapItemSize := unsafe.Sizeof(struct {
 		key K

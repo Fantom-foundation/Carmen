@@ -6,6 +6,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "cerrno"
+#include "common/macro_utils.h"
 
 // This header provides a few utility macros for dealing with absl::Status and
 // absl::StatusOr values. The main intention is to make code using Status codes
@@ -35,14 +36,15 @@ absl::Status GetStatus(absl::StatusOr<T> status) {
 }
 }  // namespace testing::internal
 
-// Get status based on status code. If `errno` error code is set, the error
-// message will be appended to the status message.
+// Get status based on status code and error code. If error code is not 0, then
+// corresponding error message is set and appended to the status message.
 inline absl::Status GetStatusWithSystemError(absl::StatusCode code,
+                                             int error_code,
                                              std::string_view message) {
-  if (errno == 0) {
+  if (error_code == 0) {
     return {code, message};
   }
-  return {code, absl::StrCat(message, " Error: ", std::strerror(errno))};
+  return {code, absl::StrCat(message, " Error: ", std::strerror(error_code))};
 }
 
 // Wrapper around std::reference_wrapper that provides functions to access the
@@ -55,6 +57,8 @@ class ReferenceWrapper : public std::reference_wrapper<T> {
   T& AsReference() const { return this->get(); }
   // Returns a pointer to the wrapped value.
   T* AsPointer() const { return &AsReference(); }
+
+  operator T*() const { return AsPointer(); }
 };
 
 // Type definition for a StatusOr<T> that can be used with reference types.
@@ -107,5 +111,7 @@ using StatusOrRef = absl::StatusOr<ReferenceWrapper<T>>;
 //
 // Note, for this to work, the enclosing function must return a Status or a
 // StatusOr.
-#define ASSIGN_OR_RETURN(lhs, expr) \
-  INTERNAL_ASSIGN_OR_RETURN_IMPL(lhs, expr, CONCAT(_status_, __LINE__))
+#define ASSIGN_OR_RETURN(lhs, expr)                                 \
+  INTERNAL_ASSIGN_OR_RETURN_IMPL(REMOVE_OPTIONAL_PARENTHESIS(lhs),  \
+                                 REMOVE_OPTIONAL_PARENTHESIS(expr), \
+                                 CONCAT(_status_, __LINE__))

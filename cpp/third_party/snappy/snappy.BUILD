@@ -30,12 +30,12 @@ cc_library(
             "snappy_benchmark.cc",
             "snappy_test_data.cc",
             "snappy_test_tool.cc",
-            "snappy_uncompress_fuzzer.cc"
+            "snappy_uncompress_fuzzer.cc",
         ],
     ),
     hdrs = glob(
         ["**/*.h"],
-	    exclude = ["snappy-test.h"],
+        exclude = ["snappy-test.h"],
     ) + [
         ":config_h",
         ":snappy_stubs_public_h",

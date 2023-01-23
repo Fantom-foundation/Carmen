@@ -11,7 +11,7 @@ cc_test(
     name = "hash_page_test",
     srcs = ["hash_page_test.cc"],
     deps = [
-        ":hash_page", 
+        ":hash_page",
         "//backend/common:page",
         "@com_google_googletest//:gtest_main",
     ],
@@ -30,7 +30,7 @@ cc_test(
     name = "stable_hash_test",
     srcs = ["stable_hash_test.cc"],
     deps = [
-        ":stable_hash", 
+        ":stable_hash",
         "//backend/common:page",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/hash",
@@ -44,37 +44,38 @@ cc_binary(
     deps = [
         ":stable_hash",
         "//common:type",
-        "@com_google_absl//absl/hash",
-        "@com_github_google_benchmark//:benchmark_main",
         "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_absl//absl/hash",
     ],
 )
 
 cc_library(
     name = "index",
     hdrs = ["index.h"],
+    visibility = ["//visibility:public"],
     deps = [
         ":hash_page",
         ":stable_hash",
-        "//backend/common:file",
-        "//backend/common:page_pool", 
         "//backend:structure",
-        "//common:type",
+        "//backend/common:file",
+        "//backend/common:page_pool",
         "//common:hash",
-        "//common:status_util",
         "//common:memory_usage",
-        "@com_google_absl//absl/status:status",
+        "//common:status_util",
+        "//common:type",
+        "//common:fstream",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:strings",
     ],
-    visibility = ["//visibility:public"],
 )
 
 cc_test(
     name = "index_test",
     srcs = ["index_test.cc"],
     deps = [
-        ":index", 
+        ":index",
         "//backend/index:test_util",
         "//backend:structure",
         "//common:status_test_util",

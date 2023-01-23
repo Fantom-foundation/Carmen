@@ -2,7 +2,6 @@ package multimap
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/multimap/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -21,24 +20,6 @@ func getMultiMapFactories(tb testing.TB) (stores []multimapFactory) {
 			label: "Memory",
 			getMultiMap: func(tempDir string) MultiMap[uint32, uint64] {
 				return memory.NewMultiMap[uint32, uint64]()
-			},
-		},
-		{
-			label: "File",
-			getMultiMap: func(tempDir string) MultiMap[uint32, uint64] {
-				m, err := file.NewMultiMap[uint32, uint64](
-					tempDir,
-					common.Identifier32Serializer{},
-					common.Identifier64Serializer{},
-					common.UInt32Hasher{},
-					common.Uint32Comparator{},
-				)
-
-				if err != nil {
-					tb.Fatalf("failed to init file multimap store; %s", err)
-				}
-
-				return m
 			},
 		},
 		{

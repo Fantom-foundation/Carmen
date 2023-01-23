@@ -62,7 +62,7 @@ func NewPagePool[K comparable, V comparable](capacity, pageItems int, freeIds []
 	}
 }
 
-// GenerateNextId generate next unique ID
+// GenerateNextId generates next unique ID.
 func (p *PagePool[K, V]) GenerateNextId() (id int) {
 	if len(p.freeIds) > 0 {
 		id = p.freeIds[len(p.freeIds)-1]
@@ -102,7 +102,7 @@ func (p *PagePool[K, V]) put(pageId PageId, page *Page[K, V]) (err error) {
 }
 
 // Remove deletes a page from this pool, which may cause deletion of the page
-// from the storage
+// from the storage.
 func (p *PagePool[K, V]) Remove(id PageId) (bool, error) {
 	original, exists := p.pagePool.Remove(id)
 	if exists {
@@ -138,7 +138,7 @@ func (p *PagePool[K, V]) Close() (err error) {
 	return
 }
 
-// GetFreeIds returns ID of removed pages, which can be used later to re-allocate space
+// GetFreeIds returns ID of removed pages, which can be used later to re-allocate space.
 func (p *PagePool[K, V]) GetFreeIds() []int {
 	return p.freeIds
 }
@@ -155,7 +155,7 @@ func (p *PagePool[K, V]) storePage(pageId PageId, page *Page[K, V]) error {
 	return nil
 }
 
-// loadPage loads a page from the disk
+// loadPage loads a page from the disk.
 func (p *PagePool[K, V]) loadPage(pageId PageId) (page *Page[K, V], err error) {
 	page = p.createPage() // it creates a new page instance or re-use from the freelist
 	err = p.pageStore.Load(pageId, page)

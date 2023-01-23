@@ -213,9 +213,9 @@ template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
-  ASSIGN_OR_RETURN(auto page,
+  ASSIGN_OR_RETURN(Page & page,
                    pool_->template Get<Page>(key / kNumElementsPerPage));
-  auto& trg = page.AsReference()[key % kNumElementsPerPage];
+  auto& trg = page[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
     pool_->MarkAsDirty(key / kNumElementsPerPage);
@@ -230,9 +230,9 @@ requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
     StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
         const K& key)
 const {
-  ASSIGN_OR_RETURN(auto page,
+  ASSIGN_OR_RETURN(Page & page,
                    pool_->template Get<Page>(key / kNumElementsPerPage));
-  return page.AsReference()[key % kNumElementsPerPage];
+  return page[key % kNumElementsPerPage];
 }
 
 template <typename K, Trivial V, template <std::size_t> class F,

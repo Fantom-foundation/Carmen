@@ -1,25 +1,18 @@
-package pagepool
+package file
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 )
 
-var (
-	A = common.Address{0xAA}
-	B = common.Address{0xBB}
-	C = common.Address{0xCC}
-	D = common.Address{0xDD}
-)
-
 const (
-	pagePoolSize = 2
-	maxItems     = 3
+	maxItems = 3
 )
 
 func TestPageListIsMap(t *testing.T) {
 	var instance PageList[common.Address, uint32]
-	var _ common.BulkInsertMap[common.Address, uint32] = &instance
+	var _ common.ErrMap[common.Address, uint32] = &instance
 }
 
 func TestPageListBulkInsertNonEmptyList(t *testing.T) {
@@ -40,7 +33,7 @@ func TestPageListBulkInsertNonEmptyList(t *testing.T) {
 		data[i] = common.MapEntry[common.Address, uint32]{address, i + 1}
 	}
 
-	_ = p.BulkInsert(data)
+	_ = p.bulkInsert(data)
 
 	expectedData := append(make([]common.MapEntry[common.Address, uint32], 0, 3*max), common.MapEntry[common.Address, uint32]{A, 3000})
 	expectedData = append(expectedData, common.MapEntry[common.Address, uint32]{B, 4000})
@@ -74,7 +67,7 @@ func TestPageListBulkInsertNonEmptyList(t *testing.T) {
 		data[i] = common.MapEntry[common.Address, uint32]{address, max + i + 1}
 	}
 
-	_ = p.BulkInsert(data)
+	_ = p.bulkInsert(data)
 
 	expectedData = append(expectedData, data...)
 
@@ -112,7 +105,7 @@ func TestPageListOverflow(t *testing.T) {
 	if len(p.pageList) != 1 {
 		t.Errorf("PageList should have one page")
 	}
-	if page, _ := p.pagePool.Get(PageId{randomBucket, p.pageList[0]}); page.Size() != maxItems {
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, p.pageList[0])); page.Size() != maxItems {
 		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems)
 	}
 
@@ -122,10 +115,10 @@ func TestPageListOverflow(t *testing.T) {
 	if len(p.pageList) != 2 {
 		t.Errorf("PageList should have two pages")
 	}
-	if page, _ := p.pagePool.Get(PageId{randomBucket, 0}); page.Size() != maxItems {
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems {
 		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems)
 	}
-	if page, _ := p.pagePool.Get(PageId{randomBucket, p.pageList[1]}); page.Size() != 1 {
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, p.pageList[1])); page.Size() != 1 {
 		t.Errorf("Wrong page size: %d != %d", page.Size(), 1)
 	}
 
@@ -138,7 +131,7 @@ func TestPageListOverflow(t *testing.T) {
 	if len(p.pageList) != 1 {
 		t.Errorf("PageList should have one page")
 	}
-	if page, _ := p.pagePool.Get(PageId{randomBucket, 0}); page.Size() != maxItems {
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems {
 		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems)
 	}
 
@@ -152,13 +145,13 @@ func TestPageListOverflow(t *testing.T) {
 	if len(p.pageList) != 1 {
 		t.Errorf("PageList should have one page")
 	}
-	if page, _ := p.pagePool.Get(PageId{randomBucket, 0}); page.Size() != maxItems-1 {
+	if page, _ := p.pagePool.Get(pagepool.NewPageId(randomBucket, 0)); page.Size() != maxItems-1 {
 		t.Errorf("Wrong page size: %d != %d", page.Size(), maxItems-1)
 	}
 }
 
 func initPageList() *PageList[common.Address, uint32] {
 	// two pages in the pool, two items each
-	pagePool := NewPagePool[common.Address, uint32](pagePoolSize, maxItems, nil, NewMemoryPageStore[common.Address, uint32](), common.AddressComparator{})
+	pagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, maxItems, nil, pagepool.NewMemoryPageStore[common.Address, uint32](), common.AddressComparator{})
 	return NewPageList[common.Address, uint32](33, maxItems, pagePool)
 }

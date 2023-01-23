@@ -1,7 +1,8 @@
-package pagepool
+package file
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"unsafe"
 )
@@ -10,7 +11,7 @@ import (
 // When the size overflows, a new page is created and linked in this list. Further keys are stored in the new page.
 // The list receives pages from a page pool.
 type PageList[K comparable, V comparable] struct {
-	pagePool     *PagePool[K, V]
+	pagePool     *pagepool.PagePool[K, V]
 	bucket       int   // bucket this list belongs to, it is used to identify correct first page
 	pageList     []int // IDs of pages in this list
 	maxPageItems int
@@ -18,21 +19,16 @@ type PageList[K comparable, V comparable] struct {
 	size int // current size computed during addition for fast read
 }
 
-// opType represents internal operation type to distinguish between Map and MultiMap
+// opType represents internal operation type to distinguish between Map and MultiMap.
 type opType int
 
 const (
 	put opType = iota
-	add
 	getOrAdd
-	remove
-	removeVal
-	removeAll
-	unknown
 )
 
 // NewPageList creates a new instance, each block will have the given maximal capacity.
-func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *PagePool[K, V]) *PageList[K, V] {
+func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[K, V]) *PageList[K, V] {
 	return &PageList[K, V]{
 		maxPageItems: pageItems,
 		pagePool:     pagePool,
@@ -41,9 +37,16 @@ func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *Pa
 	}
 }
 
-// ForEach all entries - calls the callback for each key-value pair in the list
+// InitPageList creates a new instance, each block will have the given maximal capacity.
+func InitPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[K, V], data []common.MapEntry[K, V]) (*PageList[K, V], error) {
+	pageList := NewPageList[K, V](bucket, pageItems, pagePool)
+	err := pageList.bulkInsert(data)
+	return pageList, err
+}
+
+// ForEach all entries - calls the callback for each key-value pair in the list.
 func (m *PageList[K, V]) ForEach(callback func(K, V)) error {
-	page, err := m.pagePool.Get(PageId{m.bucket, 0}) // fist page from this bucket
+	page, err := m.pagePool.Get(pagepool.NewPageId(m.bucket, 0)) // fist page from this bucket
 	if err != nil {
 		return err
 	}
@@ -62,7 +65,7 @@ func (m *PageList[K, V]) ForEach(callback func(K, V)) error {
 
 // Get returns a value from the list or false.
 func (m *PageList[K, V]) Get(key K) (val V, exists bool, err error) {
-	page, err := m.pagePool.Get(PageId{m.bucket, 0}) // fist page from this bucket
+	page, err := m.pagePool.Get(pagepool.NewPageId(m.bucket, 0)) // fist page from this bucket
 	if err != nil {
 		return
 	}
@@ -91,19 +94,14 @@ func (m *PageList[K, V]) Put(key K, val V) error {
 	return err
 }
 
-func (m *PageList[K, V]) Add(key K, val V) error {
-	_, _, err := m.addOrPut(key, val, add)
-	return err
-}
-
 func (m *PageList[K, V]) addOrPut(key K, val V, op opType) (V, bool, error) {
-	page, err := m.pagePool.Get(PageId{m.bucket, 0}) // fist page from this bucket
+	page, err := m.pagePool.Get(pagepool.NewPageId(m.bucket, 0)) // fist page from this bucket
 	if err != nil {
 		return val, false, err
 	}
 
 	// locate page with existing value
-	var last *Page[K, V]
+	var last *pagepool.Page[K, V]
 	var position int
 	var exists bool
 	for page != nil {
@@ -112,21 +110,14 @@ func (m *PageList[K, V]) addOrPut(key K, val V, op opType) (V, bool, error) {
 		switch op {
 		case put:
 			// PUT operation: if the key exists, associate a new value with the same key
-			if position, exists = page.findItem(key); exists {
-				page.update(position, val)
-				return val, true, nil
-			}
-		case add:
-			// ADD operation: if the key and value exist, return and do nothing
-			// if only key exists, but the value does not match, it is ignored and the value
-			// will be added at the end of this method
-			if position, exists = page.findValue(key, val); exists {
+			if position, exists = page.FindItem(key); exists {
+				page.UpdateAt(position, val)
 				return val, true, nil
 			}
 		case getOrAdd:
 			// getOrAdd operation: when the key exists, its value is just returned
-			if position, exists = page.findItem(key); exists {
-				return page.get(position), true, nil
+			if position, exists = page.FindItem(key); exists {
+				return page.GetAt(position), true, nil
 			}
 		}
 
@@ -153,14 +144,14 @@ func (m *PageList[K, V]) addOrPut(key K, val V, op opType) (V, bool, error) {
 	// insert at the last position we have located while iterating pages
 	// it is either a position within the last non-full page
 	// or the zero position of a newly created page
-	last.insert(position, key, val)
+	last.InsertAt(position, key, val)
 
 	return val, false, nil
 }
 
-// BulkInsert creates content of this list from the input data.
-func (m *PageList[K, V]) BulkInsert(data []common.MapEntry[K, V]) error {
-	pageId := PageId{m.bucket, m.pageList[len(m.pageList)-1]}
+// bulkInsert creates content of this list from the input data.
+func (m *PageList[K, V]) bulkInsert(data []common.MapEntry[K, V]) error {
+	pageId := pagepool.NewPageId(m.bucket, m.pageList[len(m.pageList)-1])
 
 	var start int
 	// fill-in possible half empty last element
@@ -208,9 +199,9 @@ func (m *PageList[K, V]) BulkInsert(data []common.MapEntry[K, V]) error {
 	return nil
 }
 
-// GetEntries collects data from all blocks and returns them as one slice
+// GetEntries collects data from all blocks and returns them as one slice.
 func (m *PageList[K, V]) GetEntries() ([]common.MapEntry[K, V], error) {
-	page, err := m.pagePool.Get(PageId{m.bucket, 0}) // fist page from this bucket
+	page, err := m.pagePool.Get(pagepool.NewPageId(m.bucket, 0)) // fist page from this bucket
 	if err != nil {
 		return nil, err
 	}
@@ -228,86 +219,35 @@ func (m *PageList[K, V]) GetEntries() ([]common.MapEntry[K, V], error) {
 	return data, nil
 }
 
-func (m *PageList[K, V]) GetAll(key K) ([]V, error) {
-	page, err := m.pagePool.Get(PageId{m.bucket, 0}) // fist page from this bucket
-	if err != nil {
-		return nil, err
-	}
-
-	data := make([]V, 0, m.size)
-	for page != nil {
-		data = page.appendAll(key, data)
-		// fetch next page if it exists
-		page, _, err = m.next(page)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return data, nil
-}
-
 // Remove deletes the key from the map and returns whether an element was removed.
 func (m *PageList[K, V]) Remove(key K) (exists bool, err error) {
-	return m.remove(key, nil, remove)
+	return m.remove(key)
 }
 
-func (m *PageList[K, V]) RemoveVal(key K, val V) (bool, error) {
-	return m.remove(key, &val, removeVal)
-}
-
-func (m *PageList[K, V]) RemoveAll(key K) error {
-	_, err := m.remove(key, nil, removeAll)
-	return err
-}
-
-func (m *PageList[K, V]) remove(key K, val *V, op opType) (bool, error) {
-
+func (m *PageList[K, V]) remove(key K) (bool, error) {
 	// Iterate pages from tail to the beginning,
 	// remove items in the page, and potentially remove the tail if it becomes empty
 	var exists bool
 	for i := len(m.pageList) - 1; i >= 0; i-- {
-		itemPageId := PageId{m.bucket, m.pageList[i]}
+		itemPageId := pagepool.NewPageId(m.bucket, m.pageList[i])
 		item, err := m.pagePool.Get(itemPageId)
 		if err != nil {
 			return false, err
 		}
 
-		var numRemove int
-		// remove either one key or all values under the same key
-		// track the number of removed key-value pairs
-		switch op {
-		case remove:
-			if removed := item.Remove(key); removed {
-				numRemove = 1
-			}
-		case removeVal:
-			if removed := item.RemoveVal(key, *val); removed {
-				numRemove = 1
-			}
-		case removeAll:
-			if start, end, removed := item.removeAll(key); removed {
-				numRemove = end - start
-			}
-		}
-
-		m.size -= numRemove
-
-		// fill removed data by keys from the tail
-		// potentially remove the tail when it becomes empty
-		for numRemove > 0 {
-			exists = true
+		// remove value if it already exists.
+		if exists = item.Remove(key); exists {
 			tailIndex := len(m.pageList) - 1
-			tailPageId := PageId{m.bucket, m.pageList[tailIndex]}
+			tailPageId := pagepool.NewPageId(m.bucket, m.pageList[tailIndex])
 			tail, err := m.pagePool.Get(tailPageId) // tail page
+			m.size -= 1
+
 			if err != nil {
 				return false, err
 			}
 
-			if itemPageId == tailPageId {
-				numRemove = 0
-			} else {
-				numRemove -= fillFromTail[K, V](item, tail, numRemove)
+			if itemPageId != tailPageId {
+				fillFromTail[K, V](item, tail)
 			}
 
 			// remove tail if empty
@@ -320,7 +260,7 @@ func (m *PageList[K, V]) remove(key K, val *V, op opType) (bool, error) {
 				if tailIndex > 0 {
 					// remove the link from last but the tail
 					m.pageList = m.pageList[:len(m.pageList)-1]
-					prevPageId := PageId{m.bucket, m.pageList[len(m.pageList)-1]}
+					prevPageId := pagepool.NewPageId(m.bucket, m.pageList[len(m.pageList)-1])
 					prevPage, err := m.pagePool.Get(prevPageId)
 					if err != nil {
 						return false, err
@@ -328,47 +268,33 @@ func (m *PageList[K, V]) remove(key K, val *V, op opType) (bool, error) {
 					prevPage.RemoveNext()
 				}
 			}
-
-			// for single remove, we are done,
-			// for remove all we have to unfortunately iterate all pages
-			if op == remove || op == removeVal {
-				break
-			}
+			break
 		}
-
 	}
 
 	return exists, nil
 }
 
-func (m *PageList[K, V]) createNextPage(page *Page[K, V]) (nextId PageId) {
+func (m *PageList[K, V]) createNextPage(page *pagepool.Page[K, V]) (nextId pagepool.PageId) {
 	tailPageId := m.pagePool.GenerateNextId()
 	m.pageList = append(m.pageList, tailPageId)
-	pageId := PageId{m.bucket, tailPageId}
+	pageId := pagepool.NewPageId(m.bucket, tailPageId)
 	page.SetNext(pageId)
 	return pageId
 }
 
-// fillFromTail reads the requested number of key-value pairs from the tail and inserts them into the input page
-// it returns the number of actually inserted items, which can be lower than the requested number
-// if the tail has no more items
-func fillFromTail[K comparable, V comparable](page, tail *Page[K, V], number int) int {
-	n := number
-	if number > tail.Size() {
-		n = tail.Size()
-	}
+// fillFromTail reads a key-value pair from the tail and inserts it into the input page,
+// no item is moved when the tail is empty.
+func fillFromTail[K comparable, V comparable](page, tail *pagepool.Page[K, V]) {
 
-	// replace N entries
-	if n > 0 {
-		entries := tail.GetEntries()[tail.Size()-n : tail.Size()]
+	if tail.Size() > 0 {
+		entries := tail.GetEntries()[tail.Size()-1 : tail.Size()]
 		for _, entry := range entries {
-			page.Add(entry.Key, entry.Val)
+			page.Put(entry.Key, entry.Val)
 		}
 		// remove from tail by moving the size
-		tail.SetSize(tail.Size() - n)
+		tail.SetSize(tail.Size() - 1)
 	}
-
-	return n
 }
 
 func (m *PageList[K, V]) Size() int {
@@ -378,7 +304,7 @@ func (m *PageList[K, V]) Size() int {
 func (m *PageList[K, V]) Clear() error {
 	// release pages from the pool
 	for _, overflow := range m.pageList {
-		_, err := m.pagePool.Remove(PageId{m.bucket, overflow})
+		_, err := m.pagePool.Remove(pagepool.NewPageId(m.bucket, overflow))
 		if err != nil {
 			return err
 		}
@@ -389,9 +315,9 @@ func (m *PageList[K, V]) Clear() error {
 	return nil
 }
 
-func (m *PageList[K, V]) next(current *Page[K, V]) (page *Page[K, V], pageId PageId, err error) {
-	if current.hasNext {
-		pageId = current.next
+func (m *PageList[K, V]) next(current *pagepool.Page[K, V]) (page *pagepool.Page[K, V], pageId pagepool.PageId, err error) {
+	if current.HasNext() {
+		pageId = current.NextPage()
 		page, err = m.pagePool.Get(pageId)
 	}
 
@@ -399,7 +325,7 @@ func (m *PageList[K, V]) next(current *Page[K, V]) (page *Page[K, V], pageId Pag
 }
 
 func (m *PageList[K, V]) PrintDump() {
-	page, err := m.pagePool.Get(PageId{m.bucket, 0}) // fist page from this bucket
+	page, err := m.pagePool.Get(pagepool.NewPageId(m.bucket, 0)) // fist page from this bucket
 	if err != nil {
 		fmt.Printf("Error: %s", err)
 	}
