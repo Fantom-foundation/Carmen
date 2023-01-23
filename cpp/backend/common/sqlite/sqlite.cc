@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string_view>
 
 #include "absl/status/status.h"
@@ -134,6 +135,14 @@ absl::Status SqlStatement::Bind(int index, absl::string_view str) {
                                             str.size(), SQLITE_TRANSIENT));
 }
 
+absl::Status SqlStatement::Bind(int index, std::span<const std::byte> bytes) {
+  RETURN_IF_ERROR(CheckState());
+  // See https://www.sqlite.org/c3ref/bind_blob.html
+  return db_->HandleError(sqlite3_bind_text(
+      stmt_, index + 1, reinterpret_cast<const char*>(bytes.data()),
+      bytes.size(), SQLITE_TRANSIENT));
+}
+
 absl::Status SqlStatement::Reset() {
   RETURN_IF_ERROR(CheckState());
   return db_->HandleError(sqlite3_reset(stmt_));
@@ -185,6 +194,13 @@ std::string_view SqlRow::GetString(int column) const {
   const unsigned char* data = sqlite3_column_text(stmt_, column);
   int size = sqlite3_column_bytes(stmt_, column);
   return std::string_view(reinterpret_cast<const char*>(data), size);
+}
+
+std::span<const std::byte> SqlRow::GetBytes(int column) const {
+  // See https://www.sqlite.org/c3ref/column_blob.html
+  const unsigned char* data = sqlite3_column_text(stmt_, column);
+  int size = sqlite3_column_bytes(stmt_, column);
+  return std::span(reinterpret_cast<const std::byte*>(data), size);
 }
 
 }  // namespace carmen::backend

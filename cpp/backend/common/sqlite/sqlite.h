@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string_view>
 
 #include "absl/functional/function_ref.h"
@@ -105,6 +106,8 @@ class SqlStatement {
 
   absl::Status Bind(int index, absl::string_view str);
 
+  absl::Status Bind(int index, std::span<const std::byte> data);
+
   // After the parameters are bound (if there are any), the following overloads
   // of Run(..) can be used to execute the actual operation.
 
@@ -154,6 +157,11 @@ class SqlRow {
   // column. Note: the resulting string_view is only valid until the next
   // GetXXX() call or the end of the life cycle of this SqlRow.
   std::string_view GetString(int column) const;
+
+  // Retrieves the bytes stored in the given column. Note: the resulting span is
+  // only valid until the next GetXXX() call or the end of the life cycle of
+  // this SqlRow.
+  std::span<const std::byte> GetBytes(int column) const;
 
  private:
   SqlRow(sqlite3_stmt* stmt) : stmt_(stmt) {}
