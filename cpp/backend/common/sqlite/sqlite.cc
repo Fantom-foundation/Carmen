@@ -1,5 +1,6 @@
 #include "backend/common/sqlite/sqlite.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -128,6 +129,12 @@ absl::Status SqlStatement::Bind(int index, int value) {
   return db_->HandleError(sqlite3_bind_int(stmt_, index + 1, value));
 }
 
+absl::Status SqlStatement::Bind(int index, std::int64_t value) {
+  RETURN_IF_ERROR(CheckState());
+  // See https://www.sqlite.org/c3ref/bind_blob.html
+  return db_->HandleError(sqlite3_bind_int64(stmt_, index + 1, value));
+}
+
 absl::Status SqlStatement::Bind(int index, absl::string_view str) {
   RETURN_IF_ERROR(CheckState());
   // See https://www.sqlite.org/c3ref/bind_blob.html
@@ -187,6 +194,11 @@ int SqlRow::GetNumberOfColumns() const {
 int SqlRow::GetInt(int column) const {
   // See https://www.sqlite.org/c3ref/column_blob.html
   return sqlite3_column_int(stmt_, column);
+}
+
+std::int64_t SqlRow::GetInt64(int column) const {
+  // See https://www.sqlite.org/c3ref/column_blob.html
+  return sqlite3_column_int64(stmt_, column);
 }
 
 std::string_view SqlRow::GetString(int column) const {

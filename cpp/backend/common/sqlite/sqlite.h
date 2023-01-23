@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -104,6 +105,8 @@ class SqlStatement {
 
   absl::Status Bind(int index, int value);
 
+  absl::Status Bind(int index, std::int64_t value);
+
   absl::Status Bind(int index, absl::string_view str);
 
   absl::Status Bind(int index, std::span<const std::byte> data);
@@ -152,6 +155,10 @@ class SqlRow {
   // Retrieves the integer interpretation of the value stored in the given
   // column.
   int GetInt(int column) const;
+
+  // Retrieves the 64-bit integer interpretation of the value stored in the
+  // given column.
+  std::int64_t GetInt64(int column) const;
 
   // Retrieves the string interpretation of the value stored in the given
   // column. Note: the resulting string_view is only valid until the next
