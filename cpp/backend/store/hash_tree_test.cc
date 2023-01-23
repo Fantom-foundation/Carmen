@@ -72,7 +72,7 @@ TEST(HashTreeTest, HashesOfMultiplePagesAreAggregated) {
   // The total hash should be the hash of the concatenation of the hashes of the
   // first level and a padded zero hash.
   auto should = GetSha256Hash(hash_0, hash_1, hash_2, Hash{});
-  EXPECT_THAT(tree.GetHash(), IsOkAndHolds(should));
+  EXPECT_THAT(tree.GetHash(), should);
 }
 
 TEST(HashTreeTest, AggregationMaySpanMultipleLevels) {
