@@ -1,5 +1,7 @@
 #include "backend/common/sqlite/sqlite.h"
 
+#include <array>
+
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
@@ -161,6 +163,47 @@ TEST(SqlStatement, DatabaseCanBeClosedAndReOpened) {
         RunAndGetData(query),
         IsOkAndHolds(ElementsAre(Pair(12, "hello"), Pair(14, "world"))));
   }
+}
+
+TEST(SqlStatement, DatabaseSupportsByteArrays) {
+  using Value = std::array<std::byte, 32>;
+
+  Value a{std::byte{0x01}};
+  Value b{std::byte{0x01}};
+  Value c{std::byte{0x01}};
+
+  TempFile file;
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(file));
+  ASSERT_OK(db.Run("CREATE TABLE test (key BLOB)"));
+
+  // Insert elements out-of-order.
+  ASSERT_OK_AND_ASSIGN(auto insert,
+                       db.Prepare("INSERT INTO test(key) VALUES (?)"));
+  EXPECT_OK(insert.Bind(0, a));
+  EXPECT_OK(insert.Run());
+
+  EXPECT_OK(insert.Reset());
+  EXPECT_OK(insert.Bind(0, c));
+  EXPECT_OK(insert.Run());
+
+  EXPECT_OK(insert.Reset());
+  EXPECT_OK(insert.Bind(0, b));
+  EXPECT_OK(insert.Run());
+
+  // Query elements in order.
+  ASSERT_OK_AND_ASSIGN(auto query,
+                       db.Prepare("SELECT key FROM test ORDER BY key"));
+  std::vector<Value> data;
+  EXPECT_OK(query.Run([&](const SqlRow& row) {
+    auto key = row.GetBytes(0);
+    ASSERT_EQ(key.size(), 32);
+    Value value;
+    for (std::size_t i = 0; i < 32; i++) {
+      value[i] = key[i];
+    }
+    data.push_back(value);
+  }));
+  EXPECT_THAT(data, ElementsAre(a, b, c));
 }
 
 }  // namespace
