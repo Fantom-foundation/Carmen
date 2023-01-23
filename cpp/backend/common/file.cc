@@ -82,8 +82,7 @@ absl::Status FStreamFile::Read(std::size_t pos, std::span<std::byte> span) {
     return absl::OkStatus();
   }
   RETURN_IF_ERROR(data_.Seekg(pos));
-  RETURN_IF_ERROR(data_.Read(span));
-  return absl::OkStatus();
+  return data_.Read(span);
 }
 
 absl::Status FStreamFile::Write(std::size_t pos,
@@ -91,19 +90,15 @@ absl::Status FStreamFile::Write(std::size_t pos,
   // Grow file as needed.
   RETURN_IF_ERROR(GrowFileIfNeeded(pos + span.size()));
   RETURN_IF_ERROR(data_.Seekp(pos));
-  RETURN_IF_ERROR(data_.Write(span));
-  return absl::OkStatus();
+  return data_.Write(span);
 }
 
-absl::Status FStreamFile::Flush() {
-  RETURN_IF_ERROR(data_.Flush());
-  return absl::OkStatus();
-}
+absl::Status FStreamFile::Flush() { return data_.Flush(); }
 
 absl::Status FStreamFile::Close() {
   if (data_.IsOpen()) {
     RETURN_IF_ERROR(Flush());
-    RETURN_IF_ERROR(data_.Close());
+    return data_.Close();
   }
   return absl::OkStatus();
 }
@@ -148,10 +143,8 @@ absl::StatusOr<CFile> CFile::Open(const std::filesystem::path& path) {
 CFile::CFile(std::FILE* file, std::size_t file_size)
     : file_size_(file_size), file_(file) {}
 
-CFile::CFile(CFile&& file) noexcept {
-  // Swap the file pointers and invalidate the old one.
-  file_ = file.file_;
-  file_size_ = file.file_size_;
+CFile::CFile(CFile&& file) noexcept
+    : file_size_(file.file_size_), file_(file.file_) {
   file.file_ = nullptr;
 }
 
@@ -288,10 +281,8 @@ absl::StatusOr<PosixFile> PosixFile::Open(const std::filesystem::path& path) {
 PosixFile::PosixFile(int fd, std::size_t file_size)
     : file_size_(file_size), fd_(fd) {}
 
-PosixFile::PosixFile(PosixFile&& file) noexcept {
-  // Swap the file descriptors and invalidate the old one.
-  file_size_ = file.file_size_;
-  fd_ = file.fd_;
+PosixFile::PosixFile(PosixFile&& file) noexcept
+    : file_size_(file.file_size_), fd_(file.fd_) {
   file.fd_ = -1;
 }
 

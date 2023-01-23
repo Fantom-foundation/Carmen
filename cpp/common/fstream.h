@@ -88,10 +88,7 @@ absl::Status FStream::Read(std::span<T> buffer) {
 
 template <typename T>
 absl::Status FStream::Read(T& buffer) {
-  fs_.read(reinterpret_cast<char*>(&buffer), sizeof(T));
-  if (fs_.good()) return absl::OkStatus();
-  return absl::InternalError(
-      absl::StrFormat("Failed to read from file %s.", path_.string()));
+  return Read(std::span<T>(&buffer, 1));
 }
 
 template <typename T>
@@ -123,9 +120,6 @@ absl::Status FStream::Write(std::span<const T> data) {
 
 template <typename T>
 absl::Status FStream::Write(const T& data) {
-  fs_.write(reinterpret_cast<const char*>(&data), sizeof(T));
-  if (fs_.good()) return absl::OkStatus();
-  return absl::InternalError(
-      absl::StrFormat("Failed to write into file %s.", path_.string()));
+  return Write(std::span<const T>(&data, 1));
 }
 }  // namespace carmen
