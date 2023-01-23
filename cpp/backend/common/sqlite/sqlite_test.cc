@@ -1,6 +1,7 @@
 #include "backend/common/sqlite/sqlite.h"
 
 #include <array>
+#include <cstdint>
 
 #include "common/file_util.h"
 #include "common/status_test_util.h"
@@ -163,6 +164,40 @@ TEST(SqlStatement, DatabaseCanBeClosedAndReOpened) {
         RunAndGetData(query),
         IsOkAndHolds(ElementsAre(Pair(12, "hello"), Pair(14, "world"))));
   }
+}
+
+TEST(SqlStatement, DatabaseSupportsInt64) {
+  using Value = std::int64_t;
+
+  Value a = 1;
+  Value b = 2;
+  Value c = -1;
+
+  TempFile file;
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(file));
+  ASSERT_OK(db.Run("CREATE TABLE test (key INTEGER)"));
+
+  // Insert elements out-of-order.
+  ASSERT_OK_AND_ASSIGN(auto insert,
+                       db.Prepare("INSERT INTO test(key) VALUES (?)"));
+  EXPECT_OK(insert.Bind(0, a));
+  EXPECT_OK(insert.Run());
+
+  EXPECT_OK(insert.Reset());
+  EXPECT_OK(insert.Bind(0, c));
+  EXPECT_OK(insert.Run());
+
+  EXPECT_OK(insert.Reset());
+  EXPECT_OK(insert.Bind(0, b));
+  EXPECT_OK(insert.Run());
+
+  // Query elements in order.
+  ASSERT_OK_AND_ASSIGN(auto query,
+                       db.Prepare("SELECT key FROM test ORDER BY key"));
+  std::vector<Value> data;
+  EXPECT_OK(
+      query.Run([&](const SqlRow& row) { data.push_back(row.GetInt64(0)); }));
+  EXPECT_THAT(data, ElementsAre(c, a, b));
 }
 
 TEST(SqlStatement, DatabaseSupportsByteArrays) {
