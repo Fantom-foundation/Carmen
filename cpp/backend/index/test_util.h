@@ -31,13 +31,13 @@ class IndexTest : public testing::Test {};
 TYPED_TEST_SUITE_P(IndexTest);
 
 TYPED_TEST_P(IndexTest, TypeProperties) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_TRUE(std::is_move_constructible_v<decltype(index)>);
 }
 
 TYPED_TEST_P(IndexTest, IdentifiersAreAssignedInorder) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, true)));
   EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, true)));
@@ -45,7 +45,7 @@ TYPED_TEST_P(IndexTest, IdentifiersAreAssignedInorder) {
 }
 
 TYPED_TEST_P(IndexTest, SameKeyLeadsToSameIdentifier) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(0, true)));
   EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(1, true)));
@@ -54,7 +54,7 @@ TYPED_TEST_P(IndexTest, SameKeyLeadsToSameIdentifier) {
 }
 
 TYPED_TEST_P(IndexTest, ContainsIdentifiesIndexedElements) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
 
   EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
@@ -73,7 +73,7 @@ TYPED_TEST_P(IndexTest, ContainsIdentifiesIndexedElements) {
 }
 
 TYPED_TEST_P(IndexTest, GetRetrievesPresentKeys) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.Get(1), StatusIs(absl::StatusCode::kNotFound, _));
   EXPECT_THAT(index.Get(2), StatusIs(absl::StatusCode::kNotFound, _));
@@ -89,14 +89,14 @@ TYPED_TEST_P(IndexTest, GetRetrievesPresentKeys) {
 }
 
 TYPED_TEST_P(IndexTest, EmptyIndexHasHashEqualsZero) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(Hash{}));
 }
 
 TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
   Hash hash;
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));
   ASSERT_OK(index.GetOrAdd(12));
@@ -111,14 +111,14 @@ TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
 }
 
 TYPED_TEST_P(IndexTest, CanProduceMemoryFootprint) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   auto summary = index.GetMemoryFootprint();
   EXPECT_GT(summary.GetTotal(), Memory(0));
 }
 
 TYPED_TEST_P(IndexTest, HashesMatchReferenceImplementation) {
-  IndexHandler<TypeParam> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   auto& reference_index = wrapper.GetReferenceIndex();
 
@@ -157,8 +157,8 @@ class MockIndex {
   MOCK_METHOD(MemoryFootprint, GetMemoryFootprint, (), (const));
 };
 
-// A movable wrapper of a mock index. This may be required when a index needs to
-// be moved into position.
+// A movable wrapper of a mock index. This may be required when an index needs
+// to be moved into position.
 template <typename K, typename V>
 class MockIndexWrapper {
  public:
@@ -171,7 +171,7 @@ class MockIndexWrapper {
   }
 
   MockIndexWrapper() : index_(std::make_unique<MockIndex<K, V>>()) {}
-  MockIndexWrapper(MockIndexWrapper&&) = default;
+  MockIndexWrapper(MockIndexWrapper&&) noexcept = default;
 
   absl::StatusOr<std::pair<V, bool>> GetOrAdd(const K& key) {
     return index_->GetOrAdd(key);

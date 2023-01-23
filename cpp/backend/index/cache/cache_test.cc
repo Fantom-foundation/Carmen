@@ -32,9 +32,9 @@ TEST(CachedIndex, CachedKeysAreNotFetched) {
       .WillOnce(
           Return(absl::StatusOr<std::pair<int, bool>>(std::pair{10, true})));
 
-  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(std::pair(10, true)));
-  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(std::pair(10, false)));
-  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(std::pair(10, false)));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(10, true)));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(10, false)));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(10, false)));
 }
 
 TEST(CachedIndex, MissingEntriesAreCached) {
@@ -139,21 +139,21 @@ TEST(CachedIndex, CacheSizeLimitIsEnforced) {
       .WillOnce(
           Return(absl::StatusOr<std::pair<int, bool>>(std::pair{2, true})));
 
-  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, true)));
-  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(1, true)));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(Pair(0, true)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(Pair(1, true)));
 
   // At this point keys 1 and 2 are in the cache, we can query them without
   // reload.
-  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, false)));
-  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(1, false)));
-  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, false)));
-  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(std::pair(1, false)));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(Pair(0, false)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(Pair(1, false)));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(Pair(0, false)));
+  EXPECT_THAT(index.GetOrAdd(1), IsOkAndHolds(Pair(1, false)));
 
   // Asking for key=2 will kick out key 0.
-  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(std::pair(2, true)));
+  EXPECT_THAT(index.GetOrAdd(2), IsOkAndHolds(Pair(2, true)));
 
   // At this point, key=0 is forgotten. This will trigger a second call.
-  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(std::pair(0, false)));
+  EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(Pair(0, false)));
 }
 
 }  // namespace

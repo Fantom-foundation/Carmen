@@ -1,11 +1,7 @@
 #include "state/state.h"
 
-#include "backend/depot/memory/depot.h"
-#include "backend/index/memory/index.h"
-#include "backend/store/memory/store.h"
 #include "common/account_state.h"
 #include "common/file_util.h"
-#include "common/memory_usage.h"
 #include "common/status_test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
@@ -148,8 +144,7 @@ TYPED_TEST_P(StateTest, BalancesAreCoveredByGlobalStateHash) {
 
   // Resetting value gets us original hash.
   EXPECT_OK(state.SetBalance({}, Balance{0x12}));
-  ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
-  EXPECT_EQ(value_12_hash, value_12_hash_again);
+  EXPECT_THAT(state.GetHash(), IsOkAndHolds(value_12_hash));
 }
 
 TYPED_TEST_P(StateTest, DefaultNonceIsZero) {
@@ -195,8 +190,7 @@ TYPED_TEST_P(StateTest, NoncesAreCoveredByGlobalStateHash) {
 
   // Resetting value gets us original hash.
   EXPECT_OK(state.SetNonce({}, Nonce{0x12}));
-  ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
-  EXPECT_EQ(value_12_hash, value_12_hash_again);
+  EXPECT_THAT(state.GetHash(), IsOkAndHolds(value_12_hash));
 }
 
 TYPED_TEST_P(StateTest, DefaultCodeIsEmpty) {
@@ -261,8 +255,7 @@ TYPED_TEST_P(StateTest, CodesAreCoveredByGlobalStateHash) {
 
   // Resetting value gets us original hash.
   EXPECT_OK(state.SetCode({}, std::vector{std::byte{12}}));
-  ASSERT_OK_AND_ASSIGN(auto value_12_hash_again, state.GetHash());
-  EXPECT_EQ(value_12_hash, value_12_hash_again);
+  EXPECT_THAT(state.GetHash(), IsOkAndHolds(value_12_hash));
 }
 
 TYPED_TEST_P(StateTest, LookingUpMissingCodeDoesNotChangeGlobalHash) {

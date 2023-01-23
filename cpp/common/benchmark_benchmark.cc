@@ -1,6 +1,5 @@
 #include "common/benchmark.h"
 
-#include <initializer_list>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -8,13 +7,11 @@
 
 #include "benchmark/benchmark.h"
 
-using pair_int_double = std::pair<int, double>;
-
 // Define a list of types to run generic benchmarks on.
 BENCHMARK_TYPE_LIST(MyList, int, float, std::string);
 
 // Define a second list of difficult cases.
-// Types with a , (comma) in the name need to be put in parantheses.
+// Types with a , (comma) in the name need to be put in parentheses.
 BENCHMARK_TYPE_LIST(DifficultCases, std::vector<int>, (std::pair<int, double>));
 
 template <typename Type>

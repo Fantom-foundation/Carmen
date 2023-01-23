@@ -2,6 +2,7 @@
 
 #include <type_traits>
 
+#include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -22,7 +23,9 @@ TEST(InMemoryStoreTest, TypeTraits) {
 }
 
 TEST(InMemoryStoreTest, SnapshotShieldsMutations) {
-  Store store;
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir.GetPath()));
 
   ASSERT_OK(store.Set(10, 12));
   EXPECT_THAT(store.Get(10), IsOkAndHolds(12));
@@ -38,7 +41,10 @@ TEST(InMemoryStoreTest, SnapshotShieldsMutations) {
 }
 
 TEST(InMemoryStoreTest, SnapshotRecoveryHasSameHash) {
-  Store store;
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir.GetPath()));
+
   ASSERT_OK(store.Set(10, 12));
   ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
   auto snapshot = store.CreateSnapshot();
@@ -49,8 +55,10 @@ TEST(InMemoryStoreTest, SnapshotRecoveryHasSameHash) {
 
 TEST(InMemoryStoreTest, LargeSnapshotRecoveryWorks) {
   constexpr const int kNumElements = 100000;
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir.GetPath()));
 
-  Store store;
   for (int i = 0; i < kNumElements; i++) {
     ASSERT_OK(store.Set(i, i + 10));
   }

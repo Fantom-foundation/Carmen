@@ -20,7 +20,7 @@ concept Page =
     alignof(P) >= kFileSystemPageSize &&
     alignof(P) % kFileSystemPageSize == 0 &&
     // To be used in page pools, pages must also be trivially default
-    // constructible and destructible.
+    // constructable and destructible.
     std::is_trivially_default_constructible_v<P>&& std::
         is_trivially_destructible_v<P>&& std::is_convertible_v<
             P, std::span<std::byte, sizeof(P)>>&& std::
@@ -49,8 +49,8 @@ constexpr std::size_t GetRequiredPageSize(std::size_t needed_page_size) {
 template <std::size_t page_size = kFileSystemPageSize>
 class alignas(kFileSystemPageSize) RawPage final {
  public:
-  // Can be used to interprate the content of this page using the given page
-  // format. It is a readability wrapper arround a static cast, performing no
+  // Can be used to interpret the content of this page using the given page
+  // format. It is a readability wrapper around a static cast, performing no
   // dynamic checks on the validity of the cast.
   template <Page Page>
   const Page& As() const {
@@ -86,10 +86,10 @@ class alignas(kFileSystemPageSize) RawPage final {
 // typed version of a page in a file containing a fixed length array of trivial
 // elements. Furthermore, it provides index based access to the contained data.
 //
-// The trival type V is the type of value stored in this page, in the form of an
-// array. The provided num_elements is the number values per page. Note that, if
-// total size of the array is not a multiple of kFileSystemPageSize some extra
-// bytes per page may be kept in memory and on disk.
+// The trivial type V is the type of value stored in this page, in the form of
+// an array. The provided num_elements is the number values per page. Note that,
+// if total size of the array is not a multiple of kFileSystemPageSize some
+// extra bytes per page may be kept in memory and on disk.
 template <Trivial V, std::size_t num_elements = kFileSystemPageSize / sizeof(V)>
 class alignas(kFileSystemPageSize) ArrayPage final {
  public:

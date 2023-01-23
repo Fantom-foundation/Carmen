@@ -52,7 +52,7 @@ Key ToKey(std::int64_t value) {
 template <typename Index>
 void BM_Insert(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler<Index> handler;
+  ASSERT_OK_AND_ASSIGN(auto handler, IndexHandler<Index>::Create());
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -72,7 +72,7 @@ BENCHMARK_ALL(BM_Insert, IndexConfigList)->ArgList(kSizes);
 template <typename Index>
 void BM_SequentialRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler<Index> handler;
+  ASSERT_OK_AND_ASSIGN(auto handler, IndexHandler<Index>::Create());
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -92,7 +92,7 @@ BENCHMARK_ALL(BM_SequentialRead, IndexConfigList)->ArgList(kSizes);
 template <typename Index>
 void BM_UniformRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler<Index> handler;
+  ASSERT_OK_AND_ASSIGN(auto handler, IndexHandler<Index>::Create());
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -114,7 +114,7 @@ BENCHMARK_ALL(BM_UniformRandomRead, IndexConfigList)->ArgList(kSizes);
 template <typename Index>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler<Index> handler;
+  ASSERT_OK_AND_ASSIGN(auto handler, IndexHandler<Index>::Create());
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -136,7 +136,7 @@ BENCHMARK_ALL(BM_ExponentialRandomRead, IndexConfigList)->ArgList(kSizes);
 template <typename Index>
 void BM_Hash(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
-  IndexHandler<Index> handler;
+  ASSERT_OK_AND_ASSIGN(auto handler, IndexHandler<Index>::Create());
   auto& index = handler.GetIndex();
 
   // Fill in initial elements.
@@ -152,7 +152,7 @@ void BM_Hash(benchmark::State& state) {
       ASSERT_OK(index.GetOrAdd(ToKey(i++)));
     }
     state.ResumeTiming();
-    auto hash = index.GetHash();
+    ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
     benchmark::DoNotOptimize(hash);
   }
 }

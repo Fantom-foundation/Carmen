@@ -5,6 +5,7 @@
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "cerrno"
 #include "common/macro_utils.h"
 
 // This header provides a few utility macros for dealing with absl::Status and
@@ -33,12 +34,36 @@ template <typename T>
 absl::Status GetStatus(absl::StatusOr<T> status) {
   return status.status();
 }
-
 }  // namespace testing::internal
 
-// Alias for a StatusOr<T> that can be used with reference types.
+// Get status based on status code and error code. If error code is not 0, then
+// corresponding error message is set and appended to the status message.
+inline absl::Status GetStatusWithSystemError(absl::StatusCode code,
+                                             int error_code,
+                                             std::string_view message) {
+  if (error_code == 0) {
+    return {code, message};
+  }
+  return {code, absl::StrCat(message, " Error: ", std::strerror(error_code))};
+}
+
+// Wrapper around std::reference_wrapper that provides functions to access the
+// wrapped value as reference or pointer.
 template <typename T>
-using StatusOrRef = absl::StatusOr<std::reference_wrapper<T>>;
+class ReferenceWrapper : public std::reference_wrapper<T> {
+ public:
+  using std::reference_wrapper<T>::reference_wrapper;
+  // Returns a reference to the wrapped value.
+  T& AsReference() const { return this->get(); }
+  // Returns a pointer to the wrapped value.
+  T* AsPointer() const { return &AsReference(); }
+
+  operator T*() const { return AsPointer(); }
+};
+
+// Type definition for a StatusOr<T> that can be used with reference types.
+template <typename T>
+using StatusOrRef = absl::StatusOr<ReferenceWrapper<T>>;
 
 // The implementation of RETURN_IF_ERROR below, more compact as if it would be
 // if it would be written inline.

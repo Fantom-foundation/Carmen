@@ -52,7 +52,6 @@ cc_test(
 
 cc_library(
     name = "type",
-    srcs = ["type.cc"],
     hdrs = ["type.h"],
     visibility = ["//visibility:public"],
     deps = [

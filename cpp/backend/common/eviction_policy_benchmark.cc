@@ -59,7 +59,7 @@ BENCHMARK(BM_UniformWriteTest<RandomEvictionPolicy>)
 BENCHMARK(BM_UniformWriteTest<LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-// Evalutes the performance of removing elements from the pool.
+// Evaluates the performance of removing elements from the pool.
 template <EvictionPolicy Policy>
 void BM_UniformRemoveTest(benchmark::State& state) {
   auto pool_size = state.range(0);
@@ -81,7 +81,7 @@ BENCHMARK(BM_UniformRemoveTest<RandomEvictionPolicy>)
 BENCHMARK(BM_UniformRemoveTest<LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-// Evalutes the performance of selecting pages to be evicted.
+// Evaluates the performance of selecting pages to be evicted.
 template <EvictionPolicy Policy>
 void BM_GetPageToEvictTest(benchmark::State& state) {
   auto pool_size = state.range(0);

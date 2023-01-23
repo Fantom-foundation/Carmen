@@ -24,7 +24,7 @@ namespace internal {
 
 // The FileStoreBase is the common bases of file-backed implementations of a
 // mutable key/value store. It provides mutation, lookup, and global state
-// hashing support. Hashing can occure eager (before evicting pages) or lazy,
+// hashing support. Hashing can occur eager (before evicting pages) or lazy,
 // when requesting hash computations.
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size = 32, bool eager_hashing = true>
@@ -68,25 +68,14 @@ class FileStoreBase {
   using value_type = V;
 
   // The page size in byte used by this store as configured. This may be less
-  // then the actual page size, which may be larger due to alignment and padding
+  // than the actual page size, which may be larger due to alignment and padding
   // constraints.
   constexpr static std::size_t kPageSize = page_size;
 
   // A factory function creating an instance of this store type.
   static absl::StatusOr<FileStoreBase> Open(
       Context&, const std::filesystem::path& directory,
-      std::size_t hash_branching_factor = 32) {
-    // Make sure the directory exists.
-    if (!CreateDirectory(directory)) {
-      return absl::InternalError(
-          absl::StrFormat("Unable to create parent directory %s", directory));
-    }
-    auto store = FileStoreBase(directory, hash_branching_factor);
-    if (std::filesystem::exists(store.hash_file_)) {
-      RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));
-    }
-    return store;
-  }
+      std::size_t hash_branching_factor = 32);
 
   // Supports instances to be moved.
   FileStoreBase(FileStoreBase&&) = default;
@@ -155,19 +144,25 @@ class FileStoreBase {
     PageProvider(PagePool& pool) : pool_(pool) {}
 
     std::span<const std::byte> GetPageData(PageId id) override {
-      return std::as_bytes(std::span(pool_.template Get<Page>(id).AsArray()));
+      constexpr std::span<const std::byte> const kEmpty;
+      auto page = pool_.template Get<Page>(id);
+      if (!page.ok()) {
+        return kEmpty;
+      }
+      return std::as_bytes(std::span(page->AsReference().AsArray()));
     }
 
    private:
     PagePool& pool_;
   };
 
-  // The number of elements per page, used for page and offset computaiton.
+  // The number of elements per page, used for page and offset computation.
   constexpr static std::size_t kNumElementsPerPage = Page::kNumElementsPerPage;
 
   // Creates a new file store maintaining its content in the given directory and
   // using the provided branching factor for its hash computation.
-  FileStoreBase(std::filesystem::path directory,
+  FileStoreBase(std::unique_ptr<F<kFilePageSize>> file,
+                std::filesystem::path hash_file,
                 std::size_t hash_branching_factor);
 
   // The page pool handling the in-memory buffer of pages fetched from disk. The
@@ -175,7 +170,7 @@ class FileStoreBase {
   // store is moved.
   mutable std::unique_ptr<PagePool> pool_;
 
-  // The data structure hanaging the hashing of states. The hashes are placed in
+  // The data structure managing the hashing of states. The hashes are placed in
   // a unique pointer to ensure pointer stability when the store is moved.
   mutable std::unique_ptr<HashTree> hashes_;
 
@@ -186,13 +181,32 @@ class FileStoreBase {
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
+    absl::StatusOr<FileStoreBase<K, V, F, page_size, eager_hashing>>
+    FileStoreBase<K, V, F, page_size, eager_hashing>::Open(
+        Context&, const std::filesystem::path& directory,
+        std::size_t hash_branching_factor) {
+  // Make sure the directory exists.
+  RETURN_IF_ERROR(CreateDirectory(directory));
+  ASSIGN_OR_RETURN(auto file, F<kFilePageSize>::Open(directory / "data.dat"));
+  auto store =
+      FileStoreBase(std::make_unique<F<kFilePageSize>>(std::move(file)),
+                    directory / "hash.dat", hash_branching_factor);
+  if (std::filesystem::exists(store.hash_file_)) {
+    RETURN_IF_ERROR(store.hashes_->LoadFromFile(store.hash_file_));
+  }
+  return store;
+}
+
+template <typename K, Trivial V, template <std::size_t> class F,
+          std::size_t page_size, bool eager_hashing>
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
-    std::filesystem::path directory, std::size_t hash_branching_factor)
-    : pool_(std::make_unique<PagePool>(
-          std::make_unique<F<kFilePageSize>>(directory / "data.dat"))),
+    std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file,
+    std::size_t hash_branching_factor)
+    : pool_(std::make_unique<PagePool>(std::move(file))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
-      hash_file_(directory / "hash.dat") {
+      hash_file_(std::move(hash_file)) {
   pool_->AddListener(std::make_unique<PoolListener>(*hashes_));
 }
 
@@ -200,8 +214,9 @@ template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
-  auto& trg = pool_->template Get<Page>(
-      key / kNumElementsPerPage)[key % kNumElementsPerPage];
+  ASSIGN_OR_RETURN(Page & page,
+                   pool_->template Get<Page>(key / kNumElementsPerPage));
+  auto& trg = page[key % kNumElementsPerPage];
   if (trg != value) {
     trg = value;
     pool_->MarkAsDirty(key / kNumElementsPerPage);
@@ -216,8 +231,9 @@ requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
     StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
         const K& key)
 const {
-  return pool_->template Get<Page>(
-      key / kNumElementsPerPage)[key % kNumElementsPerPage];
+  ASSIGN_OR_RETURN(Page & page,
+                   pool_->template Get<Page>(key / kNumElementsPerPage));
+  return page[key % kNumElementsPerPage];
 }
 
 template <typename K, Trivial V, template <std::size_t> class F,
@@ -231,7 +247,9 @@ template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Flush() {
-  if (pool_) pool_->Flush();
+  if (pool_) {
+    RETURN_IF_ERROR(pool_->Flush());
+  }
   if (hashes_) {
     RETURN_IF_ERROR(hashes_->SaveToFile(hash_file_));
   }
@@ -243,7 +261,9 @@ template <typename K, Trivial V, template <std::size_t> class F,
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Close() {
   RETURN_IF_ERROR(Flush());
-  if (pool_) pool_->Close();
+  if (pool_) {
+    RETURN_IF_ERROR(pool_->Close());
+  }
   return absl::OkStatus();
 }
 

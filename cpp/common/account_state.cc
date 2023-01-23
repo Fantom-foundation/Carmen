@@ -1,6 +1,5 @@
 #include "common/account_state.h"
 
-#include <cstdint>
 #include <ostream>
 
 namespace carmen {

@@ -64,8 +64,10 @@ cc_library(
         "//common:memory_usage",
         "//common:status_util",
         "//common:type",
+        "//common:fstream",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:strings",
     ],
 )
 
@@ -75,6 +77,7 @@ cc_test(
     deps = [
         ":index",
         "//backend/index:test_util",
+        "//backend:structure",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],

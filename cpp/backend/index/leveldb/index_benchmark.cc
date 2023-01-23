@@ -5,6 +5,7 @@
 #include "backend/index/leveldb/single_db/index.h"
 #include "benchmark/benchmark.h"
 #include "common/file_util.h"
+#include "common/status_test_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -16,20 +17,28 @@ namespace {
 template <Trivial K, std::integral I>
 class SingleIndexBM {
  public:
-  explicit SingleIndexBM(std::uint8_t num_indexes) {
+  static absl::StatusOr<SingleIndexBM> Create(std::uint8_t num_indexes) {
     assert(num_indexes > 0 && "num_indexes must be greater than 0");
-    // initialize index leveldb index
-    auto index = *SingleLevelDbIndex::Open(dir_.GetPath());
-    for (std::uint8_t i = 0; i < num_indexes; ++i) {
-      // create key space
-      indexes_.push_back(index.template KeySpace<K, I>(i));
-    }
+    TempDir dir;
+    ASSIGN_OR_RETURN(auto index, SingleLevelDbIndex::Open(dir.GetPath()));
+    return SingleIndexBM(num_indexes, index, std::move(dir));
   }
+
   LevelDbKeySpace<K, I>& GetIndex(std::uint8_t index) {
     return indexes_[index];
   }
 
  private:
+  SingleIndexBM(std::uint8_t num_indexes, SingleLevelDbIndex& index,
+                TempDir dir)
+      : dir_(std::move(dir)) {
+    // initialize index leveldb index
+    for (std::uint8_t i = 0; i < num_indexes; ++i) {
+      // create key space
+      indexes_.push_back(index.template KeySpace<K, I>(i));
+    }
+  }
+
   TempDir dir_;
   std::vector<LevelDbKeySpace<K, I>> indexes_;
 };
@@ -37,19 +46,29 @@ class SingleIndexBM {
 template <Trivial K, std::integral I>
 class MultiIndexBM {
  public:
-  explicit MultiIndexBM(std::uint8_t num_indexes) {
+  static absl::StatusOr<MultiIndexBM> Create(std::uint8_t num_indexes) {
+    using Index = MultiLevelDbIndex<K, I>;
     assert(num_indexes > 0 && "num_indexes must be greater than 0");
+    std::vector<TempDir> dirs;
+    std::vector<MultiLevelDbIndex<K, I>> indexes;
     for (std::uint8_t i = 0; i < num_indexes; ++i) {
       auto dir = TempDir();
-      indexes_.push_back(*MultiLevelDbIndex<K, I>::Open(dir.GetPath()));
-      dirs_.push_back(std::move(dir));
+      ASSIGN_OR_RETURN(auto index, Index::Open(dir.GetPath()));
+      indexes.push_back(std::move(index));
+      dirs.push_back(std::move(dir));
     }
+    return MultiIndexBM(std::move(dirs), std::move(indexes));
   }
+
   MultiLevelDbIndex<K, I>& GetIndex(std::uint8_t index) {
     return indexes_[index];
   }
 
  private:
+  MultiIndexBM(std::vector<TempDir> dirs,
+               std::vector<MultiLevelDbIndex<K, I>> indexes)
+      : dirs_(std::move(dirs)), indexes_(std::move(indexes)) {}
+
   std::vector<TempDir> dirs_;
   std::vector<MultiLevelDbIndex<K, I>> indexes_;
 };
@@ -70,21 +89,21 @@ template <typename LevelDbIndex>
 void BM_Insert(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDbIndex index(indexes_count);
+  ASSERT_OK_AND_ASSIGN(auto index, LevelDbIndex::Create(indexes_count));
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
     for (std::uint8_t j = 0; j < indexes_count; ++j) {
       auto& idx = index.GetIndex(j);
-      *idx.GetOrAdd(ToKey(i));
+      ASSERT_OK(idx.GetOrAdd(ToKey(i)));
     }
   }
 
   auto i = pre_loaded_num_elements;
   for (auto _ : state) {
     auto& idx = index.GetIndex(i % indexes_count);
-    auto id = idx.GetOrAdd(ToKey(i));
-    benchmark::DoNotOptimize(*id);
+    ASSERT_OK_AND_ASSIGN(auto id, idx.GetOrAdd(ToKey(i)));
+    benchmark::DoNotOptimize(id);
     ++i;
   }
 }
@@ -109,21 +128,22 @@ template <typename LevelDbIndex>
 void BM_SequentialRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDbIndex index(indexes_count);
+  ASSERT_OK_AND_ASSIGN(auto index, LevelDbIndex::Create(indexes_count));
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
     for (std::uint8_t j = 0; j < indexes_count; ++j) {
       auto& idx = index.GetIndex(j);
-      *idx.GetOrAdd(ToKey(i));
+      ASSERT_OK(idx.GetOrAdd(ToKey(i)));
     }
   }
 
   auto i = 0;
   for (auto _ : state) {
     auto& idx = index.GetIndex(i % indexes_count);
-    auto id = idx.GetOrAdd(ToKey(i % pre_loaded_num_elements));
-    benchmark::DoNotOptimize(*id);
+    ASSERT_OK_AND_ASSIGN(auto id,
+                         idx.GetOrAdd(ToKey(i % pre_loaded_num_elements)));
+    benchmark::DoNotOptimize(id);
     ++i;
   }
 }
@@ -148,13 +168,13 @@ template <typename LevelDbIndex>
 void BM_UniformRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDbIndex index(indexes_count);
+  ASSERT_OK_AND_ASSIGN(auto index, LevelDbIndex::Create(indexes_count));
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
     for (std::uint8_t j = 0; j < indexes_count; ++j) {
       auto& idx = index.GetIndex(j);
-      *idx.GetOrAdd(ToKey(i));
+      ASSERT_OK(idx.GetOrAdd(ToKey(i)));
     }
   }
 
@@ -164,8 +184,8 @@ void BM_UniformRandomRead(benchmark::State& state) {
   for (auto _ : state) {
     auto i = dist(gen);
     auto& idx = index.GetIndex(i % indexes_count);
-    auto id = idx.GetOrAdd(ToKey(i));
-    benchmark::DoNotOptimize(*id);
+    ASSERT_OK_AND_ASSIGN(auto id, idx.GetOrAdd(ToKey(i)));
+    benchmark::DoNotOptimize(id);
   }
 }
 
@@ -189,13 +209,13 @@ template <typename LevelDbIndex>
 void BM_ExponentialRandomRead(benchmark::State& state) {
   auto pre_loaded_num_elements = state.range(0);
   auto indexes_count = state.range(1);
-  LevelDbIndex index(indexes_count);
+  ASSERT_OK_AND_ASSIGN(auto index, LevelDbIndex::Create(indexes_count));
 
   // Fill in initial elements.
   for (std::int64_t i = 0; i < pre_loaded_num_elements; i++) {
     for (std::uint8_t j = 0; j < indexes_count; ++j) {
       auto& idx = index.GetIndex(j);
-      *idx.GetOrAdd(ToKey(i));
+      ASSERT_OK(idx.GetOrAdd(ToKey(i)));
     }
   }
 
@@ -205,8 +225,9 @@ void BM_ExponentialRandomRead(benchmark::State& state) {
   for (auto _ : state) {
     auto i = dist(gen);
     auto& idx = index.GetIndex(int(i) % indexes_count);
-    auto id = idx.GetOrAdd(ToKey(std::int64_t(i) % pre_loaded_num_elements));
-    benchmark::DoNotOptimize(*id);
+    ASSERT_OK_AND_ASSIGN(auto id, idx.GetOrAdd(ToKey(std::int64_t(i) %
+                                                     pre_loaded_num_elements)));
+    benchmark::DoNotOptimize(id);
   }
 }
 

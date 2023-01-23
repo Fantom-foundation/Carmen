@@ -30,18 +30,15 @@ TEST(FileDepotTest, TestIsPersistent) {
   {
     ASSERT_OK_AND_ASSIGN(auto depot, TestDepot::Open(dir.GetPath()));
     EXPECT_THAT(depot.Get(10), StatusIs(absl::StatusCode::kNotFound, _));
-    ASSERT_OK_AND_ASSIGN(auto empty_hash, depot.GetHash());
-    EXPECT_EQ(empty_hash, Hash{});
+    EXPECT_THAT(depot.GetHash(), IsOkAndHolds(Hash{}));
     ASSERT_OK(depot.Set(10, elements));
     ASSERT_OK_AND_ASSIGN(hash, depot.GetHash());
   }
 
   {
     ASSERT_OK_AND_ASSIGN(auto depot, TestDepot::Open(dir.GetPath()));
-    ASSERT_OK_AND_ASSIGN(auto val, depot.Get(10));
-    EXPECT_THAT(val, ElementsAreArray(elements));
-    ASSERT_OK_AND_ASSIGN(auto new_hash, depot.GetHash());
-    EXPECT_EQ(new_hash, hash);
+    EXPECT_THAT(depot.Get(10), IsOkAndHolds(ElementsAreArray(elements)));
+    EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash));
   }
 }
 

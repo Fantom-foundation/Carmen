@@ -59,6 +59,8 @@ cc_library(
         "//backend/index/file:index",
         "//backend/index/leveldb/multi_db:index",
         "//backend/index/leveldb/single_db:index",
+        "@com_google_absl//absl/status:statusor",
+        "//backend:structure",
         "//common:file_util",
         "//common:type",
     ],

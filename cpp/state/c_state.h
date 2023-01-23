@@ -1,5 +1,5 @@
 // This header file defines a C interface for manipulating the world state.
-// It is intendend to be used to bridge the Go/C++ boundary.
+// It is intended to be used to bridge the Go/C++ boundary.
 
 #include <stdint.h>
 
@@ -15,7 +15,7 @@ extern "C" {
 
 // The following macro definitions provide syntactic sugar for type-erased
 // pointers used in the interface definitions below. Their main purpose is to
-// increase readability, not to enforce any type contraints.
+// increase readability, not to enforce any type constraints.
 
 #define C_State void*
 
@@ -43,11 +43,11 @@ C_State Carmen_CreateFileBasedState(const char* directory, int length);
 
 // Creates a new state object maintaining data in a LevelDB instance located in
 // the given directory and returns an opaque pointer to it. Ownership of the
-// state is transfered to the caller, which is required to release it
+// state is transferred to the caller, which is required to release it
 // eventually.
 C_State Carmen_CreateLevelDbBasedState(const char* directory, int length);
 
-// Flushes all committed state information to disk to gurantee permanent
+// Flushes all committed state information to disk to guarantee permanent
 // storage. All internally cached modifications is synced to disk.
 void Carmen_Flush(C_State state);
 

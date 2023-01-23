@@ -1,11 +1,12 @@
-#include <random>
 #include <span>
 
+#include "absl/status/status.h"
 #include "backend/common/access_pattern.h"
 #include "backend/common/eviction_policy.h"
 #include "backend/common/page.h"
 #include "backend/common/page_pool.h"
 #include "benchmark/benchmark.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend {
 namespace {
@@ -23,12 +24,18 @@ class DummyFile {
  public:
   constexpr static const std::size_t kPageSize = sizeof(Page);
 
+  static absl::StatusOr<DummyFile> Open(const std::filesystem::path&) {
+    return DummyFile();
+  }
   std::size_t GetNumPages() { return kFileSize; }
-
-  void LoadPage(PageId, std::span<std::byte, kPageSize>) {}
-  void StorePage(PageId, std::span<const std::byte, kPageSize>) {}
-  void Flush() {}
-  void Close() {}
+  absl::Status LoadPage(PageId, std::span<std::byte, kPageSize>) {
+    return absl::OkStatus();
+  }
+  absl::Status StorePage(PageId, std::span<const std::byte, kPageSize>) {
+    return absl::OkStatus();
+  }
+  absl::Status Flush() { return absl::OkStatus(); }
+  absl::Status Close() { return absl::OkStatus(); }
 };
 
 template <EvictionPolicy Policy>
@@ -43,12 +50,12 @@ void BM_ReadTest(benchmark::State& state) {
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
-    pool.template Get<Page>(i);
+    ASSERT_OK(pool.template Get<Page>(i));
   }
 
   AccessOrder order(kFileSize);
   for (auto _ : state) {
-    pool.template Get<Page>(order.Next());
+    ASSERT_OK(pool.template Get<Page>(order.Next()));
   }
 }
 
@@ -67,7 +74,7 @@ BENCHMARK(BM_ReadTest<Exponential, RandomEvictionPolicy>)
 BENCHMARK(BM_ReadTest<Exponential, LeastRecentlyUsedEvictionPolicy>)
     ->Range(kMinPoolSize, kMaxPoolSize);
 
-// Evaluates the performance of writing to pages in page pools.
+// Evaluates the performance of writing on pages in page pools.
 template <typename AccessOrder, EvictionPolicy Policy>
 void BM_WriteTest(benchmark::State& state) {
   auto pool_size = state.range(0);
@@ -75,14 +82,14 @@ void BM_WriteTest(benchmark::State& state) {
 
   // Warm-up by touching each page once.
   for (int64_t i = 0; i < pool_size; i++) {
-    pool.template Get<Page>(i);
+    ASSERT_OK(pool.template Get<Page>(i));
     pool.MarkAsDirty(i);
   }
 
   AccessOrder order(kFileSize);
   for (auto _ : state) {
     auto pos = order.Next();
-    pool.template Get<Page>(pos);
+    ASSERT_OK(pool.template Get<Page>(pos));
     pool.MarkAsDirty(pos);
   }
 }

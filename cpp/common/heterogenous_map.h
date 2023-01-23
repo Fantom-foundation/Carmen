@@ -10,7 +10,7 @@ namespace carmen {
 
 // A HeterogenousMap is a map retaining values of various types, indexed by
 // their types. Thus, for each type T a value of type T may be maintained, which
-// can be retrieved and modified. It is mainly intended for for enviroments
+// can be retrieved and modified. It is mainly intended for environments
 // depending on generic extensions following the open-closed principle.
 class HeterogenousMap {
  public:
@@ -62,7 +62,7 @@ class HeterogenousMap {
   }
 
  private:
-  // A polymorthic base type for all entries. Its main purpose is to provide a
+  // A polymorphic base type for all entries. Its main purpose is to provide a
   // common base type for all stored elements and a virtual destructor for those
   // facilitating proper cleanup on destruction.
   struct EntryBase {
@@ -83,7 +83,7 @@ class HeterogenousMap {
   };
 
   // The underlying data structure mapping types to entries. Entries are
-  // referenced through their polymorthic base type.
+  // referenced through their polymorphic base type.
   absl::flat_hash_map<std::type_index, std::unique_ptr<EntryBase>> map_;
 };
 

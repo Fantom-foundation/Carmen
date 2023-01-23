@@ -2,10 +2,12 @@
 #include <random>
 #include <sstream>
 
+#include "absl/status/statusor.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "benchmark/benchmark.h"
 #include "common/file_util.h"
+#include "common/status_test_util.h"
 
 namespace carmen::backend::store {
 namespace {
@@ -28,8 +30,8 @@ namespace {
 template <std::size_t page_size>
 using Page = RawPage<page_size>;
 
-// An utility wrapper to be specialized for various file implementations to
-// handle them uniformely within benchmarks.
+// A utility wrapper to be specialized for various file implementations to
+// handle them uniformly within benchmarks.
 //
 // The default implementation maintains a File instance and the ownership of a
 // temporary file on disk backing the owned file instance. In particular, it
@@ -38,28 +40,30 @@ using Page = RawPage<page_size>;
 template <typename F>
 class FileWrapper {
  public:
-  FileWrapper() : file_(std::make_unique<F>(temp_file_)) {}
-  ~FileWrapper() {
-    file_->Flush();
-    file_.reset();
-    std::filesystem::remove(temp_file_);
+  static absl::StatusOr<FileWrapper> Create() {
+    TempFile temp_file;
+    ASSIGN_OR_RETURN(auto file, F::Open(temp_file.GetPath()));
+    return FileWrapper(std::make_unique<F>(std::move(file)),
+                       std::move(temp_file));
   }
+
+  FileWrapper(FileWrapper&&) noexcept = default;
+
+  ~FileWrapper() {
+    if (file_) {
+      file_->Flush().IgnoreError();
+      file_.reset();
+    }
+  }
+
   F& GetFile() { return *file_; }
 
  private:
+  FileWrapper(std::unique_ptr<F> file, TempFile temp_file)
+      : temp_file_(std::move(temp_file)), file_(std::move(file)) {}
+
   TempFile temp_file_;
   std::unique_ptr<F> file_;
-};
-
-// A specialization of a FileWrapper for the InMemoryFile reference
-// implementation.
-template <std::size_t page_size>
-class FileWrapper<InMemoryFile<page_size>> {
- public:
-  InMemoryFile<page_size>& GetFile() { return file_; }
-
- private:
-  InMemoryFile<page_size> file_;
 };
 
 template <std::size_t page_size>
@@ -83,10 +87,10 @@ void BM_FileInit(benchmark::State& state) {
   for (auto _ : state) {
     // We create a file and only write the final page. This implicitly creates
     // the rest of the file.
-    FileWrapper<F> wrapper;
+    ASSERT_OK_AND_ASSIGN(auto wrapper, FileWrapper<F>::Create());
     F& file = wrapper.GetFile();
     Page<F::kPageSize> trg;
-    file.StorePage(target_size / sizeof(trg) - 1, trg);
+    ASSERT_OK(file.StorePage(target_size / sizeof(trg) - 1, trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }
@@ -118,11 +122,11 @@ void BM_SequentialFileFilling(benchmark::State& state) {
   const auto target_size = state.range(0);
 
   for (auto _ : state) {
-    FileWrapper<F> wrapper;
+    ASSERT_OK_AND_ASSIGN(auto wrapper, FileWrapper<F>::Create());
     F& file = wrapper.GetFile();
     for (std::size_t i = 0; i < target_size / F::kPageSize; i++) {
       Page<F::kPageSize> trg;
-      file.StorePage(i, trg);
+      ASSERT_OK(file.StorePage(i, trg));
       benchmark::DoNotOptimize(trg[0]);
     }
   }
@@ -162,16 +166,16 @@ void BM_SequentialFileRead(benchmark::State& state) {
   const auto target_size = state.range(0);
 
   // Create and initialize the test file.
-  FileWrapper<F> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, FileWrapper<F>::Create());
   F& file = wrapper.GetFile();
   Page<F::kPageSize> trg;
   const auto num_pages = target_size / F::kPageSize;
-  file.StorePage(num_pages - 1, trg);
+  ASSERT_OK(file.StorePage(num_pages - 1, trg));
 
   int i = 0;
   for (auto _ : state) {
     // Load all pages in order.
-    file.LoadPage(i++ % num_pages, trg);
+    ASSERT_OK(file.LoadPage(i++ % num_pages, trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }
@@ -203,11 +207,11 @@ void BM_RandomFileRead(benchmark::State& state) {
   const auto target_size = state.range(0);
 
   // Create and initialize the test file.
-  FileWrapper<F> wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, FileWrapper<F>::Create());
   F& file = wrapper.GetFile();
   Page<F::kPageSize> trg;
   const auto num_pages = target_size / F::kPageSize;
-  file.StorePage(num_pages - 1, trg);
+  ASSERT_OK(file.StorePage(num_pages - 1, trg));
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -215,7 +219,7 @@ void BM_RandomFileRead(benchmark::State& state) {
 
   for (auto _ : state) {
     // Load pages in random order.
-    file.LoadPage(distribution(gen), trg);
+    ASSERT_OK(file.LoadPage(distribution(gen), trg));
     benchmark::DoNotOptimize(trg[0]);
   }
 }

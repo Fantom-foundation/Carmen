@@ -22,6 +22,7 @@ cc_binary(
         "//backend/index/leveldb/single_db:index",
         "//common:file_util",
         "//common:type",
+        "//common:status_test_util",
         "//third_party/gperftools:profiler",
         "@com_github_google_benchmark//:benchmark_main",
     ],

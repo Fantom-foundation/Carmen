@@ -19,7 +19,7 @@ class Sha256Impl;
 // functions, and consume the final hash using GetHash(). Once a hash is
 // consumed, no more input may be added.
 //
-// Instances can be reused for multiple hash computation by reseting them
+// Instances can be reused for multiple hash computation by resetting them
 // between hashing operations. This is more efficient than recreating a new
 // instance for each step.
 class Sha256Hasher {
@@ -44,15 +44,15 @@ class Sha256Hasher {
   // A no-op serving as the base case for ingesting lists of trivial types.
   void Ingest() {}
 
-  // A convenience variant of the fuction above, supporting the hashing of
+  // A convenience variant of the function above, supporting the hashing of
   // all trivial types.
   template <Trivial T>
   void Ingest(const T& value) {
     Ingest(reinterpret_cast<const std::byte*>(&value), sizeof(T));
   }
 
-  // An extension of the fuction above, supporting the ingestion of a list
-  // of trival objects.
+  // An extension of the function above, supporting the ingestion of a list
+  // of trivial objects.
   template <Trivial First, Trivial... Rest>
   void Ingest(const First& first, const Rest&... rest) {
     Ingest(first);
@@ -67,14 +67,14 @@ class Sha256Hasher {
   void Reset();
 
  private:
-  // The actual implementation of the hasher is hidden behind a interanl
+  // The actual implementation of the hasher is hidden behind an internal
   // data type (Pimpl-pattern) to avoid including headers referencing
   // implementation details into this header file, and those avoiding their
   // import in other files.
   std::unique_ptr<internal::Sha256Impl> _impl;
 };
 
-// A utility fuiction to hash a list of trivial elements using the given hasher
+// A utility function to hash a list of trivial elements using the given hasher
 // instance. The state of the handed in hasher is reset before ingesting the
 // provided list of elements.
 template <Trivial... Elements>
@@ -85,7 +85,7 @@ Hash GetHash(Sha256Hasher& hasher, const Elements&... elements) {
 }
 
 // A utility function to compute the SHA256 hash of a list of trivial elements.
-// It iternally creats a Sha256Hasher instance for computing the hash. If
+// It internally creates a Sha256Hasher instance for computing the hash. If
 // multiple hashes are to be computed, consider creating such an instance in the
 // caller scope and reusing the instance for all invocations.
 template <Trivial... Elements>

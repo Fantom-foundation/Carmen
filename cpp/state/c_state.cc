@@ -155,11 +155,17 @@ C_State Carmen_CreateLevelDbBasedState(const char* directory, int length) {
 }
 
 void Carmen_Flush(C_State state) {
-  reinterpret_cast<carmen::WorldState*>(state)->Flush().IgnoreError();
+  auto res = reinterpret_cast<carmen::WorldState*>(state)->Flush();
+  if (!res.ok()) {
+    std::cout << "WARNING: Failed to flush state: " << res << "\n";
+  }
 }
 
 void Carmen_Close(C_State state) {
-  reinterpret_cast<carmen::WorldState*>(state)->Close().IgnoreError();
+  auto res = reinterpret_cast<carmen::WorldState*>(state)->Close();
+  if (!res.ok()) {
+    std::cout << "WARNING: Failed to close state: " << res << "\n";
+  }
 }
 
 void Carmen_ReleaseState(C_State state) {

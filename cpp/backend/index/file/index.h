@@ -10,11 +10,13 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
 #include "backend/index/file/stable_hash.h"
 #include "backend/structure.h"
+#include "common/fstream.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -59,13 +61,7 @@ class FileIndex {
   static absl::StatusOr<FileIndex> Open(Context&,
                                         const std::filesystem::path& directory);
 
-  // Creates a new, empty index backed by a default-constructed file.
-  FileIndex();
-
-  // Creates an index retaining its data in the given directory.
-  FileIndex(std::filesystem::path directory);
-
-  // File indexes are move-constructible.
+  // File indexes are move-constructable.
   FileIndex(FileIndex&&) = default;
 
   // On destruction file indexes are automatically flushed and closed.
@@ -114,26 +110,27 @@ class FileIndex {
   // Creates an index based on the given files.
   FileIndex(std::unique_ptr<File> primary_page_file,
             std::unique_ptr<File> overflow_page_file,
-            std::filesystem::path metadata_file = "");
+            std::unique_ptr<std::filesystem::path> metadata_file);
 
   // A helper function to locate an entry in this map. Returns a tuple
   // containing the key's hash, the containing bucket, and the containing entry.
   // Only if the entry pointer is not-null the entry has been found.
-  std::tuple<hash_t, bucket_id_t, const Entry*> FindInternal(
+  absl::StatusOr<std::tuple<hash_t, bucket_id_t, const Entry*>> FindInternal(
       const K& key) const;
 
   // Same as above, but for non-const instances.
-  std::tuple<hash_t, bucket_id_t, Entry*> FindInternal(const K& key);
+  absl::StatusOr<std::tuple<hash_t, bucket_id_t, Entry*>> FindInternal(
+      const K& key);
 
   // Splits one bucket in the hash table causing the table to grow by one
   // bucket.
-  void Split();
+  absl::Status Split();
 
   // Obtains the index of the bucket the given hash key is supposed to be
   // located in.
-  bucket_id_t GetBucket(hash_t hashkey) const {
-    bucket_id_t bucket = hashkey & high_mask_;
-    return bucket >= num_buckets_ ? hashkey & low_mask_ : bucket;
+  bucket_id_t GetBucket(hash_t hash_key) const {
+    bucket_id_t bucket = hash_key & high_mask_;
+    return bucket >= num_buckets_ ? hash_key & low_mask_ : bucket;
   }
 
   // Returns the overflow page being the tail fo the given bucket. Returns
@@ -231,77 +228,69 @@ template <Trivial K, std::integral I, template <std::size_t> class F,
 absl::StatusOr<FileIndex<K, I, F, page_size>>
 FileIndex<K, I, F, page_size>::Open(Context&,
                                     const std::filesystem::path& directory) {
-  // TODO: move directory initialization from constructor to factory and do
-  // proper error handling.
-  return FileIndex(directory);
+  ASSIGN_OR_RETURN(auto primary_page_file,
+                   File::Open(directory / "primary.dat"));
+  ASSIGN_OR_RETURN(auto overflow_page_file,
+                   File::Open(directory / "overflow.dat"));
+
+  auto index = FileIndex(
+      std::make_unique<File>(std::move(primary_page_file)),
+      std::make_unique<File>(std::move(overflow_page_file)),
+      std::make_unique<std::filesystem::path>(directory / "metadata.dat"));
+  if (!std::filesystem::exists(*index.metadata_file_)) {
+    return index;
+  }
+
+  ASSIGN_OR_RETURN(auto in, FStream::Open(*index.metadata_file_,
+                                          std::ios::binary | std::ios::in));
+
+  // Start with scalars.
+  RETURN_IF_ERROR(in.Read(index.size_));
+  RETURN_IF_ERROR(in.Read(index.next_to_split_));
+  RETURN_IF_ERROR(in.Read(index.low_mask_));
+  RETURN_IF_ERROR(in.Read(index.high_mask_));
+  RETURN_IF_ERROR(in.Read(index.num_buckets_));
+  RETURN_IF_ERROR(in.Read(index.num_overflow_pages_));
+  RETURN_IF_ERROR(in.Read(index.hash_));
+
+  // Read bucket tail list.
+  assert(sizeof(index.bucket_tails_.size()) == sizeof(std::size_t));
+  std::size_t size;
+  RETURN_IF_ERROR(in.Read(size));
+  index.bucket_tails_.resize(size);
+  for (std::size_t i = 0; i < size; i++) {
+    RETURN_IF_ERROR(in.Read(index.bucket_tails_[i]));
+  }
+
+  // Read free list.
+  assert(sizeof(index.overflow_page_free_list_.size()) == sizeof(std::size_t));
+  RETURN_IF_ERROR(in.Read(size));
+  index.overflow_page_free_list_.resize(size);
+  for (std::size_t i = 0; i < size; i++) {
+    RETURN_IF_ERROR(in.Read(index.overflow_page_free_list_[i]));
+  }
+
+  return index;
 }
-
-template <Trivial K, std::integral I, template <std::size_t> class F,
-          std::size_t page_size>
-FileIndex<K, I, F, page_size>::FileIndex()
-    : FileIndex(std::make_unique<File>(), std::make_unique<File>()) {}
-
-template <Trivial K, std::integral I, template <std::size_t> class F,
-          std::size_t page_size>
-FileIndex<K, I, F, page_size>::FileIndex(std::filesystem::path directory)
-    : FileIndex(std::make_unique<File>(directory / "primary.dat"),
-                std::make_unique<File>(directory / "overflow.dat"),
-                directory / "metadata.dat") {}
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 FileIndex<K, I, F, page_size>::FileIndex(
     std::unique_ptr<File> primary_page_file,
     std::unique_ptr<File> overflow_page_file,
-    std::filesystem::path metadata_file)
+    std::unique_ptr<std::filesystem::path> metadata_file)
     : primary_pool_(std::move(primary_page_file)),
       overflow_pool_(std::move(overflow_page_file)),
+      metadata_file_(std::move(metadata_file)),
       low_mask_((1 << kInitialHashLength) - 1),
       high_mask_((low_mask_ << 1) | 0x1),
-      num_buckets_(1 << kInitialHashLength) {
-  // Take ownership of the metadata file and track it through a unique ptr.
-  metadata_file_ =
-      std::make_unique<std::filesystem::path>(std::move(metadata_file));
-  if (!std::filesystem::exists(*metadata_file_)) return;
-
-  // Load metadata from file.
-  std::fstream in(*metadata_file_, std::ios::binary | std::ios::in);
-  auto read_scalar = [&](auto& scalar) {
-    in.read(reinterpret_cast<char*>(&scalar), sizeof(scalar));
-  };
-
-  // Start with scalars.
-  read_scalar(size_);
-  read_scalar(next_to_split_);
-  read_scalar(low_mask_);
-  read_scalar(high_mask_);
-  read_scalar(num_buckets_);
-  read_scalar(num_overflow_pages_);
-  read_scalar(hash_);
-
-  // Read bucket tail list.
-  assert(sizeof(bucket_tails_.size()) == sizeof(std::size_t));
-  std::size_t size;
-  read_scalar(size);
-  bucket_tails_.resize(size);
-  for (std::size_t i = 0; i < size; i++) {
-    read_scalar(bucket_tails_[i]);
-  }
-
-  // Read free list.
-  assert(sizeof(overflow_page_free_list_.size()) == sizeof(std::size_t));
-  read_scalar(size);
-  overflow_page_free_list_.resize(size);
-  for (std::size_t i = 0; i < size; i++) {
-    read_scalar(overflow_page_free_list_[i]);
-  }
-}
+      num_buckets_(1 << kInitialHashLength) {}
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
     const K& key) {
-  auto [hash, bucket, entry] = FindInternal(key);
+  ASSIGN_OR_RETURN((auto [hash, bucket, entry]), FindInternal(key));
   if (entry != nullptr) {
     return std::pair{entry->value, false};
   }
@@ -310,7 +299,7 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
 
   // Trigger a split if the bucket has an overflow bucket.
   if (GetTail(bucket) != kNullPage) {
-    Split();
+    RETURN_IF_ERROR(Split());
 
     // After the split, the target bucket may be a different one.
     bucket = GetBucket(hash);
@@ -320,17 +309,18 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
   Page* page;
   auto tail = GetTail(bucket);
   if (tail == kNullPage) {
-    page = &primary_pool_.template Get<Page>(bucket);
+    ASSIGN_OR_RETURN(page, primary_pool_.template Get<Page>(bucket));
     primary_pool_.MarkAsDirty(bucket);
   } else {
-    page = &overflow_pool_.template Get<Page>(tail);
+    ASSIGN_OR_RETURN(page, overflow_pool_.template Get<Page>(tail));
     overflow_pool_.MarkAsDirty(tail);
   }
 
   if (page->Insert(hash, key, size_ - 1) == nullptr) {
     auto new_overflow_id = GetFreeOverflowPageId();
     page->SetNext(new_overflow_id);
-    auto overflow_page = &overflow_pool_.template Get<Page>(new_overflow_id);
+    ASSIGN_OR_RETURN(Page * overflow_page,
+                     overflow_pool_.template Get<Page>(new_overflow_id));
     assert(overflow_page->Size() == 0);
     assert(overflow_page->GetNext() == 0);
     SetTail(bucket, new_overflow_id);
@@ -345,7 +335,7 @@ absl::StatusOr<std::pair<I, bool>> FileIndex<K, I, F, page_size>::GetOrAdd(
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::StatusOr<I> FileIndex<K, I, F, page_size>::Get(const K& key) const {
-  auto [hash, bucket, entry] = FindInternal(key);
+  ASSIGN_OR_RETURN((auto [hash, bucket, entry]), FindInternal(key));
   if (entry == nullptr) {
     return absl::NotFoundError("Key not found.");
   }
@@ -365,38 +355,36 @@ absl::StatusOr<Hash> FileIndex<K, I, F, page_size>::GetHash() const {
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Flush() {
-  primary_pool_.Flush();
-  overflow_pool_.Flush();
+  RETURN_IF_ERROR(primary_pool_.Flush());
+  RETURN_IF_ERROR(overflow_pool_.Flush());
 
   // Flush metadata if this is an owning instance.
   if (!metadata_file_ || metadata_file_->empty()) return absl::OkStatus();
 
   // Sync out metadata information.
-  std::fstream out(*metadata_file_, std::ios::binary | std::ios::out);
-  auto write_scalar = [&](auto scalar) {
-    out.write(reinterpret_cast<const char*>(&scalar), sizeof(scalar));
-  };
+  ASSIGN_OR_RETURN(auto out, FStream::Open(*metadata_file_,
+                                           std::ios::binary | std::ios::out));
 
   // Start with scalars.
-  write_scalar(size_);
-  write_scalar(next_to_split_);
-  write_scalar(low_mask_);
-  write_scalar(high_mask_);
-  write_scalar(num_buckets_);
-  write_scalar(num_overflow_pages_);
+  RETURN_IF_ERROR(out.Write(size_));
+  RETURN_IF_ERROR(out.Write(next_to_split_));
+  RETURN_IF_ERROR(out.Write(low_mask_));
+  RETURN_IF_ERROR(out.Write(high_mask_));
+  RETURN_IF_ERROR(out.Write(num_buckets_));
+  RETURN_IF_ERROR(out.Write(num_overflow_pages_));
   ASSIGN_OR_RETURN(auto hash, GetHash());
-  write_scalar(hash);
+  RETURN_IF_ERROR(out.Write(hash));
 
   // Write bucket tail list.
-  write_scalar(bucket_tails_.size());
+  RETURN_IF_ERROR(out.Write(bucket_tails_.size()));
   for (const auto& page_id : bucket_tails_) {
-    write_scalar(page_id);
+    RETURN_IF_ERROR(out.Write(page_id));
   }
 
   // Write free list.
-  write_scalar(overflow_page_free_list_.size());
+  RETURN_IF_ERROR(out.Write(overflow_page_free_list_.size()));
   for (const auto& page_id : overflow_page_free_list_) {
-    write_scalar(page_id);
+    RETURN_IF_ERROR(out.Write(page_id));
   }
   return absl::OkStatus();
 }
@@ -405,8 +393,8 @@ template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
 absl::Status FileIndex<K, I, F, page_size>::Close() {
   RETURN_IF_ERROR(Flush());
-  primary_pool_.Close();
-  overflow_pool_.Close();
+  RETURN_IF_ERROR(primary_pool_.Close());
+  RETURN_IF_ERROR(overflow_pool_.Close());
   return absl::OkStatus();
 }
 
@@ -418,11 +406,21 @@ void FileIndex<K, I, F, page_size>::Dump() const {
             << num_buckets_ << " buckets\n";
   for (std::size_t i = 0; i < num_buckets_; i++) {
     std::cout << "\tBucket " << i << ":\n";
-    Page* page = &primary_pool_.template Get<Page>(i);
+    auto result = primary_pool_.template Get<Page>(i);
+    if (!result.ok()) {
+      std::cout << "\t\tError: " << result.status() << "\n";
+      continue;
+    }
+    Page* page = result->AsPointer();
     while (page != nullptr) {
       page->Dump();
       auto next = page->GetNext();
-      page = next == 0 ? nullptr : &overflow_pool_.template Get<Page>(next);
+      result = overflow_pool_.template Get<Page>(next);
+      if (!result.ok()) {
+        std::cout << "\t\tError: " << result.status() << "\n";
+        break;
+      }
+      page = next == 0 ? nullptr : result.AsPointer();
     }
   }
 }
@@ -440,41 +438,42 @@ MemoryFootprint FileIndex<K, I, F, page_size>::GetMemoryFootprint() const {
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
-std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
-           typename FileIndex<K, I, F, page_size>::bucket_id_t,
-           const typename FileIndex<K, I, F, page_size>::Entry*>
+absl::StatusOr<std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
+                          typename FileIndex<K, I, F, page_size>::bucket_id_t,
+                          const typename FileIndex<K, I, F, page_size>::Entry*>>
 FileIndex<K, I, F, page_size>::FindInternal(const K& key) const {
   auto hash = key_hasher_(key);
   auto bucket = GetBucket(hash);
 
   // Search within that bucket.
-  Page* cur = &primary_pool_.template Get<Page>(bucket);
+  ASSIGN_OR_RETURN(Page * cur, primary_pool_.template Get<Page>(bucket));
   while (cur != nullptr) {
     if (auto entry = cur->Find(hash, key)) {
-      return {hash, bucket, entry};
+      return std::tuple{hash, bucket, entry};
     }
     PageId next = cur->GetNext();
-    cur = next != 0 ? &overflow_pool_.template Get<Page>(next) : nullptr;
+    ASSIGN_OR_RETURN(cur, overflow_pool_.template Get<Page>(next));
+    cur = next != 0 ? cur : nullptr;
   }
 
-  // Report a nullpointer if nothing was found.
-  return {hash, bucket, nullptr};
+  // Report a null pointer if nothing was found.
+  return std::tuple{hash, bucket, nullptr};
 }
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
-std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
-           typename FileIndex<K, I, F, page_size>::bucket_id_t,
-           typename FileIndex<K, I, F, page_size>::Entry*>
+absl::StatusOr<std::tuple<typename FileIndex<K, I, F, page_size>::hash_t,
+                          typename FileIndex<K, I, F, page_size>::bucket_id_t,
+                          typename FileIndex<K, I, F, page_size>::Entry*>>
 FileIndex<K, I, F, page_size>::FindInternal(const K& key) {
-  auto [hash, bucket, entry] =
-      const_cast<const FileIndex*>(this)->FindInternal(key);
-  return {hash, bucket, const_cast<Entry*>(entry)};
+  ASSIGN_OR_RETURN((auto [hash, bucket, entry]),
+                   const_cast<const FileIndex*>(this)->FindInternal(key));
+  return std::tuple{hash, bucket, const_cast<Entry*>(entry)};
 }
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
           std::size_t page_size>
-void FileIndex<K, I, F, page_size>::Split() {
+absl::Status FileIndex<K, I, F, page_size>::Split() {
   assert(next_to_split_ < num_buckets_);
 
   // When a full cycle is completed ...
@@ -491,14 +490,15 @@ void FileIndex<K, I, F, page_size>::Split() {
 
   // Load data from page to be split into memory.
   std::deque<Entry> entries;
-  Page* page = &primary_pool_.template Get<Page>(old_bucket_id);
+  ASSIGN_OR_RETURN(Page * page,
+                   primary_pool_.template Get<Page>(old_bucket_id));
   while (page != nullptr) {
     for (std::size_t i = 0; i < page->Size(); i++) {
       entries.push_back((*page)[i]);
     }
     auto next = page->GetNext();
     if (next != 0) {
-      page = &overflow_pool_.template Get<Page>(next);
+      ASSIGN_OR_RETURN(page, overflow_pool_.template Get<Page>(next));
     } else {
       page = nullptr;
     }
@@ -525,7 +525,7 @@ void FileIndex<K, I, F, page_size>::Split() {
   std::sort(new_bucket.begin(), new_bucket.end());
 
   // Write old entries into old bucket.
-  page = &primary_pool_.template Get<Page>(old_bucket_id);
+  ASSIGN_OR_RETURN(page, primary_pool_.template Get<Page>(old_bucket_id));
   primary_pool_.MarkAsDirty(old_bucket_id);
   int i = 0;
   ResetTail(old_bucket_id);
@@ -535,7 +535,7 @@ void FileIndex<K, I, F, page_size>::Split() {
       page->Resize(Page::kNumEntries);
       auto next = page->GetNext();
       assert(next != 0);
-      page = &overflow_pool_.template Get<Page>(next);
+      ASSIGN_OR_RETURN(page, overflow_pool_.template Get<Page>(next));
       overflow_pool_.MarkAsDirty(next);
       SetTail(old_bucket_id, next);
       i = 0;
@@ -551,7 +551,7 @@ void FileIndex<K, I, F, page_size>::Split() {
     if (next != 0) {
       page->SetNext(0);
       ReturnOverflowPage(next);
-      page = &overflow_pool_.template Get<Page>(next);
+      ASSIGN_OR_RETURN(page, overflow_pool_.template Get<Page>(next));
       page->Resize(0);
       overflow_pool_.MarkAsDirty(next);
     } else {
@@ -560,7 +560,7 @@ void FileIndex<K, I, F, page_size>::Split() {
   }
 
   // Write new entries into new bucket.
-  page = &primary_pool_.template Get<Page>(new_bucket_id);
+  ASSIGN_OR_RETURN(page, primary_pool_.template Get<Page>(new_bucket_id));
   i = 0;
   primary_pool_.MarkAsDirty(new_bucket_id);
   for (const Entry& entry : new_bucket) {
@@ -569,7 +569,7 @@ void FileIndex<K, I, F, page_size>::Split() {
       page->Resize(Page::kNumEntries);
       auto next = GetFreeOverflowPageId();
       page->SetNext(next);
-      page = &overflow_pool_.template Get<Page>(next);
+      ASSIGN_OR_RETURN(page, overflow_pool_.template Get<Page>(next));
       overflow_pool_.MarkAsDirty(next);
       assert(page->GetNext() == 0);
       SetTail(new_bucket_id, next);
@@ -579,6 +579,8 @@ void FileIndex<K, I, F, page_size>::Split() {
   }
   remaining = new_bucket.size() % Page::kNumEntries;
   page->Resize(remaining == 0 ? Page::kNumEntries : remaining);
+
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::index

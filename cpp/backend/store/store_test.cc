@@ -35,13 +35,13 @@ class StoreTest : public testing::Test {};
 TYPED_TEST_SUITE_P(StoreTest);
 
 TYPED_TEST_P(StoreTest, TypeProperties) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   EXPECT_TRUE(Store<std::decay_t<decltype(wrapper.GetStore())>>);
   EXPECT_TRUE(std::is_move_constructible_v<decltype(wrapper.GetStore())>);
 }
 
 TYPED_TEST_P(StoreTest, UninitializedValuesAreZero) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   EXPECT_THAT(store.Get(0), IsOkAndHolds(Value{}));
   EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{}));
@@ -49,7 +49,7 @@ TYPED_TEST_P(StoreTest, UninitializedValuesAreZero) {
 }
 
 TYPED_TEST_P(StoreTest, DataCanBeAddedAndRetrieved) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{}));
   EXPECT_THAT(store.Get(12), IsOkAndHolds(Value{}));
@@ -64,7 +64,7 @@ TYPED_TEST_P(StoreTest, DataCanBeAddedAndRetrieved) {
 }
 
 TYPED_TEST_P(StoreTest, EntriesCanBeUpdated) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   EXPECT_THAT(store.Get(10), IsOkAndHolds(Value{}));
   ASSERT_OK(store.Set(10, Value{12}));
@@ -74,13 +74,13 @@ TYPED_TEST_P(StoreTest, EntriesCanBeUpdated) {
 }
 
 TYPED_TEST_P(StoreTest, EmptyStoreHasZeroHash) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   EXPECT_THAT(store.GetHash(), IsOkAndHolds(Hash{}));
 }
 
 TYPED_TEST_P(StoreTest, HashesChangeWithUpdates) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
 
   ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
@@ -94,7 +94,7 @@ TYPED_TEST_P(StoreTest, HashesChangeWithUpdates) {
 }
 
 TYPED_TEST_P(StoreTest, HashesCoverMultiplePages) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
 
   ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
@@ -111,7 +111,7 @@ TYPED_TEST_P(StoreTest, HashesCoverMultiplePages) {
 
 TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
   // We only hard-code hashes for a subset of the configurations.
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   EXPECT_THAT(store.GetHash(), IsOkAndHolds(Hash{}));
 
@@ -187,7 +187,7 @@ TYPED_TEST_P(StoreTest, HashesRespectBranchingFactor) {
   // factor empty pages.
   static_assert(TypeParam::kPageSize % sizeof(Value) == 0);
   constexpr auto kElementsPerPage = TypeParam::kPageSize / sizeof(Value);
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
 
   // Initialize branching_factor * 2 pages.
@@ -224,7 +224,7 @@ TYPED_TEST_P(StoreTest, HashesRespectBranchingFactor) {
 
 TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
   constexpr int N = 100;
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   auto& reference = wrapper.GetReferenceStore();
 
@@ -244,11 +244,11 @@ TYPED_TEST_P(StoreTest, HashesEqualReferenceImplementation) {
 }
 
 TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   auto& reference = wrapper.GetReferenceStore();
 
-  // Implictitly create empty pages by asking for an element with a high ID.
+  // Implicitly create empty pages by asking for an element with a high ID.
   ASSERT_OK(reference.Get(10000));
   ASSERT_OK(store.Get(10000));
 
@@ -260,7 +260,7 @@ TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
 }
 
 TYPED_TEST_P(StoreTest, CanProduceMemoryFootprint) {
-  TypeParam wrapper;
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
   auto summary = store.GetMemoryFootprint();
   EXPECT_GT(summary.GetTotal(), Memory(0));

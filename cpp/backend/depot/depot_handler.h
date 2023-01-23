@@ -2,10 +2,12 @@
 
 #include <cstddef>
 
+#include "absl/status/statusor.h"
 #include "backend/depot/cache/cache.h"
 #include "backend/depot/depot.h"
 #include "backend/depot/memory/depot.h"
 #include "common/file_util.h"
+#include "common/status_util.h"
 
 namespace carmen::backend::depot {
 namespace {
@@ -29,10 +31,7 @@ class DepotHandlerBase {
 
   auto& GetReferenceDepot() { return reference_; }
 
-  std::filesystem::path GetDepotDirectory() const { return temp_dir_; }
-
  private:
-  TempDir temp_dir_;
   ReferenceDepot<K> reference_;
 };
 
@@ -47,43 +46,48 @@ template <Depot Depot, std::size_t branching_factor, std::size_t hash_box_size>
 class DepotHandler : public DepotHandlerBase<typename Depot::key_type,
                                              branching_factor, hash_box_size> {
  public:
-  using DepotHandlerBase<typename Depot::key_type, branching_factor,
-                         hash_box_size>::GetDepotDirectory;
-  DepotHandler()
-      : depot_(*Depot::Open(GetDepotDirectory(), branching_factor,
-                            hash_box_size)) {}
+  template <typename... Args>
+  static absl::StatusOr<DepotHandler> Create(Args&&... args) {
+    TempDir dir;
+    ASSIGN_OR_RETURN(auto depot,
+                     Depot::Open(dir.GetPath(), branching_factor, hash_box_size,
+                                 std::forward<Args>(args)...));
+    return DepotHandler(std::move(depot), std::move(dir));
+  }
+
   Depot& GetDepot() { return depot_; }
 
  private:
+  DepotHandler(Depot depot, TempDir dir)
+      : temp_dir_(std::move(dir)), depot_(std::move(depot)) {}
+
+  TempDir temp_dir_;
   Depot depot_;
-};
-
-// A specialization of a DepotHandler for InMemoryDepot handling ignoring the
-// creation/deletion of temporary files and directories.
-template <std::integral K, std::size_t branching_factor,
-          std::size_t hash_box_size>
-class DepotHandler<InMemoryDepot<K>, branching_factor, hash_box_size>
-    : public DepotHandlerBase<K, branching_factor, hash_box_size> {
- public:
-  DepotHandler() : depot_(branching_factor, hash_box_size) {}
-  InMemoryDepot<K>& GetDepot() { return depot_; }
-
- private:
-  InMemoryDepot<K> depot_;
 };
 
 // A specialization of a DepotHandler for Cached depot handling ignoring the
 // creation/deletion of temporary files and directories.
-template <Depot Depot, std::size_t branching_factor, std::size_t num_hash_boxes>
-class DepotHandler<Cached<Depot>, branching_factor, num_hash_boxes>
+template <Depot Depot, std::size_t branching_factor, std::size_t hash_box_size>
+class DepotHandler<Cached<Depot>, branching_factor, hash_box_size>
     : public DepotHandlerBase<typename Depot::key_type, branching_factor,
-                              num_hash_boxes> {
+                              hash_box_size> {
  public:
-  DepotHandler() : depot_(std::move(nested_.GetDepot())) {}
+  template <typename... Args>
+  static absl::StatusOr<DepotHandler> Create(Args&&... args) {
+    TempDir dir;
+    ASSIGN_OR_RETURN(auto depot,
+                     Depot::Open(dir.GetPath(), branching_factor, hash_box_size,
+                                 std::forward<Args>(args)...));
+    return DepotHandler(std::move(depot), std::move(dir));
+  }
+
   Cached<Depot>& GetDepot() { return depot_; }
 
  private:
-  DepotHandler<Depot, branching_factor, num_hash_boxes> nested_;
+  DepotHandler(Depot nested, TempDir dir)
+      : temp_dir_(std::move(dir)), depot_(std::move(nested)) {}
+
+  TempDir temp_dir_;
   Cached<Depot> depot_;
 };
 

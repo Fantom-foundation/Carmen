@@ -2,12 +2,14 @@
 
 #include <cstddef>
 
+#include "absl/status/statusor.h"
 #include "backend/index/cache/cache.h"
 #include "backend/index/file/index.h"
 #include "backend/index/index.h"
 #include "backend/index/leveldb/multi_db/index.h"
 #include "backend/index/leveldb/single_db/index.h"
 #include "backend/index/memory/index.h"
+#include "backend/structure.h"
 #include "common/file_util.h"
 #include "common/type.h"
 
@@ -35,68 +37,49 @@ template <Index Index>
 class IndexHandler : public IndexHandlerBase<typename Index::key_type,
                                              typename Index::value_type> {
  public:
-  IndexHandler() : index_() {}
+  template <typename... Args>
+  static absl::StatusOr<IndexHandler> Create(Args&&... args) {
+    TempDir dir;
+    Context ctx;
+    ASSIGN_OR_RETURN(auto index, Index::Open(ctx, dir.GetPath(),
+                                             std::forward<Args>(args)...));
+    return IndexHandler(std::move(ctx), std::move(dir), std::move(index));
+  }
+
   Index& GetIndex() { return index_; }
 
  private:
+  IndexHandler(Context ctx, TempDir dir, Index idx)
+      : ctx_(std::move(ctx)),
+        temp_dir_(std::move(dir)),
+        index_(std::move(idx)){};
+
+  Context ctx_;
+  TempDir temp_dir_;
   Index index_;
-};
-
-// A specialization of the generic IndexHandler for cached index
-// implementations.
-template <Index Index>
-class IndexHandler<Cached<Index>>
-    : public IndexHandlerBase<typename Index::key_type,
-                              typename Index::value_type> {
- public:
-  IndexHandler() : index_(std::move(nested_.GetIndex())) {}
-  Cached<Index>& GetIndex() { return index_; }
-
- private:
-  IndexHandler<Index> nested_;
-  Cached<Index> index_;
-};
-
-// A specialization of the generic IndexHandler for file-based implementations.
-template <Trivial K, std::integral I, std::size_t page_size>
-class IndexHandler<FileIndex<K, I, SingleFile, page_size>>
-    : public IndexHandlerBase<K, I> {
- public:
-  using File = typename FileIndex<K, I, SingleFile, page_size>::File;
-  IndexHandler() : index_(dir_.GetPath()) {}
-
-  FileIndex<K, I, SingleFile, page_size>& GetIndex() { return index_; }
-
- private:
-  TempDir dir_;
-  FileIndex<K, I, SingleFile, page_size> index_;
 };
 
 // A specialization of the generic IndexHandler for leveldb implementation.
 template <Trivial K, std::integral I>
 class IndexHandler<LevelDbKeySpace<K, I>> : public IndexHandlerBase<K, I> {
  public:
-  IndexHandler()
-      : index_((*SingleLevelDbIndex::Open(dir_.GetPath()))
-                   .template KeySpace<K, I>('t')) {}
+  template <typename... Args>
+  static absl::StatusOr<IndexHandler> Create(Args&&... args) {
+    TempDir dir;
+    ASSIGN_OR_RETURN(
+        auto index,
+        SingleLevelDbIndex::Open(dir.GetPath(), std::forward<Args>(args)...));
+    return IndexHandler(std::move(dir), index.template KeySpace<K, I>('t'));
+  }
+
   LevelDbKeySpace<K, I>& GetIndex() { return index_; }
 
  private:
-  TempDir dir_;
+  IndexHandler(TempDir dir, LevelDbKeySpace<K, I> idx)
+      : temp_dir_(std::move(dir)), index_(std::move(idx)){};
+
+  TempDir temp_dir_;
   LevelDbKeySpace<K, I> index_;
 };
-
-// A specialization of the generic IndexHandler for leveldb implementation.
-template <Trivial K, std::integral I>
-class IndexHandler<MultiLevelDbIndex<K, I>> : public IndexHandlerBase<K, I> {
- public:
-  IndexHandler() : index_(*MultiLevelDbIndex<K, I>::Open(dir_.GetPath())) {}
-  MultiLevelDbIndex<K, I>& GetIndex() { return index_; }
-
- private:
-  TempDir dir_;
-  MultiLevelDbIndex<K, I> index_;
-};
-
 }  // namespace
 }  // namespace carmen::backend::index

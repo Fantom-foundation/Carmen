@@ -2,6 +2,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "cerrno"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
 
@@ -10,7 +11,9 @@ namespace {
 using ::testing::_;
 using ::testing::IsOk;
 using ::testing::Not;
+using ::testing::StartsWith;
 using ::testing::StatusIs;
+using ::testing::StrEq;
 
 absl::Status Ok() { return absl::OkStatus(); }
 
@@ -89,6 +92,34 @@ TEST(StatusMacroTest, AssignOrReturnCanReturnPlainStatus) {
               StatusIs(absl::StatusCode::kInternal, _));
 }
 
+TEST(ReferenceWraperTest, ReferenceAddressesAreEqual) {
+  int x = 10;
+  auto wrapper = ReferenceWrapper<int>(x);
+  EXPECT_EQ(&x, &wrapper.AsReference());
+}
+
+TEST(ReferenceWraperTest, PointsToSameValue) {
+  int x = 10;
+  auto wrapper = ReferenceWrapper<int>(x);
+  EXPECT_EQ(&x, wrapper.AsPointer());
+}
+
+TEST(StatusWithSystemErrorTest, HasNoSystemError) {
+  // make sure the errno is set to zero
+  auto status = GetStatusWithSystemError(absl::StatusCode::kInvalidArgument, 0,
+                                         "Invalid arguments.");
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInvalidArgument,
+                               StrEq("Invalid arguments.")));
+}
+
+TEST(StatusWithSystemErrorTest, HasSystemError) {
+  auto status = GetStatusWithSystemError(absl::StatusCode::kInternal, ENOENT,
+                                         "Internal error.");
+  // assure that error message is appended.
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal,
+                               StartsWith("Internal error. Error:")));
+}
+
 absl::StatusOr<std::pair<int, int>> CreatePair() { return std::pair{1, 2}; }
 
 absl::StatusOr<int> AssignOrReturnWithDecomposition() {
@@ -99,5 +130,4 @@ absl::StatusOr<int> AssignOrReturnWithDecomposition() {
 TEST(StatusMacroTest, AssignCanHandleDecomposition) {
   EXPECT_THAT(AssignOrReturnWithDecomposition(), 3);
 }
-
 }  // namespace

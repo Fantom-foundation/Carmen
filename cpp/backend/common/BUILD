@@ -36,6 +36,11 @@ cc_library(
     deps = [
         ":page",
         ":page_id",
+        "//common:status_util",
+        "//common:fstream",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -45,6 +50,7 @@ cc_test(
     deps = [
         ":file",
         "//common:file_util",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -56,8 +62,10 @@ cc_binary(
     deps = [
         ":file",
         "//common:file_util",
-        "//third_party/gperftools:profiler",
+        "//common:status_test_util",
         "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_absl//absl/status:statusor",
+        "//third_party/gperftools:profiler",
     ],
 )
 
@@ -100,6 +108,9 @@ cc_library(
         ":file",
         ":page_id",
         "//common:memory_usage",
+        "//common:status_util",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
@@ -110,6 +121,7 @@ cc_test(
     deps = [
         ":page",
         ":page_pool",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -121,9 +133,11 @@ cc_binary(
         ":access_pattern",
         ":eviction_policy",
         ":page_pool",
+        "//common:status_test_util",
         "//third_party/gperftools:profiler",
         "@com_github_google_benchmark//:benchmark_main",
     ],
+    testonly = True,
 )
 
 cc_library(
@@ -134,6 +148,7 @@ cc_library(
         ":page",
         ":page_id",
         ":page_pool",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -144,5 +159,10 @@ cc_test(
         ":page_manager",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
+        "@com_github_google_benchmark//:benchmark_main",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
+        "//third_party/gperftools:profiler",
     ],
+    testonly = True,
 )

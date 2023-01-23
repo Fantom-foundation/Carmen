@@ -15,6 +15,7 @@ namespace {
 
 using ::testing::_;
 using ::testing::ElementsAreArray;
+using ::testing::IsOkAndHolds;
 using ::testing::Return;
 using ::testing::StatusIs;
 
@@ -33,10 +34,8 @@ TEST(CachedDepot, CachedKeysAreNotFetched) {
   EXPECT_CALL(mock, Get(10))
       .WillOnce(Return(absl::StatusOr<std::span<const std::byte>>(val)));
 
-  ASSERT_OK_AND_ASSIGN(auto result, depot.Get(10));
-  EXPECT_THAT(result, ElementsAreArray(val));
-  ASSERT_OK_AND_ASSIGN(result, depot.Get(10));
-  EXPECT_THAT(result, ElementsAreArray(val));
+  EXPECT_THAT(depot.Get(10), IsOkAndHolds(ElementsAreArray(val)));
+  EXPECT_THAT(depot.Get(10), IsOkAndHolds(ElementsAreArray(val)));
 }
 
 TEST(CachedDepot, MissingEntriesAreCached) {
@@ -62,10 +61,8 @@ TEST(CachedDepot, HashesAreCached) {
   Hash hash{0x01, 0x23};
   EXPECT_CALL(mock, GetHash()).WillOnce(Return(absl::StatusOr<Hash>(hash)));
 
-  ASSERT_OK_AND_ASSIGN(auto result, depot.GetHash());
-  EXPECT_EQ(hash, result);
-  ASSERT_OK_AND_ASSIGN(result, depot.GetHash());
-  EXPECT_EQ(hash, result);
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash));
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash));
 }
 
 TEST(CachedDepot, AddNewElementInvalidatesHash) {
@@ -82,18 +79,14 @@ TEST(CachedDepot, AddNewElementInvalidatesHash) {
       .WillOnce(Return(absl::StatusOr<Hash>(hash_a)))
       .WillOnce(Return(absl::StatusOr<Hash>(hash_b)));
 
-  ASSERT_OK_AND_ASSIGN(auto result, depot.GetHash());
-  EXPECT_EQ(hash_a, result);
-  ASSERT_OK_AND_ASSIGN(result, depot.GetHash());
-  EXPECT_EQ(hash_a, result);
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash_a));
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash_a));
 
   EXPECT_CALL(mock, Set(10, _)).WillOnce(Return(absl::OkStatus()));
   ASSERT_OK(depot.Set(10, val));
 
-  ASSERT_OK_AND_ASSIGN(result, depot.GetHash());
-  EXPECT_EQ(hash_b, result);
-  ASSERT_OK_AND_ASSIGN(result, depot.GetHash());
-  EXPECT_EQ(hash_b, result);
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash_b));
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(hash_b));
 }
 
 TEST(CachedDepot, CacheSizeLimitIsEnforced) {
