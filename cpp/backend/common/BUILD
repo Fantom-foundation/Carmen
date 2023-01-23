@@ -26,6 +26,7 @@ cc_test(
 cc_library(
     name = "access_pattern",
     hdrs = ["access_pattern.h"],
+    visibility = ["//backend:__subpackages__"],
 )
 
 cc_library(

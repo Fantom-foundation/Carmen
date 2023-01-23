@@ -21,3 +21,17 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_binary(
+    name = "sqlite_benchmark",
+    testonly = True,
+    srcs = ["sqlite_benchmark.cc"],
+    deps = [
+        ":sqlite",
+        "//backend/common:access_pattern",
+        "//common:file_util",
+        "//common:status_test_util",
+        "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+)
