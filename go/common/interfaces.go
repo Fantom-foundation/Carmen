@@ -75,32 +75,6 @@ type ErrMap[K comparable, V any] interface {
 	Clear() error
 }
 
-// BulkInsert is a map extension that has an extra method to fill this collection with initial key-value pairs
-// This method does not assure any properties on the underlaying map
-// such as uniqueness of the keys, their sort, etc. hold.
-// It is expected to be used for initial insertion of data from another source
-// that already has expected properties, such as uniqueness, or sort of the keys
-type BulkInsert[K comparable, V any] interface {
-	// BulkInsert only inserts the input key-value pairs at the map collection.
-	// It should be used only to insert keys that already have properties expected from
-	// the resulting map, i.e. uniqueness of the keys, potentially their order.
-	// It should be used for fast filling the map from a data source that already
-	// has expected properties and thus their computation by standard iterative Put
-	// would be redundant.
-	BulkInsert(data []MapEntry[K, V]) error
-
-	// GetEntries returns a slice with all entries from the map.
-	// If possible, it should provide direct data, not their copy, for the fastest possible access
-	GetEntries() ([]MapEntry[K, V], error)
-}
-
-// BulkInsertMap is a union of ErrMap, MemoryFootprintProvider and BulkInsert
-type BulkInsertMap[K comparable, V any] interface {
-	ErrMap[K, V]
-	MemoryFootprintProvider
-	BulkInsert[K, V]
-}
-
 // MapEntry wraps a map key-value par
 type MapEntry[K comparable, V any] struct {
 	Key K
@@ -110,6 +84,3 @@ type MapEntry[K comparable, V any] struct {
 func (e MapEntry[K, V]) String() string {
 	return fmt.Sprintf("Entry: %v -> %v", e.Key, e.Val)
 }
-
-// BulkInsertMapFactory creates a new BulkInsertMap with the given parameters
-type BulkInsertMapFactory[K comparable, V any] func(bucket, capacity int) BulkInsertMap[K, V]

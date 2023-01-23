@@ -7,6 +7,12 @@ import (
 
 const sortedMapCapacity = 5
 
+var (
+	A = Address{0xAA}
+	B = Address{0xBB}
+	C = Address{0xCC}
+)
+
 func TestSortedMapIsMap(t *testing.T) {
 	var instance SortedMap[Address, uint32]
 	var _ Map[Address, uint32] = &instance
@@ -56,12 +62,6 @@ func TestSortedMapGetPut(t *testing.T) {
 }
 
 func TestSortedMapBulk(t *testing.T) {
-	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
-
-	if _, exists := h.Get(A); exists {
-		t.Errorf("Value is not correct")
-	}
-
 	max := uint32(102)
 	data := make([]MapEntry[Address, uint32], max)
 	for i := uint32(0); i < max; i++ {
@@ -69,7 +69,7 @@ func TestSortedMapBulk(t *testing.T) {
 		data[i] = MapEntry[Address, uint32]{address, i + 1}
 	}
 
-	h.BulkInsert(data)
+	h := InitSortedMap[Address, uint32](sortedMapCapacity, data, AddressComparator{})
 
 	if size := h.Size(); size != int(max) {
 		t.Errorf("Size does not match: %d != %d", size, max)
@@ -86,52 +86,6 @@ func TestSortedMapBulk(t *testing.T) {
 		t.Errorf("Size does not match: %d != %d", size, max)
 	}
 
-}
-
-func TestSortedMapBulkMultipleTimes(t *testing.T) {
-	b := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
-
-	if _, exists := b.Get(A); exists {
-		t.Errorf("Value is not correct")
-	}
-
-	max := uint32(20)
-	data := make([]MapEntry[Address, uint32], 0, max)
-	for i := uint32(0); i < max; i++ {
-		address := Address{byte(i + 1)}
-		data = append(data, MapEntry[Address, uint32]{address, i + 1})
-	}
-
-	b.BulkInsert(data)
-
-	nextMax := uint32(30)
-	nextData := make([]MapEntry[Address, uint32], 0, nextMax)
-	for i := max; i < nextMax+max; i++ {
-		address := Address{byte(i + 1)}
-		nextData = append(nextData, MapEntry[Address, uint32]{address, i + 1})
-	}
-
-	b.BulkInsert(nextData)
-
-	allData := append(data, nextData...)
-	// inserted data must much returned data
-	for i, entry := range b.GetEntries() {
-		if entry.Key != allData[i].Key || entry.Val != allData[i].Val {
-			t.Errorf("Entries do not match: %v, %d != %v, %d", entry.Key, entry.Val, allData[i].Key, allData[i].Val)
-		}
-	}
-
-	if size := len(b.GetEntries()); size != int(max+nextMax) {
-		t.Errorf("Size does not match: %d != %d", size, max+nextMax)
-	}
-
-	// pickup values in order
-	arr := make([]Address, 0, max)
-	b.ForEach(func(k Address, v uint32) {
-		arr = append(arr, k)
-	})
-
-	AssertArraySorted[Address](t, arr, AddressComparator{})
 }
 
 func TestSortedMapInverseGetPut(t *testing.T) {
