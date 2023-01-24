@@ -1,7 +1,6 @@
 #pragma once
 
 #include <concepts>
-#include <filesystem>
 #include <fstream>
 #include <utility>
 
@@ -10,6 +9,7 @@
 #include "absl/strings/str_format.h"
 #include "backend/common/file.h"
 #include "backend/structure.h"
+#include "common/fstream.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
@@ -17,7 +17,7 @@
 namespace carmen::backend::multimap {
 
 // Implements an in-memory version of a MultiMap using a btree based set.
-// To facilitate effecient search, only integral key types are supported.
+// To facilitate efficient search, only integral key types are supported.
 // All index data for this implementation is loaded upon opening and resides
 // fully in memory.
 template <std::integral K, Trivial V>
@@ -37,27 +37,20 @@ class InMemoryMultiMap {
     }
 
     // Load data from file.
-    std::fstream in(file, std::ios::binary | std::ios::in);
-    auto check_stream = [&]() -> absl::Status {
-      if (in.good()) return absl::OkStatus();
-      return absl::InternalError(absl::StrFormat(
-          "Failed to read data from file %s: %s", file, std::strerror(errno)));
-    };
+    ASSIGN_OR_RETURN(auto in,
+                     FStream::Open(file, std::ios::binary | std::ios::in));
 
     uint64_t size;
-    in.read(reinterpret_cast<char*>(&size), 8);
-    RETURN_IF_ERROR(check_stream());
+    RETURN_IF_ERROR(in.Read(size));
 
     absl::btree_set<std::pair<K, V>> set;
     for (uint64_t i = 0; i < size; i++) {
       std::pair<K, V> entry;
-      in.read(reinterpret_cast<char*>(&entry), sizeof(entry));
-      RETURN_IF_ERROR(check_stream());
+      RETURN_IF_ERROR(in.Read(entry));
       set.emplace(std::move(entry));
     }
 
-    in.close();
-    RETURN_IF_ERROR(check_stream());
+    RETURN_IF_ERROR(in.Close());
 
     return InMemoryMultiMap(std::move(set), std::move(file));
   }
@@ -82,13 +75,13 @@ class InMemoryMultiMap {
   }
 
   // Erases a single key/value entry and indicates whether the entry has been
-  // present. This operaton never fails.
+  // present. This operation never fails.
   absl::StatusOr<bool> Erase(const K& key, const V& value) {
     return set_.erase({key, value}) != 0;
   }
 
   // Applies the given operation on each value associated to the given key.
-  // This operaton never fails.
+  // This operation never fails.
   template <typename Op>
   absl::Status ForEach(const K& key, const Op& op) const {
     auto [from, to] = GetKeyRange(key);
@@ -103,24 +96,17 @@ class InMemoryMultiMap {
     // Start by creating the directory.
     RETURN_IF_ERROR(CreateDirectory(file_.parent_path()));
 
-    std::fstream out(file_, std::ios::binary | std::ios::out);
-    auto check_stream = [&]() -> absl::Status {
-      if (out.good()) return absl::OkStatus();
-      return absl::InternalError(absl::StrFormat(
-          "Failed to write data to file %s: %s", file_, std::strerror(errno)));
-    };
+    ASSIGN_OR_RETURN(auto out,
+                     FStream::Open(file_, std::ios::binary | std::ios::out));
 
     uint64_t num_elements = set_.size();
-    out.write(reinterpret_cast<const char*>(&num_elements), 8);
-    RETURN_IF_ERROR(check_stream());
+    RETURN_IF_ERROR(out.Write(num_elements));
 
     for (const auto& cur : set_) {
-      out.write(reinterpret_cast<const char*>(&cur), sizeof(cur));
-      RETURN_IF_ERROR(check_stream());
+      RETURN_IF_ERROR(out.Write(cur));
     }
 
-    out.close();
-    return check_stream();
+    return out.Close();
   }
 
   // Flushes all data to the underlying file.
@@ -148,9 +134,9 @@ class InMemoryMultiMap {
                    std::filesystem::path file)
       : set_(std::move(set)), file_(std::move(file)) {}
 
-  // A internal utility to get the range of the given key. The result is a pair
-  // of iterators ranging from the begin (inclusive) to the end (exclusive) of
-  // the corresponding key range.
+  // An internal utility to get the range of the given key. The result is a pair
+  // of iterators ranging from the beginning (inclusive) to the end (exclusive)
+  // of the corresponding key range.
   auto GetKeyRange(const K& key) const {
     return std::make_pair(set_.lower_bound({key, V{}}),
                           set_.lower_bound({key + 1, V{}}));
