@@ -1,7 +1,6 @@
 #pragma once
 
 #include <concepts>
-#include <fstream>
 
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
