@@ -31,6 +31,37 @@ class ByteValue {
               std::begin(data_));
   }
 
+  // Provide mutable access to the individual bytes.
+  std::uint8_t& operator[](std::size_t index) { return data_[index]; }
+
+  // Provide read-only access to the individual bytes.
+  std::uint8_t operator[](std::size_t index) const { return data_[index]; }
+
+  // Enables the implicit conversion into fixed-length spans of bytes.
+  operator std::span<const std::byte, N>() const {
+    return std::as_bytes(std::span(data_));
+  }
+
+  // Enables the implicit conversion into spans of bytes with dynamic extend.
+  operator std::span<const std::byte>() const {
+    return std::as_bytes(std::span(data_));
+  }
+
+  // Sets the bytes of this value to the provided data.
+  void SetBytes(std::span<const std::byte, N> data) {
+    std::memcpy(&data_[0], data.data(), data.size());
+  }
+
+  // Sets the bytes of this value to the data provided. Elements in the input
+  // exceeding the size of this ByteValue are ignored. If the input is too
+  // short, the rest of the bytes are filled with zero.
+  void SetBytes(std::span<const std::byte> data) {
+    std::memcpy(&data_[0], data.data(), std::min(data.size(), data_.size()));
+    if (data.size() < data_.size()) {
+      std::memset(&data_[0] + data.size(), 0, data_.size() - data.size());
+    }
+  }
+
   // Overload of << operator to make class printable.
   friend std::ostream& operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {

@@ -66,6 +66,56 @@ TEST(ByteValueTest, CanBeUsedInFlatHashSet) {
   EXPECT_FALSE(set.contains(b));
 }
 
+TEST(ByteValueTest, ValuesCanBeAccessedUsingSubscripts) {
+  ByteValue<3> a{};
+  a[0] = 1;
+  a[1] = 2;
+  a[2] = 3;
+  const ByteValue<3> b = a;
+  EXPECT_EQ(b[0], 1);
+  EXPECT_EQ(b[1], 2);
+  EXPECT_EQ(b[2], 3);
+}
+
+TEST(ByteValueTest, CanBeConvertedToByteSpans) {
+  ByteValue<23> a{};
+  std::span<const std::byte> span_a = a;
+  std::span<const std::byte, 23> span_b = a;
+  EXPECT_EQ(span_a.size(), span_b.size());
+  EXPECT_EQ(span_a.data(), span_b.data());
+  EXPECT_EQ(span_a.data(), reinterpret_cast<const std::byte*>(&a[0]));
+}
+
+TEST(ByteValueTest, ValuesCanBeUpdatedUsingSetByte) {
+  ByteValue<3> a{};
+  std::span<const std::byte, 3> span_fixed = a;
+  std::span<const std::byte> span_variable = a;
+
+  a[0] = 1;
+  a[1] = 2;
+  a[2] = 3;
+  ByteValue<3> b;
+  b.SetBytes(span_fixed);
+  EXPECT_EQ(a, b);
+
+  a[1] = 4;
+  EXPECT_NE(a, b);
+  b.SetBytes(span_variable);
+  EXPECT_EQ(a, b);
+}
+
+TEST(ByteValueTest, ValuesCanBeUpdatedUsingDifferentLengthSpan) {
+  ByteValue<3> a{};
+
+  ByteValue<4> b{0x01, 0x02, 0x03, 0x04};
+  a.SetBytes(b);
+  EXPECT_EQ(a, (ByteValue<3>{0x01, 0x02, 0x03}));
+
+  ByteValue<2> c{0x04, 0x05};
+  a.SetBytes(c);
+  EXPECT_EQ(a, (ByteValue<3>{0x04, 0x05, 0x00}));
+}
+
 TEST(HashTest, SizeIsCompact) { EXPECT_EQ(kHashLength, sizeof(Hash)); }
 
 TEST(HashTest, TypeProperties) {
