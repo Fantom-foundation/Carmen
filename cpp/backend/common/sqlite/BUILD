@@ -2,7 +2,7 @@ cc_library(
     name = "sqlite",
     srcs = ["sqlite.cc"],
     hdrs = ["sqlite.h"],
-    visibility = ["//backend:__subpackages__"],
+    visibility = ["//visibility:public"],
     deps = [
         "//common:status_util",
         "@com_github_rockwotj_sqlite_bazel//:sqlite3",
