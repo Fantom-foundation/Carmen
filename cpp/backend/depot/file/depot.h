@@ -1,7 +1,6 @@
 #pragma once
 
 #include <concepts>
-#include <fstream>
 
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
@@ -10,6 +9,7 @@
 #include "backend/common/file.h"
 #include "backend/store/hash_tree.h"
 #include "backend/structure.h"
+#include "common/fstream.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -44,28 +44,18 @@ class FileDepot {
     auto offset_file = path / "offset.dat";
     auto data_file = path / "data.dat";
 
-    // Opening the file write-only first creates the file in case it does not
-    // exist.
-    if (!std::filesystem::exists(offset_file)) {
-      std::fstream fs(offset_file, std::ios::binary | std::ios::out);
-      fs.close();
-    }
-    if (!std::filesystem::exists(data_file)) {
-      std::fstream fs(data_file, std::ios::binary | std::ios::out);
-      fs.close();
-    }
+    // Create files for data and offsets.
+    RETURN_IF_ERROR(CreateFile(offset_file));
+    RETURN_IF_ERROR(CreateFile(data_file));
 
-    // Open the files for reading and writing.
-    std::fstream offset_fs(offset_file,
-                           std::ios::binary | std::ios::in | std::ios::out);
-    if (!offset_fs.is_open())
-      return absl::InternalError("Failed to open offset file.");
-    std::fstream data_fs(data_file,
-                         std::ios::binary | std::ios::in | std::ios::out);
-    if (!data_fs.is_open()) {
-      offset_fs.close();
-      return absl::InternalError("Failed to open data file.");
-    }
+    ASSIGN_OR_RETURN(
+        auto offset_fs,
+        FStream::Open(offset_file,
+                      std::ios::binary | std::ios::in | std::ios::out));
+
+    ASSIGN_OR_RETURN(auto data_fs,
+                     FStream::Open(data_file, std::ios::binary | std::ios::in |
+                                                  std::ios::out));
 
     auto depot =
         FileDepot(path / "hash.dat", std::move(offset_fs), std::move(data_fs),
@@ -83,40 +73,34 @@ class FileDepot {
   FileDepot(FileDepot&&) noexcept = default;
 
   // Depot is closed when the instance is destroyed.
-  ~FileDepot() { Close().IgnoreError(); }
+  ~FileDepot() {
+    if (auto status = Close(); !status.ok()) {
+      std::cout << "WARNING: Failed to close Depot, " << status << std::endl;
+    }
+  }
 
   // Updates the value associated to the given key. The value is copied
   // into the depot.
   absl::Status Set(const K& key, std::span<const std::byte> data) {
-    // clear the error state
-    data_fs_->clear();
-    offset_fs_->clear();
-
     // Move to the end of the file and get the position.
-    data_fs_->seekp(0, std::ios::end);
-    auto eof_pos = data_fs_->tellp();
-    if (eof_pos == -1)
-      return absl::InternalError("Failed to get offset in data file");
+    RETURN_IF_ERROR(data_fs_->Seekp(0, std::ios::end));
+    ASSIGN_OR_RETURN(auto eof_pos, data_fs_->Tellp());
 
     // Write data to the end of the file.
-    data_fs_->write(reinterpret_cast<const char*>(data.data()), data.size());
-    if (!data_fs_->good())
-      return absl::InternalError("Failed to write data to data file");
+    RETURN_IF_ERROR(data_fs_->Write(data));
 
     // Move to the position of the key in the offset file.
-    offset_fs_->seekp(GetOffsetPosition(key), std::ios::beg);
+    RETURN_IF_ERROR(offset_fs_->Seekp(GetOffsetPosition(key), std::ios::beg));
 
     // Prepare data to write to the offset file.
     OffsetAndSize write_data{static_cast<Offset>(eof_pos),
                              static_cast<Size>(data.size())};
 
     // Write data to the offset file.
-    offset_fs_->write(reinterpret_cast<const char*>(&write_data),
-                      sizeof(write_data));
-    if (!offset_fs_->good())
-      return absl::InternalError("Failed to write size to offset file");
+    RETURN_IF_ERROR(offset_fs_->Write(write_data));
 
     hashes_.MarkDirty(GetBoxHashGroup(key));
+
     return absl::OkStatus();
   }
 
@@ -124,31 +108,26 @@ class FileDepot {
   // until the next call to this function. If no values has been previously
   // set using the Set(..) function above, not found status is returned.
   absl::StatusOr<std::span<const std::byte>> Get(const K& key) const {
-    ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key, *offset_fs_));
+    ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key));
     if (metadata.size == 0) return std::span<const std::byte>();
-
-    // clear the error state
-    data_fs_->clear();
 
     // prepare the buffer
     get_data_.resize(metadata.size);
 
     // seek to position in data file
-    data_fs_->seekg(metadata.offset, std::ios::beg);
+    RETURN_IF_ERROR(data_fs_->Seekg(metadata.offset, std::ios::beg));
 
     // read actual data
-    data_fs_->read(get_data_.data(), metadata.size);
-    if (!data_fs_->good()) return absl::InternalError("Failed to read data");
+    RETURN_IF_ERROR(data_fs_->Read(std::span(get_data_.data(), metadata.size)));
 
-    return std::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(get_data_.data()), metadata.size);
+    return get_data_;
   }
 
   // Retrieves the size of data associated to the given key. If no values has
   // been previously set using the Set(..) function above, not found status
   // is returned.
   absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
-    ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key, *offset_fs_));
+    ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key));
     if (metadata.size == 0) return absl::NotFoundError("Key not found");
     return metadata.size;
   }
@@ -158,22 +137,20 @@ class FileDepot {
 
   // Flush all pending changes to disk.
   absl::Status Flush() {
-    if ((data_fs_ && data_fs_->is_open()) &&
-        (offset_fs_ && offset_fs_->is_open())) {
+    if (data_fs_ && data_fs_->IsOpen() && offset_fs_ && offset_fs_->IsOpen()) {
       RETURN_IF_ERROR(hashes_.SaveToFile(hash_file_));
-      data_fs_->flush();
-      offset_fs_->flush();
+      RETURN_IF_ERROR(data_fs_->Flush());
+      RETURN_IF_ERROR(offset_fs_->Flush());
     }
     return absl::OkStatus();
   }
 
   // Close the depot.
   absl::Status Close() {
-    if ((data_fs_ && data_fs_->is_open()) &&
-        (offset_fs_ && offset_fs_->is_open())) {
+    if (data_fs_ && data_fs_->IsOpen() && offset_fs_ && offset_fs_->IsOpen()) {
       RETURN_IF_ERROR(Flush());
-      data_fs_->close();
-      offset_fs_->close();
+      RETURN_IF_ERROR(data_fs_->Close());
+      RETURN_IF_ERROR(offset_fs_->Close());
     }
     return absl::OkStatus();
   }
@@ -196,13 +173,12 @@ class FileDepot {
     Size size = 0;
   } ABSL_ATTRIBUTE_PACKED;
 
-  FileDepot(std::filesystem::path hash_file, std::fstream offset_fs,
-            std::fstream data_fs, std::size_t hash_branching_factor,
-            std::size_t hash_box_size)
+  FileDepot(std::filesystem::path hash_file, FStream offset_fs, FStream data_fs,
+            std::size_t hash_branching_factor, std::size_t hash_box_size)
       : hash_box_size_(hash_box_size),
         hash_file_(std::move(hash_file)),
-        offset_fs_(std::make_unique<std::fstream>(std::move(offset_fs))),
-        data_fs_(std::make_unique<std::fstream>(std::move(data_fs))),
+        offset_fs_(std::make_unique<FStream>(std::move(offset_fs))),
+        data_fs_(std::make_unique<FStream>(std::move(data_fs))),
         hashes_(std::make_unique<PageProvider>(*data_fs_, *offset_fs_,
                                                hash_box_size_),
                 hash_branching_factor) {
@@ -215,21 +191,17 @@ class FileDepot {
   }
 
   // Get offset and size for given key from the offset file into the data file.
-  static absl::StatusOr<OffsetAndSize> GetOffsetAndSize(
-      const K& key, std::fstream& offset_fs) {
-    // clear the error state
-    offset_fs.clear();
-
+  absl::StatusOr<OffsetAndSize> GetOffsetAndSize(const K& key) const {
     // Seek to the position of the key.
-    offset_fs.seekg(GetOffsetPosition(key), std::ios::beg);
+    RETURN_IF_ERROR(offset_fs_->Seekg(GetOffsetPosition(key), std::ios::beg));
 
     // Read offset and size.
     OffsetAndSize metadata;
-    offset_fs.read(reinterpret_cast<char*>(&metadata), sizeof(metadata));
+    ASSIGN_OR_RETURN(auto length,
+                     offset_fs_->ReadUntilEof(std::span(&metadata, 1)));
 
-    if (offset_fs.eof()) return absl::NotFoundError("Key not found");
-    if (offset_fs.fail())
-      return absl::InternalError("Failed to read offset and size");
+    // If no data were read, then entry does not exist.
+    if (length == 0) return absl::NotFoundError("Key not found");
 
     return metadata;
   }
@@ -242,7 +214,7 @@ class FileDepot {
   // A page source providing the owned hash tree access to the stored pages.
   class PageProvider : public store::PageSource {
    public:
-    PageProvider(std::fstream& data_fs, std::fstream& offset_fs,
+    PageProvider(FStream& data_fs, FStream& offset_fs,
                  std::size_t hash_box_size)
         : data_fs_(data_fs),
           offset_fs_(offset_fs),
@@ -255,20 +227,14 @@ class FileDepot {
       const std::size_t lengths_size = hash_box_size_ * sizeof(Size);
 
       // read all offsets and sizes for the hash group
-      offset_fs_.clear();
-      offset_fs_.seekg(GetOffsetPosition(id * hash_box_size_), std::ios::beg);
-      offset_fs_.read(reinterpret_cast<char*>(offset_buffer.data()),
-                      hash_box_size_ * sizeof(OffsetAndSize));
-
-      if (!offset_fs_.eof() && offset_fs_.fail()) {
-        return absl::InternalError("Failed to read offset and size");
-      }
+      RETURN_IF_ERROR(offset_fs_.Seekg(GetOffsetPosition(id * hash_box_size_),
+                                       std::ios::beg));
+      RETURN_IF_ERROR(offset_fs_.ReadUntilEof(
+          std::span(offset_buffer.data(), hash_box_size_)));
 
       // set lengths to zero default value
-      if (page_data_.size() < lengths_size) {
-        page_data_.resize(lengths_size);
-      }
-      std::fill_n(page_data_.begin(), lengths_size, 0);
+      page_data_.resize(lengths_size);
+      std::fill_n(page_data_.begin(), lengths_size, std::byte{0});
 
       // parse offsets and sizes
       std::size_t total_length = 0;
@@ -287,52 +253,40 @@ class FileDepot {
       }
 
       if (total_length == 0) {
-        return std::span{reinterpret_cast<const std::byte*>(page_data_.data()),
-                         lengths_size};
+        return page_data_;
       }
 
       // add lengths size to total length and prepare buffer
       total_length += lengths_size;
-      if (page_data_.size() < total_length) {
-        page_data_.resize(total_length);
-      }
-
-      data_fs_.clear();
+      page_data_.resize(total_length);
 
       // fast path for non-fragmented data
       if (!is_fragmented) {
-        data_fs_.seekg(start, std::ios::beg);
-        data_fs_.read(page_data_.data() + lengths_size,
-                      total_length - lengths_size);
-        if (!data_fs_.good()) {
-          return absl::InternalError("Failed to read data");
-        }
-        return std::span{reinterpret_cast<const std::byte*>(page_data_.data()),
-                         total_length};
+        RETURN_IF_ERROR(data_fs_.Seekg(start, std::ios::beg));
+        RETURN_IF_ERROR(data_fs_.Read(std::span(
+            page_data_.data() + lengths_size, total_length - lengths_size)));
+        return page_data_;
       }
 
       // slow path for fragmented data
       std::size_t position = 0;
       for (std::size_t i = 0; i < hash_box_size_; ++i) {
         if (offset_buffer[i].size == 0) continue;
-        data_fs_.seekg(offset_buffer[i].offset, std::ios::beg);
-        data_fs_.read(page_data_.data() + lengths_size + position,
-                      offset_buffer[i].size);
-        if (!data_fs_.good()) {
-          return absl::InternalError("Failed to read data");
-        }
+        RETURN_IF_ERROR(data_fs_.Seekg(offset_buffer[i].offset, std::ios::beg));
+        RETURN_IF_ERROR(
+            data_fs_.Read(std::span(page_data_.data() + lengths_size + position,
+                                    offset_buffer[i].size)));
         position += offset_buffer[i].size;
       }
 
-      return std::span{reinterpret_cast<const std::byte*>(page_data_.data()),
-                       total_length};
+      return page_data_;
     }
 
    private:
-    std::fstream& data_fs_;
-    std::fstream& offset_fs_;
+    FStream& data_fs_;
+    FStream& offset_fs_;
     const std::size_t hash_box_size_;
-    std::vector<char> page_data_;
+    std::vector<std::byte> page_data_;
   };
 
   // The amount of items that will be grouped into a single hashing group.
@@ -342,16 +296,16 @@ class FileDepot {
   std::filesystem::path hash_file_;
 
   // It is used to get positions of the data in the data file.
-  std::unique_ptr<std::fstream> offset_fs_;
+  std::unique_ptr<FStream> offset_fs_;
 
   // It is used to get the actual data.
-  std::unique_ptr<std::fstream> data_fs_;
+  std::unique_ptr<FStream> data_fs_;
 
   // The data structure managing the hashing of states.
   mutable store::HashTree hashes_;
 
   // Temporary storage for the result of Get().
-  mutable std::vector<char> get_data_;
+  mutable std::vector<std::byte> get_data_;
 };
 
 }  // namespace carmen::backend::depot
