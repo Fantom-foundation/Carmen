@@ -4,6 +4,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//backend/common:file",
+        "//common:fstream",
         "//common:type",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/strings",

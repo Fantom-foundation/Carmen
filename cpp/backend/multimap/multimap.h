@@ -16,7 +16,7 @@ concept MultiMap = requires(M a, const M b) {
   typename M::value_type;
   // Insert a new Key/Value pair in the multimap. Duplicates are ignored.
   // Returns true if pair was not present before, false if it was, and an error
-  // if the operaion failed.
+  // if the operation failed.
   {
     a.Insert(std::declval<typename M::key_type>(),
              std::declval<typename M::value_type>())
