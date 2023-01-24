@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 
 #include "hex_util.h"
@@ -38,9 +39,19 @@ class ByteValue {
     return out;
   }
 
-  // Ensure default three-way comparison.
-  friend auto operator<=>(const ByteValue<N>& containerA,
-                          const ByteValue<N>& containerB) = default;
+  // Add equality and inequality comparison support for all ByteValues.
+  friend bool operator==(const ByteValue<N>& containerA,
+                         const ByteValue<N>& containerB) = default;
+
+  // Add comparison support for all ByteValues.
+  friend int operator<=>(const ByteValue<N>& containerA,
+                         const ByteValue<N>& containerB) {
+    // Ideally we would just let this generate using =default, but this fails on
+    // MacOS since no <=> operator for arrays can be found. This seems to be a
+    // missing feature, since according to the cppreference such an operator
+    // should be defined.
+    return std::memcmp(containerA.data_.begin(), containerB.data_.begin(), N);
+  }
 
   // Support the usage of ByteValues in hash based absl containers.
   template <typename H>

@@ -31,6 +31,30 @@ TEST(ByteValueTest, CannotHoldMoreValues) {
   EXPECT_THAT(Print(container), StrNe("0x12abef"));
 }
 
+TEST(ByteValueTest, DefaultValueIsZero) {
+  EXPECT_EQ(ByteValue<0>{}, (ByteValue<0>{}));
+  EXPECT_EQ(ByteValue<1>{}, (ByteValue<1>{0x00}));
+  EXPECT_EQ(ByteValue<2>{}, (ByteValue<2>{0x00, 0x00}));
+  EXPECT_EQ(ByteValue<3>{}, (ByteValue<3>{0x00, 0x00, 0x00}));
+}
+
+TEST(ByteValueTest, AreComarable) {
+  using Value = ByteValue<2>;
+  EXPECT_EQ(Value{0x01}, Value{0x01});
+  EXPECT_NE(Value{0x01}, Value{0x02});
+  EXPECT_LT(Value{0x01}, Value{0x02});
+  EXPECT_LE(Value{0x01}, Value{0x02});
+  EXPECT_GT(Value{0x02}, Value{0x01});
+  EXPECT_GE(Value{0x02}, Value{0x01});
+}
+
+TEST(ByteValueTest, AreLexicographicallySorted) {
+  EXPECT_LT((ByteValue<3>{0x01, 0x02}), (ByteValue<3>{0x01, 0x03}));
+  EXPECT_LT((ByteValue<3>{0x01, 0x02}), (ByteValue<3>{0x02, 0x01}));
+  EXPECT_LT((ByteValue<3>{0x01}), (ByteValue<3>{0x01, 0x02}));
+  EXPECT_EQ((ByteValue<3>{0x01}), (ByteValue<3>{0x01, 0x00}));
+}
+
 TEST(ByteValueTest, CanBeUsedInFlatHashSet) {
   ByteValue<2> a{0x12, 0x14};
   ByteValue<2> b{0x16, 0xf5};
