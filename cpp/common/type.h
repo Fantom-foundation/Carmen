@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <compare>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -75,13 +76,17 @@ class ByteValue {
                          const ByteValue<N>& containerB) = default;
 
   // Add comparison support for all ByteValues.
-  friend int operator<=>(const ByteValue<N>& containerA,
-                         const ByteValue<N>& containerB) {
+  friend std::strong_ordering operator<=>(const ByteValue<N>& containerA,
+                                          const ByteValue<N>& containerB) {
     // Ideally we would just let this generate using =default, but this fails on
     // MacOS since no <=> operator for arrays can be found. This seems to be a
     // missing feature, since according to the cppreference such an operator
     // should be defined.
-    return std::memcmp(containerA.data_.begin(), containerB.data_.begin(), N);
+    int res =
+        std::memcmp(containerA.data_.begin(), containerB.data_.begin(), N);
+    return res < 0    ? std::strong_ordering::less
+           : res == 0 ? std::strong_ordering::equal
+                      : std::strong_ordering::greater;
   }
 
   // Support the usage of ByteValues in hash based absl containers.

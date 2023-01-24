@@ -95,3 +95,28 @@ cc_binary(
         ":c_state",
     ],
 )
+
+cc_library(
+    name = "archive",
+    srcs = ["archive.cc"],
+    hdrs = ["archive.h"],
+    deps = [
+        "//backend/common/sqlite",
+        "//common:type",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "archive_test",
+    srcs = ["archive_test.cc"],
+    deps = [
+        ":archive",
+        "//common:file_util",
+        "//common:status_test_util",
+        "//common:type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
