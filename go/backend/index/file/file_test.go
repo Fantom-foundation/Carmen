@@ -117,6 +117,12 @@ func TestFileHashIndexPersisted(t *testing.T) {
 		}
 	}
 
+	if size := inst.table.Size(); size != len(data) {
+		t.Errorf("Size is not correct: %d != %d", size, len(data))
+	}
+
+	expectedNumBuckets := inst.table.GetNumBuckets()
+
 	// re-open
 	err = inst.Close()
 	if err != nil {
@@ -131,6 +137,14 @@ func TestFileHashIndexPersisted(t *testing.T) {
 		t.Fatal("Cannot create instance", err)
 	}
 
+	// test metadata propagated
+	if size := inst.table.Size(); size != len(data) {
+		t.Errorf("Size is not correct: %d != %d", size, len(data))
+	}
+	if actualBuckets := inst.table.GetNumBuckets(); actualBuckets != expectedNumBuckets {
+		t.Errorf("Size is not correct: %d != %d", actualBuckets, len(data))
+	}
+
 	// check all vales present
 	for expectKey, expectVal := range data {
 		if actVal, err := inst.Get(expectKey); err != nil || actVal != expectVal {
@@ -142,11 +156,11 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	key := common.AddressFromNumber(100009)
 	expected := uint32(len(data))
 	if idx, err := inst.GetOrAdd(key); err != nil || idx != expected {
-		t.Errorf("Unexpected size: %d != %d", idx, expected)
+		t.Errorf("Unexpected index: %d != %d", idx, expected)
 	}
 
 	// test metadata written
-	hash, numBuckets, lastBucket, _, lastIndex, freeIds, err := readMetadata[uint32](dir, common.Identifier32Serializer{})
+	hash, buckets, lastBucket, _, records, lastIndex, freeIds, err := readMetadata[uint32](dir, common.Identifier32Serializer{})
 	if err != nil {
 		t.Errorf("Cannot read metadata file: %s", err)
 	}
@@ -157,7 +171,7 @@ func TestFileHashIndexPersisted(t *testing.T) {
 	}
 
 	// default number of buckets
-	if numBuckets == 0 {
+	if buckets != int(expectedNumBuckets) {
 		t.Errorf("Wrong number of buckets: %d ", numBuckets)
 	}
 
@@ -173,6 +187,9 @@ func TestFileHashIndexPersisted(t *testing.T) {
 		t.Errorf("No free Ids read")
 	}
 
+	if records != len(data) {
+		t.Errorf("Size is not correct: %d != %d", records, len(data))
+	}
 }
 
 func TestFileHashMemoryFootprint(t *testing.T) {
@@ -208,11 +225,6 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 
 	linearHash := footPrint.GetChild("linearHash")
 	if size := linearHash.Value(); size == 0 {
-		t.Errorf("Mem footprint wrong: %d", size)
-	}
-
-	buckets := linearHash.GetChild("buckets")
-	if size := buckets.Value(); size == 0 {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
 

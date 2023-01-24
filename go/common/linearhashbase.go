@@ -75,6 +75,10 @@ func (h *LinearHashBase[K, V]) GetBits() uint {
 	return h.bits
 }
 
+func (h *LinearHashBase[K, V]) GetNumBuckets() uint {
+	return h.numBuckets
+}
+
 func IntLog2(x int) (y uint) {
 	return uint(math.Ceil(math.Log2(float64(x))))
 }

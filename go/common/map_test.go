@@ -170,19 +170,20 @@ func initMapFactories(t *testing.T) map[string]func() common.Map[common.Address,
 	singlePageListFactory := func() common.Map[common.Address, uint32] {
 		eachPageStore := pagepool.NewMemoryPageStore[common.Address, uint32]()
 		eachPagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, pageItems, nil, eachPageStore, common.AddressComparator{})
-		return &noErrMapWrapper[common.Address, uint32]{file.NewPageList[common.Address, uint32](123, pageItems, eachPagePool)}
+		pageList := file.NewPageList[common.Address, uint32](123, pageItems, eachPagePool)
+		return &noErrMapWrapper[common.Address, uint32]{&pageList}
 	}
 
 	sharedPageStore := pagepool.NewMemoryPageStore[common.Address, uint32]()
 	sharedPagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, pageItems, nil, sharedPageStore, common.AddressComparator{})
 	linearHashPagePoolFactory := func() common.Map[common.Address, uint32] {
-		return &noErrMapWrapper[common.Address, uint32]{file.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, sharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
+		return &noErrMapWrapper[common.Address, uint32]{file.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, 0, sharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}
 
 	persistedLinearHashPagePoolFactory := func() common.Map[common.Address, uint32] {
 		persistedSharedPageStore, _ := pagepool.NewFilePageStorage[common.Address, uint32](t.TempDir(), pageSize, pageItems, 0, 0, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
 		persistedSharedPagePool := pagepool.NewPagePool[common.Address, uint32](pagePoolSize, pageItems, nil, persistedSharedPageStore, common.AddressComparator{})
-		return &noErrMapWrapper[common.Address, uint32]{file.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, persistedSharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
+		return &noErrMapWrapper[common.Address, uint32]{file.NewLinearHashMap[common.Address, uint32](pageItems, numBuckets, 0, persistedSharedPagePool, common.AddressHasher{}, common.AddressComparator{})}
 	}
 
 	factories := map[string]func() common.Map[common.Address, uint32]{
