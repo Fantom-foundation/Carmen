@@ -5,6 +5,7 @@ cc_library(
     deps = [
         "//backend/common:file",
         "//backend/store:hash_tree",
+        "//common:fstream",
         "//common:hash",
         "//common:status_util",
         "//common:type",
