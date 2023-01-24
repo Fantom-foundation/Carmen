@@ -250,8 +250,7 @@ class FileDepot {
 
     // Get data for given page. The data is valid until the next call to
     // this function.
-    std::span<const std::byte> GetPageData(PageId id) override {
-      const auto empty = std::span<const std::byte>();
+    absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
       std::vector<OffsetAndSize> offset_buffer(hash_box_size_);
       const std::size_t lengths_size = hash_box_size_ * sizeof(Size);
 
@@ -260,9 +259,9 @@ class FileDepot {
       offset_fs_.seekg(GetOffsetPosition(id * hash_box_size_), std::ios::beg);
       offset_fs_.read(reinterpret_cast<char*>(offset_buffer.data()),
                       hash_box_size_ * sizeof(OffsetAndSize));
-      // TODO: Do proper error handling
+
       if (!offset_fs_.eof() && offset_fs_.fail()) {
-        return empty;
+        return absl::InternalError("Failed to read offset and size");
       }
 
       // set lengths to zero default value
@@ -288,8 +287,8 @@ class FileDepot {
       }
 
       if (total_length == 0) {
-        return {reinterpret_cast<const std::byte*>(page_data_.data()),
-                lengths_size};
+        return std::span{reinterpret_cast<const std::byte*>(page_data_.data()),
+                         lengths_size};
       }
 
       // add lengths size to total length and prepare buffer
@@ -306,11 +305,10 @@ class FileDepot {
         data_fs_.read(page_data_.data() + lengths_size,
                       total_length - lengths_size);
         if (!data_fs_.good()) {
-          // TODO: Add error handling
-          return empty;
+          return absl::InternalError("Failed to read data");
         }
-        return {reinterpret_cast<const std::byte*>(page_data_.data()),
-                total_length};
+        return std::span{reinterpret_cast<const std::byte*>(page_data_.data()),
+                         total_length};
       }
 
       // slow path for fragmented data
@@ -321,14 +319,13 @@ class FileDepot {
         data_fs_.read(page_data_.data() + lengths_size + position,
                       offset_buffer[i].size);
         if (!data_fs_.good()) {
-          // TODO: Add error handling
-          return empty;
+          return absl::InternalError("Failed to read data");
         }
         position += offset_buffer[i].size;
       }
 
-      return {reinterpret_cast<const std::byte*>(page_data_.data()),
-              total_length};
+      return std::span{reinterpret_cast<const std::byte*>(page_data_.data()),
+                       total_length};
     }
 
    private:

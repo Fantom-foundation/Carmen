@@ -111,7 +111,7 @@ class InMemoryDepot {
 
     // Get data for given page. The data is valid until the next call to
     // this function.
-    std::span<const std::byte> GetPageData(PageId id) override {
+    absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
       static const auto empty = Item{};
       const std::size_t lengths_size = hash_box_size_ * sizeof(ItemLength);
 

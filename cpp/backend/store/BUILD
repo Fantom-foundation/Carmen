@@ -64,12 +64,14 @@ cc_library(
         "//backend/common:page_id",
         "//backend/common/leveldb",
         "//common:byte_util",
+        "//common:fstream",
         "//common:hash",
         "//common:memory_usage",
         "//common:status_util",
         "//common:type",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 
@@ -82,6 +84,7 @@ cc_test(
         "//common:hash",
         "//common:status_test_util",
         "//common:type",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )

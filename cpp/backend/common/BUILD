@@ -135,6 +135,8 @@ cc_binary(
         ":page_pool",
         "//common:status_test_util",
         "//third_party/gperftools:profiler",
+        "@com_google_absl//absl/status:status",
+        "@com_google_absl//absl/status:statusor",
         "@com_github_google_benchmark//:benchmark_main",
     ],
     testonly = True,

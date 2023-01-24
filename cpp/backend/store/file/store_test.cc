@@ -32,8 +32,7 @@ TYPED_TEST_P(FileStoreTest, StoreCanBeSavedAndRestored) {
   }
   {
     ASSERT_OK_AND_ASSIGN(auto restored, Store::Open(ctx, dir.GetPath()));
-    ASSERT_OK_AND_ASSIGN(auto restored_hash, restored.GetHash());
-    EXPECT_EQ(hash, restored_hash);
+    EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
     for (int i = 0; i < kNumElements; i++) {
       EXPECT_THAT(restored.Get(i), IsOkAndHolds(i * i));
     }

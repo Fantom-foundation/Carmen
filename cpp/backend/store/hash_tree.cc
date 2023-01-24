@@ -1,7 +1,6 @@
 #include "backend/store/hash_tree.h"
 
 #include <cstddef>
-#include <fstream>
 #include <span>
 #include <sstream>
 #include <vector>
@@ -12,6 +11,7 @@
 #include "backend/common/leveldb/leveldb.h"
 #include "backend/common/page_id.h"
 #include "common/byte_util.h"
+#include "common/fstream.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -40,7 +40,7 @@ void HashTree::MarkDirty(PageId page) {
   dirty_pages_.insert(page);
 }
 
-Hash HashTree::GetHash() {
+absl::StatusOr<Hash> HashTree::GetHash() {
   // If there are no pages, the full hash is zero by definition.
   if (num_pages_ == 0) {
     return Hash{};
@@ -55,7 +55,7 @@ Hash HashTree::GetHash() {
   absl::flat_hash_set<int> dirty_parent;
   std::swap(dirty_level_one_positions_, dirty_parent);
   for (PageId i : dirty_pages_) {
-    auto data = page_source_->GetPageData(i);
+    ASSIGN_OR_RETURN(auto data, page_source_->GetPageData(i));
     GetMutableHash(0, i) = carmen::GetHash(hasher_, data);
     dirty_parent.insert(i / branching_factor_);
   }
@@ -138,81 +138,39 @@ absl::Status HashTree::SaveToFile(const std::filesystem::path& file) {
 
   std::uint32_t branching_factor = branching_factor_;
   std::uint32_t num_pages = num_pages_;
-  auto hash = GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
 
-  std::fstream out(file, std::ios::binary | std::ios::out);
-  if (!out) {
-    return absl::InternalError(
-        absl::StrFormat("Could not open file %s for writing.", file));
-  }
+  ASSIGN_OR_RETURN(auto out,
+                   FStream::Open(file, std::ios::binary | std::ios::out));
 
-  auto write_scalar = [&](auto& data) -> absl::Status {
-    out.write(reinterpret_cast<const char*>(&data), sizeof(data));
-    if (out.good()) return absl::OkStatus();
-    return absl::InternalError(
-        absl::StrFormat("Could not write to file %s.", file));
-  };
-
-  RETURN_IF_ERROR(write_scalar(branching_factor));
-  RETURN_IF_ERROR(write_scalar(num_pages));
-  RETURN_IF_ERROR(write_scalar(hash));
+  RETURN_IF_ERROR(out.Write(branching_factor));
+  RETURN_IF_ERROR(out.Write(num_pages));
+  RETURN_IF_ERROR(out.Write(hash));
   for (std::size_t i = 0; i < num_pages_; i++) {
     const auto& hash = hashes_[0][i];
-    RETURN_IF_ERROR(write_scalar(hash));
+    RETURN_IF_ERROR(out.Write(hash));
   }
 
-  out.close();
-  if (!out.good()) {
-    return absl::InternalError(
-        absl::StrFormat("Could not close file %s.", file));
-  }
-
-  return absl::OkStatus();
+  return out.Close();
 }
 
 absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
-  std::fstream in(file, std::ios::binary | std::ios::in);
-
-  // Fail if the file could not be opened.
-  if (!in) {
-    return absl::InternalError(
-        absl::StrFormat("Could not open file %s for reading.", file));
-  }
+  ASSIGN_OR_RETURN(auto in,
+                   FStream::Open(file, std::ios::binary | std::ios::in));
 
   // Check the minimum file length of 4 + 4 + 32 byte.
-  in.seekg(0, std::ios::end);
-  if (!in.good()) {
-    return absl::InternalError(
-        absl::StrFormat("Could not seek to end of file %s.", file));
-  }
-
-  auto size = in.tellg();
-  if (size < 0) {
-    return absl::InternalError(
-        absl::StrFormat("Could not read position in file %s.", file));
-  }
-
+  RETURN_IF_ERROR(in.Seekg(0, std::ios::end));
+  ASSIGN_OR_RETURN(auto size, in.Tellg());
   if (size < 40) {
     return absl::InternalError(absl::StrFormat(
         "File %s is too short. Needed 40, got %d bytes.", file, size));
   }
 
-  auto read_scalar = [&](auto& data) -> absl::Status {
-    in.read(reinterpret_cast<char*>(&data), sizeof(data));
-    if (in.good()) return absl::OkStatus();
-    return absl::InternalError(
-        absl::StrFormat("Could not read from file %s.", file));
-  };
-
-  in.seekg(0, std::ios::beg);
-  if (!in.good()) {
-    return absl::InternalError(
-        absl::StrFormat("Could not seek to beginning of file %s.", file));
-  }
+  RETURN_IF_ERROR(in.Seekg(0, std::ios::beg));
 
   // Load the branching factor.
   std::uint32_t branching_factor;
-  RETURN_IF_ERROR(read_scalar(branching_factor));
+  RETURN_IF_ERROR(in.Read(branching_factor));
   if (branching_factor_ != branching_factor) {
     return absl::InternalError(
         absl::StrFormat("Branching factor mismatch. Expected %d, got %d.",
@@ -221,7 +179,7 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
 
   // Load the number of pages.
   std::uint32_t num_pages;
-  RETURN_IF_ERROR(read_scalar(num_pages));
+  RETURN_IF_ERROR(in.Read(num_pages));
   if (size != 40 + num_pages * 32) {
     return absl::InternalError(
         absl::StrFormat("File %s has wrong size. Expected %d, got %d bytes.",
@@ -231,27 +189,18 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
 
   // Load the global hash.
   Hash file_hash;
-  RETURN_IF_ERROR(read_scalar(file_hash));
+  RETURN_IF_ERROR(in.Read(file_hash));
 
   // Read the page hashes.
   hashes_.clear();
   if (num_pages > 0) {
     std::vector<Hash> page_hashes;
     page_hashes.resize(GetPaddedSize(num_pages, branching_factor));
-    in.read(reinterpret_cast<char*>(page_hashes.data()),
-            sizeof(Hash) * num_pages);
-    if (!in.good()) {
-      return absl::InternalError(
-          absl::StrFormat("Could not read hashes from file %s.", file));
-    }
+    RETURN_IF_ERROR(in.Read(std::span(page_hashes.data(), num_pages)));
     hashes_.push_back(std::move(page_hashes));
   }
 
-  in.close();
-  if (!in.good()) {
-    return absl::InternalError(
-        absl::StrFormat("Could not close file %s.", file));
-  }
+  RETURN_IF_ERROR(in.Close());
 
   // Update hash information.
   dirty_pages_.clear();
@@ -261,7 +210,7 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
   }
 
   // Recompute hashes.
-  auto hash = GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
 
   if (hash != file_hash) {
     std::stringstream ss;
@@ -274,10 +223,11 @@ absl::Status HashTree::LoadFromFile(const std::filesystem::path& file) {
 }
 
 absl::Status HashTree::SaveToLevelDb(LevelDb& leveldb) {
+  ASSIGN_OR_RETURN(auto hash, GetHash());
   RETURN_IF_ERROR(
       leveldb.Add({"ht_branching_factor", AsChars(branching_factor_)}));
   RETURN_IF_ERROR(leveldb.Add({"ht_num_pages", AsChars(num_pages_)}));
-  RETURN_IF_ERROR(leveldb.Add({"ht_hash", AsChars(GetHash())}));
+  RETURN_IF_ERROR(leveldb.Add({"ht_hash", AsChars(hash)}));
 
   for (std::size_t i = 0; i < num_pages_; i++) {
     RETURN_IF_ERROR(
@@ -336,7 +286,7 @@ absl::Status HashTree::LoadFromLevelDb(const LevelDb& leveldb) {
   }
 
   // Recompute hashes.
-  auto hash = GetHash();
+  ASSIGN_OR_RETURN(auto hash, GetHash());
 
   if (hash != file_hash) {
     std::stringstream ss;

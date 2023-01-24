@@ -162,7 +162,7 @@ class InMemoryStore {
    public:
     PageProvider(Pages& pages) : pages_(pages) {}
 
-    std::span<const std::byte> GetPageData(PageId id) override {
+    absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
       static const Page empty{};
       if (id >= pages_.size()) {
         return empty.AsBytes();
@@ -201,7 +201,7 @@ InMemoryStore<K, V, page_size>::InMemoryStore(const StoreSnapshot& snapshot,
     hashes_.MarkDirty(i);
   }
   // Refresh the hashes.
-  hashes_.GetHash();
+  hashes_.GetHash().IgnoreError();
 }
 
 template <typename K, Trivial V, std::size_t page_size>
