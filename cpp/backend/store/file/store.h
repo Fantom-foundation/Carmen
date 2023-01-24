@@ -144,11 +144,8 @@ class FileStoreBase {
     PageProvider(PagePool& pool) : pool_(pool) {}
 
     absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
-      auto page = pool_.template Get<Page>(id);
-      if (!page.ok()) {
-        return page.status();
-      }
-      return std::as_bytes(std::span(page->AsReference().AsArray()));
+      ASSIGN_OR_RETURN(Page & page, pool_.template Get<Page>(id));
+      return std::as_bytes(std::span(page.AsArray()));
     }
 
    private:
