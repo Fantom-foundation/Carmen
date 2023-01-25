@@ -97,13 +97,33 @@ cc_binary(
 )
 
 cc_library(
+    name = "update",
+    srcs = ["update.cc"],
+    hdrs = ["update.h"],
+    deps = [
+        "//common:type",
+        "@com_google_absl//absl/container:btree",
+    ],
+)
+
+cc_test(
+    name = "update_test",
+    srcs = ["update_test.cc"],
+    deps = [
+        ":update",
+        "//common:type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "archive",
     srcs = ["archive.cc"],
     hdrs = ["archive.h"],
     deps = [
+        ":update",
         "//backend/common/sqlite",
         "//common:type",
-        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],

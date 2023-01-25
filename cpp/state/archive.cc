@@ -39,7 +39,7 @@ class Archive {
   }
 
   // Adds the block update for the given block.
-  absl::Status Add(BlockId block, const BlockUpdate& update) {
+  absl::Status Add(BlockId block, const Update& update) {
     auto guard = absl::MutexLock(&add_value_lock_);
     if (!add_value_stmt_) return absl::FailedPreconditionError("DB Closed");
     RETURN_IF_ERROR(db_.Run("BEGIN TRANSACTION"));
@@ -149,7 +149,7 @@ absl::StatusOr<Archive> Archive::Open(std::filesystem::path directory) {
   return Archive(std::move(impl));
 }
 
-absl::Status Archive::Add(BlockId block, const BlockUpdate& update) {
+absl::Status Archive::Add(BlockId block, const Update& update) {
   RETURN_IF_ERROR(CheckState());
   return impl_->Add(block, update);
 }
@@ -175,11 +175,6 @@ absl::Status Archive::Close() {
 absl::Status Archive::CheckState() const {
   if (impl_) return absl::OkStatus();
   return absl::FailedPreconditionError("Archive not connected to DB.");
-}
-
-void BlockUpdate::Set(const Address& account, const Key& key,
-                      const Value& value) {
-  storage_[{account, key}] = value;
 }
 
 }  // namespace carmen
