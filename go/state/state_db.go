@@ -127,7 +127,7 @@ type stateDB struct {
 	accessedAddresses map[common.Address]bool
 
 	// A set of accessed slots in the current transaction.
-	accessedSlots map[slotId]bool
+	accessedSlots *common.FastMap[slotId, bool]
 
 	// A set of slots with current value (possibly) different from the committed value - for needs of committing.
 	writtenSlots map[*slotValue]bool
@@ -247,7 +247,7 @@ func CreateStateDBUsing(state State) *stateDB {
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
 		accessedAddresses: map[common.Address]bool{},
-		accessedSlots:     map[slotId]bool{},
+		accessedSlots:     common.NewFastMap[slotId, bool](slotHasher{}),
 		writtenSlots:      map[*slotValue]bool{},
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
@@ -739,8 +739,8 @@ func (s *stateDB) ClearAccessList() {
 	if len(s.accessedAddresses) > 0 {
 		s.accessedAddresses = make(map[common.Address]bool)
 	}
-	if len(s.accessedSlots) > 0 {
-		s.accessedSlots = make(map[slotId]bool)
+	if s.accessedSlots.Size() > 0 {
+		s.accessedSlots.Clear()
 	}
 }
 
@@ -757,11 +757,11 @@ func (s *stateDB) AddAddressToAccessList(addr common.Address) {
 func (s *stateDB) AddSlotToAccessList(addr common.Address, key common.Key) {
 	s.AddAddressToAccessList(addr)
 	sid := slotId{addr, key}
-	_, found := s.accessedSlots[sid]
+	_, found := s.accessedSlots.Get(sid)
 	if !found {
-		s.accessedSlots[sid] = true
+		s.accessedSlots.Put(sid, true)
 		s.undo = append(s.undo, func() {
-			delete(s.accessedSlots, sid)
+			s.accessedSlots.Remove(sid)
 		})
 	}
 }
@@ -772,7 +772,7 @@ func (s *stateDB) IsAddressInAccessList(addr common.Address) bool {
 }
 
 func (s *stateDB) IsSlotInAccessList(addr common.Address, key common.Key) (addressPresent bool, slotPresent bool) {
-	_, found := s.accessedSlots[slotId{addr, key}]
+	_, found := s.accessedSlots.Get(slotId{addr, key})
 	if found {
 		return true, true
 	}
@@ -1040,7 +1040,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	var boolean bool
 	const boolSize = unsafe.Sizeof(boolean)
 	mf.AddChild("accessedAddresses", common.NewMemoryFootprint(uintptr(len(s.accessedAddresses))*(addressSize+boolSize)))
-	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(len(s.accessedSlots))*(slotIdSize+boolSize)))
+	mf.AddChild("accessedSlots", common.NewMemoryFootprint(uintptr(s.accessedSlots.Size())*(slotIdSize+boolSize)))
 	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(boolSize+unsafe.Sizeof(&slotValue{}))))
 	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
 	mf.AddChild("reincarnation", common.NewMemoryFootprint(uintptr(len(s.reincarnation))*(addressSize+unsafe.Sizeof(uint64(0)))))
