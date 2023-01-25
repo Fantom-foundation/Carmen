@@ -33,7 +33,7 @@ func TestAccountsCanBeCreated(t *testing.T) {
 			}
 			defer state.Close()
 
-			state.CreateAccount(address1)
+			state.createAccount(address1)
 			account_state, _ := state.GetAccountState(address1)
 			if account_state != common.Exists {
 				t.Errorf("Created account does not exist, got %v", account_state)
@@ -51,8 +51,8 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 			}
 			defer state.Close()
 
-			state.CreateAccount(address1)
-			state.DeleteAccount(address1)
+			state.createAccount(address1)
+			state.deleteAccount(address1)
 			account_state, _ := state.GetAccountState(address1)
 			if account_state != common.Deleted {
 				t.Errorf("Deleted account is not deleted, got %v", account_state)
@@ -90,7 +90,7 @@ func TestWriteAndReadBalance(t *testing.T) {
 			}
 			defer state.Close()
 
-			err = state.SetBalance(address1, balance1)
+			err = state.setBalance(address1, balance1)
 			if err != nil {
 				t.Fatalf("Error updating balance: %v", err)
 			}
@@ -134,7 +134,7 @@ func TestWriteAndReadNonce(t *testing.T) {
 			}
 			defer state.Close()
 
-			err = state.SetNonce(address1, nonce1)
+			err = state.setNonce(address1, nonce1)
 			if err != nil {
 				t.Fatalf("Error updating nonce: %v", err)
 			}
@@ -178,7 +178,7 @@ func TestWriteAndReadSlot(t *testing.T) {
 			}
 			defer state.Close()
 
-			err = state.SetStorage(address1, key1, val1)
+			err = state.setStorage(address1, key1, val1)
 			if err != nil {
 				t.Fatalf("Error updating storage: %v", err)
 			}
@@ -223,7 +223,7 @@ func TestSetAndGetCode(t *testing.T) {
 			defer state.Close()
 
 			for _, code := range getTestCodes() {
-				err := state.SetCode(address1, code)
+				err := state.setCode(address1, code)
 				if err != nil {
 					t.Fatalf("Error setting code: %v", err)
 				}
@@ -256,7 +256,7 @@ func TestSetAndGetCodeHash(t *testing.T) {
 			defer state.Close()
 
 			for _, code := range getTestCodes() {
-				err := state.SetCode(address1, code)
+				err := state.setCode(address1, code)
 				if err != nil {
 					t.Fatalf("Error setting code: %v", err)
 				}
@@ -275,8 +275,8 @@ func TestSetAndGetCodeHash(t *testing.T) {
 
 func initCppStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"InMemory", NewCppInMemoryState},
-		{"FileBased", NewCppFileBasedState},
-		{"LevelDbBased", NewCppLevelDbBasedState},
+		{"InMemory", castToDirectUpdateState(NewCppInMemoryState)},
+		{"FileBased", castToDirectUpdateState(NewCppFileBasedState)},
+		{"LevelDbBased", castToDirectUpdateState(NewCppLevelDbBasedState)},
 	}
 }

@@ -34,7 +34,7 @@ type GoState struct {
 	hasher          hash.Hash
 }
 
-func (s *GoState) CreateAccount(address common.Address) (err error) {
+func (s *GoState) createAccount(address common.Address) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
@@ -53,7 +53,7 @@ func (s *GoState) GetAccountState(address common.Address) (state common.AccountS
 	return s.accountsStore.Get(idx)
 }
 
-func (s *GoState) DeleteAccount(address common.Address) error {
+func (s *GoState) deleteAccount(address common.Address) error {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
@@ -88,7 +88,7 @@ func (s *GoState) GetBalance(address common.Address) (balance common.Balance, er
 	return s.balancesStore.Get(idx)
 }
 
-func (s *GoState) SetBalance(address common.Address, balance common.Balance) (err error) {
+func (s *GoState) setBalance(address common.Address, balance common.Balance) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
@@ -107,7 +107,7 @@ func (s *GoState) GetNonce(address common.Address) (nonce common.Nonce, err erro
 	return s.noncesStore.Get(idx)
 }
 
-func (s *GoState) SetNonce(address common.Address, nonce common.Nonce) (err error) {
+func (s *GoState) setNonce(address common.Address, nonce common.Nonce) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
@@ -140,7 +140,7 @@ func (s *GoState) GetStorage(address common.Address, key common.Key) (value comm
 	return s.valuesStore.Get(slotIdx)
 }
 
-func (s *GoState) SetStorage(address common.Address, key common.Key, value common.Value) error {
+func (s *GoState) setStorage(address common.Address, key common.Key, value common.Value) error {
 	addressIdx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return err
@@ -187,7 +187,7 @@ func (s *GoState) GetCodeSize(address common.Address) (size int, err error) {
 	return s.codesDepot.GetSize(idx)
 }
 
-func (s *GoState) SetCode(address common.Address, code []byte) (err error) {
+func (s *GoState) setCode(address common.Address, code []byte) (err error) {
 	var codeHash common.Hash
 	if code != nil { // codeHash is zero for empty code
 		if s.hasher == nil {

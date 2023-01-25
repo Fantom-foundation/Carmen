@@ -1009,7 +1009,7 @@ func (s *stateDB) Close() error {
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock(0)
 	s.storedDataCache.Clear()
-	return &bulkLoad{s.state}
+	return &bulkLoad{s.state.(directUpdateState)}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -1066,11 +1066,11 @@ func (s *stateDB) reset() {
 }
 
 type bulkLoad struct {
-	state State
+	state directUpdateState
 }
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
-	err := l.state.CreateAccount(addr)
+	err := l.state.createAccount(addr)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create account: %v", err))
 	}
@@ -1081,27 +1081,27 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
-	err = l.state.SetBalance(addr, newBalance)
+	err = l.state.setBalance(addr, newBalance)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set balance: %v", err))
 	}
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
-	err := l.state.SetNonce(addr, common.ToNonce(value))
+	err := l.state.setNonce(addr, common.ToNonce(value))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set nonce: %v", err))
 	}
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
-	err := l.state.SetStorage(addr, key, value)
+	err := l.state.setStorage(addr, key, value)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set storage: %v", err))
 	}
 }
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
-	err := l.state.SetCode(addr, code)
+	err := l.state.setCode(addr, code)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to set code: %v", err))
 	}
