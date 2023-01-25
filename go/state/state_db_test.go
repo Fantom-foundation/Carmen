@@ -16,29 +16,51 @@ func TestCaremenStateImplementsStateDbInterface(t *testing.T) {
 	var _ StateDB = &db
 }
 
+func prepareMockState(ctrl *gomock.Controller) *MockState {
+	mock := NewMockState(ctrl)
+	// Implement the Apply() function by distributing the calls among specialized functions.
+	mock.
+		EXPECT().
+		Apply(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(block uint64, update Update) error {
+			// Check that the produced update is valid.
+			if err := update.Check(); err != nil {
+				ctrl.T.Errorf("Update invalid: %v", err)
+			}
+			// Distribute the update among the individual setters.
+			return update.apply(mock)
+		}).
+		AnyTimes()
+	return mock
+}
+
 func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// the account creation needs to check whether the account exists
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
-
 	db.CreateAccount(address1)
+
 	if !db.Exist(address1) {
 		t.Errorf("Account does not exist after it was created")
 	}
+
 	if db.HasSuicided(address1) {
 		t.Errorf("New account is considered deleted")
 	}
+
 	db.Suicide(address1)
+
 	if !db.HasSuicided(address1) {
 		t.Errorf("Destroyed account is still considered alive")
 	}
+
 	// The account should stop existing at the end of the transaction
 	db.EndTransaction()
 	db.BeginTransaction()
+
 	if db.Exist(address1) {
 		t.Errorf("Account still exists after suicide")
 	}
@@ -46,8 +68,7 @@ func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 
 func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a non-existing account.
@@ -74,8 +95,7 @@ func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 
 func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a previously deleted account.
@@ -102,8 +122,7 @@ func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T)
 
 func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 	zero := common.Value{}
 
@@ -153,13 +172,12 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	}
 
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 	zero := common.Value{}
 
@@ -212,13 +230,12 @@ func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.
 	}
 
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(123)
 }
 
 func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 	zero := common.Value{}
 
@@ -270,8 +287,7 @@ func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransacti
 
 func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 	zero := common.Value{}
 
@@ -292,7 +308,7 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 		t.Errorf("unexpected value, wanted %v, got %v", val1, got)
 	}
 	db.EndTransaction()
-	db.EndBlock() // < stored value remains in store data cache
+	db.EndBlock(1) // < stored value remains in store data cache
 
 	// In the next block the account is destroyed
 	db.BeginTransaction()
@@ -305,7 +321,7 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	}
 	db.SetState(address1, key2, val2)
 	db.EndTransaction()
-	db.EndBlock() // < here the stored data cache is reset to forget the old state; also, key2/val2 is stored in DB
+	db.EndBlock(2) // < here the stored data cache is reset to forget the old state; also, key2/val2 is stored in DB
 
 	// In this block we try to read the value again. This time it is not cached
 	// in the snapshot state nor is the account marked as being cleared. The value
@@ -321,13 +337,12 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 		t.Errorf("unexpected value, wanted %v, got %v", val2, got)
 	}
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(3)
 }
 
 func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Initially the account is exisiting with a view stored values.
@@ -361,13 +376,12 @@ func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
 	}
 
 	db.EndTransaction()
-	db.EndBlock() // < no change is send to the DB
+	db.EndBlock(1) // < no change is send to the DB
 }
 
 func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDeleteAndCreateAccountOnStateDb(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Initially the account is exisiting with a view stored values.
@@ -394,13 +408,12 @@ func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDel
 	db.SetNonce(address1, 1)
 
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Initially the account is exisiting with a view stored values.
@@ -431,13 +444,12 @@ func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *
 	db.RevertToSnapshot(snapshot)
 
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a previously deleted account.
@@ -471,8 +483,7 @@ func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesB
 
 func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
@@ -493,8 +504,7 @@ func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
@@ -522,8 +532,7 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 
 func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
@@ -550,8 +559,7 @@ func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
 
 func TestCarmenStateRepeatedSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
@@ -598,13 +606,12 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 
 	// The changes are applied to the state at the end of the block.
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateSuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an unknown account.
@@ -623,8 +630,7 @@ func TestCarmenStateSuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T
 
 func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a deleted account.
@@ -643,8 +649,7 @@ func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T
 
 func TestCarmenStateSuicideRemovesBalanceFromAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
@@ -670,8 +675,7 @@ func TestCarmenStateSuicideRemovesBalanceFromAccount(t *testing.T) {
 
 func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
@@ -712,8 +716,7 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateSuicideIsExecutedAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// the nonce and code will be set at the end of the block since suicide is canceled.
@@ -729,13 +732,12 @@ func TestCarmenStateSuicideIsExecutedAtEndOfTransaction(t *testing.T) {
 	db.Suicide(address1)
 
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// the nonce and code will be set at the end of the block since suicide is canceled.
@@ -751,13 +753,12 @@ func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
 	db.RevertToSnapshot(snapshot)
 
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The new account is created at the end of the transaction.
@@ -770,13 +771,12 @@ func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db.CreateAccount(address1)
 	db.SetNonce(address1, 1) // the account must not be empty
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The created account is only created once, and nonces and code are initialized.
@@ -789,14 +789,13 @@ func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	db.CreateAccount(address1)
 	db.SetNonce(address1, 1)
 	db.EndTransaction()
-	db.EndBlock()
-	db.EndBlock()
+	db.EndBlock(1)
+	db.EndBlock(2)
 }
 
 func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Needs to check whether the account already existed before the creation.
@@ -804,14 +803,13 @@ func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *test
 
 	db.CreateAccount(address1)
 	db.AbortTransaction()
-	db.EndBlock()
-	db.EndBlock()
+	db.EndBlock(1)
+	db.EndBlock(2)
 }
 
 func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
@@ -823,13 +821,12 @@ func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 
 	db.Suicide(address1)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
@@ -862,13 +859,12 @@ func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T)
 		t.Errorf("retrieved wrong code, got %v, wanted empty code", got)
 	}
 
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a non-existing account.
@@ -876,13 +872,12 @@ func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) 
 
 	db.Suicide(address1)
 	db.AbortTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
@@ -895,13 +890,12 @@ func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *tes
 	db.CreateAccount(address1)
 	db.Suicide(address1)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a non-existing account.
@@ -910,13 +904,12 @@ func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *t
 	db.CreateAccount(address1)
 	db.Suicide(address1)
 	db.AbortTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
@@ -931,8 +924,7 @@ func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
 
 func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
@@ -952,8 +944,7 @@ func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 
 func TestCarmenStateSettingTheBalanceCreatesAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	addedBalance := big.NewInt(5)
@@ -969,13 +960,12 @@ func TestCarmenStateSettingTheBalanceCreatesAccount(t *testing.T) {
 		t.Errorf("Account does not exist after adding balance")
 	}
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its nonce and code set to zero.
@@ -995,13 +985,12 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 		t.Errorf("Account with nonce != 0 is still considered empty")
 	}
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateCreatesAccountOnNonceSetting(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The account does not exist, is expected to be created automatically.
@@ -1015,13 +1004,12 @@ func TestCarmenStateCreatesAccountOnNonceSetting(t *testing.T) {
 		t.Errorf("Account does not exist after setting the nonce")
 	}
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1053,8 +1041,7 @@ func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
 
 func TestCarmenStateBalancesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1069,8 +1056,7 @@ func TestCarmenStateBalancesAreReadFromState(t *testing.T) {
 
 func TestCarmenStateBalancesAreOnlyReadOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1087,8 +1073,7 @@ func TestCarmenStateBalancesAreOnlyReadOnce(t *testing.T) {
 
 func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Balance is initially 10. This should only be fetched once.
@@ -1140,8 +1125,7 @@ func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
 
 func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The balance is expected to be read and the updated value to be written to the state.
@@ -1154,17 +1138,16 @@ func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 
 	db.AddBalance(address1, big.NewInt(2))
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 
 	// The second end-of-block should not trigger yet another update.
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(2)
 }
 
 func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Only the last value is to be written to the state.
@@ -1181,13 +1164,12 @@ func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	db.EndTransaction()
 	db.AddBalance(address1, big.NewInt(2))
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Balance is only read, never written.
@@ -1200,13 +1182,12 @@ func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	db.SubBalance(address1, big.NewInt(5))
 	db.SubBalance(address1, big.NewInt(5))
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(2)
 }
 
 func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Balance is only read, never written.
@@ -1217,13 +1198,12 @@ func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.
 
 	db.AddBalance(address1, big.NewInt(10))
 	db.AbortTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1237,8 +1217,7 @@ func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
 
 func TestCarmenStateNoncesAreOnlyReadOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1254,8 +1233,7 @@ func TestCarmenStateNoncesAreOnlyReadOnce(t *testing.T) {
 
 func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetNonce creates the account if it does not exist
@@ -1275,8 +1253,7 @@ func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 
 func TestCarmenStateNoncesOfANonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The nonce is fetched, and its default is zero.
@@ -1290,8 +1267,7 @@ func TestCarmenStateNoncesOfANonExistingAccountIsZero(t *testing.T) {
 
 func TestCarmenStateNonceOfADeletedAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The side-effects of the creation of the account in the first transactions are expected.
@@ -1309,7 +1285,7 @@ func TestCarmenStateNonceOfADeletedAccountIsZero(t *testing.T) {
 	db.CreateAccount(address1)
 	db.SetNonce(address1, 12)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 
 	// Fetch the nonce in a new transaction.
 	var want uint64 = 12
@@ -1336,8 +1312,7 @@ func TestCarmenStateNonceOfADeletedAccountIsZero(t *testing.T) {
 
 func TestCarmenStateNonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
@@ -1374,8 +1349,7 @@ func TestCarmenStateNonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing
 
 func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Nonce is initially 10. This should only be fetched once.
@@ -1424,8 +1398,7 @@ func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
 
 func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Nonce is initially 10. This should only be fetched once.
@@ -1449,8 +1422,7 @@ func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 
 func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The updated value is expected to be written to the state.
@@ -1460,17 +1432,16 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 
 	db.SetNonce(address1, 10)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 
 	// The second end-of-transaction should not trigger yet another update.
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(2)
 }
 
 func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Only the last value is to be written to the state.
@@ -1483,13 +1454,12 @@ func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	db.EndTransaction()
 	db.SetNonce(address1, 12)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Nonce is only read, never written.
@@ -1500,13 +1470,12 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	value := db.GetNonce(address1)
 	db.SetNonce(address1, value)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetNonce create the account if it does not exist
@@ -1515,13 +1484,12 @@ func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T
 
 	db.SetNonce(address1, 10)
 	db.AbortTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateValuesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1534,8 +1502,7 @@ func TestCarmenStateValuesAreReadFromState(t *testing.T) {
 
 func TestCarmenStateCommittedValuesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1548,8 +1515,7 @@ func TestCarmenStateCommittedValuesAreReadFromState(t *testing.T) {
 
 func TestCarmenStateCommittedValuesAreOnlyFetchedOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
@@ -1561,8 +1527,7 @@ func TestCarmenStateCommittedValuesAreOnlyFetchedOnce(t *testing.T) {
 
 func TestCarmenStateCommittedValuesCanBeFetchedAfterValueBeingWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
@@ -1578,8 +1543,7 @@ func TestCarmenStateCommittedValuesCanBeFetchedAfterValueBeingWritten(t *testing
 
 func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The commited state is only read ones
@@ -1597,8 +1561,7 @@ func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
 
 func TestCarmenStateWrittenValuesCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.SetState(address1, key1, val1)
@@ -1609,8 +1572,7 @@ func TestCarmenStateWrittenValuesCanBeRead(t *testing.T) {
 
 func TestCarmenStateWrittenValuesCanBeUpdated(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.SetState(address1, key1, val1)
@@ -1626,8 +1588,7 @@ func TestCarmenStateWrittenValuesCanBeUpdated(t *testing.T) {
 
 func TestCarmenStateWrittenValuesCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
@@ -1672,8 +1633,7 @@ func TestCarmenStateWrittenValuesCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().SetStorage(address1, key1, val1)
@@ -1682,13 +1642,12 @@ func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().SetStorage(address1, key1, val1)
@@ -1698,13 +1657,12 @@ func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	db.SetState(address1, key2, val2)
 	db.RevertToSnapshot(snapshot)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateNothingIsCommitedOnTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// No expectations in mock, will fail if anything is called.
@@ -1712,13 +1670,12 @@ func TestCarmenStateNothingIsCommitedOnTransactionAbort(t *testing.T) {
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
 	db.AbortTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().SetStorage(address1, key1, val3)
@@ -1728,13 +1685,12 @@ func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	db.EndTransaction()
 	db.SetState(address1, key1, val3)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Only expect a read but no update.
@@ -1745,13 +1701,12 @@ func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
 	db.EndTransaction()
 	db.SetState(address1, key1, val)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Only expect a read but no update.
@@ -1787,8 +1742,7 @@ func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
 
 func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().SetStorage(address1, key1, val1)
@@ -1797,19 +1751,18 @@ func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 	db.SetState(address1, key1, val2)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(2)
 	db.SetState(address1, key1, val3)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(3)
 }
 
 func TestCarmenStateCodesCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	want := []byte{0xAC, 0xDC}
@@ -1822,8 +1775,7 @@ func TestCarmenStateCodesCanBeRead(t *testing.T) {
 
 func TestCarmenStateCodesCanBeSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
@@ -1838,8 +1790,7 @@ func TestCarmenStateCodesCanBeSet(t *testing.T) {
 
 func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
@@ -1869,8 +1820,7 @@ func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
 
 func TestCarmenStateReadCodesAreNotStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	want := []byte{0xAC, 0xDC}
@@ -1878,13 +1828,12 @@ func TestCarmenStateReadCodesAreNotStored(t *testing.T) {
 
 	db.GetCode(address1)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
@@ -1895,13 +1844,12 @@ func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
@@ -1912,17 +1860,16 @@ func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 
 	// No store on second time
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(2)
 }
 
 func TestCarmenStateSettingCodesCreatesAccountsImplicitly(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
@@ -1935,13 +1882,12 @@ func TestCarmenStateSettingCodesCreatesAccountsImplicitly(t *testing.T) {
 
 	db.SetCode(address1, want)
 	db.EndTransaction()
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	want := 2
@@ -1954,8 +1900,7 @@ func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
 
 func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
@@ -1971,8 +1916,7 @@ func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
 
 func TestCarmenStateCodeSizeOfANonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	want := 0
@@ -1985,8 +1929,7 @@ func TestCarmenStateCodeSizeOfANonExistingAccountIsZero(t *testing.T) {
 
 func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing acocunt.
@@ -2012,8 +1955,7 @@ func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *test
 
 func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// The state DB is asked for the accounts existence, but not for the hash.
@@ -2027,8 +1969,7 @@ func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
 
 func TestCarmenStateCodeHashOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account with empty code.
@@ -2043,8 +1984,7 @@ func TestCarmenStateCodeHashOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testin
 
 func TestCarmenStateCodeHashOfNewlyCreatedAccountIsTheHashOfTheEmptyCode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// At the start the account does not exist.
@@ -2059,8 +1999,7 @@ func TestCarmenStateCodeHashOfNewlyCreatedAccountIsTheHashOfTheEmptyCode(t *test
 
 func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	want := common.Hash{0xAC, 0xDC}
@@ -2074,8 +2013,7 @@ func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 
 func TestCarmenStateSetCodeSizeCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
@@ -2098,8 +2036,7 @@ func TestCarmenStateSetCodeSizeCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
@@ -2115,8 +2052,7 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 
 func TestCarmenStateInitialRefundIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	if got := db.GetRefund(); got != 0 {
@@ -2126,8 +2062,7 @@ func TestCarmenStateInitialRefundIsZero(t *testing.T) {
 
 func TestCarmenStateRefundCanBeModified(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	var want uint64 = 0
@@ -2153,8 +2088,7 @@ func TestCarmenStateRefundCanBeModified(t *testing.T) {
 
 func TestCarmenStateAddedRefundCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	var want uint64 = 0
@@ -2196,8 +2130,7 @@ func TestCarmenStateAddedRefundCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateRemovedRefundCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	var want uint64 = 0
@@ -2239,8 +2172,7 @@ func TestCarmenStateRemovedRefundCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateRefundIsResetAtTransactionEnd(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	var want uint64 = 12
@@ -2256,8 +2188,7 @@ func TestCarmenStateRefundIsResetAtTransactionEnd(t *testing.T) {
 
 func TestCarmenStateRefundIsResetAtTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	var want uint64 = 12
@@ -2273,8 +2204,7 @@ func TestCarmenStateRefundIsResetAtTransactionAbort(t *testing.T) {
 
 func TestCarmenStateAccessedAddressesCanBeAdded(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	if db.IsAddressInAccessList(address1) {
@@ -2303,8 +2233,7 @@ func TestCarmenStateAccessedAddressesCanBeAdded(t *testing.T) {
 
 func TestCarmenStateAccessedAddressesCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	snapshot1 := db.Snapshot()
@@ -2340,8 +2269,7 @@ func TestCarmenStateAccessedAddressesCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateAccessedAddressesAreResetAtTransactionEnd(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.AddAddressToAccessList(address1)
@@ -2353,8 +2281,7 @@ func TestCarmenStateAccessedAddressesAreResetAtTransactionEnd(t *testing.T) {
 
 func TestCarmenStateAccessedAddressesAreResetAtTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.AddAddressToAccessList(address1)
@@ -2366,8 +2293,7 @@ func TestCarmenStateAccessedAddressesAreResetAtTransactionAbort(t *testing.T) {
 
 func TestCarmenStateAccessedSlotsCanBeAdded(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	if _, b := db.IsSlotInAccessList(address1, key1); b {
@@ -2416,8 +2342,7 @@ func TestCarmenStateAccessedSlotsCanBeAdded(t *testing.T) {
 
 func TestCarmenStateAddingSlotToAccessListAddsAddress(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.AddSlotToAccessList(address1, key1)
@@ -2431,8 +2356,7 @@ func TestCarmenStateAddingSlotToAccessListAddsAddress(t *testing.T) {
 
 func TestCarmenStateAccessedSlotsCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	snapshot1 := db.Snapshot()
@@ -2486,8 +2410,7 @@ func TestCarmenStateAccessedSlotsCanBeRolledBack(t *testing.T) {
 
 func TestCarmenStateAccessedSlotsAreResetAtTransactionEnd(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.AddSlotToAccessList(address1, key1)
@@ -2499,8 +2422,7 @@ func TestCarmenStateAccessedSlotsAreResetAtTransactionEnd(t *testing.T) {
 
 func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	db.AddSlotToAccessList(address1, key1)
@@ -2514,8 +2436,7 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 // which is now empty SHALL instead become non-existent (i.e. deleted).
 func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	b12, err := common.ToBalance(big.NewInt(12))
@@ -2543,13 +2464,12 @@ func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
 	mock.EXPECT().DeleteAccount(address1).Return(nil)
 	mock.EXPECT().SetBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
@@ -2584,13 +2504,12 @@ func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	mock.EXPECT().SetCode(address1, []byte{}).Return(nil)
 	mock.EXPECT().SetCode(address2, []byte{}).Return(nil)
 	mock.EXPECT().SetCode(address3, []byte{}).Return(nil)
-	db.EndBlock()
+	db.EndBlock(1)
 }
 
 func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	balance, _ := common.ToBalance(big.NewInt(12))
@@ -2616,8 +2535,7 @@ func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 
 func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mock := NewMockState(ctrl)
+	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(0))
@@ -2637,7 +2555,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	defer ref.Close()
 	mod(ref)
 	ref.EndTransaction()
-	ref.EndBlock()
+	ref.EndBlock(1)
 	want := ref.GetHash()
 	for i := 0; i < 3; i++ {
 		for _, config := range initStates() {
@@ -2651,7 +2569,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 
 				mod(stateDb)
 				stateDb.EndTransaction()
-				stateDb.EndBlock()
+				stateDb.EndBlock(1)
 				if got := stateDb.GetHash(); want != got {
 					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
 				}
@@ -2784,7 +2702,7 @@ func TestPersistentStateDB(t *testing.T) {
 			}
 
 			stateDb.EndTransaction()
-			stateDb.EndBlock()
+			stateDb.EndBlock(1)
 			stateDb.BeginBlock()
 			stateDb.BeginTransaction()
 
@@ -2800,7 +2718,7 @@ func TestPersistentStateDB(t *testing.T) {
 			}
 
 			stateDb.EndTransaction()
-			stateDb.EndBlock()
+			stateDb.EndBlock(2)
 			stateDb.EndEpoch(1)
 
 			if err := stateDb.Close(); err != nil {

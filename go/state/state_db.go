@@ -60,7 +60,7 @@ type StateDB interface {
 	AbortTransaction()
 
 	BeginBlock()
-	EndBlock()
+	EndBlock(number uint64)
 
 	BeginEpoch()
 	EndEpoch(number uint64)
@@ -868,11 +868,18 @@ func (s *stateDB) BeginBlock() {
 	// ignored
 }
 
-func (s *stateDB) EndBlock() {
+func (s *stateDB) EndBlock(block uint64) {
 	// Write all changes to the store. Note, the store's state hash depends on the insertion order.
 	// Thus, the insertion must be performed in a deterministic order. Maps in Go have an undefined
 	// order and are deliberately randomized. Thus, updates need to be ordered before being written
 	// to the underlying state.
+	update := Update{}
+
+	// A list of addresses reused for different purposes in this function.
+	addresses := make([]common.Address, 0, max(max(max(len(s.accounts), len(s.balances)), len(s.nonces)), len(s.clearedAccounts)))
+	sortAddresses := func() {
+		sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(&addresses[j]) < 0 })
+	}
 
 	// Clear all accounts that have been deleted at some point during this block.
 	// This will cause all storage slots of that accounts to be reset before new
@@ -881,15 +888,13 @@ func (s *stateDB) EndBlock() {
 	clearedAccounts := map[common.Address]bool{}
 	for addr, clearingState := range s.clearedAccounts {
 		if clearingState == cleared {
-			// We can delete accounts in an arbitrary order since deleting does not
-			// introduce new values in the address -> addr_id map.
-			if err := s.state.DeleteAccount(addr); err != nil {
-				panic(fmt.Sprintf("failed to delete account: %v", err))
-			}
+			addresses = append(addresses, addr)
 			clearedAccounts[addr] = true
 			s.accounts[addr].original = &deletedAccountState
 		}
 	}
+	sortAddresses()
+	update.AppendDeleteAccounts(addresses)
 
 	// Increment the reincarnation counter of cleared addresses to invalidate cached entries in
 	// the stored data cache.
@@ -898,10 +903,7 @@ func (s *stateDB) EndBlock() {
 	}
 
 	// Update account stats in deterministic order in state DB
-	addresses := make([]common.Address, 0, max(max(len(s.accounts), len(s.balances)), len(s.nonces)))
-	sortAddresses := func() {
-		sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(&addresses[j]) < 0 })
-	}
+	addresses = addresses[0:0]
 	for addr, value := range s.accounts {
 		if value.original == nil || *value.original != value.current {
 			if value.current == common.Exists {
@@ -914,12 +916,7 @@ func (s *stateDB) EndBlock() {
 		}
 	}
 	sortAddresses()
-	for _, address := range addresses {
-		err := s.state.CreateAccount(address)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to create account: %v", err))
-		}
-	}
+	update.AppendCreateAccounts(addresses)
 
 	// Update balances in a deterministic order.
 	addresses = addresses[0:0]
@@ -934,10 +931,7 @@ func (s *stateDB) EndBlock() {
 		if err != nil {
 			panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 		}
-		err = s.state.SetBalance(addr, newBalance)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to set account balance: %v", err))
-		}
+		update.AppendBalanceUpdate(addr, newBalance)
 	}
 
 	// Update nonces in a deterministic order.
@@ -949,10 +943,7 @@ func (s *stateDB) EndBlock() {
 	}
 	sortAddresses()
 	for _, addr := range addresses {
-		err := s.state.SetNonce(addr, common.ToNonce(s.nonces[addr].current))
-		if err != nil {
-			panic(fmt.Sprintf("Failed to set account nonce: %v", err))
-		}
+		update.AppendNonceUpdate(addr, common.ToNonce(s.nonces[addr].current))
 	}
 
 	// Update storage values in state DB
@@ -965,11 +956,7 @@ func (s *stateDB) EndBlock() {
 	sort.Slice(slots, func(i, j int) bool { return slots[i].Compare(&slots[j]) < 0 })
 	for _, slot := range slots {
 		value, _ := s.data.Get(slot)
-		err := s.state.SetStorage(slot.addr, slot.key, value.current)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to set storage: %v", err))
-		}
-
+		update.AppendSlotUpdate(slot.addr, slot.key, value.current)
 		s.storedDataCache.Set(slot, storedDataCacheValue{value.current, s.reincarnation[slot.addr]})
 	}
 
@@ -982,10 +969,12 @@ func (s *stateDB) EndBlock() {
 	}
 	sortAddresses()
 	for _, addr := range addresses {
-		err := s.state.SetCode(addr, s.codes[addr].code)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to set contract code: %v", err))
-		}
+		update.AppendCodeUpdate(addr, s.codes[addr].code)
+	}
+
+	// Send the update to the state.
+	if err := s.state.Apply(block, update); err != nil {
+		panic(fmt.Sprintf("Failed to apply update: %v", err))
 	}
 
 	// Reset internal state for next block
@@ -1018,7 +1007,7 @@ func (s *stateDB) Close() error {
 }
 
 func (s *stateDB) StartBulkLoad() BulkLoad {
-	s.EndBlock()
+	s.EndBlock(0)
 	s.storedDataCache.Clear()
 	return &bulkLoad{s.state}
 }
@@ -1026,7 +1015,6 @@ func (s *stateDB) StartBulkLoad() BulkLoad {
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	const addressSize = 20
 	const keySize = 32
-	const valueSize = 32
 	const hashSize = 32
 	const slotIdSize = addressSize + keySize
 

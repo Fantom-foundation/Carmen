@@ -154,6 +154,10 @@ func (cs *CppState) GetHash() (common.Hash, error) {
 	return hash, nil
 }
 
+func (s *CppState) Apply(block uint64, update Update) error {
+	return update.apply(s)
+}
+
 func (cs *CppState) Flush() error {
 	C.Carmen_Flush(cs.state)
 	return nil
