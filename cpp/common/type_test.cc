@@ -8,6 +8,7 @@
 namespace carmen {
 namespace {
 
+using ::testing::ElementsAre;
 using ::testing::StrEq;
 using ::testing::StrNe;
 
@@ -184,6 +185,24 @@ TEST(NonceTest, TypeProperties) {
   EXPECT_TRUE(std::is_trivially_move_assignable_v<Nonce>);
   EXPECT_TRUE(std::equality_comparable<Nonce>);
   EXPECT_TRUE(std::is_default_constructible_v<Nonce>);
+}
+
+TEST(CodeTest, DefaultCodeIsEmpty) {
+  Code code;
+  EXPECT_EQ(code.Size(), 0);
+}
+
+TEST(CodeTest, IsOrderedLexicographically) {
+  EXPECT_LT((Code{0}), (Code{1}));
+  EXPECT_LT((Code{0, 1}), (Code{0, 2}));
+  EXPECT_LT((Code{}), (Code{0}));
+  EXPECT_LT((Code{0}), (Code{0, 1}));
+}
+
+TEST(CodeTest, CodeCanBeConvertedToByteSpan) {
+  Code code{0, 1};
+  std::span<const std::byte> span = code;
+  EXPECT_THAT(span, ElementsAre(std::byte{0}, std::byte{1}));
 }
 
 }  // namespace

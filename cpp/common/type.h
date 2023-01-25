@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <span>
+#include <vector>
 
 #include "hex_util.h"
 
@@ -133,6 +135,30 @@ class Balance : public ByteValue<kBalanceLength> {
 class Nonce : public ByteValue<kNonceLength> {
  public:
   using ByteValue::ByteValue;
+};
+
+// Code represents a smart contract code.
+class Code {
+ public:
+  Code(std::vector<std::byte> code = {}) : code_(std::move(code)) {}
+  Code(std::span<const std::byte> code) {
+    code_.assign(code.begin(), code.end());
+  }
+  Code(std::initializer_list<std::uint8_t> il) {
+    auto bytes = std::as_bytes(std::span(il.begin(), il.size()));
+    code_.assign(bytes.begin(), bytes.end());
+  }
+
+  auto Size() const { return code_.size(); }
+
+  auto operator<=>(const Code&) const = default;
+
+  operator std::span<const std::byte>() const {
+    return {code_.data(), code_.size()};
+  }
+
+ private:
+  std::vector<std::byte> code_;
 };
 
 }  // namespace carmen

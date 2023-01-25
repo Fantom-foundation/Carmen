@@ -39,6 +39,15 @@ class Archive {
   // Adds the changes of the given block to this archive.
   absl::Status Add(BlockId block, const Update& update);
 
+  // Allows to fetch a historic balance values for a given account.
+  absl::StatusOr<Balance> GetBalance(BlockId block, const Address& account);
+
+  // Allows to fetch a historic code values for a given account.
+  absl::StatusOr<Code> GetCode(BlockId block, const Address& account);
+
+  // Allows to fetch a historic nonce values for a given account.
+  absl::StatusOr<Nonce> GetNonce(BlockId block, const Address& account);
+
   // Allows to fetch a historic value for a given slot.
   absl::StatusOr<Value> GetStorage(BlockId block, const Address& account,
                                    const Key& key);
