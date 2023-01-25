@@ -34,6 +34,20 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 	return m.recorder
 }
 
+// Apply mocks base method.
+func (m *MockState) Apply(block uint64, update Update) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Apply", block, update)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Apply indicates an expected call of Apply.
+func (mr *MockStateMockRecorder) Apply(block, update interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockState)(nil).Apply), block, update)
+}
+
 // Close mocks base method.
 func (m *MockState) Close() error {
 	m.ctrl.T.Helper()

@@ -37,13 +37,23 @@ type Update struct {
 // account's storage. Subsequent account creations or balance / nonce / slot
 // updates will take affect after the deletion of the account.
 func (u *Update) AppendDeleteAccount(addr common.Address) {
-	u.deletedAccounts = append(u.deletedAccounts, addr)
+	u.AppendDeleteAccounts([]common.Address{addr})
+}
+
+// AppendDeleteAccounts is the same as AppendDeleteAccount, but for a slice.
+func (u *Update) AppendDeleteAccounts(addr []common.Address) {
+	u.deletedAccounts = append(u.deletedAccounts, addr...)
 }
 
 // AppendCreateAccount registers a new account to be created in this block.
 // This takes affect after deleting the accounts listed in this update.
 func (u *Update) AppendCreateAccount(addr common.Address) {
-	u.createdAccounts = append(u.createdAccounts, addr)
+	u.AppendCreateAccounts([]common.Address{addr})
+}
+
+// AppendCreateAccounts is the same as AppendCreateAccount, but for a slice.
+func (u *Update) AppendCreateAccounts(addr []common.Address) {
+	u.createdAccounts = append(u.createdAccounts, addr...)
 }
 
 // AppendBalanceUpdate registers a balance update to be conducted.
@@ -111,6 +121,43 @@ func (u *Update) Check() error {
 		return fmt.Errorf("storage updates are not in order or unique")
 	}
 
+	return nil
+}
+
+// apply distributes the updates combined in a Update struct to individual update calls.
+// This is intended as the default implementation for the Go, C++, and Mock state. However,
+// implementations may chose to implement specialized versions.
+func (u *Update) apply(s State) error {
+	for _, addr := range u.deletedAccounts {
+		if err := s.DeleteAccount(addr); err != nil {
+			return err
+		}
+	}
+	for _, addr := range u.createdAccounts {
+		if err := s.CreateAccount(addr); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.balances {
+		if err := s.SetBalance(change.account, change.balance); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.nonces {
+		if err := s.SetNonce(change.account, change.nonce); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.codes {
+		if err := s.SetCode(change.account, change.code); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.slots {
+		if err := s.SetStorage(change.account, change.key, change.value); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

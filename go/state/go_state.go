@@ -2,9 +2,10 @@ package state
 
 import (
 	"crypto/sha256"
-	"github.com/Fantom-foundation/Carmen/go/backend/multimap"
 	"hash"
 	"io"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/multimap"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
@@ -234,6 +235,10 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 		}
 	}
 	return hash, nil
+}
+
+func (s *GoState) Apply(block uint64, update Update) error {
+	return update.apply(s)
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {
