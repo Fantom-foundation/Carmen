@@ -54,7 +54,7 @@ func NewCppLevelDbBasedState(directory string) (State, error) {
 	}, nil
 }
 
-func (cs *CppState) CreateAccount(address common.Address) error {
+func (cs *CppState) createAccount(address common.Address) error {
 	C.Carmen_CreateAccount(cs.state, unsafe.Pointer(&address[0]))
 	return nil
 }
@@ -65,7 +65,7 @@ func (cs *CppState) GetAccountState(address common.Address) (common.AccountState
 	return res, nil
 }
 
-func (cs *CppState) DeleteAccount(address common.Address) error {
+func (cs *CppState) deleteAccount(address common.Address) error {
 	C.Carmen_DeleteAccount(cs.state, unsafe.Pointer(&address[0]))
 	return nil
 }
@@ -76,7 +76,7 @@ func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
 	return balance, nil
 }
 
-func (cs *CppState) SetBalance(address common.Address, balance common.Balance) error {
+func (cs *CppState) setBalance(address common.Address, balance common.Balance) error {
 	C.Carmen_SetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))
 	return nil
 }
@@ -87,7 +87,7 @@ func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
 	return nonce, nil
 }
 
-func (cs *CppState) SetNonce(address common.Address, nonce common.Nonce) error {
+func (cs *CppState) setNonce(address common.Address, nonce common.Nonce) error {
 	C.Carmen_SetNonce(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&nonce[0]))
 	return nil
 }
@@ -98,7 +98,7 @@ func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.V
 	return value, nil
 }
 
-func (cs *CppState) SetStorage(address common.Address, key common.Key, value common.Value) error {
+func (cs *CppState) setStorage(address common.Address, key common.Key, value common.Value) error {
 	C.Carmen_SetStorageValue(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&key[0]), unsafe.Pointer(&value[0]))
 	return nil
 }
@@ -126,7 +126,7 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 	return code, nil
 }
 
-func (cs *CppState) SetCode(address common.Address, code []byte) error {
+func (cs *CppState) setCode(address common.Address, code []byte) error {
 	var codePtr unsafe.Pointer
 	if len(code) > 0 {
 		codePtr = unsafe.Pointer(&code[0])

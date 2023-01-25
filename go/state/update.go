@@ -127,34 +127,34 @@ func (u *Update) Check() error {
 // apply distributes the updates combined in a Update struct to individual update calls.
 // This is intended as the default implementation for the Go, C++, and Mock state. However,
 // implementations may chose to implement specialized versions.
-func (u *Update) apply(s State) error {
+func (u *Update) apply(s directUpdateState) error {
 	for _, addr := range u.deletedAccounts {
-		if err := s.DeleteAccount(addr); err != nil {
+		if err := s.deleteAccount(addr); err != nil {
 			return err
 		}
 	}
 	for _, addr := range u.createdAccounts {
-		if err := s.CreateAccount(addr); err != nil {
+		if err := s.createAccount(addr); err != nil {
 			return err
 		}
 	}
 	for _, change := range u.balances {
-		if err := s.SetBalance(change.account, change.balance); err != nil {
+		if err := s.setBalance(change.account, change.balance); err != nil {
 			return err
 		}
 	}
 	for _, change := range u.nonces {
-		if err := s.SetNonce(change.account, change.nonce); err != nil {
+		if err := s.setNonce(change.account, change.nonce); err != nil {
 			return err
 		}
 	}
 	for _, change := range u.codes {
-		if err := s.SetCode(change.account, change.code); err != nil {
+		if err := s.setCode(change.account, change.code); err != nil {
 			return err
 		}
 	}
 	for _, change := range u.slots {
-		if err := s.SetStorage(change.account, change.key, change.value); err != nil {
+		if err := s.setStorage(change.account, change.key, change.value); err != nil {
 			return err
 		}
 	}

@@ -62,34 +62,6 @@ func (mr *MockStateMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockState)(nil).Close))
 }
 
-// CreateAccount mocks base method.
-func (m *MockState) CreateAccount(address common.Address) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateAccount", address)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateAccount indicates an expected call of CreateAccount.
-func (mr *MockStateMockRecorder) CreateAccount(address interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockState)(nil).CreateAccount), address)
-}
-
-// DeleteAccount mocks base method.
-func (m *MockState) DeleteAccount(address common.Address) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteAccount", address)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteAccount indicates an expected call of DeleteAccount.
-func (mr *MockStateMockRecorder) DeleteAccount(address interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAccount", reflect.TypeOf((*MockState)(nil).DeleteAccount), address)
-}
-
 // Flush mocks base method.
 func (m *MockState) Flush() error {
 	m.ctrl.T.Helper()
@@ -238,58 +210,285 @@ func (mr *MockStateMockRecorder) GetStorage(address, key interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockState)(nil).GetStorage), address, key)
 }
 
-// SetBalance mocks base method.
-func (m *MockState) SetBalance(address common.Address, balance common.Balance) error {
+// MockmutableState is a mock of mutableState interface.
+type MockmutableState struct {
+	ctrl     *gomock.Controller
+	recorder *MockmutableStateMockRecorder
+}
+
+// MockmutableStateMockRecorder is the mock recorder for MockmutableState.
+type MockmutableStateMockRecorder struct {
+	mock *MockmutableState
+}
+
+// NewMockmutableState creates a new mock instance.
+func NewMockmutableState(ctrl *gomock.Controller) *MockmutableState {
+	mock := &MockmutableState{ctrl: ctrl}
+	mock.recorder = &MockmutableStateMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmutableState) EXPECT() *MockmutableStateMockRecorder {
+	return m.recorder
+}
+
+// Apply mocks base method.
+func (m *MockmutableState) Apply(block uint64, update Update) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetBalance", address, balance)
+	ret := m.ctrl.Call(m, "Apply", block, update)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetBalance indicates an expected call of SetBalance.
-func (mr *MockStateMockRecorder) SetBalance(address, balance interface{}) *gomock.Call {
+// Apply indicates an expected call of Apply.
+func (mr *MockmutableStateMockRecorder) Apply(block, update interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalance", reflect.TypeOf((*MockState)(nil).SetBalance), address, balance)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockmutableState)(nil).Apply), block, update)
 }
 
-// SetCode mocks base method.
-func (m *MockState) SetCode(address common.Address, code []byte) error {
+// Close mocks base method.
+func (m *MockmutableState) Close() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetCode", address, code)
+	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetCode indicates an expected call of SetCode.
-func (mr *MockStateMockRecorder) SetCode(address, code interface{}) *gomock.Call {
+// Close indicates an expected call of Close.
+func (mr *MockmutableStateMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCode", reflect.TypeOf((*MockState)(nil).SetCode), address, code)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockmutableState)(nil).Close))
 }
 
-// SetNonce mocks base method.
-func (m *MockState) SetNonce(address common.Address, nonce common.Nonce) error {
+// Flush mocks base method.
+func (m *MockmutableState) Flush() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetNonce", address, nonce)
+	ret := m.ctrl.Call(m, "Flush")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetNonce indicates an expected call of SetNonce.
-func (mr *MockStateMockRecorder) SetNonce(address, nonce interface{}) *gomock.Call {
+// Flush indicates an expected call of Flush.
+func (mr *MockmutableStateMockRecorder) Flush() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNonce", reflect.TypeOf((*MockState)(nil).SetNonce), address, nonce)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockmutableState)(nil).Flush))
 }
 
-// SetStorage mocks base method.
-func (m *MockState) SetStorage(address common.Address, key common.Key, value common.Value) error {
+// GetAccountState mocks base method.
+func (m *MockmutableState) GetAccountState(address common.Address) (common.AccountState, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetStorage", address, key, value)
+	ret := m.ctrl.Call(m, "GetAccountState", address)
+	ret0, _ := ret[0].(common.AccountState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAccountState indicates an expected call of GetAccountState.
+func (mr *MockmutableStateMockRecorder) GetAccountState(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountState", reflect.TypeOf((*MockmutableState)(nil).GetAccountState), address)
+}
+
+// GetBalance mocks base method.
+func (m *MockmutableState) GetBalance(address common.Address) (common.Balance, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBalance", address)
+	ret0, _ := ret[0].(common.Balance)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBalance indicates an expected call of GetBalance.
+func (mr *MockmutableStateMockRecorder) GetBalance(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockmutableState)(nil).GetBalance), address)
+}
+
+// GetCode mocks base method.
+func (m *MockmutableState) GetCode(address common.Address) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCode", address)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCode indicates an expected call of GetCode.
+func (mr *MockmutableStateMockRecorder) GetCode(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCode", reflect.TypeOf((*MockmutableState)(nil).GetCode), address)
+}
+
+// GetCodeHash mocks base method.
+func (m *MockmutableState) GetCodeHash(address common.Address) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCodeHash", address)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCodeHash indicates an expected call of GetCodeHash.
+func (mr *MockmutableStateMockRecorder) GetCodeHash(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeHash", reflect.TypeOf((*MockmutableState)(nil).GetCodeHash), address)
+}
+
+// GetCodeSize mocks base method.
+func (m *MockmutableState) GetCodeSize(address common.Address) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCodeSize", address)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCodeSize indicates an expected call of GetCodeSize.
+func (mr *MockmutableStateMockRecorder) GetCodeSize(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCodeSize", reflect.TypeOf((*MockmutableState)(nil).GetCodeSize), address)
+}
+
+// GetHash mocks base method.
+func (m *MockmutableState) GetHash() (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHash")
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHash indicates an expected call of GetHash.
+func (mr *MockmutableStateMockRecorder) GetHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockmutableState)(nil).GetHash))
+}
+
+// GetMemoryFootprint mocks base method.
+func (m *MockmutableState) GetMemoryFootprint() *common.MemoryFootprint {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMemoryFootprint")
+	ret0, _ := ret[0].(*common.MemoryFootprint)
+	return ret0
+}
+
+// GetMemoryFootprint indicates an expected call of GetMemoryFootprint.
+func (mr *MockmutableStateMockRecorder) GetMemoryFootprint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*MockmutableState)(nil).GetMemoryFootprint))
+}
+
+// GetNonce mocks base method.
+func (m *MockmutableState) GetNonce(address common.Address) (common.Nonce, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNonce", address)
+	ret0, _ := ret[0].(common.Nonce)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNonce indicates an expected call of GetNonce.
+func (mr *MockmutableStateMockRecorder) GetNonce(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockmutableState)(nil).GetNonce), address)
+}
+
+// GetStorage mocks base method.
+func (m *MockmutableState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStorage", address, key)
+	ret0, _ := ret[0].(common.Value)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetStorage indicates an expected call of GetStorage.
+func (mr *MockmutableStateMockRecorder) GetStorage(address, key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockmutableState)(nil).GetStorage), address, key)
+}
+
+// createAccount mocks base method.
+func (m *MockmutableState) createAccount(address common.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "createAccount", address)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SetStorage indicates an expected call of SetStorage.
-func (mr *MockStateMockRecorder) SetStorage(address, key, value interface{}) *gomock.Call {
+// createAccount indicates an expected call of createAccount.
+func (mr *MockmutableStateMockRecorder) createAccount(address interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockState)(nil).SetStorage), address, key, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "createAccount", reflect.TypeOf((*MockmutableState)(nil).createAccount), address)
+}
+
+// deleteAccount mocks base method.
+func (m *MockmutableState) deleteAccount(address common.Address) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "deleteAccount", address)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// deleteAccount indicates an expected call of deleteAccount.
+func (mr *MockmutableStateMockRecorder) deleteAccount(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "deleteAccount", reflect.TypeOf((*MockmutableState)(nil).deleteAccount), address)
+}
+
+// setBalance mocks base method.
+func (m *MockmutableState) setBalance(address common.Address, balance common.Balance) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "setBalance", address, balance)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// setBalance indicates an expected call of setBalance.
+func (mr *MockmutableStateMockRecorder) setBalance(address, balance interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setBalance", reflect.TypeOf((*MockmutableState)(nil).setBalance), address, balance)
+}
+
+// setCode mocks base method.
+func (m *MockmutableState) setCode(address common.Address, code []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "setCode", address, code)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// setCode indicates an expected call of setCode.
+func (mr *MockmutableStateMockRecorder) setCode(address, code interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setCode", reflect.TypeOf((*MockmutableState)(nil).setCode), address, code)
+}
+
+// setNonce mocks base method.
+func (m *MockmutableState) setNonce(address common.Address, nonce common.Nonce) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "setNonce", address, nonce)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// setNonce indicates an expected call of setNonce.
+func (mr *MockmutableStateMockRecorder) setNonce(address, nonce interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setNonce", reflect.TypeOf((*MockmutableState)(nil).setNonce), address, nonce)
+}
+
+// setStorage mocks base method.
+func (m *MockmutableState) setStorage(address common.Address, key common.Key, value common.Value) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "setStorage", address, key, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// setStorage indicates an expected call of setStorage.
+func (mr *MockmutableStateMockRecorder) setStorage(address, key, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setStorage", reflect.TypeOf((*MockmutableState)(nil).setStorage), address, key, value)
 }
