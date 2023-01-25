@@ -54,11 +54,11 @@ TEST(Archive, MultipleVersionsOfTheSameValueCanBeRetained) {
   Value one{0x01};
   Value two{0x02};
 
-  BlockUpdate update1;
+  Update update1;
   update1.Set(addr, key, one);
   EXPECT_OK(archive.Add(BlockId(2), update1));
 
-  BlockUpdate update2;
+  Update update2;
   update2.Set(addr, key, two);
   EXPECT_OK(archive.Add(BlockId(4), update2));
 
@@ -83,7 +83,7 @@ TEST(Archive, DifferentAccountsAreDifferentiated) {
   Value one{0x01};
   Value two{0x02};
 
-  BlockUpdate update1;
+  Update update1;
   update1.Set(addr1, key1, one);
   update1.Set(addr1, key2, two);
   update1.Set(addr2, key1, two);
@@ -118,13 +118,13 @@ TEST(Archive, ConflictingHistoryCanNotBeAdded) {
   Value one{0x01};
   Value two{0x02};
 
-  BlockUpdate update1;
+  Update update1;
   update1.Set(addr, key, one);
   EXPECT_OK(archive.Add(block, update1));
   EXPECT_THAT(archive.GetStorage(block, addr, key), one);
 
   // Attempting to update the same block again fails.
-  BlockUpdate update2;
+  Update update2;
   update2.Set(addr, key, two);
   EXPECT_THAT(archive.Add(block, update2),
               StatusIs(_, HasSubstr("UNIQUE constraint failed")));
