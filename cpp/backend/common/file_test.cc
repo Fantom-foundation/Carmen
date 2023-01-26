@@ -247,6 +247,7 @@ class MockErrorFile {
   auto Flush() { return mock_->Flush(); }
   auto Close() { return mock_->Close(); }
   auto& GetMock() { return *mock_; }
+
  private:
   class Mock {
    public:
