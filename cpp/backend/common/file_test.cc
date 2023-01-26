@@ -236,6 +236,19 @@ TYPED_TEST_P(SingleFileTest, OpenFileErrorIsHandled) {
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
 }
 
+REGISTER_TYPED_TEST_SUITE_P(SingleFileTest, IsFile, ExistingFileCanBeOpened,
+                            NonExistingFileIsCreated,
+                            NestedDirectoryIsCreatedIfNeeded,
+                            InitialFileIsEmpty, PagesCanBeWrittenAndRead,
+                            PagesAreDifferentiated,
+                            WritingPagesCreatesImplicitEmptyPages,
+                            LoadingUninitializedPagesLeadsToZeros,
+                            OpenFileErrorIsHandled);
+
+using RawFileTypes = ::testing::Types<internal::FStreamFile, internal::CFile,
+                                      internal::PosixFile>;
+INSTANTIATE_TYPED_TEST_SUITE_P(My, SingleFileTest, RawFileTypes);
+
 class MockErrorFile {
  public:
   static absl::StatusOr<MockErrorFile> Open(const std::filesystem::path&) {
@@ -312,19 +325,6 @@ TEST(SingleFileErrorTest, CloseErrorIsHandled) {
   auto status = file.Close();
   EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
 }
-
-REGISTER_TYPED_TEST_SUITE_P(SingleFileTest, IsFile, ExistingFileCanBeOpened,
-                            NonExistingFileIsCreated,
-                            NestedDirectoryIsCreatedIfNeeded,
-                            InitialFileIsEmpty, PagesCanBeWrittenAndRead,
-                            PagesAreDifferentiated,
-                            WritingPagesCreatesImplicitEmptyPages,
-                            LoadingUninitializedPagesLeadsToZeros,
-                            OpenFileErrorIsHandled);
-
-using RawFileTypes = ::testing::Types<internal::FStreamFile, internal::CFile,
-                                      internal::PosixFile>;
-INSTANTIATE_TYPED_TEST_SUITE_P(My, SingleFileTest, RawFileTypes);
 
 }  // namespace
 }  // namespace carmen::backend::store
