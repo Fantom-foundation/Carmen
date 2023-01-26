@@ -25,7 +25,7 @@ extern "C" {
 #define C_Balance void*
 #define C_Nonce void*
 #define C_Code void*
-
+#define C_Update void*
 #define C_Hash void*
 #define C_AccountState void*
 
@@ -60,31 +60,19 @@ void Carmen_ReleaseState(C_State state);
 
 // ------------------------------- Accounts -----------------------------------
 
-// Creates a new account or resurrects a deleted account.
-void Carmen_CreateAccount(C_State state, C_Address addr);
-
 // Gets the current state of the given account.
 void Carmen_GetAccountState(C_State state, C_Address addr,
                             C_AccountState out_state);
-
-// Deletes the given account.
-void Carmen_DeleteAccount(C_State state, C_Address addr);
 
 // -------------------------------- Balance -----------------------------------
 
 // Retrieves the balance of the given account.
 void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance);
 
-// Updates the balance of the given account.
-void Carmen_SetBalance(C_State state, C_Address addr, C_Balance balance);
-
 // --------------------------------- Nonce ------------------------------------
 
 // Retrieves the nonce of the given account.
 void Carmen_GetNonce(C_State state, C_Address addr, C_Nonce out_nonce);
-
-// Updates the nonce of the given account.
-void Carmen_SetNonce(C_State state, C_Address addr, C_Nonce nonce);
 
 // -------------------------------- Storage -----------------------------------
 
@@ -92,25 +80,23 @@ void Carmen_SetNonce(C_State state, C_Address addr, C_Nonce nonce);
 void Carmen_GetStorageValue(C_State state, C_Address addr, C_Key key,
                             C_Value out_value);
 
-// Updates the value of storage location (addr,key) in the given state.
-void Carmen_SetStorageValue(C_State state, C_Address addr, C_Key key,
-                            C_Value value);
-
 // --------------------------------- Code -------------------------------------
 
 // Retrieves the code stored under the given address.
 void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
                     uint32_t* out_length);
 
-// Updates the code stored under the given address.
-void Carmen_SetCode(C_State state, C_Address addr, C_Code code,
-                    uint32_t length);
-
 // Retrieves the hash of the code stored under the given address.
 void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash);
 
 // Retrieves the code length stored under the given address.
 void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
+
+// -------------------------------- Update ------------------------------------
+
+// Applies the provided block update to the maintained state.
+void Carmen_Apply(C_State state, uint64_t block, C_Update update,
+                  uint32_t length);
 
 // ------------------------------ Global Hash ---------------------------------
 

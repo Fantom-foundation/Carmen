@@ -13,6 +13,7 @@
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
+#include "state/update.h"
 
 namespace carmen {
 
@@ -86,6 +87,9 @@ class State {
 
   // Retrieves the hash of the code stored under the given address.
   absl::StatusOr<Hash> GetCodeHash(const Address& address) const;
+
+  // Applies the given block updates to this state.
+  absl::Status Apply(std::uint64_t block, const Update& update);
 
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
@@ -440,6 +444,34 @@ State<IndexType, StoreType, DepotType, MultiMapType>::GetCodeHash(
     }
   }
   return code_hash;
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType>
+absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
+    std::uint64_t, const Update& update) {
+  // It is important to keep the update order.
+  for (auto& addr : update.GetDeletedAccounts()) {
+    RETURN_IF_ERROR(DeleteAccount(addr));
+  }
+  for (auto& addr : update.GetCreatedAccounts()) {
+    RETURN_IF_ERROR(CreateAccount(addr));
+  }
+  for (auto& [addr, value] : update.GetBalances()) {
+    RETURN_IF_ERROR(SetBalance(addr, value));
+  }
+  for (auto& [addr, value] : update.GetNonces()) {
+    RETURN_IF_ERROR(SetNonce(addr, value));
+  }
+  for (auto& [addr, code] : update.GetCodes()) {
+    RETURN_IF_ERROR(SetCode(addr, code));
+  }
+  for (auto& [addr, key, value] : update.GetStorage()) {
+    RETURN_IF_ERROR(SetStorageValue(addr, key, value));
+  }
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,

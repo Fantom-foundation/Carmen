@@ -55,8 +55,9 @@ func NewCppLevelDbBasedState(directory string) (State, error) {
 }
 
 func (cs *CppState) createAccount(address common.Address) error {
-	C.Carmen_CreateAccount(cs.state, unsafe.Pointer(&address[0]))
-	return nil
+	update := Update{}
+	update.AppendCreateAccount(address)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetAccountState(address common.Address) (common.AccountState, error) {
@@ -66,8 +67,9 @@ func (cs *CppState) GetAccountState(address common.Address) (common.AccountState
 }
 
 func (cs *CppState) deleteAccount(address common.Address) error {
-	C.Carmen_DeleteAccount(cs.state, unsafe.Pointer(&address[0]))
-	return nil
+	update := Update{}
+	update.AppendDeleteAccount(address)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
@@ -77,8 +79,9 @@ func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
 }
 
 func (cs *CppState) setBalance(address common.Address, balance common.Balance) error {
-	C.Carmen_SetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))
-	return nil
+	update := Update{}
+	update.AppendBalanceUpdate(address, balance)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
@@ -88,8 +91,9 @@ func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
 }
 
 func (cs *CppState) setNonce(address common.Address, nonce common.Nonce) error {
-	C.Carmen_SetNonce(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&nonce[0]))
-	return nil
+	update := Update{}
+	update.AppendNonceUpdate(address, nonce)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
@@ -99,8 +103,9 @@ func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.V
 }
 
 func (cs *CppState) setStorage(address common.Address, key common.Key, value common.Value) error {
-	C.Carmen_SetStorageValue(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&key[0]), unsafe.Pointer(&value[0]))
-	return nil
+	update := Update{}
+	update.AppendSlotUpdate(address, key, value)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
@@ -127,13 +132,10 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 }
 
 func (cs *CppState) setCode(address common.Address, code []byte) error {
-	var codePtr unsafe.Pointer
-	if len(code) > 0 {
-		codePtr = unsafe.Pointer(&code[0])
-	}
-	C.Carmen_SetCode(cs.state, unsafe.Pointer(&address[0]), codePtr, C.uint32_t(len(code)))
+	update := Update{}
+	update.AppendCodeUpdate(address, code)
 	cs.codeCache.Set(address, code)
-	return nil
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetCodeHash(address common.Address) (common.Hash, error) {
@@ -154,8 +156,11 @@ func (cs *CppState) GetHash() (common.Hash, error) {
 	return hash, nil
 }
 
-func (s *CppState) Apply(block uint64, update Update) error {
-	return update.apply(s)
+func (cs *CppState) Apply(block uint64, update Update) error {
+	data := update.ToBytes()
+	dataPtr := unsafe.Pointer(&data[0])
+	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint32_t(len(data)))
+	return nil
 }
 
 func (cs *CppState) Flush() error {

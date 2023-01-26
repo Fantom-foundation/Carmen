@@ -12,6 +12,7 @@
 #include "common/type.h"
 #include "state/configurations.h"
 #include "state/state.h"
+#include "state/update.h"
 
 namespace carmen {
 namespace {
@@ -21,24 +22,20 @@ class WorldState {
  public:
   virtual ~WorldState() {}
 
-  virtual absl::Status CreateAccount(const Address&) = 0;
   virtual absl::StatusOr<AccountState> GetAccountState(const Address&) = 0;
-  virtual absl::Status DeleteAccount(const Address&) = 0;
 
   virtual StatusOrRef<const Balance> GetBalance(const Address&) = 0;
-  virtual absl::Status SetBalance(const Address&, const Balance&) = 0;
 
   virtual StatusOrRef<const Nonce> GetNonce(const Address&) = 0;
-  virtual absl::Status SetNonce(const Address&, const Nonce&) = 0;
 
   virtual StatusOrRef<const Value> GetValue(const Address&, const Key&) = 0;
-  virtual absl::Status SetValue(const Address&, const Key&, const Value&) = 0;
 
   virtual absl::StatusOr<std::span<const std::byte>> GetCode(
       const Address&) = 0;
   virtual absl::StatusOr<std::uint32_t> GetCodeSize(const Address&) = 0;
   virtual absl::StatusOr<Hash> GetCodeHash(const Address&) = 0;
-  virtual absl::Status SetCode(const Address&, std::span<const std::byte>) = 0;
+
+  virtual absl::Status Apply(std::uint64_t block, const Update&) = 0;
 
   virtual absl::StatusOr<Hash> GetHash() = 0;
 
@@ -57,40 +54,21 @@ class WorldStateWrapper : public WorldState {
  public:
   WorldStateWrapper(State state) : state_(std::move(state)) {}
 
-  absl::Status CreateAccount(const Address& addr) override {
-    return state_.CreateAccount(addr);
-  }
-
   absl::StatusOr<AccountState> GetAccountState(const Address& addr) override {
     return state_.GetAccountState(addr);
-  }
-
-  absl::Status DeleteAccount(const Address& addr) override {
-    return state_.DeleteAccount(addr);
   }
 
   StatusOrRef<const Balance> GetBalance(const Address& address) override {
     return state_.GetBalance(address);
   }
-  absl::Status SetBalance(const Address& address,
-                          const Balance& balance) override {
-    return state_.SetBalance(address, balance);
-  }
 
   StatusOrRef<const Nonce> GetNonce(const Address& addr) override {
     return state_.GetNonce(addr);
-  }
-  absl::Status SetNonce(const Address& addr, const Nonce& nonce) override {
-    return state_.SetNonce(addr, nonce);
   }
 
   StatusOrRef<const Value> GetValue(const Address& addr,
                                     const Key& key) override {
     return state_.GetStorageValue(addr, key);
-  }
-  absl::Status SetValue(const Address& addr, const Key& key,
-                        const Value& value) override {
-    return state_.SetStorageValue(addr, key, value);
   }
 
   absl::StatusOr<std::span<const std::byte>> GetCode(
@@ -106,9 +84,8 @@ class WorldStateWrapper : public WorldState {
     return state_.GetCodeHash(addr);
   }
 
-  absl::Status SetCode(const Address& addr,
-                       std::span<const std::byte> code) override {
-    return state_.SetCode(addr, code);
+  absl::Status Apply(std::uint64_t block, const Update& update) override {
+    return state_.Apply(block, update);
   }
 
   absl::StatusOr<Hash> GetHash() override { return state_.GetHash(); }
@@ -172,15 +149,6 @@ void Carmen_ReleaseState(C_State state) {
   delete reinterpret_cast<carmen::WorldState*>(state);
 }
 
-void Carmen_CreateAccount(C_State state, C_Address addr) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto res = s.CreateAccount(a);
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to create account: " << res << "\n";
-  }
-}
-
 void Carmen_GetAccountState(C_State state, C_Address addr,
                             C_AccountState out_state) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
@@ -195,15 +163,6 @@ void Carmen_GetAccountState(C_State state, C_Address addr,
   r = *res;
 }
 
-void Carmen_DeleteAccount(C_State state, C_Address addr) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto res = s.DeleteAccount(a);
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to delete account: " << res << "\n";
-  }
-}
-
 void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& a = *reinterpret_cast<carmen::Address*>(addr);
@@ -216,16 +175,6 @@ void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance) {
   b = *res;
 }
 
-void Carmen_SetBalance(C_State state, C_Address addr, C_Balance balance) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto& b = *reinterpret_cast<carmen::Balance*>(balance);
-  auto res = s.SetBalance(a, b);
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to set balance: " << res << "\n";
-  }
-}
-
 void Carmen_GetNonce(C_State state, C_Address addr, C_Nonce out_nonce) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   auto& a = *reinterpret_cast<carmen::Address*>(addr);
@@ -236,16 +185,6 @@ void Carmen_GetNonce(C_State state, C_Address addr, C_Nonce out_nonce) {
     return;
   }
   n = *res;
-}
-
-void Carmen_SetNonce(C_State state, C_Address addr, C_Nonce nonce) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto& n = *reinterpret_cast<carmen::Nonce*>(nonce);
-  auto res = s.SetNonce(a, n);
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to set nonce: " << res << "\n";
-  }
 }
 
 void Carmen_GetStorageValue(C_State state, C_Address addr, C_Key key,
@@ -261,18 +200,6 @@ void Carmen_GetStorageValue(C_State state, C_Address addr, C_Key key,
     return;
   }
   v = *res;
-}
-
-void Carmen_SetStorageValue(C_State state, C_Address addr, C_Key key,
-                            C_Value value) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto& k = *reinterpret_cast<carmen::Key*>(key);
-  auto& v = *reinterpret_cast<carmen::Value*>(value);
-  auto res = s.SetValue(a, k, v);
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to set storage value: " << res << "\n";
-  }
 }
 
 void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
@@ -292,17 +219,6 @@ void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
     return;
   }
   memcpy(out_code, code->data(), code->size());
-}
-
-void Carmen_SetCode(C_State state, C_Address addr, C_Code code,
-                    uint32_t length) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  auto& a = *reinterpret_cast<carmen::Address*>(addr);
-  auto c = reinterpret_cast<const std::byte*>(code);
-  auto res = s.SetCode(a, {c, static_cast<std::size_t>(length)});
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to set code: " << res << "\n";
-  }
 }
 
 void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
@@ -326,6 +242,23 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
     return;
   }
   *out_length = *res;
+}
+
+void Carmen_Apply(C_State state, uint64_t block, C_Update update,
+                  uint32_t length) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  std::span<const std::byte> data(reinterpret_cast<const std::byte*>(update),
+                                  length);
+  auto change = carmen::Update::FromBytes(data);
+  if (!change.ok()) {
+    std::cout << "WARNING: Failed to decode update: " << change.status()
+              << "\n";
+    return;
+  }
+  auto res = s.Apply(block, *change);
+  if (!res.ok()) {
+    std::cout << "WARNING: Failed to apply update: " << res << "\n";
+  }
 }
 
 void Carmen_GetHash(C_State state, C_Hash out_hash) {
