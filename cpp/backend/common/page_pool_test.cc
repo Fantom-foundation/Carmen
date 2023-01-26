@@ -18,6 +18,7 @@ using ::testing::InSequence;
 using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::Sequence;
+using ::testing::StatusIs;
 
 using Page = ArrayPage<int>;
 using TestPool = PagePool<InMemoryFile<kFileSystemPageSize>>;
@@ -295,6 +296,36 @@ TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
   ASSERT_OK(pool.Get<Page>(10));
   ASSERT_OK(pool.Get<Page>(20));
   ASSERT_OK(pool.Get<Page>(30));
+}
+
+TEST(PagePoolTest, GetPageErrorIsHandled) {
+  auto file = std::make_unique<MockFile>();
+  auto& mock = *file;
+  PagePool<MockFile> pool(std::move(file), 2);
+  EXPECT_CALL(mock, LoadPage(0, _)).WillOnce(Return(absl::InternalError("")));
+  EXPECT_THAT(pool.Get<Page>(0), StatusIs(absl::StatusCode::kInternal, _));
+}
+
+TEST(PagePoolTest, FlushErrorIsHandled) {
+  auto file = std::make_unique<MockFile>();
+  auto& mock = *file;
+  PagePool<MockFile> pool(std::move(file), 2);
+
+  // load page and make it dirty
+  EXPECT_CALL(mock, LoadPage(0, _));
+  ASSERT_OK(pool.Get<Page>(0));
+  pool.MarkAsDirty(0);
+
+  EXPECT_CALL(mock, StorePage(0, _)).WillOnce(Return(absl::InternalError("")));
+  EXPECT_THAT(pool.Flush(), StatusIs(absl::StatusCode::kInternal, _));
+}
+
+TEST(PagePoolTest, CloseErrorIsHandled) {
+  auto file = std::make_unique<MockFile>();
+  auto& mock = *file;
+  PagePool<MockFile> pool(std::move(file), 2);
+  EXPECT_CALL(mock, Close).WillOnce(Return(absl::InternalError("")));
+  EXPECT_THAT(pool.Close(), StatusIs(absl::StatusCode::kInternal, _));
 }
 
 }  // namespace
