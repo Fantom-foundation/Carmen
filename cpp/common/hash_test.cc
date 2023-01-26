@@ -86,6 +86,13 @@ TEST(GetSha256Test, ComputesHashCorrectly) {
   EXPECT_THAT(Print(GetSha256Hash('a', 'b', 'c')), StrEq(hashes["abc"]));
 }
 
+TEST(GetSha256Test, ByteSpansCanBeHashed) {
+  for (auto [text, hash] : GetKnownHashes()) {
+    auto data = std::as_bytes(std::span(text.data(), text.size()));
+    EXPECT_THAT(Print(GetSha256Hash(data)), StrEq(hash));
+  }
+}
+
 TEST(Sha256HashTest, HashesCanBeHashed) {
   // The test passes if it compiles.
   Sha256Hasher hasher;
