@@ -4,7 +4,6 @@
 #include <optional>
 
 #include "absl/status/status.h"
-#include "backend/common/eviction_policy.h"
 #include "backend/common/file.h"
 #include "backend/common/page.h"
 #include "common/status_test_util.h"
