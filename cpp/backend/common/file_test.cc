@@ -11,6 +11,10 @@
 namespace carmen::backend::store {
 namespace {
 
+using ::testing::_;
+using ::testing::Return;
+using ::testing::StatusIs;
+
 // A page format used for the tests.
 template <std::size_t page_size>
 class alignas(kFileSystemPageSize) Page
@@ -222,13 +226,100 @@ TYPED_TEST_P(SingleFileTest, LoadingUninitializedPagesLeadsToZeros) {
   EXPECT_EQ(zero, loaded);
 }
 
+TYPED_TEST_P(SingleFileTest, OpenFileErrorIsHandled) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, TypeParam>;
+  // File should not be able to be opened if directory is passed instead of a
+  // file.
+  TempDir temp_dir;
+  auto status = File::Open(temp_dir.GetPath());
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
+}
+
+class MockErrorFile {
+ public:
+  static absl::StatusOr<MockErrorFile> Open(const std::filesystem::path&) {
+    return MockErrorFile();
+  }
+  auto GetFileSize() const { return mock_->GetFileSize(); }
+  auto Read(auto a, auto b) { return mock_->Read(a, b); }
+  auto Write(auto a, auto b) { return mock_->Write(a, b); }
+  auto Flush() { return mock_->Flush(); }
+  auto Close() { return mock_->Close(); }
+  auto& GetMock() { return *mock_; }
+ private:
+  class Mock {
+   public:
+    MOCK_METHOD(size_t, GetFileSize, (), (const));
+    MOCK_METHOD(absl::Status, Read, (std::size_t, std::span<std::byte>));
+    MOCK_METHOD(absl::Status, Write, (std::size_t, std::span<const std::byte>));
+    MOCK_METHOD(absl::Status, Flush, ());
+    MOCK_METHOD(absl::Status, Close, ());
+  };
+  // Mock is wrapped in unique_ptr to allow move semantics.
+  std::unique_ptr<Mock> mock_{std::make_unique<Mock>()};
+};
+
+TEST(SingleFileErrorTest, LoadPageErrorIsHandled) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, MockErrorFile>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
+
+  auto& mock = file.GetRawFile().GetMock();
+  EXPECT_CALL(mock, Read(0, _)).WillOnce(Return(absl::InternalError("")));
+
+  auto status = file.LoadPage(0, Page{});
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
+}
+
+TEST(SingleFileErrorTest, StorePageErrorIsHandled) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, MockErrorFile>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
+
+  auto& mock = file.GetRawFile().GetMock();
+  EXPECT_CALL(mock, Write(0, _)).WillOnce(Return(absl::InternalError("")));
+
+  auto status = file.StorePage(0, Page{});
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
+}
+
+TEST(SingleFileErrorTest, FlushErrorIsHandled) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, MockErrorFile>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
+
+  auto& mock = file.GetRawFile().GetMock();
+  EXPECT_CALL(mock, Flush).WillOnce(Return(absl::InternalError("")));
+
+  auto status = file.Flush();
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
+}
+
+TEST(SingleFileErrorTest, CloseErrorIsHandled) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, MockErrorFile>;
+  TempFile temp_file;
+  ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file.GetPath()));
+
+  auto& mock = file.GetRawFile().GetMock();
+  EXPECT_CALL(mock, Close).WillOnce(Return(absl::InternalError("")));
+
+  auto status = file.Close();
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kInternal, _));
+}
+
 REGISTER_TYPED_TEST_SUITE_P(SingleFileTest, IsFile, ExistingFileCanBeOpened,
                             NonExistingFileIsCreated,
                             NestedDirectoryIsCreatedIfNeeded,
                             InitialFileIsEmpty, PagesCanBeWrittenAndRead,
                             PagesAreDifferentiated,
                             WritingPagesCreatesImplicitEmptyPages,
-                            LoadingUninitializedPagesLeadsToZeros);
+                            LoadingUninitializedPagesLeadsToZeros,
+                            OpenFileErrorIsHandled);
 
 using RawFileTypes = ::testing::Types<internal::FStreamFile, internal::CFile,
                                       internal::PosixFile>;

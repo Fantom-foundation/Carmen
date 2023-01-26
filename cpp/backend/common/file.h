@@ -256,6 +256,9 @@ class SingleFileBase {
 
   absl::Status Close() { return file_.Close(); }
 
+  // Returns the underlying file object. This is useful for testing.
+  RawFile& GetRawFile() { return file_; }
+
  private:
   SingleFileBase(RawFile file) : file_(std::move(file)) {}
 
