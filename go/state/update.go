@@ -76,6 +76,179 @@ func (u *Update) AppendSlotUpdate(addr common.Address, key common.Key, value com
 	u.slots = append(u.slots, slotUpdate{addr, key, value})
 }
 
+const updateEncodingVersion byte = 0
+
+func UpdateFromBytes(data []byte) (Update, error) {
+	if len(data) < 1+6*2 {
+		return Update{}, fmt.Errorf("invalid encoding, too few bytes")
+	}
+	if data[0] != updateEncodingVersion {
+		return Update{}, fmt.Errorf("unknown encoding version: %d", data[0])
+	}
+
+	data = data[1:]
+	deletedAccountSize := readUint16(data[0:])
+	createdAccountSize := readUint16(data[2:])
+	balancesSize := readUint16(data[4:])
+	codesSize := readUint16(data[6:])
+	noncesSize := readUint16(data[8:])
+	slotsSize := readUint16(data[10:])
+
+	data = data[12:]
+
+	res := Update{}
+
+	// Read list of deleted accounts
+	if deletedAccountSize > 0 {
+		if len(data) < int(deletedAccountSize)*len(common.Address{}) {
+			return res, fmt.Errorf("invalid encoding, truncated address list")
+		}
+		res.deletedAccounts = make([]common.Address, deletedAccountSize)
+		for i := 0; i < int(deletedAccountSize); i++ {
+			copy(res.deletedAccounts[i][:], data[:])
+			data = data[len(common.Address{}):]
+		}
+	}
+
+	// Read list of created accounts
+	if createdAccountSize > 0 {
+		if len(data) < int(createdAccountSize)*len(common.Address{}) {
+			return res, fmt.Errorf("invalid encoding, truncated address list")
+		}
+		res.createdAccounts = make([]common.Address, createdAccountSize)
+		for i := 0; i < int(createdAccountSize); i++ {
+			copy(res.createdAccounts[i][:], data[:])
+			data = data[len(common.Address{}):]
+		}
+	}
+
+	// Read list of balance updates
+	if balancesSize > 0 {
+		if len(data) < int(balancesSize)*(len(common.Address{})+len(common.Balance{})) {
+			return res, fmt.Errorf("invalid encoding, balance list truncated")
+		}
+		res.balances = make([]balanceUpdate, balancesSize)
+		for i := 0; i < int(balancesSize); i++ {
+			copy(res.balances[i].account[:], data[:])
+			data = data[len(common.Address{}):]
+			copy(res.balances[i].balance[:], data[:])
+			data = data[len(common.Balance{}):]
+		}
+	}
+
+	// Read list of code updates
+	if codesSize > 0 {
+		res.codes = make([]codeUpdate, codesSize)
+		for i := 0; i < int(codesSize); i++ {
+			if len(data) < len(common.Address{})+2 {
+				return res, fmt.Errorf("invalid encoding, truncated code list")
+			}
+			copy(res.codes[i].account[:], data[:])
+			data = data[len(common.Address{}):]
+			codeLength := readUint16(data)
+			data = data[2:]
+			if len(data) < int(codeLength) {
+				return res, fmt.Errorf("invalid encoding, truncated code")
+			}
+			res.codes[i].code = make([]byte, codeLength)
+			copy(res.codes[i].code[:], data[0:codeLength])
+			data = data[codeLength:]
+		}
+	}
+
+	// Read list of nonce updates
+	if noncesSize > 0 {
+		if len(data) < int(noncesSize)*(len(common.Address{})+len(common.Nonce{})) {
+			return res, fmt.Errorf("invalid encoding, nonce list truncated")
+		}
+		res.nonces = make([]nonceUpdate, noncesSize)
+		for i := 0; i < int(noncesSize); i++ {
+			copy(res.nonces[i].account[:], data[:])
+			data = data[len(common.Address{}):]
+			copy(res.nonces[i].nonce[:], data[:])
+			data = data[len(common.Nonce{}):]
+		}
+	}
+
+	// Read list of slot updates
+	if slotsSize > 0 {
+		if len(data) < int(slotsSize)*(len(common.Address{})+len(common.Key{})+len(common.Value{})) {
+			return res, fmt.Errorf("invalid encoding, slot list truncated")
+		}
+		res.slots = make([]slotUpdate, slotsSize)
+		for i := 0; i < int(slotsSize); i++ {
+			copy(res.slots[i].account[:], data[:])
+			data = data[len(common.Address{}):]
+			copy(res.slots[i].key[:], data[:])
+			data = data[len(common.Key{}):]
+			copy(res.slots[i].value[:], data[:])
+			data = data[len(common.Value{}):]
+		}
+	}
+
+	return res, nil
+}
+
+func (u *Update) ToBytes() []byte {
+	const addrLength = len(common.Address{})
+	size := 1 + 6*2 // version + sizes
+	size += len(u.deletedAccounts) * addrLength
+	size += len(u.createdAccounts) * addrLength
+	size += len(u.balances) * (addrLength + len(common.Balance{}))
+	size += len(u.nonces) * (addrLength + len(common.Nonce{}))
+	size += len(u.slots) * (addrLength + len(common.Key{}) + len(common.Value{}))
+	for _, cur := range u.codes {
+		size += addrLength + 2 + len(cur.code)
+	}
+
+	res := make([]byte, 0, size)
+
+	res = append(res, updateEncodingVersion)
+	res = appendUint16(res, len(u.deletedAccounts))
+	res = appendUint16(res, len(u.createdAccounts))
+	res = appendUint16(res, len(u.balances))
+	res = appendUint16(res, len(u.codes))
+	res = appendUint16(res, len(u.nonces))
+	res = appendUint16(res, len(u.slots))
+
+	for _, addr := range u.deletedAccounts {
+		res = append(res, addr[:]...)
+	}
+	for _, addr := range u.createdAccounts {
+		res = append(res, addr[:]...)
+	}
+	for _, cur := range u.balances {
+		res = append(res, cur.account[:]...)
+		res = append(res, cur.balance[:]...)
+	}
+	for _, cur := range u.codes {
+		res = append(res, cur.account[:]...)
+		res = appendUint16(res, len(cur.code))
+		res = append(res, cur.code...)
+	}
+	for _, cur := range u.nonces {
+		res = append(res, cur.account[:]...)
+		res = append(res, cur.nonce[:]...)
+	}
+	for _, cur := range u.slots {
+		res = append(res, cur.account[:]...)
+		res = append(res, cur.key[:]...)
+		res = append(res, cur.value[:]...)
+	}
+
+	return res
+}
+
+func readUint16(data []byte) uint16 {
+	return uint16(data[0])<<8 | uint16(data[1])
+}
+
+func appendUint16(data []byte, value int) []byte {
+	data = append(data, byte(value>>8))
+	data = append(data, byte(value))
+	return data
+}
+
 // Check verifies that all updates are unique and in order.
 func (u *Update) Check() error {
 	accountLess := func(a, b *common.Address) bool {
