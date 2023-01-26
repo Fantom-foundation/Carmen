@@ -6,6 +6,7 @@
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "state/update.h"
 
 namespace carmen {
 namespace {
@@ -28,6 +29,57 @@ std::string ToString(Config c) {
       return "LevelDbBased";
   }
   return "Unknown";
+}
+
+// Wrapper functions for updateing individual elements.
+
+void Carmen_CreateAccount(C_State state, C_Address addr) {
+  Update update;
+  update.Create(*reinterpret_cast<const Address*>(addr));
+  auto data = update.ToBytes();
+  Carmen_Apply(state, 0, data->data(), data->size());
+}
+
+void Carmen_DeleteAccount(C_State state, C_Address addr) {
+  Update update;
+  update.Delete(*reinterpret_cast<const Address*>(addr));
+  auto data = update.ToBytes();
+  Carmen_Apply(state, 0, data->data(), data->size());
+}
+
+void Carmen_SetBalance(C_State state, C_Address addr, C_Balance balance) {
+  Update update;
+  update.Set(*reinterpret_cast<const Address*>(addr),
+             *reinterpret_cast<const Balance*>(balance));
+  auto data = update.ToBytes();
+  Carmen_Apply(state, 0, data->data(), data->size());
+}
+
+void Carmen_SetCode(C_State state, C_Address addr, C_Code code,
+                    uint32_t length) {
+  Update update;
+  update.Set(*reinterpret_cast<const Address*>(addr),
+             Code(std::span(reinterpret_cast<const std::byte*>(code), length)));
+  auto data = update.ToBytes();
+  Carmen_Apply(state, 0, data->data(), data->size());
+}
+
+void Carmen_SetNonce(C_State state, C_Address addr, C_Nonce nonce) {
+  Update update;
+  update.Set(*reinterpret_cast<const Address*>(addr),
+             *reinterpret_cast<const Nonce*>(nonce));
+  auto data = update.ToBytes();
+  Carmen_Apply(state, 0, data->data(), data->size());
+}
+
+void Carmen_SetStorageValue(C_State state, C_Address addr, C_Key key,
+                            C_Value value) {
+  Update update;
+  update.Set(*reinterpret_cast<const Address*>(addr),
+             *reinterpret_cast<const Key*>(key),
+             *reinterpret_cast<const Value*>(value));
+  auto data = update.ToBytes();
+  Carmen_Apply(state, 0, data->data(), data->size());
 }
 
 class CStateTest : public testing::TestWithParam<Config> {

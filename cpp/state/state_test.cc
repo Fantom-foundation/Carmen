@@ -282,6 +282,33 @@ TYPED_TEST_P(StateTest, ValuesAddedCanBeRetrieved) {
   EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
 }
 
+TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
+  state.CreateAccount(Address{0x02});
+
+  Update update;
+  update.Create(Address{0x01});
+  update.Delete(Address{0x02});
+  update.Set(Address{0x03}, Balance{0xB1});
+  update.Set(Address{0x04}, Nonce{0xA1});
+  update.Set(Address{0x05}, Key{0x06}, Value{0x07});
+  update.Set(Address{0x06}, Code{0x01, 0x02});
+
+  EXPECT_OK(state.Apply(12, update));
+
+  EXPECT_THAT(state.GetAccountState(Address{0x00}), AccountState::kUnknown);
+  EXPECT_THAT(state.GetAccountState(Address{0x01}), AccountState::kExists);
+  EXPECT_THAT(state.GetAccountState(Address{0x02}), AccountState::kDeleted);
+
+  EXPECT_THAT(state.GetBalance(Address{0x03}), IsOkAndHolds(Balance{0xB1}));
+  EXPECT_THAT(state.GetNonce(Address{0x04}), IsOkAndHolds(Nonce{0xA1}));
+  EXPECT_THAT(state.GetStorageValue(Address{0x05}, Key{0x06}),
+              IsOkAndHolds(Value{0x07}));
+  EXPECT_THAT(state.GetCode(Address{0x06}),
+              IsOkAndHolds(ElementsAre(std::byte{0x01}, std::byte{0x02})));
+}
+
 TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
@@ -299,7 +326,7 @@ REGISTER_TYPED_TEST_SUITE_P(
     LookingUpMissingCodeDoesNotChangeGlobalHash,
     NoncesAreCoveredByGlobalStateHash, NoncesCanBeUpdated,
     UpdatingCodesUpdatesCodeHashes, ValuesAddedCanBeRetrieved,
-    CanProduceAMemoryFootprint);
+    UpdatesCanBeApplied, CanProduceAMemoryFootprint);
 
 using StateConfigurations =
     ::testing::Types<InMemoryState, FileBasedState, LevelDbBasedState>;
