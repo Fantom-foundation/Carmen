@@ -94,6 +94,9 @@ Hash GetSha256Hash(const Elements&... elements) {
   return GetHash(hasher, elements...);
 }
 
+// A utility function to compute the SHA256 hash of a span of bytes.
+Hash GetSha256Hash(std::span<const std::byte> data);
+
 // A utility function to compute the Keccak256 hash of the given data blob.
 Hash GetKeccak256Hash(std::span<const std::byte> data);
 

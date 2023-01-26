@@ -65,6 +65,11 @@ void Sha256Hasher::Ingest(std::string_view str) {
 
 Hash Sha256Hasher::GetHash() const { return _impl->GetHash(); }
 
+Hash GetSha256Hash(std::span<const std::byte> data) {
+  Sha256Hasher hasher;
+  return GetHash(hasher, data);
+}
+
 Hash GetKeccak256Hash(std::span<const std::byte> data) {
   static_assert(sizeof(Hash) == sizeof(ethash_hash256));
   ethash_hash256 res = ethash_keccak256(

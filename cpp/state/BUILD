@@ -16,10 +16,10 @@ cc_test(
     deps = [
         ":configurations",
         ":state",
-        "//common:type",
         "//common:account_state",
         "//common:file_util",
         "//common:status_test_util",
+        "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -101,8 +101,11 @@ cc_library(
     srcs = ["update.cc"],
     hdrs = ["update.h"],
     deps = [
+        "//common:hash",
+        "//common:status_util",
         "//common:type",
-        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -111,6 +114,8 @@ cc_test(
     srcs = ["update_test.cc"],
     deps = [
         ":update",
+        "//common:status_test_util",
+        "//common:test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
     ],

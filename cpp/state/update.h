@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstddef>
+#include <span>
 #include <vector>
 
-#include "absl/container/btree_map.h"
+#include "absl/status/statusor.h"
 #include "common/type.h"
 
 namespace carmen {
@@ -18,16 +20,20 @@ class Update {
   struct BalanceUpdate {
     Address account;
     Balance balance;
+    friend auto operator<=>(const BalanceUpdate&,
+                            const BalanceUpdate&) = default;
   };
 
   struct NonceUpdate {
     Address account;
     Nonce nonce;
+    friend auto operator<=>(const NonceUpdate&, const NonceUpdate&) = default;
   };
 
   struct CodeUpdate {
     Address account;
     Code code;
+    friend auto operator<=>(const CodeUpdate&, const CodeUpdate&) = default;
   };
 
   // The update of a slot.
@@ -35,6 +41,7 @@ class Update {
     Address account;
     Key key;
     Value value;
+    friend auto operator<=>(const SlotUpdate&, const SlotUpdate&) = default;
   };
 
   // --- Mutators ---
@@ -100,6 +107,18 @@ class Update {
   // Returns a span of storage updates, valid until the next modification or
   // the end of the life cycle of this update.
   std::span<const SlotUpdate> GetStorage() const { return storage_; }
+
+  // --- Serialization ---
+
+  // Parses the encoded update into an update object.
+  static absl::StatusOr<Update> FromBytes(std::span<const std::byte> data);
+
+  // Encodes this update into a byte string.
+  absl::StatusOr<std::vector<std::byte>> ToBytes() const;
+
+  // --- Operators ---
+
+  friend bool operator==(const Update&, const Update&) = default;
 
  private:
   // The list of accounts that should be deleted / cleared by this update.
