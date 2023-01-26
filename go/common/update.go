@@ -361,6 +361,10 @@ func slotEqual(a, b *SlotUpdate) bool {
 	return *a == *b
 }
 
+func (*Update) GetHash() Hash {
+	return Hash{} // TODO
+}
+
 type BalanceUpdate struct {
 	Account Address
 	Balance Balance
