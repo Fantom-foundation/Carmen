@@ -1,7 +1,9 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -74,6 +76,36 @@ func (u *Update) AppendCodeUpdate(addr common.Address, code []byte) {
 // AppendSlotUpdate registers a slot value update to be conducted
 func (u *Update) AppendSlotUpdate(addr common.Address, key common.Key, value common.Value) {
 	u.slots = append(u.slots, slotUpdate{addr, key, value})
+}
+
+// Normalize sorts all updates and removes duplicates.
+func (u *Update) Normalize() error {
+	var err error
+	u.deletedAccounts, err = sortAndMakeUnique(u.deletedAccounts, accountLess, accountEqual)
+	if err != nil {
+		return err
+	}
+	u.createdAccounts, err = sortAndMakeUnique(u.createdAccounts, accountLess, accountEqual)
+	if err != nil {
+		return err
+	}
+	u.balances, err = sortAndMakeUnique(u.balances, balanceLess, balanceEqual)
+	if err != nil {
+		return err
+	}
+	u.codes, err = sortAndMakeUnique(u.codes, codeLess, codeEqual)
+	if err != nil {
+		return err
+	}
+	u.nonces, err = sortAndMakeUnique(u.nonces, nonceLess, nonceEqual)
+	if err != nil {
+		return err
+	}
+	u.slots, err = sortAndMakeUnique(u.slots, slotLess, slotEqual)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 const updateEncodingVersion byte = 0
@@ -251,9 +283,6 @@ func appendUint16(data []byte, value int) []byte {
 
 // Check verifies that all updates are unique and in order.
 func (u *Update) Check() error {
-	accountLess := func(a, b *common.Address) bool {
-		return a.Compare(b) < 0
-	}
 	if !isSortedAndUnique(u.createdAccounts, accountLess) {
 		return fmt.Errorf("created accounts are not in order or unique")
 	}
@@ -261,40 +290,77 @@ func (u *Update) Check() error {
 		return fmt.Errorf("deleted accounts are not in order or unique")
 	}
 
-	balanceLess := func(a, b *balanceUpdate) bool {
-		return accountLess(&a.account, &b.account)
-	}
-
 	if !isSortedAndUnique(u.balances, balanceLess) {
 		return fmt.Errorf("balance updates are not in order or unique")
-	}
-
-	nonceLess := func(a, b *nonceUpdate) bool {
-		return accountLess(&a.account, &b.account)
 	}
 
 	if !isSortedAndUnique(u.nonces, nonceLess) {
 		return fmt.Errorf("nonce updates are not in order or unique")
 	}
 
-	codeLess := func(a, b *codeUpdate) bool {
-		return accountLess(&a.account, &b.account)
-	}
-
 	if !isSortedAndUnique(u.codes, codeLess) {
 		return fmt.Errorf("nonce updates are not in order or unique")
-	}
-
-	slotLess := func(a, b *slotUpdate) bool {
-		accountCompare := a.account.Compare(&b.account)
-		return accountCompare < 0 || (accountCompare == 0 && a.key.Compare(&b.key) < 0)
 	}
 
 	if !isSortedAndUnique(u.slots, slotLess) {
 		return fmt.Errorf("storage updates are not in order or unique")
 	}
 
+	// Make sure that there is no account created and deleted.
+	for i, j := 0, 0; i < len(u.createdAccounts) && j < len(u.deletedAccounts); {
+		cmp := u.createdAccounts[i].Compare(&u.deletedAccounts[j])
+		if cmp == 0 {
+			return fmt.Errorf("unable to create and delete same address in update: %v", u.createdAccounts[i])
+		}
+		if cmp < 0 {
+			i++
+		} else {
+			j++
+		}
+	}
+
 	return nil
+}
+
+func accountLess(a, b *common.Address) bool {
+	return a.Compare(b) < 0
+}
+
+func accountEqual(a, b *common.Address) bool {
+	return *a == *b
+}
+
+func balanceLess(a, b *balanceUpdate) bool {
+	return accountLess(&a.account, &b.account)
+}
+
+func balanceEqual(a, b *balanceUpdate) bool {
+	return *a == *b
+}
+
+func nonceLess(a, b *nonceUpdate) bool {
+	return accountLess(&a.account, &b.account)
+}
+
+func nonceEqual(a, b *nonceUpdate) bool {
+	return *a == *b
+}
+
+func codeLess(a, b *codeUpdate) bool {
+	return accountLess(&a.account, &b.account)
+}
+
+func codeEqual(a, b *codeUpdate) bool {
+	return a.account == b.account && bytes.Equal(a.code, b.code)
+}
+
+func slotLess(a, b *slotUpdate) bool {
+	accountCompare := a.account.Compare(&b.account)
+	return accountCompare < 0 || (accountCompare == 0 && a.key.Compare(&b.key) < 0)
+}
+
+func slotEqual(a, b *slotUpdate) bool {
+	return *a == *b
 }
 
 // apply distributes the updates combined in a Update struct to individual update calls.
@@ -353,6 +419,27 @@ type slotUpdate struct {
 	account common.Address
 	key     common.Key
 	value   common.Value
+}
+
+func sortAndMakeUnique[T any](list []T, less func(a, b *T) bool, equal func(a, b *T) bool) ([]T, error) {
+	if len(list) <= 1 {
+		return list, nil
+	}
+	sort.Slice(list, func(i, j int) bool { return less(&list[i], &list[j]) })
+	res := make([]T, 0, len(list))
+	res = append(res, list[0])
+	for i := 1; i < len(list); i++ {
+		end := &res[len(res)-1]
+		if less(end, &list[i]) {
+			res = append(res, list[i])
+		} else if equal(end, &list[i]) {
+			// skip duplicates
+		} else {
+			// Same key, but different values => this needs to fail
+			return nil, fmt.Errorf("Unable to resolve duplicate element: %v and %v", *end, list[i])
+		}
+	}
+	return res, nil
 }
 
 func isSortedAndUnique[T any](list []T, less func(a, b *T) bool) bool {
