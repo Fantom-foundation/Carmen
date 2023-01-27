@@ -130,6 +130,11 @@ class Writer {
     return *this;
   }
 
+  template <Trivial T>
+  Writer& Append(const std::vector<T>& list) {
+    return Append(std::span<const T>(list));
+  }
+
   std::size_t Size() const { return buffer_.size(); }
 
   std::vector<std::byte> Build() && { return std::move(buffer_); }
