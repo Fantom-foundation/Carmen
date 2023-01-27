@@ -119,6 +119,8 @@ class State {
         DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes,
         MultiMapType<AddressId, SlotId> address_to_slots);
 
+  absl::Status ClearAccount(AddressId addr_id);
+
   // Indexes for mapping address, keys, and slots to dense, numeric IDs.
   IndexType<Address, AddressId> address_index_;
   IndexType<Key, KeyId> key_index_;
@@ -225,7 +227,8 @@ template <template <typename K, typename V> class IndexType,
 absl::Status State<IndexType, StoreType, DepotType,
                    MultiMapType>::CreateAccount(const Address& address) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
-  return account_states_.Set(addr_id.first, AccountState::kExists);
+  RETURN_IF_ERROR(account_states_.Set(addr_id.first, AccountState::kExists));
+  return ClearAccount(addr_id.first);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -255,14 +258,23 @@ absl::Status State<IndexType, StoreType, DepotType,
   }
   RETURN_IF_ERROR(addr_id);
   RETURN_IF_ERROR(account_states_.Set(*addr_id, AccountState::kDeleted));
+  return ClearAccount(*addr_id);
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType>
+absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::ClearAccount(
+    AddressId addr_id) {
   // Reset slots associated to account.
   absl::Status reset_status;
-  RETURN_IF_ERROR(address_to_slots_.ForEach(*addr_id, [&](SlotId slot_id) {
+  RETURN_IF_ERROR(address_to_slots_.ForEach(addr_id, [&](SlotId slot_id) {
     if (!reset_status.ok()) return;
     reset_status = value_store_.Set(slot_id, Value{});
   }));
   RETURN_IF_ERROR(reset_status);
-  return address_to_slots_.Erase(*addr_id);
+  return address_to_slots_.Erase(addr_id);
 }
 
 template <template <typename K, typename V> class IndexType,

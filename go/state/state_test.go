@@ -256,6 +256,73 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 	})
 }
 
+func TestCreatingAccountClearsStorage(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+		zero := common.Value{}
+		val, err := s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != zero {
+			t.Errorf("storage slot are initially not zero")
+		}
+
+		if err = s.setStorage(address1, key1, val1); err != nil {
+			t.Errorf("failed to update storage slot: %v", err)
+		}
+
+		val, err = s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != val1 {
+			t.Errorf("storage slot update did not take effect")
+		}
+
+		if err := s.createAccount(address1); err != nil {
+			t.Fatalf("Error: %s", err)
+		}
+
+		val, err = s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != zero {
+			t.Errorf("account creation did not clear storage slots")
+		}
+	})
+}
+
+func TestDeleteAccountClearsStorage(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+		zero := common.Value{}
+
+		if err := s.setStorage(address1, key1, val1); err != nil {
+			t.Errorf("failed to update storage slot: %v", err)
+		}
+
+		val, err := s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != val1 {
+			t.Errorf("storage slot update did not take effect")
+		}
+
+		if err := s.deleteAccount(address1); err != nil {
+			t.Fatalf("Error: %s", err)
+		}
+
+		val, err = s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != zero {
+			t.Errorf("account deletion did not clear storage slots")
+		}
+	})
+}
+
 // TestPersistentState inserts data into the state and closes it first, then the state
 // is re-opened in another process, and it is tested that data are available, i.e. all was successfully persisted
 func TestPersistentState(t *testing.T) {

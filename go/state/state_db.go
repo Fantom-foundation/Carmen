@@ -874,10 +874,8 @@ func (s *stateDB) EndBlock(block uint64) {
 	// This will cause all storage slots of that accounts to be reset before new
 	// values may be written in the subsequent updates.
 	deletedAccountState := common.Deleted
-	clearedAccounts := map[common.Address]bool{}
 	for addr, clearingState := range s.clearedAccounts {
 		if clearingState == cleared {
-			clearedAccounts[addr] = true
 			// Pretend this account was originally deleted, such that in the loop below
 			// it would be detected as re-created in case its new state is Existing.
 			s.accounts[addr].original = &deletedAccountState
@@ -885,16 +883,13 @@ func (s *stateDB) EndBlock(block uint64) {
 			if s.accounts[addr].current == common.Deleted {
 				update.AppendDeleteAccount(addr)
 			}
+			// Increment the reincarnation counter of cleared addresses to invalidate
+			// cached entries in the stored data cache.
+			s.reincarnation[addr] = s.reincarnation[addr] + 1
 		}
 	}
 
-	// Increment the reincarnation counter of cleared addresses to invalidate cached entries in
-	// the stored data cache.
-	for addr := range clearedAccounts {
-		s.reincarnation[addr] = s.reincarnation[addr] + 1
-	}
-
-	// Update account stats.
+	// (Re-)create new or resurrected accounts.
 	for addr, value := range s.accounts {
 		// In case we do not know the account state yet, we need to fetch it
 		// from the DB to decide whether the account state has changed.

@@ -47,6 +47,30 @@ TYPED_TEST_P(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kExists));
 }
 
+TYPED_TEST_P(StateTest, CreatingAnAccountDeletesItsStorage) {
+  Address a{0x01};
+  Key k{0x01, 0x02};
+  Value v{0x02, 0x03, 0x04};
+
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
+
+  // Initially, the storage is empty, but can be written to.
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+
+  // The account creation purges the storage.
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+
+  // At this point the account is re-created, storage should still be purged.
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+}
+
 TYPED_TEST_P(StateTest, AccountsCanBeDeleted) {
   Address a{0x01};
 
@@ -318,8 +342,8 @@ TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
 
 REGISTER_TYPED_TEST_SUITE_P(
     StateTest, AccountsCanBeDeleted, AccountsCanBeCreatedAndAreDifferentiated,
-    BalancesAreCoveredByGlobalStateHash, BalancesCanBeUpdated,
-    CodesAreCoveredByGlobalStateHash, CodesCanBeUpdated,
+    CreatingAnAccountDeletesItsStorage, BalancesAreCoveredByGlobalStateHash,
+    BalancesCanBeUpdated, CodesAreCoveredByGlobalStateHash, CodesCanBeUpdated,
     DefaultAccountStateIsUnknown, DefaultBalanceIsZero, DefaultCodeIsEmpty,
     DefaultNonceIsZero, DeletedAccountsCanBeRecreated,
     DeletingAnAccountDeletesItsStorage, DeletingAnUnknownAccountDoesNotCreateIt,

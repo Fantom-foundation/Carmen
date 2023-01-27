@@ -39,7 +39,11 @@ func (s *GoState) createAccount(address common.Address) (err error) {
 	if err != nil {
 		return
 	}
-	return s.accountsStore.Set(idx, common.Exists)
+	err = s.accountsStore.Set(idx, common.Exists)
+	if err != nil {
+		return
+	}
+	return s.clearAccount(idx)
 }
 
 func (s *GoState) GetAccountState(address common.Address) (state common.AccountState, err error) {
@@ -65,6 +69,10 @@ func (s *GoState) deleteAccount(address common.Address) error {
 	if err != nil {
 		return err
 	}
+	return s.clearAccount(idx)
+}
+
+func (s *GoState) clearAccount(idx uint32) error {
 	slotIdxs, err := s.addressToSlots.GetAll(idx)
 	if err != nil {
 		return err
