@@ -3,7 +3,6 @@ package state
 import (
 	"fmt"
 	"math/big"
-	"sort"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -869,17 +868,7 @@ func (s *stateDB) BeginBlock() {
 }
 
 func (s *stateDB) EndBlock(block uint64) {
-	// Write all changes to the store. Note, the store's state hash depends on the insertion order.
-	// Thus, the insertion must be performed in a deterministic order. Maps in Go have an undefined
-	// order and are deliberately randomized. Thus, updates need to be ordered before being written
-	// to the underlying state.
 	update := Update{}
-
-	// A list of addresses reused for different purposes in this function.
-	addresses := make([]common.Address, 0, max(max(max(len(s.accounts), len(s.balances)), len(s.nonces)), len(s.clearedAccounts)))
-	sortAddresses := func() {
-		sort.Slice(addresses, func(i, j int) bool { return addresses[i].Compare(&addresses[j]) < 0 })
-	}
 
 	// Clear all accounts that have been deleted at some point during this block.
 	// This will cause all storage slots of that accounts to be reset before new
@@ -888,13 +877,16 @@ func (s *stateDB) EndBlock(block uint64) {
 	clearedAccounts := map[common.Address]bool{}
 	for addr, clearingState := range s.clearedAccounts {
 		if clearingState == cleared {
-			addresses = append(addresses, addr)
 			clearedAccounts[addr] = true
+			// Pretend this account was originally deleted, such that in the loop below
+			// it would be detected as re-created in case its new state is Existing.
 			s.accounts[addr].original = &deletedAccountState
+			// If the account was not later re-created, we mark it for deletion.
+			if s.accounts[addr].current == common.Deleted {
+				update.AppendDeleteAccount(addr)
+			}
 		}
 	}
-	sortAddresses()
-	update.AppendDeleteAccounts(addresses)
 
 	// Increment the reincarnation counter of cleared addresses to invalidate cached entries in
 	// the stored data cache.
@@ -902,74 +894,67 @@ func (s *stateDB) EndBlock(block uint64) {
 		s.reincarnation[addr] = s.reincarnation[addr] + 1
 	}
 
-	// Update account stats in deterministic order in state DB
-	addresses = addresses[0:0]
+	// Update account stats.
 	for addr, value := range s.accounts {
-		if value.original == nil || *value.original != value.current {
+		// In case we do not know the account state yet, we need to fetch it
+		// from the DB to decide whether the account state has changed.
+		if value.original == nil {
+			state, err := s.state.GetAccountState(addr)
+			if err != nil {
+				panic(fmt.Sprintf("failed to fetch account state from DB: %v", err))
+			}
+			value.original = &state
+		}
+		if *value.original != value.current {
 			if value.current == common.Exists {
-				addresses = append(addresses, addr)
+				update.AppendCreateAccount(addr)
 			} else if value.current == common.Deleted {
-				// Delete was already conducted above.
+				// Accounts have already been registered for deletion in the loop above.
 			} else {
 				panic(fmt.Sprintf("Unknown account state: %v", value.current))
 			}
 		}
 	}
-	sortAddresses()
-	update.AppendCreateAccounts(addresses)
 
-	// Update balances in a deterministic order.
-	addresses = addresses[0:0]
+	// Update balances.
 	for addr, value := range s.balances {
 		if value.original == nil || value.original.Cmp(&value.current) != 0 {
-			addresses = append(addresses, addr)
+			newBalance, err := common.ToBalance(&value.current)
+			if err != nil {
+				panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
+			}
+			update.AppendBalanceUpdate(addr, newBalance)
 		}
-	}
-	sortAddresses()
-	for _, addr := range addresses {
-		newBalance, err := common.ToBalance(&s.balances[addr].current)
-		if err != nil {
-			panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
-		}
-		update.AppendBalanceUpdate(addr, newBalance)
 	}
 
-	// Update nonces in a deterministic order.
-	addresses = addresses[0:0]
+	// Update nonces.
 	for addr, value := range s.nonces {
 		if value.original == nil || *value.original != value.current {
-			addresses = append(addresses, addr)
+			update.AppendNonceUpdate(addr, common.ToNonce(s.nonces[addr].current))
 		}
-	}
-	sortAddresses()
-	for _, addr := range addresses {
-		update.AppendNonceUpdate(addr, common.ToNonce(s.nonces[addr].current))
 	}
 
 	// Update storage values in state DB
-	slots := make([]slotId, 0, s.data.Size())
 	s.data.ForEach(func(slot slotId, value *slotValue) {
 		if !value.storedKnown || value.stored != value.current {
-			slots = append(slots, slot)
+			update.AppendSlotUpdate(slot.addr, slot.key, value.current)
+			s.storedDataCache.Set(slot, storedDataCacheValue{value.current, s.reincarnation[slot.addr]})
 		}
 	})
-	sort.Slice(slots, func(i, j int) bool { return slots[i].Compare(&slots[j]) < 0 })
-	for _, slot := range slots {
-		value, _ := s.data.Get(slot)
-		update.AppendSlotUpdate(slot.addr, slot.key, value.current)
-		s.storedDataCache.Set(slot, storedDataCacheValue{value.current, s.reincarnation[slot.addr]})
-	}
 
 	// Update modified codes.
-	addresses = addresses[0:0]
 	for addr, value := range s.codes {
 		if value.dirty {
-			addresses = append(addresses, addr)
+			update.AppendCodeUpdate(addr, s.codes[addr].code)
 		}
 	}
-	sortAddresses()
-	for _, addr := range addresses {
-		update.AppendCodeUpdate(addr, s.codes[addr].code)
+
+	// Normalize the update to fix the ordering of operations. Note, the store's state hash depends
+	// on the insertion order. Thus, the insertion must be performed in a deterministic order. Maps
+	// in Go have an undefined order and are deliberately randomized. Thus, updates need to be
+	// ordered/normalized before being written to the underlying state.
+	if err := update.Normalize(); err != nil {
+		panic(fmt.Sprintf("failed to normalize update: %v", err))
 	}
 
 	// Send the update to the state.
