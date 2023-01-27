@@ -4,6 +4,7 @@ cc_library(
     hdrs = ["sqlite.h"],
     visibility = ["//visibility:public"],
     deps = [
+        "//common:memory_usage",
         "//common:status_util",
         "@com_github_rockwotj_sqlite_bazel//:sqlite3",
         "@com_google_absl//absl/status",
@@ -17,6 +18,7 @@ cc_test(
     deps = [
         ":sqlite",
         "//common:file_util",
+        "//common:memory_usage",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],

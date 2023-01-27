@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "common/file_util.h"
+#include "common/memory_usage.h"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
 
@@ -14,6 +15,7 @@ namespace {
 
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::Gt;
 using ::testing::HasSubstr;
 using ::testing::IsOkAndHolds;
 using ::testing::Pair;
@@ -239,6 +241,12 @@ TEST(SqlStatement, DatabaseSupportsByteArrays) {
     data.push_back(value);
   }));
   EXPECT_THAT(data, ElementsAre(a, b, c));
+}
+
+TEST(SqlStatement, DatabaseCanProvideMemoryFootPrint) {
+  TempFile file;
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(file));
+  EXPECT_THAT(db.GetMemoryFootprint().GetTotal(), Gt(Memory(0)));
 }
 
 }  // namespace
