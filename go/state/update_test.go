@@ -16,6 +16,237 @@ func TestUpdateEmptyUpdateCheckReportsNoErrors(t *testing.T) {
 	}
 }
 
+func TestUpdateCreatedAccountsAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
+	addr1 := common.Address{0x01}
+	addr2 := common.Address{0x02}
+	addr3 := common.Address{0x03}
+
+	update := Update{}
+	update.AppendCreateAccount(addr2)
+	update.AppendCreateAccount(addr1)
+	update.AppendCreateAccount(addr3)
+	update.AppendCreateAccount(addr1)
+
+	if err := update.Normalize(); err != nil {
+		t.Errorf("failed to normalize update: %v", err)
+	}
+
+	want := Update{}
+	want.AppendCreateAccount(addr1)
+	want.AppendCreateAccount(addr2)
+	want.AppendCreateAccount(addr3)
+
+	if !reflect.DeepEqual(want, update) {
+		t.Errorf("failed to normalize create-account list, wanted %v, got %v", want.createdAccounts, update.createdAccounts)
+	}
+}
+
+func TestUpdateDeletedAccountsAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
+	addr1 := common.Address{0x01}
+	addr2 := common.Address{0x02}
+	addr3 := common.Address{0x03}
+
+	update := Update{}
+	update.AppendDeleteAccount(addr2)
+	update.AppendDeleteAccount(addr1)
+	update.AppendDeleteAccount(addr3)
+	update.AppendDeleteAccount(addr1)
+
+	if err := update.Normalize(); err != nil {
+		t.Errorf("failed to normalize update: %v", err)
+	}
+
+	want := Update{}
+	want.AppendDeleteAccount(addr1)
+	want.AppendDeleteAccount(addr2)
+	want.AppendDeleteAccount(addr3)
+
+	if !reflect.DeepEqual(want, update) {
+		t.Errorf("failed to normalize deleted-account list, wanted %v, got %v", want.deletedAccounts, update.deletedAccounts)
+	}
+}
+
+func TestUpdateBalanceUpdatesAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
+	addr1 := common.Address{0x01}
+	addr2 := common.Address{0x02}
+	addr3 := common.Address{0x03}
+
+	value1 := common.Balance{0x01}
+	value2 := common.Balance{0x02}
+	value3 := common.Balance{0x03}
+
+	update := Update{}
+	update.AppendBalanceUpdate(addr2, value2)
+	update.AppendBalanceUpdate(addr1, value1)
+	update.AppendBalanceUpdate(addr3, value3)
+	update.AppendBalanceUpdate(addr1, value1)
+
+	if err := update.Normalize(); err != nil {
+		t.Errorf("failed to normalize update: %v", err)
+	}
+
+	want := Update{}
+	want.AppendBalanceUpdate(addr1, value1)
+	want.AppendBalanceUpdate(addr2, value2)
+	want.AppendBalanceUpdate(addr3, value3)
+
+	if !reflect.DeepEqual(want, update) {
+		t.Errorf("failed to normalize balance update list, wanted %v, got %v", want.balances, update.balances)
+	}
+}
+
+func TestUpdateConflictingBalanceUpdatesCanNotBeNormalized(t *testing.T) {
+	addr1 := common.Address{0x01}
+
+	value1 := common.Balance{0x01}
+	value2 := common.Balance{0x02}
+
+	update := Update{}
+	update.AppendBalanceUpdate(addr1, value1)
+	update.AppendBalanceUpdate(addr1, value2)
+
+	if err := update.Normalize(); err == nil {
+		t.Errorf("normalizing conflicting updates should fail")
+	}
+}
+
+func TestUpdateNonceUpdatesAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
+	addr1 := common.Address{0x01}
+	addr2 := common.Address{0x02}
+	addr3 := common.Address{0x03}
+
+	value1 := common.Nonce{0x01}
+	value2 := common.Nonce{0x02}
+	value3 := common.Nonce{0x03}
+
+	update := Update{}
+	update.AppendNonceUpdate(addr2, value2)
+	update.AppendNonceUpdate(addr1, value1)
+	update.AppendNonceUpdate(addr3, value3)
+	update.AppendNonceUpdate(addr1, value1)
+
+	if err := update.Normalize(); err != nil {
+		t.Errorf("failed to normalize update: %v", err)
+	}
+
+	want := Update{}
+	want.AppendNonceUpdate(addr1, value1)
+	want.AppendNonceUpdate(addr2, value2)
+	want.AppendNonceUpdate(addr3, value3)
+
+	if !reflect.DeepEqual(want, update) {
+		t.Errorf("failed to normalize nonce update list, wanted %v, got %v", want.balances, update.balances)
+	}
+}
+
+func TestUpdateConflictingNonceUpdatesCanNotBeNormalized(t *testing.T) {
+	addr1 := common.Address{0x01}
+
+	value1 := common.Nonce{0x01}
+	value2 := common.Nonce{0x02}
+
+	update := Update{}
+	update.AppendNonceUpdate(addr1, value1)
+	update.AppendNonceUpdate(addr1, value2)
+
+	if err := update.Normalize(); err == nil {
+		t.Errorf("normalizing conflicting updates should fail")
+	}
+}
+
+func TestUpdateCodeUpdatesAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
+	addr1 := common.Address{0x01}
+	addr2 := common.Address{0x02}
+	addr3 := common.Address{0x03}
+
+	value1 := []byte{0x01}
+	value2 := []byte{0x02}
+	value3 := []byte{0x03}
+
+	update := Update{}
+	update.AppendCodeUpdate(addr2, value2)
+	update.AppendCodeUpdate(addr1, value1)
+	update.AppendCodeUpdate(addr3, value3)
+	update.AppendCodeUpdate(addr1, value1)
+
+	if err := update.Normalize(); err != nil {
+		t.Errorf("failed to normalize update: %v", err)
+	}
+
+	want := Update{}
+	want.AppendCodeUpdate(addr1, value1)
+	want.AppendCodeUpdate(addr2, value2)
+	want.AppendCodeUpdate(addr3, value3)
+
+	if !reflect.DeepEqual(want, update) {
+		t.Errorf("failed to normalize code update list, wanted %v, got %v", want.balances, update.balances)
+	}
+}
+
+func TestUpdateConflictingCodeUpdatesCanNotBeNormalized(t *testing.T) {
+	addr1 := common.Address{0x01}
+
+	value1 := []byte{0x01}
+	value2 := []byte{0x02}
+
+	update := Update{}
+	update.AppendCodeUpdate(addr1, value1)
+	update.AppendCodeUpdate(addr1, value2)
+
+	if err := update.Normalize(); err == nil {
+		t.Errorf("normalizing conflicting updates should fail")
+	}
+}
+
+func TestUpdateSlotUpdatesAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
+	addr1 := common.Address{0x01}
+	addr2 := common.Address{0x02}
+	addr3 := common.Address{0x03}
+
+	key1 := common.Key{0x01}
+	key2 := common.Key{0x02}
+	key3 := common.Key{0x03}
+
+	value1 := common.Value{0x01}
+	value2 := common.Value{0x02}
+	value3 := common.Value{0x03}
+
+	update := Update{}
+	update.AppendSlotUpdate(addr2, key2, value2)
+	update.AppendSlotUpdate(addr1, key1, value1)
+	update.AppendSlotUpdate(addr3, key3, value3)
+	update.AppendSlotUpdate(addr1, key1, value1)
+
+	if err := update.Normalize(); err != nil {
+		t.Errorf("failed to normalize update: %v", err)
+	}
+
+	want := Update{}
+	want.AppendSlotUpdate(addr1, key1, value1)
+	want.AppendSlotUpdate(addr2, key2, value2)
+	want.AppendSlotUpdate(addr3, key3, value3)
+
+	if !reflect.DeepEqual(want, update) {
+		t.Errorf("failed to normalize slot update list, wanted %v, got %v", want.balances, update.balances)
+	}
+}
+
+func TestUpdateConflictingSlotUpdatesCanNotBeNormalized(t *testing.T) {
+	addr1 := common.Address{0x01}
+	key1 := common.Key{0x01}
+
+	value1 := common.Value{0x01}
+	value2 := common.Value{0x02}
+
+	update := Update{}
+	update.AppendSlotUpdate(addr1, key1, value1)
+	update.AppendSlotUpdate(addr1, key1, value2)
+
+	if err := update.Normalize(); err == nil {
+		t.Errorf("normalizing conflicting updates should fail")
+	}
+}
+
 // updateValueCase are used to test for all fields in the Update class that Check() is
 // detecting ordering or uniqueness issues.
 var updateValueCase = []struct {
@@ -92,6 +323,42 @@ func TestUpdateOutOfOrderUpdatesAreDetected(t *testing.T) {
 				t.Errorf("out-of-ordered updates should be detected, but Check() passed")
 			}
 		})
+	}
+}
+
+func TestUpdateCreatingAndDeletingSameAccountIsInvalid(t *testing.T) {
+	addr := common.Address{0x01}
+
+	update := Update{}
+	update.AppendCreateAccount(addr)
+	if update.Check() != nil {
+		t.Errorf("just creating an account should be fine")
+	}
+	update.AppendDeleteAccount(addr)
+	if update.Check() == nil {
+		t.Errorf("creating and deleting the same account should fail")
+	}
+}
+
+func TestUpdateSingleAccountCreatedAndDeletedIsDetectedAlsoWhenPartOfAList(t *testing.T) {
+	update := Update{}
+	for i := 0; i < 10; i++ {
+		addr := common.Address{byte(i)}
+		if i%2 == 0 {
+			update.AppendCreateAccount(addr)
+		} else {
+			update.AppendDeleteAccount(addr)
+		}
+	}
+
+	if err := update.Check(); err != nil {
+		t.Errorf("non-overlapping create and delete list should be fine, but got: %v", err)
+	}
+
+	update.AppendCreateAccount(common.Address{9})
+
+	if update.Check() == nil {
+		t.Errorf("creating and deleting the same account should fail")
 	}
 }
 
