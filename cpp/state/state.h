@@ -13,6 +13,7 @@
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
+#include "state/archive.h"
 #include "state/update.h"
 
 namespace carmen {
@@ -48,7 +49,8 @@ class State {
   };
 
   // Creates a new state by opening the content stored in the given directory.
-  static absl::StatusOr<State> Open(const std::filesystem::path& directory);
+  static absl::StatusOr<State> Open(const std::filesystem::path& directory,
+                                    bool with_archive = false);
 
   State() = default;
   State(State&&) = default;
@@ -117,7 +119,8 @@ class State {
         StoreType<SlotId, Value> value_store,
         StoreType<AddressId, AccountState> account_states,
         DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes,
-        MultiMapType<AddressId, SlotId> address_to_slots);
+        MultiMapType<AddressId, SlotId> address_to_slots,
+        std::unique_ptr<Archive> archive);
 
   // Indexes for mapping address, keys, and slots to dense, numeric IDs.
   IndexType<Address, AddressId> address_index_;
@@ -144,6 +147,9 @@ class State {
 
   // A map associating accounts to its slots.
   MultiMapType<AddressId, SlotId> address_to_slots_;
+
+  // A pointer to the optinally included archive.
+  std::unique_ptr<Archive> archive_;
 };
 
 // ----------------------------- Definitions ----------------------------------
@@ -161,7 +167,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class MultiMapType>
 absl::StatusOr<State<IndexType, StoreType, DepotType, MultiMapType>>
 State<IndexType, StoreType, DepotType, MultiMapType>::Open(
-    const std::filesystem::path& dir) {
+    const std::filesystem::path& dir, bool with_archive) {
   backend::Context context;
   ASSIGN_OR_RETURN(auto address_index, (IndexType<Address, AddressId>::Open(
                                            context, dir / "addresses")));
@@ -189,10 +195,17 @@ State<IndexType, StoreType, DepotType, MultiMapType>::Open(
                    (MultiMapType<AddressId, SlotId>::Open(
                        context, dir / "address_to_slots")));
 
+  std::unique_ptr<Archive> archive;
+  if (with_archive) {
+    ASSIGN_OR_RETURN(auto instance, Archive::Open(dir));
+    archive = std::make_unique<Archive>(std::move(instance));
+  }
+
   return State(std::move(address_index), std::move(key_index),
                std::move(slot_index), std::move(balances), std::move(nonces),
                std::move(values), std::move(account_state), std::move(codes),
-               std::move(code_hashes), std::move(address_to_slots));
+               std::move(code_hashes), std::move(address_to_slots),
+               std::move(archive));
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -206,7 +219,8 @@ State<IndexType, StoreType, DepotType, MultiMapType>::State(
     StoreType<SlotId, Value> value_store,
     StoreType<AddressId, AccountState> account_states,
     DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes,
-    MultiMapType<AddressId, SlotId> address_to_slots)
+    MultiMapType<AddressId, SlotId> address_to_slots,
+    std::unique_ptr<Archive> archive)
     : address_index_(std::move(address_index)),
       key_index_(std::move(key_index)),
       slot_index_(std::move(slot_index)),
@@ -216,7 +230,8 @@ State<IndexType, StoreType, DepotType, MultiMapType>::State(
       account_states_(std::move(account_states)),
       codes_(std::move(codes)),
       code_hashes_(std::move(code_hashes)),
-      address_to_slots_(std::move(address_to_slots)) {}
+      address_to_slots_(std::move(address_to_slots)),
+      archive_(std::move(archive)) {}
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
@@ -451,7 +466,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
-    std::uint64_t, const Update& update) {
+    std::uint64_t block, const Update& update) {
   // It is important to keep the update order.
   for (auto& addr : update.GetDeletedAccounts()) {
     RETURN_IF_ERROR(DeleteAccount(addr));
@@ -470,6 +485,10 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
   }
   for (auto& [addr, key, value] : update.GetStorage()) {
     RETURN_IF_ERROR(SetStorageValue(addr, key, value));
+  }
+  if (archive_) {
+    // TODO: run in background thread
+    RETURN_IF_ERROR(archive_->Add(block, update));
   }
   return absl::OkStatus();
 }
@@ -508,6 +527,9 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Flush() {
   RETURN_IF_ERROR(codes_.Flush());
   RETURN_IF_ERROR(code_hashes_.Flush());
   RETURN_IF_ERROR(address_to_slots_.Flush());
+  if (archive_) {
+    RETURN_IF_ERROR(archive_->Flush());
+  }
   return absl::OkStatus();
 }
 
@@ -526,6 +548,9 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Close() {
   RETURN_IF_ERROR(codes_.Close());
   RETURN_IF_ERROR(code_hashes_.Close());
   RETURN_IF_ERROR(address_to_slots_.Close());
+  if (archive_) {
+    RETURN_IF_ERROR(archive_->Close());
+  }
   return absl::OkStatus();
 }
 
@@ -545,6 +570,9 @@ MemoryFootprint State<IndexType, StoreType, DepotType,
   res.Add("codes", codes_.GetMemoryFootprint());
   res.Add("code_hashes", code_hashes_.GetMemoryFootprint());
   res.Add("address_to_slot_index", address_to_slots_.GetMemoryFootprint());
+  if (archive_) {
+    res.Add("archive", archive_->GetMemoryFootprint());
+  }
   return res;
 }
 
