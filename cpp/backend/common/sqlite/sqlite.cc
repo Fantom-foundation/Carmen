@@ -8,6 +8,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "sqlite3.h"
 
@@ -111,6 +112,12 @@ absl::Status Sqlite::Close() {
     db_ = nullptr;
   }
   return absl::OkStatus();
+}
+
+MemoryFootprint Sqlite::GetMemoryFootprint() const {
+  MemoryFootprint res(*this);
+  res.Add("connection", Memory(sqlite3_memory_used()));
+  return res;
 }
 
 SqlStatement::SqlStatement(SqlStatement&& other)
