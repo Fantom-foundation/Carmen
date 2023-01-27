@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "backend/common/sqlite/sqlite.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -258,6 +259,12 @@ class Archive {
     return db_.Close();
   }
 
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("sqlite", db_.GetMemoryFootprint());
+    return res;
+  }
+
  private:
   // See reference: https://www.sqlite.org/lang.html
 
@@ -451,6 +458,14 @@ absl::Status Archive::Close() {
   auto result = impl_->Close();
   impl_ = nullptr;
   return result;
+}
+
+MemoryFootprint Archive::GetMemoryFootprint() const {
+  MemoryFootprint res(*this);
+  if (impl_) {
+    res.Add("impl", impl_->GetMemoryFootprint());
+  }
+  return res;
 }
 
 absl::Status Archive::CheckState() const {

@@ -2,6 +2,7 @@ cc_library(
     name = "state",
     hdrs = ["state.h"],
     deps = [
+        ":archive",
         ":update",
         "//backend:structure",
         "//common:account_state",

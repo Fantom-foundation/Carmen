@@ -309,7 +309,7 @@ TYPED_TEST_P(StateTest, ValuesAddedCanBeRetrieved) {
 TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
-  state.CreateAccount(Address{0x02});
+  EXPECT_OK(state.CreateAccount(Address{0x02}));
 
   Update update;
   update.Create(Address{0x01});
@@ -333,11 +333,34 @@ TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
               IsOkAndHolds(ElementsAre(std::byte{0x01}, std::byte{0x02})));
 }
 
+TYPED_TEST_P(StateTest, UpdatesCanBeAppliedWithArchive) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir, /*with_archive=*/true));
+  EXPECT_OK(state.CreateAccount(Address{0x02}));
+
+  Update update;
+  update.Create(Address{0x01});
+  update.Delete(Address{0x02});
+  update.Set(Address{0x03}, Balance{0xB1});
+  update.Set(Address{0x04}, Nonce{0xA1});
+  update.Set(Address{0x05}, Key{0x06}, Value{0x07});
+  update.Set(Address{0x06}, Code{0x01, 0x02});
+
+  EXPECT_OK(state.Apply(12, update));
+
+  // TODO: once history is accessible, check results.
+}
+
 TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
   auto usage = state.GetMemoryFootprint();
   EXPECT_GT(usage.GetTotal(), Memory());
+}
+
+TYPED_TEST_P(StateTest, CanBeOpenedWithArchive) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir, /*with_archive=*/true));
 }
 
 REGISTER_TYPED_TEST_SUITE_P(
@@ -350,7 +373,8 @@ REGISTER_TYPED_TEST_SUITE_P(
     LookingUpMissingCodeDoesNotChangeGlobalHash,
     NoncesAreCoveredByGlobalStateHash, NoncesCanBeUpdated,
     UpdatingCodesUpdatesCodeHashes, ValuesAddedCanBeRetrieved,
-    UpdatesCanBeApplied, CanProduceAMemoryFootprint);
+    UpdatesCanBeApplied, UpdatesCanBeAppliedWithArchive,
+    CanProduceAMemoryFootprint, CanBeOpenedWithArchive);
 
 using StateConfigurations =
     ::testing::Types<InMemoryState, FileBasedState, LevelDbBasedState>;

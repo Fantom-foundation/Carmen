@@ -5,6 +5,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/memory_usage.h"
 #include "common/type.h"
 #include "state/update.h"
 
@@ -61,6 +62,9 @@ class Archive {
   // Closes the archive. This disconnects the archive from the underlying DB and
   // no further member function calls will be successful.
   absl::Status Close();
+
+  // Summarizes the memory usage of this archive.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   Archive(std::unique_ptr<internal::Archive> archive);
