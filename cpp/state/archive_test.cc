@@ -263,103 +263,6 @@ TEST(Archive, ValuesOfDifferentAccountsAreDifferentiated) {
   EXPECT_THAT(archive.GetStorage(2, addr2, key2), one);
 }
 
-TEST(Archive, ConflictingBalanceHistoryCanNotBeAdded) {
-  TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-
-  BlockId block = 2;
-  Address addr;
-
-  Balance one{0x01};
-  Balance two{0x02};
-
-  Update update1;
-  update1.Set(addr, one);
-  EXPECT_OK(archive.Add(block, update1));
-  EXPECT_THAT(archive.GetBalance(block, addr), one);
-
-  // Attempting to update the same block again fails.
-  Update update2;
-  update2.Set(addr, two);
-  EXPECT_THAT(archive.Add(block, update2),
-              StatusIs(_, HasSubstr("UNIQUE constraint failed")));
-
-  // The balance remains as it was.
-  EXPECT_THAT(archive.GetBalance(block, addr), one);
-}
-
-TEST(Archive, ConflictingCodeHistoryCanNotBeAdded) {
-  TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-
-  BlockId block = 2;
-  Address addr;
-
-  Code one{0x01};
-  Code two{0x02, 0x03};
-
-  Update update1;
-  update1.Set(addr, one);
-  EXPECT_OK(archive.Add(block, update1));
-  EXPECT_THAT(archive.GetCode(block, addr), one);
-
-  Update update2;
-  update2.Set(addr, two);
-  EXPECT_THAT(archive.Add(block, update2),
-              StatusIs(_, HasSubstr("UNIQUE constraint failed")));
-
-  EXPECT_THAT(archive.GetCode(block, addr), one);
-}
-
-TEST(Archive, ConflictingNonceHistoryCanNotBeAdded) {
-  TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-
-  BlockId block = 2;
-  Address addr;
-
-  Nonce one{0x01};
-  Nonce two{0x02};
-
-  Update update1;
-  update1.Set(addr, one);
-  EXPECT_OK(archive.Add(block, update1));
-  EXPECT_THAT(archive.GetNonce(block, addr), one);
-
-  Update update2;
-  update2.Set(addr, two);
-  EXPECT_THAT(archive.Add(block, update2),
-              StatusIs(_, HasSubstr("UNIQUE constraint failed")));
-
-  EXPECT_THAT(archive.GetNonce(block, addr), one);
-}
-
-TEST(Archive, ConflictingValueHistoryCanNotBeAdded) {
-  TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-
-  BlockId block = 2;
-  Address addr;
-  Key key;
-
-  Value one{0x01};
-  Value two{0x02};
-
-  Update update1;
-  update1.Set(addr, key, one);
-  EXPECT_OK(archive.Add(block, update1));
-  EXPECT_THAT(archive.GetStorage(block, addr, key), one);
-
-  // Attempting to update the same block again fails.
-  Update update2;
-  update2.Set(addr, key, two);
-  EXPECT_THAT(archive.Add(block, update2),
-              StatusIs(_, HasSubstr("UNIQUE constraint failed")));
-
-  // The storage remains as it was.
-  EXPECT_THAT(archive.GetStorage(block, addr, key), one);
-}
-
 TEST(Archive, CreatingAnAccountUpdatesItsExistenceState) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
@@ -527,6 +430,54 @@ TEST(Archive, StorageOfRecreatedAccountCanBeUpdated) {
   EXPECT_THAT(archive.GetStorage(4, addr, key1), two);
   EXPECT_THAT(archive.GetStorage(4, addr, key2), zero);
   EXPECT_THAT(archive.GetStorage(4, addr, key3), one);
+}
+
+TEST(Archive, BlockZeroCanBeAdded) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Update update;
+  EXPECT_OK(archive.Add(0, update));
+}
+
+TEST(Archive, IncreasingBlockNumbersCanBeAdded) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Update update;
+  EXPECT_OK(archive.Add(0, update));
+  EXPECT_OK(archive.Add(1, update));
+  EXPECT_OK(archive.Add(2, update));
+  EXPECT_OK(archive.Add(10, update));
+}
+
+TEST(Archive, RepeatedBlockNumbersCanNotBeAdded) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Update update;
+  EXPECT_OK(archive.Add(0, update));
+  EXPECT_THAT(
+      archive.Add(0, update),
+      StatusIs(
+          _,
+          HasSubstr(
+              "Unable to insert block 0, archive already contains block 0")));
+}
+
+TEST(Archive, BlocksCanNotBeAddedOutOfOrder) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Update update;
+  EXPECT_OK(archive.Add(0, update));
+  EXPECT_OK(archive.Add(2, update));
+  EXPECT_THAT(
+      archive.Add(1, update),
+      StatusIs(
+          _,
+          HasSubstr(
+              "Unable to insert block 1, archive already contains block 2")));
 }
 
 }  // namespace

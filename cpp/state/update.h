@@ -116,6 +116,11 @@ class Update {
   // Encodes this update into a byte string.
   absl::StatusOr<std::vector<std::byte>> ToBytes() const;
 
+  // --- Hashing ---
+
+  // Computes a cryptographic hash of this update.
+  absl::StatusOr<Hash> GetHash() const;
+
   // --- Operators ---
 
   friend bool operator==(const Update&, const Update&) = default;

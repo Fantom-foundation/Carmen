@@ -116,6 +116,7 @@ cc_test(
     srcs = ["update_test.cc"],
     deps = [
         ":update",
+        "//common:hash",
         "//common:status_test_util",
         "//common:test_util",
         "//common:type",
@@ -133,6 +134,7 @@ cc_library(
         "//common:type",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )
 

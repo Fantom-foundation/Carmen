@@ -5,6 +5,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/synchronization/mutex.h"
 #include "backend/common/sqlite/sqlite.h"
 #include "common/memory_usage.h"
@@ -29,6 +30,7 @@ class Archive {
     // TODO: check whether there is already some data in the proper format.
 
     // Create tables.
+    RETURN_IF_ERROR(db.Run(kCreateBlockTable));
     RETURN_IF_ERROR(db.Run(kCreateStatusTable));
     RETURN_IF_ERROR(db.Run(kCreateBalanceTable));
     RETURN_IF_ERROR(db.Run(kCreateCodeTable));
@@ -36,6 +38,9 @@ class Archive {
     RETURN_IF_ERROR(db.Run(kCreateValueTable));
 
     // Prepare query statements.
+    ASSIGN_OR_RETURN(auto add_block, db.Prepare(kAddBlockStmt));
+    ASSIGN_OR_RETURN(auto get_block_height, db.Prepare(kGetBlockHeightStmt));
+
     ASSIGN_OR_RETURN(auto create_account, db.Prepare(kCreateAccountStmt));
     ASSIGN_OR_RETURN(auto delete_account, db.Prepare(kDeleteAccountStmt));
     ASSIGN_OR_RETURN(auto get_status, db.Prepare(kGetStatusStmt));
@@ -57,7 +62,8 @@ class Archive {
     };
 
     return std::unique_ptr<Archive>(new Archive(
-        std::move(db), wrap(std::move(create_account)),
+        std::move(db), wrap(std::move(add_block)),
+        wrap(std::move(get_block_height)), wrap(std::move(create_account)),
         wrap(std::move(delete_account)), wrap(std::move(get_status)),
         wrap(std::move(add_balance)), wrap(std::move(get_balance)),
         wrap(std::move(add_code)), wrap(std::move(get_code)),
@@ -67,12 +73,25 @@ class Archive {
 
   // Adds the block update for the given block.
   absl::Status Add(BlockId block, const Update& update) {
-    // TODO: make sure that blocks are inserted in order.
+    // Check that new block is newer than anything before.
+    ASSIGN_OR_RETURN(std::int64_t newestBlock, GetLastBlockHeight());
+    if (newestBlock >= 0 && BlockId(newestBlock) >= block) {
+      return absl::FailedPreconditionError(absl::StrFormat(
+          "Unable to insert block %d, archive already contains block %d", block,
+          newestBlock));
+    }
+
+    ASSIGN_OR_RETURN(auto block_hash, update.GetHash());
 
     // Fill in data in a single transaction.
     auto guard = absl::MutexLock(&mutation_lock_);
     if (!add_value_stmt_) return absl::FailedPreconditionError("DB Closed");
     RETURN_IF_ERROR(db_.Run("BEGIN TRANSACTION"));
+
+    RETURN_IF_ERROR(add_block_stmt_->Reset());
+    RETURN_IF_ERROR(add_block_stmt_->Bind(0, std::int64_t(block)));
+    RETURN_IF_ERROR(add_block_stmt_->Bind(1, block_hash));
+    RETURN_IF_ERROR(add_block_stmt_->Run());
 
     for (auto& addr : update.GetDeletedAccounts()) {
       RETURN_IF_ERROR(delete_account_stmt_->Reset());
@@ -125,6 +144,18 @@ class Archive {
       RETURN_IF_ERROR(add_value_stmt_->Run());
     }
     return db_.Run("END TRANSACTION");
+  }
+
+  // Gets the maximum block height insert so far, returns -1 if there is none.
+  absl::StatusOr<std::int64_t> GetLastBlockHeight() {
+    auto guard = absl::MutexLock(&get_block_height_lock_);
+    if (!get_block_height_stmt_)
+      return absl::FailedPreconditionError("DB Closed");
+    RETURN_IF_ERROR(get_block_height_stmt_->Reset());
+    std::int64_t result = -1;
+    RETURN_IF_ERROR(get_block_height_stmt_->Run(
+        [&](const SqlRow& row) { result = row.GetInt64(0); }));
+    return result;
   }
 
   absl::StatusOr<bool> Exists(BlockId block, const Address& account) {
@@ -229,12 +260,17 @@ class Archive {
     // Before closing the DB all prepared statements need to be finalized.
     {
       auto guard = absl::MutexLock(&mutation_lock_);
+      add_block_stmt_.reset();
       create_account_stmt_.reset();
       delete_account_stmt_.reset();
       add_balance_stmt_.reset();
       add_code_stmt_.reset();
       add_nonce_stmt_.reset();
       add_value_stmt_.reset();
+    }
+    {
+      auto guard = absl::MutexLock(&get_block_height_lock_);
+      get_block_height_stmt_.reset();
     }
     {
       auto guard = absl::MutexLock(&get_status_lock_);
@@ -267,6 +303,17 @@ class Archive {
 
  private:
   // See reference: https://www.sqlite.org/lang.html
+
+  // -- Blocks --
+
+  static constexpr const std::string_view kCreateBlockTable =
+      "CREATE TABLE block (number INT PRIMARY KEY, hash BLOB)";
+
+  static constexpr const std::string_view kAddBlockStmt =
+      "INSERT INTO block(number, hash) VALUES (?,?)";
+
+  static constexpr const std::string_view kGetBlockHeightStmt =
+      "SELECT number FROM block ORDER BY number DESC LIMIT 1";
 
   // -- Account Status --
 
@@ -344,7 +391,9 @@ class Archive {
       "IFNULL(MAX(reincarnation),0) FROM status WHERE account = ? AND block <= "
       "?) AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1";
 
-  Archive(Sqlite db, std::unique_ptr<SqlStatement> create_account,
+  Archive(Sqlite db, std::unique_ptr<SqlStatement> add_block,
+          std::unique_ptr<SqlStatement> get_block_height,
+          std::unique_ptr<SqlStatement> create_account,
           std::unique_ptr<SqlStatement> delete_account,
           std::unique_ptr<SqlStatement> get_status,
           std::unique_ptr<SqlStatement> add_balance,
@@ -356,6 +405,8 @@ class Archive {
           std::unique_ptr<SqlStatement> add_value,
           std::unique_ptr<SqlStatement> get_value)
       : db_(std::move(db)),
+        add_block_stmt_(std::move(add_block)),
+        get_block_height_stmt_(std::move(get_block_height)),
         create_account_stmt_(std::move(create_account)),
         delete_account_stmt_(std::move(delete_account)),
         get_status_stmt_(std::move(get_status)),
@@ -375,6 +426,11 @@ class Archive {
 
   // Prepared statemetns for logging new data to the archive.
   absl::Mutex mutation_lock_;
+
+  absl::Mutex get_block_height_lock_;
+  std::unique_ptr<SqlStatement> add_block_stmt_ GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_block_height_stmt_
+      GUARDED_BY(get_block_height_lock_);
 
   absl::Mutex get_status_lock_;
   std::unique_ptr<SqlStatement> create_account_stmt_ GUARDED_BY(mutation_lock_);
