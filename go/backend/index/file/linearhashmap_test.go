@@ -190,6 +190,6 @@ func TestLinearHashRemove(t *testing.T) {
 func initLinearHashMap() *LinearHashMap[common.Address, uint32] {
 	sizeBytes := byteSizePage[common.Address, uint32](maxItems, common.AddressSerializer{}, common.Identifier32Serializer{})
 	pageFactory := PageFactory[common.Address, uint32](sizeBytes, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
-	pagePool := pagepool.NewPagePool[*Page[common.Address, uint32]](pagePoolSize, nil, pagepool.NewMemoryPageStore(), pageFactory)
+	pagePool := pagepool.NewPagePool[*IndexPage[common.Address, uint32]](pagePoolSize, nil, pagepool.NewMemoryPageStore(), pageFactory)
 	return NewLinearHashMap[common.Address, uint32](maxItems, NumBuckets, 0, pagePool, common.AddressHasher{}, common.AddressComparator{})
 }

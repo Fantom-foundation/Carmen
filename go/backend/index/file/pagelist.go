@@ -11,7 +11,7 @@ import (
 // When the size overflows, a new page is created and linked in this list. Further keys are stored in the new page.
 // The list receives pages from a page pool.
 type PageList[K comparable, V comparable] struct {
-	pagePool     *pagepool.PagePool[*Page[K, V]]
+	pagePool     *pagepool.PagePool[*IndexPage[K, V]]
 	bucket       int // bucket this list belongs to, it is used to identify correct first page
 	maxPageItems int
 
@@ -27,7 +27,7 @@ const (
 )
 
 // NewPageList creates a new instance, each block will have the given maximal capacity.
-func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[*Page[K, V]]) PageList[K, V] {
+func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[*IndexPage[K, V]]) PageList[K, V] {
 	return PageList[K, V]{
 		maxPageItems: pageItems,
 		pagePool:     pagePool,
@@ -36,7 +36,7 @@ func NewPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pa
 }
 
 // InitPageList creates a new instance, each block will have the given maximal capacity.
-func InitPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[*Page[K, V]], data []common.MapEntry[K, V]) error {
+func InitPageList[K comparable, V comparable](bucket, pageItems int, pagePool *pagepool.PagePool[*IndexPage[K, V]], data []common.MapEntry[K, V]) error {
 	pageList := NewPageList[K, V](bucket, pageItems, pagePool)
 	return pageList.bulkInsert(data)
 }
@@ -98,7 +98,7 @@ func (m *PageList[K, V]) addOrPut(key K, val V, op opType) (V, bool, error) {
 	}
 
 	// locate page with existing value
-	var last *Page[K, V]
+	var last *IndexPage[K, V]
 	var position int
 	var exists bool
 	for page != nil {
@@ -271,7 +271,7 @@ func (m *PageList[K, V]) remove(key K) (bool, error) {
 	return exists, nil
 }
 
-func (m *PageList[K, V]) createNextPage(page *Page[K, V]) (nextId pagepool.PageId) {
+func (m *PageList[K, V]) createNextPage(page *IndexPage[K, V]) (nextId pagepool.PageId) {
 	tailPageId := m.pagePool.GenerateNextId()
 	pageId := pagepool.NewPageId(m.bucket, tailPageId)
 	page.setNext(tailPageId)
@@ -280,7 +280,7 @@ func (m *PageList[K, V]) createNextPage(page *Page[K, V]) (nextId pagepool.PageI
 
 // fillFromTail reads a key-value pair from the tail and inserts it into the input page,
 // no item is moved when the tail is empty.
-func fillFromTail[K comparable, V comparable](page, tail *Page[K, V]) {
+func fillFromTail[K comparable, V comparable](page, tail *IndexPage[K, V]) {
 	if tail.sizeKeys() > 0 {
 		tailEntry := tail.getEntries()[tail.sizeKeys()-1]
 		page.put(tailEntry.Key, tailEntry.Val)
@@ -312,7 +312,7 @@ func (m *PageList[K, V]) Clear() error {
 	return nil
 }
 
-func (m *PageList[K, V]) next(current *Page[K, V]) (page *Page[K, V], pageId pagepool.PageId, err error) {
+func (m *PageList[K, V]) next(current *IndexPage[K, V]) (page *IndexPage[K, V], pageId pagepool.PageId, err error) {
 	if current.hasNext {
 		pageId = pagepool.NewPageId(m.bucket, current.next)
 		page, err = m.pagePool.Get(pageId)

@@ -6,9 +6,9 @@ import (
 	"unsafe"
 )
 
-// Page is key-value structure that can be evicted, persisted, and reloaded from the disk.
+// IndexPage is key-value structure that can be evicted, persisted, and reloaded from the disk.
 // it tracks its updates and can tell if the stored values have been updated
-type Page[K comparable, V comparable] struct {
+type IndexPage[K comparable, V comparable] struct {
 	list            []common.MapEntry[K, V]
 	comparator      common.Comparator[K]
 	keySerializer   common.Serializer[K]
@@ -16,20 +16,20 @@ type Page[K comparable, V comparable] struct {
 	sizeBytes       int //   the size in bytes
 
 	last    int
-	isDirty bool // is dirty is set to true when a value is modified and used to determine whether the Page needs to be updated on disk
+	isDirty bool // is dirty is set to true when a value is modified and used to determine whether the IndexPage needs to be updated on disk
 
-	next    int // position of next Page in the file
+	next    int // position of next IndexPage in the file
 	hasNext bool
 }
 
-func NewPage[K comparable, V comparable](sizeBytes int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) *Page[K, V] {
+func NewIndexPage[K comparable, V comparable](sizeBytes int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) *IndexPage[K, V] {
 	pageItems := numKeysPage(sizeBytes, keySerializer, indexSerializer)
 	list := make([]common.MapEntry[K, V], pageItems)
 	for i := 0; i < pageItems; i++ {
 		list[i] = common.MapEntry[K, V]{}
 	}
 
-	return &Page[K, V]{
+	return &IndexPage[K, V]{
 		list:            list,
 		comparator:      comparator,
 		keySerializer:   keySerializer,
@@ -39,7 +39,7 @@ func NewPage[K comparable, V comparable](sizeBytes int, keySerializer common.Ser
 	}
 }
 
-func (c *Page[K, V]) FromBytes(pageData []byte) {
+func (c *IndexPage[K, V]) FromBytes(pageData []byte) {
 	// read in metadata - link to the next page
 	next := binary.BigEndian.Uint32(pageData[len(pageData)-4:])
 	if next != 0 {
@@ -69,7 +69,7 @@ func (c *Page[K, V]) FromBytes(pageData []byte) {
 	c.isDirty = true
 }
 
-func (c *Page[K, V]) ToBytes(pageData []byte) {
+func (c *IndexPage[K, V]) ToBytes(pageData []byte) {
 	var offset int
 	keySize := c.keySerializer.Size()
 	valueSize := c.indexSerializer.Size()
@@ -92,14 +92,14 @@ func (c *Page[K, V]) ToBytes(pageData []byte) {
 }
 
 // forEach calls the callback for each key-value pair in the list
-func (c *Page[K, V]) forEach(callback func(K, V)) {
+func (c *IndexPage[K, V]) forEach(callback func(K, V)) {
 	for i := 0; i < c.last; i++ {
 		callback(c.list[i].Key, c.list[i].Val)
 	}
 }
 
 // get returns a value from the list or false.
-func (c *Page[K, V]) get(key K) (val V, exists bool) {
+func (c *IndexPage[K, V]) get(key K) (val V, exists bool) {
 	if index, exists := c.findItem(key); exists {
 		return c.list[index].Val, true
 	}
@@ -108,17 +108,17 @@ func (c *Page[K, V]) get(key K) (val V, exists bool) {
 }
 
 // update only replaces the value at the input index
-func (c *Page[K, V]) updateAt(index int, val V) {
+func (c *IndexPage[K, V]) updateAt(index int, val V) {
 	c.isDirty = true
 	c.list[index].Val = val
 }
 
 // update returns a value at the input index
-func (c *Page[K, V]) getAt(index int) V {
+func (c *IndexPage[K, V]) getAt(index int) V {
 	return c.list[index].Val
 }
 
-func (c *Page[K, V]) put(key K, val V) {
+func (c *IndexPage[K, V]) put(key K, val V) {
 	index, exists := c.findItem(key)
 	if exists {
 		c.updateAt(index, val)
@@ -131,7 +131,7 @@ func (c *Page[K, V]) put(key K, val V) {
 // insertAt adds the input key and value at the index position in this page
 // items occupying this position and following items are shifted one position
 // towards the end of the page
-func (c *Page[K, V]) insertAt(index int, key K, val V) {
+func (c *IndexPage[K, V]) insertAt(index int, key K, val V) {
 	c.isDirty = true
 	// found insert
 	if index < c.last {
@@ -155,20 +155,20 @@ func (c *Page[K, V]) insertAt(index int, key K, val V) {
 	c.last += 1
 }
 
-func (c *Page[K, V]) setNext(next int) {
+func (c *IndexPage[K, V]) setNext(next int) {
 	c.hasNext = true
 	c.next = next
 	c.isDirty = true
 }
 
-func (c *Page[K, V]) removeNext() {
+func (c *IndexPage[K, V]) removeNext() {
 	c.hasNext = false
 	c.next = 0
 	c.isDirty = true
 }
 
 // remove deletes the key from the map and returns whether an element was removed.
-func (c *Page[K, V]) remove(key K) (exists bool) {
+func (c *IndexPage[K, V]) remove(key K) (exists bool) {
 	if index, exists := c.findItem(key); exists {
 		c.removeAt(index)
 		return true
@@ -177,7 +177,7 @@ func (c *Page[K, V]) remove(key K) (exists bool) {
 	return false
 }
 
-func (c *Page[K, V]) removeAt(index int) {
+func (c *IndexPage[K, V]) removeAt(index int) {
 	c.isDirty = true
 	for j := index; j < c.last-1; j++ {
 		c.list[j] = c.list[j+1]
@@ -185,7 +185,7 @@ func (c *Page[K, V]) removeAt(index int) {
 	c.last -= 1
 }
 
-func (c *Page[K, V]) bulkInsert(data []common.MapEntry[K, V]) {
+func (c *IndexPage[K, V]) bulkInsert(data []common.MapEntry[K, V]) {
 	for i := 0; i < len(data); i++ {
 		c.list[i+c.last] = data[i]
 	}
@@ -194,30 +194,30 @@ func (c *Page[K, V]) bulkInsert(data []common.MapEntry[K, V]) {
 	c.isDirty = true
 }
 
-func (c *Page[K, V]) getEntries() []common.MapEntry[K, V] {
+func (c *IndexPage[K, V]) getEntries() []common.MapEntry[K, V] {
 	return c.list[0:c.last]
 }
 
 // setNumKeys allows for explicitly setting the size for situations
 // where the page is loaded.
-func (c *Page[K, V]) setNumKeys(size int) {
+func (c *IndexPage[K, V]) setNumKeys(size int) {
 	c.isDirty = true
 	c.last = size
 }
 
-func (c *Page[K, V]) sizeKeys() int {
+func (c *IndexPage[K, V]) sizeKeys() int {
 	return c.last
 }
 
-func (c *Page[K, V]) Size() int {
+func (c *IndexPage[K, V]) Size() int {
 	return c.sizeBytes
 }
 
-func (c *Page[K, V]) IsDirty() bool {
+func (c *IndexPage[K, V]) IsDirty() bool {
 	return c.isDirty
 }
 
-func (c *Page[K, V]) Clear() {
+func (c *IndexPage[K, V]) Clear() {
 	c.next = 0
 	c.hasNext = false
 	c.isDirty = true
@@ -231,7 +231,7 @@ func (c *Page[K, V]) Clear() {
 // The index is increased by one when the last visited key was lower than the input key
 // so the new key may be inserted after this key.
 // It means the index can be used as a position to insert the key in the list.
-func (c *Page[K, V]) findItem(key K) (index int, exists bool) {
+func (c *IndexPage[K, V]) findItem(key K) (index int, exists bool) {
 	start := 0
 	end := c.last - 1
 	mid := start
@@ -254,7 +254,7 @@ func (c *Page[K, V]) findItem(key K) (index int, exists bool) {
 	return mid, false
 }
 
-func (c *Page[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
+func (c *IndexPage[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*c)
 	entrySize := unsafe.Sizeof(common.MapEntry[K, V]{})
 	var v V
@@ -279,8 +279,8 @@ func byteSizePage[K any, V any](pageItems int, keySerializer common.Serializer[K
 }
 
 // PageFactory creates a factory for KVPage defining its size in bytes
-func PageFactory[K comparable, V comparable](pageSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) func() *Page[K, V] {
-	return func() *Page[K, V] {
-		return NewPage[K, V](pageSize, keySerializer, indexSerializer, comparator)
+func PageFactory[K comparable, V comparable](pageSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) func() *IndexPage[K, V] {
+	return func() *IndexPage[K, V] {
+		return NewIndexPage[K, V](pageSize, keySerializer, indexSerializer, comparator)
 	}
 }

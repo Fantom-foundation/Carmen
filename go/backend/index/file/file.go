@@ -35,7 +35,7 @@ type Index[K comparable, I common.Identifier] struct {
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
 	pageStore       *pagepool.FilePageStorage
-	pagePool        *pagepool.PagePool[*Page[K, I]]
+	pagePool        *pagepool.PagePool[*IndexPage[K, I]]
 	comparator      common.Comparator[K]
 	path            string
 
@@ -79,7 +79,7 @@ func NewParamIndex[K comparable, I common.Identifier](
 	}
 	pageItems := numKeysPage(common.PageSize, keySerializer, indexSerializer)
 	pageFactory := PageFactory(common.PageSize, keySerializer, indexSerializer, comparator)
-	pagePool := pagepool.NewPagePool[*Page[K, I]](pagePoolSize, freeIds, pageStorage, pageFactory)
+	pagePool := pagepool.NewPagePool[*IndexPage[K, I]](pagePoolSize, freeIds, pageStorage, pageFactory)
 
 	inst = &Index[K, I]{
 		table:           NewLinearHashMap[K, I](pageItems, numBuckets, size, pagePool, hasher, comparator),

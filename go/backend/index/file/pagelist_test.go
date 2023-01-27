@@ -103,6 +103,6 @@ func TestPageListOverflow(t *testing.T) {
 func initPageList() PageList[common.Address, uint32] {
 	sizeBytes := byteSizePage[common.Address, uint32](maxItems, common.AddressSerializer{}, common.Identifier32Serializer{})
 	pageFactory := PageFactory[common.Address, uint32](sizeBytes, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
-	pagePool := pagepool.NewPagePool[*Page[common.Address, uint32]](pagePoolSize, nil, pagepool.NewMemoryPageStore(), pageFactory)
+	pagePool := pagepool.NewPagePool[*IndexPage[common.Address, uint32]](pagePoolSize, nil, pagepool.NewMemoryPageStore(), pageFactory)
 	return NewPageList[common.Address, uint32](33, maxItems, pagePool)
 }
