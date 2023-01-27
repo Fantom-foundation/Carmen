@@ -126,9 +126,8 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 	zero := common.Value{}
 
-	// Initially the account is non-exisiting, it gets destroyed, and recreated.
+	// Initially the account is non-exisiting, it gets recreated.
 	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
-	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
@@ -186,8 +185,7 @@ func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
 
-	// At the end the account is deleted and recreated with the new state.
-	mock.EXPECT().deleteAccount(address1).Return(nil)
+	// At the end the account is recreated with the new state.
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
@@ -387,8 +385,7 @@ func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDel
 	// Initially the account is exisiting with a view stored values.
 	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
 
-	// The account is to be deleted and re-created.
-	mock.EXPECT().deleteAccount(address1).Return(nil)
+	// The account is to be re-created.
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
@@ -419,8 +416,7 @@ func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *
 	// Initially the account is exisiting with a view stored values.
 	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
 
-	// The account is to be deleted and re-created.
-	mock.EXPECT().deleteAccount(address1).Return(nil)
+	// The account is to be re-created.
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
@@ -597,7 +593,6 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 
 	// The original account is expected to be deleted, the last created one is expected to be really created.
 	newBalance, _ := common.ToBalance(big.NewInt(456))
-	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, newBalance).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
