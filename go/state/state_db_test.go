@@ -16,8 +16,8 @@ func TestCaremenStateImplementsStateDbInterface(t *testing.T) {
 	var _ StateDB = &db
 }
 
-func prepareMockState(ctrl *gomock.Controller) *MockmutableState {
-	mock := NewMockmutableState(ctrl)
+func prepareMockState(ctrl *gomock.Controller) *MockdirectUpdateState {
+	mock := NewMockdirectUpdateState(ctrl)
 	// Implement the Apply() function by distributing the calls among specialized functions.
 	mock.
 		EXPECT().
