@@ -78,7 +78,7 @@ func NewParamIndex[K comparable, I common.Identifier](
 		return
 	}
 	pageItems := numKeysPage(common.PageSize, keySerializer, indexSerializer)
-	pageFactory := PageNumBytesFactory(common.PageSize, keySerializer, indexSerializer, comparator)
+	pageFactory := PageFactory(common.PageSize, keySerializer, indexSerializer, comparator)
 	pagePool := pagepool.NewPagePool[*Page[K, I]](pagePoolSize, freeIds, pageStorage, pageFactory)
 
 	inst = &Index[K, I]{

@@ -156,7 +156,9 @@ func initMapFactories(t *testing.T) map[string]func() common.Map[common.Address,
 	pageSize := 1 << 8
 	pagePoolSize := 3
 
-	pageFactory := file.PageNumKeysFactory[common.Address, uint32](pageItems, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	pageMetaSize := 2 + 4
+	sizeBytes := pageMetaSize + pageItems*(common.AddressSerializer{}.Size()+common.Identifier32Serializer{}.Size())
+	pageFactory := file.PageFactory[common.Address, uint32](sizeBytes, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
 
 	sortedMapFactory := func() common.Map[common.Address, uint32] {
 		return common.NewSortedMap[common.Address, uint32](pageItems, common.AddressComparator{})

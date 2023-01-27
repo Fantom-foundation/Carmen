@@ -274,16 +274,16 @@ func (m *PageList[K, V]) remove(key K) (bool, error) {
 func (m *PageList[K, V]) createNextPage(page *Page[K, V]) (nextId pagepool.PageId) {
 	tailPageId := m.pagePool.GenerateNextId()
 	pageId := pagepool.NewPageId(m.bucket, tailPageId)
-	page.SetNext(pageId)
+	page.setNext(tailPageId)
 	return pageId
 }
 
 // fillFromTail reads a key-value pair from the tail and inserts it into the input page,
 // no item is moved when the tail is empty.
-func fillFromTail[K comparable, V comparable](page, tail *pagepool.Page[K, V]) {
-	if tail.Size() > 0 {
-		tailEntry := tail.GetEntries()[tail.Size()-1]
-		page.Put(tailEntry.Key, tailEntry.Val)
+func fillFromTail[K comparable, V comparable](page, tail *Page[K, V]) {
+	if tail.sizeKeys() > 0 {
+		tailEntry := tail.getEntries()[tail.sizeKeys()-1]
+		page.put(tailEntry.Key, tailEntry.Val)
 		// remove from tail by moving the size
 		tail.setNumKeys(tail.sizeKeys() - 1)
 	}

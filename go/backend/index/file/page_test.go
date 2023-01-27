@@ -417,13 +417,13 @@ func TestPageSetGetNext(t *testing.T) {
 }
 
 func verifyPageSorted(t *testing.T, h *Page[common.Address, uint32]) {
-	keys := make([]common.Address, 0, h.Size())
+	keys := make([]common.Address, 0, h.sizeKeys())
 	for _, entry := range h.getEntries() {
 		keys = append(keys, entry.Key)
 	}
 	common.AssertArraySorted[common.Address](t, keys, common.AddressComparator{})
 
-	keys = make([]common.Address, 0, h.Size())
+	keys = make([]common.Address, 0, h.sizeKeys())
 	h.forEach(func(k common.Address, v uint32) {
 		keys = append(keys, k)
 	})
@@ -432,5 +432,6 @@ func verifyPageSorted(t *testing.T, h *Page[common.Address, uint32]) {
 }
 
 func initPage(capacity int) *Page[common.Address, uint32] {
-	return PageNumKeysFactory[common.Address, uint32](capacity, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})()
+	sizeBytes := byteSizePage[common.Address, uint32](capacity, common.AddressSerializer{}, common.Identifier32Serializer{})
+	return PageFactory[common.Address, uint32](sizeBytes, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})()
 }

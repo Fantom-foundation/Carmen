@@ -278,15 +278,9 @@ func byteSizePage[K any, V any](pageItems int, keySerializer common.Serializer[K
 	return sizeBytes
 }
 
-// PageNumBytesFactory creates a factory for KVPage defining its size in bytes
-func PageNumBytesFactory[K comparable, V comparable](pageSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) func() *Page[K, V] {
+// PageFactory creates a factory for KVPage defining its size in bytes
+func PageFactory[K comparable, V comparable](pageSize int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) func() *Page[K, V] {
 	return func() *Page[K, V] {
 		return NewPage[K, V](pageSize, keySerializer, indexSerializer, comparator)
 	}
-}
-
-// PageNumKeysFactory creates a factory for KVPage, which defines its size as the number of max allowed key-value pairs.
-func PageNumKeysFactory[K comparable, V comparable](pageItems int, keySerializer common.Serializer[K], indexSerializer common.Serializer[V], comparator common.Comparator[K]) func() *Page[K, V] {
-	sizeBytes := byteSizePage(pageItems, keySerializer, indexSerializer)
-	return PageNumBytesFactory[K, V](sizeBytes, keySerializer, indexSerializer, comparator)
 }
