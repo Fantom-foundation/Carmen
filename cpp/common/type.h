@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <compare>
 #include <cstdint>
@@ -151,7 +152,25 @@ class Code {
 
   auto Size() const { return code_.size(); }
 
-  auto operator<=>(const Code&) const = default;
+  friend bool operator==(const Code&, const Code&) = default;
+
+  friend std::strong_ordering operator<=>(const Code& lhs, const Code& rhs) {
+    // Ideally we would just let this generate using =default, but this fails on
+    // MacOS since no <=> operator for vectors can be found. This seems to be a
+    // missing feature, since according to the cppreference such an operator
+    // should be defined.
+    // Note: the missing feature on Mac is likely caused by the lack of an
+    // implementation of std::lexicographical_compare_three_way in the standard
+    // library;
+    auto& l = lhs.code_;
+    auto& r = rhs.code_;
+    auto n = std::min(l.size(), r.size());
+    for (std::size_t i = 0; i < n; i++) {
+      if (l[i] < r[i]) return std::strong_ordering::less;
+      if (l[i] > r[i]) return std::strong_ordering::greater;
+    }
+    return l.size() <=> r.size();
+  }
 
   operator std::span<const std::byte>() const {
     return {code_.data(), code_.size()};
