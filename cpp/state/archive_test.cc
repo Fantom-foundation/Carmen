@@ -411,7 +411,7 @@ TEST(Archive, DeletingAnExistingAccountKeepsMakesAccountNonExisting) {
   EXPECT_THAT(archive.Exists(4, addr), IsOkAndHolds(false));
 }
 
-TEST(Archive, RecreatingAnAccountWorksInTheSameBlock) {
+TEST(Archive, AccountCanBeRecreatedWithoutDelete) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
@@ -422,7 +422,6 @@ TEST(Archive, RecreatingAnAccountWorksInTheSameBlock) {
   EXPECT_OK(archive.Add(1, update1));
 
   Update update2;
-  update2.Delete(addr);
   update2.Create(addr);
   EXPECT_OK(archive.Add(3, update2));
 
@@ -458,7 +457,7 @@ TEST(Archive, DeletingAnAccountInvalidatesStorage) {
   EXPECT_THAT(archive.GetStorage(4, addr, key), zero);
 }
 
-TEST(Archive, RecratingAnAccountInvalidatesStorage) {
+TEST(Archive, RecreatingAnAccountInvalidatesStorage) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
@@ -473,7 +472,6 @@ TEST(Archive, RecratingAnAccountInvalidatesStorage) {
   EXPECT_OK(archive.Add(1, update1));
 
   Update update2;
-  update2.Delete(addr);
   update2.Create(addr);
   EXPECT_OK(archive.Add(3, update2));
 
@@ -505,7 +503,6 @@ TEST(Archive, StorageOfRecreatedAccountCanBeUpdated) {
   EXPECT_OK(archive.Add(1, update1));
 
   Update update2;
-  update2.Delete(addr);
   update2.Create(addr);
   update2.Set(addr, key1, two);
   update2.Set(addr, key3, one);
