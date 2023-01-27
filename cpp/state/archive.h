@@ -39,6 +39,9 @@ class Archive {
   // Adds the changes of the given block to this archive.
   absl::Status Add(BlockId block, const Update& update);
 
+  // Allows to test whether an account exists at the given block height.
+  absl::StatusOr<bool> Exists(BlockId block, const Address& account);
+
   // Allows to fetch a historic balance values for a given account.
   absl::StatusOr<Balance> GetBalance(BlockId block, const Address& account);
 

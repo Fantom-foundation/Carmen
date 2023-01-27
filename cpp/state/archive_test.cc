@@ -12,6 +12,7 @@ namespace {
 
 using ::testing::_;
 using ::testing::HasSubstr;
+using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 
 TEST(Archive, TypeProperties) {
@@ -357,6 +358,178 @@ TEST(Archive, ConflictingValueHistoryCanNotBeAdded) {
 
   // The storage remains as it was.
   EXPECT_THAT(archive.GetStorage(block, addr, key), one);
+}
+
+TEST(Archive, CreatingAnAccountUpdatesItsExistenceState) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+
+  Update update;
+  update.Create(addr);
+  EXPECT_OK(archive.Add(1, update));
+
+  EXPECT_THAT(archive.Exists(0, addr), IsOkAndHolds(false));
+  EXPECT_THAT(archive.Exists(1, addr), IsOkAndHolds(true));
+  EXPECT_THAT(archive.Exists(2, addr), IsOkAndHolds(true));
+}
+
+TEST(Archive, DeletingAnNonExistingAccountKeepsAccountNonExisting) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+
+  Update update;
+  update.Delete(addr);
+  EXPECT_OK(archive.Add(1, update));
+
+  EXPECT_THAT(archive.Exists(0, addr), IsOkAndHolds(false));
+  EXPECT_THAT(archive.Exists(1, addr), IsOkAndHolds(false));
+  EXPECT_THAT(archive.Exists(2, addr), IsOkAndHolds(false));
+}
+
+TEST(Archive, DeletingAnExistingAccountKeepsMakesAccountNonExisting) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+
+  Update update1;
+  update1.Create(addr);
+  EXPECT_OK(archive.Add(1, update1));
+
+  Update update2;
+  update2.Delete(addr);
+  EXPECT_OK(archive.Add(3, update2));
+
+  EXPECT_THAT(archive.Exists(0, addr), IsOkAndHolds(false));
+  EXPECT_THAT(archive.Exists(1, addr), IsOkAndHolds(true));
+  EXPECT_THAT(archive.Exists(2, addr), IsOkAndHolds(true));
+  EXPECT_THAT(archive.Exists(3, addr), IsOkAndHolds(false));
+  EXPECT_THAT(archive.Exists(4, addr), IsOkAndHolds(false));
+}
+
+TEST(Archive, RecreatingAnAccountWorksInTheSameBlock) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+
+  Update update1;
+  update1.Create(addr);
+  EXPECT_OK(archive.Add(1, update1));
+
+  Update update2;
+  update2.Delete(addr);
+  update2.Create(addr);
+  EXPECT_OK(archive.Add(3, update2));
+
+  EXPECT_THAT(archive.Exists(0, addr), IsOkAndHolds(false));
+  EXPECT_THAT(archive.Exists(1, addr), IsOkAndHolds(true));
+  EXPECT_THAT(archive.Exists(2, addr), IsOkAndHolds(true));
+  EXPECT_THAT(archive.Exists(3, addr), IsOkAndHolds(true));
+  EXPECT_THAT(archive.Exists(4, addr), IsOkAndHolds(true));
+}
+
+TEST(Archive, DeletingAnAccountInvalidatesStorage) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+  Key key{0x02};
+  Value zero{0x00};
+  Value one{0x01};
+
+  Update update1;
+  update1.Create(addr);
+  update1.Set(addr, key, one);
+  EXPECT_OK(archive.Add(1, update1));
+
+  Update update2;
+  update2.Delete(addr);
+  EXPECT_OK(archive.Add(3, update2));
+
+  EXPECT_THAT(archive.GetStorage(0, addr, key), zero);
+  EXPECT_THAT(archive.GetStorage(1, addr, key), one);
+  EXPECT_THAT(archive.GetStorage(2, addr, key), one);
+  EXPECT_THAT(archive.GetStorage(3, addr, key), zero);
+  EXPECT_THAT(archive.GetStorage(4, addr, key), zero);
+}
+
+TEST(Archive, RecratingAnAccountInvalidatesStorage) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+  Key key{0x02};
+  Value zero{0x00};
+  Value one{0x01};
+
+  Update update1;
+  update1.Create(addr);
+  update1.Set(addr, key, one);
+  EXPECT_OK(archive.Add(1, update1));
+
+  Update update2;
+  update2.Delete(addr);
+  update2.Create(addr);
+  EXPECT_OK(archive.Add(3, update2));
+
+  EXPECT_THAT(archive.GetStorage(0, addr, key), zero);
+  EXPECT_THAT(archive.GetStorage(1, addr, key), one);
+  EXPECT_THAT(archive.GetStorage(2, addr, key), one);
+  EXPECT_THAT(archive.GetStorage(3, addr, key), zero);
+  EXPECT_THAT(archive.GetStorage(4, addr, key), zero);
+}
+
+TEST(Archive, StorageOfRecreatedAccountCanBeUpdated) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  Address addr{0x01};
+
+  Key key1{0x01};  // used in old and new account
+  Key key2{0x02};  // used only in old account
+  Key key3{0x03};  // used only in new account
+
+  Value zero{0x00};
+  Value one{0x01};
+  Value two{0x02};
+
+  Update update1;
+  update1.Create(addr);
+  update1.Set(addr, key1, one);
+  update1.Set(addr, key2, two);
+  EXPECT_OK(archive.Add(1, update1));
+
+  Update update2;
+  update2.Delete(addr);
+  update2.Create(addr);
+  update2.Set(addr, key1, two);
+  update2.Set(addr, key3, one);
+  EXPECT_OK(archive.Add(3, update2));
+
+  EXPECT_THAT(archive.GetStorage(0, addr, key1), zero);
+  EXPECT_THAT(archive.GetStorage(0, addr, key2), zero);
+  EXPECT_THAT(archive.GetStorage(0, addr, key3), zero);
+
+  EXPECT_THAT(archive.GetStorage(1, addr, key1), one);
+  EXPECT_THAT(archive.GetStorage(1, addr, key2), two);
+  EXPECT_THAT(archive.GetStorage(1, addr, key3), zero);
+
+  EXPECT_THAT(archive.GetStorage(2, addr, key1), one);
+  EXPECT_THAT(archive.GetStorage(2, addr, key2), two);
+  EXPECT_THAT(archive.GetStorage(2, addr, key3), zero);
+
+  EXPECT_THAT(archive.GetStorage(3, addr, key1), two);
+  EXPECT_THAT(archive.GetStorage(3, addr, key2), zero);
+  EXPECT_THAT(archive.GetStorage(3, addr, key3), one);
+
+  EXPECT_THAT(archive.GetStorage(4, addr, key1), two);
+  EXPECT_THAT(archive.GetStorage(4, addr, key2), zero);
+  EXPECT_THAT(archive.GetStorage(4, addr, key3), one);
 }
 
 }  // namespace
