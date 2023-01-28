@@ -15,7 +15,7 @@ import (
 // The capacity is verified on each insert and potentially the split is triggered.
 // It is inspired by: https://hackthology.com/linear-hashing.html#fn-5
 type LinearHashMap[K comparable, V comparable] struct {
-	pagePool *pagepool.PagePool[K, V]
+	pagePool *pagepool.PagePool[*IndexPage[K, V]]
 
 	size         uint // total number of keys in the whole map
 	pageCapacity int  //maximal number of elements per block
@@ -26,7 +26,7 @@ type LinearHashMap[K comparable, V comparable] struct {
 
 // NewLinearHashMap creates a new instance with the initial number of buckets and constant bucket size.
 // The number of buckets will grow as this table grows.
-func NewLinearHashMap[K comparable, V comparable](pageCapacity, numBuckets, size int, pagePool *pagepool.PagePool[K, V], hasher common.Hasher[K], comparator common.Comparator[K]) *LinearHashMap[K, V] {
+func NewLinearHashMap[K comparable, V comparable](pageCapacity, numBuckets, size int, pagePool *pagepool.PagePool[*IndexPage[K, V]], hasher common.Hasher[K], comparator common.Comparator[K]) *LinearHashMap[K, V] {
 	return &LinearHashMap[K, V]{
 		pagePool:       pagePool,
 		size:           uint(size),

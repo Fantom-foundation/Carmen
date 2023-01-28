@@ -34,8 +34,8 @@ type Index[K comparable, I common.Identifier] struct {
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
-	pageStore       *pagepool.FilePageStorage[K, I]
-	pagePool        *pagepool.PagePool[K, I]
+	pageStore       *pagepool.FilePageStorage
+	pagePool        *pagepool.PagePool[*IndexPage[K, I]]
 	comparator      common.Comparator[K]
 	path            string
 
@@ -73,19 +73,14 @@ func NewParamIndex[K comparable, I common.Identifier](
 		numBuckets = defaultNumBuckets // 32K * 4kb -> 128MB.
 	}
 
-	// Do not customise, unless different size of page, etc. is needed
-	// 4kB is the right fit for disk I/O
-	pageSize := common.PageSize // 4kB
-	// metadata of a page: number of items, index of next overflow page
-	pageMetaSize := 2 + 4
-	pageItems := (pageSize - pageMetaSize) / (keySerializer.Size() + indexSerializer.Size()) // number of key-value pairs per page
-
-	pageStorage, err := pagepool.NewFilePageStorage[K, I](path, pageSize, pageItems, lastBucket, lastOverflow, keySerializer, indexSerializer, comparator)
+	pageStorage, err := pagepool.NewFilePageStorage(path, common.PageSize, lastBucket, lastOverflow)
 	if err != nil {
 		return
 	}
+	pageItems := numKeysPage(common.PageSize, keySerializer, indexSerializer)
+	pageFactory := PageFactory(common.PageSize, keySerializer, indexSerializer, comparator)
+	pagePool := pagepool.NewPagePool[*IndexPage[K, I]](pagePoolSize, freeIds, pageStorage, pageFactory)
 
-	pagePool := pagepool.NewPagePool[K, I](pagePoolSize, pageItems, freeIds, pageStorage, comparator)
 	inst = &Index[K, I]{
 		table:           NewLinearHashMap[K, I](pageItems, numBuckets, size, pagePool, hasher, comparator),
 		keySerializer:   keySerializer,

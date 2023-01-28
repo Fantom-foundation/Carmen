@@ -27,6 +27,20 @@ func TestLinearHashStableHashing(t *testing.T) {
 	}
 }
 
+func TestLinearHashBitMask(t *testing.T) {
+	h := NewLinearHashMap[common.Address, uint32](10, 128, common.AddressHasher{}, common.AddressComparator{})
+	if h.GetBits() != 7 {
+		t.Errorf("Num of bits %d is not Log2 of num of blocks %d", h.GetBits(), 128)
+	}
+
+	// not exactly rounded
+	h = NewLinearHashMap[common.Address, uint32](10, 120, common.AddressHasher{}, common.AddressComparator{})
+	if h.GetBits() != 7 {
+		t.Errorf("Num of bits %d is not Log2 of num of blocks %d", h.GetBits(), 120)
+	}
+
+}
+
 func TestLinearHashGetSet(t *testing.T) {
 	h := NewLinearHashMap[common.Address, uint32](BucketSize, NumBuckets, common.AddressHasher{}, common.AddressComparator{})
 

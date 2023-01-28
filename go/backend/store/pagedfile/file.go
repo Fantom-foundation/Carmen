@@ -71,8 +71,8 @@ func (m *Store[I, V]) ensurePageLoaded(pageId int) (page *Page, err error) {
 	if err != nil {
 		return
 	}
-	evictedPageId, evictedPage := m.pagesPool.Set(pageId, page)
-	if evictedPage != nil {
+	evictedPageId, evictedPage, evicted := m.pagesPool.Set(pageId, page)
+	if evicted {
 		err = m.handleEvictedPage(evictedPageId, evictedPage)
 	}
 	return

@@ -27,6 +27,10 @@ func (id PageId) Overflow() int {
 	return id.overflow
 }
 
+func (id PageId) IsOverFlowPage() bool {
+	return id.Overflow() != 0
+}
+
 func (id PageId) Compare(other PageId) (res int) {
 	res = other.bucket - id.bucket
 	if res == 0 {
