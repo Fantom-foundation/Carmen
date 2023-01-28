@@ -3,6 +3,7 @@ package btree
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // BTree implements a classic B-tree.
@@ -64,4 +65,10 @@ func (m BTree[K]) String() string {
 func (m *BTree[K]) checkProperties() error {
 	height := -1
 	return m.root.checkProperties(&height, 0)
+}
+
+func (m *BTree[K]) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
+	mf.AddChild("nodes", m.root.GetMemoryFootprint())
+	return mf
 }

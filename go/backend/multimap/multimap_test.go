@@ -2,6 +2,7 @@ package multimap
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/multimap/btreemem"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -35,6 +36,12 @@ func getMultiMapFactories(tb testing.TB) (stores []multimapFactory) {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
 				return &multiMapClosingWrapper{mm, []func() error{db.Close}}
+			},
+		},
+		{
+			label: "BTree",
+			getMultiMap: func(tempDir string) MultiMap[uint32, uint64] {
+				return btreemem.NewMultiMap[uint32, uint64](common.Identifier32Serializer{}, common.Identifier64Serializer{}, common.Uint32Comparator{}, common.Uint64Comparator{})
 			},
 		},
 	}

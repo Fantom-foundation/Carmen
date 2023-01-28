@@ -22,6 +22,7 @@ import (
 	cachedIndex "github.com/Fantom-foundation/Carmen/go/backend/index/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
+	mapbtree "github.com/Fantom-foundation/Carmen/go/backend/multimap/btreemem"
 	mapldb "github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
 	mapmem "github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
 	cachedStore "github.com/Fantom-foundation/Carmen/go/backend/store/cache"
@@ -184,7 +185,7 @@ func NewGoFileState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
+	addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
 	var arch archive.Archive
 	if params.WithArchive {
@@ -291,7 +292,7 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
+	addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
 	var arch archive.Archive
 	if params.WithArchive {
