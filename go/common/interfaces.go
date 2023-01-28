@@ -23,6 +23,16 @@ type Hasher[K any] interface {
 	Hash(*K) uint64
 }
 
+// Iterator is an interface for standard iterator
+type Iterator[K any] interface {
+
+	//HasNext returns true if there is still at least one more item in the underlying collection.
+	HasNext() bool
+
+	//Next returns a next element in the input collection.
+	Next() K
+}
+
 // Map associates keys to values
 type Map[K comparable, V any] interface {
 

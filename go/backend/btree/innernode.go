@@ -6,24 +6,24 @@ import (
 )
 
 // InnerNode contains keys as the LeafNode, in addition, it contains array of children elements.
-type InnerNode[K comparable] struct {
+type InnerNode[K any] struct {
 	LeafNode[K] // LeafNode is the base for this node, it contains common properties such as the keys, and common methods
 
 	// TODO replace the node list by iIDs and fetch nodes from the pool
-	children []Node[K] // children is the array of IDs of child nodes
+	children []node[K] // children is the array of IDs of child nodes
 }
 
 // newInnerNode creates a new instance with the given capacity.
-func newInnerNode[K comparable](capacity int, comparator common.Comparator[K]) *InnerNode[K] {
+func newInnerNode[K any](capacity int, comparator common.Comparator[K]) *InnerNode[K] {
 	return &InnerNode[K]{
-		children: make([]Node[K], 0, capacity+2),
+		children: make([]node[K], 0, capacity+2),
 		LeafNode: *newLeafNode[K](capacity, comparator)}
 }
 
 // initNewInnerNode creates a new inner node.
 // It assigns left and right child, and a value that falls between these children.
 // The left child can be set to nil, in which case it is not added
-func initNewInnerNode[K comparable](left, right Node[K], middle K, capacity int, comparator common.Comparator[K]) *InnerNode[K] {
+func initNewInnerNode[K any](left, right node[K], middle K, capacity int, comparator common.Comparator[K]) *InnerNode[K] {
 	innerNode := newInnerNode[K](capacity, comparator)
 	innerNode.children = append(innerNode.children, left)
 	innerNode.keys = append(innerNode.keys, middle)
@@ -33,11 +33,11 @@ func initNewInnerNode[K comparable](left, right Node[K], middle K, capacity int,
 	return innerNode
 }
 
-func (m *InnerNode[K]) Insert(key K) (right Node[K], middle K, split bool) {
+func (m *InnerNode[K]) insert(key K) (right node[K], middle K, split bool) {
 	index, exists := m.findItem(key)
 	if !exists {
 		// insert into child, when split has happened, insert result in this node
-		if right, middle, split := m.children[index].Insert(key); split {
+		if right, middle, split := m.children[index].insert(key); split {
 			m.insertAt(middle, right, index)
 		}
 
@@ -51,14 +51,14 @@ func (m *InnerNode[K]) Insert(key K) (right Node[K], middle K, split bool) {
 	return
 }
 
-func (m *InnerNode[K]) Contains(key K) bool {
+func (m *InnerNode[K]) contains(key K) bool {
 	index, exists := m.findItem(key)
 
 	if exists {
 		return true
 	}
 
-	return m.children[index].Contains(key)
+	return m.children[index].contains(key)
 }
 
 // split this node into two. Keys in this node are reduced to half
@@ -84,7 +84,7 @@ func (m *InnerNode[K]) split() (right *InnerNode[K], middle K) {
 // insertAt extends the leaf of one item and inserts the input key
 // at the input position. The keys beyond this index
 // are shifted right.
-func (m *InnerNode[K]) insertAt(key K, right Node[K], index int) {
+func (m *InnerNode[K]) insertAt(key K, right node[K], index int) {
 	if index == len(m.keys) {
 		m.keys = append(m.keys, key)
 		m.children = append(m.children, right)
@@ -126,6 +126,43 @@ func (m *InnerNode[K]) ForEach(callback func(k K)) {
 
 func (m InnerNode[K]) String() string {
 	return fmt.Sprintf("%v", m.children)
+}
+
+func (m *InnerNode[K]) hasNext(iterator *Iterator[K]) (exists bool) {
+	if iterator.visitChild {
+		// if there is a child
+		if iterator.currentLevel().currentIndex < iterator.currentLevel().endIndex+1 {
+			// peek in it
+			child := m.children[iterator.currentLevel().currentIndex]
+			startIndex, _ := child.findItem(iterator.start)
+			endIndex, _ := child.findItem(iterator.end)
+			iterator.pushLevel(startIndex, endIndex, child)
+			exists = iterator.HasNext()
+		}
+	} else {
+		exists = m.LeafNode.hasNext(iterator)
+	}
+	return
+}
+
+func (m *InnerNode[K]) next(iterator *Iterator[K]) (k K) {
+	if !iterator.HasNext() {
+		return
+	}
+	if iterator.visitChild {
+		// drill down to a child node first
+		child := m.children[iterator.currentLevel().currentIndex]
+		startIndex, _ := child.findItem(iterator.start)
+		endIndex, _ := child.findItem(iterator.end)
+		iterator.pushLevel(startIndex, endIndex, child)
+		k = iterator.Next()
+	} else {
+		// no data in child, or child already visited - get a key from this node
+		k = m.LeafNode.next(iterator)
+		iterator.visitChild = true
+	}
+
+	return
 }
 
 // printDump collects debug print of this tree
