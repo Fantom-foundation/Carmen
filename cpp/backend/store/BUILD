@@ -23,6 +23,18 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "test_util",
+    testonly = True,
+    hdrs = ["test_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//common:memory_usage",
+        "//common:type",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
 cc_test(
     name = "store_test",
     srcs = ["store_test.cc"],

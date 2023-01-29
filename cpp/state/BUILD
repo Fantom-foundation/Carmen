@@ -17,6 +17,7 @@ cc_test(
     deps = [
         ":configurations",
         ":state",
+        "//backend/index:test_util",
         "//common:account_state",
         "//common:file_util",
         "//common:status_test_util",

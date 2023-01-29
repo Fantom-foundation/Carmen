@@ -3,6 +3,7 @@
 #include "common/account_state.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
+#include "backend/index/test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
