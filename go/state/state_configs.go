@@ -1,10 +1,12 @@
 package state
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 
 	cachedDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/cache"
 	fileDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/file"
@@ -39,9 +41,18 @@ const PoolSize = 100000
 // The number of codes grouped together in depots to form one leaf node of the hash tree.
 const CodeHashGroupSize = 4
 
+// Parameters struct defining configuration parameters for state instances.
+type Parameters struct {
+	Directory   string
+	WithArchive bool
+}
+
 // NewGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
-func NewGoMemoryState() (State, error) {
+func NewGoMemoryState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
@@ -79,8 +90,11 @@ func NewGoMemoryState() (State, error) {
 }
 
 // NewGoFileState creates File based Index and Store implementations
-func NewGoFileState(path string) (State, error) {
-	indexPath, storePath, err := createSubDirs(path)
+func NewGoFileState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -177,8 +191,11 @@ func NewGoFileState(path string) (State, error) {
 }
 
 // NewGoCachedFileState creates File based Index and Store implementations
-func NewGoCachedFileState(path string) (State, error) {
-	indexPath, storePath, err := createSubDirs(path)
+func NewGoCachedFileState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +292,11 @@ func NewGoCachedFileState(path string) (State, error) {
 }
 
 // NewGoLeveLIndexFileStoreState creates LevelDB Index and File Store implementations
-func NewGoLeveLIndexFileStoreState(path string) (State, error) {
-	indexPath, storePath, err := createSubDirs(path)
+func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -356,8 +376,11 @@ func NewGoLeveLIndexFileStoreState(path string) (State, error) {
 }
 
 // NewGoCachedLeveLIndexFileStoreState creates Cached LevelDB Index and File Store implementations
-func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
-	indexPath, storePath, err := createSubDirs(path)
+func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -449,8 +472,11 @@ func NewGoCachedLeveLIndexFileStoreState(path string) (State, error) {
 }
 
 // NewGoCachedTransactLeveLIndexFileStoreState creates Cached and Transactional LevelDB Index and File Store implementations
-func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
-	indexPath, storePath, err := createSubDirs(path)
+func NewGoCachedTransactLeveLIndexFileStoreState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -555,8 +581,11 @@ func NewGoCachedTransactLeveLIndexFileStoreState(path string) (State, error) {
 }
 
 // NewGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func NewGoLeveLIndexAndStoreState(path string) (State, error) {
-	db, err := common.OpenLevelDb(path, nil)
+func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	db, err := common.OpenLevelDb(params.Directory, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -611,8 +640,11 @@ func NewGoLeveLIndexAndStoreState(path string) (State, error) {
 }
 
 // NewGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func NewGoCachedLeveLIndexAndStoreState(path string) (State, error) {
-	db, err := common.OpenLevelDb(path, nil)
+func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
+	db, err := common.OpenLevelDb(params.Directory, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -678,9 +710,12 @@ func NewGoCachedLeveLIndexAndStoreState(path string) (State, error) {
 }
 
 // NewGoTransactCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func NewGoTransactCachedLeveLIndexAndStoreState(path string) (State, error) {
+func NewGoTransactCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.WithArchive {
+		return nil, fmt.Errorf("archive mode not supported yet in go-* variant")
+	}
 	opts := opt.Options{WriteBuffer: TransactBufferMB}
-	db, err := common.OpenLevelDb(path, &opts)
+	db, err := common.OpenLevelDb(params.Directory, &opts)
 	if err != nil {
 		return nil, err
 	}
