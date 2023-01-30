@@ -307,7 +307,7 @@ class Archive {
   // -- Blocks --
 
   static constexpr const std::string_view kCreateBlockTable =
-      "CREATE TABLE block (number INT PRIMARY KEY, hash BLOB)";
+      "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY, hash BLOB)";
 
   static constexpr const std::string_view kAddBlockStmt =
       "INSERT INTO block(number, hash) VALUES (?,?)";
@@ -318,8 +318,8 @@ class Archive {
   // -- Account Status --
 
   static constexpr const std::string_view kCreateStatusTable =
-      "CREATE TABLE status (account BLOB, block INT, exist, reincarnation INT "
-      "INT, PRIMARY KEY (account,block))";
+      "CREATE TABLE IF NOT EXISTS status (account BLOB, block INT, exist INT, "
+      "reincarnation INT, PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kCreateAccountStmt =
       "INSERT INTO status(account,block,exist,reincarnation) VALUES "
@@ -338,8 +338,8 @@ class Archive {
   // -- Balance --
 
   static constexpr const std::string_view kCreateBalanceTable =
-      "CREATE TABLE balance (account BLOB, block INT, value BLOB, "
-      "PRIMARY KEY (account,block))";
+      "CREATE TABLE IF NOT EXISTS balance (account BLOB, block INT, value "
+      "BLOB, PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kAddBalanceStmt =
       "INSERT INTO balance(account,block,value) VALUES (?,?,?)";
@@ -351,7 +351,7 @@ class Archive {
   // -- Code --
 
   static constexpr const std::string_view kCreateCodeTable =
-      "CREATE TABLE code (account BLOB, block INT, code BLOB, "
+      "CREATE TABLE IF NOT EXISTS code (account BLOB, block INT, code BLOB, "
       "PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kAddCodeStmt =
@@ -364,7 +364,7 @@ class Archive {
   // -- Nonces --
 
   static constexpr const std::string_view kCreateNonceTable =
-      "CREATE TABLE nonce (account BLOB, block INT, value BLOB, "
+      "CREATE TABLE IF NOT EXISTS nonce (account BLOB, block INT, value BLOB, "
       "PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kAddNonceStmt =
@@ -377,9 +377,9 @@ class Archive {
   // -- Storage --
 
   static constexpr const std::string_view kCreateValueTable =
-      "CREATE TABLE storage (account BLOB, reincarnation INT, slot BLOB, block "
-      "INT, value BLOB, "
-      "PRIMARY KEY (account,reincarnation,slot,block))";
+      "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, "
+      "slot BLOB, block INT, value BLOB, PRIMARY KEY "
+      "(account,reincarnation,slot,block))";
 
   static constexpr const std::string_view kAddValueStmt =
       "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES "

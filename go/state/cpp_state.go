@@ -29,29 +29,36 @@ type CppState struct {
 	codeCache *common.Cache[common.Address, []byte]
 }
 
-func NewCppInMemoryState(directory string) (State, error) {
+func NewCppInMemoryState(params Parameters) (State, error) {
 	return &CppState{
-		state:     C.Carmen_CreateInMemoryState(),
+		state:     C.Carmen_CreateInMemoryState(toCBool(params.WithArchive)),
 		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
 	}, nil
 }
 
-func NewCppFileBasedState(directory string) (State, error) {
-	dir := C.CString(directory)
+func NewCppFileBasedState(params Parameters) (State, error) {
+	dir := C.CString(params.Directory)
 	defer C.free(unsafe.Pointer(dir))
 	return &CppState{
-		state:     C.Carmen_CreateFileBasedState(dir, C.int(len(directory))),
+		state:     C.Carmen_CreateFileBasedState(dir, C.int(len(params.Directory)), toCBool(params.WithArchive)),
 		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
 	}, nil
 }
 
-func NewCppLevelDbBasedState(directory string) (State, error) {
-	dir := C.CString(directory)
+func NewCppLevelDbBasedState(params Parameters) (State, error) {
+	dir := C.CString(params.Directory)
 	defer C.free(unsafe.Pointer(dir))
 	return &CppState{
-		state:     C.Carmen_CreateLevelDbBasedState(dir, C.int(len(directory))),
+		state:     C.Carmen_CreateLevelDbBasedState(dir, C.int(len(params.Directory)), toCBool(params.WithArchive)),
 		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
 	}, nil
+}
+
+func toCBool(flag bool) C.C_bool {
+	if flag {
+		return C.C_bool(1)
+	}
+	return C.C_bool(0)
 }
 
 func (cs *CppState) createAccount(address common.Address) error {

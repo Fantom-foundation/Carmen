@@ -103,8 +103,8 @@ class WorldStateWrapper : public WorldState {
 };
 
 template <typename State>
-WorldState* Open(const std::filesystem::path& directory) {
-  auto state = State::Open(directory);
+WorldState* Open(const std::filesystem::path& directory, C_bool with_archive) {
+  auto state = State::Open(directory, with_archive);
   if (!state.ok()) {
     std::cout << "WARNING: Failed to open state: " << state.status() << "\n";
     return nullptr;
@@ -117,18 +117,20 @@ WorldState* Open(const std::filesystem::path& directory) {
 
 extern "C" {
 
-C_State Carmen_CreateInMemoryState() {
-  return carmen::Open<carmen::InMemoryState>("");
+C_State Carmen_CreateInMemoryState(C_bool with_archive) {
+  return carmen::Open<carmen::InMemoryState>("", with_archive);
 }
 
-C_State Carmen_CreateFileBasedState(const char* directory, int length) {
+C_State Carmen_CreateFileBasedState(const char* directory, int length,
+                                    C_bool with_archive) {
   return carmen::Open<carmen::FileBasedState>(
-      std::string_view(directory, length));
+      std::string_view(directory, length), with_archive);
 }
 
-C_State Carmen_CreateLevelDbBasedState(const char* directory, int length) {
+C_State Carmen_CreateLevelDbBasedState(const char* directory, int length,
+                                       C_bool with_archive) {
   return carmen::Open<carmen::LevelDbBasedState>(
-      std::string_view(directory, length));
+      std::string_view(directory, length), with_archive);
 }
 
 void Carmen_Flush(C_State state) {

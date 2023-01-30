@@ -10,13 +10,17 @@ import (
 )
 
 type namedStateConfig struct {
-	name        string
-	createState func(tmpDir string) (directUpdateState, error)
+	name    string
+	factory func(params Parameters) (directUpdateState, error)
 }
 
-func castToDirectUpdateState(factory func(dir string) (State, error)) func(dir string) (directUpdateState, error) {
-	return func(dir string) (directUpdateState, error) {
-		state, err := factory(dir)
+func (c *namedStateConfig) createState(directory string) (directUpdateState, error) {
+	return c.factory(Parameters{Directory: directory})
+}
+
+func castToDirectUpdateState(factory func(params Parameters) (State, error)) func(params Parameters) (directUpdateState, error) {
+	return func(params Parameters) (directUpdateState, error) {
+		state, err := factory(params)
 		if err != nil {
 			return nil, err
 		}
@@ -27,10 +31,10 @@ func castToDirectUpdateState(factory func(dir string) (State, error)) func(dir s
 func initStates() []namedStateConfig {
 	var res []namedStateConfig
 	for _, s := range initCppStates() {
-		res = append(res, namedStateConfig{name: "cpp-" + s.name, createState: s.createState})
+		res = append(res, namedStateConfig{name: "cpp-" + s.name, factory: s.factory})
 	}
 	for _, s := range initGoStates() {
-		res = append(res, namedStateConfig{name: "go-" + s.name, createState: s.createState})
+		res = append(res, namedStateConfig{name: "go-" + s.name, factory: s.factory})
 	}
 	return res
 }
@@ -50,7 +54,7 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, s directUpdateS
 }
 
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
-	ref, err := NewGoMemoryState()
+	ref, err := NewGoMemoryState(Parameters{})
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}
