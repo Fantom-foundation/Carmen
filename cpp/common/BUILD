@@ -293,3 +293,21 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "channel",
+    hdrs = ["channel.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "channel_test",
+    srcs = ["channel_test.cc"],
+    deps = [
+        ":channel",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
