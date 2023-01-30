@@ -3,12 +3,14 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <thread>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/structure.h"
 #include "common/account_state.h"
+#include "common/channel.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -54,6 +56,7 @@ class State {
 
   State() = default;
   State(State&&) = default;
+  ~State();
 
   absl::Status CreateAccount(const Address& address);
 
@@ -91,7 +94,7 @@ class State {
   absl::StatusOr<Hash> GetCodeHash(const Address& address) const;
 
   // Applies the given block updates to this state.
-  absl::Status Apply(std::uint64_t block, const Update& update);
+  absl::Status Apply(std::uint64_t block, Update update);
 
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
@@ -152,6 +155,12 @@ class State {
 
   // A pointer to the optinally included archive.
   std::unique_ptr<Archive> archive_;
+
+  // A thread adding updates into the archive.
+  std::thread archive_writer_;
+
+  // A channel used to communicate with the archive writer thread.
+  std::unique_ptr<Channel<std::pair<BlockId, Update>>> archive_channel_;
 };
 
 // ----------------------------- Definitions ----------------------------------
@@ -222,7 +231,7 @@ State<IndexType, StoreType, DepotType, MultiMapType>::State(
     StoreType<AddressId, AccountState> account_states,
     DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes,
     MultiMapType<AddressId, SlotId> address_to_slots,
-    std::unique_ptr<Archive> archive)
+    std::unique_ptr<Archive> optional_archive)
     : address_index_(std::move(address_index)),
       key_index_(std::move(key_index)),
       slot_index_(std::move(slot_index)),
@@ -233,7 +242,38 @@ State<IndexType, StoreType, DepotType, MultiMapType>::State(
       codes_(std::move(codes)),
       code_hashes_(std::move(code_hashes)),
       address_to_slots_(std::move(address_to_slots)),
-      archive_(std::move(archive)) {}
+      archive_(std::move(optional_archive)) {
+  if (!archive_) {
+    return;
+  }
+  archive_channel_ =
+      std::make_unique<Channel<std::pair<BlockId, Update>>>(/*capacity=*/10);
+  auto* archive = archive_.get();
+  auto* channel = archive_channel_.get();
+  archive_writer_ = std::thread([channel, archive] {
+    auto in = channel->Pop();
+    while (in != std::nullopt) {
+      auto status = archive->Add(in->first, in->second);
+      // TODO: forward error message to state and client.
+      if (!status.ok()) {
+        std::cerr << "WARNING: failed to write update to archive: "
+                  << status.message();
+      }
+      in = channel->Pop();
+    }
+  });
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType>
+State<IndexType, StoreType, DepotType, MultiMapType>::~State() {
+  if (auto status = Close(); !status.ok()) {
+    std::cerr << "WARNING: error during state destruction: " << status.message()
+              << std::endl;
+  }
+}
 
 template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
@@ -478,7 +518,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
-    std::uint64_t block, const Update& update) {
+    std::uint64_t block, Update update) {
   // It is important to keep the update order.
   for (auto& addr : update.GetDeletedAccounts()) {
     RETURN_IF_ERROR(DeleteAccount(addr));
@@ -498,9 +538,8 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
   for (auto& [addr, key, value] : update.GetStorage()) {
     RETURN_IF_ERROR(SetStorageValue(addr, key, value));
   }
-  if (archive_) {
-    // TODO: run in background thread
-    RETURN_IF_ERROR(archive_->Add(block, update));
+  if (archive_channel_) {
+    archive_channel_->Push({block, std::move(update)});
   }
   return absl::OkStatus();
 }
@@ -550,6 +589,20 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Close() {
+  // Close archive first to make sure the channel and processing thread are shut
+  // down in case one of the other structures fails its closing process.
+  if (archive_) {
+    // Signal that there will be no more updates.
+    archive_channel_->Close();
+    // Wait until the writer thread is done.
+    archive_writer_.join();
+    // Only after the writer is done the channel can be removed.
+    archive_channel_.reset();
+    auto status = archive_->Close();
+    archive_.reset();
+    RETURN_IF_ERROR(status);
+  }
+
   RETURN_IF_ERROR(address_index_.Close());
   RETURN_IF_ERROR(key_index_.Close());
   RETURN_IF_ERROR(slot_index_.Close());
@@ -560,9 +613,6 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Close() {
   RETURN_IF_ERROR(codes_.Close());
   RETURN_IF_ERROR(code_hashes_.Close());
   RETURN_IF_ERROR(address_to_slots_.Close());
-  if (archive_) {
-    RETURN_IF_ERROR(archive_->Close());
-  }
   return absl::OkStatus();
 }
 

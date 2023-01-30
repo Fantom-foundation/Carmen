@@ -6,6 +6,7 @@ cc_library(
         ":update",
         "//backend:structure",
         "//common:account_state",
+        "//common:channel",
         "//common:type",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

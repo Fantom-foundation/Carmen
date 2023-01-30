@@ -35,7 +35,7 @@ class WorldState {
   virtual absl::StatusOr<std::uint32_t> GetCodeSize(const Address&) = 0;
   virtual absl::StatusOr<Hash> GetCodeHash(const Address&) = 0;
 
-  virtual absl::Status Apply(std::uint64_t block, const Update&) = 0;
+  virtual absl::Status Apply(std::uint64_t block, Update) = 0;
 
   virtual absl::StatusOr<Hash> GetHash() = 0;
 
@@ -84,8 +84,8 @@ class WorldStateWrapper : public WorldState {
     return state_.GetCodeHash(addr);
   }
 
-  absl::Status Apply(std::uint64_t block, const Update& update) override {
-    return state_.Apply(block, update);
+  absl::Status Apply(std::uint64_t block, Update update) override {
+    return state_.Apply(block, std::move(update));
   }
 
   absl::StatusOr<Hash> GetHash() override { return state_.GetHash(); }
@@ -257,7 +257,7 @@ void Carmen_Apply(C_State state, uint64_t block, C_Update update,
               << "\n";
     return;
   }
-  auto res = s.Apply(block, *change);
+  auto res = s.Apply(block, *std::move(change));
   if (!res.ok()) {
     std::cout << "WARNING: Failed to apply update: " << res << "\n";
   }
