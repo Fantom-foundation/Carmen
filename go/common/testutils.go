@@ -2,20 +2,17 @@ package common
 
 import (
 	"encoding/binary"
-	"sort"
 	"testing"
 )
 
-func AssertEqualArrays[V Identifier](t *testing.T, first, second []V) {
-	sort.Slice(first, func(i, j int) bool { return first[i] < first[j] })
-	sort.Slice(second, func(i, j int) bool { return second[i] < second[j] })
+func AssertArraysEqual[V comparable](t *testing.T, first, second []V) {
 	if len(first) != len(second) {
 		t.Errorf("array sizes differ, %d != %d", len(first), len(second))
 		return
 	}
 	for i := 0; i < len(first); i++ {
 		if first[i] != second[i] {
-			t.Errorf("assertValues failed")
+			t.Errorf("assertValues failed: %v != %v", first[i], second[i])
 		}
 	}
 }
