@@ -868,7 +868,7 @@ func (s *stateDB) BeginBlock() {
 }
 
 func (s *stateDB) EndBlock(block uint64) {
-	update := Update{}
+	update := common.Update{}
 
 	// Clear all accounts that have been deleted at some point during this block.
 	// This will cause all storage slots of that accounts to be reset before new

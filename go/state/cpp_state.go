@@ -55,7 +55,7 @@ func NewCppLevelDbBasedState(directory string) (State, error) {
 }
 
 func (cs *CppState) createAccount(address common.Address) error {
-	update := Update{}
+	update := common.Update{}
 	update.AppendCreateAccount(address)
 	return cs.Apply(0, update)
 }
@@ -67,7 +67,7 @@ func (cs *CppState) GetAccountState(address common.Address) (common.AccountState
 }
 
 func (cs *CppState) deleteAccount(address common.Address) error {
-	update := Update{}
+	update := common.Update{}
 	update.AppendDeleteAccount(address)
 	return cs.Apply(0, update)
 }
@@ -79,7 +79,7 @@ func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
 }
 
 func (cs *CppState) setBalance(address common.Address, balance common.Balance) error {
-	update := Update{}
+	update := common.Update{}
 	update.AppendBalanceUpdate(address, balance)
 	return cs.Apply(0, update)
 }
@@ -91,7 +91,7 @@ func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
 }
 
 func (cs *CppState) setNonce(address common.Address, nonce common.Nonce) error {
-	update := Update{}
+	update := common.Update{}
 	update.AppendNonceUpdate(address, nonce)
 	return cs.Apply(0, update)
 }
@@ -103,7 +103,7 @@ func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.V
 }
 
 func (cs *CppState) setStorage(address common.Address, key common.Key, value common.Value) error {
-	update := Update{}
+	update := common.Update{}
 	update.AppendSlotUpdate(address, key, value)
 	return cs.Apply(0, update)
 }
@@ -132,7 +132,7 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 }
 
 func (cs *CppState) setCode(address common.Address, code []byte) error {
-	update := Update{}
+	update := common.Update{}
 	update.AppendCodeUpdate(address, code)
 	cs.codeCache.Set(address, code)
 	return cs.Apply(0, update)
@@ -156,7 +156,7 @@ func (cs *CppState) GetHash() (common.Hash, error) {
 	return hash, nil
 }
 
-func (cs *CppState) Apply(block uint64, update Update) error {
+func (cs *CppState) Apply(block uint64, update common.Update) error {
 	data := update.ToBytes()
 	dataPtr := unsafe.Pointer(&data[0])
 	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint32_t(len(data)))

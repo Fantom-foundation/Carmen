@@ -245,8 +245,8 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 	return hash, nil
 }
 
-func (s *GoState) Apply(block uint64, update Update) error {
-	return update.apply(s)
+func (s *GoState) Apply(block uint64, update common.Update) error {
+	return applyUpdate(s, update)
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {

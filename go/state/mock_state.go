@@ -35,7 +35,7 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockState) Apply(block uint64, update Update) error {
+func (m *MockState) Apply(block uint64, update common.Update) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", block, update)
 	ret0, _ := ret[0].(error)
@@ -234,7 +234,7 @@ func (m *MockdirectUpdateState) EXPECT() *MockdirectUpdateStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockdirectUpdateState) Apply(block uint64, update Update) error {
+func (m *MockdirectUpdateState) Apply(block uint64, update common.Update) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", block, update)
 	ret0, _ := ret[0].(error)
