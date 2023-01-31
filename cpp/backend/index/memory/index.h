@@ -146,7 +146,7 @@ class InMemoryIndex {
 
   mutable std::size_t next_to_hash_ = 0;
   mutable Sha256Hasher hasher_;
-  mutable Hash hash_;
+  mutable Hash hash_{};
 };
 
 template <Trivial K, std::integral I>

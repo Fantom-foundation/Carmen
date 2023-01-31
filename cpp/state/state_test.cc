@@ -174,7 +174,7 @@ TYPED_TEST_P(StateTest, BalancesAreCoveredByGlobalStateHash) {
 TYPED_TEST_P(StateTest, DefaultNonceIsZero) {
   Address a{0x01};
   Address b{0x02};
-  Nonce zero;
+  Nonce zero{};
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
@@ -185,7 +185,7 @@ TYPED_TEST_P(StateTest, DefaultNonceIsZero) {
 TYPED_TEST_P(StateTest, NoncesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
-  Nonce zero;
+  Nonce zero{};
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
