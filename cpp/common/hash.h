@@ -74,21 +74,21 @@ class Sha256Hasher {
   std::unique_ptr<internal::Sha256Impl> _impl;
 };
 
-// A utility function to hash a list of trivial elements using the given hasher
+// A utility function to hash a list of elements using the given hasher
 // instance. The state of the handed in hasher is reset before ingesting the
 // provided list of elements.
-template <Trivial... Elements>
+template <typename... Elements>
 Hash GetHash(Sha256Hasher& hasher, const Elements&... elements) {
   hasher.Reset();
   hasher.Ingest(elements...);
   return hasher.GetHash();
 }
 
-// A utility function to compute the SHA256 hash of a list of trivial elements.
+// A utility function to compute the SHA256 hash of a list of elements.
 // It internally creates a Sha256Hasher instance for computing the hash. If
 // multiple hashes are to be computed, consider creating such an instance in the
 // caller scope and reusing the instance for all invocations.
-template <Trivial... Elements>
+template <typename... Elements>
 Hash GetSha256Hash(const Elements&... elements) {
   Sha256Hasher hasher;
   return GetHash(hasher, elements...);

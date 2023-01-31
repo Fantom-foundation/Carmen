@@ -14,7 +14,8 @@
 namespace carmen {
 
 template <typename T>
-concept Trivial = std::is_trivially_copyable_v<T>;
+concept Trivial = std::is_trivially_default_constructible_v<T> &&
+    std::is_trivially_copyable_v<T> && std::is_trivially_destructible_v<T>;
 
 constexpr int kHashLength = 32;
 constexpr int kAddressLength = 20;
@@ -23,7 +24,27 @@ constexpr int kValueLength = 32;
 constexpr int kBalanceLength = 16;
 constexpr int kNonceLength = 8;
 
-// Class template for all types based on byte array value.
+// Class template for all types based on byte array value. Byte values are
+// trivial objects containing a fixed length sequence of bytes. All byte
+// sequences are valid.
+//
+// When creating a byte value, there are multiple options:
+//
+//   // Creates a byte value with uninitialized (random) data:
+//   ByteValue<2> value;
+//
+//   // Create and initialize a value with some values:
+//   ByteValue<2> value{1,2};
+//
+//   // Create a value with a partial list, rest is zero:
+//   ByteValue<2> value{1};  // == {1,0}
+//
+// Thus, to initialize a byte value with all zeros, one can write
+//   ByteValue value{};
+//
+// Note the difference: without {} the byte value remains uninitialized, with {}
+// the value is initialized to zero. This is the same semantic as it is
+// exhibited by the underlying std::array<..>.
 template <std::size_t N>
 class ByteValue {
  public:
@@ -31,8 +52,7 @@ class ByteValue {
 
   // Class constructor populating data with given list of values.
   ByteValue(std::initializer_list<std::uint8_t> il) {
-    std::copy(il.begin(), il.begin() + std::min(il.size(), data_.size()),
-              std::begin(data_));
+    SetBytes(std::as_bytes(std::span(il)));
   }
 
   // Provide mutable access to the individual bytes.
@@ -60,17 +80,16 @@ class ByteValue {
   // exceeding the size of this ByteValue are ignored. If the input is too
   // short, the rest of the bytes are filled with zero.
   void SetBytes(std::span<const std::byte> data) {
-    std::memcpy(&data_[0], data.data(), std::min(data.size(), data_.size()));
-    if (data.size() < data_.size()) {
-      std::memset(&data_[0] + data.size(), 0, data_.size() - data.size());
+    std::memcpy(&data_[0], data.data(), std::min(data.size(), N));
+    if (data.size() < N) {
+      std::memset(&data_[0] + data.size(), 0, N - data.size());
     }
   }
 
   // Overload of << operator to make class printable.
   friend std::ostream& operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {
-    hex_util::WriteTo(
-        out, *const_cast<std::array<std::uint8_t, N>*>(&hexContainer.data_));
+    hex_util::WriteTo(out, hexContainer.data_);
     return out;
   }
 
@@ -99,7 +118,7 @@ class ByteValue {
   }
 
  private:
-  std::array<std::uint8_t, N> data_{};
+  std::array<std::uint8_t, N> data_;
 };
 
 // Hash represents the 32 byte hash of data

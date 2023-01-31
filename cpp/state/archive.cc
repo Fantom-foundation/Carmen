@@ -184,7 +184,7 @@ class Archive {
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default balance.
-    Balance result;
+    Balance result{};
     RETURN_IF_ERROR(get_balance_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
@@ -201,7 +201,7 @@ class Archive {
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default code.
-    Code result;
+    Code result{};
     RETURN_IF_ERROR(get_code_stmt_->Run(
         [&](const SqlRow& row) { result = Code(row.GetBytes(0)); }));
     return result;
@@ -218,7 +218,7 @@ class Archive {
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default balance.
-    Nonce result;
+    Nonce result{};
     RETURN_IF_ERROR(get_nonce_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
@@ -243,7 +243,7 @@ class Archive {
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default value of storage
     // slots.
-    Value result;
+    Value result{};
     RETURN_IF_ERROR(get_value_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
