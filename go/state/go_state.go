@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"hash"
 	"io"
 
@@ -32,6 +33,7 @@ type GoState struct {
 	addressToSlots  multimap.MultiMap[uint32, uint32]
 	cleanup         []func()
 	hasher          hash.Hash
+	archive         archive.Archive
 }
 
 func (s *GoState) createAccount(address common.Address) (err error) {
@@ -246,7 +248,18 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 }
 
 func (s *GoState) Apply(block uint64, update common.Update) error {
-	return applyUpdate(s, update)
+	err := applyUpdate(s, update)
+	if err != nil {
+		return err
+	}
+	if s.archive != nil {
+		// TODO add into archive in a separated thread
+		err = s.archive.Add(block, update)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {
