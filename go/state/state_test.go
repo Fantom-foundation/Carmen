@@ -18,6 +18,10 @@ func (c *namedStateConfig) createState(directory string) (directUpdateState, err
 	return c.factory(Parameters{Directory: directory})
 }
 
+func (c *namedStateConfig) createStateWithArchive(directory string) (directUpdateState, error) {
+	return c.factory(Parameters{Directory: directory, WithArchive: true})
+}
+
 func castToDirectUpdateState(factory func(params Parameters) (State, error)) func(params Parameters) (directUpdateState, error) {
 	return func(params Parameters) (directUpdateState, error) {
 		state, err := factory(params)
@@ -325,6 +329,59 @@ func TestDeleteAccountClearsStorage(t *testing.T) {
 			t.Errorf("account deletion did not clear storage slots")
 		}
 	})
+}
+
+// TestArchive inserts data into the state and tries to obtain the history from the archive.
+func TestArchive(t *testing.T) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+
+			// skip in-memory (we don't have an in-memory archive implementation)
+			if config.name == "cpp-InMemory" || config.name == "go-Memory" {
+				return
+			}
+
+			dir := t.TempDir()
+			s, err := config.createStateWithArchive(dir)
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer s.Close()
+
+			if err := s.Apply(1, common.Update{
+				CreatedAccounts: []common.Address{address1},
+				Balances: []common.BalanceUpdate{
+					{address1, common.Balance{0x12}},
+				},
+				Codes:  nil,
+				Nonces: nil,
+				Slots: []common.SlotUpdate{
+					{address1, common.Key{0x05}, common.Value{0x47}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 1; %s", err)
+			}
+
+			if err := s.Apply(2, common.Update{
+				Balances: []common.BalanceUpdate{
+					{address1, common.Balance{0x34}},
+				},
+				Codes: []common.CodeUpdate{
+					{address1, []byte{0x12, 0x23}},
+				},
+				Nonces: []common.NonceUpdate{
+					{address1, common.Nonce{0x54}},
+				},
+				Slots: []common.SlotUpdate{
+					{address1, common.Key{0x05}, common.Value{0x89}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 5; %s", err)
+			}
+
+			// TODO check data in the archive (when an interface to access the archive will be available)
+		})
+	}
 }
 
 // TestPersistentState inserts data into the state and closes it first, then the state
