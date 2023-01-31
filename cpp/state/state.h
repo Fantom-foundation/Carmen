@@ -93,6 +93,9 @@ class State {
   // Applies the given block updates to this state.
   absl::Status Apply(std::uint64_t block, const Update& update);
 
+  // Applies the changes of the provided update to the current state.
+  absl::Status ApplyToState(const Update& update);
+
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
   absl::StatusOr<Hash> GetHash();
@@ -479,6 +482,22 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class MultiMapType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
     std::uint64_t block, const Update& update) {
+  // Add updates the current state only.
+  RETURN_IF_ERROR(ApplyToState(update));
+  // If there is an active archive, the update is also added to its log.
+  if (archive_) {
+    // TODO: run in background thread
+    RETURN_IF_ERROR(archive_->Add(block, update));
+  }
+  return absl::OkStatus();
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType>
+absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::ApplyToState(
+    const Update& update) {
   // It is important to keep the update order.
   for (auto& addr : update.GetDeletedAccounts()) {
     RETURN_IF_ERROR(DeleteAccount(addr));
@@ -497,10 +516,6 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType>::Apply(
   }
   for (auto& [addr, key, value] : update.GetStorage()) {
     RETURN_IF_ERROR(SetStorageValue(addr, key, value));
-  }
-  if (archive_) {
-    // TODO: run in background thread
-    RETURN_IF_ERROR(archive_->Add(block, update));
   }
   return absl::OkStatus();
 }
