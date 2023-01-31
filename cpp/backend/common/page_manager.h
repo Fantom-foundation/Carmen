@@ -22,6 +22,8 @@ namespace carmen::backend {
 template <typename PagePool>
 class PageManager {
  public:
+  PageManager(PagePool pool = PagePool{}) : pool_(std::move(pool)) {}
+
   // The type returned when allocating a new page, including the new page's id
   // and a reference to the new page.
   template <Page Page>

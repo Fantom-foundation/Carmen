@@ -48,7 +48,7 @@ class BTreeSet {
   using LeafNode = btree::LeafNode<Value, Comparator, max_keys>;
   using InnerNode = btree::InnerNode<LeafNode, max_elements>;
 
-  BTreeSet();
+  BTreeSet(PageManager<PagePool> page_manager);
 
   // The page ID of the root node.
   PageId root_id_ = 0;
@@ -72,14 +72,19 @@ template <Trivial Value, typename PagePool, typename Comparator,
           std::size_t max_keys, std::size_t max_elements>
 absl::StatusOr<BTreeSet<Value, PagePool, Comparator, max_keys, max_elements>>
 BTreeSet<Value, PagePool, Comparator, max_keys, max_elements>::Open(
-    std::filesystem::path) {
+    std::filesystem::path path) {
   // TODO: support loading actual data from the file.
-  return BTreeSet();
+  std::filesystem::remove(path);
+  ASSIGN_OR_RETURN(auto file, PagePool::File::Open(path));
+  PagePool pool(std::make_unique<typename PagePool::File>(std::move(file)));
+  return BTreeSet(PageManager(std::move(pool)));
 }
 
 template <Trivial Value, typename PagePool, typename Comparator,
           std::size_t max_keys, std::size_t max_elements>
-BTreeSet<Value, PagePool, Comparator, max_keys, max_elements>::BTreeSet() {
+BTreeSet<Value, PagePool, Comparator, max_keys, max_elements>::BTreeSet(
+    PageManager<PagePool> page_manager)
+    : page_manager_(std::move(page_manager)) {
   // Start with initially empty root page.
   page_manager_.template New<LeafNode>().IgnoreError();
 }

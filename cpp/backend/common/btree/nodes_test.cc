@@ -29,6 +29,8 @@ constexpr auto kInternal = absl::StatusCode::kInternal;
 // A slightly extended page manager to simplfy test case definitions.
 class TestPageManager : public PageManager<TestPagePool> {
  public:
+  TestPageManager() : PageManager(TestPagePool()) {}
+
   // An extension for the test version of the manager to reduce boiler plate
   // code and increase readability by avoiding unnecessary error handling.
   template <Page Node>
@@ -300,6 +302,13 @@ TEST(LeafNode, IsPage) {
 
   EXPECT_TRUE((Page<LeafNode<int, std::less<int>, 4>>));
   EXPECT_EQ(sizeof(LeafNode<int, std::less<int>, 4>), kFileSystemPageSize);
+
+    EXPECT_TRUE(Page<LeafNode<Value>>);
+    EXPECT_EQ(sizeof(LeafNode<Value>), kFileSystemPageSize);
+
+    EXPECT_TRUE((Page<LeafNode<Value, std::less<Value>, 4>>));
+    EXPECT_EQ(sizeof(LeafNode<Value, std::less<Value>, 4>),
+    kFileSystemPageSize);
 }
 
 TEST(LeafNode, DefaultMaxElementsUsesFullNodeSize) {
@@ -599,12 +608,19 @@ TEST(LeafNode, BoundViolationsAreDetected) {
 }
 
 TEST(InnerNode, IsPage) {
-  using Leaf = LeafNode<int>;
-  EXPECT_TRUE(Page<InnerNode<Leaf>>);
-  EXPECT_EQ(sizeof(InnerNode<Leaf>), kFileSystemPageSize);
+  using IntLeaf = LeafNode<int>;
+  EXPECT_TRUE(Page<InnerNode<IntLeaf>>);
+  EXPECT_EQ(sizeof(InnerNode<IntLeaf>), kFileSystemPageSize);
 
-  EXPECT_TRUE((Page<InnerNode<Leaf, 4>>));
-  EXPECT_EQ(sizeof(InnerNode<Leaf, 4>), kFileSystemPageSize);
+  EXPECT_TRUE((Page<InnerNode<IntLeaf, 4>>));
+  EXPECT_EQ(sizeof(InnerNode<IntLeaf, 4>), kFileSystemPageSize);
+
+  using ValueLeaf = LeafNode<Value>;
+  EXPECT_TRUE(Page<InnerNode<ValueLeaf>>);
+  EXPECT_EQ(sizeof(InnerNode<ValueLeaf>), kFileSystemPageSize);
+
+  EXPECT_TRUE((Page<InnerNode<ValueLeaf, 4>>));
+  EXPECT_EQ(sizeof(InnerNode<ValueLeaf, 4>), kFileSystemPageSize);
 }
 
 TEST(InnerNode, CapacityFillsFullNode) {
