@@ -101,6 +101,10 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
 void Carmen_Apply(C_State state, uint64_t block, C_Update update,
                   uint32_t length);
 
+// Applies the provided update to the current state only. This is intended for
+// the bulk load interface support.
+void Carmen_ApplyToState(C_State state, C_Update update, uint32_t length);
+
 // ------------------------------ Global Hash ---------------------------------
 
 // Retrieves a global state hash of the given state.
