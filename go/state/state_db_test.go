@@ -22,13 +22,13 @@ func prepareMockState(ctrl *gomock.Controller) *MockdirectUpdateState {
 	mock.
 		EXPECT().
 		Apply(gomock.Any(), gomock.Any()).
-		DoAndReturn(func(block uint64, update Update) error {
+		DoAndReturn(func(block uint64, update common.Update) error {
 			// Check that the produced update is valid.
 			if err := update.Check(); err != nil {
 				ctrl.T.Errorf("Update invalid: %v", err)
 			}
 			// Distribute the update among the individual setters.
-			return update.apply(mock)
+			return applyUpdate(mock, update)
 		}).
 		AnyTimes()
 	return mock

@@ -30,7 +30,7 @@ type State interface {
 	GetCodeHash(address common.Address) (common.Hash, error)
 
 	// Apply applies the provided updates to the state content.
-	Apply(block uint64, update Update) error
+	Apply(block uint64, update common.Update) error
 
 	// GetHash hashes the values.
 	GetHash() (common.Hash, error)
@@ -46,26 +46,63 @@ type State interface {
 }
 
 // directUpdateState is an extended version of the State interface adding support for
-// triggering and mocking indivudual state updates. All its additional members are
+// triggering and mocking individual state updates. All its additional members are
 // private and not intended to be used outside this package.
 type directUpdateState interface {
 	State
 
-	// CreateAccount creates a new account with the given address.
+	// createAccount creates a new account with the given address.
 	createAccount(address common.Address) error
 
-	// DeleteAccount deletes the account with the given address.
+	// deleteAccount deletes the account with the given address.
 	deleteAccount(address common.Address) error
 
-	// SetBalance provides balance for the input account address.
+	// setBalance provides balance for the input account address.
 	setBalance(address common.Address, balance common.Balance) error
 
-	// SetNonce updates nonce of the account for the  input account address.
+	// setNonce updates nonce of the account for the  input account address.
 	setNonce(address common.Address, nonce common.Nonce) error
 
-	// SetStorage updates the memory slot for the account address (i.e. the contract) and the memory location key.
+	// setStorage updates the memory slot for the account address (i.e. the contract) and the memory location key.
 	setStorage(address common.Address, key common.Key, value common.Value) error
 
-	// SetCode updates code of the contract for the input contract address.
+	// setCode updates code of the contract for the input contract address.
 	setCode(address common.Address, code []byte) error
+}
+
+// applyUpdate distributes the updates combined in an Update struct to individual update calls.
+// This is intended as the default implementation for the Go, C++, and Mock state. However,
+// implementations may choose to implement specialized versions.
+func applyUpdate(s directUpdateState, update common.Update) error {
+	for _, addr := range update.DeletedAccounts {
+		if err := s.deleteAccount(addr); err != nil {
+			return err
+		}
+	}
+	for _, addr := range update.CreatedAccounts {
+		if err := s.createAccount(addr); err != nil {
+			return err
+		}
+	}
+	for _, change := range update.Balances {
+		if err := s.setBalance(change.Account, change.Balance); err != nil {
+			return err
+		}
+	}
+	for _, change := range update.Nonces {
+		if err := s.setNonce(change.Account, change.Nonce); err != nil {
+			return err
+		}
+	}
+	for _, change := range update.Codes {
+		if err := s.setCode(change.Account, change.Code); err != nil {
+			return err
+		}
+	}
+	for _, change := range update.Slots {
+		if err := s.setStorage(change.Account, change.Key, change.Value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
