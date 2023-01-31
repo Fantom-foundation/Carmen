@@ -7,6 +7,7 @@ cmake(
         "--",  # <- Pass remaining options to the native tool.
         "-j 8",
     ],
+    copts = ["-Wno-error"],
     generate_args = [
         "-Dgperftools_build_benchmark=OFF",
     ],
