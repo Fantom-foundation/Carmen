@@ -226,6 +226,45 @@ TYPED_TEST_P(SingleFileTest, LoadingUninitializedPagesLeadsToZeros) {
   EXPECT_EQ(zero, loaded);
 }
 
+TYPED_TEST_P(SingleFileTest, EmptyFileCanBeClosedAndReopenedAsEmpty) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, TypeParam>;
+  TempFile temp_file;
+  {
+    ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file));
+    EXPECT_EQ(file.GetNumPages(), 0);
+    EXPECT_OK(file.Close());
+  }
+  {
+    ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file));
+    EXPECT_EQ(file.GetNumPages(), 0);
+    EXPECT_OK(file.Close());
+  }
+}
+
+TYPED_TEST_P(SingleFileTest,
+             NonEmptyFileCanBeClosedAndReopenedWithSameContent) {
+  using Page = Page<kFileSystemPageSize>;
+  using File = SingleFileBase<Page::kPageSize, TypeParam>;
+  TempFile temp_file;
+  Page content{std::byte{0x01}, std::byte{0x02}};
+  {
+    ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file));
+    EXPECT_EQ(file.GetNumPages(), 0);
+    EXPECT_OK(file.StorePage(0, content));
+    EXPECT_EQ(file.GetNumPages(), 1);
+    EXPECT_OK(file.Close());
+  }
+  {
+    ASSERT_OK_AND_ASSIGN(auto file, File::Open(temp_file));
+    EXPECT_EQ(file.GetNumPages(), 1);
+    Page restored;
+    EXPECT_OK(file.LoadPage(0, restored));
+    EXPECT_EQ(content, restored);
+    EXPECT_OK(file.Close());
+  }
+}
+
 TYPED_TEST_P(SingleFileTest, OpenFileErrorIsHandled) {
   using Page = Page<kFileSystemPageSize>;
   using File = SingleFileBase<Page::kPageSize, TypeParam>;
@@ -243,6 +282,8 @@ REGISTER_TYPED_TEST_SUITE_P(SingleFileTest, IsFile, ExistingFileCanBeOpened,
                             PagesAreDifferentiated,
                             WritingPagesCreatesImplicitEmptyPages,
                             LoadingUninitializedPagesLeadsToZeros,
+                            EmptyFileCanBeClosedAndReopenedAsEmpty,
+                            NonEmptyFileCanBeClosedAndReopenedWithSameContent,
                             OpenFileErrorIsHandled);
 
 using RawFileTypes = ::testing::Types<internal::FStreamFile, internal::CFile,

@@ -78,7 +78,8 @@ class LeafNode final
   // the node had to be split to include the new element and that the split key
   // should be inserted in the parent.
   template <typename PageManager>
-  absl::StatusOr<InsertResult<Value>> Insert(const Value& value,
+  absl::StatusOr<InsertResult<Value>> Insert(PageId this_page_id,
+                                             const Value& value,
                                              PageManager& manager);
 
   // For testing: checks the invariants defined for this node, returns an error
@@ -91,6 +92,16 @@ class LeafNode final
   std::span<const Value> GetElements() const {
     return {elements_.begin(), elements_.begin() + num_elements_};
   };
+
+  // For testing, to set the elements in this node. Note: this function does not
+  // retain the ordered constraint on elements nor does it check boundaries. It
+  // is not intended to be used outside of tests.
+  void SetTestElements(std::span<const Value> data) {
+    for (std::size_t i = 0; i < data.size(); i++) {
+      elements_[i] = data[i];
+    }
+    num_elements_ = data.size();
+  }
 
   // For debugging: prints the tree to std::cout.
   void Print() const;
@@ -153,7 +164,8 @@ class InnerNode final : public internal::Node<InnerNode<LeafNode, max_keys>> {
   // resolve child nodes as required. The result range may be the same as for
   // leaf nodes: ElementAdded, ElementPresent, or Split.
   template <typename PageManager>
-  absl::StatusOr<InsertResult<value_t>> Insert(std::uint16_t level,
+  absl::StatusOr<InsertResult<value_t>> Insert(PageId this_page_id,
+                                               std::uint16_t level,
                                                const value_t& value,
                                                PageManager& manager);
 
@@ -220,7 +232,7 @@ bool LeafNode<Value, Less, max_keys>::Contains(const Value& value) const {
 template <Trivial Value, typename Less, std::size_t max_keys>
 template <typename PageManager>
 absl::StatusOr<InsertResult<Value>> LeafNode<Value, Less, max_keys>::Insert(
-    const Value& value, PageManager& context) {
+    PageId this_page_id, const Value& value, PageManager& context) {
   // Elements are inserted in-order.
   // The first step is to find the insertion position.
   auto begin = elements_.begin();
@@ -229,6 +241,9 @@ absl::StatusOr<InsertResult<Value>> LeafNode<Value, Less, max_keys>::Insert(
 
   // If the element is already present, we are done.
   if (pos < end && *pos == value) return ElementPresent{};
+
+  // At this point it is clear that the node needs to be modified.
+  context.MarkAsDirty(this_page_id);
 
   // If there is enough space, we can add it to the current node.
   if (num_elements_ < kMaxElements) {
@@ -239,6 +254,7 @@ absl::StatusOr<InsertResult<Value>> LeafNode<Value, Less, max_keys>::Insert(
   // If this leaf is full, it needs to be split. So we need a new node.
   ASSIGN_OR_RETURN((auto [new_page_id, new_page]),
                    context.template New<LeafNode>());
+  context.MarkAsDirty(new_page_id);
   auto& left = *this;
   auto& right = new_page;
 
@@ -369,7 +385,7 @@ absl::StatusOr<bool> InnerNode<LeafNode, max_keys>::Contains(
 template <Page LeafNode, std::size_t max_keys>
 template <typename PageManager>
 absl::StatusOr<InsertResult<typename LeafNode::value_t>>
-InnerNode<LeafNode, max_keys>::Insert(std::uint16_t level,
+InnerNode<LeafNode, max_keys>::Insert(PageId this_page_id, std::uint16_t level,
                                       const typename LeafNode::value_t& value,
                                       PageManager& manager) {
   auto begin = keys_.begin();
@@ -384,11 +400,11 @@ InnerNode<LeafNode, max_keys>::Insert(std::uint16_t level,
   if (level > 1) {
     // Next level is a inner node, insert there.
     ASSIGN_OR_RETURN(InnerNode & node, (manager.template Get<InnerNode>(next)));
-    ASSIGN_OR_RETURN(result, node.Insert(level - 1, value, manager));
+    ASSIGN_OR_RETURN(result, node.Insert(next, level - 1, value, manager));
   } else {
     // Next level is a leaf node, insert there.
     ASSIGN_OR_RETURN(LeafNode & node, (manager.template Get<LeafNode>(next)));
-    ASSIGN_OR_RETURN(result, node.Insert(value, manager));
+    ASSIGN_OR_RETURN(result, node.Insert(next, value, manager));
   }
 
   // At this point *this page may have been replaced in the page pool!
@@ -400,6 +416,9 @@ InnerNode<LeafNode, max_keys>::Insert(std::uint16_t level,
   return std::visit(
       match{[&](const Split<value_t>& split)
                 -> absl::StatusOr<InsertResult<value_t>> {
+              // We need to modify this node, so in any case it is dirty after.
+              manager.MarkAsDirty(this_page_id);
+
               // The child node was split and we need to integrate a new key
               // in this inner node. If there is still enough capacity, we can
               // just add it in the current node.
@@ -412,6 +431,7 @@ InnerNode<LeafNode, max_keys>::Insert(std::uint16_t level,
               // node.
               ASSIGN_OR_RETURN((auto [new_page_id, new_page]),
                                manager.template New<InnerNode>());
+              manager.MarkAsDirty(new_page_id);
               auto& left = *this;
               auto& right = new_page;
 

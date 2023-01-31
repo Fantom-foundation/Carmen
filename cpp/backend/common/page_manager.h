@@ -22,6 +22,9 @@ namespace carmen::backend {
 template <typename PagePool>
 class PageManager {
  public:
+  PageManager(PagePool pool = PagePool{}, PageId next = 0)
+      : next_(next), pool_(std::move(pool)) {}
+
   // The type returned when allocating a new page, including the new page's id
   // and a reference to the new page.
   template <Page Page>
@@ -47,9 +50,19 @@ class PageManager {
     return pool_.template Get<Page>(id);
   }
 
+  // Marks the given page as dirty (=modified), indicating that it needs to be
+  // written back to the disk before being evicted or during a flush.
+  void MarkAsDirty(PageId id) { pool_.MarkAsDirty(id); }
+
+  // Flushes the content of all managed pages to disk.
+  absl::Status Flush() { return pool_.Flush(); }
+
+  // Closes the underlying pool manager after flushing its content.
+  absl::Status Close() { return pool_.Close(); }
+
  private:
   // The next page ID to be used for allocating a page.
-  PageId next_ = 0;
+  PageId next_;
 
   // The underlying page pool managing the actual file accesses.
   mutable PagePool pool_;

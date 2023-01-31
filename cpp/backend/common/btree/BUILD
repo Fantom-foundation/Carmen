@@ -23,6 +23,20 @@ cc_test(
     ],
 )
 
+cc_binary(
+    name = "btree_set_benchmark",
+    testonly = True,
+    srcs = ["btree_set_benchmark.cc"],
+    deps = [
+        ":btree_set",
+        "//backend/common:access_pattern",
+        "//common:file_util",
+        "//common:status_test_util",
+        "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+)
+
 cc_library(
     name = "insert_result",
     hdrs = ["insert_result.h"],

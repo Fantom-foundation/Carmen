@@ -102,5 +102,65 @@ TEST(BTreeSet, RandomInsertsRetainInvariantsInNarrowTreeWithOddBranching) {
   RunInsertionTest<TestBTreeSet<int, 7, 7>>(Shuffle(GetSequence(10000)));
 }
 
+template <typename Set>
+void RunClosingAndReopeningTest() {
+  const int N = 10000;
+  const int S = 3;
+  const int K = 5;
+  TempFile file;
+  std::size_t size;
+
+  // Create a set containing some elements.
+  {
+    ASSERT_OK_AND_ASSIGN(auto set, Set::Open(file));
+    EXPECT_OK(set.Check());
+    for (int i = 0; i < N; i += S) {
+      ASSERT_OK(set.Insert(i));
+    }
+    EXPECT_OK(set.Check());
+    size = set.Size();
+    EXPECT_OK(set.Close());
+  }
+
+  // Reopen the set, check content, and add additional elements.
+  {
+    ASSERT_OK_AND_ASSIGN(auto set, Set::Open(file));
+    EXPECT_OK(set.Check());
+    EXPECT_EQ(set.Size(), size);
+    for (int i = 0; i < N; i++) {
+      EXPECT_THAT(set.Contains(i), i % S == 0) << "i=" << i;
+    }
+    for (int i = 0; i < N; i += K) {
+      ASSERT_OK(set.Insert(i));
+    }
+    EXPECT_OK(set.Check());
+    size = set.Size();
+    EXPECT_OK(set.Close());
+  }
+
+  // Reopen a second time to see whether insert on the reopened set was
+  // successful.
+  {
+    ASSERT_OK_AND_ASSIGN(auto set, Set::Open(file));
+    EXPECT_OK(set.Check());
+    EXPECT_EQ(set.Size(), size);
+    for (int i = 0; i < N; i++) {
+      EXPECT_THAT(set.Contains(i), i % S == 0 || i % K == 0) << "i=" << i;
+    }
+    EXPECT_OK(set.Close());
+  }
+}
+
+TEST(BTreeSet, ClosingAndReopeningProducesSameSet) {
+  using Pool = PagePool<SingleFile<kFileSystemPageSize>>;
+  // Run the test with the maximum number of keys per node.
+  RunClosingAndReopeningTest<BTreeSet<int, Pool>>();
+  // Run the tests with small even/odd numbers of keys to test deeper trees.
+  RunClosingAndReopeningTest<BTreeSet<int, Pool, std::less<int>, 2, 2>>();
+  RunClosingAndReopeningTest<BTreeSet<int, Pool, std::less<int>, 3, 3>>();
+  RunClosingAndReopeningTest<BTreeSet<int, Pool, std::less<int>, 11, 10>>();
+  RunClosingAndReopeningTest<BTreeSet<int, Pool, std::less<int>, 10, 11>>();
+}
+
 }  // namespace
 }  // namespace carmen::backend
