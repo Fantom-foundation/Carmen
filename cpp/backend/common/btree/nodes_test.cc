@@ -130,7 +130,7 @@ struct Tree {
     return id;
   }
 
-  auto operator<=>(const Tree&) const = default;
+  friend bool operator==(const Tree&, const Tree&) = default;
 
   friend std::ostream& operator<<(std::ostream& out, const Tree& tree) {
     out << "Node(";
@@ -177,7 +177,7 @@ struct Tree<0> {
     return id;
   }
 
-  auto operator<=>(const Tree&) const = default;
+  friend bool operator==(const Tree&, const Tree&) = default;
 
   friend std::ostream& operator<<(std::ostream& out, const Tree& tree) {
     out << "Node(";
