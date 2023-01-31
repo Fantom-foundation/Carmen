@@ -50,9 +50,9 @@ TEST(Archive, MultipleBalancesOfTheSameAccountCanBeRetained) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
-  Address addr;
+  Address addr{};
 
-  Balance zero;
+  Balance zero{};
   Balance one{0x01};
   Balance two{0x02};
 
@@ -76,9 +76,9 @@ TEST(Archive, MultipleCodesOfTheSameAccountCanBeRetained) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
-  Address addr;
+  Address addr{};
 
-  Code zero;
+  Code zero{};
   Code one{0x01};
   Code two{0x02, 0x03};
 
@@ -102,9 +102,9 @@ TEST(Archive, MultipleNoncesOfTheSameAccountCanBeRetained) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
-  Address addr;
+  Address addr{};
 
-  Nonce zero;
+  Nonce zero{};
   Nonce one{0x01};
   Nonce two{0x02};
 
@@ -128,10 +128,10 @@ TEST(Archive, MultipleValuesOfTheSameSlotCanBeRetained) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
-  Address addr;
-  Key key;
+  Address addr{};
+  Key key{};
 
-  Value zero;
+  Value zero{};
   Value one{0x01};
   Value two{0x02};
 
@@ -158,7 +158,7 @@ TEST(Archive, BalancesOfDifferentAccountsAreDifferentiated) {
   Address addr1{0x01};
   Address addr2{0x02};
 
-  Balance zero;
+  Balance zero{};
   Balance one{0x01};
   Balance two{0x02};
 
@@ -183,7 +183,7 @@ TEST(Archive, CodesOfDifferentAccountsAreDifferentiated) {
   Address addr1{0x01};
   Address addr2{0x02};
 
-  Code zero;
+  Code zero{};
   Code one{0x01};
   Code two{0x02, 0x03};
 
@@ -208,7 +208,7 @@ TEST(Archive, NoncesOfDifferentAccountsAreDifferentiated) {
   Address addr1{0x01};
   Address addr2{0x02};
 
-  Nonce zero;
+  Nonce zero{};
   Nonce one{0x01};
   Nonce two{0x02, 0x03};
 
@@ -235,7 +235,7 @@ TEST(Archive, ValuesOfDifferentAccountsAreDifferentiated) {
   Key key1{0x01};
   Key key2{0x02};
 
-  Value zero;
+  Value zero{};
   Value one{0x01};
   Value two{0x02};
 

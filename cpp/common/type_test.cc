@@ -12,6 +12,13 @@ using ::testing::ElementsAre;
 using ::testing::StrEq;
 using ::testing::StrNe;
 
+TEST(ByteValueTest, TypePorperties) {
+  EXPECT_TRUE(std::is_trivially_default_constructible_v<ByteValue<10>>);
+  EXPECT_TRUE(std::is_trivially_copyable_v<ByteValue<10>>);
+  EXPECT_TRUE(std::is_trivially_destructible_v<ByteValue<10>>);
+  EXPECT_TRUE(Trivial<ByteValue<10>>);
+}
+
 TEST(ByteValueTest, CanBePrinted) {
   ByteValue<2> container{0x12, 0xab};
   EXPECT_THAT(Print(container), StrEq("0x12ab"));
@@ -23,7 +30,7 @@ TEST(ByteValueTest, CanBeEmpty) {
 }
 
 TEST(ByteValueTest, CanBeInitializedEmpty) {
-  ByteValue<1> container;
+  ByteValue<1> container{};
   EXPECT_THAT(Print(container), StrEq("0x00"));
 }
 

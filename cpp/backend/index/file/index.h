@@ -220,7 +220,7 @@ class FileIndex {
 
   mutable std::queue<K> unhashed_keys_;
   mutable Sha256Hasher hasher_;
-  mutable Hash hash_;
+  mutable Hash hash_{};
 };
 
 template <Trivial K, std::integral I, template <std::size_t> class F,
