@@ -23,3 +23,6 @@ jobs:
         with:
           clang-format-version: '14'
           check-path: 'cpp'
+
+      - name: Run BUILD file style check.
+        uses: thompsonja/bazel-buildifier@v0.4.0
