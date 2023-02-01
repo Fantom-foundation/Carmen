@@ -5,41 +5,41 @@ import (
 	"testing"
 )
 
-func TestInsertWithinCapacity(t *testing.T) {
+func TestLeafNodeInsertWithinCapacity(t *testing.T) {
 	n := newLeafNode[uint32](10, comparator)
 
-	n.Insert(4)
-	n.Insert(1)
-	n.Insert(3)
-	n.Insert(2)
+	n.insert(4)
+	n.insert(1)
+	n.insert(3)
+	n.insert(2)
 
 	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4}, getKeys(n))
 }
 
-func TestInsertDuplicities(t *testing.T) {
+func TestLeafNodeInsertDuplicities(t *testing.T) {
 	n := newLeafNode[uint32](10, comparator)
 
-	n.Insert(4)
-	n.Insert(1)
-	n.Insert(3)
-	n.Insert(2)
+	n.insert(4)
+	n.insert(1)
+	n.insert(3)
+	n.insert(2)
 
 	// will do nothing
-	n.Insert(4)
-	n.Insert(1)
-	n.Insert(3)
-	n.Insert(2)
+	n.insert(4)
+	n.insert(1)
+	n.insert(3)
+	n.insert(2)
 
 	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4}, getKeys(n))
 }
 
-func TestInsertOverflowCapacity(t *testing.T) {
+func TestLeafNodeInsertOverflowCapacity(t *testing.T) {
 	n := newLeafNode[uint32](3, comparator)
 
-	n.Insert(4)
-	n.Insert(1)
-	n.Insert(3)
-	right, middle, split := n.Insert(2) // this will overflow
+	n.insert(4)
+	n.insert(1)
+	n.insert(3)
+	right, middle, split := n.insert(2) // this will overflow
 
 	if !split {
 		t.Errorf("node has not split.")
@@ -57,12 +57,12 @@ func TestInsertOverflowCapacity(t *testing.T) {
 	}
 }
 
-func TestInsertOverflowCapacityBinaryTree(t *testing.T) {
+func TestLeafNodeInsertOverflowCapacityBinaryTree(t *testing.T) {
 	n := newLeafNode[uint32](2, comparator)
 
-	n.Insert(2)
-	n.Insert(1)
-	right, middle, split := n.Insert(3) // this will overflow
+	n.insert(2)
+	n.insert(1)
+	right, middle, split := n.insert(3) // this will overflow
 
 	if !split {
 		t.Errorf("node has not split.")
@@ -83,15 +83,57 @@ func TestInsertOverflowCapacityBinaryTree(t *testing.T) {
 func TestLeafNodeContains(t *testing.T) {
 	n := newLeafNode[uint32](3, comparator)
 
-	n.Insert(4)
-	n.Insert(1)
-	n.Insert(3)
+	n.insert(4)
+	n.insert(1)
+	n.insert(3)
 
-	if exists := n.Contains(1); !exists {
+	if exists := n.contains(1); !exists {
 		t.Errorf("key should be found")
 	}
 
-	if exists := n.Contains(10); exists {
+	if exists := n.contains(10); exists {
 		t.Errorf("key should not be found")
 	}
+}
+
+func TestLeafNodeGetRange(t *testing.T) {
+	n := newLeafNode[uint32](10, comparator)
+
+	n.insert(7)
+	n.insert(1)
+	n.insert(5)
+	n.insert(3)
+	n.insert(4)
+	n.insert(6)
+	n.insert(2)
+
+	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4}, getNodeRange(n, 1, 5))
+
+	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6, 7}, getNodeRange(n, 1, 100)) // above range
+
+	// sub-range
+	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 4, 5, 6}, getNodeRange(n, 2, 7))
+
+	// not found
+	common.AssertArraysEqual[uint32](t, []uint32{}, getNodeRange(n, 10, 100))
+}
+
+func TestLeafNodeNonConsecutiveGetRange(t *testing.T) {
+	n := newLeafNode[uint32](10, comparator)
+
+	n.insert(7)
+	n.insert(3)
+	n.insert(6)
+	n.insert(2)
+
+	// - B C - - F G;  H I J
+	common.AssertArraysEqual[uint32](t, []uint32{2, 3}, getNodeRange(n, 1, 5))
+
+	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 6, 7}, getNodeRange(n, 1, 100)) // above range
+
+	// sub-range
+	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 6}, getNodeRange(n, 2, 7))
+
+	// not found
+	common.AssertArraysEqual[uint32](t, []uint32{}, getNodeRange(n, 10, 100))
 }

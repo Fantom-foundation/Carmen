@@ -6,7 +6,7 @@ import (
 )
 
 // LeafNode contains a list of keys. The node has a maximal capacity, i.e. the number of keys it can hold.
-type LeafNode[K comparable] struct {
+type LeafNode[K any] struct {
 	keys []K // keys is the array of elements stored in this node
 
 	capacity   int
@@ -14,14 +14,14 @@ type LeafNode[K comparable] struct {
 }
 
 // newLeafNode creates a new instance with the given capacity.
-func newLeafNode[K comparable](capacity int, comparator common.Comparator[K]) *LeafNode[K] {
+func newLeafNode[K any](capacity int, comparator common.Comparator[K]) *LeafNode[K] {
 	return &LeafNode[K]{
 		keys:       make([]K, 0, capacity+1),
 		capacity:   capacity,
 		comparator: comparator}
 }
 
-func (m *LeafNode[K]) Insert(key K) (right Node[K], middle K, split bool) {
+func (m *LeafNode[K]) insert(key K) (right node[K], middle K, split bool) {
 	index, exists := m.findItem(key)
 	if !exists {
 		m.insertAt(key, index)
@@ -36,9 +36,25 @@ func (m *LeafNode[K]) Insert(key K) (right Node[K], middle K, split bool) {
 	return
 }
 
-func (m *LeafNode[K]) Contains(key K) bool {
+func (m *LeafNode[K]) contains(key K) bool {
 	_, exists := m.findItem(key)
 	return exists
+}
+
+func (m *LeafNode[K]) hasNext(iterator *Iterator[K]) bool {
+	return iterator.currentLevel().currentIndex < iterator.currentLevel().endIndex
+}
+
+func (m *LeafNode[K]) next(iterator *Iterator[K]) (k K) {
+	// no next item
+	if !m.hasNext(iterator) {
+		return
+	}
+
+	level := iterator.currentLevel()
+	k = m.keys[level.currentIndex]
+	level.currentIndex += 1 // move to next position
+	return k
 }
 
 // split this node into two. Keys in this node are reduced to half

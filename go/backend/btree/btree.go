@@ -11,16 +11,16 @@ import (
 // The keys are stored  ordered using insertion order. If a node exceeds its capacity
 // it is split in two, and the keys are distributed into left and right nodes.
 // The middle key is moved to the parent node.
-type BTree[K comparable] struct {
+type BTree[K any] struct {
 	// TODO replace by node ID later and fetch from the page pool
-	root Node[K]
+	root node[K]
 
 	nodeCapacity int
 	comparator   common.Comparator[K]
 }
 
 // NewBTree creates a new instance of BTree
-func NewBTree[K comparable](nodeCapacity int, comparator common.Comparator[K]) *BTree[K] {
+func NewBTree[K any](nodeCapacity int, comparator common.Comparator[K]) *BTree[K] {
 	return &BTree[K]{
 		root:         newLeafNode(nodeCapacity, comparator),
 		nodeCapacity: nodeCapacity,
@@ -28,26 +28,28 @@ func NewBTree[K comparable](nodeCapacity int, comparator common.Comparator[K]) *
 	}
 }
 
+// Insert inserts this the input key in this BTree. If the key already exists, nothing happens.
 func (m *BTree[K]) Insert(key K) {
-	right, middle, split := m.root.Insert(key)
+	right, middle, split := m.root.insert(key)
 	if split {
 		newNode := initNewInnerNode[K](m.root, right, middle, m.nodeCapacity, m.comparator)
 		m.root = newNode
 	}
 }
 
-func (m *BTree[K]) Contains(key K) bool {
-	if m.root != nil {
-		return m.root.Contains(key)
-	}
-
-	return false
+// NewIterator creates am iterator for the input key ranges.
+func (m *BTree[K]) NewIterator(start, end K) *Iterator[K] {
+	return newIterator[K](start, end, m.root)
 }
 
+// Contains returns true if the input key exists in this BTree
+func (m *BTree[K]) Contains(key K) bool {
+	return m.root.contains(key)
+}
+
+// ForEach iterates over this BTree and visits all keys in order
 func (m *BTree[K]) ForEach(callback func(k K)) {
-	if m.root != nil {
-		m.root.ForEach(callback)
-	}
+	m.root.ForEach(callback)
 }
 
 func (m BTree[K]) String() string {
