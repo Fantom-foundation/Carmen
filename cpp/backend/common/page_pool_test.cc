@@ -298,7 +298,7 @@ TEST(PagePoolTest, OnFallBackEvictionPolicyIsInformed) {
   ASSERT_OK(pool.Get<Page>(30));
 }
 
-TEST(PagePoolTest, GetPageErrorIsHandled) {
+TEST(PagePoolTest, GetPageErrorIsForwarded) {
   auto file = std::make_unique<MockFile>();
   auto& mock = *file;
   PagePool<MockFile> pool(std::move(file), 2);
@@ -306,7 +306,7 @@ TEST(PagePoolTest, GetPageErrorIsHandled) {
   EXPECT_THAT(pool.Get<Page>(0), StatusIs(absl::StatusCode::kInternal, _));
 }
 
-TEST(PagePoolTest, GetPageEvictionErrorIsHandled) {
+TEST(PagePoolTest, GetPageEvictionErrorIsForwarded) {
   auto file = std::make_unique<MockFile>();
   auto& mock = *file;
   PagePool<MockFile> pool(std::move(file), 1);
@@ -322,7 +322,7 @@ TEST(PagePoolTest, GetPageEvictionErrorIsHandled) {
   EXPECT_THAT(pool.Get<Page>(1), StatusIs(absl::StatusCode::kInternal, _));
 }
 
-TEST(PagePoolTest, FlushErrorIsHandled) {
+TEST(PagePoolTest, FlushErrorIsForwarded) {
   auto file = std::make_unique<MockFile>();
   auto& mock = *file;
   PagePool<MockFile> pool(std::move(file), 2);
@@ -336,7 +336,7 @@ TEST(PagePoolTest, FlushErrorIsHandled) {
   EXPECT_THAT(pool.Flush(), StatusIs(absl::StatusCode::kInternal, _));
 }
 
-TEST(PagePoolTest, CloseErrorIsHandled) {
+TEST(PagePoolTest, CloseErrorIsForwarded) {
   auto file = std::make_unique<MockFile>();
   auto& mock = *file;
   PagePool<MockFile> pool(std::move(file), 2);
