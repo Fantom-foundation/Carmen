@@ -300,6 +300,168 @@ func TestInnerNodeNonConsecutiveGetRange(t *testing.T) {
 	common.AssertArraysEqual[uint32](t, []uint32{}, getNodeRange(n, 10, 100))
 }
 
+func TestInnerNodeRemovePred(t *testing.T) {
+	left := newLeafNode[uint32](3, comparator)
+	right := newLeafNode[uint32](3, comparator)
+	n := initNewInnerNode[uint32](left, right, 3, 3, comparator)
+
+	n.insert(2)
+	n.insert(3)
+	n.insert(4)
+	n.insert(1)
+
+	n.remove(3)
+	common.AssertArraysEqual[uint32](t, []uint32{2}, n.keys)
+	common.AssertArraysEqual[uint32](t, []uint32{1}, getKeys(n.children[0]))
+	common.AssertArraysEqual[uint32](t, []uint32{4}, getKeys(n.children[1]))
+}
+
+func TestInnerNodeRemoveSuc(t *testing.T) {
+	left := newLeafNode[uint32](3, comparator)
+	right := newLeafNode[uint32](3, comparator)
+	n := initNewInnerNode[uint32](left, right, 2, 3, comparator)
+
+	n.insert(1)
+	n.insert(2)
+	n.insert(3)
+	n.insert(4)
+
+	n.remove(2)
+	common.AssertArraysEqual[uint32](t, []uint32{3}, n.keys)
+	common.AssertArraysEqual[uint32](t, []uint32{1}, getKeys(n.children[0]))
+	common.AssertArraysEqual[uint32](t, []uint32{4}, getKeys(n.children[1]))
+}
+
+func TestInnerNodeRemoveRotateR(t *testing.T) {
+	left := newLeafNode[uint32](3, comparator)
+	right := newLeafNode[uint32](3, comparator)
+	n := initNewInnerNode[uint32](left, right, 3, 3, comparator)
+
+	n.insert(2)
+	n.insert(3)
+	n.insert(4)
+	n.insert(1)
+
+	n.remove(4)
+	common.AssertArraysEqual[uint32](t, []uint32{2}, n.keys)
+	common.AssertArraysEqual[uint32](t, []uint32{1}, getKeys(n.children[0]))
+	common.AssertArraysEqual[uint32](t, []uint32{3}, getKeys(n.children[1]))
+}
+
+func TestInnerNodeRemoveRotateL(t *testing.T) {
+	left := newLeafNode[uint32](3, comparator)
+	right := newLeafNode[uint32](3, comparator)
+	n := initNewInnerNode[uint32](left, right, 2, 3, comparator)
+
+	n.insert(1)
+	n.insert(2)
+	n.insert(3)
+	n.insert(4)
+
+	n.remove(1)
+	common.AssertArraysEqual[uint32](t, []uint32{3}, n.keys)
+	common.AssertArraysEqual[uint32](t, []uint32{2}, getKeys(n.children[0]))
+	common.AssertArraysEqual[uint32](t, []uint32{4}, getKeys(n.children[1]))
+}
+
+func TestInnerNodeRemoveMerge(t *testing.T) {
+	left := newLeafNode[uint32](3, comparator)
+	right := newLeafNode[uint32](3, comparator)
+	n := initNewInnerNode[uint32](left, right, 2, 3, comparator)
+
+	n.insert(1)
+	n.insert(2)
+	n.insert(3)
+
+	n.remove(1)
+	common.AssertArraysEqual[uint32](t, []uint32{}, n.keys)
+	common.AssertArraysEqual[uint32](t, []uint32{2, 3}, getKeys(n.children[0]))
+	// one child removed
+	if len(n.children) != 1 {
+		t.Errorf("wrong number of children: %d", len(n.children))
+	}
+}
+
+func TestInnerNodeRemove(t *testing.T) {
+	left := newLeafNode[uint32](3, comparator)
+	right := newLeafNode[uint32](3, comparator)
+	n := initNewInnerNode[uint32](left, right, 2, 3, comparator)
+
+	n.insert(1)
+	n.insert(2)
+	n.insert(3)
+	n.insert(4)
+	n.insert(5)
+	n.insert(6)
+	n.insert(7)
+
+	// keys are all there
+	expected := []uint32{1, 2, 3, 4, 5, 6, 7}
+	common.AssertArraysEqual[uint32](t, expected, getNodeRange(n, 1, 50))
+
+	var root node[uint32] = n
+	for _, key := range expected {
+		root = root.remove(key)
+		if exists := root.contains(key); exists {
+			t.Errorf("key should not be found")
+		}
+	}
+}
+
+func TestInnerNodeThreeLevelsRemove(t *testing.T) {
+	left := initNewInnerNode[uint32](newLeafNode[uint32](3, comparator), newLeafNode[uint32](3, comparator), 7, 3, comparator)
+	right := initNewInnerNode[uint32](newLeafNode[uint32](3, comparator), newLeafNode[uint32](3, comparator), 52, 3, comparator)
+	n := initNewInnerNode[uint32](left, right, 27, 3, comparator)
+
+	n.insert(1)
+	n.insert(4)
+	n.insert(7)
+	n.insert(9)
+	n.insert(13)
+	n.insert(15)
+	n.insert(21)
+	n.insert(26)
+	n.insert(27)
+	n.insert(29)
+	n.insert(52)
+	n.insert(51)
+	n.insert(54)
+
+	expected := []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54}
+	common.AssertArraysEqual[uint32](t, expected, getNodeRange(n, 1, 500))
+
+	n.remove(54) // rotate right middle level: 15 -> 27 -> 52 + rotate right: 51 -> 52 -> 54, and delete 54
+
+	if str := n.String(); str != "[[[1, 4], 7, [9, 13]], 15, [[21, 26], 27, [29], 51, [52]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.remove(4)
+	n.remove(1) // rotate right 9 -> 7 -> 1
+
+	if str := n.String(); str != "[[[7], 9, [13], 15, [21, 26]], 27, [[29], 51, [52]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.remove(52) // rotate right middle level: 15 -> 27 -> 51 + merge 29, 51, 52, and delete 51
+
+	if str := n.String(); str != "[[[7], 9, [13]], 15, [[21, 26], 27, [29, 51]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n = n.remove(26).(*InnerNode[uint32]) // merge 9, 15, 27 - it creates a new root
+
+	if str := n.String(); str != "[[7], 9, [13], 15, [21], 27, [29, 51]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.remove(15) // merge 16, 15, 21
+
+	if str := n.String(); str != "[[7], 9, [13, 21], 27, [29, 51]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+}
+
 func getLeafKeys(n node[uint32]) []uint32 {
 	leaf := n.(*LeafNode[uint32])
 	return leaf.keys

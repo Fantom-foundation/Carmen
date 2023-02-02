@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
+	"sort"
 	"testing"
 )
 
 var (
 	comparator = common.Uint32Comparator{}
-	numKeys    = 10000
 )
+
+const numKeys = 10000
 
 func TestBTreeInsert(t *testing.T) {
 	n := NewBTree[uint32](3, common.Uint32Comparator{})
@@ -189,20 +191,99 @@ func TestBTreeMultiLevelHasNext(t *testing.T) {
 	}
 }
 
+func TestBTreeThreeLevelsRemove(t *testing.T) {
+	n := NewBTree[uint32](3, common.Uint32Comparator{})
+
+	n.Insert(1)
+	n.Insert(4)
+	n.Insert(7)
+	n.Insert(9)
+	n.Insert(13)
+	n.Insert(15)
+	n.Insert(21)
+	n.Insert(26)
+	n.Insert(27)
+	n.Insert(29)
+	n.Insert(52)
+	n.Insert(51)
+	n.Insert(54)
+
+	if str := n.String(); str != "[[[1, 4], 7, [9, 13], 15, [21, 26]], 27, [[29, 51], 52, [54]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	expected := []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54}
+	common.AssertArraysEqual[uint32](t, expected, getTreeRange(n, 1, 500))
+
+	n.Remove(54) // rotate right middle level: 15 -> 27 -> 52 + rotate right: 51 -> 52 -> 54, and delete 54
+
+	if str := n.String(); str != "[[[1, 4], 7, [9, 13]], 15, [[21, 26], 27, [29], 51, [52]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(4)
+	n.Remove(1) // rotate right 9 -> 7 -> 1
+
+	if str := n.String(); str != "[[[7], 9, [13], 15, [21, 26]], 27, [[29], 51, [52]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(52) // rotate right middle level: 15 -> 27 -> 51 + merge 29, 51, 52, and delete 51
+
+	if str := n.String(); str != "[[[7], 9, [13]], 15, [[21, 26], 27, [29, 51]]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(26) // merge 9, 15, 27 - it creates a new root
+
+	if str := n.String(); str != "[[7], 9, [13], 15, [21], 27, [29, 51]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(15) // merge 16, 15, 21
+
+	if str := n.String(); str != "[[7], 9, [13, 21], 27, [29, 51]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(21)
+	n.Remove(51)
+	n.Remove(9) // merge 7, 9, 13
+
+	if str := n.String(); str != "[[7, 13], 27, [29]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(27) // use predecessor 27 -> 13
+
+	if str := n.String(); str != "[[7], 13, [29]]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	n.Remove(7) // new root - one leaf
+
+	if str := n.String(); str != "[13, 29]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+
+	// empty tree
+	n.Remove(13)
+	n.Remove(29)
+
+	if str := n.String(); str != "[]" {
+		t.Errorf("tree structure does not match: %v", str)
+	}
+}
+
 func TestBTreeGetRangeManyElements(t *testing.T) {
 	widths := []int{2, 3, 2 << 3, 2 << 5, 2 << 7}
 
 	for _, width := range widths {
-		t.Run(fmt.Sprintf("btree, capacity: %d, items: %d", width, numKeys), func(t *testing.T) {
-			n := NewBTree[uint32](width, common.Uint32Comparator{})
-
-			data := make([]uint32, 0, numKeys)
-			for i := 0; i < numKeys; i++ {
-				key := uint32(i*10 + rand.Intn(10)) // rand keys in tenth intervals
-				data = append(data, key)
-				n.Insert(key)
-			}
-
+		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
+			n, data := initBTreeNonRepeatRandomKeys(width, numKeys)
+			sort.Slice(data, func(i, j int) bool {
+				return data[i] < data[j]
+			})
 			// test various intervals
 			for i := 0; i < len(data); i += 10 {
 				start := rand.Intn(i + 1)
@@ -219,21 +300,14 @@ func TestBTreeLoadTest(t *testing.T) {
 	widths := []int{2, 3, 2 << 3, 2 << 5, 2 << 7}
 
 	for _, width := range widths {
-		t.Run(fmt.Sprintf("btree, capacity: %d, items: %d", width, numKeys), func(t *testing.T) {
-			n := NewBTree[uint32](width, common.Uint32Comparator{})
-
-			data := make([]uint32, 0, numKeys)
-			for i := 0; i < numKeys; i++ {
-				key := uint32(rand.Intn(10 * numKeys))
-				data = append(data, key)
-				n.Insert(key)
+		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
+			n, data := initBTreeRandomKeys(width, numKeys)
+			if err := n.checkProperties(); err != nil {
+				t.Errorf("tree properties check do not pass: %e", err)
 			}
-
-			//fmt.Printf("Tree: %d\n%v\n\n", width, n)
 
 			// check all data inserted and sorted
 			common.AssertArraySorted[uint32](t, getKeys(n), comparator)
-
 			for _, key := range data {
 				if !n.Contains(key) {
 					t.Errorf("key %d should be present", key)
@@ -241,6 +315,83 @@ func TestBTreeLoadTest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBTreeRemove(t *testing.T) {
+	widths := []int{2, 3, 2 << 3, 2 << 5, 2 << 7}
+
+	for _, width := range widths {
+		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
+			n, data := initBTreeNonRepeatRandomKeys(width, numKeys)
+
+			if err := n.checkProperties(); err != nil {
+				t.Errorf("tree properties check do not pass: %e", err)
+			}
+
+			// pick-up randomly keys from the input and delete until all keys are removed
+			for len(data) > 0 {
+				i := uint32(rand.Intn(len(data)))
+				key := data[i]
+
+				if !n.Contains(key) {
+					t.Errorf("key %d should exist in the tree", i)
+				}
+
+				n.Remove(key)
+
+				if n.Contains(key) {
+					t.Errorf("key %d should not exist in the tree", i)
+				}
+
+				data = append(data[:i], data[i+1:]...)
+
+				if err := n.checkProperties(); err != nil {
+					t.Errorf("tree properties check do not pass: %e", err)
+				}
+			}
+
+			// the remaining node must be an empty leaf
+			if len(n.root.(*LeafNode[uint32]).keys) != 0 {
+				t.Errorf("tree is not empty")
+			}
+		})
+	}
+}
+
+// initBTreeRandomKeys creates a BTree with the given width of nodes.
+// It initializes it with random numbers, with the size of numKeys
+func initBTreeRandomKeys(width, numKeys int) (*BTree[uint32], []uint32) {
+	n := NewBTree[uint32](width, common.Uint32Comparator{})
+
+	data := make([]uint32, 0, numKeys)
+	for i := 0; i < numKeys; i++ {
+		key := uint32(rand.Intn(10 * numKeys))
+		data = append(data, key)
+		n.Insert(key)
+	}
+
+	return n, data
+}
+
+// initBTreeNonRepeatRandomKeys creates a BTree with the given width of nodes.
+// It initializes it with random numbers, with the size of numKeys.
+// The random numbers do not repeat.
+func initBTreeNonRepeatRandomKeys(width, numKeys int) (*BTree[uint32], []uint32) {
+	n := NewBTree[uint32](width, common.Uint32Comparator{})
+
+	data := make([]uint32, 0, numKeys)
+	for i := 0; i < numKeys; i++ {
+		key := uint32(i*10 + rand.Intn(10)) // rand keys in tenth intervals
+		data = append(data, key)
+	}
+
+	rand.Shuffle(len(data), func(i, j int) { data[i], data[j] = data[j], data[i] })
+
+	for _, key := range data {
+		n.Insert(key)
+	}
+
+	return n, data
 }
 
 func getKeys(n ForEacher[uint32]) []uint32 {

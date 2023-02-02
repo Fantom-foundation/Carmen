@@ -137,3 +137,30 @@ func TestLeafNodeNonConsecutiveGetRange(t *testing.T) {
 	// not found
 	common.AssertArraysEqual[uint32](t, []uint32{}, getNodeRange(n, 10, 100))
 }
+
+func TestLeafNodeRemove(t *testing.T) {
+	n := newLeafNode[uint32](3, comparator)
+
+	n.insert(4)
+	n.insert(1)
+	n.insert(3)
+
+	n.remove(1)
+	if n.contains(1) {
+		t.Errorf("key should not exist")
+	}
+
+	// check order preserved
+	common.AssertArraysEqual[uint32](t, []uint32{3, 4}, getNodeRange(n, 1, 5))
+
+	n.remove(4)
+	if n.contains(4) {
+		t.Errorf("key should not exist")
+	}
+
+	n.remove(3)
+	if n.contains(3) {
+		t.Errorf("key should not exist")
+	}
+
+}
