@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"hash"
 	"io"
@@ -67,7 +68,7 @@ func (s *GoState) deleteAccount(address common.Address) error {
 		}
 		return err
 	}
-	err = s.accountsStore.Set(idx, common.Deleted)
+	err = s.accountsStore.Set(idx, common.Unknown)
 	if err != nil {
 		return err
 	}
@@ -354,4 +355,14 @@ func (s *GoState) Close() error {
 		}
 	}
 	return last
+}
+
+func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
+	if s.archive == nil {
+		return nil, fmt.Errorf("archive not enabled for this GoState")
+	}
+	return &ArchiveState{
+		archive: s.archive,
+		block:   block,
+	}, nil
 }

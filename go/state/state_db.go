@@ -828,7 +828,7 @@ func (s *stateDB) EndTransaction() {
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
 			// of the block processing.
-			s.setAccountState(addr, common.Deleted)
+			s.setAccountState(addr, common.Unknown)
 			s.setNonceInternal(addr, 0)
 			s.setCodeInternal(addr, []byte{})
 
@@ -873,14 +873,14 @@ func (s *stateDB) EndBlock(block uint64) {
 	// Clear all accounts that have been deleted at some point during this block.
 	// This will cause all storage slots of that accounts to be reset before new
 	// values may be written in the subsequent updates.
-	deletedAccountState := common.Deleted
+	deletedAccountState := common.Unknown
 	for addr, clearingState := range s.clearedAccounts {
 		if clearingState == cleared {
 			// Pretend this account was originally deleted, such that in the loop below
 			// it would be detected as re-created in case its new state is Existing.
 			s.accounts[addr].original = &deletedAccountState
 			// If the account was not later re-created, we mark it for deletion.
-			if s.accounts[addr].current == common.Deleted {
+			if s.accounts[addr].current == common.Unknown {
 				update.AppendDeleteAccount(addr)
 			}
 			// Increment the reincarnation counter of cleared addresses to invalidate
@@ -903,7 +903,7 @@ func (s *stateDB) EndBlock(block uint64) {
 		if *value.original != value.current {
 			if value.current == common.Exists {
 				update.AppendCreateAccount(addr)
-			} else if value.current == common.Deleted {
+			} else if value.current == common.Unknown {
 				// Accounts have already been registered for deletion in the loop above.
 			} else {
 				panic(fmt.Sprintf("Unknown account state: %v", value.current))
@@ -1026,6 +1026,14 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("reincarnation", common.NewMemoryFootprint(uintptr(len(s.reincarnation))*(addressSize+unsafe.Sizeof(uint64(0)))))
 
 	return mf
+}
+
+func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
+	archiveState, err := s.state.GetArchiveState(block)
+	if err != nil {
+		return nil, err
+	}
+	return CreateStateDBUsing(archiveState), nil
 }
 
 func (s *stateDB) resetTransactionContext() {

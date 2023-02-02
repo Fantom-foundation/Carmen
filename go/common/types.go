@@ -74,8 +74,6 @@ const (
 	Unknown AccountState = 0
 	// Exists is the state of an open account.
 	Exists AccountState = 1
-	// Deleted is the state of a closed account.
-	Deleted AccountState = 2
 )
 
 func (s AccountState) String() string {
@@ -84,8 +82,6 @@ func (s AccountState) String() string {
 		return "unknown"
 	case Exists:
 		return "exists"
-	case Deleted:
-		return "deleted"
 	}
 	return "invalid"
 }

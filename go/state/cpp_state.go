@@ -220,7 +220,10 @@ func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 		return uintptr(cap(code)) // memory consumed by the code slice
 	}))
 	return res
+}
 
+func (cs *CppState) GetArchiveState(block uint64) (State, error) {
+	return nil, fmt.Errorf("archive not implemented for CPP state")
 }
 
 type objectId struct {

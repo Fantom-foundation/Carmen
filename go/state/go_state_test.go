@@ -135,7 +135,7 @@ func TestBasicOperations(t *testing.T) {
 			if err := state.deleteAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if val, err := state.GetAccountState(address1); err != nil || val != common.Deleted {
+			if val, err := state.GetAccountState(address1); err != nil || val != common.Unknown {
 				t.Errorf("Deleted account is not deleted: Val: %s, Err: %s", val, err)
 			}
 

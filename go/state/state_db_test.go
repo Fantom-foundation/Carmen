@@ -99,7 +99,7 @@ func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a previously deleted account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Deleted, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
 
 	db.CreateAccount(address1)
 
@@ -629,7 +629,7 @@ func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a deleted account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Deleted, nil)
+	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
 
 	// An already deleted account is indicated as not being deleted during the suicide.
 	if exists := db.Suicide(address1); exists {
