@@ -355,3 +355,10 @@ func (s *GoState) Close() error {
 	}
 	return last
 }
+
+func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
+	return &ArchiveState{
+		archive: s.archive,
+		block:   block,
+	}, nil
+}

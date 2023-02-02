@@ -91,6 +91,21 @@ func (mr *MockStateMockRecorder) GetAccountState(address interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountState", reflect.TypeOf((*MockState)(nil).GetAccountState), address)
 }
 
+// GetArchiveState mocks base method.
+func (m *MockState) GetArchiveState(block uint64) (State, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetArchiveState", block)
+	ret0, _ := ret[0].(State)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetArchiveState indicates an expected call of GetArchiveState.
+func (mr *MockStateMockRecorder) GetArchiveState(block interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveState", reflect.TypeOf((*MockState)(nil).GetArchiveState), block)
+}
+
 // GetBalance mocks base method.
 func (m *MockState) GetBalance(address common.Address) (common.Balance, error) {
 	m.ctrl.T.Helper()
@@ -288,6 +303,21 @@ func (m *MockdirectUpdateState) GetAccountState(address common.Address) (common.
 func (mr *MockdirectUpdateStateMockRecorder) GetAccountState(address interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountState", reflect.TypeOf((*MockdirectUpdateState)(nil).GetAccountState), address)
+}
+
+// GetArchiveState mocks base method.
+func (m *MockdirectUpdateState) GetArchiveState(block uint64) (State, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetArchiveState", block)
+	ret0, _ := ret[0].(State)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetArchiveState indicates an expected call of GetArchiveState.
+func (mr *MockdirectUpdateStateMockRecorder) GetArchiveState(block interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveState", reflect.TypeOf((*MockdirectUpdateState)(nil).GetArchiveState), block)
 }
 
 // GetBalance mocks base method.
