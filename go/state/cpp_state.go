@@ -223,7 +223,7 @@ func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (cs *CppState) GetArchiveState(block uint64) (State, error) {
-	panic("not implemented for CPP state")
+	return nil, fmt.Errorf("archive not implemented for CPP state")
 }
 
 type objectId struct {

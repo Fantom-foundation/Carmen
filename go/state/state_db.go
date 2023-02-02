@@ -1028,6 +1028,14 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	return mf
 }
 
+func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
+	archiveState, err := s.state.GetArchiveState(block)
+	if err != nil {
+		return nil, err
+	}
+	return CreateStateDBUsing(archiveState), nil
+}
+
 func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()

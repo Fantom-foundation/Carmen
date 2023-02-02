@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"hash"
 	"io"
@@ -357,6 +358,9 @@ func (s *GoState) Close() error {
 }
 
 func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
+	if s.archive == nil {
+		return nil, fmt.Errorf("archive not enabled for this GoState")
+	}
 	return &ArchiveState{
 		archive: s.archive,
 		block:   block,
