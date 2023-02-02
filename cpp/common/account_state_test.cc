@@ -17,7 +17,6 @@ TEST(AccountStateTest, IsTrivial) { EXPECT_TRUE(Trivial<AccountState>); }
 TEST(AccountStateTest, IsPrintable) {
   EXPECT_THAT(Print(AccountState::kUnknown), StrEq("unknown"));
   EXPECT_THAT(Print(AccountState::kExists), StrEq("exists"));
-  EXPECT_THAT(Print(AccountState::kDeleted), StrEq("deleted"));
   EXPECT_THAT(Print(AccountState(10)), StrEq("invalid"));
 }
 

@@ -275,7 +275,7 @@ absl::Status State<IndexType, StoreType, DepotType,
     return absl::OkStatus();
   }
   RETURN_IF_ERROR(addr_id);
-  RETURN_IF_ERROR(account_states_.Set(*addr_id, AccountState::kDeleted));
+  RETURN_IF_ERROR(account_states_.Set(*addr_id, AccountState::kUnknown));
   return ClearAccount(*addr_id);
 }
 

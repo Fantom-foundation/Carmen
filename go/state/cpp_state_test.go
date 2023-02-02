@@ -54,7 +54,7 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 			state.createAccount(address1)
 			state.deleteAccount(address1)
 			account_state, _ := state.GetAccountState(address1)
-			if account_state != common.Deleted {
+			if account_state != common.Unknown {
 				t.Errorf("Deleted account is not deleted, got %v", account_state)
 			}
 		})

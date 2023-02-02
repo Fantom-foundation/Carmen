@@ -10,8 +10,6 @@ std::ostream& operator<<(std::ostream& out, AccountState s) {
       return out << "unknown";
     case AccountState::kExists:
       return out << "exists";
-    case AccountState::kDeleted:
-      return out << "deleted";
   }
   return out << "invalid";
 }

@@ -82,7 +82,7 @@ TYPED_TEST_P(StateTest, AccountsCanBeDeleted) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 
   EXPECT_OK(state.DeleteAccount(a));
-  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 }
 
 TYPED_TEST_P(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
@@ -104,7 +104,7 @@ TYPED_TEST_P(StateTest, DeletedAccountsCanBeRecreated) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_OK(state.CreateAccount(a));
   EXPECT_OK(state.DeleteAccount(a));
-  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_OK(state.CreateAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 }
@@ -323,7 +323,7 @@ TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
 
   EXPECT_THAT(state.GetAccountState(Address{0x00}), AccountState::kUnknown);
   EXPECT_THAT(state.GetAccountState(Address{0x01}), AccountState::kExists);
-  EXPECT_THAT(state.GetAccountState(Address{0x02}), AccountState::kDeleted);
+  EXPECT_THAT(state.GetAccountState(Address{0x02}), AccountState::kUnknown);
 
   EXPECT_THAT(state.GetBalance(Address{0x03}), IsOkAndHolds(Balance{0xB1}));
   EXPECT_THAT(state.GetNonce(Address{0x04}), IsOkAndHolds(Nonce{0xA1}));

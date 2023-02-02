@@ -67,7 +67,7 @@ func (s *GoState) deleteAccount(address common.Address) error {
 		}
 		return err
 	}
-	err = s.accountsStore.Set(idx, common.Deleted)
+	err = s.accountsStore.Set(idx, common.Unknown)
 	if err != nil {
 		return err
 	}

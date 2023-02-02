@@ -163,7 +163,7 @@ TEST_P(CStateTest, AccountsCanBeDeleted) {
   Carmen_CreateAccount(state, &addr);
   Carmen_DeleteAccount(state, &addr);
   Carmen_GetAccountState(state, &addr, &as);
-  EXPECT_EQ(as, AccountState::kDeleted);
+  EXPECT_EQ(as, AccountState::kUnknown);
 }
 
 TEST_P(CStateTest, BalancesAreInitiallyZero) {
