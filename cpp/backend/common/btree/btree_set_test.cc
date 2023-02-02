@@ -1,10 +1,8 @@
 #include "backend/common/btree/btree_set.h"
 
-#include <algorithm>
-#include <initializer_list>
-#include <ostream>
 #include <vector>
 
+#include "backend/common/btree/test_util.h"
 #include "backend/common/file.h"
 #include "backend/common/page_pool.h"
 #include "common/file_util.h"
@@ -44,21 +42,6 @@ TEST(BTreeSet, InsertingZeroWorks) {
   EXPECT_THAT(set.Contains(0), false);
   EXPECT_THAT(set.Insert(0), true);
   EXPECT_THAT(set.Contains(0), true);
-}
-
-std::vector<int> GetSequence(int size) {
-  std::vector<int> data;
-  for (int i = 0; i < size; i++) {
-    data.push_back(i);
-  }
-  return data;
-}
-
-std::vector<int> Shuffle(std::vector<int> data) {
-  std::random_device rd;
-  std::mt19937 g(rd());
-  std::shuffle(data.begin(), data.end(), g);
-  return data;
 }
 
 template <typename Tree>
@@ -131,7 +114,7 @@ void RunClosingAndReopeningTest() {
       EXPECT_THAT(set.Contains(i), i % S == 0) << "i=" << i;
     }
     for (int i = 0; i < N; i += K) {
-      ASSERT_OK(set.Insert(i));
+      EXPECT_THAT(set.Insert(i), !(i % S == 0));
     }
     EXPECT_OK(set.Check());
     size = set.Size();
