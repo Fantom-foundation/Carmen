@@ -14,7 +14,7 @@ type ArchiveState struct {
 }
 
 func (s *ArchiveState) Exist(address common.Address) (bool, error) {
-	return s.archive.Exist(s.block, address)
+	return s.archive.Exists(s.block, address)
 }
 
 func (s *ArchiveState) GetBalance(address common.Address) (balance common.Balance, err error) {

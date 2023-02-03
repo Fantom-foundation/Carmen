@@ -146,13 +146,13 @@ func TestAccountDeleteCreate(t *testing.T) {
 				t.Fatalf("failed to add block 9; %s", err)
 			}
 
-			if exists, err := a.Exist(1, addr1); err != nil || exists != true {
+			if exists, err := a.Exists(1, addr1); err != nil || exists != true {
 				t.Errorf("unexpected existence status at block 1: %t; %s", exists, err)
 			}
-			if exists, err := a.Exist(5, addr1); err != nil || exists != false {
+			if exists, err := a.Exists(5, addr1); err != nil || exists != false {
 				t.Errorf("unexpected existence status at block 1: %t; %s", exists, err)
 			}
-			if exists, err := a.Exist(9, addr1); err != nil || exists != true {
+			if exists, err := a.Exists(9, addr1); err != nil || exists != true {
 				t.Errorf("unexpected existence status at block 1: %t; %s", exists, err)
 			}
 

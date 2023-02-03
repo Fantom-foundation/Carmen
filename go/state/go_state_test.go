@@ -59,7 +59,7 @@ func TestMissingKeys(t *testing.T) {
 
 			accountState, err := state.Exist(address1)
 			if err != nil || accountState != false {
-				t.Errorf("Account state must be not-existing. It is: %t, err: %s", accountState, err)
+				t.Errorf("Account must not exist in the initial state, but it exists. err: %s", err)
 			}
 			balance, err := state.GetBalance(address1)
 			if (err != nil || balance != common.Balance{}) {
