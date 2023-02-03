@@ -57,7 +57,7 @@ func TestMissingKeys(t *testing.T) {
 			}
 			defer state.Close()
 
-			accountState, err := state.Exist(address1)
+			accountState, err := state.Exists(address1)
 			if err != nil || accountState != false {
 				t.Errorf("Account must not exist in the initial state, but it exists. err: %s", err)
 			}
@@ -112,7 +112,7 @@ func TestBasicOperations(t *testing.T) {
 			}
 
 			// fetch values
-			if val, err := state.Exist(address1); err != nil || val != true {
+			if val, err := state.Exists(address1); err != nil || val != true {
 				t.Errorf("Created account does not exists: Val: %t, Err: %s", val, err)
 			}
 			if val, err := state.GetNonce(address1); (err != nil || val != common.Nonce{123}) {
@@ -135,7 +135,7 @@ func TestBasicOperations(t *testing.T) {
 			if err := state.deleteAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if val, err := state.Exist(address1); err != nil || val != false {
+			if val, err := state.Exists(address1); err != nil || val != false {
 				t.Errorf("Deleted account is not deleted: Val: %t, Err: %s", val, err)
 			}
 

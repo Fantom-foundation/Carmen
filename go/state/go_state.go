@@ -49,7 +49,7 @@ func (s *GoState) createAccount(address common.Address) (err error) {
 	return s.clearAccount(idx)
 }
 
-func (s *GoState) Exist(address common.Address) (bool, error) {
+func (s *GoState) Exists(address common.Address) (bool, error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {

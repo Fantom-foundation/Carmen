@@ -257,10 +257,10 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 			t.Fatalf("Error: %s", err)
 		}
 
-		if newState, err := s.Exist(address1); err != nil || newState != true {
+		if newState, err := s.Exists(address1); err != nil || newState != true {
 			t.Errorf("Unrelated existing state: %t, Error: %s", newState, err)
 		}
-		if newState, err := s.Exist(address2); err != nil || newState != false {
+		if newState, err := s.Exists(address2); err != nil || newState != false {
 			t.Errorf("Delete never-existing state: %t, Error: %s", newState, err)
 		}
 	})
@@ -394,10 +394,10 @@ func TestArchive(t *testing.T) {
 				t.Fatalf("failed to get state of block 2; %s", err)
 			}
 
-			if as, err := state1.Exist(address1); err != nil || as != true {
+			if as, err := state1.Exists(address1); err != nil || as != true {
 				t.Errorf("invalid account state at block 1: %t, %s", as, err)
 			}
-			if as, err := state2.Exist(address1); err != nil || as != true {
+			if as, err := state2.Exists(address1); err != nil || as != true {
 				t.Errorf("invalid account state at block 2: %t, %s", as, err)
 			}
 			if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
@@ -488,7 +488,7 @@ func TestStateRead(t *testing.T) {
 		_ = s.Close()
 	}()
 
-	if state, err := s.Exist(address1); err != nil || state != true {
+	if state, err := s.Exists(address1); err != nil || state != true {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, true, err)
 	}
 	if balance, err := s.GetBalance(address1); err != nil || balance != balance1 {

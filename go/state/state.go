@@ -8,8 +8,8 @@ import (
 
 // State interfaces provides access to accounts and smart contract values memory.
 type State interface {
-	// Exist obtains the current state of the provided account.
-	Exist(address common.Address) (bool, error)
+	// Exists obtains the current state of the provided account.
+	Exists(address common.Address) (bool, error)
 
 	// GetBalance provides balance for the input account address.
 	GetBalance(address common.Address) (common.Balance, error)

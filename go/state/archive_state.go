@@ -13,7 +13,7 @@ type ArchiveState struct {
 	block   uint64
 }
 
-func (s *ArchiveState) Exist(address common.Address) (bool, error) {
+func (s *ArchiveState) Exists(address common.Address) (bool, error) {
 	return s.archive.Exists(s.block, address)
 }
 

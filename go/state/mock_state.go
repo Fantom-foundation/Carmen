@@ -62,19 +62,19 @@ func (mr *MockStateMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockState)(nil).Close))
 }
 
-// Exist mocks base method.
-func (m *MockState) Exist(address common.Address) (bool, error) {
+// Exists mocks base method.
+func (m *MockState) Exists(address common.Address) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exist", address)
+	ret := m.ctrl.Call(m, "Exists", address)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Exist indicates an expected call of Exist.
-func (mr *MockStateMockRecorder) Exist(address interface{}) *gomock.Call {
+// Exists indicates an expected call of Exists.
+func (mr *MockStateMockRecorder) Exists(address interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exist", reflect.TypeOf((*MockState)(nil).Exist), address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockState)(nil).Exists), address)
 }
 
 // Flush mocks base method.
@@ -276,19 +276,19 @@ func (mr *MockdirectUpdateStateMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockdirectUpdateState)(nil).Close))
 }
 
-// Exist mocks base method.
-func (m *MockdirectUpdateState) Exist(address common.Address) (bool, error) {
+// Exists mocks base method.
+func (m *MockdirectUpdateState) Exists(address common.Address) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exist", address)
+	ret := m.ctrl.Call(m, "Exists", address)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Exist indicates an expected call of Exist.
-func (mr *MockdirectUpdateStateMockRecorder) Exist(address interface{}) *gomock.Call {
+// Exists indicates an expected call of Exists.
+func (mr *MockdirectUpdateStateMockRecorder) Exists(address interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exist", reflect.TypeOf((*MockdirectUpdateState)(nil).Exist), address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockdirectUpdateState)(nil).Exists), address)
 }
 
 // Flush mocks base method.

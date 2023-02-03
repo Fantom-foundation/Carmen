@@ -285,7 +285,7 @@ func (s *stateDB) Exist(addr common.Address) bool {
 	if val, exists := s.accounts[addr]; exists {
 		return val.current
 	}
-	state, err := s.state.Exist(addr)
+	state, err := s.state.Exists(addr)
 	if err != nil {
 		panic(fmt.Errorf("failed to get account state for address %v: %v", addr, err))
 	}
@@ -890,7 +890,7 @@ func (s *stateDB) EndBlock(block uint64) {
 		// In case we do not know the account state yet, we need to fetch it
 		// from the DB to decide whether the account state has changed.
 		if value.original == nil {
-			state, err := s.state.Exist(addr)
+			state, err := s.state.Exists(addr)
 			if err != nil {
 				panic(fmt.Sprintf("failed to fetch account state from DB: %v", err))
 			}

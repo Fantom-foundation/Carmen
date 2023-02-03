@@ -67,7 +67,7 @@ func (cs *CppState) createAccount(address common.Address) error {
 	return cs.applyToState(update)
 }
 
-func (cs *CppState) Exist(address common.Address) (bool, error) {
+func (cs *CppState) Exists(address common.Address) (bool, error) {
 	var res common.AccountState
 	C.Carmen_GetAccountState(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&res))
 	return res == common.Exists, nil
