@@ -61,21 +61,56 @@ class BTree {
   void Print() const;
 
  protected:
-  // Returns the value associated to the given key or std::nullopt if there is
+  using LeafNode = btree::LeafNode<Key, Value, Comparator, max_keys>;
+  using InnerNode = btree::InnerNode<LeafNode, max_elements>;
+
+  // An iterator on BTree content. It is modeled after iterators in the standard
+  // library, however increment/decrement operators may fail due to IO errors.
+  class Iterator {
+   public:
+    using element_type = Entry<Key, Value>;
+
+    Iterator() = default;
+
+    bool operator==(const Iterator&) const = default;
+    const Entry<Key, Value>& operator*() const;
+    const Entry<Key, Value>* get() const;
+
+    absl::Status Next();
+    absl::Status Previous();
+
+   private:
+    friend class BTree;
+    Iterator(const PageManager<PagePool>* manager, const LeafNode* node,
+             std::uint16_t pos)
+        : manager_(manager), node_(node), pos_(pos) {}
+
+    // TODO: use page pinning once implemented
+    const PageManager<PagePool>* manager_ = nullptr;
+    const LeafNode* node_ = nullptr;
+    std::uint16_t pos_ = 0;
+  };
+
+  // Returns an iterator pointing to the first element in the tree. If the tree
+  // is empty, it is equivalent to the end.
+  absl::StatusOr<Iterator> Begin() const;
+
+  // Returns an iterator pointing to the non-existing element after the last
+  // element in the tree.
+  absl::StatusOr<Iterator> End() const;
+
+  // Returns an iterator pointing to the given key or End() if there is
   // no such key. To mearly check whether an element is present it is more
   // efficient to use the Contains(..) function, since contains may stop in the
   // unlikely case of the key being present in an inner node, while find needs
   // to go all the way to the leaf node to get the value.
-  absl::StatusOr<std::optional<Value>> Find(const Key& key) const;
+  absl::StatusOr<Iterator> Find(const Key& key) const;
 
   // Inserts the given entry. This function is intended to be used by derived
   // implementations, customized for their use case.
   absl::StatusOr<bool> Insert(const Entry<Key, Value>& entry);
 
  private:
-  using LeafNode = btree::LeafNode<Key, Value, Comparator, max_keys>;
-  using InnerNode = btree::InnerNode<LeafNode, max_elements>;
-
   // A special page type used to store tree meta data. This node type is always
   // at page 0 of a file.
   struct MetaData : public btree::internal::Node<MetaData> {
@@ -157,17 +192,55 @@ absl::StatusOr<bool> BTree<Key, Value, PagePool, Comparator, max_keys,
 
 template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
           std::size_t max_keys, std::size_t max_elements>
-absl::StatusOr<std::optional<Value>>
+absl::StatusOr<typename BTree<Key, Value, PagePool, Comparator, max_keys,
+                              max_elements>::Iterator>
+BTree<Key, Value, PagePool, Comparator, max_keys, max_elements>::Begin() const {
+  if (num_entries_ == 0) return End();
+  // The first leaf node is always at page 1 since it is created there and never
+  // moved.
+  ASSIGN_OR_RETURN(LeafNode & leaf, page_manager_.template Get<LeafNode>(1));
+  return Iterator(&page_manager_, &leaf, 0);
+}
+
+template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
+          std::size_t max_keys, std::size_t max_elements>
+absl::StatusOr<typename BTree<Key, Value, PagePool, Comparator, max_keys,
+                              max_elements>::Iterator>
+BTree<Key, Value, PagePool, Comparator, max_keys, max_elements>::End() const {
+  if (height_ > 0) {
+    ASSIGN_OR_RETURN(InnerNode & inner,
+                     page_manager_.template Get<InnerNode>(root_id_));
+    ASSIGN_OR_RETURN((auto [node, pos]), inner.End(height_, page_manager_));
+    return Iterator(&page_manager_, node, pos);
+  }
+  ASSIGN_OR_RETURN(LeafNode & leaf,
+                   page_manager_.template Get<LeafNode>(root_id_));
+  return Iterator(&page_manager_, &leaf, leaf.Size());
+}
+
+template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
+          std::size_t max_keys, std::size_t max_elements>
+absl::StatusOr<typename BTree<Key, Value, PagePool, Comparator, max_keys,
+                              max_elements>::Iterator>
 BTree<Key, Value, PagePool, Comparator, max_keys, max_elements>::Find(
     const Key& key) const {
   if (height_ > 0) {
     ASSIGN_OR_RETURN(InnerNode & inner,
                      page_manager_.template Get<InnerNode>(root_id_));
-    return inner.Find(height_, key, page_manager_);
+    ASSIGN_OR_RETURN((auto [leaf, pos]),
+                     inner.Find(height_, key, page_manager_));
+    if (leaf != nullptr) {
+      return Iterator(&page_manager_, leaf, pos);
+    }
+    return End();
   }
   ASSIGN_OR_RETURN(LeafNode & leaf,
                    page_manager_.template Get<LeafNode>(root_id_));
-  return leaf.Find(key);
+  auto pos = leaf.Find(key);
+  if (pos >= leaf.Size()) {
+    return End();
+  }
+  return Iterator(&page_manager_, &leaf, pos);
 }
 
 template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
@@ -258,6 +331,54 @@ void BTree<Key, Value, PagePool, Comparator, max_keys, max_elements>::Print()
     std::cout << "Unable to load root node: " << leaf.status();
   }
   leaf->get().Print();
+}
+
+template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
+          std::size_t max_keys, std::size_t max_elements>
+const Entry<Key, Value>& BTree<Key, Value, PagePool, Comparator, max_keys,
+                               max_elements>::Iterator::operator*() const {
+  return node_->At(pos_);
+}
+
+template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
+          std::size_t max_keys, std::size_t max_elements>
+const Entry<Key, Value>* BTree<Key, Value, PagePool, Comparator, max_keys,
+                               max_elements>::Iterator::get() const {
+  return &(node_->At(pos_));
+}
+
+template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
+          std::size_t max_keys, std::size_t max_elements>
+absl::Status BTree<Key, Value, PagePool, Comparator, max_keys,
+                   max_elements>::Iterator::Next() {
+  if (pos_ < node_->Size() - 1) {
+    pos_++;
+    return absl::OkStatus();
+  }
+  PageId next = node_->GetSuccessor();
+  if (next != 0) {
+    ASSIGN_OR_RETURN(node_, manager_->template Get<LeafNode>(next));
+    pos_ = 0;
+  } else {
+    pos_ = node_->Size();
+  }
+  return absl::OkStatus();
+}
+
+template <Trivial Key, Trivial Value, typename PagePool, typename Comparator,
+          std::size_t max_keys, std::size_t max_elements>
+absl::Status BTree<Key, Value, PagePool, Comparator, max_keys,
+                   max_elements>::Iterator::Previous() {
+  if (pos_ > 0) {
+    pos_--;
+    return absl::OkStatus();
+  }
+  PageId previous = node_->GetPredecessor();
+  if (previous != 0) {
+    ASSIGN_OR_RETURN(node_, manager_->template Get<LeafNode>(previous));
+    pos_ = node_->Size() - 1;
+  }
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::btree

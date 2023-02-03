@@ -50,9 +50,11 @@ class BTreeMap : public btree::BTree<Key, Value, PagePool, Comparator, max_keys,
 
   // Attempts to locate the given key in the map and returns the associated
   // value, or std::nullopt if there is no such key in the map.
-  absl::StatusOr<std::optional<Value>> Find(const Key& key) {
-    return super::Find(key);
-  }
+  using super::Find;
+
+  // Make the BTree's Begin and End members public accessible.
+  using super::Begin;
+  using super::End;
 
  private:
   // Inherit the constructors of the generic BTree implementation.

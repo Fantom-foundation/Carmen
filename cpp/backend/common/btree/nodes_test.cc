@@ -326,15 +326,15 @@ TEST(LeafNode, IsPage) {
 }
 
 TEST(LeafNode, DefaultMaxElementsUsesFullNodeSize) {
-  EXPECT_EQ(
-      (LeafNode<std::uint8_t, Unit>::kMaxEntries),
-      (kFileSystemPageSize - sizeof(std::uint16_t)) / sizeof(std::uint8_t));
-  EXPECT_EQ(
-      (LeafNode<std::uint64_t, Unit>::kMaxEntries),
-      (kFileSystemPageSize - sizeof(std::uint16_t)) / sizeof(std::uint64_t));
+  EXPECT_EQ((LeafNode<std::uint8_t, Unit>::kMaxEntries),
+            (kFileSystemPageSize - sizeof(std::uint16_t) - 2 * sizeof(PageId)) /
+                sizeof(std::uint8_t));
+  EXPECT_EQ((LeafNode<std::uint64_t, Unit>::kMaxEntries),
+            (kFileSystemPageSize - sizeof(std::uint16_t) - 2 * sizeof(PageId)) /
+                sizeof(std::uint64_t));
 
   EXPECT_EQ((LeafNode<std::uint8_t, std::uint16_t>::kMaxEntries),
-            (kFileSystemPageSize - sizeof(std::uint16_t)) /
+            (kFileSystemPageSize - sizeof(std::uint16_t) - 2 * sizeof(PageId)) /
                 (sizeof(std::uint8_t) + sizeof(std::uint16_t)));
 }
 
@@ -420,8 +420,8 @@ TEST(LeafNode, InsertionTriggersSplitIfTooFull) {
   EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2, 3, 4));
 
   // The next element triggers a split.
-  EXPECT_THAT(leaf.Insert(0, 5, manager), (Split<int>{3, PageId(1)}));
-  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2));
+  EXPECT_THAT(leaf.Insert(0, 5, manager), (Split<int>{4, PageId(1)}));
+  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2, 3));
   ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
   EXPECT_THAT(overflow.GetEntries(), ElementsAre(4, 5));
 }
@@ -441,8 +441,8 @@ TEST(LeafNode, SplitWithElementOnTheRightIsBalanced) {
   EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 3, 4, 5));
 
   // Trigger the split with an element that should end up on the left.
-  EXPECT_THAT(leaf.Insert(0, 2, manager), (Split<int>{3, PageId(1)}));
-  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2));
+  EXPECT_THAT(leaf.Insert(0, 2, manager), (Split<int>{4, PageId(1)}));
+  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2, 3));
   ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
   EXPECT_THAT(overflow.GetEntries(), ElementsAre(4, 5));
 }
@@ -457,13 +457,13 @@ TEST(LeafNode, NewElementCanBeTheSplitKey) {
   // Fill the leaf to the limit.
   EXPECT_THAT(leaf.Insert(0, 1, manager), EntryAdded{});
   EXPECT_THAT(leaf.Insert(0, 2, manager), EntryAdded{});
-  EXPECT_THAT(leaf.Insert(0, 4, manager), EntryAdded{});
+  EXPECT_THAT(leaf.Insert(0, 3, manager), EntryAdded{});
   EXPECT_THAT(leaf.Insert(0, 5, manager), EntryAdded{});
-  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2, 4, 5));
+  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2, 3, 5));
 
-  // Trigger the split with an element that should end up on the left.
-  EXPECT_THAT(leaf.Insert(0, 3, manager), (Split<int>{3, PageId(1)}));
-  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2));
+  // Trigger the split with an element that should end up as the split key.
+  EXPECT_THAT(leaf.Insert(0, 4, manager), (Split<int>{4, PageId(1)}));
+  EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2, 3));
   ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
   EXPECT_THAT(overflow.GetEntries(), ElementsAre(4, 5));
 }
@@ -485,7 +485,7 @@ TEST(LeafNode, SplittingOddCapacityNodeLeadsToLargerLeftNode_InsertLeft) {
   EXPECT_THAT(leaf.Insert(0, 2, manager), (Split<int>{3, PageId(1)}));
   EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2));
   ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
-  EXPECT_THAT(overflow.GetEntries(), ElementsAre(4));
+  EXPECT_THAT(overflow.GetEntries(), ElementsAre(3, 4));
 }
 
 TEST(LeafNode, SplittingOddCapacityNodeLeadsToLargerLeftNode_InsertRight) {
@@ -505,7 +505,7 @@ TEST(LeafNode, SplittingOddCapacityNodeLeadsToLargerLeftNode_InsertRight) {
   EXPECT_THAT(leaf.Insert(0, 4, manager), (Split<int>{3, PageId(1)}));
   EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2));
   ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
-  EXPECT_THAT(overflow.GetEntries(), ElementsAre(4));
+  EXPECT_THAT(overflow.GetEntries(), ElementsAre(3, 4));
 }
 
 TEST(LeafNode, SplittingOddCapacityNodeLeadsToLargerLeftNode_InsertCenter) {
@@ -525,7 +525,7 @@ TEST(LeafNode, SplittingOddCapacityNodeLeadsToLargerLeftNode_InsertCenter) {
   EXPECT_THAT(leaf.Insert(0, 3, manager), (Split<int>{3, PageId(1)}));
   EXPECT_THAT(leaf.GetEntries(), ElementsAre(1, 2));
   ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
-  EXPECT_THAT(overflow.GetEntries(), ElementsAre(4));
+  EXPECT_THAT(overflow.GetEntries(), ElementsAre(3, 4));
 }
 
 TEST(LeafNode, SplittingMapLeafsKeepsCopyOfKeyInLeaf) {
@@ -569,6 +569,29 @@ TEST(LeafNode, SplittingMapLeafsRemainsBalancedForEvenLength) {
   }
 }
 
+TEST(LeafNode, SplittingMapLeafsRemainsBalancedForOddLength) {
+  using Leaf = LeafNode<int, int, std::less<int>, 3>;
+  using E = typename Leaf::entry_t;
+  for (int i = 1; i <= 4; i++) {
+    TestPageManager manager;
+    ASSERT_EQ(Leaf::kMaxEntries, 3);
+
+    // Fill the leaf to the limit with all elements except i.
+    auto& leaf = manager.Create<Leaf>();
+    for (int j = 1; j <= 4; j++) {
+      if (i != j) {
+        EXPECT_THAT(leaf.Insert(0, E(j, j), manager), EntryAdded{});
+      }
+    }
+
+    // Inserting i triggers the split, the result should always be the same.
+    EXPECT_THAT(leaf.Insert(0, E(i, i), manager), (Split<int>{3, PageId(1)}));
+    EXPECT_THAT(leaf.GetEntries(), ElementsAre(E(1, 1), E(2, 2)));
+    ASSERT_OK_AND_ASSIGN(Leaf & overflow, manager.Get<Leaf>(1));
+    EXPECT_THAT(overflow.GetEntries(), ElementsAre(E(3, 3), E(4, 4)));
+  }
+}
+
 TEST(LeafNode, InsertingNewElementMarksPageAsDirty) {
   using Leaf = LeafNode<int, Unit, std::less<int>, 3>;
   MockPageManager manager;
@@ -596,7 +619,7 @@ TEST(LeafNode, SplitMarksOldAndNewNodeDirty) {
 
   EXPECT_CALL(manager, MarkAsDirty(12));
   EXPECT_CALL(manager, MarkAsDirty(1));  // 1 is the ID of the new node.
-  EXPECT_THAT(leaf.Insert(12, 3, manager), (Split<int>{2, PageId(1)}));
+  EXPECT_THAT(leaf.Insert(12, 3, manager), (Split<int>{3, PageId(1)}));
 }
 
 TEST(LeafNode, ContainsFindsPresentElements) {
@@ -680,12 +703,13 @@ TEST(LeafNode, BoundViolationsAreDetected) {
   EXPECT_OK(leaf.Insert(0, 3, manager));
   EXPECT_OK(leaf.Check(nullptr, nullptr));
 
-  int limit = 0;
+  int limit = 1;
   EXPECT_OK(leaf.Check(&limit, nullptr));
-  limit = 1;
+  limit = 2;
   EXPECT_THAT(
       leaf.Check(&limit, nullptr),
-      StatusIs(_, StrEq("Lower boundary is not less than smallest entry")));
+      StatusIs(_,
+               StrEq("Lower boundary is not less-equal than smallest entry")));
   limit = 3;
   EXPECT_THAT(
       leaf.Check(nullptr, &limit),
@@ -788,12 +812,12 @@ TEST(InnerNode, LeftNodeSplitExtendsInnerNode) {
 
   // The inner node gets a new entry.
   EXPECT_THAT(node.Insert(0, 1, 4, manager), EntryAdded{});
-  EXPECT_THAT(node.GetKeys(), ElementsAre(3, 6));
+  EXPECT_THAT(node.GetKeys(), ElementsAre(4, 6));
   ASSERT_THAT(node.GetChildren(), ElementsAre(PageId(1), PageId(3), PageId(2)));
 
   // The leaf nodes are properly split.
   ASSERT_OK_AND_ASSIGN(Leaf & a, manager.Get<Leaf>(PageId(1)));
-  EXPECT_THAT(a.GetEntries(), ElementsAre(1, 2));
+  EXPECT_THAT(a.GetEntries(), ElementsAre(1, 2, 3));
   ASSERT_OK_AND_ASSIGN(Leaf & b, manager.Get<Leaf>(PageId(3)));
   EXPECT_THAT(b.GetEntries(), ElementsAre(4, 5));
   ASSERT_OK_AND_ASSIGN(Leaf & c, manager.Get<Leaf>(PageId(2)));
@@ -809,14 +833,14 @@ TEST(InnerNode, RightNodeSplitExtendsInnerNode) {
 
   // The inner node gets a new entry.
   EXPECT_THAT(node.Insert(0, 1, 6, manager), EntryAdded{});
-  EXPECT_THAT(node.GetKeys(), ElementsAre(3, 6));
+  EXPECT_THAT(node.GetKeys(), ElementsAre(3, 7));
   ASSERT_THAT(node.GetChildren(), ElementsAre(PageId(1), PageId(2), PageId(3)));
 
   // The leaf nodes are properly split.
   ASSERT_OK_AND_ASSIGN(Leaf & a, manager.Get<Leaf>(PageId(1)));
   EXPECT_THAT(a.GetEntries(), ElementsAre(1, 2));
   ASSERT_OK_AND_ASSIGN(Leaf & b, manager.Get<Leaf>(PageId(2)));
-  EXPECT_THAT(b.GetEntries(), ElementsAre(4, 5));
+  EXPECT_THAT(b.GetEntries(), ElementsAre(4, 5, 6));
   ASSERT_OK_AND_ASSIGN(Leaf & c, manager.Get<Leaf>(PageId(3)));
   EXPECT_THAT(c.GetEntries(), ElementsAre(7, 8));
 }
@@ -836,12 +860,12 @@ TEST(InnerNode, FullInnerNodeIsSplit) {
   auto& root = CreateNewRoot<Inner>(manager, insert_result);
 
   // Check the structure of the new tree.
-  EXPECT_EQ(ToTree<2>(root, manager), Node(Node(Node(1), 2, Node(3)), 4,
+  EXPECT_EQ(ToTree<2>(root, manager), Node(Node(Node(1, 2), 3, Node(3)), 4,
                                            Node(Node(5, 6), 7, Node(8, 9))));
 
   // Check also that the pages are properly reused. The old root is reduced to
   // the key 2 and two sub-trees, one of those is the new subtree 4.
-  EXPECT_THAT(node.GetKeys(), ElementsAre(2));
+  EXPECT_THAT(node.GetKeys(), ElementsAre(3));
   EXPECT_THAT(node.GetChildren(), ElementsAre(1, 4));
 
   // The new sibling node has the remaining key 7 and the previous child pages.
@@ -859,11 +883,11 @@ TEST(InnerNode, FullInnerNodeSplitByMiddleElementUsesNewElementAsKey) {
 
   // Inserting element 5 makes 5 the new root key.
   ASSERT_OK_AND_ASSIGN(auto insert_result, node.Insert(0, 1, 5, manager));
-  EXPECT_THAT(insert_result, (Split<int>{5, PageId(5)}));
+  EXPECT_THAT(insert_result, (Split<int>{6, PageId(5)}));
 
   // Check the structure of the new tree.
   auto& root = CreateNewRoot<Inner>(manager, insert_result);
-  EXPECT_EQ(ToTree<2>(root, manager), Node(Node(Node(1, 2), 3, Node(4)), 5,
+  EXPECT_EQ(ToTree<2>(root, manager), Node(Node(Node(1, 2), 3, Node(4, 5)), 6,
                                            Node(Node(6), 7, Node(8, 9))));
 }
 
@@ -881,7 +905,7 @@ TEST(InnerNode, InsertOnRightSubTreeCausingSplitWorks) {
   // Check the structure of the new tree.
   auto& root = CreateNewRoot<Inner>(manager, insert_result);
   EXPECT_EQ(ToTree<2>(root, manager), Node(Node(Node(1, 2), 3, Node(4, 5)), 6,
-                                           Node(Node(7), 8, Node(9))));
+                                           Node(Node(7, 8), 9, Node(9))));
 }
 
 TEST(InnerNode, SplitInLeftHalfKeepsSiblingsBalanced) {
@@ -901,7 +925,7 @@ TEST(InnerNode, SplitInLeftHalfKeepsSiblingsBalanced) {
   // Check the structure of the new tree. The new siblings have both 2 keys.
   auto& root = CreateNewRoot<Inner>(manager, insert_result);
   EXPECT_EQ(ToTree<2>(root, manager),
-            Node(Node(Node(0), 1, Node(2), 3, Node(4, 5)), 6,
+            Node(Node(Node(0, 1), 2, Node(2), 3, Node(4, 5)), 6,
                  Node(Node(7, 8), 9, Node(10, 11), 12, Node(13, 14))));
 }
 
@@ -923,7 +947,7 @@ TEST(InnerNode, SplitInRightHalfKeepsSiblingsBalanced) {
   auto& root = CreateNewRoot<Inner>(manager, insert_result);
   EXPECT_EQ(ToTree<2>(root, manager),
             Node(Node(Node(1, 2), 3, Node(4, 5), 6, Node(7, 8)), 9,
-                 Node(Node(10, 11), 12, Node(13), 14, Node(15))));
+                 Node(Node(10, 11), 12, Node(13, 14), 15, Node(15))));
 }
 
 TEST(InnerNode, InsertingNewEntryInSubTreeDoesNotMarkInnerNodeDirty) {
@@ -1089,7 +1113,8 @@ TEST(InnerNode, BoundariesArePropagated) {
         Create<Inner>(manager, Node(Node(1, 2), 3, Node(2, 5), 6, Node(7, 8)));
     EXPECT_THAT(
         node.Check(1, nullptr, nullptr, manager),
-        StatusIs(_, StrEq("Lower boundary is not less than smallest entry")));
+        StatusIs(
+            _, StrEq("Lower boundary is not less-equal than smallest entry")));
   }
   {
     // The value 7 should not be in the middle node.
@@ -1105,7 +1130,8 @@ TEST(InnerNode, BoundariesArePropagated) {
     int limit = 2;
     EXPECT_THAT(
         node.Check(1, &limit, nullptr, manager),
-        StatusIs(_, StrEq("Lower boundary is not less than smallest entry")));
+        StatusIs(
+            _, StrEq("Lower boundary is not less-equal than smallest entry")));
   }
   {
     auto& node =

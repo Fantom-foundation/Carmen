@@ -35,10 +35,39 @@ class BTreeSet : public btree::BTree<Value, btree::Unit, PagePool, Comparator,
                              max_elements>;
 
  public:
+  // An iterator for sets. It is a customized version of the iterator offered
+  // for maps hidding the implicit Unit value.
+  class Iterator : public super::Iterator {
+   public:
+    Iterator() = default;
+
+    // Adapts the base iterator to only provide access to the key.
+    const Value& operator*() const { return super::Iterator::operator*().key; }
+
+   private:
+    friend class BTreeSet;
+    Iterator(typename super::Iterator base) : super::Iterator(base) {}
+  };
+
   // Opens the set stored in the given directory. If no data is found, an empty
   // set is created.
   static absl::StatusOr<BTreeSet> Open(std::filesystem::path directory) {
     return super::template Open<BTreeSet>(directory);
+  }
+
+  absl::StatusOr<Iterator> Begin() const {
+    ASSIGN_OR_RETURN(auto iter, super::Begin());
+    return Iterator(std::move(iter));
+  }
+
+  absl::StatusOr<Iterator> End() const {
+    ASSIGN_OR_RETURN(auto iter, super::End());
+    return Iterator(std::move(iter));
+  }
+
+  absl::StatusOr<Iterator> Find(const Value& value) const {
+    ASSIGN_OR_RETURN(auto iter, super::Find(value));
+    return Iterator(std::move(iter));
   }
 
   // Inserts the given element.
