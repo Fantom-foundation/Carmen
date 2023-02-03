@@ -257,11 +257,11 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 			t.Fatalf("Error: %s", err)
 		}
 
-		if newState, err := s.GetAccountState(address1); err != nil || newState != common.Exists {
-			t.Errorf("Unrelated existing state: %d, Error: %s", newState, err)
+		if newState, err := s.Exist(address1); err != nil || newState != true {
+			t.Errorf("Unrelated existing state: %t, Error: %s", newState, err)
 		}
-		if newState, err := s.GetAccountState(address2); err != nil || newState != common.Unknown {
-			t.Errorf("Delete never-existing state: %d, Error: %s", newState, err)
+		if newState, err := s.Exist(address2); err != nil || newState != false {
+			t.Errorf("Delete never-existing state: %t, Error: %s", newState, err)
 		}
 	})
 }
@@ -394,11 +394,11 @@ func TestArchive(t *testing.T) {
 				t.Fatalf("failed to get state of block 2; %s", err)
 			}
 
-			if as, err := state1.GetAccountState(address1); err != nil || as != common.Exists {
-				t.Errorf("invalid account state at block 1: %d, %s", as, err)
+			if as, err := state1.Exist(address1); err != nil || as != true {
+				t.Errorf("invalid account state at block 1: %t, %s", as, err)
 			}
-			if as, err := state2.GetAccountState(address1); err != nil || as != common.Exists {
-				t.Errorf("invalid account state at block 2: %d, %s", as, err)
+			if as, err := state2.Exist(address1); err != nil || as != true {
+				t.Errorf("invalid account state at block 2: %t, %s", as, err)
 			}
 			if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
 				t.Errorf("invalid balance at block 1: %s, %s", balance.ToBigInt(), err)
@@ -488,8 +488,8 @@ func TestStateRead(t *testing.T) {
 		_ = s.Close()
 	}()
 
-	if state, err := s.GetAccountState(address1); err != nil || state != common.Exists {
-		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, common.Exists, err)
+	if state, err := s.Exist(address1); err != nil || state != true {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, true, err)
 	}
 	if balance, err := s.GetBalance(address1); err != nil || balance != balance1 {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", balance, balance1, err)

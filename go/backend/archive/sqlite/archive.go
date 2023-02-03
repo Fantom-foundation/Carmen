@@ -259,7 +259,7 @@ func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
 	return 0, rows.Err()
 }
 
-func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err error) {
+func (a *Archive) Exist(block uint64, account common.Address) (exists bool, err error) {
 	exists, _, err = a.getStatus(nil, block, account)
 	return exists, err
 }

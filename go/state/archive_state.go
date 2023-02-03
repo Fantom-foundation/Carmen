@@ -13,13 +13,8 @@ type ArchiveState struct {
 	block   uint64
 }
 
-func (s *ArchiveState) GetAccountState(address common.Address) (state common.AccountState, err error) {
-	exists, err := s.archive.Exists(s.block, address)
-	if exists {
-		return common.Exists, err
-	} else {
-		return common.Unknown, err
-	}
+func (s *ArchiveState) Exist(address common.Address) (bool, error) {
+	return s.archive.Exist(s.block, address)
 }
 
 func (s *ArchiveState) GetBalance(address common.Address) (balance common.Balance, err error) {

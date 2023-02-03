@@ -16,8 +16,8 @@ func TestAccountsAreInitiallyUnknown(t *testing.T) {
 			}
 			defer state.Close()
 
-			account_state, _ := state.GetAccountState(address1)
-			if account_state != common.Unknown {
+			account_state, _ := state.Exist(address1)
+			if account_state != false {
 				t.Errorf("Initial account is not unknown, got %v", account_state)
 			}
 		})
@@ -34,8 +34,8 @@ func TestAccountsCanBeCreated(t *testing.T) {
 			defer state.Close()
 
 			state.createAccount(address1)
-			account_state, _ := state.GetAccountState(address1)
-			if account_state != common.Exists {
+			account_state, _ := state.Exist(address1)
+			if account_state != true {
 				t.Errorf("Created account does not exist, got %v", account_state)
 			}
 		})
@@ -53,8 +53,8 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 
 			state.createAccount(address1)
 			state.deleteAccount(address1)
-			account_state, _ := state.GetAccountState(address1)
-			if account_state != common.Unknown {
+			account_state, _ := state.Exist(address1)
+			if account_state != false {
 				t.Errorf("Deleted account is not deleted, got %v", account_state)
 			}
 		})

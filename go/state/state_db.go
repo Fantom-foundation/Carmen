@@ -145,9 +145,9 @@ type stateDB struct {
 // accountState maintains the state of an account during a transaction.
 type accountState struct {
 	// The committed account state, missing if never fetched.
-	original *common.AccountState
+	original *bool
 	// The current account state visible to the state DB users.
-	current common.AccountState
+	current bool
 }
 
 type accountClearingState int
@@ -255,7 +255,7 @@ func CreateStateDBUsing(state State) *stateDB {
 	}
 }
 
-func (s *stateDB) setAccountState(addr common.Address, state common.AccountState) {
+func (s *stateDB) setAccountState(addr common.Address, state bool) {
 	if val, exists := s.accounts[addr]; exists {
 		if val.current == state {
 			return
@@ -281,11 +281,11 @@ func (s *stateDB) setAccountState(addr common.Address, state common.AccountState
 	}
 }
 
-func (s *stateDB) getAccountState(addr common.Address) common.AccountState {
+func (s *stateDB) Exist(addr common.Address) bool {
 	if val, exists := s.accounts[addr]; exists {
 		return val.current
 	}
-	state, err := s.state.GetAccountState(addr)
+	state, err := s.state.Exist(addr)
 	if err != nil {
 		panic(fmt.Errorf("failed to get account state for address %v: %v", addr, err))
 	}
@@ -300,12 +300,12 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	s.setNonceInternal(addr, 0)
 	s.setCodeInternal(addr, []byte{})
 
-	exists := s.getAccountState(addr) == common.Exists
+	exists := s.Exist(addr)
 	suicided := s.HasSuicided(addr)
 	if exists && !suicided {
 		return
 	}
-	s.setAccountState(addr, common.Exists)
+	s.setAccountState(addr, true)
 
 	// Created because touched - will be deleted at the end of the transaction if it stays empty
 	s.emptyCandidates = append(s.emptyCandidates, addr)
@@ -349,10 +349,10 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 }
 
 func (s *stateDB) createAccountIfNotExists(addr common.Address) {
-	if s.getAccountState(addr) == common.Exists {
+	if s.Exist(addr) {
 		return
 	}
-	s.setAccountState(addr, common.Exists)
+	s.setAccountState(addr, true)
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -360,10 +360,6 @@ func (s *stateDB) createAccountIfNotExists(addr common.Address) {
 	// are restored will have an empty balance. However, for accounts that
 	// already existed before this create call the balance is preserved.
 	s.resetBalance(addr)
-}
-
-func (s *stateDB) Exist(addr common.Address) bool {
-	return s.getAccountState(addr) == common.Exists
 }
 
 // Suicide marks the given account as suicided.
@@ -828,7 +824,7 @@ func (s *stateDB) EndTransaction() {
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
 			// of the block processing.
-			s.setAccountState(addr, common.Unknown)
+			s.setAccountState(addr, false)
 			s.setNonceInternal(addr, 0)
 			s.setCodeInternal(addr, []byte{})
 
@@ -873,14 +869,14 @@ func (s *stateDB) EndBlock(block uint64) {
 	// Clear all accounts that have been deleted at some point during this block.
 	// This will cause all storage slots of that accounts to be reset before new
 	// values may be written in the subsequent updates.
-	deletedAccountState := common.Unknown
+	deletedAccountState := false
 	for addr, clearingState := range s.clearedAccounts {
 		if clearingState == cleared {
 			// Pretend this account was originally deleted, such that in the loop below
 			// it would be detected as re-created in case its new state is Existing.
 			s.accounts[addr].original = &deletedAccountState
 			// If the account was not later re-created, we mark it for deletion.
-			if s.accounts[addr].current == common.Unknown {
+			if s.accounts[addr].current == false {
 				update.AppendDeleteAccount(addr)
 			}
 			// Increment the reincarnation counter of cleared addresses to invalidate
@@ -894,16 +890,16 @@ func (s *stateDB) EndBlock(block uint64) {
 		// In case we do not know the account state yet, we need to fetch it
 		// from the DB to decide whether the account state has changed.
 		if value.original == nil {
-			state, err := s.state.GetAccountState(addr)
+			state, err := s.state.Exist(addr)
 			if err != nil {
 				panic(fmt.Sprintf("failed to fetch account state from DB: %v", err))
 			}
 			value.original = &state
 		}
 		if *value.original != value.current {
-			if value.current == common.Exists {
+			if value.current == true {
 				update.AppendCreateAccount(addr)
-			} else if value.current == common.Unknown {
+			} else if value.current == false {
 				// Accounts have already been registered for deletion in the loop above.
 			} else {
 				panic(fmt.Sprintf("Unknown account state: %v", value.current))

@@ -49,15 +49,16 @@ func (s *GoState) createAccount(address common.Address) (err error) {
 	return s.clearAccount(idx)
 }
 
-func (s *GoState) GetAccountState(address common.Address) (state common.AccountState, err error) {
+func (s *GoState) Exist(address common.Address) (bool, error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
-			return common.Unknown, nil
+			return false, nil
 		}
-		return
+		return false, err
 	}
-	return s.accountsStore.Get(idx)
+	state, err := s.accountsStore.Get(idx)
+	return state == common.Exists, err
 }
 
 func (s *GoState) deleteAccount(address common.Address) error {

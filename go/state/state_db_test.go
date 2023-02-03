@@ -11,7 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 )
 
-func TestCaremenStateImplementsStateDbInterface(t *testing.T) {
+func TestCarmenStateImplementsStateDbInterface(t *testing.T) {
 	var db stateDB
 	var _ StateDB = &db
 }
@@ -40,7 +40,7 @@ func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// the account creation needs to check whether the account exists
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	db.CreateAccount(address1)
 
 	if !db.Exist(address1) {
@@ -72,7 +72,7 @@ func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a non-existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	db.CreateAccount(address1)
 
@@ -99,7 +99,7 @@ func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T)
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a previously deleted account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	db.CreateAccount(address1)
 
@@ -127,7 +127,7 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	zero := common.Value{}
 
 	// Initially the account is non-exisiting, it gets recreated.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{0, 0, 0, 0, 0, 0, 0, 1}).Return(nil)
@@ -181,7 +181,7 @@ func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.
 	zero := common.Value{}
 
 	// Initially the account exists with some state.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
 
@@ -238,7 +238,7 @@ func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransacti
 	zero := common.Value{}
 
 	// Initially the account existis with some values inside.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
 
@@ -290,7 +290,7 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	zero := common.Value{}
 
 	// Initially the account exists and has a slot value set.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	// During the processing the account is deleted.
@@ -344,7 +344,7 @@ func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Initially the account is exisiting with a view stored values.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
 
@@ -383,7 +383,7 @@ func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDel
 	db := CreateStateDBUsing(mock)
 
 	// Initially the account is exisiting with a view stored values.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	// The account is to be re-created.
 	mock.EXPECT().createAccount(address1).Return(nil)
@@ -414,7 +414,7 @@ func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *
 	db := CreateStateDBUsing(mock)
 
 	// Initially the account is exisiting with a view stored values.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	// The account is to be re-created.
 	mock.EXPECT().createAccount(address1).Return(nil)
@@ -453,7 +453,7 @@ func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesB
 	if err != nil {
 		t.Fatalf("failed to set up test case: %v", err)
 	}
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 	db.SetNonce(address1, 14)
 	db.SetCode(address1, []byte{1, 2, 3})
@@ -483,7 +483,7 @@ func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	snapshot := db.Snapshot()
 
@@ -504,7 +504,7 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	// An existing account is indicated as being deleted.
 	if exists := db.Suicide(address1); !exists {
@@ -532,7 +532,7 @@ func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{1}, nil)
 
 	// An existing account is indicated as being deleted.
@@ -559,7 +559,7 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	// An existing account is indicated as being deleted.
 	if exists := db.Suicide(address1); !exists {
@@ -610,7 +610,7 @@ func TestCarmenStateSuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an unknown account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	// An unknown account is indicated as not being deleted.
 	if exists := db.Suicide(address1); exists {
@@ -629,7 +629,7 @@ func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a deleted account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	// An already deleted account is indicated as not being deleted during the suicide.
 	if exists := db.Suicide(address1); exists {
@@ -652,7 +652,7 @@ func TestCarmenStateSuicideRemovesBalanceFromAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing test: %v", err)
 	}
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
 	want := big.NewInt(12)
@@ -678,7 +678,7 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing test: %v", err)
 	}
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
 	if !db.Exist(address1) {
@@ -715,7 +715,7 @@ func TestCarmenStateSuicideIsExecutedAtEndOfTransaction(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// the nonce and code will be set at the end of the block since suicide is canceled.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -736,7 +736,7 @@ func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// the nonce and code will be set at the end of the block since suicide is canceled.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(5)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{1, 2, 3}).Return(nil)
 
@@ -757,7 +757,7 @@ func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The new account is created at the end of the transaction.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(1)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -775,7 +775,7 @@ func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The created account is only created once, and nonces and code are initialized.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(1)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -794,7 +794,7 @@ func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *test
 	db := CreateStateDBUsing(mock)
 
 	// Needs to check whether the account already existed before the creation.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	db.CreateAccount(address1)
 	db.AbortTransaction()
@@ -808,7 +808,7 @@ func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -825,7 +825,7 @@ func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T)
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -863,7 +863,7 @@ func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) 
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a non-existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	db.Suicide(address1)
 	db.AbortTransaction()
@@ -876,7 +876,7 @@ func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *tes
 	db := CreateStateDBUsing(mock)
 
 	// The new account is deleted at the end of the transaction.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -894,7 +894,7 @@ func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *t
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a non-existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	db.CreateAccount(address1)
 	db.Suicide(address1)
@@ -923,7 +923,7 @@ func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
@@ -946,7 +946,7 @@ func TestCarmenStateSettingTheBalanceCreatesAccount(t *testing.T) {
 	balance, _ := common.ToBalance(addedBalance)
 
 	// The account have not existed - must be created by AddBalance call.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, balance).Return(nil)
 
@@ -964,7 +964,7 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its nonce and code set to zero.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(1)).Return(nil)
@@ -989,7 +989,7 @@ func TestCarmenStateCreatesAccountOnNonceSetting(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The account does not exist, is expected to be created automatically.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(1)).Return(nil)
@@ -1074,7 +1074,7 @@ func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	// Balance is initially 10. This should only be fetched once.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
 	snapshot0 := db.Snapshot()
@@ -1129,7 +1129,7 @@ func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	balance, _ = common.ToBalance(big.NewInt(12))
 	mock.EXPECT().setBalance(address1, balance).Return(nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.AddBalance(address1, big.NewInt(2))
 	db.EndTransaction()
@@ -1152,7 +1152,7 @@ func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	balance, _ = common.ToBalance(big.NewInt(14))
 	mock.EXPECT().setBalance(address1, balance).Return(nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.AddBalance(address1, big.NewInt(5))
 	db.SubBalance(address1, big.NewInt(3))
@@ -1171,7 +1171,7 @@ func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.AddBalance(address1, big.NewInt(10))
 	db.SubBalance(address1, big.NewInt(5))
@@ -1189,7 +1189,7 @@ func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.
 	want := big.NewInt(10)
 	balance, _ := common.ToBalance(want)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.AddBalance(address1, big.NewInt(10))
 	db.AbortTransaction()
@@ -1232,7 +1232,7 @@ func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// SetNonce creates the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	var want uint64 = 12
 	db.SetNonce(address1, want)
@@ -1266,14 +1266,14 @@ func TestCarmenStateNonceOfADeletedAccountIsZero(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The side-effects of the creation of the account in the first transactions are expected.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(12)).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
 
 	// Also the fetch of the Nonce value in the second transaction is expected.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(12), nil)
 
 	// Create an account and set the nonce.
@@ -1311,7 +1311,7 @@ func TestCarmenStateNonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 
 	var want uint64 = 0
@@ -1349,7 +1349,7 @@ func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
 
 	// Nonce is initially 10. This should only be fetched once.
 	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -1398,7 +1398,7 @@ func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 
 	// Nonce is initially 10. This should only be fetched once.
 	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -1423,7 +1423,7 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	// The updated value is expected to be written to the state.
 	mock.EXPECT().setNonce(address1, common.ToNonce(10)).Return(nil)
 	// SetNonce create the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.SetNonce(address1, 10)
 	db.EndTransaction()
@@ -1442,7 +1442,7 @@ func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	// Only the last value is to be written to the state.
 	mock.EXPECT().setNonce(address1, common.ToNonce(12)).Return(nil)
 	// SetNonce create the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.SetNonce(address1, 10)
 	db.SetNonce(address1, 11)
@@ -1460,7 +1460,7 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	// Nonce is only read, never written.
 	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
 	// SetNonce create the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	value := db.GetNonce(address1)
 	db.SetNonce(address1, value)
@@ -1474,7 +1474,7 @@ func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T
 	db := CreateStateDBUsing(mock)
 
 	// SetNonce create the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	// No other mock call is expected.
 
 	db.SetNonce(address1, 10)
@@ -1773,7 +1773,7 @@ func TestCarmenStateCodesCanBeSet(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	want := []byte{0xAC, 0xDC}
 	db.SetCode(address1, want)
@@ -1788,7 +1788,7 @@ func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	want1 := []byte{0xAC, 0xDC}
 	want2 := []byte{0xFE, 0xEF}
@@ -1832,7 +1832,7 @@ func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	want := []byte{0xAC, 0xDC}
 	mock.EXPECT().setCode(address1, want).Return(nil)
@@ -1848,7 +1848,7 @@ func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	want := []byte{0xAC, 0xDC}
 	mock.EXPECT().setCode(address1, want).Return(nil)
@@ -1868,7 +1868,7 @@ func TestCarmenStateSettingCodesCreatesAccountsImplicitly(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 
@@ -1899,7 +1899,7 @@ func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	want := []byte{0xAC, 0xDC}
 	db.SetCode(address1, want)
@@ -1927,8 +1927,8 @@ func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *test
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	// Simulate an existing acocunt.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	// Simulate an existing account.
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	db.SetCode(address1, []byte{1, 2, 3})
 	db.Suicide(address1)
@@ -1954,7 +1954,7 @@ func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// The state DB is asked for the accounts existence, but not for the hash.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	want := common.Hash{}
 	if got := db.GetCodeHash(address1); got != want {
@@ -1968,7 +1968,7 @@ func TestCarmenStateCodeHashOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testin
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account with empty code.
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 	mock.EXPECT().GetCodeHash(address1).Return(common.GetKeccak256Hash([]byte{}), nil)
 
 	want := common.GetKeccak256Hash([]byte{})
@@ -1983,7 +1983,7 @@ func TestCarmenStateCodeHashOfNewlyCreatedAccountIsTheHashOfTheEmptyCode(t *test
 	db := CreateStateDBUsing(mock)
 
 	// At the start the account does not exist.
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
 
 	db.CreateAccount(address1)
 	want := common.GetKeccak256Hash([]byte{})
@@ -1999,7 +1999,7 @@ func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 
 	want := common.Hash{0xAC, 0xDC}
 	mock.EXPECT().GetCodeHash(address1).Return(want, nil)
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	if got := db.GetCodeHash(address1); got != want {
 		t.Errorf("error retrieving code hash, wanted %v, got %v", want, got)
@@ -2012,7 +2012,7 @@ func TestCarmenStateSetCodeSizeCanBeRolledBack(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// SetCode creates the account if it does not exist
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	want := []byte{0xAB, 0xCD}
 	db.SetCode(address1, want)
@@ -2034,7 +2034,7 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetAccountState(address1).Return(common.Exists, nil)
+	mock.EXPECT().Exist(address1).Return(true, nil)
 
 	code := []byte{0xAC, 0xDC}
 	db.SetCode(address1, code)
@@ -2467,9 +2467,9 @@ func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetAccountState(address1).Return(common.Unknown, nil)
-	mock.EXPECT().GetAccountState(address2).Return(common.Unknown, nil)
-	mock.EXPECT().GetAccountState(address3).Return(common.Unknown, nil)
+	mock.EXPECT().Exist(address1).Return(false, nil)
+	mock.EXPECT().Exist(address2).Return(false, nil)
+	mock.EXPECT().Exist(address3).Return(false, nil)
 	mock.EXPECT().GetNonce(address2).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetNonce(address3).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address2).Return(0, nil)
@@ -2741,11 +2741,11 @@ func TestStateDBRead(t *testing.T) {
 
 	stateDb := CreateStateDBUsing(s)
 
-	if state := stateDb.getAccountState(address1); state != common.Exists {
-		t.Errorf("Unexpected value, val: %v != %v", state, common.Exists)
+	if state := stateDb.Exist(address1); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
 	}
-	if state := stateDb.getAccountState(address2); state != common.Exists {
-		t.Errorf("Unexpected value, val: %v != %v", state, common.Exists)
+	if state := stateDb.Exist(address2); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
 	}
 
 	if balance := stateDb.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
