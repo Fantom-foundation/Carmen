@@ -9,8 +9,10 @@
 namespace carmen::backend {
 namespace {
 
+using ::testing::FieldsAre;
 using ::testing::IsOkAndHolds;
 using ::testing::Optional;
+using ::testing::Pointee;
 
 using TestPagePool = PagePool<InMemoryFile<kFileSystemPageSize>>;
 
@@ -27,6 +29,10 @@ TEST(BTreeMap, EmptySetContainsNothing) {
   EXPECT_THAT(map.Contains(1), false);
   EXPECT_THAT(map.Contains(7), false);
   EXPECT_THAT(map.Contains(92), false);
+
+  ASSERT_OK_AND_ASSIGN(auto begin, map.Begin());
+  ASSERT_OK_AND_ASSIGN(auto end, map.End());
+  EXPECT_EQ(begin, end);
 }
 
 TEST(BTreeMap, InsertedElementsCanBeFound) {
@@ -45,8 +51,8 @@ TEST(BTreeMap, ValuesAssociatedToKeysCanBetFound) {
   EXPECT_THAT(map.Insert(1, 2), true);
   EXPECT_THAT(map.Insert(2, 3), true);
 
-  EXPECT_THAT(map.Find(1), 2);
-  EXPECT_THAT(map.Find(2), 3);
+  EXPECT_THAT(map.Find(1), IsOkAndHolds(Pointee(FieldsAre(1, 2))));
+  EXPECT_THAT(map.Find(2), IsOkAndHolds(Pointee(FieldsAre(2, 3))));
 }
 
 template <typename Tree>
@@ -62,7 +68,8 @@ void RunInsertionAndLookupTest(const std::vector<int>& data) {
     }
   }
   for (int i : data) {
-    EXPECT_THAT(set.Find(i), IsOkAndHolds(Optional(2 * i))) << "i=" << i;
+    EXPECT_THAT(set.Find(i), IsOkAndHolds(Pointee(FieldsAre(i, 2 * i))))
+        << "i=" << i;
   }
 }
 
@@ -125,10 +132,11 @@ void RunClosingAndReopeningTest() {
       bool should_exist = (i % S == 0);
       EXPECT_THAT(map.Contains(i), should_exist) << "i=" << i;
       if (should_exist) {
-        EXPECT_THAT(map.Find(i), 2 * i) << "i=" << i;
+        EXPECT_THAT(map.Find(i), IsOkAndHolds(Pointee(FieldsAre(i, 2 * i))))
+            << "i=" << i;
         ;
       } else {
-        EXPECT_THAT(map.Find(i), std::nullopt);
+        EXPECT_THAT(map.Find(i), map.End());
       }
     }
     for (int i = 0; i < N; i += K) {
@@ -149,10 +157,11 @@ void RunClosingAndReopeningTest() {
       bool should_exist = (i % S == 0 || i % K == 0);
       EXPECT_THAT(map.Contains(i), should_exist) << "i=" << i;
       if (should_exist) {
-        EXPECT_THAT(map.Find(i), 2 * i) << "i=" << i;
+        EXPECT_THAT(map.Find(i), IsOkAndHolds(Pointee(FieldsAre(i, 2 * i))))
+            << "i=" << i;
         ;
       } else {
-        EXPECT_THAT(map.Find(i), std::nullopt);
+        EXPECT_THAT(map.Find(i), map.End());
       }
     }
     EXPECT_OK(map.Close());

@@ -11,6 +11,10 @@
 namespace carmen::backend {
 namespace {
 
+using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
+using ::testing::IsOkAndHolds;
+
 using TestPagePool = PagePool<InMemoryFile<kFileSystemPageSize>>;
 
 template <Trivial Value, std::size_t max_keys = 0, std::size_t max_elements = 0>
@@ -42,6 +46,72 @@ TEST(BTreeSet, InsertingZeroWorks) {
   EXPECT_THAT(set.Contains(0), false);
   EXPECT_THAT(set.Insert(0), true);
   EXPECT_THAT(set.Contains(0), true);
+}
+
+TEST(BTreeSet, ElementsCanBeIteratedInForwardOrder) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto set, (TestBTreeSet<int, 7, 7>::Open(dir)));
+  auto data = GetSequence(1000);
+  for (int cur : data) {
+    ASSERT_THAT(set.Insert(cur), true);
+  }
+  ASSERT_OK_AND_ASSIGN(auto begin, set.Begin());
+  ASSERT_OK_AND_ASSIGN(auto end, set.End());
+  std::vector<int> res;
+  res.reserve(set.Size());
+  for (auto it = begin; it != end;) {
+    res.push_back(*it);
+    ASSERT_OK(it.Next());
+  }
+  EXPECT_THAT(res, ElementsAreArray(data));
+}
+
+TEST(BTreeSet, ElementsCanBeIteratedInBackwardOrder) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto set, (TestBTreeSet<int, 7, 7>::Open(dir)));
+  auto data = GetSequence(1000);
+  for (int cur : data) {
+    ASSERT_THAT(set.Insert(cur), true);
+  }
+  ASSERT_OK_AND_ASSIGN(auto begin, set.Begin());
+  ASSERT_OK_AND_ASSIGN(auto end, set.End());
+  std::vector<int> res;
+  res.reserve(set.Size());
+  for (auto it = end; it != begin;) {
+    ASSERT_OK(it.Previous());
+    res.push_back(*it);
+  }
+  std::reverse(res.begin(), res.end());
+  EXPECT_THAT(res, ElementsAreArray(data));
+}
+
+TEST(BTreeSet, IteratorReturnedByFindCanBeUsedToNavigate) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto set, (TestBTreeSet<int, 7, 7>::Open(dir)));
+  for (int cur : GetSequence(100)) {
+    ASSERT_THAT(set.Insert(cur), true);
+  }
+  ASSERT_OK_AND_ASSIGN(auto begin, set.Begin());
+  ASSERT_OK_AND_ASSIGN(auto end, set.End());
+
+  EXPECT_THAT(set.Find(0), begin);
+
+  for (int i = 0; i < 100; i++) {
+    ASSERT_OK_AND_ASSIGN(auto pos, set.Find(i));
+    EXPECT_EQ(*pos, i);
+    if (i != 0) {
+      auto priv = pos;
+      EXPECT_OK(priv.Previous());
+      EXPECT_EQ(*priv, i - 1);
+    }
+    auto next = pos;
+    EXPECT_OK(next.Next());
+    if (i != 99) {
+      EXPECT_EQ(*next, i + 1);
+    } else {
+      EXPECT_EQ(next, end);
+    }
+  }
 }
 
 template <typename Tree>

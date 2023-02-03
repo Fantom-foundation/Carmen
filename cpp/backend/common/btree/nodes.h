@@ -72,15 +72,20 @@ class LeafNode final
 
   // The maximum number of entries stored in this node.
   constexpr static int kMaxEntries =
-      max_entries <= 0
-          ? ((kFileSystemPageSize - sizeof(std::uint16_t)) / sizeof(entry_t))
-          : max_entries;
+      max_entries <= 0 ? ((kFileSystemPageSize - sizeof(std::uint16_t) -
+                           2 * sizeof(PageId)) /
+                          sizeof(entry_t))
+                       : max_entries;
+
+  // Provides the current number of elements in this node.
+  std::uint16_t Size() const { return num_entries_; }
 
   // Tests whether the given key is present in this node.
   bool Contains(const Key& key) const;
 
-  // Finds the value associated to the given key in this node or returns null.
-  std::optional<Value> Find(const Key& key) const;
+  // Finds the position of the entry associated to the given key in this node or
+  // returns a value >= Size() if not found.
+  std::uint16_t Find(const Key& key) const;
 
   // Inserts the given entry into this node. Entries are identified by their
   // key. If the same key was already present, no operation is conducted.
@@ -93,6 +98,16 @@ class LeafNode final
   absl::StatusOr<InsertResult<Key>> Insert(PageId this_page_id,
                                            const entry_t& entry,
                                            PageManager& manager);
+
+  // Obtains a reference to the value at the given position. No bounds are
+  // checked.
+  const entry_t& At(int pos) const { return entries_[pos]; }
+
+  // Returns the predecessor of this node, 0 if there is none.
+  PageId GetPredecessor() const { return prev_; }
+
+  // Returns the successor of this node, 0 if there is none.
+  PageId GetSuccessor() const { return next_; }
 
   // For testing: checks the invariants defined for this node, returns an error
   // if one is violated. The provided bounds should define lower and upper
@@ -129,6 +144,12 @@ class LeafNode final
 
   // The number of entries stored in this node.
   std::uint16_t num_entries_;
+
+  // The ID of the preceeding leaf node in the BTree, to aid iteration.
+  PageId prev_;
+
+  // The ID of the succeeding leaf node in the BTree, to aid iteration.
+  PageId next_;
 };
 
 // A InnerNode is the format of a inner node of a BTree set, containing keys
@@ -173,13 +194,17 @@ class InnerNode final : public internal::Node<InnerNode<LeafNode, max_keys>> {
   absl::StatusOr<bool> Contains(std::uint16_t level, const key_t& key,
                                 PageManager& manager) const;
 
-  // Finds the value associated to the given key in the sub-tree rooted by this
-  // node or std::nullopt if there is no such key. The parameters are the same
-  // as for the Contains(..) above.
+  // Finds the location of the position after the last element in this sub-tree.
   template <typename PageManager>
-  absl::StatusOr<std::optional<value_t>> Find(std::uint16_t level,
-                                              const key_t& key,
-                                              PageManager& manager) const;
+  absl::StatusOr<std::pair<const LeafNode*, std::uint16_t>> End(
+      std::uint16_t level, PageManager& manager) const;
+
+  // Finds the page and index possition of the entry associated to the given key
+  // in the sub-tree rooted by this node or page 0 if there is no such entry.
+  // The parameters are the same as for the Contains(..) above.
+  template <typename PageManager>
+  absl::StatusOr<std::pair<const LeafNode*, std::uint16_t>> Find(
+      std::uint16_t level, const key_t& key, PageManager& manager) const;
 
   // Inserts the given entry in this node or one of its sub-trees. The level is
   // required to identify the leaf level, and the page manager is used to
@@ -254,7 +279,7 @@ bool LeafNode<Key, Value, Less, max_entries>::Contains(const key_t& key) const {
 }
 
 template <Trivial Key, Trivial Value, typename Less, std::size_t max_entries>
-std::optional<Value> LeafNode<Key, Value, Less, max_entries>::Find(
+std::uint16_t LeafNode<Key, Value, Less, max_entries>::Find(
     const key_t& key) const {
   auto begin = entries_.begin();
   auto end = begin + num_entries_;
@@ -262,9 +287,9 @@ std::optional<Value> LeafNode<Key, Value, Less, max_entries>::Find(
       begin, end, entry_t{key},
       [](const entry_t& a, const entry_t& b) { return kLess(a.key, b.key); });
   if (pos == end || pos->key != key) {
-    return std::nullopt;
+    return num_entries_;
   }
-  return pos->value;
+  return pos - begin;
 }
 
 template <Trivial Key, Trivial Value, typename Less, std::size_t max_entries>
@@ -300,21 +325,22 @@ LeafNode<Key, Value, Less, max_entries>::Insert(PageId this_page_id,
   auto& left = *this;
   auto& right = new_page;
 
+  // Fix linking between the leafs.
+  right.next_ = left.next_;
+  right.prev_ = this_page_id;
+  left.next_ = new_page_id;
+
+  if (right.next_ != 0) {
+    ASSIGN_OR_RETURN(LeafNode & next,
+                     context.template Get<LeafNode>(right.next_));
+    context.MarkAsDirty(right.next_);
+    next.prev_ = new_page_id;
+  }
+
   // Partition entries in retained elements, the new dividing key (=split_key),
   // and the elements to be moved to the new node.
-  const auto mid_index = kMaxEntries / 2 + (kMaxEntries % 2);
+  const auto mid_index = kMaxEntries / 2;
   auto split_index = mid_index;
-
-  // If the new value would end up right at the split position, use the new
-  // value as the split key and devide elements evenly left/right. This is only
-  // allowed for sets.
-  if (kIsSet && pos - begin == split_index) {
-    left.num_entries_ = split_index;
-    right.num_entries_ = kMaxEntries - split_index;
-    std::memcpy(right.entries_.begin(), begin + split_index,
-                sizeof(entry_t) * right.num_entries_);
-    return Split<Key>{entry.key, new_page_id};
-  }
 
   // If the new element ends up in the left node, make the left node one element
   // smaller to be balanced in the end.
@@ -322,13 +348,10 @@ LeafNode<Key, Value, Less, max_entries>::Insert(PageId this_page_id,
     split_index--;
   }
 
-  left.num_entries_ = split_index + (kIsSet ? 0 : 1);
+  left.num_entries_ = split_index + 1;
   right.num_entries_ = kMaxEntries - split_index - 1;
   std::memcpy(right.entries_.begin(), begin + split_index + 1,
               sizeof(entry_t) * right.num_entries_);
-
-  // For sets, the split key is the first key after the last remaining.
-  auto split_key = left.entries_[left.num_entries_].key;
 
   // Finally, we need to decide where to put the new value.
   if (pos - begin <= mid_index) {
@@ -341,11 +364,7 @@ LeafNode<Key, Value, Less, max_entries>::Insert(PageId this_page_id,
 
   // In case of a map, the key to be propagated to the parent is the lower bound
   // of the new right node.
-  if (!kIsSet) {
-    split_key = right.entries_[0].key;
-  }
-
-  return Split<Key>{split_key, new_page_id};
+  return Split<Key>{right.entries_[0].key, new_page_id};
 }
 
 template <Trivial Key, Trivial Value, typename Less, std::size_t max_entries>
@@ -380,26 +399,15 @@ absl::Status LeafNode<Key, Value, Less, max_entries>::Check(
   // Check that entries are ordered.
   for (unsigned i = 0; i < num_entries_ - 1; i++) {
     if (!kLess(entries_[i].key, entries_[i + 1].key)) {
-      std::cout << "Entries:\n";
-      for (unsigned i = 0; i < num_entries_; i++) {
-        std::cout << entries_[i].key << "\n";
-      }
-      std::cout << std::endl;
       return absl::InternalError("Invalid order of entries");
     }
   }
 
   // Check bounds
-  if (lower_bound != nullptr && !kLess(*lower_bound, entries_[0].key)) {
-    // For sets, the smallest element must strictly bigger than the lower
-    // boundary, for maps it has to be bigger or equal.
-    if (kIsSet) {
-      return absl::InternalError(
-          "Lower boundary is not less than smallest entry");
-    } else if (entries_[0].key != *lower_bound) {
-      return absl::InternalError(
-          "Lower boundary is not less-equal than smallest entry");
-    }
+  if (lower_bound != nullptr && !kLess(*lower_bound, entries_[0].key) &&
+      entries_[0].key != *lower_bound) {
+    return absl::InternalError(
+        "Lower boundary is not less-equal than smallest entry");
   }
   if (upper_bound != nullptr &&
       !kLess(entries_[num_entries_ - 1].key, *upper_bound)) {
@@ -446,7 +454,23 @@ absl::StatusOr<bool> InnerNode<LeafNode, max_keys>::Contains(
 
 template <Page LeafNode, std::size_t max_keys>
 template <typename PageManager>
-absl::StatusOr<std::optional<typename LeafNode::value_t>>
+absl::StatusOr<std::pair<const LeafNode*, std::uint16_t>>
+InnerNode<LeafNode, max_keys>::End(std::uint16_t level,
+                                   PageManager& manager) const {
+  // The end is found in the right-most sub-tree.
+  PageId next = children_[num_keys_];
+  if (level > 1) {
+    ASSIGN_OR_RETURN(InnerNode & node, manager.template Get<InnerNode>(next));
+    return node.End(level - 1, manager);
+  } else {
+    ASSIGN_OR_RETURN(LeafNode & node, manager.template Get<LeafNode>(next));
+    return std::make_pair(&node, node.Size());
+  }
+}
+
+template <Page LeafNode, std::size_t max_keys>
+template <typename PageManager>
+absl::StatusOr<std::pair<const LeafNode*, std::uint16_t>>
 InnerNode<LeafNode, max_keys>::Find(std::uint16_t level, const key_t& key,
                                     PageManager& manager) const {
   // Search upper bound for the key range to identify next node.
@@ -459,7 +483,11 @@ InnerNode<LeafNode, max_keys>::Find(std::uint16_t level, const key_t& key,
     return node.Find(level - 1, key, manager);
   } else {
     ASSIGN_OR_RETURN(LeafNode & node, manager.template Get<LeafNode>(next));
-    return node.Find(key);
+    auto pos = node.Find(key);
+    if (pos >= node.Size()) {
+      return std::make_pair(nullptr, 0);
+    }
+    return std::make_pair(&node, pos);
   }
 }
 
