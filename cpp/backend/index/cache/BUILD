@@ -22,7 +22,6 @@ cc_test(
     deps = [
         ":cache",
         "//backend/index:test_util",
-        "//backend/index/memory:index",
         "//common:status_test_util",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",

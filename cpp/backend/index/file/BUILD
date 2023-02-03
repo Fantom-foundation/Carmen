@@ -76,8 +76,8 @@ cc_test(
     srcs = ["index_test.cc"],
     deps = [
         ":index",
-        "//backend/index:test_util",
         "//backend:structure",
+        "//common:file_util",
         "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],

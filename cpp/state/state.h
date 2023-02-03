@@ -106,10 +106,10 @@ class State {
   // Summarizes the memory usage of this state object.
   MemoryFootprint GetMemoryFootprint() const;
 
- private:
-  // A constant for the hash of the empty code.
-  static const Hash kEmptyCodeHash;
-
+ protected:
+  // Make the state constructor protected to prevent direct instantiation. The
+  // state should be created by calling the static Open method. This allows
+  // the state to be mocked in tests.
   State(IndexType<Address, AddressId> address_index,
         IndexType<Key, KeyId> key_index, IndexType<Slot, SlotId> slot_index,
         StoreType<AddressId, Balance> balances,
@@ -144,6 +144,10 @@ class State {
 
   // A map associating accounts to its slots.
   MultiMapType<AddressId, SlotId> address_to_slots_;
+
+ private:
+  // A constant for the hash of the empty code.
+  static const Hash kEmptyCodeHash;
 };
 
 // ----------------------------- Definitions ----------------------------------

@@ -17,12 +17,17 @@ cc_test(
     deps = [
         ":configurations",
         ":state",
+        "//backend/depot:test_util",
         "//backend/index:test_util",
+        "//backend/multimap:test_util",
+        "//backend/store:test_util",
         "//common:account_state",
         "//common:file_util",
         "//common:status_test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
 )
 

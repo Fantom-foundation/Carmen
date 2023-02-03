@@ -29,8 +29,12 @@ cc_library(
     hdrs = ["test_util.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "//common:memory_usage",
         "//common:type",
+        "//common:memory_usage",
+        "//backend:structure",
+        "//common:status_util",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
     ],
 )

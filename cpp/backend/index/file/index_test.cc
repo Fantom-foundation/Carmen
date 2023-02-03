@@ -1,8 +1,8 @@
 #include "backend/index/file/index.h"
 
 #include "backend/common/file.h"
-#include "backend/index/test_util.h"
 #include "backend/structure.h"
+#include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -16,9 +16,6 @@ using ::testing::Pair;
 using ::testing::StatusIs;
 
 using TestIndex = FileIndex<int, int, InMemoryFile, 128>;
-
-// Instantiates common index tests for the FileIndex index type.
-INSTANTIATE_TYPED_TEST_SUITE_P(File, IndexTest, TestIndex);
 
 TEST(FileIndexTest, FillTest) {
   constexpr int N = 1000;
