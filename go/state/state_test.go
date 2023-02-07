@@ -384,6 +384,10 @@ func TestArchive(t *testing.T) {
 				t.Fatalf("failed to add block 2; %s", err)
 			}
 
+			if err := s.Flush(); err != nil {
+				t.Fatalf("failed to flush updates, %s", err)
+			}
+
 			state1, err := s.GetArchiveState(1)
 			if err != nil {
 				t.Fatalf("failed to get state of block 1; %s", err)
