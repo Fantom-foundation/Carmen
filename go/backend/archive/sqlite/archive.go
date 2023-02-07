@@ -4,8 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	_ "github.com/mattn/go-sqlite3"
+)
+
+var (
+	// See https://www.sqlite.org/pragma.html
+	kConfigureConnection = []string{
+		"PRAGMA journal_mode = OFF",
+		"PRAGMA synchronous = OFF",
+		"PRAGMA cache_size = -1048576", // abs(N*1024) = 1GB
+		"PRAGMA locking_mode = EXCLUSIVE",
+	}
 )
 
 const (
@@ -55,7 +66,12 @@ func NewArchive(file string) (*Archive, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open SQLite; %s", err)
 	}
-
+	for _, cmd := range kConfigureConnection {
+		_, err = db.Exec(cmd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to configure connection with %s; %s", cmd, err)
+		}
+	}
 	_, err = db.Exec(kCreateBlockTable)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create block table; %s", err)
