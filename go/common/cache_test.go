@@ -38,8 +38,8 @@ func TestExceedCapacity(t *testing.T) {
 
 	c.Set(1, 11)
 	c.Set(2, 22)
-	evictedKey, evictedValue := c.Set(3, 33)
-	if evictedKey != 0 || evictedValue != 0 {
+	evictedKey, evictedValue, evicted := c.Set(3, 33)
+	if evictedKey != 0 || evictedValue != 0 || evicted {
 		t.Errorf("No items should have been evicted yet")
 	}
 
@@ -48,8 +48,8 @@ func TestExceedCapacity(t *testing.T) {
 		t.Errorf("Item should exist")
 	}
 
-	evictedKey, evictedValue = c.Set(4, 44)
-	if evictedKey != 2 || evictedValue != 22 {
+	evictedKey, evictedValue, evicted = c.Set(4, 44)
+	if evictedKey != 2 || evictedValue != 22 || evicted == false {
 		t.Errorf("Incorrectly evicted items: %d/%d", evictedKey, evictedValue)
 	}
 	_, exists = c.Get(2) // 2 is the oldest in the table

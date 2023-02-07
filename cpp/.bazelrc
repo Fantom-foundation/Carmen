@@ -4,6 +4,7 @@ build --cxxopt=-Wpedantic
 build --cxxopt=-Wall
 build --cxxopt=-Wextra
 build --cxxopt=-Wno-gcc-compat
+build --cxxopt=-Werror
 
 # A configuration running all code using an address sanitizer
 # To run, add --config=asan to bazel command.

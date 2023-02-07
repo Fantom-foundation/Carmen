@@ -35,7 +35,7 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockState) Apply(block uint64, update Update) error {
+func (m *MockState) Apply(block uint64, update common.Update) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", block, update)
 	ret0, _ := ret[0].(error)
@@ -62,6 +62,21 @@ func (mr *MockStateMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockState)(nil).Close))
 }
 
+// Exists mocks base method.
+func (m *MockState) Exists(address common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exists", address)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exists indicates an expected call of Exists.
+func (mr *MockStateMockRecorder) Exists(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockState)(nil).Exists), address)
+}
+
 // Flush mocks base method.
 func (m *MockState) Flush() error {
 	m.ctrl.T.Helper()
@@ -76,19 +91,19 @@ func (mr *MockStateMockRecorder) Flush() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockState)(nil).Flush))
 }
 
-// GetAccountState mocks base method.
-func (m *MockState) GetAccountState(address common.Address) (common.AccountState, error) {
+// GetArchiveState mocks base method.
+func (m *MockState) GetArchiveState(block uint64) (State, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountState", address)
-	ret0, _ := ret[0].(common.AccountState)
+	ret := m.ctrl.Call(m, "GetArchiveState", block)
+	ret0, _ := ret[0].(State)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetAccountState indicates an expected call of GetAccountState.
-func (mr *MockStateMockRecorder) GetAccountState(address interface{}) *gomock.Call {
+// GetArchiveState indicates an expected call of GetArchiveState.
+func (mr *MockStateMockRecorder) GetArchiveState(block interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountState", reflect.TypeOf((*MockState)(nil).GetAccountState), address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveState", reflect.TypeOf((*MockState)(nil).GetArchiveState), block)
 }
 
 // GetBalance mocks base method.
@@ -234,7 +249,7 @@ func (m *MockdirectUpdateState) EXPECT() *MockdirectUpdateStateMockRecorder {
 }
 
 // Apply mocks base method.
-func (m *MockdirectUpdateState) Apply(block uint64, update Update) error {
+func (m *MockdirectUpdateState) Apply(block uint64, update common.Update) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Apply", block, update)
 	ret0, _ := ret[0].(error)
@@ -261,6 +276,21 @@ func (mr *MockdirectUpdateStateMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockdirectUpdateState)(nil).Close))
 }
 
+// Exists mocks base method.
+func (m *MockdirectUpdateState) Exists(address common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Exists", address)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Exists indicates an expected call of Exists.
+func (mr *MockdirectUpdateStateMockRecorder) Exists(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exists", reflect.TypeOf((*MockdirectUpdateState)(nil).Exists), address)
+}
+
 // Flush mocks base method.
 func (m *MockdirectUpdateState) Flush() error {
 	m.ctrl.T.Helper()
@@ -275,19 +305,19 @@ func (mr *MockdirectUpdateStateMockRecorder) Flush() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockdirectUpdateState)(nil).Flush))
 }
 
-// GetAccountState mocks base method.
-func (m *MockdirectUpdateState) GetAccountState(address common.Address) (common.AccountState, error) {
+// GetArchiveState mocks base method.
+func (m *MockdirectUpdateState) GetArchiveState(block uint64) (State, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAccountState", address)
-	ret0, _ := ret[0].(common.AccountState)
+	ret := m.ctrl.Call(m, "GetArchiveState", block)
+	ret0, _ := ret[0].(State)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetAccountState indicates an expected call of GetAccountState.
-func (mr *MockdirectUpdateStateMockRecorder) GetAccountState(address interface{}) *gomock.Call {
+// GetArchiveState indicates an expected call of GetArchiveState.
+func (mr *MockdirectUpdateStateMockRecorder) GetArchiveState(block interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccountState", reflect.TypeOf((*MockdirectUpdateState)(nil).GetAccountState), address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveState", reflect.TypeOf((*MockdirectUpdateState)(nil).GetArchiveState), block)
 }
 
 // GetBalance mocks base method.

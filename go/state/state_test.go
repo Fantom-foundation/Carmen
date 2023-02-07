@@ -3,20 +3,30 @@ package state
 import (
 	"bytes"
 	"flag"
+	"math/big"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 type namedStateConfig struct {
-	name        string
-	createState func(tmpDir string) (directUpdateState, error)
+	name    string
+	factory func(params Parameters) (directUpdateState, error)
 }
 
-func castToDirectUpdateState(factory func(dir string) (State, error)) func(dir string) (directUpdateState, error) {
-	return func(dir string) (directUpdateState, error) {
-		state, err := factory(dir)
+func (c *namedStateConfig) createState(directory string) (directUpdateState, error) {
+	return c.factory(Parameters{Directory: directory})
+}
+
+func (c *namedStateConfig) createStateWithArchive(directory string) (directUpdateState, error) {
+	return c.factory(Parameters{Directory: directory, WithArchive: true})
+}
+
+func castToDirectUpdateState(factory func(params Parameters) (State, error)) func(params Parameters) (directUpdateState, error) {
+	return func(params Parameters) (directUpdateState, error) {
+		state, err := factory(params)
 		if err != nil {
 			return nil, err
 		}
@@ -27,10 +37,10 @@ func castToDirectUpdateState(factory func(dir string) (State, error)) func(dir s
 func initStates() []namedStateConfig {
 	var res []namedStateConfig
 	for _, s := range initCppStates() {
-		res = append(res, namedStateConfig{name: "cpp-" + s.name, createState: s.createState})
+		res = append(res, namedStateConfig{name: "cpp-" + s.name, factory: s.factory})
 	}
 	for _, s := range initGoStates() {
-		res = append(res, namedStateConfig{name: "go-" + s.name, createState: s.createState})
+		res = append(res, namedStateConfig{name: "go-" + s.name, factory: s.factory})
 	}
 	return res
 }
@@ -50,7 +60,7 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, s directUpdateS
 }
 
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
-	ref, err := NewGoMemoryState()
+	ref, err := NewGoMemoryState(Parameters{})
 	if err != nil {
 		t.Fatalf("failed to create reference state: %v", err)
 	}
@@ -247,13 +257,175 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 			t.Fatalf("Error: %s", err)
 		}
 
-		if newState, err := s.GetAccountState(address1); err != nil || newState != common.Exists {
-			t.Errorf("Unrelated existing state: %d, Error: %s", newState, err)
+		if newState, err := s.Exists(address1); err != nil || newState != true {
+			t.Errorf("Unrelated existing state: %t, Error: %s", newState, err)
 		}
-		if newState, err := s.GetAccountState(address2); err != nil || newState != common.Unknown {
-			t.Errorf("Delete never-existing state: %d, Error: %s", newState, err)
+		if newState, err := s.Exists(address2); err != nil || newState != false {
+			t.Errorf("Delete never-existing state: %t, Error: %s", newState, err)
 		}
 	})
+}
+
+func TestCreatingAccountClearsStorage(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+		zero := common.Value{}
+		val, err := s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != zero {
+			t.Errorf("storage slot are initially not zero")
+		}
+
+		if err = s.setStorage(address1, key1, val1); err != nil {
+			t.Errorf("failed to update storage slot: %v", err)
+		}
+
+		val, err = s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != val1 {
+			t.Errorf("storage slot update did not take effect")
+		}
+
+		if err := s.createAccount(address1); err != nil {
+			t.Fatalf("Error: %s", err)
+		}
+
+		val, err = s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != zero {
+			t.Errorf("account creation did not clear storage slots")
+		}
+	})
+}
+
+func TestDeleteAccountClearsStorage(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+		zero := common.Value{}
+
+		if err := s.setStorage(address1, key1, val1); err != nil {
+			t.Errorf("failed to update storage slot: %v", err)
+		}
+
+		val, err := s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != val1 {
+			t.Errorf("storage slot update did not take effect")
+		}
+
+		if err := s.deleteAccount(address1); err != nil {
+			t.Fatalf("Error: %s", err)
+		}
+
+		val, err = s.GetStorage(address1, key1)
+		if err != nil {
+			t.Errorf("failed to fetch storage value: %v", err)
+		}
+		if val != zero {
+			t.Errorf("account deletion did not clear storage slots")
+		}
+	})
+}
+
+// TestArchive inserts data into the state and tries to obtain the history from the archive.
+func TestArchive(t *testing.T) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+
+			// skip in-memory (we don't have an in-memory archive implementation)
+			if config.name == "go-Memory" || strings.HasPrefix(config.name, "cpp-") {
+				t.Skip("Archive not implemented for this variant")
+			}
+
+			dir := t.TempDir()
+			s, err := config.createStateWithArchive(dir)
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer s.Close()
+
+			balance12, _ := common.ToBalance(big.NewInt(0x12))
+			balance34, _ := common.ToBalance(big.NewInt(0x34))
+
+			if err := s.Apply(1, common.Update{
+				CreatedAccounts: []common.Address{address1},
+				Balances: []common.BalanceUpdate{
+					{address1, balance12},
+				},
+				Codes:  nil,
+				Nonces: nil,
+				Slots: []common.SlotUpdate{
+					{address1, common.Key{0x05}, common.Value{0x47}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 1; %s", err)
+			}
+
+			if err := s.Apply(2, common.Update{
+				Balances: []common.BalanceUpdate{
+					{address1, balance34},
+				},
+				Codes: []common.CodeUpdate{
+					{address1, []byte{0x12, 0x23}},
+				},
+				Nonces: []common.NonceUpdate{
+					{address1, common.Nonce{0x54}},
+				},
+				Slots: []common.SlotUpdate{
+					{address1, common.Key{0x05}, common.Value{0x89}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 2; %s", err)
+			}
+
+			state1, err := s.GetArchiveState(1)
+			if err != nil {
+				t.Fatalf("failed to get state of block 1; %s", err)
+			}
+
+			state2, err := s.GetArchiveState(2)
+			if err != nil {
+				t.Fatalf("failed to get state of block 2; %s", err)
+			}
+
+			if as, err := state1.Exists(address1); err != nil || as != true {
+				t.Errorf("invalid account state at block 1: %t, %s", as, err)
+			}
+			if as, err := state2.Exists(address1); err != nil || as != true {
+				t.Errorf("invalid account state at block 2: %t, %s", as, err)
+			}
+			if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
+				t.Errorf("invalid balance at block 1: %s, %s", balance.ToBigInt(), err)
+			}
+			if balance, err := state2.GetBalance(address1); err != nil || balance != balance34 {
+				t.Errorf("invalid balance at block 2: %s, %s", balance.ToBigInt(), err)
+			}
+			if code, err := state1.GetCode(address1); err != nil || code != nil {
+				t.Errorf("invalid code at block 1: %s, %s", code, err)
+			}
+			if code, err := state2.GetCode(address1); err != nil || !bytes.Equal(code, []byte{0x12, 0x23}) {
+				t.Errorf("invalid code at block 2: %s, %s", code, err)
+			}
+			if nonce, err := state1.GetNonce(address1); err != nil || nonce != (common.Nonce{}) {
+				t.Errorf("invalid nonce at block 1: %s, %s", nonce, err)
+			}
+			if nonce, err := state2.GetNonce(address1); err != nil || nonce != (common.Nonce{0x54}) {
+				t.Errorf("invalid nonce at block 2: %s, %s", nonce, err)
+			}
+			if value, err := state1.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x47}) {
+				t.Errorf("invalid slot value at block 1: %s, %s", value, err)
+			}
+			if value, err := state2.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x89}) {
+				t.Errorf("invalid slot value at block 2: %s, %s", value, err)
+			}
+		})
+	}
 }
 
 // TestPersistentState inserts data into the state and closes it first, then the state
@@ -316,8 +488,8 @@ func TestStateRead(t *testing.T) {
 		_ = s.Close()
 	}()
 
-	if state, err := s.GetAccountState(address1); err != nil || state != common.Exists {
-		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, common.Exists, err)
+	if state, err := s.Exists(address1); err != nil || state != true {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, true, err)
 	}
 	if balance, err := s.GetBalance(address1); err != nil || balance != balance1 {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", balance, balance1, err)

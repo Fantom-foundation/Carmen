@@ -57,6 +57,30 @@ TYPED_TEST_P(StateTest, AccountsCanBeCreatedAndAreDifferentiated) {
   EXPECT_THAT(state.GetAccountState(b), IsOkAndHolds(AccountState::kExists));
 }
 
+TYPED_TEST_P(StateTest, CreatingAnAccountDeletesItsStorage) {
+  Address a{0x01};
+  Key k{0x01, 0x02};
+  Value v{0x02, 0x03, 0x04};
+
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
+
+  // Initially, the storage is empty, but can be written to.
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+
+  // The account creation purges the storage.
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+  EXPECT_OK(state.SetStorageValue(a, k, v));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(v));
+
+  // At this point the account is re-created, storage should still be purged.
+  EXPECT_OK(state.CreateAccount(a));
+  EXPECT_THAT(state.GetStorageValue(a, k), IsOkAndHolds(Value{}));
+}
+
 TYPED_TEST_P(StateTest, AccountsCanBeDeleted) {
   Address a{0x01};
 
@@ -68,7 +92,7 @@ TYPED_TEST_P(StateTest, AccountsCanBeDeleted) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 
   EXPECT_OK(state.DeleteAccount(a));
-  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
 }
 
 TYPED_TEST_P(StateTest, DeletingAnUnknownAccountDoesNotCreateIt) {
@@ -90,7 +114,7 @@ TYPED_TEST_P(StateTest, DeletedAccountsCanBeRecreated) {
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_OK(state.CreateAccount(a));
   EXPECT_OK(state.DeleteAccount(a));
-  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kDeleted));
+  EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kUnknown));
   EXPECT_OK(state.CreateAccount(a));
   EXPECT_THAT(state.GetAccountState(a), IsOkAndHolds(AccountState::kExists));
 }
@@ -160,7 +184,7 @@ TYPED_TEST_P(StateTest, BalancesAreCoveredByGlobalStateHash) {
 TYPED_TEST_P(StateTest, DefaultNonceIsZero) {
   Address a{0x01};
   Address b{0x02};
-  Nonce zero;
+  Nonce zero{};
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
@@ -171,7 +195,7 @@ TYPED_TEST_P(StateTest, DefaultNonceIsZero) {
 TYPED_TEST_P(StateTest, NoncesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
-  Nonce zero;
+  Nonce zero{};
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
@@ -295,7 +319,7 @@ TYPED_TEST_P(StateTest, ValuesAddedCanBeRetrieved) {
 TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
-  ASSERT_OK(state.CreateAccount(Address{0x02}));
+  EXPECT_OK(state.CreateAccount(Address{0x02}));
 
   Update update;
   update.Create(Address{0x01});
@@ -309,7 +333,7 @@ TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
 
   EXPECT_THAT(state.GetAccountState(Address{0x00}), AccountState::kUnknown);
   EXPECT_THAT(state.GetAccountState(Address{0x01}), AccountState::kExists);
-  EXPECT_THAT(state.GetAccountState(Address{0x02}), AccountState::kDeleted);
+  EXPECT_THAT(state.GetAccountState(Address{0x02}), AccountState::kUnknown);
 
   EXPECT_THAT(state.GetBalance(Address{0x03}), IsOkAndHolds(Balance{0xB1}));
   EXPECT_THAT(state.GetNonce(Address{0x04}), IsOkAndHolds(Nonce{0xA1}));
@@ -319,6 +343,24 @@ TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
               IsOkAndHolds(ElementsAre(std::byte{0x01}, std::byte{0x02})));
 }
 
+TYPED_TEST_P(StateTest, UpdatesCanBeAppliedWithArchive) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir, /*with_archive=*/true));
+  EXPECT_OK(state.CreateAccount(Address{0x02}));
+
+  Update update;
+  update.Create(Address{0x01});
+  update.Delete(Address{0x02});
+  update.Set(Address{0x03}, Balance{0xB1});
+  update.Set(Address{0x04}, Nonce{0xA1});
+  update.Set(Address{0x05}, Key{0x06}, Value{0x07});
+  update.Set(Address{0x06}, Code{0x01, 0x02});
+
+  EXPECT_OK(state.Apply(12, update));
+
+  // TODO: once history is accessible, check results.
+}
+
 TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
@@ -326,17 +368,23 @@ TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
   EXPECT_GT(usage.GetTotal(), Memory());
 }
 
+TYPED_TEST_P(StateTest, CanBeOpenedWithArchive) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir, /*with_archive=*/true));
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     StateTest, AccountsCanBeDeleted, AccountsCanBeCreatedAndAreDifferentiated,
-    BalancesAreCoveredByGlobalStateHash, BalancesCanBeUpdated,
-    CodesAreCoveredByGlobalStateHash, CodesCanBeUpdated,
+    CreatingAnAccountDeletesItsStorage, BalancesAreCoveredByGlobalStateHash,
+    BalancesCanBeUpdated, CodesAreCoveredByGlobalStateHash, CodesCanBeUpdated,
     DefaultAccountStateIsUnknown, DefaultBalanceIsZero, DefaultCodeIsEmpty,
     DefaultNonceIsZero, DeletedAccountsCanBeRecreated,
     DeletingAnAccountDeletesItsStorage, DeletingAnUnknownAccountDoesNotCreateIt,
     LookingUpMissingCodeDoesNotChangeGlobalHash,
     NoncesAreCoveredByGlobalStateHash, NoncesCanBeUpdated,
     UpdatingCodesUpdatesCodeHashes, ValuesAddedCanBeRetrieved,
-    UpdatesCanBeApplied, CanProduceAMemoryFootprint);
+    UpdatesCanBeApplied, UpdatesCanBeAppliedWithArchive,
+    CanProduceAMemoryFootprint, CanBeOpenedWithArchive);
 
 using StateConfigurations =
     ::testing::Types<InMemoryState, FileBasedState, LevelDbBasedState>;

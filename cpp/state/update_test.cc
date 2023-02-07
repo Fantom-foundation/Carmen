@@ -171,13 +171,13 @@ TEST(Update, TruncatedInputIsHandledSafely) {
 TEST(Update, KnownEncodings) {
   // The hashes for the empty update and the example update are aligned between
   // the C++ and Go version.
-  ASSERT_OK_AND_ASSIGN(auto empty, Update().ToBytes());
+  ASSERT_OK_AND_ASSIGN(auto empty, Update().GetHash());
   EXPECT_THAT(
-      Print(GetSha256Hash(empty)),
+      Print(empty),
       "0xdd46c3eebb1884ff3b5258c0a2fc9398e560a29e0780d4b53869b6254aa46a96");
-  ASSERT_OK_AND_ASSIGN(auto example, GetExampleUpdate().ToBytes());
+  ASSERT_OK_AND_ASSIGN(auto example, GetExampleUpdate().GetHash());
   EXPECT_THAT(
-      Print(GetSha256Hash(example)),
+      Print(example),
       "0xbc283c81ee1607c83e557420bf3763ab99aca2a59a99d0c66d7105e1ff2fea26");
 }
 

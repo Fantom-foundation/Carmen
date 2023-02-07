@@ -7,6 +7,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "common/hash.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -130,6 +131,11 @@ class Writer {
     return *this;
   }
 
+  template <Trivial T>
+  Writer& Append(const std::vector<T>& list) {
+    return Append(std::span<const T>(list));
+  }
+
   std::size_t Size() const { return buffer_.size(); }
 
   std::vector<std::byte> Build() && { return std::move(buffer_); }
@@ -177,6 +183,11 @@ absl::StatusOr<Update> Update::FromBytes(std::span<const std::byte> data) {
                    reader.ReadList<Update::SlotUpdate>(storage_size));
 
   return update;
+}
+
+absl::StatusOr<Hash> Update::GetHash() const {
+  ASSIGN_OR_RETURN(auto data, ToBytes());
+  return GetSha256Hash(data);
 }
 
 absl::StatusOr<std::vector<std::byte>> Update::ToBytes() const {

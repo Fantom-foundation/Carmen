@@ -82,13 +82,13 @@ class Update {
 
   // Returns a span of deleted addresses, valid until the next modification or
   // the end of the life cycle of this update.
-  std::span<const Address> GetDeletedAccounts() const {
+  const std::vector<Address>& GetDeletedAccounts() const {
     return deleted_accounts_;
   }
 
   // Returns a span of created addresses, valid until the next modification or
   // the end of the life cycle of this update.
-  std::span<const Address> GetCreatedAccounts() const {
+  const std::vector<Address>& GetCreatedAccounts() const {
     return created_accounts_;
   }
 
@@ -115,6 +115,11 @@ class Update {
 
   // Encodes this update into a byte string.
   absl::StatusOr<std::vector<std::byte>> ToBytes() const;
+
+  // --- Hashing ---
+
+  // Computes a cryptographic hash of this update.
+  absl::StatusOr<Hash> GetHash() const;
 
   // --- Operators ---
 

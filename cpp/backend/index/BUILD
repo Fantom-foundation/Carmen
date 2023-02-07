@@ -58,6 +58,7 @@ cc_library(
     visibility = ["//backend/index:__subpackages__"],
     deps = [
         ":index",
+        "//backend:structure",
         "//backend/index/cache",
         "//backend/index/file:index",
         "//backend/index/leveldb/multi_db:index",

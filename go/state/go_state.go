@@ -2,6 +2,8 @@ package state
 
 import (
 	"crypto/sha256"
+	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"hash"
 	"io"
 
@@ -32,6 +34,7 @@ type GoState struct {
 	addressToSlots  multimap.MultiMap[uint32, uint32]
 	cleanup         []func()
 	hasher          hash.Hash
+	archive         archive.Archive
 }
 
 func (s *GoState) createAccount(address common.Address) (err error) {
@@ -39,18 +42,23 @@ func (s *GoState) createAccount(address common.Address) (err error) {
 	if err != nil {
 		return
 	}
-	return s.accountsStore.Set(idx, common.Exists)
+	err = s.accountsStore.Set(idx, common.Exists)
+	if err != nil {
+		return
+	}
+	return s.clearAccount(idx)
 }
 
-func (s *GoState) GetAccountState(address common.Address) (state common.AccountState, err error) {
+func (s *GoState) Exists(address common.Address) (bool, error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
-			return common.Unknown, nil
+			return false, nil
 		}
-		return
+		return false, err
 	}
-	return s.accountsStore.Get(idx)
+	state, err := s.accountsStore.Get(idx)
+	return state == common.Exists, err
 }
 
 func (s *GoState) deleteAccount(address common.Address) error {
@@ -61,10 +69,14 @@ func (s *GoState) deleteAccount(address common.Address) error {
 		}
 		return err
 	}
-	err = s.accountsStore.Set(idx, common.Deleted)
+	err = s.accountsStore.Set(idx, common.Unknown)
 	if err != nil {
 		return err
 	}
+	return s.clearAccount(idx)
+}
+
+func (s *GoState) clearAccount(idx uint32) error {
 	slotIdxs, err := s.addressToSlots.GetAll(idx)
 	if err != nil {
 		return err
@@ -237,8 +249,19 @@ func (s *GoState) GetCodeHash(address common.Address) (hash common.Hash, err err
 	return hash, nil
 }
 
-func (s *GoState) Apply(block uint64, update Update) error {
-	return update.apply(s)
+func (s *GoState) Apply(block uint64, update common.Update) error {
+	err := applyUpdate(s, update)
+	if err != nil {
+		return err
+	}
+	if s.archive != nil {
+		// TODO add into archive in a separated thread
+		err = s.archive.Add(block, update)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *GoState) GetHash() (hash common.Hash, err error) {
@@ -333,4 +356,14 @@ func (s *GoState) Close() error {
 		}
 	}
 	return last
+}
+
+func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
+	if s.archive == nil {
+		return nil, fmt.Errorf("archive not enabled for this GoState")
+	}
+	return &ArchiveState{
+		archive: s.archive,
+		block:   block,
+	}, nil
 }

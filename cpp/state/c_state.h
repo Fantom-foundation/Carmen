@@ -19,6 +19,7 @@ extern "C" {
 
 #define C_State void*
 
+#define C_bool uint8_t
 #define C_Address void*
 #define C_Key void*
 #define C_Value void*
@@ -34,18 +35,20 @@ extern "C" {
 // Creates a new state retaining all data in memory and returns an opaque
 // pointer to it. Ownership of the state is transfered to the caller, which is
 // required to release it eventually.
-C_State Carmen_CreateInMemoryState();
+C_State Carmen_CreateInMemoryState(C_bool with_archive);
 
 // Creates a new state object maintaining data in files of the given directory
 // and returns an opaque pointer to it. Ownership of the state is transfered to
 // the caller, which is required to release it eventually.
-C_State Carmen_CreateFileBasedState(const char* directory, int length);
+C_State Carmen_CreateFileBasedState(const char* directory, int length,
+                                    C_bool with_archive);
 
 // Creates a new state object maintaining data in a LevelDB instance located in
 // the given directory and returns an opaque pointer to it. Ownership of the
 // state is transferred to the caller, which is required to release it
 // eventually.
-C_State Carmen_CreateLevelDbBasedState(const char* directory, int length);
+C_State Carmen_CreateLevelDbBasedState(const char* directory, int length,
+                                       C_bool with_archive);
 
 // Flushes all committed state information to disk to guarantee permanent
 // storage. All internally cached modifications is synced to disk.
@@ -97,6 +100,10 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
 // Applies the provided block update to the maintained state.
 void Carmen_Apply(C_State state, uint64_t block, C_Update update,
                   uint32_t length);
+
+// Applies the provided update to the current state only. This is intended for
+// the bulk load interface support.
+void Carmen_ApplyToState(C_State state, C_Update update, uint32_t length);
 
 // ------------------------------ Global Hash ---------------------------------
 

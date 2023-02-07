@@ -10,7 +10,8 @@ var (
 	pageB = PageId{1, 0}
 	pageC = PageId{2, 0}
 	pageD = PageId{3, 0}
-	pageE = PageId{3, 1}
+
+	data = []byte{0xAA}
 )
 
 func TestEmptyPagePool(t *testing.T) {
@@ -40,10 +41,10 @@ func TestPageGetSet(t *testing.T) {
 func TestPageOverflows(t *testing.T) {
 	pagePool := initPagePool()
 
-	evictedPage := NewPage[common.Address, uint32](100, common.AddressComparator{})
-	evictedPage.Put(common.Address{}, 123) // to track a non-empty page
+	evictedPage := NewRawPage(common.PageSize)
+	evictedPage.FromBytes(data[:]) // to track a non-empty page
 
-	page := NewPage[common.Address, uint32](100, common.AddressComparator{})
+	page := NewRawPage(common.PageSize)
 	// 3 pages with 4 items each
 	_ = pagePool.put(pageA, evictedPage)
 	_ = pagePool.put(pageB, page)
@@ -53,7 +54,7 @@ func TestPageOverflows(t *testing.T) {
 
 	// Here a page is loaded from the persistent storage.
 	// If the page exists there, it verifies the page was evicted from the page pool
-	testPage := NewPage[common.Address, uint32](100, common.AddressComparator{})
+	testPage := NewRawPage(common.PageSize)
 	if err := pagePool.pageStore.Load(pageA, testPage); testPage.Size() == 0 || err != nil {
 		t.Errorf("One page should be evicted")
 	}
@@ -71,9 +72,9 @@ func TestRemovedPageDoesNotExist(t *testing.T) {
 }
 
 func TestPageRemoveOverflow(t *testing.T) {
-	evictedPage := NewPage[common.Address, uint32](100, common.AddressComparator{})
-	evictedPage.Put(common.Address{}, 123) // to track a non-empty page
-	page := NewPage[common.Address, uint32](100, common.AddressComparator{})
+	evictedPage := NewRawPage(common.PageSize)
+	evictedPage.FromBytes(data[:]) // to track a non-empty page
+	page := NewRawPage(common.PageSize)
 
 	pagePool := initPagePool()
 
@@ -84,7 +85,7 @@ func TestPageRemoveOverflow(t *testing.T) {
 
 	// Here a page is loaded from the persistent storage.
 	// If the page exists there, it verifies the page was evicted from the page pool
-	testPage := NewPage[common.Address, uint32](100, common.AddressComparator{})
+	testPage := NewRawPage(common.PageSize)
 	if err := pagePool.pageStore.Load(pageA, testPage); testPage.Size() == 0 || err != nil {
 		t.Errorf("Page is not evicted. ")
 	}
@@ -97,7 +98,7 @@ func TestPageRemoveOverflow(t *testing.T) {
 	}
 
 	// and from the store
-	testPage = NewPage[common.Address, uint32](100, common.AddressComparator{})
+	testPage = NewRawPage(common.PageSize)
 	if err := pagePool.pageStore.Load(pageA, testPage); testPage.Size() != 0 || err != nil {
 		t.Errorf("Page is not removed. ")
 	}
@@ -117,7 +118,7 @@ func TestPageClose(t *testing.T) {
 	pagePool := initPagePool()
 
 	newPage, _ := pagePool.Get(pageA)
-	newPage.Put(common.Address{}, 123) // to track a non-empty page
+	newPage.FromBytes(data) // to track a non-empty page
 
 	if actualPage, _ := pagePool.Get(pageA); actualPage.Size() == 0 || actualPage != newPage {
 		t.Errorf("Page was not created, %v != %v", actualPage, newPage)
@@ -127,14 +128,14 @@ func TestPageClose(t *testing.T) {
 
 	// close must persist the page
 	// try to get the page from the storage, and it must exist there
-	page := NewPage[common.Address, uint32](100, common.AddressComparator{})
+	page := NewRawPage(common.PageSize)
 	if err := pagePool.pageStore.Load(pageA, page); err != nil || page.Size() == 0 {
 		t.Errorf("Page is not persisted, %v ", page)
 	}
 }
 
-func initPagePool() *PagePool[common.Address, uint32] {
+func initPagePool() *PagePool[*RawPage] {
 	poolSize := 3
-	pageItems := 4
-	return NewPagePool[common.Address, uint32](poolSize, pageItems, nil, NewMemoryPageStore[common.Address, uint32](), common.AddressComparator{})
+	pageFactory := func() *RawPage { return NewRawPage(common.PageSize) }
+	return NewPagePool[*RawPage](poolSize, nil, NewMemoryPageStore(), pageFactory)
 }

@@ -18,8 +18,8 @@ cc_library(
         "//backend/store/file:store",
         "//backend/store/memory:store",
         "//common:file_util",
-        "//common:type",
         "//common:status_util",
+        "//common:type",
     ],
 )
 

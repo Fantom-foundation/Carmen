@@ -1,10 +1,14 @@
 #include "state/archive.h"
 
+#include <algorithm>
+
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/synchronization/mutex.h"
 #include "backend/common/sqlite/sqlite.h"
+#include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -26,12 +30,21 @@ class Archive {
     // TODO: check whether there is already some data in the proper format.
 
     // Create tables.
+    RETURN_IF_ERROR(db.Run(kCreateBlockTable));
+    RETURN_IF_ERROR(db.Run(kCreateStatusTable));
     RETURN_IF_ERROR(db.Run(kCreateBalanceTable));
     RETURN_IF_ERROR(db.Run(kCreateCodeTable));
     RETURN_IF_ERROR(db.Run(kCreateNonceTable));
     RETURN_IF_ERROR(db.Run(kCreateValueTable));
 
     // Prepare query statements.
+    ASSIGN_OR_RETURN(auto add_block, db.Prepare(kAddBlockStmt));
+    ASSIGN_OR_RETURN(auto get_block_height, db.Prepare(kGetBlockHeightStmt));
+
+    ASSIGN_OR_RETURN(auto create_account, db.Prepare(kCreateAccountStmt));
+    ASSIGN_OR_RETURN(auto delete_account, db.Prepare(kDeleteAccountStmt));
+    ASSIGN_OR_RETURN(auto get_status, db.Prepare(kGetStatusStmt));
+
     ASSIGN_OR_RETURN(auto add_balance, db.Prepare(kAddBalanceStmt));
     ASSIGN_OR_RETURN(auto get_balance, db.Prepare(kGetBalanceStmt));
 
@@ -48,20 +61,54 @@ class Archive {
       return std::make_unique<SqlStatement>(std::move(stmt));
     };
 
-    return std::unique_ptr<Archive>(
-        new Archive(std::move(db), wrap(std::move(add_balance)),
-                    wrap(std::move(get_balance)), wrap(std::move(add_code)),
-                    wrap(std::move(get_code)), wrap(std::move(add_nonce)),
-                    wrap(std::move(get_nonce)), wrap(std::move(add_value)),
-                    wrap(std::move(get_value))));
+    return std::unique_ptr<Archive>(new Archive(
+        std::move(db), wrap(std::move(add_block)),
+        wrap(std::move(get_block_height)), wrap(std::move(create_account)),
+        wrap(std::move(delete_account)), wrap(std::move(get_status)),
+        wrap(std::move(add_balance)), wrap(std::move(get_balance)),
+        wrap(std::move(add_code)), wrap(std::move(get_code)),
+        wrap(std::move(add_nonce)), wrap(std::move(get_nonce)),
+        wrap(std::move(add_value)), wrap(std::move(get_value))));
   }
 
   // Adds the block update for the given block.
   absl::Status Add(BlockId block, const Update& update) {
+    // Check that new block is newer than anything before.
+    ASSIGN_OR_RETURN(std::int64_t newestBlock, GetLastBlockHeight());
+    if (newestBlock >= 0 && BlockId(newestBlock) >= block) {
+      return absl::FailedPreconditionError(absl::StrFormat(
+          "Unable to insert block %d, archive already contains block %d", block,
+          newestBlock));
+    }
+
+    ASSIGN_OR_RETURN(auto block_hash, update.GetHash());
+
+    // Fill in data in a single transaction.
     auto guard = absl::MutexLock(&mutation_lock_);
     if (!add_value_stmt_) return absl::FailedPreconditionError("DB Closed");
     RETURN_IF_ERROR(db_.Run("BEGIN TRANSACTION"));
-    // TODO: support account creation / deletion;
+
+    RETURN_IF_ERROR(add_block_stmt_->Reset());
+    RETURN_IF_ERROR(add_block_stmt_->Bind(0, std::int64_t(block)));
+    RETURN_IF_ERROR(add_block_stmt_->Bind(1, block_hash));
+    RETURN_IF_ERROR(add_block_stmt_->Run());
+
+    for (auto& addr : update.GetDeletedAccounts()) {
+      RETURN_IF_ERROR(delete_account_stmt_->Reset());
+      RETURN_IF_ERROR(delete_account_stmt_->Bind(0, addr));
+      RETURN_IF_ERROR(delete_account_stmt_->Bind(1, static_cast<int>(block)));
+      RETURN_IF_ERROR(delete_account_stmt_->Bind(2, addr));
+      RETURN_IF_ERROR(delete_account_stmt_->Run());
+    }
+
+    for (auto& addr : update.GetCreatedAccounts()) {
+      RETURN_IF_ERROR(create_account_stmt_->Reset());
+      RETURN_IF_ERROR(create_account_stmt_->Bind(0, addr));
+      RETURN_IF_ERROR(create_account_stmt_->Bind(1, static_cast<int>(block)));
+      RETURN_IF_ERROR(create_account_stmt_->Bind(2, addr));
+      RETURN_IF_ERROR(create_account_stmt_->Run());
+    }
+
     for (auto& [addr, balance] : update.GetBalances()) {
       RETURN_IF_ERROR(add_balance_stmt_->Reset());
       RETURN_IF_ERROR(add_balance_stmt_->Bind(0, addr));
@@ -89,12 +136,41 @@ class Archive {
     for (auto& [addr, key, value] : update.GetStorage()) {
       RETURN_IF_ERROR(add_value_stmt_->Reset());
       RETURN_IF_ERROR(add_value_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(1, key));
+      RETURN_IF_ERROR(add_value_stmt_->Bind(1, addr));
       RETURN_IF_ERROR(add_value_stmt_->Bind(2, static_cast<int>(block)));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(3, value));
+      RETURN_IF_ERROR(add_value_stmt_->Bind(3, key));
+      RETURN_IF_ERROR(add_value_stmt_->Bind(4, static_cast<int>(block)));
+      RETURN_IF_ERROR(add_value_stmt_->Bind(5, value));
       RETURN_IF_ERROR(add_value_stmt_->Run());
     }
     return db_.Run("END TRANSACTION");
+  }
+
+  // Gets the maximum block height insert so far, returns -1 if there is none.
+  absl::StatusOr<std::int64_t> GetLastBlockHeight() {
+    auto guard = absl::MutexLock(&get_block_height_lock_);
+    if (!get_block_height_stmt_)
+      return absl::FailedPreconditionError("DB Closed");
+    RETURN_IF_ERROR(get_block_height_stmt_->Reset());
+    std::int64_t result = -1;
+    RETURN_IF_ERROR(get_block_height_stmt_->Run(
+        [&](const SqlRow& row) { result = row.GetInt64(0); }));
+    return result;
+  }
+
+  absl::StatusOr<bool> Exists(BlockId block, const Address& account) {
+    auto guard = absl::MutexLock(&get_status_lock_);
+    if (!get_status_stmt_) return absl::FailedPreconditionError("DB Closed");
+    RETURN_IF_ERROR(get_status_stmt_->Reset());
+    RETURN_IF_ERROR(get_status_stmt_->Bind(0, account));
+    RETURN_IF_ERROR(get_status_stmt_->Bind(1, static_cast<int>(block)));
+
+    // The query produces 0 or 1 results. If there is no result, returning false
+    // is what is expected since this is the default account state.
+    bool result = false;
+    RETURN_IF_ERROR(get_status_stmt_->Run(
+        [&](const SqlRow& row) { result = (row.GetInt(0) != 0); }));
+    return result;
   }
 
   absl::StatusOr<Balance> GetBalance(BlockId block, const Address& account) {
@@ -108,7 +184,7 @@ class Archive {
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default balance.
-    Balance result;
+    Balance result{};
     RETURN_IF_ERROR(get_balance_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
@@ -125,7 +201,7 @@ class Archive {
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default code.
-    Code result;
+    Code result{};
     RETURN_IF_ERROR(get_code_stmt_->Run(
         [&](const SqlRow& row) { result = Code(row.GetBytes(0)); }));
     return result;
@@ -142,7 +218,7 @@ class Archive {
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default balance.
-    Nonce result;
+    Nonce result{};
     RETURN_IF_ERROR(get_nonce_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
@@ -159,13 +235,15 @@ class Archive {
     if (!get_value_stmt_) return absl::FailedPreconditionError("DB Closed");
     RETURN_IF_ERROR(get_value_stmt_->Reset());
     RETURN_IF_ERROR(get_value_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_value_stmt_->Bind(1, key));
+    RETURN_IF_ERROR(get_value_stmt_->Bind(1, account));
     RETURN_IF_ERROR(get_value_stmt_->Bind(2, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_value_stmt_->Bind(3, key));
+    RETURN_IF_ERROR(get_value_stmt_->Bind(4, static_cast<int>(block)));
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default value of storage
     // slots.
-    Value result;
+    Value result{};
     RETURN_IF_ERROR(get_value_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
@@ -182,10 +260,21 @@ class Archive {
     // Before closing the DB all prepared statements need to be finalized.
     {
       auto guard = absl::MutexLock(&mutation_lock_);
+      add_block_stmt_.reset();
+      create_account_stmt_.reset();
+      delete_account_stmt_.reset();
       add_balance_stmt_.reset();
       add_code_stmt_.reset();
       add_nonce_stmt_.reset();
       add_value_stmt_.reset();
+    }
+    {
+      auto guard = absl::MutexLock(&get_block_height_lock_);
+      get_block_height_stmt_.reset();
+    }
+    {
+      auto guard = absl::MutexLock(&get_status_lock_);
+      get_status_stmt_.reset();
     }
     {
       auto guard = absl::MutexLock(&get_balance_lock_);
@@ -206,14 +295,51 @@ class Archive {
     return db_.Close();
   }
 
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("sqlite", db_.GetMemoryFootprint());
+    return res;
+  }
+
  private:
   // See reference: https://www.sqlite.org/lang.html
+
+  // -- Blocks --
+
+  static constexpr const std::string_view kCreateBlockTable =
+      "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY, hash BLOB)";
+
+  static constexpr const std::string_view kAddBlockStmt =
+      "INSERT INTO block(number, hash) VALUES (?,?)";
+
+  static constexpr const std::string_view kGetBlockHeightStmt =
+      "SELECT number FROM block ORDER BY number DESC LIMIT 1";
+
+  // -- Account Status --
+
+  static constexpr const std::string_view kCreateStatusTable =
+      "CREATE TABLE IF NOT EXISTS status (account BLOB, block INT, exist INT, "
+      "reincarnation INT, PRIMARY KEY (account,block))";
+
+  static constexpr const std::string_view kCreateAccountStmt =
+      "INSERT INTO status(account,block,exist,reincarnation) VALUES "
+      "(?,?,1,(SELECT IFNULL(MAX(reincarnation)+1,0) FROM status WHERE account "
+      "= ?))";
+
+  static constexpr const std::string_view kDeleteAccountStmt =
+      "INSERT INTO status(account,block,exist,reincarnation) VALUES "
+      "(?,?,0,(SELECT IFNULL(MAX(reincarnation)+1,0) FROM status WHERE account "
+      "= ?))";
+
+  static constexpr const std::string_view kGetStatusStmt =
+      "SELECT exist FROM status WHERE account = ? AND block <= ? ORDER BY "
+      "block DESC LIMIT 1";
 
   // -- Balance --
 
   static constexpr const std::string_view kCreateBalanceTable =
-      "CREATE TABLE balance (account BLOB, block INT, value BLOB, "
-      "PRIMARY KEY (account,block))";
+      "CREATE TABLE IF NOT EXISTS balance (account BLOB, block INT, value "
+      "BLOB, PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kAddBalanceStmt =
       "INSERT INTO balance(account,block,value) VALUES (?,?,?)";
@@ -225,7 +351,7 @@ class Archive {
   // -- Code --
 
   static constexpr const std::string_view kCreateCodeTable =
-      "CREATE TABLE code (account BLOB, block INT, code BLOB, "
+      "CREATE TABLE IF NOT EXISTS code (account BLOB, block INT, code BLOB, "
       "PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kAddCodeStmt =
@@ -238,7 +364,7 @@ class Archive {
   // -- Nonces --
 
   static constexpr const std::string_view kCreateNonceTable =
-      "CREATE TABLE nonce (account BLOB, block INT, value BLOB, "
+      "CREATE TABLE IF NOT EXISTS nonce (account BLOB, block INT, value BLOB, "
       "PRIMARY KEY (account,block))";
 
   static constexpr const std::string_view kAddNonceStmt =
@@ -251,17 +377,26 @@ class Archive {
   // -- Storage --
 
   static constexpr const std::string_view kCreateValueTable =
-      "CREATE TABLE storage (account BLOB, slot BLOB, block INT, value BLOB, "
-      "PRIMARY KEY (account,slot,block))";
+      "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, "
+      "slot BLOB, block INT, value BLOB, PRIMARY KEY "
+      "(account,reincarnation,slot,block))";
 
   static constexpr const std::string_view kAddValueStmt =
-      "INSERT INTO storage(account,slot,block,value) VALUES (?,?,?,?)";
+      "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES "
+      "(?,(SELECT IFNULL(MAX(reincarnation),0) FROM status WHERE account = ? "
+      "AND block <= ?),?,?,?)";
 
   static constexpr const std::string_view kGetValueStmt =
-      "SELECT value FROM storage WHERE account = ? AND slot = ? AND block <= ? "
-      "ORDER BY block DESC LIMIT 1";
+      "SELECT value FROM storage WHERE account = ? AND reincarnation = (SELECT "
+      "IFNULL(MAX(reincarnation),0) FROM status WHERE account = ? AND block <= "
+      "?) AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1";
 
-  Archive(Sqlite db, std::unique_ptr<SqlStatement> add_balance,
+  Archive(Sqlite db, std::unique_ptr<SqlStatement> add_block,
+          std::unique_ptr<SqlStatement> get_block_height,
+          std::unique_ptr<SqlStatement> create_account,
+          std::unique_ptr<SqlStatement> delete_account,
+          std::unique_ptr<SqlStatement> get_status,
+          std::unique_ptr<SqlStatement> add_balance,
           std::unique_ptr<SqlStatement> get_balance,
           std::unique_ptr<SqlStatement> add_code,
           std::unique_ptr<SqlStatement> get_code,
@@ -270,6 +405,11 @@ class Archive {
           std::unique_ptr<SqlStatement> add_value,
           std::unique_ptr<SqlStatement> get_value)
       : db_(std::move(db)),
+        add_block_stmt_(std::move(add_block)),
+        get_block_height_stmt_(std::move(get_block_height)),
+        create_account_stmt_(std::move(create_account)),
+        delete_account_stmt_(std::move(delete_account)),
+        get_status_stmt_(std::move(get_status)),
         add_balance_stmt_(std::move(add_balance)),
         get_balance_stmt_(std::move(get_balance)),
         add_code_stmt_(std::move(add_code)),
@@ -286,6 +426,16 @@ class Archive {
 
   // Prepared statemetns for logging new data to the archive.
   absl::Mutex mutation_lock_;
+
+  absl::Mutex get_block_height_lock_;
+  std::unique_ptr<SqlStatement> add_block_stmt_ GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_block_height_stmt_
+      GUARDED_BY(get_block_height_lock_);
+
+  absl::Mutex get_status_lock_;
+  std::unique_ptr<SqlStatement> create_account_stmt_ GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> delete_account_stmt_ GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_status_stmt_ GUARDED_BY(get_status_lock_);
 
   absl::Mutex get_balance_lock_;
   std::unique_ptr<SqlStatement> add_balance_stmt_ GUARDED_BY(mutation_lock_);
@@ -327,6 +477,11 @@ absl::Status Archive::Add(BlockId block, const Update& update) {
   return impl_->Add(block, update);
 }
 
+absl::StatusOr<bool> Archive::Exists(BlockId block, const Address& account) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->Exists(block, account);
+}
+
 absl::StatusOr<Balance> Archive::GetBalance(BlockId block,
                                             const Address& account) {
   RETURN_IF_ERROR(CheckState());
@@ -359,6 +514,14 @@ absl::Status Archive::Close() {
   auto result = impl_->Close();
   impl_ = nullptr;
   return result;
+}
+
+MemoryFootprint Archive::GetMemoryFootprint() const {
+  MemoryFootprint res(*this);
+  if (impl_) {
+    res.Add("impl", impl_->GetMemoryFootprint());
+  }
+  return res;
 }
 
 absl::Status Archive::CheckState() const {

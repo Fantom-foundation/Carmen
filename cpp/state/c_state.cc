@@ -36,6 +36,7 @@ class WorldState {
   virtual absl::StatusOr<Hash> GetCodeHash(const Address&) = 0;
 
   virtual absl::Status Apply(std::uint64_t block, const Update&) = 0;
+  virtual absl::Status ApplyToState(const Update&) = 0;
 
   virtual absl::StatusOr<Hash> GetHash() = 0;
 
@@ -88,6 +89,10 @@ class WorldStateWrapper : public WorldState {
     return state_.Apply(block, update);
   }
 
+  absl::Status ApplyToState(const Update& update) override {
+    return state_.ApplyToState(update);
+  }
+
   absl::StatusOr<Hash> GetHash() override { return state_.GetHash(); }
 
   absl::Status Flush() override { return state_.Flush(); }
@@ -103,8 +108,8 @@ class WorldStateWrapper : public WorldState {
 };
 
 template <typename State>
-WorldState* Open(const std::filesystem::path& directory) {
-  auto state = State::Open(directory);
+WorldState* Open(const std::filesystem::path& directory, C_bool with_archive) {
+  auto state = State::Open(directory, with_archive);
   if (!state.ok()) {
     std::cout << "WARNING: Failed to open state: " << state.status() << "\n";
     return nullptr;
@@ -117,18 +122,20 @@ WorldState* Open(const std::filesystem::path& directory) {
 
 extern "C" {
 
-C_State Carmen_CreateInMemoryState() {
-  return carmen::Open<carmen::InMemoryState>("");
+C_State Carmen_CreateInMemoryState(C_bool with_archive) {
+  return carmen::Open<carmen::InMemoryState>("", with_archive);
 }
 
-C_State Carmen_CreateFileBasedState(const char* directory, int length) {
+C_State Carmen_CreateFileBasedState(const char* directory, int length,
+                                    C_bool with_archive) {
   return carmen::Open<carmen::FileBasedState>(
-      std::string_view(directory, length));
+      std::string_view(directory, length), with_archive);
 }
 
-C_State Carmen_CreateLevelDbBasedState(const char* directory, int length) {
+C_State Carmen_CreateLevelDbBasedState(const char* directory, int length,
+                                       C_bool with_archive) {
   return carmen::Open<carmen::LevelDbBasedState>(
-      std::string_view(directory, length));
+      std::string_view(directory, length), with_archive);
 }
 
 void Carmen_Flush(C_State state) {
@@ -255,7 +262,23 @@ void Carmen_Apply(C_State state, uint64_t block, C_Update update,
               << "\n";
     return;
   }
-  auto res = s.Apply(block, *change);
+  auto res = s.Apply(block, *std::move(change));
+  if (!res.ok()) {
+    std::cout << "WARNING: Failed to apply update: " << res << "\n";
+  }
+}
+
+void Carmen_ApplyToState(C_State state, C_Update update, uint32_t length) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  std::span<const std::byte> data(reinterpret_cast<const std::byte*>(update),
+                                  length);
+  auto change = carmen::Update::FromBytes(data);
+  if (!change.ok()) {
+    std::cout << "WARNING: Failed to decode update: " << change.status()
+              << "\n";
+    return;
+  }
+  auto res = s.ApplyToState(*std::move(change));
   if (!res.ok()) {
     std::cout << "WARNING: Failed to apply update: " << res << "\n";
   }

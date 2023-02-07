@@ -3,18 +3,19 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state"
 	"math"
 	"math/big"
 	"math/rand"
 	"time"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
 const KeysCacheSize = 256
 
 func main() {
-	memState, err := state.NewGoMemoryState()
+	memState, err := state.NewGoMemoryState(state.Parameters{})
 	if err != nil {
 		panic(err)
 	}

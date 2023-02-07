@@ -7,6 +7,7 @@
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "common/memory_usage.h"
 #include "sqlite3.h"
 
 namespace carmen::backend {
@@ -65,6 +66,9 @@ class Sqlite {
   // and to handle potential errors. Before closing the DB, all derived
   // statements should be destructed.
   absl::Status Close();
+
+  // Estimates the total memory used by this DB connection.
+  MemoryFootprint GetMemoryFootprint() const;
 
  private:
   Sqlite(std::shared_ptr<internal::SqliteDb> db) : db_(std::move(db)){};

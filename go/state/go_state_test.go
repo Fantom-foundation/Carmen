@@ -36,7 +36,7 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory", castToDirectUpdateState(newTestingMemory)},
+		{"Memory", castToDirectUpdateState(NewGoMemoryState)},
 		{"File Index and Store", castToDirectUpdateState(NewGoFileState)},
 		{"Cached File Index and Store", castToDirectUpdateState(NewGoCachedFileState)},
 		{"LevelDB Index, File Store", castToDirectUpdateState(NewGoLeveLIndexFileStoreState)},
@@ -48,10 +48,6 @@ func initGoStates() []namedStateConfig {
 	}
 }
 
-func newTestingMemory(_ string) (State, error) {
-	return NewGoMemoryState()
-}
-
 func TestMissingKeys(t *testing.T) {
 	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
@@ -61,9 +57,9 @@ func TestMissingKeys(t *testing.T) {
 			}
 			defer state.Close()
 
-			accountState, err := state.GetAccountState(address1)
-			if err != nil || accountState != common.Unknown {
-				t.Errorf("Account state must be Unknown. It is: %s, err: %s", accountState, err)
+			accountState, err := state.Exists(address1)
+			if err != nil || accountState != false {
+				t.Errorf("Account must not exist in the initial state, but it exists. err: %s", err)
 			}
 			balance, err := state.GetBalance(address1)
 			if (err != nil || balance != common.Balance{}) {
@@ -116,8 +112,8 @@ func TestBasicOperations(t *testing.T) {
 			}
 
 			// fetch values
-			if val, err := state.GetAccountState(address1); err != nil || val != common.Exists {
-				t.Errorf("Created account does not exists: Val: %s, Err: %s", val, err)
+			if val, err := state.Exists(address1); err != nil || val != true {
+				t.Errorf("Created account does not exists: Val: %t, Err: %s", val, err)
 			}
 			if val, err := state.GetNonce(address1); (err != nil || val != common.Nonce{123}) {
 				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
@@ -139,8 +135,8 @@ func TestBasicOperations(t *testing.T) {
 			if err := state.deleteAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if val, err := state.GetAccountState(address1); err != nil || val != common.Deleted {
-				t.Errorf("Deleted account is not deleted: Val: %s, Err: %s", val, err)
+			if val, err := state.Exists(address1); err != nil || val != false {
+				t.Errorf("Deleted account is not deleted: Val: %t, Err: %s", val, err)
 			}
 
 			// fetch wrong combinations
@@ -269,7 +265,7 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewGoMemoryState()
+	state, err := NewGoMemoryState(Parameters{})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
@@ -299,7 +295,7 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewGoMemoryState()
+	state, err := NewGoMemoryState(Parameters{})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}

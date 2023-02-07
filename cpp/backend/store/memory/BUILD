@@ -18,8 +18,8 @@ cc_test(
     srcs = ["store_test.cc"],
     deps = [
         ":store",
-        "//common:status_test_util",
         "//common:file_util",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )
