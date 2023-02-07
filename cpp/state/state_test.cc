@@ -347,10 +347,10 @@ template <typename K, typename V>
 using MockIndex = backend::index::MockIndex<K, V>;
 
 template <typename K, typename V>
-using MockStore = backend::store::MockStoreWrapper<K, V, kPageSize>;
+using MockStore = backend::store::MockStore<K, V, kPageSize>;
 
 template <typename K>
-using MockDepot = backend::depot::MockDepotWrapper<K>;
+using MockDepot = backend::depot::MockDepot<K>;
 
 template <typename K, typename V>
 using MockMultiMap = backend::multimap::MockMultiMap<K, V>;

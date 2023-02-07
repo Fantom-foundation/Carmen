@@ -45,8 +45,6 @@ class MockMultiMap {
  private:
   class Mock {
    public:
-    static absl::StatusOr<Mock> Open(Context&, const std::filesystem::path&){};
-
     MOCK_METHOD(absl::StatusOr<bool>, Insert, (const K& key, const V& value));
     MOCK_METHOD(absl::StatusOr<bool>, Contains, (const K& key, const V& value),
                 (const));
@@ -58,7 +56,6 @@ class MockMultiMap {
     MOCK_METHOD(absl::Status, Close, ());
     MOCK_METHOD(MemoryFootprint, GetMemoryFootprint, (), (const));
   };
-
   std::unique_ptr<Mock> map_{std::make_unique<Mock>()};
 };
 

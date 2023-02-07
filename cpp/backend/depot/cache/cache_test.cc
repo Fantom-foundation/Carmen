@@ -19,14 +19,12 @@ using ::testing::IsOkAndHolds;
 using ::testing::Return;
 using ::testing::StatusIs;
 
-TEST(CachedDepot, IsDepot) {
-  EXPECT_TRUE(Depot<Cached<MockDepotWrapper<int>>>);
-}
+TEST(CachedDepot, IsDepot) { EXPECT_TRUE(Depot<Cached<MockDepot<int>>>); }
 
 TEST(CachedDepot, CachedKeysAreNotFetched) {
-  MockDepotWrapper<int> wrapper;
+  MockDepot<int> wrapper;
   auto& mock = wrapper.GetMockDepot();
-  Cached<MockDepotWrapper<int>> depot(std::move(wrapper));
+  Cached<MockDepot<int>> depot(std::move(wrapper));
 
   auto val = std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}};
 
@@ -39,9 +37,9 @@ TEST(CachedDepot, CachedKeysAreNotFetched) {
 }
 
 TEST(CachedDepot, MissingEntriesAreCached) {
-  MockDepotWrapper<int> wrapper;
+  MockDepot<int> wrapper;
   auto& mock = wrapper.GetMockDepot();
-  Cached<MockDepotWrapper<int>> depot(std::move(wrapper));
+  Cached<MockDepot<int>> depot(std::move(wrapper));
 
   // The underlying depot is only accessed once.
   EXPECT_CALL(mock, Get(10)).WillOnce(Return(absl::NotFoundError("Not found")));
@@ -53,9 +51,9 @@ TEST(CachedDepot, MissingEntriesAreCached) {
 }
 
 TEST(CachedDepot, HashesAreCached) {
-  MockDepotWrapper<int> wrapper;
+  MockDepot<int> wrapper;
   auto& mock = wrapper.GetMockDepot();
-  Cached<MockDepotWrapper<int>> depot(std::move(wrapper));
+  Cached<MockDepot<int>> depot(std::move(wrapper));
 
   // The underlying depot is only accessed once.
   Hash hash{0x01, 0x23};
@@ -66,9 +64,9 @@ TEST(CachedDepot, HashesAreCached) {
 }
 
 TEST(CachedDepot, AddNewElementInvalidatesHash) {
-  MockDepotWrapper<int> wrapper;
+  MockDepot<int> wrapper;
   auto& mock = wrapper.GetMockDepot();
-  Cached<MockDepotWrapper<int>> depot(std::move(wrapper));
+  Cached<MockDepot<int>> depot(std::move(wrapper));
 
   auto val = std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}};
 
@@ -90,9 +88,9 @@ TEST(CachedDepot, AddNewElementInvalidatesHash) {
 }
 
 TEST(CachedDepot, CacheSizeLimitIsEnforced) {
-  MockDepotWrapper<int> wrapper;
+  MockDepot<int> wrapper;
   auto& mock = wrapper.GetMockDepot();
-  Cached<MockDepotWrapper<int>> depot(std::move(wrapper), /*max_entries=*/2);
+  Cached<MockDepot<int>> depot(std::move(wrapper), /*max_entries=*/2);
 
   auto val = std::vector<std::byte>{std::byte{1}, std::byte{2}, std::byte{3}};
 
