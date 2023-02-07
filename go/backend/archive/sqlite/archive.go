@@ -59,6 +59,8 @@ type Archive struct {
 	getNonceStmt       *sql.Stmt
 	addValueStmt       *sql.Stmt
 	getValueStmt       *sql.Stmt
+
+	reincarnationNumberCache map[common.Address]int
 }
 
 func NewArchive(file string) (*Archive, error) {
@@ -147,19 +149,20 @@ func NewArchive(file string) (*Archive, error) {
 	}
 
 	return &Archive{
-		db:                 db,
-		addBlockStmt:       addBlock,
-		getBlockHeightStmt: getBlockHeight,
-		addStatusStmt:      addStatus,
-		getStatusStmt:      getStatus,
-		addBalanceStmt:     addBalance,
-		getBalanceStmt:     getBalance,
-		addCodeStmt:        addCode,
-		getCodeStmt:        getCode,
-		addNonceStmt:       addNonce,
-		getNonceStmt:       getNonce,
-		addValueStmt:       addValue,
-		getValueStmt:       getValue,
+		db:                       db,
+		addBlockStmt:             addBlock,
+		getBlockHeightStmt:       getBlockHeight,
+		addStatusStmt:            addStatus,
+		getStatusStmt:            getStatus,
+		addBalanceStmt:           addBalance,
+		getBalanceStmt:           getBalance,
+		addCodeStmt:              addCode,
+		getCodeStmt:              getCode,
+		addNonceStmt:             addNonce,
+		getNonceStmt:             getNonce,
+		addValueStmt:             addValue,
+		getValueStmt:             getValue,
+		reincarnationNumberCache: map[common.Address]int{},
 	}, nil
 }
 
@@ -187,55 +190,74 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		return fmt.Errorf("failed to add block; %s", err)
 	}
 
+	getReincarnationNumber := func(account common.Address) (int, error) {
+		if res, exists := a.reincarnationNumberCache[account]; exists {
+			return res, nil
+		}
+		_, res, err := a.getStatus(tx, block, account)
+		if err != nil {
+			return 0, err
+		}
+		a.reincarnationNumberCache[account] = res
+		return res, nil
+	}
+
+	stmt := tx.Stmt(a.addStatusStmt)
 	for _, account := range update.DeletedAccounts {
-		_, reincarnation, err := a.getStatus(tx, block, account)
+		reincarnation, err := getReincarnationNumber(account)
 		if err != nil {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
-		_, err = tx.Stmt(a.addStatusStmt).Exec(account[:], block, false, reincarnation+1)
+		_, err = stmt.Exec(account[:], block, false, reincarnation+1)
 		if err != nil {
 			return fmt.Errorf("failed to add status; %s", err)
 		}
+		a.reincarnationNumberCache[account] = reincarnation + 1
 	}
 
 	for _, account := range update.CreatedAccounts {
-		_, reincarnation, err := a.getStatus(tx, block, account)
+		reincarnation, err := getReincarnationNumber(account)
 		if err != nil {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
-		_, err = tx.Stmt(a.addStatusStmt).Exec(account[:], block, true, reincarnation+1)
+		_, err = stmt.Exec(account[:], block, true, reincarnation+1)
 		if err != nil {
 			return fmt.Errorf("failed to add status; %s", err)
 		}
+		a.reincarnationNumberCache[account] = reincarnation + 1
 	}
 
+	stmt = tx.Stmt(a.addBalanceStmt)
 	for _, balanceUpdate := range update.Balances {
-		_, err = tx.Stmt(a.addBalanceStmt).Exec(balanceUpdate.Account[:], block, balanceUpdate.Balance[:])
+		_, err = stmt.Exec(balanceUpdate.Account[:], block, balanceUpdate.Balance[:])
 		if err != nil {
 			return fmt.Errorf("failed to add balance; %s", err)
 		}
 	}
 
+	stmt = tx.Stmt(a.addCodeStmt)
 	for _, codeUpdate := range update.Codes {
-		_, err = tx.Stmt(a.addCodeStmt).Exec(codeUpdate.Account[:], block, codeUpdate.Code)
+		_, err = stmt.Exec(codeUpdate.Account[:], block, codeUpdate.Code)
 		if err != nil {
 			return fmt.Errorf("failed to add code; %s", err)
 		}
 	}
 
+	stmt = tx.Stmt(a.addNonceStmt)
 	for _, nonceUpdate := range update.Nonces {
-		_, err = tx.Stmt(a.addNonceStmt).Exec(nonceUpdate.Account[:], block, nonceUpdate.Nonce[:])
+		_, err = stmt.Exec(nonceUpdate.Account[:], block, nonceUpdate.Nonce[:])
 		if err != nil {
 			return fmt.Errorf("failed to add nonce; %s", err)
 		}
 	}
 
+	stmt = tx.Stmt(a.addValueStmt)
 	for _, slotUpdate := range update.Slots {
-		_, reincarnation, err := a.getStatus(tx, block, slotUpdate.Account) // use changes from status updates above
+		reincarnation, err := getReincarnationNumber(slotUpdate.Account)
 		if err != nil {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
-		_, err = tx.Stmt(a.addValueStmt).Exec(slotUpdate.Account[:], reincarnation, slotUpdate.Key[:], block, slotUpdate.Value[:])
+		_, err = stmt.Exec(slotUpdate.Account[:], reincarnation, slotUpdate.Key[:], block, slotUpdate.Value[:])
 		if err != nil {
 			return fmt.Errorf("failed to add storage value; %s", err)
 		}
