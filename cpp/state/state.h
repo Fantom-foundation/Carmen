@@ -207,10 +207,10 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Open(
                    (MultiMapType<AddressId, SlotId>::Open(
                        context, dir / "address_to_slots")));
 
-  std::unique_ptr<Archive> archive;
+  std::unique_ptr<ArchiveType> archive;
   if (with_archive) {
-    ASSIGN_OR_RETURN(auto instance, Archive::Open(dir));
-    archive = std::make_unique<Archive>(std::move(instance));
+    ASSIGN_OR_RETURN(auto instance, ArchiveType::Open(dir));
+    archive = std::make_unique<ArchiveType>(std::move(instance));
   }
 
   return State(std::move(address_index), std::move(key_index),
