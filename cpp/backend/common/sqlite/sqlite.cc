@@ -88,7 +88,17 @@ absl::StatusOr<Sqlite> Sqlite::Open(std::filesystem::path db_file) {
     return absl::InternalError(
         absl::StrCat("Unable to create Sqlite DB: ", err_msg));
   }
-  return Sqlite(std::make_shared<internal::SqliteDb>(db));
+
+  auto sqlite = Sqlite(std::make_shared<internal::SqliteDb>(db));
+
+  // See https://www.sqlite.org/pragma.html
+  RETURN_IF_ERROR(sqlite.Run("PRAGMA journal_mode = OFF"));
+  RETURN_IF_ERROR(sqlite.Run("PRAGMA synchronous = OFF"));
+  RETURN_IF_ERROR(
+      sqlite.Run("PRAGMA cache_size = -1048576"));  // absl(N*1024) = 1GB
+  RETURN_IF_ERROR(sqlite.Run("PRAGMA locking_mode = EXCLUSIVE"));
+
+  return sqlite;
 }
 
 absl::Status Sqlite::Run(std::string_view statement) {
