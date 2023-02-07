@@ -13,6 +13,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "state/configurations.h"
+#include "state/test_util.h"
+#include "state/update.h"
 
 namespace carmen {
 
@@ -403,7 +405,8 @@ using MockDepot = backend::depot::MockDepot<K>;
 template <typename K, typename V>
 using MockMultiMap = backend::multimap::MockMultiMap<K, V>;
 
-using MockState = State<MockIndex, MockStore, MockDepot, MockMultiMap>;
+using MockState =
+    State<MockIndex, MockStore, MockDepot, MockMultiMap, MockArchive>;
 
 // A test fixture for the State class. It provides a State instance with
 // mocked dependencies. The dependencies are exposed through getters.
@@ -420,7 +423,8 @@ class MockStateTest : public ::testing::Test {
                     MockStore<AddressId, Nonce>(), MockStore<SlotId, Value>(),
                     MockStore<AddressId, AccountState>(),
                     MockDepot<AddressId>(), MockStore<AddressId, Hash>(),
-                    MockMultiMap<AddressId, SlotId>()) {}
+                    MockMultiMap<AddressId, SlotId>(),
+                    std::make_unique<MockArchive>()) {}
     auto& GetAddressIndex() { return this->address_index_.GetMockIndex(); }
     auto& GetKeyIndex() { return this->key_index_.GetMockIndex(); }
     auto& GetSlotIndex() { return this->slot_index_.GetMockIndex(); }
@@ -435,7 +439,10 @@ class MockStateTest : public ::testing::Test {
     auto& GetAddressToSlotsMap() {
       return this->address_to_slots_.GetMockMultiMap();
     }
-    auto GetEmptyCodeHash() const { return this->kEmptyCodeHash; }
+    // archive will always be available, because it is created in the
+    // constructor.
+    auto& GetArchive() { return this->archive_->GetMockArchive(); }
+    auto GetEmptyCodeHash() const { return kEmptyCodeHash; }
   };
   Mock state_{};
 };
@@ -916,9 +923,15 @@ TEST_F(MockStateTest, FlushErrorIsForwarded) {
               StatusIs(absl::StatusCode::kInternal, "Code hash store error"));
 
   EXPECT_CALL(state.GetAddressToSlotsMap(), Flush())
-      .WillOnce(Return(absl::InternalError("Address to slot multimap error")));
+      .WillOnce(Return(absl::InternalError("Address to slot multimap error")))
+      .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.Flush(), StatusIs(absl::StatusCode::kInternal,
                                       "Address to slot multimap error"));
+
+  EXPECT_CALL(state.GetArchive(), Flush())
+      .WillOnce(Return(absl::InternalError("Archive error")));
+  EXPECT_THAT(state.Flush(),
+              StatusIs(absl::StatusCode::kInternal, "Archive error"));
 }
 
 TEST_F(MockStateTest, CloseErrorIsForwarded) {
@@ -979,8 +992,23 @@ TEST_F(MockStateTest, CloseErrorIsForwarded) {
               StatusIs(absl::StatusCode::kInternal, "Code hash store error"));
 
   EXPECT_CALL(state.GetAddressToSlotsMap(), Close())
-      .WillOnce(Return(absl::InternalError("Address to slot multimap error")));
+      .WillOnce(Return(absl::InternalError("Address to slot multimap error")))
+      .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.Close(), StatusIs(absl::StatusCode::kInternal,
                                       "Address to slot multimap error"));
+
+  EXPECT_CALL(state.GetArchive(), Close())
+      .WillOnce(Return(absl::InternalError("Archive error")));
+  EXPECT_THAT(state.Close(),
+              StatusIs(absl::StatusCode::kInternal, "Archive error"));
+}
+
+TEST_F(MockStateTest, ApplyArchiveErrorIsForwarded) {
+  auto& state = GetState();
+
+  EXPECT_CALL(state.GetArchive(), Add(_, _))
+      .WillOnce(Return(absl::InternalError("Archive error")));
+  EXPECT_THAT(state.Apply(0, Update{}),
+              StatusIs(absl::StatusCode::kInternal, "Archive error"));
 }
 }  // namespace carmen

@@ -96,7 +96,7 @@ TYPED_TEST_P(IndexTest, EmptyIndexHasHashEqualsZero) {
 }
 
 TYPED_TEST_P(IndexTest, IndexHashIsEqualToInsertionOrder) {
-  Hash hash;
+  Hash hash{};
   ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
   EXPECT_THAT(index.GetHash(), IsOkAndHolds(hash));

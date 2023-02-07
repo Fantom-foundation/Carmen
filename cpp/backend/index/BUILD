@@ -33,8 +33,8 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//backend:structure",
-        "//common:type",
         "//common:memory_usage",
+        "//common:type",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
@@ -63,12 +63,11 @@ cc_library(
         "//backend/index/file:index",
         "//backend/index/leveldb/multi_db:index",
         "//backend/index/leveldb/single_db:index",
+        "//common:file_util",
+        "//common:type",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
-        "//backend:structure",
-        "//common:file_util",
-        "//common:type",
     ],
 )
 
