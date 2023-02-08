@@ -320,7 +320,26 @@ class Archive {
   }
 
   absl::Status Verify(BlockId block, const Hash& expected_hash) {
-    // Start by checking the expected hash.
+    // Start by checking the DB integrity.
+    ASSIGN_OR_RETURN(auto integrity_check_stmt,
+                     db_.Prepare("PRAGMA integrity_check"));
+    std::vector<std::string> issues;
+    RETURN_IF_ERROR(integrity_check_stmt.Run([&](const SqlRow& row) {
+      auto msg = row.GetString(0);
+      if (msg != "ok") {
+        issues.emplace_back(msg);
+      }
+    }));
+    if (!issues.empty()) {
+      std::stringstream out;
+      for (const auto& cur : issues) {
+        out << "\t" << cur << "\n";
+      }
+      return absl::InternalError("Encountered DB integrity issues:\n" +
+                                 out.str());
+    }
+
+    // Next, check the expected hash.
     ASSIGN_OR_RETURN(auto hash, GetHash(block));
     if (hash != expected_hash) {
       return absl::InternalError("Archive hash does not match expected hash.");

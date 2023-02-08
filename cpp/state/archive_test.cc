@@ -2,6 +2,7 @@
 
 #include <type_traits>
 
+#include "backend/common/sqlite/sqlite.h"
 #include "common/file_util.h"
 #include "common/hash.h"
 #include "common/status_test_util.h"
@@ -11,6 +12,7 @@
 namespace carmen {
 namespace {
 
+using ::carmen::backend::Sqlite;
 using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::HasSubstr;
@@ -627,7 +629,53 @@ TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
   EXPECT_OK(archive.VerifyAccount(6, addr2));
 }
 
-// TODO: check corrupted DB files
+TEST(Archive, AccountValidationFailsOnMissingHash) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr{};
+  Update update;
+  update.Create(addr);
+  EXPECT_OK(archive.Add(1, update));
+  EXPECT_OK(archive.VerifyAccount(0, addr));
+  EXPECT_OK(archive.VerifyAccount(3, addr));
+
+  // Mess with the DB by deleting the hash of the update.
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(dir.GetPath() / "archive.sqlite"));
+  ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 1"));
+  EXPECT_OK(archive.VerifyAccount(0, addr));
+  EXPECT_THAT(
+      archive.VerifyAccount(3, addr),
+      StatusIs(_,
+               HasSubstr(
+                   "Archive contains update for block 1 but no hash for it.")));
+}
+
+TEST(Archive, AccountValidationFailsOnAdditionalStatusUpdate) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr{};
+  Update update;
+  update.Create(addr);
+  EXPECT_OK(archive.Add(1, update));
+  EXPECT_OK(archive.VerifyAccount(0, addr));
+  EXPECT_OK(archive.VerifyAccount(3, addr));
+
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(dir.GetPath() / "archive.sqlite"));
+  ASSERT_OK_AND_ASSIGN(
+      auto stmt,
+      db.Prepare("INSERT INTO status(account, block, exist) VALUES (?,2,1)"));
+  ASSERT_OK(stmt.Bind(0, addr));
+  ASSERT_OK(stmt.Run());
+  EXPECT_OK(archive.VerifyAccount(0, addr));
+  EXPECT_THAT(
+      archive.VerifyAccount(3, addr),
+      StatusIs(_,
+               HasSubstr(
+                   "Archive contains update for block 2 but no hash for it.")));
+}
+
+// TODO: test more verification issues.
+// TODO: test messing with reincarnation numbers
 
 TEST(Archive, ArchiveHashIsHashOfAccountHashes) {
   TempDir dir;
