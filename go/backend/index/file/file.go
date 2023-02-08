@@ -19,6 +19,8 @@ const (
 	// A smaller number of initial buckets causes many splits, but small initial file. A higher number causes the opposite.
 	defaultNumBuckets = 1 << 15
 	pagePoolSize      = 1 << 17
+
+	uint32ByteSize = 4
 )
 
 // Index is a file implementation of index.Index. It uses common.LinearHashMap to store key-identifier pairs.
@@ -34,8 +36,8 @@ type Index[K comparable, I common.Identifier] struct {
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
-	pageStore       *pagepool.FilePageStorage
-	pagePool        *pagepool.PagePool[*IndexPage[K, I]]
+	pageStore       *TwoFilesPageStorage
+	pagePool        *pagepool.PagePool[PageId, *IndexPage[K, I]]
 	comparator      common.Comparator[K]
 	path            string
 
@@ -63,7 +65,7 @@ func NewParamIndex[K comparable, I common.Identifier](
 	hasher common.Hasher[K],
 	comparator common.Comparator[K]) (inst *Index[K, I], err error) {
 
-	hash, numBuckets, lastBucket, lastOverflow, size, lastIndex, freeIds, err := readMetadata[I](path, indexSerializer)
+	hash, numBuckets, size, lastIndex, err := readMetadata[I](path, indexSerializer)
 	if err != nil {
 		return
 	}
@@ -73,13 +75,16 @@ func NewParamIndex[K comparable, I common.Identifier](
 		numBuckets = defaultNumBuckets // 32K * 4kb -> 128MB.
 	}
 
-	pageStorage, err := pagepool.NewFilePageStorage(path, common.PageSize, lastBucket, lastOverflow)
+	// Do not customise, unless different size of page, etc. is needed
+	// 4kB is the right fit for disk I/O
+	pageSize := common.PageSize // 4kB
+	pageStorage, err := NewTwoFilesPageStorage(path, pageSize)
 	if err != nil {
 		return
 	}
 	pageItems := numKeysPage(common.PageSize, keySerializer, indexSerializer)
 	pageFactory := PageFactory(common.PageSize, keySerializer, indexSerializer, comparator)
-	pagePool := pagepool.NewPagePool[*IndexPage[K, I]](pagePoolSize, freeIds, pageStorage, pageFactory)
+	pagePool := pagepool.NewPagePool[PageId, *IndexPage[K, I]](pagePoolSize, pageStorage, pageFactory)
 
 	inst = &Index[K, I]{
 		table:           NewLinearHashMap[K, I](pageItems, numBuckets, size, pagePool, hasher, comparator),
@@ -178,7 +183,7 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	return memoryFootprint
 }
 
-func readMetadata[I common.Identifier](path string, indexSerializer common.Serializer[I]) (hash common.Hash, numBuckets, lastBucket, lastOverflow, records int, lastIndex I, freeIds []int, err error) {
+func readMetadata[I common.Identifier](path string, indexSerializer common.Serializer[I]) (hash common.Hash, numBuckets, records int, lastIndex I, err error) {
 	metadataFile, err := os.OpenFile(path+"/metadata.dat", os.O_RDONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return
@@ -186,25 +191,14 @@ func readMetadata[I common.Identifier](path string, indexSerializer common.Seria
 	defer metadataFile.Close()
 
 	// read metadata
-	size := len(hash) + indexSerializer.Size() + 4*4
+	size := len(hash) + indexSerializer.Size() + 2*uint32ByteSize
 	data := make([]byte, size)
 	_, err = metadataFile.Read(data)
 	if err == nil {
 		hash = *(*common.Hash)(data[0:32])
 		numBuckets = int(binary.BigEndian.Uint32(data[32:36]))
-		lastBucket = int(binary.BigEndian.Uint32(data[36:40]))
-		lastOverflow = int(binary.BigEndian.Uint32(data[40:44]))
-		lastIndex = indexSerializer.FromBytes(data[44:48])
-		records = int(binary.BigEndian.Uint32(data[48:52]))
-	}
-
-	// read metadata - free IDs
-	for err == nil {
-		freeIdBytes := make([]byte, 4)
-		_, err = metadataFile.Read(freeIdBytes)
-		if err == nil {
-			freeIds = append(freeIds, int(binary.BigEndian.Uint32(freeIdBytes)))
-		}
+		records = int(binary.BigEndian.Uint32(data[36:40]))
+		lastIndex = indexSerializer.FromBytes(data[40:44])
 	}
 
 	if err == io.EOF {
@@ -227,19 +221,14 @@ func (m *Index[K, I]) writeMetadata() (err error) {
 		return
 	}
 
-	size := len(hash) + m.indexSerializer.Size() + (4+len(m.pagePool.GetFreeIds()))*4
+	// total size is: 32B size of bash + size of index + 2 times uint32
+	size := len(hash) + m.indexSerializer.Size() + 2*uint32ByteSize
 	metadata := make([]byte, 0, size)
 
 	metadata = append(metadata, hash.ToBytes()...)
 	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.table.GetNumBuckets()))
-	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.pageStore.GetLastId().Bucket()))
-	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.pageStore.GetLastId().Overflow()))
-	metadata = append(metadata, m.indexSerializer.ToBytes(m.maxIndex)...)
 	metadata = binary.BigEndian.AppendUint32(metadata, uint32(m.table.Size()))
-
-	for _, freeId := range m.pagePool.GetFreeIds() {
-		metadata = binary.BigEndian.AppendUint32(metadata, uint32(freeId))
-	}
+	metadata = append(metadata, m.indexSerializer.ToBytes(m.maxIndex)...)
 
 	_, err = metadataFile.Write(metadata)
 

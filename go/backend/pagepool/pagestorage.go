@@ -1,6 +1,7 @@
 package pagepool
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
@@ -8,108 +9,82 @@ import (
 	"unsafe"
 )
 
-const freePagesCap = 10 // initial size of freed pages set.
-
-// FilePageStorage receives requests to Load or Store pages identified by PageId.
-// The PageId contains two integer IDs and the pages are distributed into two files - primary and overflow.
-// It allows for distinguishing between primary pages, which have the overflow component of the ID set to zero
-// and overflow pages of a primary page.
-// Pages are fixed size and are stored in the files at positions corresponding to their IDs either to the primary
-// secondary files.
+// FilePageStorage receives requests to Load or Store pages identified by an ID.
+// Pages are fixed size and are stored in the files at positions corresponding to their IDs
 // The FilePageStorage maintains a fixed size byte buffer used for reading
 // and storing pages not to allocate new memory every-time.
-// On Store execution, the stored page memory representation is kept in the free list and reused for a following Load execution.
-// The free list is caped not to exhaust memory when many Store operations is executed without follow-up Load executions.
+// The storage maintains last used ID and a list of released IDs. The IDs are re-used for storing further pages
+// so there are no unused holes in the file. When a page ID to load is beyond the stored last ID, nothing
+// happens not to trigger useless I/O.
 type FilePageStorage struct {
-	path     string // directory to store the files in
-	pageSize int    // page size in bytes
+	file *os.File
 
-	primaryFile  *os.File // primary file contains first pages for the bucket, directly indexed by the bucket number
-	overflowFile *os.File // overflow file contains next pages for the bucket, indexed by the page id computed by the page pool
-
-	removedBuckets   map[int]bool // hold empty pages not to try to read them
-	removedOverflows map[int]bool // hold empty pages not to try to read them
-	lastBucket       int          // hold last item not to touch above the file size
-	lastOverflow     int          // hold last item not to touch above the file size
+	freeIdsMap map[int]bool // free page IDs tracks deleted pages so that requests for loading them
+	// do not necessarily query I/O and also Pages do not have to be actually deleted from file
+	freeIds  []int // list of free IDs that are re-used for new pages
+	lastID   int   // hold last item not to touch above the file size
+	pageSize int
 
 	buffer []byte // a page binary data shared between Load and Store operations not to allocate memory every time.
 }
 
-func NewFilePageStorage(
-	path string,
-	pageSize int,
-	lastBucket int,
-	lastOverflow int,
-) (storage *FilePageStorage, err error) {
-
-	primaryFile, err := os.OpenFile(path+"/primaryPages.dat", os.O_RDWR|os.O_CREATE, 0600)
+// NewFilePageStorage creates a new instance with path to the file, it defines the page size to pre-allocate
+// the page buffer.
+func NewFilePageStorage(filePath string, pageSize int) (storage *FilePageStorage, err error) {
+	removedIDs, lastID, err := readMetadata(filePath, pageSize)
 	if err != nil {
 		return
 	}
 
-	overflowFile, err := os.OpenFile(path+"/overflowPages.dat", os.O_RDWR|os.O_CREATE, 0600)
+	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return
+	}
+
+	freeIds := make([]int, 0, len(removedIDs))
+	for k := range removedIDs {
+		freeIds = append(freeIds, k)
 	}
 
 	storage = &FilePageStorage{
-		path:             path,
-		pageSize:         pageSize,
-		lastBucket:       lastBucket,
-		lastOverflow:     lastOverflow,
-		primaryFile:      primaryFile,
-		overflowFile:     overflowFile,
-		removedBuckets:   make(map[int]bool, freePagesCap),
-		removedOverflows: make(map[int]bool, freePagesCap),
-		buffer:           make([]byte, pageSize),
+		file:       file,
+		freeIdsMap: removedIDs,
+		freeIds:    freeIds,
+		pageSize:   pageSize,
+		lastID:     lastID,
+		buffer:     make([]byte, pageSize),
 	}
 
 	return
 }
 
 // Load reads a page of the input ID from the persistent storage.
-func (c *FilePageStorage) Load(pageId PageId, page Page) error {
+func (c *FilePageStorage) Load(pageId int, page Page) error {
 	if !c.shouldLoad(pageId) {
 		page.Clear()
 		return nil
 	}
 
-	pageData := c.buffer
-	file := c.primaryFile
-	pageNumber := pageId.Bucket()
-	// Recover either from primary or overflow buckets
-	if pageId.Overflow() != 0 { // even nicer: pageId.IsOverFlowPage()
-		file = c.overflowFile
-		pageNumber = pageId.Overflow() - 1
-	}
-	offset := int64(pageNumber * c.pageSize)
-	if _, err := file.ReadAt(pageData, offset); err != nil {
+	offset := int64(pageId * c.pageSize)
+	if _, err := c.file.ReadAt(c.buffer, offset); err != nil {
 		if err == io.EOF {
 			// page does not yet exist
 			page.Clear()
-			return nil // maybe reset page first!
+			return nil
 		}
 		return err
 	}
 
-	page.FromBytes(pageData)
+	page.FromBytes(c.buffer)
 	return nil
 }
 
 // Store persists the input page under input key.
-func (c *FilePageStorage) Store(pageId PageId, page Page) (err error) {
-	pageData := c.buffer
-	page.ToBytes(pageData)
+func (c *FilePageStorage) Store(pageId int, page Page) (err error) {
+	page.ToBytes(c.buffer)
 
-	file := c.primaryFile
-	pageNumber := pageId.Bucket()
-	// Recover either from primary or overflow buckets
-	if pageId.Overflow() != 0 { // even nicer: pageId.IsOverFlowPage()
-		file = c.overflowFile
-		pageNumber = pageId.Overflow() - 1
-	}
-	fileOffset := int64(pageNumber * c.pageSize)
-	_, err = file.WriteAt(pageData, fileOffset)
+	fileOffset := int64(pageId * c.pageSize)
+	_, err = c.file.WriteAt(c.buffer, fileOffset)
 	if err != nil {
 		return
 	}
@@ -118,26 +93,32 @@ func (c *FilePageStorage) Store(pageId PageId, page Page) (err error) {
 	return
 }
 
+func (c *FilePageStorage) NextId() int {
+	var id int
+	if len(c.freeIds) > 0 {
+		id = c.freeIds[len(c.freeIds)-1]
+		c.freeIds = c.freeIds[0 : len(c.freeIds)-1]
+	} else {
+		id = c.lastID
+		c.lastID += 1
+	}
+
+	// treat as free at first to prevent tangling IDs when actually not used
+	c.freeIdsMap[id] = true
+
+	return id
+}
+
 // shouldLoad returns true it the page under pageId should be loaded.
 // It happens when the page is not deleted and the pageId does not exceed actual size of the file.
-func (c *FilePageStorage) shouldLoad(pageId PageId) bool {
+func (c *FilePageStorage) shouldLoad(pageId int) bool {
 	// do not necessarily query I/O if the page does not exist,
 	// and it allows also for not actually deleting data, it only tracks non-existing items.
-	if pageId.Bucket() > c.lastBucket {
+	if pageId >= c.lastID {
 		return false
 	}
-	if pageId.Overflow() == 0 {
-		if removed, exists := c.removedBuckets[pageId.Bucket()]; exists && removed {
-			return false
-		}
-	} else {
-		if pageId.Overflow() > c.lastOverflow {
-			return false
-		}
-
-		if removed, exists := c.removedOverflows[pageId.Overflow()]; exists && removed {
-			return false
-		}
+	if removed, exists := c.freeIdsMap[pageId]; exists && removed {
+		return false
 	}
 
 	return true
@@ -145,55 +126,39 @@ func (c *FilePageStorage) shouldLoad(pageId PageId) bool {
 
 // updateUse sets that the input pageId is not deleted (if it was set so)
 // and potentially extends markers of last positions in the dataset.
-func (c *FilePageStorage) updateUse(pageId PageId) {
-	if removed, exists := c.removedBuckets[pageId.Bucket()]; exists && removed {
-		c.removedBuckets[pageId.Bucket()] = false
+func (c *FilePageStorage) updateUse(pageId int) {
+	if removed, exists := c.freeIdsMap[pageId]; exists && removed {
+		c.freeIdsMap[pageId] = false
 	}
-	if removed, exists := c.removedOverflows[pageId.Overflow()]; exists && removed {
-		c.removedOverflows[pageId.Overflow()] = false
+	if pageId >= c.lastID {
+		c.lastID = pageId + 1
 	}
-	if pageId.Bucket() >= c.lastBucket {
-		c.lastBucket = pageId.Bucket()
-	}
-	if pageId.Overflow() >= c.lastOverflow {
-		c.lastOverflow = pageId.Overflow()
-	}
-}
-
-func (c *FilePageStorage) GetLastId() PageId {
-	return NewPageId(c.lastBucket, c.lastOverflow)
 }
 
 // Remove deletes the key from the map and returns whether an element was removed.
-func (c *FilePageStorage) Remove(pageId PageId) error {
-	if pageId.Overflow() == 0 {
-		c.removedBuckets[pageId.Bucket()] = true
-	}
-	c.removedOverflows[pageId.Overflow()] = true
+func (c *FilePageStorage) Remove(pageId int) error {
+	c.freeIdsMap[pageId] = true
+	c.freeIds = append(c.freeIds, pageId)
 	return nil
 }
 
 // Flush all changes to the disk
 func (c *FilePageStorage) Flush() (err error) {
 	// flush data file changes to disk
-	primFileErr := c.primaryFile.Sync()
-	overflowFileErr := c.overflowFile.Sync()
-
-	if primFileErr != nil || overflowFileErr != nil {
-		err = fmt.Errorf("flush error: Primary file: %s, Overflow file: %s", primFileErr, overflowFileErr)
+	if err := c.writeMetadata(); err != nil {
+		return err
 	}
 
-	return
+	return c.file.Sync()
 }
 
 // Close the store
 func (c *FilePageStorage) Close() (err error) {
 	flushErr := c.Flush()
-	primFileErr := c.primaryFile.Close()
-	overflowFileErr := c.overflowFile.Close()
+	fileErr := c.file.Close()
 
-	if flushErr != nil || primFileErr != nil || overflowFileErr != nil {
-		err = fmt.Errorf("close error: Flush: %s,  Primary file: %s, Overflow file: %s", flushErr, primFileErr, overflowFileErr)
+	if flushErr != nil || fileErr != nil {
+		err = fmt.Errorf("close error: Flush: %s,  file: %s", flushErr, fileErr)
 	}
 
 	return
@@ -206,54 +171,71 @@ func (c *FilePageStorage) GetMemoryFootprint() *common.MemoryFootprint {
 
 	var boolType bool
 	var intType int
-	removedBucketsSize := uintptr(len(c.removedBuckets)) * (unsafe.Sizeof(boolType) + unsafe.Sizeof(intType))
-	removedOverflowsSize := uintptr(len(c.removedOverflows)) * (unsafe.Sizeof(boolType) + unsafe.Sizeof(intType))
+	removedIDsSize := uintptr(len(c.freeIdsMap)) * (unsafe.Sizeof(boolType) + unsafe.Sizeof(intType))
+	freeIdsSize := uintptr(len(c.freeIds)) * unsafe.Sizeof(intType)
 
 	memoryFootprint := common.NewMemoryFootprint(selfSize + bufferSize)
-	memoryFootprint.AddChild("removedIds", common.NewMemoryFootprint(removedBucketsSize+removedOverflowsSize))
+	memoryFootprint.AddChild("removedIds", common.NewMemoryFootprint(removedIDsSize))
+	memoryFootprint.AddChild("freeIds", common.NewMemoryFootprint(freeIdsSize))
 	return memoryFootprint
 }
 
-// MemoryPageStore stores pages in-memory only, its use is mainly for testing.
-type MemoryPageStore struct {
-	table map[PageId][]byte
-}
-
-func NewMemoryPageStore() *MemoryPageStore {
-	return &MemoryPageStore{
-		table: make(map[PageId][]byte),
+func readMetadata(filePath string, pageSize int) (removedIDs map[int]bool, lastID int, err error) {
+	removedIDs = make(map[int]bool)
+	file, err := os.OpenFile(filePath, os.O_RDONLY, 0600)
+	if err != nil {
+		if os.IsNotExist(err) || err == os.ErrNotExist || err == io.EOF {
+			return removedIDs, lastID, nil
+		}
+		return removedIDs, lastID, err
 	}
-}
+	defer func() {
+		file.Close()
+	}()
 
-func (c *MemoryPageStore) Remove(pageId PageId) error {
-	delete(c.table, pageId)
-	return nil
-}
-
-func (c *MemoryPageStore) Store(pageId PageId, page Page) (err error) {
-	data := make([]byte, page.Size())
-	page.ToBytes(data)
-	c.table[pageId] = data
-	return nil
-}
-
-func (c *MemoryPageStore) Load(pageId PageId, page Page) error {
-	storedPage, exists := c.table[pageId]
-	if exists {
-		page.FromBytes(storedPage)
-	} else {
-		page.Clear()
+	// data are structured as
+	// [page1][page2]...[pageN][freeIds][lastId]
+	// seek at the last Uint34 in the file and read the LastID
+	metadataEndOffset, err := file.Seek(-4, io.SeekEnd)
+	if err != nil {
+		return removedIDs, lastID, err
 	}
-	return nil
+	buffer := make([]byte, 4)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return removedIDs, lastID, err
+	}
+	lastID = int(binary.LittleEndian.Uint32(buffer[0:4]))
+
+	// read removed IDs that are stored after pages and before the LastID
+	metadataStartOffset := int64((lastID) * pageSize)
+	offsetWindow := metadataEndOffset - metadataStartOffset
+	metadata := make([]byte, offsetWindow)
+	if _, err := file.ReadAt(metadata, metadataStartOffset); err != nil {
+		return removedIDs, lastID, err
+	}
+
+	// convert to a map
+	for i := int64(0); i < offsetWindow; i += 4 {
+		id := int(binary.LittleEndian.Uint32(metadata[i : i+4]))
+		removedIDs[id] = true
+	}
+
+	return removedIDs, lastID, nil
 }
 
-func (c *MemoryPageStore) GetMemoryFootprint() *common.MemoryFootprint {
-	selfSize := unsafe.Sizeof(*c)
-	memfootprint := common.NewMemoryFootprint(selfSize)
-	var size uintptr
-	for k, v := range c.table {
-		size += unsafe.Sizeof(k) + unsafe.Sizeof(v)
+func (c *FilePageStorage) writeMetadata() error {
+	// data are structured as
+	// [page1][page2]...[pageN][freeIds][lastId]
+	metadata := make([]byte, 0, 4*len(c.freeIdsMap))
+	for id, removed := range c.freeIdsMap {
+		if removed {
+			metadata = binary.LittleEndian.AppendUint32(metadata, uint32(id))
+		}
 	}
-	memfootprint.AddChild("pageStore", common.NewMemoryFootprint(size))
-	return memfootprint
+	metadata = binary.LittleEndian.AppendUint32(metadata, uint32(c.lastID))
+	// append at the end, after data
+	fileOffset := int64((c.lastID) * c.pageSize)
+	_, err := c.file.WriteAt(metadata, fileOffset)
+	return err
 }
