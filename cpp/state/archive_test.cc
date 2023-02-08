@@ -15,6 +15,7 @@ using ::testing::_;
 using ::testing::HasSubstr;
 using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
+using ::testing::ElementsAre;
 
 TEST(Archive, TypeProperties) {
   EXPECT_FALSE(std::is_default_constructible_v<Archive>);
@@ -491,6 +492,35 @@ TEST(Archive, InitialAccountHashIsZero) {
   EXPECT_THAT(archive.GetAccountHash(0, addr2), zero);
   EXPECT_THAT(archive.GetAccountHash(4, addr1), zero);
   EXPECT_THAT(archive.GetAccountHash(8, addr2), zero);
+}
+
+TEST(Archive, AccountListIncludesAllTouchedAccounts) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x01};
+  Address addr2{0x02};
+  Balance balance{0x10};
+
+  Update update1;
+  update1.Create(addr1);
+
+  Update update3;
+  update3.Create(addr2);
+
+  Update update5;
+  update5.Delete(addr1);
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  EXPECT_THAT(archive.GetAccountList(0), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(archive.GetAccountList(1), IsOkAndHolds(ElementsAre(addr1)));
+  EXPECT_THAT(archive.GetAccountList(2), IsOkAndHolds(ElementsAre(addr1)));
+  EXPECT_THAT(archive.GetAccountList(3), IsOkAndHolds(ElementsAre(addr1,addr2)));
+  EXPECT_THAT(archive.GetAccountList(4), IsOkAndHolds(ElementsAre(addr1,addr2)));
+  EXPECT_THAT(archive.GetAccountList(5), IsOkAndHolds(ElementsAre(addr1,addr2)));
+  EXPECT_THAT(archive.GetAccountList(6), IsOkAndHolds(ElementsAre(addr1,addr2)));
 }
 
 TEST(Archive, AccountHashesChainUp) {
