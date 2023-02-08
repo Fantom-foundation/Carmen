@@ -309,8 +309,27 @@ std::ostream& operator<<(std::ostream& out,
   return out << update.key << ":" << update.value;
 }
 
-std::ostream& operator<<(std::ostream& out, const AccountUpdate&) {
-  return out << "Missing implementation";
+std::ostream& operator<<(std::ostream& out, const AccountUpdate& update) {
+  std::cout << "Update(";
+  if (update.created) {
+    out << "Created";
+  }
+  if (update.deleted) {
+    out << "Deleted";
+  }
+  if (update.balance) {
+    out << ",Balance:" << *update.balance;
+  }
+  if (update.nonce) {
+    out << ",Nonce:" << *update.nonce;
+  }
+  if (update.code) {
+    out << ",code: <new_code>";
+  }
+  for (auto& cur : update.storage) {
+    out << "," << cur;
+  }
+  return out << ")";
 }
 
 }  // namespace carmen

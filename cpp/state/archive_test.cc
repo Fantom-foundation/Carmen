@@ -546,5 +546,54 @@ TEST(Archive, AccountHashesChainUp) {
   EXPECT_THAT(archive.GetAccountHash(6, addr2), hash_account2_b3);
 }
 
+TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x1};
+  Address addr2{0x2};
+  Balance balance1{0x1};
+  Balance balance2{0x2};
+  Nonce nonce1{0x1};
+  Nonce nonce2{0x2};
+  Key key{0x1};
+
+  Update update1;
+  update1.Create(addr1);
+  update1.Set(addr1, balance1);
+  update1.Set(addr1, nonce1);
+
+  Update update3;
+  update3.Create(addr2);
+  update3.Set(addr2, balance2);
+
+  Update update5;
+  update5.Set(addr1, balance2);
+  update5.Set(addr1, nonce2);
+  update5.Set(addr1, Code{0x01, 0x02});
+  update5.Set(addr1, key, Value{0x01});
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  EXPECT_OK(archive.VerifyAccount(0, addr1));
+  EXPECT_OK(archive.VerifyAccount(1, addr1));
+  EXPECT_OK(archive.VerifyAccount(2, addr1));
+  EXPECT_OK(archive.VerifyAccount(3, addr1));
+  EXPECT_OK(archive.VerifyAccount(4, addr1));
+  EXPECT_OK(archive.VerifyAccount(5, addr1));
+  EXPECT_OK(archive.VerifyAccount(6, addr1));
+
+  EXPECT_OK(archive.VerifyAccount(0, addr2));
+  EXPECT_OK(archive.VerifyAccount(1, addr2));
+  EXPECT_OK(archive.VerifyAccount(2, addr2));
+  EXPECT_OK(archive.VerifyAccount(3, addr2));
+  EXPECT_OK(archive.VerifyAccount(4, addr2));
+  EXPECT_OK(archive.VerifyAccount(5, addr2));
+  EXPECT_OK(archive.VerifyAccount(6, addr2));
+}
+
+// TODO: check validation errors
+
 }  // namespace
 }  // namespace carmen
