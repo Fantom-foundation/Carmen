@@ -3,6 +3,7 @@
 #include <type_traits>
 
 #include "common/file_util.h"
+#include "common/hash.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -478,6 +479,71 @@ TEST(Archive, BlocksCanNotBeAddedOutOfOrder) {
           _,
           HasSubstr(
               "Unable to insert block 1, archive already contains block 2")));
+}
+
+TEST(Archive, InitialAccountHashIsZero) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x01};
+  Address addr2{0x02};
+  Hash zero{};
+  EXPECT_THAT(archive.GetAccountHash(0, addr1), zero);
+  EXPECT_THAT(archive.GetAccountHash(0, addr2), zero);
+  EXPECT_THAT(archive.GetAccountHash(4, addr1), zero);
+  EXPECT_THAT(archive.GetAccountHash(8, addr2), zero);
+}
+
+TEST(Archive, AccountHashesChainUp) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x01};
+  Address addr2{0x02};
+  Balance balance{0x10};
+
+  Hash zero{};
+
+  Update update1;
+  update1.Create(addr1);
+
+  Update update3;
+  update3.Create(addr2);
+  update3.Set(addr2, balance);
+
+  Update update5;
+  update5.Set(addr1, balance);
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  auto hash_update_1 = AccountUpdate::From(update1)[addr1].GetHash();
+  auto hash_update_3 = AccountUpdate::From(update3)[addr2].GetHash();
+  auto hash_update_5 = AccountUpdate::From(update5)[addr1].GetHash();
+
+  auto hash_account1_b1 = GetSha256Hash(zero, hash_update_1);
+  auto hash_account2_b3 = GetSha256Hash(zero, hash_update_3);
+  auto hash_account1_b5 = GetSha256Hash(hash_account1_b1, hash_update_5);
+
+  EXPECT_THAT(archive.GetAccountHash(0, addr1), zero);
+  EXPECT_THAT(archive.GetAccountHash(0, addr2), zero);
+
+  EXPECT_THAT(archive.GetAccountHash(1, addr1), hash_account1_b1);
+  EXPECT_THAT(archive.GetAccountHash(1, addr2), zero);
+
+  EXPECT_THAT(archive.GetAccountHash(2, addr1), hash_account1_b1);
+  EXPECT_THAT(archive.GetAccountHash(2, addr2), zero);
+
+  EXPECT_THAT(archive.GetAccountHash(3, addr1), hash_account1_b1);
+  EXPECT_THAT(archive.GetAccountHash(3, addr2), hash_account2_b3);
+
+  EXPECT_THAT(archive.GetAccountHash(4, addr1), hash_account1_b1);
+  EXPECT_THAT(archive.GetAccountHash(4, addr2), hash_account2_b3);
+
+  EXPECT_THAT(archive.GetAccountHash(5, addr1), hash_account1_b5);
+  EXPECT_THAT(archive.GetAccountHash(5, addr2), hash_account2_b3);
+
+  EXPECT_THAT(archive.GetAccountHash(6, addr1), hash_account1_b5);
+  EXPECT_THAT(archive.GetAccountHash(6, addr2), hash_account2_b3);
 }
 
 }  // namespace

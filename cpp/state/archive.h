@@ -56,6 +56,9 @@ class Archive {
   absl::StatusOr<Value> GetStorage(BlockId block, const Address& account,
                                    const Key& key);
 
+  // Obtains a hash on the content of the given hash at the given block height.
+  absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& account);
+
   // Flushes all temporary changes to disk.
   absl::Status Flush();
 
