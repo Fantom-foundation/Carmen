@@ -2,12 +2,12 @@ package state
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"io"
 	"os"
 	"path/filepath"
-
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 
@@ -685,7 +685,7 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(params.Directory + string(filepath.Separator) + "archive.sqlite")
+		arch, err = archldb.NewArchive(db)
 		if err != nil {
 			return nil, err
 		}
@@ -760,7 +760,7 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(params.Directory + string(filepath.Separator) + "archive.sqlite")
+		arch, err = archldb.NewArchive(db)
 		if err != nil {
 			return nil, err
 		}

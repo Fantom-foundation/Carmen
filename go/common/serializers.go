@@ -16,7 +16,7 @@ func (a AddressSerializer) FromBytes(bytes []byte) Address {
 }
 
 func (a AddressSerializer) Size() int {
-	return 20
+	return AddressSize
 }
 
 // KeySerializer is a Serializer of the Key type
@@ -32,7 +32,7 @@ func (a KeySerializer) FromBytes(bytes []byte) Key {
 	return *(*Key)(bytes)
 }
 func (a KeySerializer) Size() int {
-	return 32
+	return KeySize
 }
 
 // ValueSerializer is a Serializer of the Value type
@@ -48,7 +48,7 @@ func (a ValueSerializer) FromBytes(bytes []byte) Value {
 	return *(*Value)(bytes)
 }
 func (a ValueSerializer) Size() int {
-	return 32
+	return ValueSize
 }
 
 // HashSerializer is a Serializer of the Hash type
@@ -96,7 +96,7 @@ func (a BalanceSerializer) FromBytes(bytes []byte) Balance {
 	return *(*Balance)(bytes)
 }
 func (a BalanceSerializer) Size() int {
-	return 16
+	return BalanceSize
 }
 
 // NonceSerializer is a Serializer of the Nonce type
@@ -112,7 +112,7 @@ func (a NonceSerializer) FromBytes(bytes []byte) Nonce {
 	return *(*Nonce)(bytes)
 }
 func (a NonceSerializer) Size() int {
-	return 8
+	return NonceSize
 }
 
 // SlotIdxSerializer32 is a Serializer of the SlotIdx[uint32] type
