@@ -271,6 +271,20 @@ class Archive {
     return result;
   }
 
+  absl::StatusOr<std::vector<Address>> GetAccountList(BlockId block) {
+    std::vector<Address> res;
+    ASSIGN_OR_RETURN(auto query,
+                     db_.Prepare("SELECT DISTINCT account FROM account_hash "
+                                 "WHERE block <= ? ORDER BY account"));
+    RETURN_IF_ERROR(query.Bind(0, static_cast<int>(block)));
+    RETURN_IF_ERROR(query.Run([&](const SqlRow& row) {
+      Address addr;
+      addr.SetBytes(row.GetBytes(0));
+      res.push_back(addr);
+    }));
+    return res;
+  }
+
   // Fetches the hash of the given account on the given block height. The hash
   // of an account is initially zero. Subsequent updates create a hash chain
   // covering the previous state and the hash of applied diffs.
@@ -731,6 +745,11 @@ absl::StatusOr<Value> Archive::GetStorage(BlockId block, const Address& account,
                                           const Key& key) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetStorage(block, account, key);
+}
+
+absl::StatusOr<std::vector<Address>> Archive::GetAccountList(BlockId block) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetAccountList(block);
 }
 
 absl::StatusOr<Hash> Archive::GetAccountHash(BlockId block,

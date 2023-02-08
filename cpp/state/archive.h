@@ -56,6 +56,9 @@ class Archive {
   absl::StatusOr<Value> GetStorage(BlockId block, const Address& account,
                                    const Key& key);
 
+  // Obtains a full list of addresses encountered up until the given block.
+  absl::StatusOr<std::vector<Address>> GetAccountList(BlockId block);
+
   // Obtains a hash on the content of the given hash at the given block height.
   absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& account);
 
