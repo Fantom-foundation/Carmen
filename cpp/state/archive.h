@@ -59,6 +59,9 @@ class Archive {
   // Obtains a hash on the content of the given hash at the given block height.
   absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& account);
 
+  // Verifies the given account at the given block height.
+  absl::Status VerifyAccount(BlockId block, const Address& account) const;
+
   // Flushes all temporary changes to disk.
   absl::Status Flush();
 

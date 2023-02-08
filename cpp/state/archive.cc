@@ -1,6 +1,7 @@
 #include "state/archive.h"
 
 #include <algorithm>
+#include <queue>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
@@ -287,6 +288,166 @@ class Archive {
     RETURN_IF_ERROR(get_account_hash_stmt_->Run(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
+  }
+
+  absl::Status Verify(BlockId) {
+    // TODO:
+    //  - get list of all accounts
+    //  - check individual accounts
+    //  - check that there is no extra information in any of the tables listed
+    //  (as SQL query)
+    return absl::UnimplementedError("sorry");
+  }
+
+  // Verifyies the consistency of the provides account up until the given block.
+  absl::Status VerifyAccount(BlockId block, const Address& account) {
+    using ::carmen::backend::SqlIterator;
+    ASSIGN_OR_RETURN(auto list_diffs_stmt,
+                     db_.Prepare("SELECT block, hash FROM account_hash WHERE "
+                                 "account = ? AND block <= ? ORDER BY block"));
+
+    RETURN_IF_ERROR(list_diffs_stmt.Bind(0, account));
+    RETURN_IF_ERROR(list_diffs_stmt.Bind(1, static_cast<int>(block)));
+
+    ASSIGN_OR_RETURN(auto list_state_stmt,
+                     db_.Prepare("SELECT block, exist FROM status WHERE "
+                                 "account = ? AND block <= ? ORDER BY block"));
+    RETURN_IF_ERROR(list_state_stmt.Bind(0, account));
+    RETURN_IF_ERROR(list_state_stmt.Bind(1, static_cast<int>(block)));
+
+    ASSIGN_OR_RETURN(auto list_balance_stmt,
+                     db_.Prepare("SELECT block, value FROM balance WHERE "
+                                 "account = ? AND block <= ? ORDER BY block"));
+    RETURN_IF_ERROR(list_balance_stmt.Bind(0, account));
+    RETURN_IF_ERROR(list_balance_stmt.Bind(1, static_cast<int>(block)));
+
+    ASSIGN_OR_RETURN(auto list_nonce_stmt,
+                     db_.Prepare("SELECT block, value FROM nonce WHERE "
+                                 "account = ? AND block <= ? ORDER BY block"));
+    RETURN_IF_ERROR(list_nonce_stmt.Bind(0, account));
+    RETURN_IF_ERROR(list_nonce_stmt.Bind(1, static_cast<int>(block)));
+
+    ASSIGN_OR_RETURN(auto list_code_stmt,
+                     db_.Prepare("SELECT block, code FROM code WHERE "
+                                 "account = ? AND block <= ? ORDER BY block"));
+    RETURN_IF_ERROR(list_code_stmt.Bind(0, account));
+    RETURN_IF_ERROR(list_code_stmt.Bind(1, static_cast<int>(block)));
+
+    ASSIGN_OR_RETURN(
+        auto list_storage_stmt,
+        db_.Prepare("SELECT block, slot, value FROM storage WHERE "
+                    "account = ? AND block <= ? ORDER BY block, slot"));
+    RETURN_IF_ERROR(list_storage_stmt.Bind(0, account));
+    RETURN_IF_ERROR(list_storage_stmt.Bind(1, static_cast<int>(block)));
+
+    // Open individual result iterators.
+    ASSIGN_OR_RETURN(auto hash_iter, list_diffs_stmt.Open());
+    ASSIGN_OR_RETURN(auto state_iter, list_state_stmt.Open());
+    ASSIGN_OR_RETURN(auto balance_iter, list_balance_stmt.Open());
+    ASSIGN_OR_RETURN(auto nonce_iter, list_nonce_stmt.Open());
+    ASSIGN_OR_RETURN(auto code_iter, list_code_stmt.Open());
+    ASSIGN_OR_RETURN(auto storage_iter, list_storage_stmt.Open());
+
+    // Create and initializer priority queue over block numbers.
+    BlockId next = block + 1;
+    for (SqlIterator* iter :
+         {&state_iter, &balance_iter, &nonce_iter, &code_iter, &storage_iter}) {
+      ASSIGN_OR_RETURN(auto has_next, iter->Next());
+      if (has_next) {
+        next = std::min<BlockId>(next, (*iter)->GetInt64(0));
+      }
+    }
+
+    Hash hash{};
+    BlockId last = next - 1;
+    while (next <= block) {
+      BlockId current = next;
+      if (current <= last) {
+        // This should only be possible if primary key constraints are violated.
+        return absl::InternalError(
+            "Multiple updates for same information in same block found.");
+      }
+
+      // --- Recreate Update for Current Block ---
+      AccountUpdate update;
+
+      if (!state_iter.Finished() && state_iter->GetInt64(0) == current) {
+        if (state_iter->GetInt(1) == 0) {
+          update.deleted = true;
+        } else {
+          update.created = true;
+        }
+        RETURN_IF_ERROR(state_iter.Next());
+      }
+
+      if (!balance_iter.Finished() && balance_iter->GetInt64(0) == current) {
+        Balance balance;
+        balance.SetBytes(balance_iter->GetBytes(1));
+        update.balance = balance;
+        RETURN_IF_ERROR(balance_iter.Next());
+      }
+
+      if (!nonce_iter.Finished() && nonce_iter->GetInt64(0) == current) {
+        Nonce nonce;
+        nonce.SetBytes(nonce_iter->GetBytes(1));
+        update.nonce = nonce;
+        RETURN_IF_ERROR(nonce_iter.Next());
+      }
+
+      if (!code_iter.Finished() && code_iter->GetInt64(0) == current) {
+        update.code = Code(code_iter->GetBytes(1));
+        RETURN_IF_ERROR(code_iter.Next());
+      }
+
+      while (!storage_iter.Finished() && storage_iter->GetInt64(0) == current) {
+        Key key;
+        key.SetBytes(storage_iter->GetBytes(1));
+        Value value;
+        value.SetBytes(storage_iter->GetBytes(2));
+        update.storage.push_back({key, value});
+        RETURN_IF_ERROR(storage_iter.Next());
+      }
+
+      // --- Check that the current update matches the current block ---
+
+      // Check the update against the list of per-account hashes.
+      ASSIGN_OR_RETURN(auto has_next, hash_iter.Next());
+      if (!has_next || hash_iter->GetInt64(0) != current) {
+        return absl::InternalError(absl::StrFormat(
+            "Archive contains update for block %d but no hash for it.",
+            current));
+      }
+
+      // Compute the hash based on the diff.
+      hash = GetSha256Hash(hash, update.GetHash());
+
+      // Compare with hash stored in DB.
+      Hash should;
+      should.SetBytes(hash_iter->GetBytes(1));
+      if (hash != should) {
+        return absl::InternalError(
+            absl::StrFormat("Hash for block %d does not match.", current));
+      }
+
+      // Find next block to be processed.
+      next = block + 1;
+      for (SqlIterator* iter : {&state_iter, &balance_iter, &nonce_iter,
+                                &code_iter, &storage_iter}) {
+        if (!iter->Finished()) {
+          next = std::min<BlockId>(next, (*iter)->GetInt64(0));
+        }
+      }
+    }
+
+    // Check whether there are additional updates in the hash table.
+    ASSIGN_OR_RETURN(auto has_more, hash_iter.Next());
+    if (has_more) {
+      return absl::InternalError(absl::StrFormat(
+          "DB contains hash for update on block %d but no data.",
+          hash_iter->GetInt64(0)));
+    }
+
+    return absl::OkStatus();
   }
 
   absl::Status Flush() {
@@ -576,6 +737,12 @@ absl::StatusOr<Hash> Archive::GetAccountHash(BlockId block,
                                              const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetAccountHash(block, account);
+}
+
+absl::Status Archive::VerifyAccount(BlockId block,
+                                    const Address& account) const {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->VerifyAccount(block, account);
 }
 
 absl::Status Archive::Flush() {
