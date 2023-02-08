@@ -12,10 +12,10 @@ namespace carmen {
 namespace {
 
 using ::testing::_;
+using ::testing::ElementsAre;
 using ::testing::HasSubstr;
 using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
-using ::testing::ElementsAre;
 
 TEST(Archive, TypeProperties) {
   EXPECT_FALSE(std::is_default_constructible_v<Archive>);
@@ -517,10 +517,14 @@ TEST(Archive, AccountListIncludesAllTouchedAccounts) {
   EXPECT_THAT(archive.GetAccountList(0), IsOkAndHolds(ElementsAre()));
   EXPECT_THAT(archive.GetAccountList(1), IsOkAndHolds(ElementsAre(addr1)));
   EXPECT_THAT(archive.GetAccountList(2), IsOkAndHolds(ElementsAre(addr1)));
-  EXPECT_THAT(archive.GetAccountList(3), IsOkAndHolds(ElementsAre(addr1,addr2)));
-  EXPECT_THAT(archive.GetAccountList(4), IsOkAndHolds(ElementsAre(addr1,addr2)));
-  EXPECT_THAT(archive.GetAccountList(5), IsOkAndHolds(ElementsAre(addr1,addr2)));
-  EXPECT_THAT(archive.GetAccountList(6), IsOkAndHolds(ElementsAre(addr1,addr2)));
+  EXPECT_THAT(archive.GetAccountList(3),
+              IsOkAndHolds(ElementsAre(addr1, addr2)));
+  EXPECT_THAT(archive.GetAccountList(4),
+              IsOkAndHolds(ElementsAre(addr1, addr2)));
+  EXPECT_THAT(archive.GetAccountList(5),
+              IsOkAndHolds(ElementsAre(addr1, addr2)));
+  EXPECT_THAT(archive.GetAccountList(6),
+              IsOkAndHolds(ElementsAre(addr1, addr2)));
 }
 
 TEST(Archive, AccountHashesChainUp) {
@@ -623,7 +627,87 @@ TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
   EXPECT_OK(archive.VerifyAccount(6, addr2));
 }
 
-// TODO: check validation errors
+// TODO: check corrupted DB files
+
+TEST(Archive, ArchiveHashIsHashOfAccountHashes) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x1};
+  Address addr2{0x2};
+  Balance balance1{0x1};
+  Balance balance2{0x2};
+  Nonce nonce1{0x1};
+  Nonce nonce2{0x2};
+  Key key{0x1};
+
+  Update update1;
+  update1.Create(addr1);
+  update1.Set(addr1, balance1);
+  update1.Set(addr1, nonce1);
+
+  Update update3;
+  update3.Create(addr2);
+  update3.Set(addr2, balance2);
+
+  Update update5;
+  update5.Set(addr1, balance2);
+  update5.Set(addr1, nonce2);
+  update5.Set(addr1, Code{0x01, 0x02});
+  update5.Set(addr1, key, Value{0x01});
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  for (BlockId block = 0; block <= 6; block++) {
+    ASSERT_OK_AND_ASSIGN(auto addr1_hash, archive.GetAccountHash(block, addr1));
+    ASSERT_OK_AND_ASSIGN(auto addr2_hash, archive.GetAccountHash(block, addr2));
+    ASSERT_OK_AND_ASSIGN(auto archive_hash, archive.GetHash(block));
+    if (block < 1) {
+      EXPECT_EQ(archive_hash, GetSha256Hash());
+    } else if (block < 3) {
+      EXPECT_EQ(archive_hash, GetSha256Hash(addr1_hash));
+    } else {
+      EXPECT_EQ(archive_hash, GetSha256Hash(addr1_hash, addr2_hash));
+    }
+  }
+}
+
+TEST(Archive, ArchiveCanBeVerifiedForCustomBlockHeight) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x1};
+  Address addr2{0x2};
+  Balance balance1{0x1};
+  Balance balance2{0x2};
+  Nonce nonce1{0x1};
+  Nonce nonce2{0x2};
+  Key key{0x1};
+
+  Update update1;
+  update1.Create(addr1);
+  update1.Set(addr1, balance1);
+  update1.Set(addr1, nonce1);
+
+  Update update3;
+  update3.Create(addr2);
+  update3.Set(addr2, balance2);
+
+  Update update5;
+  update5.Set(addr1, balance2);
+  update5.Set(addr1, nonce2);
+  update5.Set(addr1, Code{0x01, 0x02});
+  update5.Set(addr1, key, Value{0x01});
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  for (BlockId block = 0; block <= 6; block++) {
+    ASSERT_OK_AND_ASSIGN(auto archive_hash, archive.GetHash(block));
+    EXPECT_OK(archive.Verify(block, archive_hash));
+  }
+}
 
 }  // namespace
 }  // namespace carmen

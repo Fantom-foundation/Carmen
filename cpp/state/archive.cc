@@ -271,6 +271,21 @@ class Archive {
     return result;
   }
 
+  absl::StatusOr<Hash> GetHash(BlockId block) {
+    Sha256Hasher hasher;
+    ASSIGN_OR_RETURN(
+        auto query,
+        db_.Prepare(
+            "SELECT hash FROM account_hash a INNER JOIN (SELECT account, "
+            "MAX(block) as block FROM account_hash WHERE block <= ? GROUP BY "
+            "account) b ON a.account = b.account AND a.block = b.block ORDER "
+            "BY a.account"));
+    RETURN_IF_ERROR(query.Bind(0, static_cast<int>(block)));
+    RETURN_IF_ERROR(
+        query.Run([&](const SqlRow& row) { hasher.Ingest(row.GetBytes(0)); }));
+    return hasher.GetHash();
+  }
+
   absl::StatusOr<std::vector<Address>> GetAccountList(BlockId block) {
     std::vector<Address> res;
     ASSIGN_OR_RETURN(auto query,
@@ -304,13 +319,42 @@ class Archive {
     return result;
   }
 
-  absl::Status Verify(BlockId) {
-    // TODO:
-    //  - get list of all accounts
-    //  - check individual accounts
-    //  - check that there is no extra information in any of the tables listed
-    //  (as SQL query)
-    return absl::UnimplementedError("sorry");
+  absl::Status Verify(BlockId block, const Hash& expected_hash) {
+    // Start by checking the expected hash.
+    ASSIGN_OR_RETURN(auto hash, GetHash(block));
+    if (hash != expected_hash) {
+      return absl::InternalError("Archive hash does not match expected hash.");
+    }
+
+    // Validate all individual accounts.
+    // TODO: run this in parallel
+    ASSIGN_OR_RETURN(auto accounts, GetAccountList(block));
+    for (const auto& cur : accounts) {
+      RETURN_IF_ERROR(VerifyAccount(block, cur));
+    }
+
+    // Check that there is no extra information in any of the content tables.
+    // TODO: run this in parallel
+    for (auto table : {"status", "balance", "nonce", "code", "storage"}) {
+      ASSIGN_OR_RETURN(auto state_check,
+                       db_.Prepare(absl::StrFormat(
+                           "SELECT 1 FROM (SELECT account FROM %s WHERE block "
+                           "<= ? EXCEPT SELECT account FROM account_hash WHERE "
+                           "block <= ?) LIMIT 1",
+                           table)));
+      RETURN_IF_ERROR(state_check.Bind(0, static_cast<int>(block)));
+      RETURN_IF_ERROR(state_check.Bind(1, static_cast<int>(block)));
+
+      bool found = false;
+      RETURN_IF_ERROR(state_check.Run([&](const auto&) { found = true; }));
+      if (found) {
+        return absl::InternalError(
+            absl::StrFormat("Found extra row of data in table `%s`.", table));
+      }
+    }
+
+    // All checks have been passed. DB is verified.
+    return absl::OkStatus();
   }
 
   // Verifyies the consistency of the provides account up until the given block.
@@ -747,6 +791,11 @@ absl::StatusOr<Value> Archive::GetStorage(BlockId block, const Address& account,
   return impl_->GetStorage(block, account, key);
 }
 
+absl::StatusOr<Hash> Archive::GetHash(BlockId block) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetHash(block);
+}
+
 absl::StatusOr<std::vector<Address>> Archive::GetAccountList(BlockId block) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetAccountList(block);
@@ -756,6 +805,11 @@ absl::StatusOr<Hash> Archive::GetAccountHash(BlockId block,
                                              const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetAccountHash(block, account);
+}
+
+absl::Status Archive::Verify(BlockId block, const Hash& expected_hash) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->Verify(block, expected_hash);
 }
 
 absl::Status Archive::VerifyAccount(BlockId block,
