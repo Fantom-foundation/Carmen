@@ -181,5 +181,127 @@ TEST(Update, KnownEncodings) {
       "0xbc283c81ee1607c83e557420bf3763ab99aca2a59a99d0c66d7105e1ff2fea26");
 }
 
+TEST(AccountUpdate, IsNormalizedDetectsOutOfOrderSlotUpdates) {
+  AccountUpdate update;
+  update.storage.push_back({Key{0x02}, Value{}});
+  EXPECT_OK(update.IsNormalized());
+  update.storage.push_back({Key{0x01}, Value{}});
+  EXPECT_THAT(update.IsNormalized(),
+              StatusIs(absl::StatusCode::kInternal, HasSubstr("not in order")));
+}
+
+TEST(AccountUpdate, IsNormalizedDetectsDuplicatedSlotUpdates) {
+  AccountUpdate update;
+  update.storage.push_back({Key{0x02}, Value{}});
+  EXPECT_OK(update.IsNormalized());
+  update.storage.push_back({Key{0x02}, Value{}});
+  EXPECT_THAT(
+      update.IsNormalized(),
+      StatusIs(absl::StatusCode::kInternal, HasSubstr("contains collisions")));
+}
+
+TEST(AccountUpdate, NormalizeFixesSlotUpdateOrder) {
+  using S = AccountUpdate::SlotUpdate;
+  AccountUpdate update;
+  S s1{Key{0x01}, Value{0x01}};
+  S s2{Key{0x02}, Value{0x02}};
+  S s3{Key{0x03}, Value{0x03}};
+  update.storage.push_back(s2);
+  update.storage.push_back(s1);
+  update.storage.push_back(s3);
+  EXPECT_OK(update.Normalize());
+  EXPECT_OK(update.IsNormalized());
+  EXPECT_THAT(update.storage, ElementsAre(s1, s2, s3));
+}
+
+TEST(AccountUpdate, NormalizeRemovesDuplicates) {
+  using S = AccountUpdate::SlotUpdate;
+  AccountUpdate update;
+  S s1{Key{0x01}, Value{0x01}};
+  S s2{Key{0x02}, Value{0x02}};
+  S s3{Key{0x03}, Value{0x03}};
+  update.storage.push_back(s2);
+  update.storage.push_back(s1);
+  update.storage.push_back(s3);
+  update.storage.push_back(s1);
+  update.storage.push_back(s2);
+  EXPECT_OK(update.Normalize());
+  EXPECT_OK(update.IsNormalized());
+  EXPECT_THAT(update.storage, ElementsAre(s1, s2, s3));
+}
+
+TEST(AccountUpdate, NormalizeFailsOnCollisions) {
+  using S = AccountUpdate::SlotUpdate;
+  AccountUpdate update;
+  S s2a{Key{0x02}, Value{0x02}};
+  S s2b{Key{0x02}, Value{0x03}};
+  update.storage.push_back(s2a);
+  update.storage.push_back(s2b);
+  EXPECT_THAT(update.Normalize(),
+              StatusIs(_, HasSubstr("conflicting updates")));
+}
+
+TEST(AccountUpdate, HashOfEmptyAccountUpdateIsHashOfEmptyString) {
+  AccountUpdate update;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(""));
+}
+
+TEST(AccountUpdate, HashOfAccountStateChangesAreHashesOfSingleByte) {
+  AccountUpdate update;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(""));
+  update.created = true;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(1)));
+  update.deleted = true;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(3)));
+  update.created = false;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(2)));
+}
+
+TEST(AccountUpdate, HashOfBalanceChangeIsHashOfBalance) {
+  AccountUpdate update;
+  Balance b{0x1, 0x2};
+  update.balance = b;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), b));
+}
+
+TEST(AccountUpdate, HashOfNonceChangeIsHashOfBalance) {
+  AccountUpdate update;
+  Nonce n{0x1, 0x2};
+  update.nonce = n;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), n));
+}
+
+TEST(AccountUpdate, HashOfCodeChangeIsHashOfCode) {
+  AccountUpdate update;
+  Code c{0x1, 0x2, 0x3};
+  update.code = c;
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), c));
+}
+
+TEST(AccountUpdate, SlotUpdatesAreHashedInOrder) {
+  AccountUpdate update;
+  Key k1{0x01};
+  Key k2{0x02};
+  Value v1{0x10};
+  Value v2{0x20};
+  update.storage.push_back({k1, v1});
+  update.storage.push_back({k2, v2});
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), k1, v1, k2, v2));
+}
+
+TEST(AccountUpdate, BlanceNonceCodeAndStorageAreHashedInOrder) {
+  AccountUpdate update;
+  Balance b{0x1, 0x2};
+  Nonce n{0x1, 0x2};
+  Code c{0x1, 0x2, 0x3};
+  Key k1{0x01};
+  Value v1{0x10};
+  update.balance = b;
+  update.nonce = n;
+  update.code = c;
+  update.storage.push_back({k1, v1});
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), b, n, c, k1, v1));
+}
+
 }  // namespace
 }  // namespace carmen

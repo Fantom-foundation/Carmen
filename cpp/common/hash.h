@@ -52,11 +52,11 @@ class Sha256Hasher {
   }
 
   // An extension of the function above, supporting the ingestion of a list
-  // of trivial objects.
-  template <Trivial First, Trivial... Rest>
-  void Ingest(const First& first, const Rest&... rest) {
+  // of hashable objects.
+  template <typename First, typename Second, typename... Rest>
+  void Ingest(const First& first, const Second& second, const Rest&... rest) {
     Ingest(first);
-    Ingest(rest...);
+    Ingest(second, rest...);
   }
 
   // Finalises the hashing and consumes the resulting hash.
