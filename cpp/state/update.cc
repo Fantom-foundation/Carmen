@@ -1,5 +1,6 @@
 #include "state/update.h"
 
+#include <algorithm>
 #include <span>
 #include <sstream>
 #include <vector>
@@ -225,6 +226,70 @@ absl::StatusOr<std::vector<std::byte>> Update::ToBytes() const {
 
   assert(out.Size() == size);
   return std::move(out).Build();
+}
+
+absl::Status AccountUpdate::IsNormalized() const {
+  for (std::size_t i = 1; i < storage.size(); i++) {
+    if (storage[i - 1].key >= storage[i].key) {
+      return absl::InternalError(
+          "Slot updates not in order or contains collisions.");
+    }
+  }
+  return absl::OkStatus();
+}
+
+absl::Status AccountUpdate::Normalize() {
+  // Sort updates.
+  std::sort(storage.begin(), storage.end(),
+            [](const auto& a, const auto& b) { return a.key < b.key; });
+
+  // Remove duplciates.
+  auto last = std::unique(storage.begin(), storage.end());
+  storage.erase(last, storage.end());
+
+  // Check for collisions.
+  if (auto status = IsNormalized(); !status.ok()) {
+    return absl::InvalidArgumentError(
+        "Slot updates containes conflicting updates.");
+  }
+  return absl::OkStatus();
+}
+
+Hash AccountUpdate::GetHash() const {
+  // The hash of an account update is computed by hashing a byte string composed
+  // as followes:
+  //   - a byte summarizing creation/deletion events; bit 0 is set if the
+  //   account is created, bit 1 is set if the a account is deleted.
+  //   - the 16 byte of the updated balance, if it was updated
+  //   - the 8 byte of the updated nonce, if it was updated
+  //   - the new code, if it was updated
+  //   - the concatenated list of updated slots
+  Sha256Hasher hasher;
+  std::uint8_t state_change = (created ? 1 : 0) | (deleted ? 2 : 0);
+  hasher.Ingest(state_change);
+  if (balance.has_value()) {
+    hasher.Ingest(*balance);
+  }
+  if (nonce.has_value()) {
+    hasher.Ingest(*nonce);
+  }
+  if (code.has_value()) {
+    hasher.Ingest(*code);
+  }
+  for (const auto& cur : storage) {
+    hasher.Ingest(cur.key);
+    hasher.Ingest(cur.value);
+  }
+  return hasher.GetHash();
+}
+
+std::ostream& operator<<(std::ostream& out,
+                         const AccountUpdate::SlotUpdate& update) {
+  return out << update.key << ":" << update.value;
+}
+
+std::ostream& operator<<(std::ostream& out, const AccountUpdate&) {
+  return out << "Missing implementation";
 }
 
 }  // namespace carmen
