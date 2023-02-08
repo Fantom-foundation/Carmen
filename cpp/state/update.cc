@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -13,10 +14,6 @@
 #include "common/type.h"
 
 namespace carmen {
-
-// TODO:
-//  - implement cryptographic hashing
-
 namespace {
 
 constexpr const std::uint8_t kVersion0 = 0;
@@ -226,6 +223,30 @@ absl::StatusOr<std::vector<std::byte>> Update::ToBytes() const {
 
   assert(out.Size() == size);
   return std::move(out).Build();
+}
+
+absl::flat_hash_map<Address, AccountUpdate> AccountUpdate::From(
+    const Update& update) {
+  absl::flat_hash_map<Address, AccountUpdate> res;
+  for (const auto& cur : update.GetCreatedAccounts()) {
+    res[cur].created = true;
+  }
+  for (const auto& cur : update.GetDeletedAccounts()) {
+    res[cur].deleted = true;
+  }
+  for (const auto& [address, balance] : update.GetBalances()) {
+    res[address].balance = balance;
+  }
+  for (const auto& [address, nonce] : update.GetNonces()) {
+    res[address].nonce = nonce;
+  }
+  for (const auto& [address, code] : update.GetCodes()) {
+    res[address].code = code;
+  }
+  for (const auto& [address, key, value] : update.GetStorage()) {
+    res[address].storage.push_back({key, value});
+  }
+  return res;
 }
 
 absl::Status AccountUpdate::IsNormalized() const {

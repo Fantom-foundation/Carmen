@@ -2,12 +2,14 @@
 
 #include <algorithm>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/synchronization/mutex.h"
 #include "backend/common/sqlite/sqlite.h"
+#include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
@@ -31,6 +33,7 @@ class Archive {
 
     // Create tables.
     RETURN_IF_ERROR(db.Run(kCreateBlockTable));
+    RETURN_IF_ERROR(db.Run(kCreateAccountHashTable));
     RETURN_IF_ERROR(db.Run(kCreateStatusTable));
     RETURN_IF_ERROR(db.Run(kCreateBalanceTable));
     RETURN_IF_ERROR(db.Run(kCreateCodeTable));
@@ -40,6 +43,9 @@ class Archive {
     // Prepare query statements.
     ASSIGN_OR_RETURN(auto add_block, db.Prepare(kAddBlockStmt));
     ASSIGN_OR_RETURN(auto get_block_height, db.Prepare(kGetBlockHeightStmt));
+
+    ASSIGN_OR_RETURN(auto add_account_hash, db.Prepare(kAddAccountHashStmt));
+    ASSIGN_OR_RETURN(auto get_account_hash, db.Prepare(kGetAccountHashStmt));
 
     ASSIGN_OR_RETURN(auto create_account, db.Prepare(kCreateAccountStmt));
     ASSIGN_OR_RETURN(auto delete_account, db.Prepare(kDeleteAccountStmt));
@@ -63,7 +69,8 @@ class Archive {
 
     return std::unique_ptr<Archive>(new Archive(
         std::move(db), wrap(std::move(add_block)),
-        wrap(std::move(get_block_height)), wrap(std::move(create_account)),
+        wrap(std::move(get_block_height)), wrap(std::move(add_account_hash)),
+        wrap(std::move(get_account_hash)), wrap(std::move(create_account)),
         wrap(std::move(delete_account)), wrap(std::move(get_status)),
         wrap(std::move(add_balance)), wrap(std::move(get_balance)),
         wrap(std::move(add_code)), wrap(std::move(get_code)),
@@ -81,7 +88,11 @@ class Archive {
           newestBlock));
     }
 
-    ASSIGN_OR_RETURN(auto block_hash, update.GetHash());
+    // Compute hashes of account updates.
+    absl::flat_hash_map<Address, Hash> diff_hashes;
+    for (const auto& [addr, diff] : AccountUpdate::From(update)) {
+      diff_hashes[addr] = diff.GetHash();
+    }
 
     // Fill in data in a single transaction.
     auto guard = absl::MutexLock(&mutation_lock_);
@@ -90,7 +101,6 @@ class Archive {
 
     RETURN_IF_ERROR(add_block_stmt_->Reset());
     RETURN_IF_ERROR(add_block_stmt_->Bind(0, std::int64_t(block)));
-    RETURN_IF_ERROR(add_block_stmt_->Bind(1, block_hash));
     RETURN_IF_ERROR(add_block_stmt_->Run());
 
     for (auto& addr : update.GetDeletedAccounts()) {
@@ -143,6 +153,17 @@ class Archive {
       RETURN_IF_ERROR(add_value_stmt_->Bind(5, value));
       RETURN_IF_ERROR(add_value_stmt_->Run());
     }
+
+    for (auto& [addr, hash] : diff_hashes) {
+      ASSIGN_OR_RETURN(auto last_hash, GetAccountHash(block, addr));
+      RETURN_IF_ERROR(add_account_hash_stmt_->Reset());
+      RETURN_IF_ERROR(add_account_hash_stmt_->Bind(0, addr));
+      RETURN_IF_ERROR(add_account_hash_stmt_->Bind(1, static_cast<int>(block)));
+      RETURN_IF_ERROR(
+          add_account_hash_stmt_->Bind(2, GetSha256Hash(last_hash, hash)));
+      RETURN_IF_ERROR(add_account_hash_stmt_->Run());
+    }
+
     return db_.Run("END TRANSACTION");
   }
 
@@ -249,6 +270,25 @@ class Archive {
     return result;
   }
 
+  // Fetches the hash of the given account on the given block height. The hash
+  // of an account is initially zero. Subsequent updates create a hash chain
+  // covering the previous state and the hash of applied diffs.
+  absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& account) {
+    auto guard = absl::MutexLock(&get_account_hash_lock_);
+    if (!get_account_hash_stmt_)
+      return absl::FailedPreconditionError("DB Closed");
+    RETURN_IF_ERROR(get_account_hash_stmt_->Reset());
+    RETURN_IF_ERROR(get_account_hash_stmt_->Bind(0, account));
+    RETURN_IF_ERROR(get_account_hash_stmt_->Bind(1, static_cast<int>(block)));
+
+    // The query produces 0 or 1 results. If there is no result, returning the
+    // zero hash is expected, since it is the hash of a non-existing account.
+    Hash result{};
+    RETURN_IF_ERROR(get_account_hash_stmt_->Run(
+        [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
+    return result;
+  }
+
   absl::Status Flush() {
     // Nothing to do.
     return absl::OkStatus();
@@ -267,10 +307,15 @@ class Archive {
       add_code_stmt_.reset();
       add_nonce_stmt_.reset();
       add_value_stmt_.reset();
+      add_account_hash_stmt_.reset();
     }
     {
       auto guard = absl::MutexLock(&get_block_height_lock_);
       get_block_height_stmt_.reset();
+    }
+    {
+      auto guard = absl::MutexLock(&get_account_hash_lock_);
+      get_account_hash_stmt_.reset();
     }
     {
       auto guard = absl::MutexLock(&get_status_lock_);
@@ -307,13 +352,26 @@ class Archive {
   // -- Blocks --
 
   static constexpr const std::string_view kCreateBlockTable =
-      "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY, hash BLOB)";
+      "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY)";
 
   static constexpr const std::string_view kAddBlockStmt =
-      "INSERT INTO block(number, hash) VALUES (?,?)";
+      "INSERT INTO block(number) VALUES (?)";
 
   static constexpr const std::string_view kGetBlockHeightStmt =
       "SELECT number FROM block ORDER BY number DESC LIMIT 1";
+
+  // -- Account Hashes --
+
+  static constexpr const std::string_view kCreateAccountHashTable =
+      "CREATE TABLE IF NOT EXISTS account_hash (account BLOB, block INT, hash "
+      "BLOB, PRIMARY KEY(account,block))";
+
+  static constexpr const std::string_view kAddAccountHashStmt =
+      "INSERT INTO account_hash(account, block, hash) VALUES (?,?,?)";
+
+  static constexpr const std::string_view kGetAccountHashStmt =
+      "SELECT hash FROM account_hash WHERE account = ? AND block <= ? ORDER BY "
+      "block DESC LIMIT 1";
 
   // -- Account Status --
 
@@ -393,6 +451,8 @@ class Archive {
 
   Archive(Sqlite db, std::unique_ptr<SqlStatement> add_block,
           std::unique_ptr<SqlStatement> get_block_height,
+          std::unique_ptr<SqlStatement> add_account_hash,
+          std::unique_ptr<SqlStatement> get_account_hash,
           std::unique_ptr<SqlStatement> create_account,
           std::unique_ptr<SqlStatement> delete_account,
           std::unique_ptr<SqlStatement> get_status,
@@ -407,6 +467,8 @@ class Archive {
       : db_(std::move(db)),
         add_block_stmt_(std::move(add_block)),
         get_block_height_stmt_(std::move(get_block_height)),
+        add_account_hash_stmt_(std::move(add_account_hash)),
+        get_account_hash_stmt_(std::move(get_account_hash)),
         create_account_stmt_(std::move(create_account)),
         delete_account_stmt_(std::move(delete_account)),
         get_status_stmt_(std::move(get_status)),
@@ -431,6 +493,12 @@ class Archive {
   std::unique_ptr<SqlStatement> add_block_stmt_ GUARDED_BY(mutation_lock_);
   std::unique_ptr<SqlStatement> get_block_height_stmt_
       GUARDED_BY(get_block_height_lock_);
+
+  absl::Mutex get_account_hash_lock_;
+  std::unique_ptr<SqlStatement> add_account_hash_stmt_
+      GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_account_hash_stmt_
+      GUARDED_BY(get_account_hash_lock_);
 
   absl::Mutex get_status_lock_;
   std::unique_ptr<SqlStatement> create_account_stmt_ GUARDED_BY(mutation_lock_);
@@ -502,6 +570,12 @@ absl::StatusOr<Value> Archive::GetStorage(BlockId block, const Address& account,
                                           const Key& key) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetStorage(block, account, key);
+}
+
+absl::StatusOr<Hash> Archive::GetAccountHash(BlockId block,
+                                             const Address& account) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetAccountHash(block, account);
 }
 
 absl::Status Archive::Flush() {

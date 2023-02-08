@@ -7,6 +7,7 @@ cc_library(
         "//backend:structure",
         "//common:account_state",
         "//common:type",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -106,6 +107,7 @@ cc_library(
         "//common:hash",
         "//common:status_util",
         "//common:type",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
     ],
@@ -144,6 +146,7 @@ cc_test(
     deps = [
         ":archive",
         "//common:file_util",
+        "//common:hash",
         "//common:status_test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",

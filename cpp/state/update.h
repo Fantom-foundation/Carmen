@@ -4,6 +4,7 @@
 #include <span>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "common/type.h"
 
@@ -153,6 +154,10 @@ struct AccountUpdate {
     friend auto operator<=>(const SlotUpdate&, const SlotUpdate&) = default;
     friend std::ostream& operator<<(std::ostream& out, const SlotUpdate&);
   };
+
+  // Converts the provided update in a list of account updates. If the update
+  // was normalized, the entries of the resulting list are normalized.
+  static absl::flat_hash_map<Address, AccountUpdate> From(const Update& update);
 
   // --- Normalization ---
 
