@@ -184,16 +184,18 @@ absl::Status SqlStatement::Run() {
 absl::Status SqlStatement::Run(
     absl::FunctionRef<void(const SqlRow& row)> consumer) {
   RETURN_IF_ERROR(CheckState());
-  // See  https://www.sqlite.org/c3ref/step.html
-  int result = sqlite3_step(stmt_);
-  while (result == SQLITE_ROW) {
-    consumer(SqlRow(stmt_));
-    result = sqlite3_step(stmt_);
-  }
-  if (result != SQLITE_DONE) {
-    return db_->HandleError(result);
+  ASSIGN_OR_RETURN(auto iter, Open());
+  ASSIGN_OR_RETURN(auto has_next, iter.Next());
+  while (has_next) {
+    consumer(*iter);
+    ASSIGN_OR_RETURN(has_next, iter.Next());
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<SqlIterator> SqlStatement::Open() {
+  RETURN_IF_ERROR(CheckState());
+  return SqlIterator(db_.get(), stmt_);
 }
 
 absl::Status SqlStatement::CheckState() {
@@ -231,5 +233,25 @@ std::span<const std::byte> SqlRow::GetBytes(int column) const {
   int size = sqlite3_column_bytes(stmt_, column);
   return std::span(reinterpret_cast<const std::byte*>(data), size);
 }
+
+absl::StatusOr<bool> SqlIterator::Next() {
+  // See  https://www.sqlite.org/c3ref/step.html
+  if (Finished()) return false;
+  int result = sqlite3_step(row_.stmt_);
+  if (result == SQLITE_DONE) {
+    row_.stmt_ = nullptr;
+    return false;
+  }
+  if (result == SQLITE_ROW) {
+    return true;
+  }
+  return db_->HandleError(result);
+}
+
+bool SqlIterator::Finished() { return row_.stmt_ == nullptr; }
+
+SqlRow& SqlIterator::operator*() { return row_; }
+
+SqlRow* SqlIterator::operator->() { return &row_; }
 
 }  // namespace carmen::backend
