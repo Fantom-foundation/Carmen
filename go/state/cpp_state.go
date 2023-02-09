@@ -141,7 +141,6 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 func (cs *CppState) setCode(address common.Address, code []byte) error {
 	update := common.Update{}
 	update.AppendCodeUpdate(address, code)
-	cs.codeCache.Set(address, code)
 	return cs.applyToState(update)
 }
 
@@ -167,6 +166,10 @@ func (cs *CppState) Apply(block uint64, update common.Update) error {
 	data := update.ToBytes()
 	dataPtr := unsafe.Pointer(&data[0])
 	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint32_t(len(data)))
+	// Apply code changes to Go-sided code cache.
+	for _, change := range update.Codes {
+		cs.codeCache.Set(change.Account, change.Code)
+	}
 	return nil
 }
 
@@ -176,6 +179,11 @@ func (cs *CppState) applyToState(update common.Update) error {
 	data := update.ToBytes()
 	dataPtr := unsafe.Pointer(&data[0])
 	C.Carmen_ApplyToState(cs.state, dataPtr, C.uint32_t(len(data)))
+
+	// Apply code changes to Go-sided code cache.
+	for _, change := range update.Codes {
+		cs.codeCache.Set(change.Account, change.Code)
+	}
 	return nil
 }
 
