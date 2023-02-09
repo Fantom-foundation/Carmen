@@ -130,6 +130,10 @@ cc_library(
     name = "archive",
     srcs = ["archive.cc"],
     hdrs = ["archive.h"],
+    visibility = [
+        "//state:__subpackages__",
+        "//tools:__subpackages__",
+    ],
     deps = [
         ":update",
         "//backend/common/sqlite",
