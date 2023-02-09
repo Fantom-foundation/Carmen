@@ -32,7 +32,7 @@ absl::Status PrintStats(int argc, char** argv) {
   std::cout << "\tBlock height: " << height << "\n";
   ASSIGN_OR_RETURN(auto hash, archive.GetHash(height));
   std::cout << "\tArchive Hash: " << hash << "\n";
-  return absl::OkStatus();
+  return archive.Close();
 }
 
 absl::Status Verify(int argc, char** argv) {
@@ -61,7 +61,7 @@ absl::Status Verify(int argc, char** argv) {
     std::cout << "\tVerification: failed\n";
     std::cout << "\t\t" << verify_result.message() << "\n";
   }
-  return absl::OkStatus();
+  return archive.Close();
 }
 
 absl::Status Main(int argc, char** argv) {
