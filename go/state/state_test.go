@@ -201,6 +201,60 @@ func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
 	})
 }
 
+func TestCodeCanBeUpdated(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+		// Initially, the code of an account is empty.
+		code, err := s.GetCode(address1)
+		if err != nil {
+			t.Fatalf("failed to fetch initial code: %v", err)
+		}
+		if len(code) != 0 {
+			t.Errorf("initial code is not empty")
+		}
+		if size, err := s.GetCodeSize(address1); err != nil || size != 0 {
+			t.Errorf("reported code size is not zero")
+		}
+		expected_hash := common.GetKeccak256Hash([]byte{})
+		if hash, err := s.GetCodeHash(address1); err != nil || hash != expected_hash {
+			t.Errorf("hash of code does not match, expected %v, got %v", expected_hash, hash)
+		}
+
+		// Set the code to a new value.
+		code1 := []byte{0, 1, 2, 3, 4}
+		if err := s.setCode(address1, code1); err != nil {
+			t.Fatalf("failed to update code: %v", err)
+		}
+		code, err = s.GetCode(address1)
+		if err != nil || !bytes.Equal(code, code1) {
+			t.Errorf("failed to set code for address")
+		}
+		if size, err := s.GetCodeSize(address1); err != nil || size != len(code1) {
+			t.Errorf("reported code size is not %d, got %d", len(code1), size)
+		}
+		expected_hash = common.GetKeccak256Hash(code1)
+		if hash, err := s.GetCodeHash(address1); err != nil || hash != expected_hash {
+			t.Errorf("hash of code does not match, expected %v, got %v", expected_hash, hash)
+		}
+
+		// Update code again should be fine.
+		code2 := []byte{5, 4, 3, 2, 1}
+		if err := s.setCode(address1, code2); err != nil {
+			t.Fatalf("failed to update code: %v", err)
+		}
+		code, err = s.GetCode(address1)
+		if err != nil || !bytes.Equal(code, code2) {
+			t.Errorf("failed to update code for address")
+		}
+		if size, err := s.GetCodeSize(address1); err != nil || size != len(code2) {
+			t.Errorf("reported code size is not %d, got %d", len(code2), size)
+		}
+		expected_hash = common.GetKeccak256Hash(code2)
+		if hash, err := s.GetCodeHash(address1); err != nil || hash != expected_hash {
+			t.Errorf("hash of code does not match, expected %v, got %v", expected_hash, hash)
+		}
+	})
+}
+
 func TestCodeHashesMatchCodes(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
 		hashOfEmptyCode := common.GetKeccak256Hash([]byte{})

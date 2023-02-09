@@ -231,7 +231,7 @@ TYPED_TEST_P(StateTest, CodesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
   std::vector<std::byte> code1{std::byte{1}, std::byte{2}};
-  std::vector<std::byte> code2{std::byte{1}, std::byte{2}};
+  std::vector<std::byte> code2{std::byte{3}, std::byte{4}};
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
@@ -244,6 +244,10 @@ TYPED_TEST_P(StateTest, CodesCanBeUpdated) {
 
   EXPECT_OK(state.SetCode(b, code2));
   EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
+
+  EXPECT_OK(state.SetCode(a, code2));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code2)));
   EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
 }
 
