@@ -673,14 +673,8 @@ TEST(Archive, AccountValidationFailsOnAdditionalStatusUpdate) {
   {
     ASSERT_OK_AND_ASSIGN(auto db,
                          Sqlite::Open(dir.GetPath() / "archive.sqlite"));
-    {
-      ASSERT_OK_AND_ASSIGN(
-          auto stmt,
-          db.Prepare(
-              "INSERT INTO status(account, block, exist) VALUES (?,2,1)"));
-      ASSERT_OK(stmt.Bind(0, addr));
-      ASSERT_OK(stmt.Run());
-    }
+    ASSERT_OK(db.Run("INSERT INTO status(account, block, exist) VALUES (?,2,1)",
+                     addr));
     ASSERT_OK(db.Close());
   }
   {

@@ -143,19 +143,25 @@ SqlStatement::~SqlStatement() {
 absl::Status SqlStatement::Bind(int index, int value) {
   RETURN_IF_ERROR(CheckState());
   // See https://www.sqlite.org/c3ref/bind_blob.html
-  return db_->HandleError(sqlite3_bind_int(stmt_, index + 1, value));
+  return db_->HandleError(sqlite3_bind_int(stmt_, index, value));
+}
+
+absl::Status SqlStatement::Bind(int index, std::uint32_t value) {
+  RETURN_IF_ERROR(CheckState());
+  // See https://www.sqlite.org/c3ref/bind_blob.html
+  return db_->HandleError(sqlite3_bind_int64(stmt_, index, value));
 }
 
 absl::Status SqlStatement::Bind(int index, std::int64_t value) {
   RETURN_IF_ERROR(CheckState());
   // See https://www.sqlite.org/c3ref/bind_blob.html
-  return db_->HandleError(sqlite3_bind_int64(stmt_, index + 1, value));
+  return db_->HandleError(sqlite3_bind_int64(stmt_, index, value));
 }
 
 absl::Status SqlStatement::Bind(int index, absl::string_view str) {
   RETURN_IF_ERROR(CheckState());
   // See https://www.sqlite.org/c3ref/bind_blob.html
-  return db_->HandleError(sqlite3_bind_text(stmt_, index + 1, str.data(),
+  return db_->HandleError(sqlite3_bind_text(stmt_, index, str.data(),
                                             str.size(), SQLITE_TRANSIENT));
 }
 
@@ -163,8 +169,8 @@ absl::Status SqlStatement::Bind(int index, std::span<const std::byte> bytes) {
   RETURN_IF_ERROR(CheckState());
   // See https://www.sqlite.org/c3ref/bind_blob.html
   return db_->HandleError(sqlite3_bind_text(
-      stmt_, index + 1, reinterpret_cast<const char*>(bytes.data()),
-      bytes.size(), SQLITE_TRANSIENT));
+      stmt_, index, reinterpret_cast<const char*>(bytes.data()), bytes.size(),
+      SQLITE_TRANSIENT));
 }
 
 absl::Status SqlStatement::Reset() {
@@ -176,12 +182,14 @@ absl::Status SqlStatement::Run() {
   RETURN_IF_ERROR(CheckState());
   int result = sqlite3_step(stmt_);
   if (result == SQLITE_DONE) {
-    return absl::OkStatus();
+    return Reset();
   }
-  return db_->HandleError(result);
+  auto status = db_->HandleError(result);
+  RETURN_IF_ERROR(Reset());
+  return status;
 }
 
-absl::Status SqlStatement::Run(
+absl::Status SqlStatement::Execute(
     absl::FunctionRef<void(const SqlRow& row)> consumer) {
   RETURN_IF_ERROR(CheckState());
   ASSIGN_OR_RETURN(auto iter, Open());
@@ -190,12 +198,12 @@ absl::Status SqlStatement::Run(
     consumer(*iter);
     ASSIGN_OR_RETURN(has_next, iter.Next());
   }
-  return absl::OkStatus();
+  return iter.Close();
 }
 
 absl::StatusOr<SqlIterator> SqlStatement::Open() {
   RETURN_IF_ERROR(CheckState());
-  return SqlIterator(db_.get(), stmt_);
+  return SqlIterator(db_.get(), this, stmt_);
 }
 
 absl::Status SqlStatement::CheckState() {
@@ -234,12 +242,19 @@ std::span<const std::byte> SqlRow::GetBytes(int column) const {
   return std::span(reinterpret_cast<const std::byte*>(data), size);
 }
 
+SqlIterator::SqlIterator(SqlIterator&& iter)
+    : db_(iter.db_), stmt_(iter.stmt_), row_(iter.row_) {
+  iter.stmt_ = nullptr;
+}
+
+SqlIterator::~SqlIterator() { Close().IgnoreError(); }
+
 absl::StatusOr<bool> SqlIterator::Next() {
   // See  https://www.sqlite.org/c3ref/step.html
   if (Finished()) return false;
   int result = sqlite3_step(row_.stmt_);
   if (result == SQLITE_DONE) {
-    row_.stmt_ = nullptr;
+    db_ = nullptr;
     return false;
   }
   if (result == SQLITE_ROW) {
@@ -248,10 +263,30 @@ absl::StatusOr<bool> SqlIterator::Next() {
   return db_->HandleError(result);
 }
 
-bool SqlIterator::Finished() { return row_.stmt_ == nullptr; }
+bool SqlIterator::Finished() { return db_ == nullptr; }
 
 SqlRow& SqlIterator::operator*() { return row_; }
 
 SqlRow* SqlIterator::operator->() { return &row_; }
+
+absl::Status SqlIterator::Close() {
+  if (stmt_ == nullptr) return absl::OkStatus();
+  auto stmt = stmt_;
+  stmt_ = nullptr;
+  return stmt->Reset();
+}
+
+absl::StatusOr<SqlIterator> SqlQueryResult::Iterator() { return stmt_.Open(); }
+
+absl::Status SqlQueryResult::Consume(
+    absl::FunctionRef<void(const SqlRow& row)> consumer) {
+  ASSIGN_OR_RETURN(auto iter, Iterator());
+  ASSIGN_OR_RETURN(auto has_next, iter.Next());
+  while (has_next) {
+    consumer(*iter);
+    ASSIGN_OR_RETURN(has_next, iter.Next());
+  }
+  return absl::OkStatus();
+}
 
 }  // namespace carmen::backend

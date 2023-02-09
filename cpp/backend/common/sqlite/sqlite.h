@@ -8,6 +8,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 #include "sqlite3.h"
 
 namespace carmen::backend {
@@ -30,6 +31,7 @@ namespace carmen::backend {
 
 class Sqlite;
 class SqlStatement;
+class SqlQueryResult;
 class SqlIterator;
 class SqlRow;
 
@@ -55,6 +57,18 @@ class Sqlite {
   // Runs the given statement on the database. It is a shortcut for one-of
   // statements, skipping the statement preparation step.
   absl::Status Run(std::string_view statement);
+
+  // Runs a given parameterized statement on the database using the provided
+  // arguments. Results are ignored. This is a convenience version preparing the
+  // statement internally, running it once, and discarding it afterwards. For
+  // frequently used queries the prepared statements should be reused.
+  template <typename... Args>
+  absl::Status Run(std::string_view statement, const Args&... args);
+
+  // Issues a parameterized query and returns an iterator on the results.
+  template <typename... Args>
+  absl::StatusOr<SqlQueryResult> Query(std::string_view statement,
+                                       const Args&... args);
 
   // Statements that should be repeated many times should use this preparation
   // call, returning a prepared statement which can be run multiple times. The
@@ -103,18 +117,26 @@ class SqlStatement {
   absl::Status Reset();
 
   // Parameter Binding: prepared SQL statements may contain parameters in the
-  // form of ?. These parameters need to be bound before each execution. The
-  // following overloads allow to bind those parameters to values. Parameters
-  // are addressed through their index, where the first parameter in the query
-  // has index 0.
+  // form of ? or ?NNN where NNN is a number > 0. These parameters need to be
+  // bound before each execution. The following overloads allow to bind those
+  // parameters to values. Parameters are addressed through their index, where
+  // the first parameter in the query has index 1.
 
   absl::Status Bind(int index, int value);
+
+  absl::Status Bind(int index, std::uint32_t value);
 
   absl::Status Bind(int index, std::int64_t value);
 
   absl::Status Bind(int index, absl::string_view str);
 
   absl::Status Bind(int index, std::span<const std::byte> data);
+
+  // A convenience version of the function above, binding a list of parameters
+  // in one go. The first argument is bound to parameter 0, the second to
+  // parmeter 1, and so forth.
+  template <typename... Args>
+  absl::Status BindParameters(const Args&... args);
 
   // After the parameters are bound (if there are any), the following overloads
   // of Run(..) can be used to execute the actual operation.
@@ -123,15 +145,24 @@ class SqlStatement {
   // CREATE TABLE).
   absl::Status Run();
 
+  // Convenience method binding arguments and running the query in one go.
+  template <typename... Args>
+  absl::Status Run(const Args&... args);
+
   // Runs a statement that produces results and forward each row of the result
   // to the given consumer.
-  absl::Status Run(absl::FunctionRef<void(const SqlRow& row)> consumer);
+  absl::Status Execute(absl::FunctionRef<void(const SqlRow& row)> consumer);
 
   // Runs this statement and returns an iterator on its results. Only one
   // iterator can be alive at any time and this statement must outlive the
   // returned iterator. If all results should be consumed, use the Run() methods
   // above for convenience.
   absl::StatusOr<SqlIterator> Open();
+
+  // Binds the provided parameters to this query and opens an iterator. This
+  // function is equivalent to calling BindParameters() and Open() in one go.
+  template <typename... Args>
+  absl::StatusOr<SqlIterator> Open(const Args&... args);
 
  private:
   SqlStatement(std::shared_ptr<internal::SqliteDb> db, sqlite3_stmt* stmt)
@@ -190,6 +221,10 @@ class SqlRow {
 class SqlIterator {
  public:
   friend class SqlStatement;
+  friend class SqlQueryResult;
+
+  SqlIterator(SqlIterator&&);
+  ~SqlIterator();
 
   // Move to the next element, returning true if there is one, false otherwise.
   absl::StatusOr<bool> Next();
@@ -201,11 +236,87 @@ class SqlIterator {
   SqlRow& operator*();
   SqlRow* operator->();
 
+  // Closes this iterator and resets the underlying query. Close is called
+  // implicitly on destruction.
+  absl::Status Close();
+
  private:
-  SqlIterator(internal::SqliteDb* db, sqlite3_stmt* stmt)
-      : db_(db), row_(stmt) {}
+  SqlIterator(internal::SqliteDb* db, SqlStatement* stmt,
+              sqlite3_stmt* raw_stmt)
+      : db_(db), stmt_(stmt), row_(raw_stmt) {}
   internal::SqliteDb* db_;
+  SqlStatement* stmt_;
   SqlRow row_;
 };
+
+// A SQL query result is a wrapper object providing access to the result of a
+// single, stand-alone query that can not be reused.
+//
+// The main reason for introducing this is to keep the statement alife until the
+// result is consumed or discarded. For iterators, the associated statement
+// needs to be kept alive independently.
+class SqlQueryResult {
+ public:
+  friend class Sqlite;
+
+  // Produces an iterator over the query result.
+  absl::StatusOr<SqlIterator> Iterator();
+
+  // Iterates through the results and passes each row to the consumer.
+  absl::Status Consume(absl::FunctionRef<void(const SqlRow& row)> consumer);
+
+ private:
+  SqlQueryResult(SqlStatement stmt) : stmt_(std::move(stmt)){};
+  SqlStatement stmt_;
+};
+
+// ----------------------------------------------------------------------------
+//                               Definitions
+// ----------------------------------------------------------------------------
+
+template <typename... Args>
+absl::Status Sqlite::Run(std::string_view statement, const Args&... args) {
+  ASSIGN_OR_RETURN(auto stmt, Prepare(statement));
+  RETURN_IF_ERROR(stmt.BindParameters(args...));
+  return stmt.Run();
+}
+
+template <typename... Args>
+absl::StatusOr<SqlQueryResult> Sqlite::Query(std::string_view statement,
+                                             const Args&... args) {
+  ASSIGN_OR_RETURN(auto stmt, Prepare(statement));
+  RETURN_IF_ERROR(stmt.BindParameters(args...));
+  return SqlQueryResult(std::move(stmt));
+}
+
+namespace internal {
+
+inline absl::Status Bind(SqlStatement&, int) { return absl::OkStatus(); }
+
+template <typename First, typename... Rest>
+absl::Status Bind(SqlStatement& stmt, int index, const First& first,
+                  const Rest&... rest) {
+  RETURN_IF_ERROR(stmt.Bind(index, first));
+  return Bind(stmt, index + 1, rest...);
+}
+
+}  // namespace internal
+
+template <typename... Args>
+absl::Status SqlStatement::BindParameters(const Args&... args) {
+  return internal::Bind(*this, 1, args...);
+}
+
+template <typename... Args>
+absl::Status SqlStatement::Run(const Args&... args) {
+  RETURN_IF_ERROR(BindParameters(args...));
+  return Run();
+}
+
+template <typename... Args>
+absl::StatusOr<SqlIterator> SqlStatement::Open(const Args&... args) {
+  RETURN_IF_ERROR(BindParameters(args...));
+  return Open();
+}
 
 }  // namespace carmen::backend

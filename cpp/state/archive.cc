@@ -100,69 +100,36 @@ class Archive {
     if (!add_value_stmt_) return absl::FailedPreconditionError("DB Closed");
     RETURN_IF_ERROR(db_.Run("BEGIN TRANSACTION"));
 
-    RETURN_IF_ERROR(add_block_stmt_->Reset());
-    RETURN_IF_ERROR(add_block_stmt_->Bind(0, std::int64_t(block)));
-    RETURN_IF_ERROR(add_block_stmt_->Run());
+    RETURN_IF_ERROR(add_block_stmt_->Run(block));
 
     for (auto& addr : update.GetDeletedAccounts()) {
-      RETURN_IF_ERROR(delete_account_stmt_->Reset());
-      RETURN_IF_ERROR(delete_account_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(delete_account_stmt_->Bind(1, static_cast<int>(block)));
-      RETURN_IF_ERROR(delete_account_stmt_->Bind(2, addr));
-      RETURN_IF_ERROR(delete_account_stmt_->Run());
+      RETURN_IF_ERROR(delete_account_stmt_->Run(addr, block));
     }
 
     for (auto& addr : update.GetCreatedAccounts()) {
-      RETURN_IF_ERROR(create_account_stmt_->Reset());
-      RETURN_IF_ERROR(create_account_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(create_account_stmt_->Bind(1, static_cast<int>(block)));
-      RETURN_IF_ERROR(create_account_stmt_->Bind(2, addr));
-      RETURN_IF_ERROR(create_account_stmt_->Run());
+      RETURN_IF_ERROR(create_account_stmt_->Run(addr, block));
     }
 
     for (auto& [addr, balance] : update.GetBalances()) {
-      RETURN_IF_ERROR(add_balance_stmt_->Reset());
-      RETURN_IF_ERROR(add_balance_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(add_balance_stmt_->Bind(1, static_cast<int>(block)));
-      RETURN_IF_ERROR(add_balance_stmt_->Bind(2, balance));
-      RETURN_IF_ERROR(add_balance_stmt_->Run());
+      RETURN_IF_ERROR(add_balance_stmt_->Run(addr, block, balance));
     }
 
     for (auto& [addr, code] : update.GetCodes()) {
-      RETURN_IF_ERROR(add_code_stmt_->Reset());
-      RETURN_IF_ERROR(add_code_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(add_code_stmt_->Bind(1, static_cast<int>(block)));
-      RETURN_IF_ERROR(add_code_stmt_->Bind(2, code));
-      RETURN_IF_ERROR(add_code_stmt_->Run());
+      RETURN_IF_ERROR(add_code_stmt_->Run(addr, block, code));
     }
 
     for (auto& [addr, nonce] : update.GetNonces()) {
-      RETURN_IF_ERROR(add_nonce_stmt_->Reset());
-      RETURN_IF_ERROR(add_nonce_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(add_nonce_stmt_->Bind(1, static_cast<int>(block)));
-      RETURN_IF_ERROR(add_nonce_stmt_->Bind(2, nonce));
-      RETURN_IF_ERROR(add_nonce_stmt_->Run());
+      RETURN_IF_ERROR(add_nonce_stmt_->Run(addr, block, nonce));
     }
 
     for (auto& [addr, key, value] : update.GetStorage()) {
-      RETURN_IF_ERROR(add_value_stmt_->Reset());
-      RETURN_IF_ERROR(add_value_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(1, addr));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(2, static_cast<int>(block)));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(3, key));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(4, static_cast<int>(block)));
-      RETURN_IF_ERROR(add_value_stmt_->Bind(5, value));
-      RETURN_IF_ERROR(add_value_stmt_->Run());
+      RETURN_IF_ERROR(add_value_stmt_->Run(addr, key, block, value));
     }
 
     for (auto& [addr, hash] : diff_hashes) {
       ASSIGN_OR_RETURN(auto last_hash, GetAccountHash(block, addr));
-      RETURN_IF_ERROR(add_account_hash_stmt_->Reset());
-      RETURN_IF_ERROR(add_account_hash_stmt_->Bind(0, addr));
-      RETURN_IF_ERROR(add_account_hash_stmt_->Bind(1, static_cast<int>(block)));
-      RETURN_IF_ERROR(
-          add_account_hash_stmt_->Bind(2, GetSha256Hash(last_hash, hash)));
-      RETURN_IF_ERROR(add_account_hash_stmt_->Run());
+      RETURN_IF_ERROR(add_account_hash_stmt_->Run(
+          addr, block, GetSha256Hash(last_hash, hash)));
     }
 
     return db_.Run("END TRANSACTION");
@@ -173,9 +140,8 @@ class Archive {
     auto guard = absl::MutexLock(&get_block_height_lock_);
     if (!get_block_height_stmt_)
       return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_block_height_stmt_->Reset());
     std::int64_t result = -1;
-    RETURN_IF_ERROR(get_block_height_stmt_->Run(
+    RETURN_IF_ERROR(get_block_height_stmt_->Execute(
         [&](const SqlRow& row) { result = row.GetInt64(0); }));
     return result;
   }
@@ -183,14 +149,12 @@ class Archive {
   absl::StatusOr<bool> Exists(BlockId block, const Address& account) {
     auto guard = absl::MutexLock(&get_status_lock_);
     if (!get_status_stmt_) return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_status_stmt_->Reset());
-    RETURN_IF_ERROR(get_status_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_status_stmt_->Bind(1, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_status_stmt_->BindParameters(account, block));
 
     // The query produces 0 or 1 results. If there is no result, returning false
     // is what is expected since this is the default account state.
     bool result = false;
-    RETURN_IF_ERROR(get_status_stmt_->Run(
+    RETURN_IF_ERROR(get_status_stmt_->Execute(
         [&](const SqlRow& row) { result = (row.GetInt(0) != 0); }));
     return result;
   }
@@ -200,14 +164,12 @@ class Archive {
     // that block.
     auto guard = absl::MutexLock(&get_balance_lock_);
     if (!get_balance_stmt_) return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_balance_stmt_->Reset());
-    RETURN_IF_ERROR(get_balance_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_balance_stmt_->Bind(1, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_balance_stmt_->BindParameters(account, block));
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default balance.
     Balance result{};
-    RETURN_IF_ERROR(get_balance_stmt_->Run(
+    RETURN_IF_ERROR(get_balance_stmt_->Execute(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
   }
@@ -217,14 +179,12 @@ class Archive {
     // that block.
     auto guard = absl::MutexLock(&get_code_lock_);
     if (!get_code_stmt_) return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_code_stmt_->Reset());
-    RETURN_IF_ERROR(get_code_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_code_stmt_->Bind(1, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_code_stmt_->BindParameters(account, block));
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default code.
     Code result{};
-    RETURN_IF_ERROR(get_code_stmt_->Run(
+    RETURN_IF_ERROR(get_code_stmt_->Execute(
         [&](const SqlRow& row) { result = Code(row.GetBytes(0)); }));
     return result;
   }
@@ -234,14 +194,12 @@ class Archive {
     // that block.
     auto guard = absl::MutexLock(&get_nonce_lock_);
     if (!get_nonce_stmt_) return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_nonce_stmt_->Reset());
-    RETURN_IF_ERROR(get_nonce_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_nonce_stmt_->Bind(1, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_nonce_stmt_->BindParameters(account, block));
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default balance.
     Nonce result{};
-    RETURN_IF_ERROR(get_nonce_stmt_->Run(
+    RETURN_IF_ERROR(get_nonce_stmt_->Execute(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
   }
@@ -255,18 +213,13 @@ class Archive {
     // that block.
     auto guard = absl::MutexLock(&get_value_lock_);
     if (!get_value_stmt_) return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_value_stmt_->Reset());
-    RETURN_IF_ERROR(get_value_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_value_stmt_->Bind(1, account));
-    RETURN_IF_ERROR(get_value_stmt_->Bind(2, static_cast<int>(block)));
-    RETURN_IF_ERROR(get_value_stmt_->Bind(3, key));
-    RETURN_IF_ERROR(get_value_stmt_->Bind(4, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_value_stmt_->BindParameters(account, key, block));
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero value is what is expected since this is the default value of storage
     // slots.
     Value result{};
-    RETURN_IF_ERROR(get_value_stmt_->Run(
+    RETURN_IF_ERROR(get_value_stmt_->Execute(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
   }
@@ -280,9 +233,9 @@ class Archive {
             "MAX(block) as block FROM account_hash WHERE block <= ? GROUP BY "
             "account) b ON a.account = b.account AND a.block = b.block ORDER "
             "BY a.account"));
-    RETURN_IF_ERROR(query.Bind(0, static_cast<int>(block)));
-    RETURN_IF_ERROR(
-        query.Run([&](const SqlRow& row) { hasher.Ingest(row.GetBytes(0)); }));
+    RETURN_IF_ERROR(query.BindParameters(block));
+    RETURN_IF_ERROR(query.Execute(
+        [&](const SqlRow& row) { hasher.Ingest(row.GetBytes(0)); }));
     return hasher.GetHash();
   }
 
@@ -291,8 +244,8 @@ class Archive {
     ASSIGN_OR_RETURN(auto query,
                      db_.Prepare("SELECT DISTINCT account FROM account_hash "
                                  "WHERE block <= ? ORDER BY account"));
-    RETURN_IF_ERROR(query.Bind(0, static_cast<int>(block)));
-    RETURN_IF_ERROR(query.Run([&](const SqlRow& row) {
+    RETURN_IF_ERROR(query.BindParameters(block));
+    RETURN_IF_ERROR(query.Execute([&](const SqlRow& row) {
       Address addr;
       addr.SetBytes(row.GetBytes(0));
       res.push_back(addr);
@@ -307,14 +260,12 @@ class Archive {
     auto guard = absl::MutexLock(&get_account_hash_lock_);
     if (!get_account_hash_stmt_)
       return absl::FailedPreconditionError("DB Closed");
-    RETURN_IF_ERROR(get_account_hash_stmt_->Reset());
-    RETURN_IF_ERROR(get_account_hash_stmt_->Bind(0, account));
-    RETURN_IF_ERROR(get_account_hash_stmt_->Bind(1, static_cast<int>(block)));
+    RETURN_IF_ERROR(get_account_hash_stmt_->BindParameters(account, block));
 
     // The query produces 0 or 1 results. If there is no result, returning the
     // zero hash is expected, since it is the hash of a non-existing account.
     Hash result{};
-    RETURN_IF_ERROR(get_account_hash_stmt_->Run(
+    RETURN_IF_ERROR(get_account_hash_stmt_->Execute(
         [&](const SqlRow& row) { result.SetBytes(row.GetBytes(0)); }));
     return result;
   }
@@ -324,7 +275,7 @@ class Archive {
     ASSIGN_OR_RETURN(auto integrity_check_stmt,
                      db_.Prepare("PRAGMA integrity_check"));
     std::vector<std::string> issues;
-    RETURN_IF_ERROR(integrity_check_stmt.Run([&](const SqlRow& row) {
+    RETURN_IF_ERROR(integrity_check_stmt.Execute([&](const SqlRow& row) {
       auto msg = row.GetString(0);
       if (msg != "ok") {
         issues.emplace_back(msg);
@@ -357,18 +308,18 @@ class Archive {
     // TODO: run this in parallel
     for (auto table : {"status", "balance", "nonce", "code", "storage"}) {
       // Check that there are no additional addresses referenced.
-      ASSIGN_OR_RETURN(auto no_extra_address_check,
-                       db_.Prepare(absl::StrFormat(
-                           "SELECT 1 FROM (SELECT account FROM %s WHERE block "
-                           "<= ? EXCEPT SELECT account FROM account_hash WHERE "
-                           "block <= ?) LIMIT 1",
-                           table)));
-      RETURN_IF_ERROR(no_extra_address_check.Bind(0, static_cast<int>(block)));
-      RETURN_IF_ERROR(no_extra_address_check.Bind(1, static_cast<int>(block)));
+      ASSIGN_OR_RETURN(
+          auto no_extra_address_check,
+          db_.Prepare(absl::StrFormat(
+              "SELECT 1 FROM (SELECT account FROM %s WHERE block "
+              "<= ?1 EXCEPT SELECT account FROM account_hash WHERE "
+              "block <= ?1) LIMIT 1",
+              table)));
+      RETURN_IF_ERROR(no_extra_address_check.BindParameters(block));
 
       bool found = false;
       RETURN_IF_ERROR(
-          no_extra_address_check.Run([&](const auto&) { found = true; }));
+          no_extra_address_check.Execute([&](const auto&) { found = true; }));
       if (found) {
         return absl::InternalError(
             absl::StrFormat("Found extra row of data in table `%s`.", table));
@@ -379,11 +330,10 @@ class Archive {
       ASSIGN_OR_RETURN(auto no_future_block_check,
                        db_.Prepare(absl::StrFormat(
                            "SELECT 1 FROM %s WHERE block > ? LIMIT 1", table)));
-      RETURN_IF_ERROR(
-          no_future_block_check.Bind(0, static_cast<int>(latestBlock)));
+      RETURN_IF_ERROR(no_future_block_check.BindParameters(latestBlock));
 
       RETURN_IF_ERROR(
-          no_future_block_check.Run([&](const auto&) { found = true; }));
+          no_future_block_check.Execute([&](const auto&) { found = true; }));
       if (found) {
         return absl::InternalError(absl::StrFormat(
             "Found entry of future block height in `%s`.", table));
@@ -397,51 +347,38 @@ class Archive {
   // Verifyies the consistency of the provides account up until the given block.
   absl::Status VerifyAccount(BlockId block, const Address& account) {
     using ::carmen::backend::SqlIterator;
-    ASSIGN_OR_RETURN(auto list_diffs_stmt,
+    ASSIGN_OR_RETURN(auto list_diffs,
                      db_.Prepare("SELECT block, hash FROM account_hash WHERE "
                                  "account = ? AND block <= ? ORDER BY block"));
 
-    RETURN_IF_ERROR(list_diffs_stmt.Bind(0, account));
-    RETURN_IF_ERROR(list_diffs_stmt.Bind(1, static_cast<int>(block)));
-
-    ASSIGN_OR_RETURN(auto list_state_stmt,
+    ASSIGN_OR_RETURN(auto list_state,
                      db_.Prepare("SELECT block, exist FROM status WHERE "
                                  "account = ? AND block <= ? ORDER BY block"));
-    RETURN_IF_ERROR(list_state_stmt.Bind(0, account));
-    RETURN_IF_ERROR(list_state_stmt.Bind(1, static_cast<int>(block)));
 
-    ASSIGN_OR_RETURN(auto list_balance_stmt,
+    ASSIGN_OR_RETURN(auto list_balance,
                      db_.Prepare("SELECT block, value FROM balance WHERE "
                                  "account = ? AND block <= ? ORDER BY block"));
-    RETURN_IF_ERROR(list_balance_stmt.Bind(0, account));
-    RETURN_IF_ERROR(list_balance_stmt.Bind(1, static_cast<int>(block)));
 
-    ASSIGN_OR_RETURN(auto list_nonce_stmt,
+    ASSIGN_OR_RETURN(auto list_nonce,
                      db_.Prepare("SELECT block, value FROM nonce WHERE "
                                  "account = ? AND block <= ? ORDER BY block"));
-    RETURN_IF_ERROR(list_nonce_stmt.Bind(0, account));
-    RETURN_IF_ERROR(list_nonce_stmt.Bind(1, static_cast<int>(block)));
 
-    ASSIGN_OR_RETURN(auto list_code_stmt,
+    ASSIGN_OR_RETURN(auto list_code,
                      db_.Prepare("SELECT block, code FROM code WHERE "
                                  "account = ? AND block <= ? ORDER BY block"));
-    RETURN_IF_ERROR(list_code_stmt.Bind(0, account));
-    RETURN_IF_ERROR(list_code_stmt.Bind(1, static_cast<int>(block)));
 
     ASSIGN_OR_RETURN(
-        auto list_storage_stmt,
+        auto list_storage,
         db_.Prepare("SELECT block, slot, value FROM storage WHERE "
                     "account = ? AND block <= ? ORDER BY block, slot"));
-    RETURN_IF_ERROR(list_storage_stmt.Bind(0, account));
-    RETURN_IF_ERROR(list_storage_stmt.Bind(1, static_cast<int>(block)));
 
     // Open individual result iterators.
-    ASSIGN_OR_RETURN(auto hash_iter, list_diffs_stmt.Open());
-    ASSIGN_OR_RETURN(auto state_iter, list_state_stmt.Open());
-    ASSIGN_OR_RETURN(auto balance_iter, list_balance_stmt.Open());
-    ASSIGN_OR_RETURN(auto nonce_iter, list_nonce_stmt.Open());
-    ASSIGN_OR_RETURN(auto code_iter, list_code_stmt.Open());
-    ASSIGN_OR_RETURN(auto storage_iter, list_storage_stmt.Open());
+    ASSIGN_OR_RETURN(auto hash_iter, list_diffs.Open(account, block));
+    ASSIGN_OR_RETURN(auto state_iter, list_state.Open(account, block));
+    ASSIGN_OR_RETURN(auto balance_iter, list_balance.Open(account, block));
+    ASSIGN_OR_RETURN(auto nonce_iter, list_nonce.Open(account, block));
+    ASSIGN_OR_RETURN(auto code_iter, list_code.Open(account, block));
+    ASSIGN_OR_RETURN(auto storage_iter, list_storage.Open(account, block));
 
     // Find the first block referencing the account.
     BlockId next = block + 1;
@@ -637,13 +574,15 @@ class Archive {
 
   static constexpr const std::string_view kCreateAccountStmt =
       "INSERT INTO status(account,block,exist,reincarnation) VALUES "
-      "(?,?,1,(SELECT IFNULL(MAX(reincarnation)+1,0) FROM status WHERE account "
-      "= ?))";
+      "(?1,?2,1,(SELECT IFNULL(MAX(reincarnation)+1,0) FROM status WHERE "
+      "account "
+      "= ?1))";
 
   static constexpr const std::string_view kDeleteAccountStmt =
       "INSERT INTO status(account,block,exist,reincarnation) VALUES "
-      "(?,?,0,(SELECT IFNULL(MAX(reincarnation)+1,0) FROM status WHERE account "
-      "= ?))";
+      "(?1,?2,0,(SELECT IFNULL(MAX(reincarnation)+1,0) FROM status WHERE "
+      "account "
+      "= ?1))";
 
   static constexpr const std::string_view kGetStatusStmt =
       "SELECT exist FROM status WHERE account = ? AND block <= ? ORDER BY "
@@ -697,13 +636,15 @@ class Archive {
 
   static constexpr const std::string_view kAddValueStmt =
       "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES "
-      "(?,(SELECT IFNULL(MAX(reincarnation),0) FROM status WHERE account = ? "
-      "AND block <= ?),?,?,?)";
+      "(?1,(SELECT IFNULL(MAX(reincarnation),0) FROM status WHERE account = ?1 "
+      "AND block <= ?2),?2,?3,?4)";
 
   static constexpr const std::string_view kGetValueStmt =
-      "SELECT value FROM storage WHERE account = ? AND reincarnation = (SELECT "
-      "IFNULL(MAX(reincarnation),0) FROM status WHERE account = ? AND block <= "
-      "?) AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1";
+      "SELECT value FROM storage WHERE account = ?1 AND reincarnation = "
+      "(SELECT "
+      "IFNULL(MAX(reincarnation),0) FROM status WHERE account = ?1 AND block "
+      "<= "
+      "?3) AND slot = ?2 AND block <= ?3 ORDER BY block DESC LIMIT 1";
 
   Archive(Sqlite db, std::unique_ptr<SqlStatement> add_block,
           std::unique_ptr<SqlStatement> get_block_height,
