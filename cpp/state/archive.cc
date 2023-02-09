@@ -773,8 +773,11 @@ Archive& Archive::operator=(Archive&&) = default;
 
 absl::StatusOr<Archive> Archive::Open(std::filesystem::path directory) {
   // TODO: create directory if it does not exist.
-  ASSIGN_OR_RETURN(auto impl,
-                   internal::Archive::Open(directory / "archive.sqlite"));
+  auto path = directory;
+  if (std::filesystem::is_directory(directory)) {
+    path = path / "archive.sqlite";
+  }
+  ASSIGN_OR_RETURN(auto impl, internal::Archive::Open(path));
   return Archive(std::move(impl));
 }
 
@@ -808,6 +811,11 @@ absl::StatusOr<Value> Archive::GetStorage(BlockId block, const Address& account,
                                           const Key& key) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetStorage(block, account, key);
+}
+
+absl::StatusOr<BlockId> Archive::GetLatestBlock() {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetLastBlockHeight();
 }
 
 absl::StatusOr<Hash> Archive::GetHash(BlockId block) {

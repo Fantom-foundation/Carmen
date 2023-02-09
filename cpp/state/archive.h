@@ -56,6 +56,9 @@ class Archive {
   absl::StatusOr<Value> GetStorage(BlockId block, const Address& account,
                                    const Key& key);
 
+  // Obtains the last block included in this archive, 0 if empty.
+  absl::StatusOr<BlockId> GetLatestBlock();
+
   // Computes a hash for the entire archive up until the given block.
   absl::StatusOr<Hash> GetHash(BlockId block);
 
