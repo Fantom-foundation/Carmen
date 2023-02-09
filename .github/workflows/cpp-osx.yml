@@ -29,5 +29,5 @@ jobs:
 
     - name: Run C++ tests
       working-directory: ./cpp
-      run: bazel test //...
+      run: bazel test --test_output=errors //...
 
