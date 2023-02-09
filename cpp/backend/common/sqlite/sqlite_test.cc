@@ -86,10 +86,7 @@ absl::Status CreateTestTable(
                    db.Prepare("INSERT INTO test (id, text) VALUES (?,?)"));
 
   for (auto [id, text] : data) {
-    RETURN_IF_ERROR(stmt.Reset());
-    RETURN_IF_ERROR(stmt.Bind(0, id));
-    RETURN_IF_ERROR(stmt.Bind(1, text));
-    RETURN_IF_ERROR(stmt.Run());
+    RETURN_IF_ERROR(stmt.Run(id, text));
   }
   return absl::OkStatus();
 }
@@ -97,7 +94,7 @@ absl::Status CreateTestTable(
 absl::StatusOr<std::vector<std::pair<int, std::string>>> RunAndGetData(
     SqlStatement& query) {
   std::vector<std::pair<int, std::string>> data;
-  RETURN_IF_ERROR(query.Run([&](const SqlRow& row) {
+  RETURN_IF_ERROR(query.Execute([&](const SqlRow& row) {
     EXPECT_EQ(row.GetNumberOfColumns(), 2);
     int id = row.GetInt(0);
     std::string text(row.GetString(1));
@@ -125,6 +122,55 @@ TEST(SqlStatement, RunPreparedQuery) {
               IsOkAndHolds(ElementsAre(Pair(12, "hello"), Pair(14, "world"))));
 }
 
+TEST(SqlStatement, RunParameterizedStatement) {
+  TempFile file;
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(file));
+  EXPECT_OK(CreateTestTable(db, {}));
+
+  // Test whether a parameterized statement can be directly issued.
+  EXPECT_OK(db.Run("INSERT INTO test(id,text) VALUES (?,?)", 12, "hello"));
+  EXPECT_OK(db.Run("INSERT INTO test(id,text) VALUES (?,?)", 14, "world"));
+
+  ASSERT_OK_AND_ASSIGN(auto query,
+                       db.Prepare("SELECT id, text FROM test ORDER BY id"));
+
+  EXPECT_THAT(RunAndGetData(query),
+              IsOkAndHolds(ElementsAre(Pair(12, "hello"), Pair(14, "world"))));
+}
+
+TEST(SqlStatement, RunParameterizedQuery) {
+  TempFile file;
+  ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(file));
+  EXPECT_OK(CreateTestTable(db, {{12, "hello"}, {14, "world"}}));
+
+  // Test whether a parameterized query can be directly issued.
+  {
+    std::vector<std::pair<int, std::string>> data;
+    ASSERT_OK_AND_ASSIGN(
+        auto result,
+        db.Query("SELECT id, text FROM test WHERE id > ? ORDER BY id", 10));
+
+    EXPECT_OK(result.Consume([&](const SqlRow& row) {
+      data.emplace_back(row.GetInt(0), row.GetString(1));
+    }));
+
+    EXPECT_THAT(data, ElementsAre(Pair(12, "hello"), Pair(14, "world")));
+  }
+  {
+    std::vector<std::pair<int, std::string>> data;
+    ASSERT_OK_AND_ASSIGN(auto result,
+                         db.Query("SELECT id, text FROM test WHERE id > ? AND "
+                                  "id < ? AND text = ? ORDER BY id",
+                                  10, 20, "world"));
+
+    EXPECT_OK(result.Consume([&](const SqlRow& row) {
+      data.emplace_back(row.GetInt(0), row.GetString(1));
+    }));
+
+    EXPECT_THAT(data, ElementsAre(Pair(14, "world")));
+  }
+}
+
 TEST(SqlStatement, ReusePreparedQuery) {
   TempFile file;
   ASSERT_OK_AND_ASSIGN(auto db, Sqlite::Open(file));
@@ -134,17 +180,17 @@ TEST(SqlStatement, ReusePreparedQuery) {
   ASSERT_OK_AND_ASSIGN(auto query,
                        db.Prepare("SELECT id, text FROM test WHERE id == ?"));
 
-  EXPECT_OK(query.Bind(0, 12));
+  EXPECT_OK(query.Bind(1, 12));
   EXPECT_THAT(RunAndGetData(query),
               IsOkAndHolds(ElementsAre(Pair(12, "hello"))));
 
   EXPECT_OK(query.Reset());
-  EXPECT_OK(query.Bind(0, 14));
+  EXPECT_OK(query.Bind(1, 14));
   EXPECT_THAT(RunAndGetData(query),
               IsOkAndHolds(ElementsAre(Pair(14, "world"))));
 
   EXPECT_OK(query.Reset());
-  EXPECT_OK(query.Bind(0, 16));
+  EXPECT_OK(query.Bind(1, 16));
   EXPECT_THAT(RunAndGetData(query), IsOkAndHolds(ElementsAre()));
 }
 
@@ -182,23 +228,23 @@ TEST(SqlStatement, DatabaseSupportsInt64) {
   // Insert elements out-of-order.
   ASSERT_OK_AND_ASSIGN(auto insert,
                        db.Prepare("INSERT INTO test(key) VALUES (?)"));
-  EXPECT_OK(insert.Bind(0, a));
+  EXPECT_OK(insert.Bind(1, a));
   EXPECT_OK(insert.Run());
 
   EXPECT_OK(insert.Reset());
-  EXPECT_OK(insert.Bind(0, c));
+  EXPECT_OK(insert.Bind(1, c));
   EXPECT_OK(insert.Run());
 
   EXPECT_OK(insert.Reset());
-  EXPECT_OK(insert.Bind(0, b));
+  EXPECT_OK(insert.Bind(1, b));
   EXPECT_OK(insert.Run());
 
   // Query elements in order.
   ASSERT_OK_AND_ASSIGN(auto query,
                        db.Prepare("SELECT key FROM test ORDER BY key"));
   std::vector<Value> data;
-  EXPECT_OK(
-      query.Run([&](const SqlRow& row) { data.push_back(row.GetInt64(0)); }));
+  EXPECT_OK(query.Execute(
+      [&](const SqlRow& row) { data.push_back(row.GetInt64(0)); }));
   EXPECT_THAT(data, ElementsAre(c, a, b));
 }
 
@@ -216,22 +262,22 @@ TEST(SqlStatement, DatabaseSupportsByteArrays) {
   // Insert elements out-of-order.
   ASSERT_OK_AND_ASSIGN(auto insert,
                        db.Prepare("INSERT INTO test(key) VALUES (?)"));
-  EXPECT_OK(insert.Bind(0, a));
+  EXPECT_OK(insert.Bind(1, a));
   EXPECT_OK(insert.Run());
 
   EXPECT_OK(insert.Reset());
-  EXPECT_OK(insert.Bind(0, c));
+  EXPECT_OK(insert.Bind(1, c));
   EXPECT_OK(insert.Run());
 
   EXPECT_OK(insert.Reset());
-  EXPECT_OK(insert.Bind(0, b));
+  EXPECT_OK(insert.Bind(1, b));
   EXPECT_OK(insert.Run());
 
   // Query elements in order.
   ASSERT_OK_AND_ASSIGN(auto query,
                        db.Prepare("SELECT key FROM test ORDER BY key"));
   std::vector<Value> data;
-  EXPECT_OK(query.Run([&](const SqlRow& row) {
+  EXPECT_OK(query.Execute([&](const SqlRow& row) {
     auto key = row.GetBytes(0);
     ASSERT_EQ(key.size(), 32);
     Value value;
