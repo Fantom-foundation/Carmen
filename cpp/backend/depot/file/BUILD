@@ -22,6 +22,7 @@ cc_test(
     deps = [
         ":depot",
         "//backend/depot",
+        "//backend/depot:depot_test_suite",
         "//backend/depot/memory:depot",
         "//common:file_util",
         "//common:status_test_util",

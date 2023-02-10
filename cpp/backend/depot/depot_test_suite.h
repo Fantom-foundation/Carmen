@@ -1,9 +1,5 @@
-#include "backend/depot/memory/depot.h"
-
-#include "backend/depot/cache/cache.h"
+#include "backend/depot/depot.h"
 #include "backend/depot/depot_handler.h"
-#include "backend/depot/file/depot.h"
-#include "backend/depot/leveldb/depot.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
 #include "gmock/gmock-matchers.h"
@@ -19,6 +15,10 @@ using ::testing::IsEmpty;
 using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 using ::testing::StrEq;
+
+// A test configuration for depot implementations.
+template <Depot depot, std::size_t branching_factor, std::size_t hash_box_size>
+using DepotTestConfig = DepotHandler<depot, branching_factor, hash_box_size>;
 
 // A test suite testing generic depot implementations.
 template <typename>
@@ -190,33 +190,5 @@ REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties, EmptyCodeCanBeStored,
                             NonEmptyDepotHasHash, HashChangesBack,
                             KnownHashesAreReproduced,
                             HashesEqualReferenceImplementation);
-
-using DepotTypes = ::testing::Types<
-    // Branching size 3, Size of box 1.
-    DepotHandler<InMemoryDepot<unsigned int>, 3, 1>,
-    DepotHandler<LevelDbDepot<unsigned int>, 3, 1>,
-    DepotHandler<FileDepot<unsigned int>, 3, 1>,
-    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 3, 1>,
-
-    // Branching size 3, Size of box 2.
-    DepotHandler<InMemoryDepot<unsigned int>, 3, 2>,
-    DepotHandler<LevelDbDepot<unsigned int>, 3, 2>,
-    DepotHandler<FileDepot<unsigned int>, 3, 2>,
-    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 3, 2>,
-
-    // Branching size 16, Size of box 8.
-    DepotHandler<InMemoryDepot<unsigned int>, 16, 8>,
-    DepotHandler<LevelDbDepot<unsigned int>, 16, 8>,
-    DepotHandler<FileDepot<unsigned int>, 16, 8>,
-    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 16, 8>,
-
-    // Branching size 32, Size of box 16.
-    DepotHandler<InMemoryDepot<unsigned int>, 32, 16>,
-    DepotHandler<LevelDbDepot<unsigned int>, 32, 16>,
-    DepotHandler<FileDepot<unsigned int>, 32, 16>,
-    DepotHandler<Cached<InMemoryDepot<unsigned int>>, 32, 16>>;
-
-INSTANTIATE_TYPED_TEST_SUITE_P(All, DepotTest, DepotTypes);
-
 }  // namespace
 }  // namespace carmen::backend::depot
