@@ -234,7 +234,7 @@ func TestBalanceOnly(t *testing.T) {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
-			if err := a.Add(2, common.Update{
+			if err := a.Add(200, common.Update{
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x34}},
 				},
@@ -246,7 +246,7 @@ func TestBalanceOnly(t *testing.T) {
 				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
 			}
 
-			if balance, err := a.GetBalance(3, addr1); err != nil || balance != (common.Balance{0x34}) {
+			if balance, err := a.GetBalance(300, addr1); err != nil || balance != (common.Balance{0x34}) {
 				t.Errorf("unexpected balance at block 3: %x; %s", balance, err)
 			}
 		})

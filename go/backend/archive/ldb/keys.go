@@ -14,11 +14,11 @@ type blockKey [1 + blockSize]byte
 
 func (k *blockKey) set(block uint64) {
 	k[0] = byte(common.BlockArchiveKey)
-	binary.LittleEndian.PutUint64(k[1:], maxBlock-block)
+	binary.BigEndian.PutUint64(k[1:], maxBlock-block)
 }
 
 func (k *blockKey) get() (block uint64) {
-	return maxBlock - binary.LittleEndian.Uint64(k[1:])
+	return maxBlock - binary.BigEndian.Uint64(k[1:])
 }
 
 func getLastBlockRange() util.Range {
@@ -36,7 +36,7 @@ type accountBlockKey [1 + common.AddressSize + blockSize]byte
 func (k *accountBlockKey) set(table common.TableSpace, account common.Address, block uint64) {
 	k[0] = byte(table)
 	copy(k[1:1+common.AddressSize], account[:])
-	binary.LittleEndian.PutUint64(k[1+common.AddressSize:], maxBlock-block)
+	binary.BigEndian.PutUint64(k[1+common.AddressSize:], maxBlock-block)
 }
 
 func (k *accountBlockKey) getRange() util.Range {
@@ -53,9 +53,9 @@ type accountKeyBlockKey [1 + common.AddressSize + reincSize + common.KeySize + b
 func (k *accountKeyBlockKey) set(table common.TableSpace, account common.Address, reincarnation int, slot common.Key, block uint64) {
 	k[0] = byte(table)
 	copy(k[1:1+common.AddressSize], account[:])
-	binary.LittleEndian.PutUint32(k[1+common.AddressSize:], uint32(reincarnation))
+	binary.BigEndian.PutUint32(k[1+common.AddressSize:], uint32(reincarnation))
 	copy(k[1+common.AddressSize+reincSize:], slot[:])
-	binary.LittleEndian.PutUint64(k[1+common.AddressSize+reincSize+common.KeySize:], maxBlock-block)
+	binary.BigEndian.PutUint64(k[1+common.AddressSize+reincSize+common.KeySize:], maxBlock-block)
 }
 
 func (k *accountKeyBlockKey) getRange() util.Range {
@@ -75,11 +75,11 @@ func (k *accountStatusValue) set(exists bool, reincarnation int) {
 	} else {
 		k[0] = 0
 	}
-	binary.LittleEndian.PutUint32(k[1:], uint32(reincarnation))
+	binary.BigEndian.PutUint32(k[1:], uint32(reincarnation))
 }
 
 func (k *accountStatusValue) get() (exists bool, reincarnation int) {
 	exists = k[0] != 0
-	reincarnation = int(binary.LittleEndian.Uint32(k[1:]))
+	reincarnation = int(binary.BigEndian.Uint32(k[1:]))
 	return exists, reincarnation
 }
