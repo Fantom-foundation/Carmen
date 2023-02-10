@@ -2,17 +2,17 @@ package btree
 
 // Iterator of BTree elements
 type Iterator[K any] struct {
-	start, end K // start and end key to iterate
+	start, end *K // start and end key to iterate
 	visitChild bool
 	nestStack  nestStack[K]
 }
 
 // newIterator creates a new iterator for input key range.
 // The range is [start;end)
-func newIterator[K any](start, end K, n node[K]) *Iterator[K] {
+func newIterator[K any](start, end *K, n node[K], initStack nestStack[K]) *Iterator[K] {
 	startIndex, _ := n.findItem(start)
 	endIndex, _ := n.findItem(end)
-	it := &Iterator[K]{start, end, true, make([]nestCtx[K], 0, 100)}
+	it := &Iterator[K]{start, end, true, initStack}
 	it.nestStack.push(nestCtx[K]{startIndex, endIndex, n})
 	return it
 }

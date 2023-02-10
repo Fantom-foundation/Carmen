@@ -12,6 +12,8 @@ type MultiMap[K any, V any] struct {
 
 	keyComparator   common.Comparator[K]
 	valueComparator common.Comparator[V]
+
+	valuesBuffer []V // pre-allocated buffer to save on creation every time
 }
 
 // NewMultiMap creates new instance
@@ -29,6 +31,7 @@ func NewMultiMap[K any, V any](
 		btree:           btree.NewBTree[dbKey[K, V]](pageItems, dbKeyComparator[K, V]{keyComparator, valueComparator}),
 		keyComparator:   keyComparator,
 		valueComparator: valueComparator,
+		valuesBuffer:    make([]V, 0, 1000),
 	}
 }
 
@@ -57,11 +60,11 @@ func (m *MultiMap[K, V]) RemoveAll(key K) error {
 
 func (m *MultiMap[K, V]) GetAll(key K) ([]V, error) {
 	it := m.btree.NewIterator(newDbKeyMinVal[K, V](key), newDbKeyMaxVal[K, V](key))
-	values := make([]V, 0, 100)
+	m.valuesBuffer = m.valuesBuffer[0:0]
 	for it.HasNext() {
-		values = append(values, it.Next().v)
+		m.valuesBuffer = append(m.valuesBuffer, it.Next().v)
 	}
-	return values, nil
+	return m.valuesBuffer, nil
 }
 
 // Flush the store
@@ -78,5 +81,8 @@ func (m *MultiMap[K, V]) Close() error {
 func (m *MultiMap[K, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("btree", m.btree.GetMemoryFootprint())
+	var x V
+	valuesSize := uintptr(len(m.valuesBuffer)) * unsafe.Sizeof(x)
+	mf.AddChild("buffer", common.NewMemoryFootprint(valuesSize))
 	return mf
 }

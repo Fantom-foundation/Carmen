@@ -23,7 +23,7 @@ func newLeafNode[K any](capacity int, comparator common.Comparator[K]) *LeafNode
 }
 
 func (m *LeafNode[K]) insert(key K) (right node[K], middle K, split bool) {
-	if index, exists := m.findItem(key); !exists {
+	if index, exists := m.findItem(&key); !exists {
 		m.insertAt(index, key, nil, nil)
 
 		// split when overflow
@@ -37,12 +37,12 @@ func (m *LeafNode[K]) insert(key K) (right node[K], middle K, split bool) {
 }
 
 func (m *LeafNode[K]) contains(key K) bool {
-	_, exists := m.findItem(key)
+	_, exists := m.findItem(&key)
 	return exists
 }
 
 func (m *LeafNode[K]) remove(key K) node[K] {
-	if index, exists := m.findItem(key); exists {
+	if index, exists := m.findItem(&key); exists {
 		m.removeAt(index)
 	}
 
@@ -116,12 +116,12 @@ func (m *LeafNode[K]) insertAt(index int, key K, left, right node[K]) {
 	return
 }
 
-func (m *LeafNode[K]) findItem(key K) (index int, exists bool) {
+func (m *LeafNode[K]) findItem(key *K) (index int, exists bool) {
 	end := len(m.keys) - 1
 	var res, start, mid int
 	for start <= end {
 		mid = (start + end) / 2
-		res = m.comparator.Compare(&m.keys[mid], &key)
+		res = m.comparator.Compare(&m.keys[mid], key)
 		if res == 0 {
 			return mid, true
 		} else if res < 0 {

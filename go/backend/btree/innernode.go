@@ -35,7 +35,7 @@ func initNewInnerNode[K any](left, right node[K], middle K, capacity int, compar
 }
 
 func (m *InnerNode[K]) insert(key K) (right node[K], middle K, split bool) {
-	index, exists := m.findItem(key)
+	index, exists := m.findItem(&key)
 	if !exists {
 		// insert into child, when split has happened, insert result in this node
 		if right, middle, split := m.children[index].insert(key); split {
@@ -53,7 +53,7 @@ func (m *InnerNode[K]) insert(key K) (right node[K], middle K, split bool) {
 }
 
 func (m *InnerNode[K]) contains(key K) bool {
-	index, exists := m.findItem(key)
+	index, exists := m.findItem(&key)
 
 	if exists {
 		return true
@@ -137,7 +137,7 @@ func (m *InnerNode[K]) ForEach(callback func(k K)) {
 // is necessary for removing the key.
 // This implementation has been inspired by: https://www.geeksforgeeks.org/delete-operation-in-b-tree/
 func (m *InnerNode[K]) remove(key K) node[K] {
-	if index, exists := m.findItem(key); exists {
+	if index, exists := m.findItem(&key); exists {
 		// key is in this node - remove it potentially borrowing/merging from children
 		m.removeKeyAt(index)
 	} else {

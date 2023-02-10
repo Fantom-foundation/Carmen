@@ -18,14 +18,17 @@ type BTree[K any] struct {
 
 	nodeCapacity int
 	comparator   common.Comparator[K]
+
+	iteratorStackBuffer nestStack[K] // initial stack for iterators, it is re-used to save on allocations
 }
 
 // NewBTree creates a new instance of BTree
 func NewBTree[K any](nodeCapacity int, comparator common.Comparator[K]) *BTree[K] {
 	return &BTree[K]{
-		root:         newLeafNode(nodeCapacity, comparator),
-		nodeCapacity: nodeCapacity,
-		comparator:   comparator,
+		root:                newLeafNode(nodeCapacity, comparator),
+		nodeCapacity:        nodeCapacity,
+		comparator:          comparator,
+		iteratorStackBuffer: make([]nestCtx[K], 0, 100),
 	}
 }
 
@@ -45,7 +48,7 @@ func (m *BTree[K]) Remove(key K) {
 
 // NewIterator creates am iterator for the input key ranges.
 func (m *BTree[K]) NewIterator(start, end K) *Iterator[K] {
-	return newIterator[K](start, end, m.root)
+	return newIterator[K](&start, &end, m.root, m.iteratorStackBuffer[0:0])
 }
 
 // Contains returns true if the input key exists in this BTree
@@ -70,5 +73,8 @@ func (m *BTree[K]) checkProperties() error {
 func (m *BTree[K]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("nodes", m.root.GetMemoryFootprint())
+	var x nestCtx[K]
+	nestStackSize := uintptr(m.iteratorStackBuffer.size()) * unsafe.Sizeof(x)
+	mf.AddChild("buffer", common.NewMemoryFootprint(nestStackSize))
 	return mf
 }

@@ -205,7 +205,9 @@ func TestInnerNodeIteratorNextCalledOnly(t *testing.T) {
 	n.insert(6)
 	n.insert(2)
 
-	it := newIterator[uint32](1, 5, n)
+	a := uint32(1)
+	b := uint32(5)
+	it := newIterator[uint32](&a, &b, n, make([]nestCtx[uint32], 0, 100))
 
 	expected := []uint32{1, 2, 3, 4}
 	for _, expectedKey := range expected {
@@ -228,7 +230,9 @@ func TestInnerNodeIteratorHasNextStable(t *testing.T) {
 	n.insert(6)
 	n.insert(2)
 
-	it := newIterator[uint32](1, 5, n)
+	a := uint32(1)
+	b := uint32(5)
+	it := newIterator[uint32](&a, &b, n, make([]nestCtx[uint32], 0, 100))
 
 	expected := []uint32{1, 2, 3, 4}
 	for _, expectedKey := range expected {
@@ -258,7 +262,9 @@ func TestInnerNodeIteratorHasNext(t *testing.T) {
 	n.insert(6)
 	n.insert(2)
 
-	it := newIterator[uint32](1, 5, n)
+	a := uint32(1)
+	b := uint32(5)
+	it := newIterator[uint32](&a, &b, n, make([]nestCtx[uint32], 0, 100))
 
 	// HasNext() work
 	if exists := it.HasNext(); !exists {
@@ -473,7 +479,7 @@ func getInnerKeys(n node[uint32]) []uint32 {
 
 func getNodeRange(n node[uint32], start, end uint32) []uint32 {
 	keys := make([]uint32, 0, 10)
-	it := newIterator[uint32](start, end, n)
+	it := newIterator[uint32](&start, &end, n, make([]nestCtx[uint32], 0, 100))
 	for it.HasNext() {
 		keys = append(keys, it.Next())
 	}

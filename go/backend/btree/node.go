@@ -64,7 +64,7 @@ type node[K any] interface {
 	// The index is increased by one when the last visited key was lower than the input key
 	// so the new key may be inserted after this key.
 	// It means the index can be used as a position to insert the key in the list.
-	findItem(key K) (index int, exists bool)
+	findItem(key *K) (index int, exists bool)
 
 	//next moves position of the input iterator, and returns next key using the iterator.
 	next(iterator *Iterator[K]) (k K)
