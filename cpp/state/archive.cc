@@ -351,9 +351,10 @@ class Archive {
                      db_.Prepare("SELECT block, hash FROM account_hash WHERE "
                                  "account = ? AND block <= ? ORDER BY block"));
 
-    ASSIGN_OR_RETURN(auto list_state,
-                     db_.Prepare("SELECT block, exist FROM status WHERE "
-                                 "account = ? AND block <= ? ORDER BY block"));
+    ASSIGN_OR_RETURN(
+        auto list_state,
+        db_.Prepare("SELECT block, exist, reincarnation FROM status WHERE "
+                    "account = ? AND block <= ? ORDER BY block"));
 
     ASSIGN_OR_RETURN(auto list_balance,
                      db_.Prepare("SELECT block, value FROM balance WHERE "
@@ -369,8 +370,9 @@ class Archive {
 
     ASSIGN_OR_RETURN(
         auto list_storage,
-        db_.Prepare("SELECT block, slot, value FROM storage WHERE "
-                    "account = ? AND block <= ? ORDER BY block, slot"));
+        db_.Prepare(
+            "SELECT block, slot, value, reincarnation FROM storage WHERE "
+            "account = ? AND block <= ? ORDER BY block, slot"));
 
     // Open individual result iterators.
     ASSIGN_OR_RETURN(auto hash_iter, list_diffs.Open(account, block));
@@ -389,6 +391,9 @@ class Archive {
         next = std::min<BlockId>(next, (*iter)->GetInt64(0));
       }
     }
+
+    // Keep track of the reincarnation number.
+    int reincarnation = -1;
 
     Hash hash{};
     BlockId last = next - 1;
@@ -409,6 +414,14 @@ class Archive {
         } else {
           update.created = true;
         }
+        int new_reincarnation_number = state_iter->GetInt(2);
+        if (new_reincarnation_number != reincarnation + 1) {
+          return absl::InternalError(absl::StrFormat(
+              "Reincarnation numbers are not incremental, at block %d the "
+              "value moves from %d to %d",
+              current, reincarnation, new_reincarnation_number));
+        }
+        reincarnation = new_reincarnation_number;
         RETURN_IF_ERROR(state_iter.Next());
       }
 
@@ -432,6 +445,13 @@ class Archive {
       }
 
       while (!storage_iter.Finished() && storage_iter->GetInt64(0) == current) {
+        int cur_reincarnation = storage_iter->GetInt(3);
+        if (cur_reincarnation != reincarnation) {
+          return absl::InternalError(
+              absl::StrFormat("Invalid reincarnation number for storage value "
+                              "at block %d, expected %d, got %d",
+                              current, reincarnation, cur_reincarnation));
+        }
         Key key;
         key.SetBytes(storage_iter->GetBytes(1));
         Value value;
@@ -444,10 +464,18 @@ class Archive {
 
       // Check the update against the list of per-account hashes.
       ASSIGN_OR_RETURN(auto has_next, hash_iter.Next());
-      if (!has_next || hash_iter->GetInt64(0) != current) {
-        return absl::InternalError(absl::StrFormat(
-            "Archive contains update for block %d but no hash for it.",
-            current));
+      BlockId diff_block = hash_iter->GetInt64(0);
+      if (!has_next || diff_block != current) {
+        if (diff_block < current) {
+          return absl::InternalError(
+              absl::StrFormat("Archive contains hash for update at block %d "
+                              "but no change for it.",
+                              diff_block));
+        } else {
+          return absl::InternalError(absl::StrFormat(
+              "Archive contains update for block %d but no hash for it.",
+              current));
+        }
       }
 
       // Compute the hash based on the diff.
@@ -457,8 +485,8 @@ class Archive {
       Hash should;
       should.SetBytes(hash_iter->GetBytes(1));
       if (hash != should) {
-        return absl::InternalError(
-            absl::StrFormat("Hash for block %d does not match.", current));
+        return absl::InternalError(absl::StrFormat(
+            "Hash for diff at block %d does not match.", current));
       }
 
       // Find next block to be processed.

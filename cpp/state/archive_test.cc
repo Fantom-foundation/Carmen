@@ -629,67 +629,404 @@ TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
   EXPECT_OK(archive.VerifyAccount(6, addr2));
 }
 
-TEST(Archive, AccountValidationFailsOnMissingHash) {
+template <typename Check>
+void TestCorruption(absl::FunctionRef<void(Sqlite& db)> change,
+                    const Check& check) {
   TempDir dir;
-  Address addr{};
+  Address addr{0x01};
+  Hash hash;
+  // Initialize an account with a bit of history.
   {
     ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-    Update update;
-    update.Create(addr);
-    EXPECT_OK(archive.Add(1, update));
-    EXPECT_OK(archive.VerifyAccount(0, addr));
-    EXPECT_OK(archive.VerifyAccount(3, addr));
-  }
-  {
-    // Mess with the DB by deleting the hash of the update.
-    ASSERT_OK_AND_ASSIGN(auto db,
-                         Sqlite::Open(dir.GetPath() / "archive.sqlite"));
-    ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 1"));
-    ASSERT_OK(db.Close());
-  }
-  {
-    ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-    EXPECT_OK(archive.VerifyAccount(0, addr));
-    EXPECT_THAT(
-        archive.VerifyAccount(3, addr),
-        StatusIs(
-            _, HasSubstr(
-                   "Archive contains update for block 1 but no hash for it.")));
-  }
-}
+    Update update1;
+    update1.Create(addr);
+    update1.Set(addr, Balance{0x12});
+    update1.Set(addr, Nonce{0x13});
+    update1.Set(addr, Code{0x14});
+    update1.Set(addr, Key{0x15}, Value{0x16});
+    EXPECT_OK(archive.Add(1, update1));
 
-TEST(Archive, AccountValidationFailsOnAdditionalStatusUpdate) {
-  TempDir dir;
-  Address addr{};
-  {
-    ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-    Update update;
-    update.Create(addr);
-    EXPECT_OK(archive.Add(1, update));
-    EXPECT_OK(archive.VerifyAccount(0, addr));
-    EXPECT_OK(archive.VerifyAccount(3, addr));
-  }
+    Update update3;
+    update3.Delete(addr);
+    update3.Set(addr, Balance{0x31});
+    update3.Set(addr, Nonce{0x33});
+    update3.Set(addr, Code{0x34});
+    update3.Set(addr, Key{0x35}, Value{0x36});
+    EXPECT_OK(archive.Add(3, update3));
 
+    Update update5;
+    update5.Create(addr);
+    update5.Set(addr, Balance{0x51});
+    EXPECT_OK(archive.Add(5, update5));
+
+    for (BlockId i = 0; i < 10; i++) {
+      EXPECT_OK(archive.VerifyAccount(i, addr));
+    }
+
+    ASSERT_OK_AND_ASSIGN(hash, archive.GetHash(10));
+    EXPECT_OK(archive.Verify(10, hash));
+  }
+  // Allow the test case to mess with the DB.
   {
     ASSERT_OK_AND_ASSIGN(auto db,
                          Sqlite::Open(dir.GetPath() / "archive.sqlite"));
-    ASSERT_OK(db.Run("INSERT INTO status(account, block, exist) VALUES (?,2,1)",
-                     addr));
+    change(db);
     ASSERT_OK(db.Close());
   }
+  // Reopen the archive and make sure the issue is detected.
   {
     ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
-    EXPECT_OK(archive.VerifyAccount(0, addr));
-    EXPECT_THAT(
-        archive.VerifyAccount(3, addr),
-        StatusIs(
-            _, HasSubstr(
-                   "Archive contains update for block 2 but no hash for it.")));
+    check(archive, hash);
   }
 }
 
-// TODO: test more verification issues.
-// TODO: test messing with reincarnation numbers
+void TestAccountCorruption(absl::FunctionRef<void(Sqlite& db)> change,
+                           std::string_view error = "") {
+  TestCorruption(change, [&](Archive& archive, const Hash&) {
+    EXPECT_THAT(archive.VerifyAccount(10, Address{0x01}),
+                StatusIs(_, HasSubstr(error)));
+  });
+}
+
+TEST(Archive, AccountVerificationDetectsMissingHash) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 3"));
+      },
+      "Archive contains update for block 3 but no hash for it.");
+}
+
+TEST(Archive, AccountVerificationDetectsModifiedStatusUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) { ASSERT_OK(db.Run("UPDATE status SET exist = 0")); },
+      "Hash for diff at block 1 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsAdditionalStatusUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO status(account, block, exist,reincarnation) "
+                   "VALUES (?,2,1,1)",
+                   Address{0x01}));
+      },
+      "Archive contains update for block 2 but no hash for it.");
+}
+
+TEST(Archive, AccountVerificationDetectsModifiedReincarnationNumber) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("UPDATE status SET reincarnation = 0"));
+      },
+      "Reincarnation numbers are not incremental");
+}
+
+TEST(Archive, AccountVerificationDetectsMissingStatusUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("DELETE FROM status WHERE block = 3"));
+      },
+      "Invalid reincarnation number for storage value at block 3, expected 0, "
+      "got 1");
+}
+
+TEST(Archive, AccountVerificationDetectsMissingBalanceUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM balance WHERE true")); },
+      "Hash for diff at block 1 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsModifiedBalanceUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("UPDATE balance SET value = ? WHERE block = 3",
+                         Balance{0xFF}));
+      },
+      "Hash for diff at block 3 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsAdditionalBalanceUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO balance(account,block,value) VALUES (?,4,?)",
+                   Address{0x01}, Balance{0xFF}));
+      },
+      "Archive contains update for block 4 but no hash for it.");
+}
+
+TEST(Archive, AccountVerificationDetectsMissingNonceUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM nonce WHERE true")); },
+      "Hash for diff at block 1 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsModifiedNonceUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("UPDATE nonce SET value = ? WHERE block = 3", Nonce{0xFF}));
+      },
+      "Hash for diff at block 3 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsAdditionalNonceUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO nonce(account,block,value) VALUES (?,4,?)",
+                   Address{0x01}, Nonce{0xFF}));
+      },
+      "Archive contains update for block 4 but no hash for it.");
+}
+
+TEST(Archive, AccountVerificationDetectsMissingCodeUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM code WHERE true")); },
+      "Hash for diff at block 1 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsModifiedCodeUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("UPDATE code SET code = ? WHERE block = 3", Code{0xFF}));
+      },
+      "Hash for diff at block 3 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsAdditionalCodeUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("INSERT INTO code(account,block,code) VALUES (?,4,?)",
+                         Address{0x01}, Code{0xFF}));
+      },
+      "Archive contains update for block 4 but no hash for it.");
+}
+
+TEST(Archive, AccountVerificationDetectsMissingStorageUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM storage WHERE true")); },
+      "Hash for diff at block 1 does not match.");
+}
+
+TEST(Archive, AccountVerificationDetectsModifiedStorageUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("UPDATE storage SET slot = ? WHERE block = 3", Key{0xFF}));
+      },
+      "Hash for diff at block 3 does not match.");
+
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("UPDATE storage SET value = ? WHERE block = 3",
+                         Value{0xFF}));
+      },
+      "Hash for diff at block 3 does not match.");
+
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("UPDATE storage SET reincarnation = 2 WHERE block = 3"));
+      },
+      "Invalid reincarnation number for storage value at block 3, expected 1, "
+      "got 2");
+}
+
+TEST(Archive, AccountVerificationDetectsAdditionalStorageUpdate) {
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run(
+            "INSERT INTO storage(account,reincarnation,block,slot,value) "
+            "VALUES (?,1,4,?,?)",
+            Address{0x01}, Key{0xAB}, Value{0xCD}));
+      },
+      "Archive contains update for block 4 but no hash for it.");
+
+  TestAccountCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run(
+            "INSERT INTO storage(account,reincarnation,block,slot,value) "
+            "VALUES (?,1,3,?,?)",
+            Address{0x01}, Key{0xAB}, Value{0xCD}));
+      },
+      "Hash for diff at block 3 does not match.");
+}
+
+void TestArchiveCorruption(absl::FunctionRef<void(Sqlite& db)> change,
+                           std::string_view error = "") {
+  TestCorruption(change, [&](Archive& archive, const Hash& hash) {
+    EXPECT_THAT(archive.Verify(10, hash), StatusIs(_, HasSubstr(error)));
+  });
+}
+
+TEST(Archive, VerificationDetectsMissingHash) {
+  // Delete a most-recent account update.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 5"));
+      },
+      "Archive hash does not match expected hash.");
+
+  // Delete a historic account update hash.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 3"));
+      },
+      "Archive contains update for block 3 but no hash for it.");
+}
+
+TEST(Archive, VerificationDetectsModifiedHashes) {
+  // A corrupted hash for a most-recent account update.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("UPDATE account_hash SET hash = ? WHERE block = 5", Hash{}));
+      },
+      "Archive hash does not match expected hash.");
+
+  // A corrupted hash for a past account update.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("UPDATE account_hash SET hash = ? WHERE block = 3", Hash{}));
+      },
+      "Hash for diff at block 3 does not match.");
+}
+
+TEST(Archive, VerificationDetectsAdditionalHashes) {
+  // An addition hash representing the most recent update.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run(
+            "INSERT INTO account_hash(account,block,hash) VALUES (?,7,?)",
+            Address{0x01}, Hash{}));
+      },
+      "Archive hash does not match expected hash.");
+
+  // An additional hash somewhere in the history.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run(
+            "INSERT INTO account_hash(account,block,hash) VALUES (?,4,?)",
+            Address{0x01}, Hash{}));
+      },
+      "Archive contains hash for update at block 4 but no change for it.");
+}
+
+TEST(Archive, VerificationDetectsExtraAccountStatus) {
+  // An entry in the past with uncovered address.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO status(account,block,exist,reincarnation) "
+                   "VALUES (?,1,0,0)",
+                   Address{0x02}));
+      },
+      "Found extra row of data in table `status`.");
+
+  // An entry in the future.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO status(account,block,exist,reincarnation) "
+                   "VALUES (?,20,0,0)",
+                   Address{0x01}));
+      },
+      "Found entry of future block height in `status`.");
+}
+
+TEST(Archive, VerificationDetectsExtraBalance) {
+  // An entry in the past with uncovered address.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO balance(account,block,value) VALUES (?,1,?)",
+                   Address{0x02}, Balance{}));
+      },
+      "Found extra row of data in table `balance`.");
+
+  // An entry in the future.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO balance(account,block,value) VALUES (?,20,?)",
+                   Address{0x01}, Balance{}));
+      },
+      "Found entry of future block height in `balance`.");
+}
+
+TEST(Archive, VerificationDetectsExtraNonce) {
+  // An entry in the past with uncovered address.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO nonce(account,block,value) VALUES (?,1,?)",
+                   Address{0x02}, Nonce{}));
+      },
+      "Found extra row of data in table `nonce`.");
+
+  // An entry in the future.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(
+            db.Run("INSERT INTO nonce(account,block,value) VALUES (?,20,?)",
+                   Address{0x01}, Nonce{}));
+      },
+      "Found entry of future block height in `nonce`.");
+}
+
+TEST(Archive, VerificationDetectsExtraCode) {
+  // An entry in the past with uncovered address.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("INSERT INTO code(account,block,code) VALUES (?,1,?)",
+                         Address{0x02}, Code{}));
+      },
+      "Found extra row of data in table `code`.");
+
+  // An entry in the future.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("INSERT INTO code(account,block,code) VALUES (?,20,?)",
+                         Address{0x01}, Code{}));
+      },
+      "Found entry of future block height in `code`.");
+}
+
+TEST(Archive, VerificationDetectsExtraStorage) {
+  // An entry in the past with uncovered address.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run(
+            "INSERT INTO storage(account,reincarnation,block,slot,value) "
+            "VALUES (?,1,1,?,?)",
+            Address{0x02}, Key{}, Value{}));
+      },
+      "Found extra row of data in table `storage`.");
+
+  // An entry in the future.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run(
+            "INSERT INTO storage(account,reincarnation,block,slot,value) "
+            "VALUES (?,1,20,?,?)",
+            Address{0x01}, Key{}, Value{}));
+      },
+      "Found entry of future block height in `storage`.");
+}
+
+TEST(Archive, VerificationDetectsCorruptedAccount) {
+  // Account verification is tested with its own set of tests. Here we only test
+  // that account verification is indeed involved in state validation.
+  TestArchiveCorruption(
+      [](Sqlite& db) {
+        ASSERT_OK(db.Run("UPDATE balance SET value = ? WHERE block = 3",
+                         Balance{0xFF}));
+      },
+      "Hash for diff at block 3 does not match.");
+}
 
 TEST(Archive, ArchiveHashIsHashOfAccountHashes) {
   TempDir dir;
