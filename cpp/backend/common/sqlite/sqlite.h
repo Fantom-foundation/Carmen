@@ -128,7 +128,7 @@ class SqlStatement {
   absl::Status Run(absl::FunctionRef<void(const SqlRow& row)> consumer);
 
   // Runs this statement and returns an iterator on its results. Only one
-  // iterator can be alife at any time and this statement must outlive the
+  // iterator can be alive at any time and this statement must outlive the
   // returned iterator. If all results should be consumed, use the Run() methods
   // above for convenience.
   absl::StatusOr<SqlIterator> Open();
