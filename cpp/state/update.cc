@@ -228,11 +228,11 @@ absl::StatusOr<std::vector<std::byte>> Update::ToBytes() const {
 absl::flat_hash_map<Address, AccountUpdate> AccountUpdate::From(
     const Update& update) {
   absl::flat_hash_map<Address, AccountUpdate> res;
-  for (const auto& cur : update.GetCreatedAccounts()) {
-    res[cur].created = true;
+  for (const auto& address : update.GetCreatedAccounts()) {
+    res[address].created = true;
   }
-  for (const auto& cur : update.GetDeletedAccounts()) {
-    res[cur].deleted = true;
+  for (const auto& address : update.GetDeletedAccounts()) {
+    res[address].deleted = true;
   }
   for (const auto& [address, balance] : update.GetBalances()) {
     res[address].balance = balance;

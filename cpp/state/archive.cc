@@ -353,22 +353,40 @@ class Archive {
     }
 
     // Check that there is no extra information in any of the content tables.
+    ASSIGN_OR_RETURN(BlockId latestBlock, GetLastBlockHeight());
     // TODO: run this in parallel
     for (auto table : {"status", "balance", "nonce", "code", "storage"}) {
-      ASSIGN_OR_RETURN(auto state_check,
+      // Check that there are no additional addresses referenced.
+      ASSIGN_OR_RETURN(auto no_extra_address_check,
                        db_.Prepare(absl::StrFormat(
                            "SELECT 1 FROM (SELECT account FROM %s WHERE block "
                            "<= ? EXCEPT SELECT account FROM account_hash WHERE "
                            "block <= ?) LIMIT 1",
                            table)));
-      RETURN_IF_ERROR(state_check.Bind(0, static_cast<int>(block)));
-      RETURN_IF_ERROR(state_check.Bind(1, static_cast<int>(block)));
+      RETURN_IF_ERROR(no_extra_address_check.Bind(0, static_cast<int>(block)));
+      RETURN_IF_ERROR(no_extra_address_check.Bind(1, static_cast<int>(block)));
 
       bool found = false;
-      RETURN_IF_ERROR(state_check.Run([&](const auto&) { found = true; }));
+      RETURN_IF_ERROR(
+          no_extra_address_check.Run([&](const auto&) { found = true; }));
       if (found) {
         return absl::InternalError(
             absl::StrFormat("Found extra row of data in table `%s`.", table));
+      }
+
+      // Check that there is no future information for a block not covered yet.
+      // This depends on the fact that blocks can only be added in order.
+      ASSIGN_OR_RETURN(auto no_future_block_check,
+                       db_.Prepare(absl::StrFormat(
+                           "SELECT 1 FROM %s WHERE block > ? LIMIT 1", table)));
+      RETURN_IF_ERROR(
+          no_future_block_check.Bind(0, static_cast<int>(latestBlock)));
+
+      RETURN_IF_ERROR(
+          no_future_block_check.Run([&](const auto&) { found = true; }));
+      if (found) {
+        return absl::InternalError(absl::StrFormat(
+            "Found entry of future block height in `%s`.", table));
       }
     }
 
