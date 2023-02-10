@@ -1,6 +1,7 @@
 #include "backend/index/leveldb/single_db/index.h"
 
 #include "absl/status/status.h"
+#include "backend/index/index_test_suite.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
@@ -13,6 +14,11 @@ using ::testing::_;
 using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 using ::testing::StrEq;
+
+using TestIndex = LevelDbKeySpace<int, int>;
+
+// Instantiates common index tests for the single leveldb index type.
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
 absl::StatusOr<LevelDbKeySpace<int, int>> GetTestIndex(const TempDir& dir) {
   ASSIGN_OR_RETURN(auto index, SingleLevelDbIndex::Open(dir.GetPath()));

@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "backend/index/index_test_suite.h"
 #include "backend/index/test_util.h"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
@@ -14,6 +15,12 @@ using ::testing::IsOkAndHolds;
 using ::testing::Pair;
 using ::testing::Return;
 using ::testing::StatusIs;
+
+using TestIndex = InMemoryIndex<int, int>;
+using CachedIndex = Cached<TestIndex>;
+
+// Instantiates common index tests for the Cached index type.
+INSTANTIATE_TYPED_TEST_SUITE_P(Cached, IndexTest, CachedIndex);
 
 TEST(CachedIndex, CachedKeysAreNotFetched) {
   MockIndex<int, int> wrapper;

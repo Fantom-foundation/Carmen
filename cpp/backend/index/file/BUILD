@@ -77,6 +77,7 @@ cc_test(
     deps = [
         ":index",
         "//backend:structure",
+        "//backend/index:index_test_suite",
         "//backend/index:test_util",
         "//common:file_util",
         "//common:status_test_util",

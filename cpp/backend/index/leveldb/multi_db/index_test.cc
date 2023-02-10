@@ -1,6 +1,7 @@
 #include "backend/index/leveldb/multi_db/index.h"
 
 #include "absl/status/status.h"
+#include "backend/index/index_test_suite.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
@@ -14,6 +15,9 @@ using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 
 using TestIndex = MultiLevelDbIndex<int, int>;
+
+// Instantiates common index tests for the multi leveldb index type.
+INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
 TEST(LevelDbMultiFileIndex, TestOpen) {
   auto dir = TempDir();
