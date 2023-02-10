@@ -1,11 +1,9 @@
-
-#include "backend/store/memory/store.h"
+#pragma once
 
 #include <string>
 #include <vector>
 
-#include "backend/store/file/store.h"
-#include "backend/store/leveldb/store.h"
+#include "backend/store/store.h"
 #include "backend/store/store_handler.h"
 #include "common/hash.h"
 #include "common/status_test_util.h"
@@ -19,6 +17,10 @@ namespace {
 
 using ::testing::IsOkAndHolds;
 using ::testing::StrEq;
+
+// A test configuration for store implementations.
+template <Store store, std::size_t branching_factor>
+using StoreTestConfig = StoreHandler<store, branching_factor>;
 
 Value ToValue(std::int64_t value) {
   return Value{static_cast<std::uint8_t>(value >> 32),
@@ -275,41 +277,5 @@ REGISTER_TYPED_TEST_SUITE_P(StoreTest, TypeProperties,
                             HashesRespectEmptyPages, HashesChangeWithUpdates,
                             HashesCoverMultiplePages,
                             CanProduceMemoryFootprint);
-
-using StoreTypes = ::testing::Types<
-    // Page size 32, branching size 32.
-    StoreHandler<ReferenceStore<32>, 32>,
-    StoreHandler<InMemoryStore<int, Value, 32>, 32>,
-    StoreHandler<EagerFileStore<int, Value, InMemoryFile, 32>, 32>,
-    StoreHandler<EagerFileStore<int, Value, SingleFile, 32>, 32>,
-    StoreHandler<LazyFileStore<int, Value, SingleFile, 32>, 32>,
-    StoreHandler<LevelDbStore<int, Value, 32>, 32>,
-
-    // Page size 64, branching size 3.
-    StoreHandler<ReferenceStore<64>, 3>,
-    StoreHandler<InMemoryStore<int, Value, 64>, 3>,
-    StoreHandler<EagerFileStore<int, Value, InMemoryFile, 64>, 3>,
-    StoreHandler<EagerFileStore<int, Value, SingleFile, 64>, 3>,
-    StoreHandler<LazyFileStore<int, Value, SingleFile, 64>, 3>,
-    StoreHandler<LevelDbStore<int, Value, 64>, 3>,
-
-    // Page size 64, branching size 8.
-    StoreHandler<ReferenceStore<64>, 8>,
-    StoreHandler<InMemoryStore<int, Value, 64>, 8>,
-    StoreHandler<EagerFileStore<int, Value, InMemoryFile, 64>, 8>,
-    StoreHandler<EagerFileStore<int, Value, SingleFile, 64>, 8>,
-    StoreHandler<LazyFileStore<int, Value, SingleFile, 64>, 8>,
-    StoreHandler<LevelDbStore<int, Value, 64>, 8>,
-
-    // Page size 128, branching size 4.
-    StoreHandler<ReferenceStore<128>, 4>,
-    StoreHandler<InMemoryStore<int, Value, 128>, 4>,
-    StoreHandler<EagerFileStore<int, Value, InMemoryFile, 128>, 4>,
-    StoreHandler<EagerFileStore<int, Value, SingleFile, 128>, 4>,
-    StoreHandler<LazyFileStore<int, Value, SingleFile, 128>, 4>,
-    StoreHandler<LevelDbStore<int, Value, 128>, 4>>;
-
-INSTANTIATE_TYPED_TEST_SUITE_P(All, StoreTest, StoreTypes);
-
 }  // namespace
 }  // namespace carmen::backend::store

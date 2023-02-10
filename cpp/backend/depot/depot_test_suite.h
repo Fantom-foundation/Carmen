@@ -1,3 +1,5 @@
+#pragma once
+
 #include "backend/depot/depot.h"
 #include "backend/depot/depot_handler.h"
 #include "common/status_test_util.h"
