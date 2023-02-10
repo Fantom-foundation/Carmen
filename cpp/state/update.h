@@ -145,7 +145,8 @@ class Update {
 };
 
 // An AccountUpdate combines the updates applied to a single account in one
-// block. Its main intention is to u
+// block. Its main intention is to be utilized as the diff unit for hashing
+// incremental updates on accounts in archives.
 struct AccountUpdate {
   // The update of a slot.
   struct SlotUpdate {

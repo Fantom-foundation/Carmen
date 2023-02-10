@@ -372,7 +372,7 @@ class Archive {
       }
     }
 
-    // All checks have been passed. DB is verified.
+    // All checks have passed. DB is verified.
     return absl::OkStatus();
   }
 
@@ -425,7 +425,7 @@ class Archive {
     ASSIGN_OR_RETURN(auto code_iter, list_code_stmt.Open());
     ASSIGN_OR_RETURN(auto storage_iter, list_storage_stmt.Open());
 
-    // Create and initializer priority queue over block numbers.
+    // Find the first block referencing the account.
     BlockId next = block + 1;
     for (SqlIterator* iter :
          {&state_iter, &balance_iter, &nonce_iter, &code_iter, &storage_iter}) {
