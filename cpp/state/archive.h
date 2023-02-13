@@ -2,7 +2,9 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string_view>
 
+#include "absl/functional/function_ref.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "common/memory_usage.h"
@@ -69,7 +71,10 @@ class Archive {
   absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& account);
 
   // Verifies that the content of this archive up until the given block.
-  absl::Status Verify(BlockId block, const Hash& expected_hash);
+  absl::Status Verify(
+      BlockId block, const Hash& expected_hash,
+      absl::FunctionRef<void(std::string_view)> progress_callback =
+          [](std::string_view) {});
 
   // Verifies the given account at the given block height.
   absl::Status VerifyAccount(BlockId block, const Address& account) const;
