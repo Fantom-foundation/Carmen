@@ -5,6 +5,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/depot/depot.h"
+#include "backend/depot/depot_test_suite.h"
+#include "backend/depot/memory/depot.h"
 #include "backend/depot/test_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
@@ -18,6 +20,20 @@ using ::testing::ElementsAreArray;
 using ::testing::IsOkAndHolds;
 using ::testing::Return;
 using ::testing::StatusIs;
+
+using CachedDepot = Cached<InMemoryDepot<unsigned int>>;
+using CachedDepotTypes = ::testing::Types<
+    // Branching size 3, Size of box 1.
+    DepotTestConfig<CachedDepot, 3, 1>,
+    // Branching size 3, Size of box 2.
+    DepotTestConfig<CachedDepot, 3, 2>,
+    // Branching size 16, Size of box 8.
+    DepotTestConfig<CachedDepot, 16, 8>,
+    // Branching size 32, Size of box 16.
+    DepotTestConfig<CachedDepot, 32, 16>>;
+
+// Instantiates common depot tests for the Cached depot type.
+INSTANTIATE_TYPED_TEST_SUITE_P(Cached, DepotTest, CachedDepotTypes);
 
 TEST(CachedDepot, IsDepot) { EXPECT_TRUE(Depot<Cached<MockDepot<int>>>); }
 

@@ -19,6 +19,7 @@ cc_test(
     srcs = ["cache_test.cc"],
     deps = [
         ":cache",
+        "//backend/depot:depot_test_suite",
         "//backend/depot:test_util",
         "//common:status_test_util",
         "@com_google_absl//absl/status",

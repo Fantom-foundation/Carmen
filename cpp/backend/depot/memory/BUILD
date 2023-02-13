@@ -18,6 +18,7 @@ cc_test(
     deps = [
         ":depot",
         "//backend/depot",
+        "//backend/depot:depot_test_suite",
         "@com_google_googletest//:gtest_main",
     ],
 )

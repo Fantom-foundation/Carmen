@@ -21,8 +21,10 @@ cc_test(
     deps = [
         ":store",
         "//backend:structure",
+        "//backend/store:store_test_suite",
         "//common:file_util",
         "//common:status_test_util",
+        "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
 )

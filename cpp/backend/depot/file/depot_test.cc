@@ -1,6 +1,7 @@
 #include "backend/depot/file/depot.h"
 
 #include "backend/depot/depot.h"
+#include "backend/depot/depot_test_suite.h"
 #include "backend/depot/memory/depot.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
@@ -18,7 +19,18 @@ using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 
 using TestDepot = FileDepot<unsigned long>;
-using ReferenceDepot = InMemoryDepot<unsigned long>;
+using DepotTypes = ::testing::Types<
+    // Branching size 3, Size of box 1.
+    DepotTestConfig<TestDepot, 3, 1>,
+    // Branching size 3, Size of box 2.
+    DepotTestConfig<TestDepot, 3, 2>,
+    // Branching size 16, Size of box 8.
+    DepotTestConfig<TestDepot, 16, 8>,
+    // Branching size 32, Size of box 16.
+    DepotTestConfig<TestDepot, 32, 16>>;
+
+// Instantiates common depot tests for the File depot type.
+INSTANTIATE_TYPED_TEST_SUITE_P(File, DepotTest, DepotTypes);
 
 TEST(FileDepotTest, IsDepot) { EXPECT_TRUE(Depot<TestDepot>); }
 
@@ -47,8 +59,11 @@ TEST(FileDepotTest, FragmentedPathEqualsReference) {
   ASSERT_OK_AND_ASSIGN(
       auto depot, TestDepot::Open(dir.GetPath(), /*hash_branching_factor=*/32,
                                   /*hash_box_size=*/2));
-  auto ref_depot =
-      ReferenceDepot(/*hash_branching_factor=*/32, /*hash_box_size=*/2);
+
+  ASSERT_OK_AND_ASSIGN(auto ref_depot,
+                       InMemoryDepot<unsigned long>::Open(
+                           dir.GetPath(), /*hash_branching_factor=*/32,
+                           /*hash_box_size=*/2));
 
   // Box size is 2, so these elements will be in the same box.
   auto elements = std::array{std::byte{1}, std::byte{2}};

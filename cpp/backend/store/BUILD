@@ -39,14 +39,15 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "store_test",
-    srcs = ["store_test.cc"],
+cc_library(
+    name = "store_test_suite",
+    testonly = True,
+    srcs = ["store_test_suite.h"],
+    visibility = ["//backend/store:__subpackages__"],
     deps = [
+        ":store",
         ":store_handler",
-        "//backend/store/file:store",
-        "//backend/store/leveldb:store",
-        "//backend/store/memory:store",
+        "//common:hash",
         "//common:status_test_util",
         "//common:test_util",
         "//common:type",

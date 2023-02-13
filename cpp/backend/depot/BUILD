@@ -36,16 +36,14 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "depot_test",
-    srcs = ["depot_test.cc"],
+cc_library(
+    name = "depot_test_suite",
+    testonly = True,
+    hdrs = ["depot_test_suite.h"],
+    visibility = ["//backend/depot:__subpackages__"],
     deps = [
         ":depot",
         ":depot_handler",
-        "//backend/depot/cache",
-        "//backend/depot/file:depot",
-        "//backend/depot/leveldb:depot",
-        "//backend/depot/memory:depot",
         "//common:status_test_util",
         "//common:test_util",
         "@com_google_googletest//:gtest_main",

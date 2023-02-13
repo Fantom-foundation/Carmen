@@ -2,8 +2,10 @@
 
 #include <type_traits>
 
+#include "backend/store/store_test_suite.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
+#include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -13,6 +15,19 @@ namespace {
 using ::testing::IsOkAndHolds;
 
 using Store = InMemoryStore<int, int>;
+
+using StoreTypes = ::testing::Types<
+    // Page size 32, branching size 32.
+    StoreTestConfig<InMemoryStore<int, Value, 32>, 32>,
+    // Page size 64, branching size 3.
+    StoreTestConfig<InMemoryStore<int, Value, 64>, 3>,
+    // Page size 64, branching size 8.
+    StoreTestConfig<InMemoryStore<int, Value, 64>, 8>,
+    // Page size 128, branching size 4.
+    StoreTestConfig<InMemoryStore<int, Value, 128>, 4>>;
+
+// Instantiates common store tests for the InMemory store type.
+INSTANTIATE_TYPED_TEST_SUITE_P(InMemory, StoreTest, StoreTypes);
 
 TEST(InMemoryStoreTest, TypeTraits) {
   EXPECT_TRUE(std::is_default_constructible_v<Store>);
