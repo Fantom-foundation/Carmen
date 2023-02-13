@@ -34,5 +34,8 @@ type Archive interface {
 	// GetStorage allows to fetch a historic value for a given slot.
 	GetStorage(block uint64, account common.Address, slot common.Key) (value common.Value, err error)
 
+	// provides the size of the store in memory in bytes
+	common.MemoryFootprintProvider
+
 	io.Closer
 }

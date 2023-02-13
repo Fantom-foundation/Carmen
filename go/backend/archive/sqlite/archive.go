@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -363,4 +364,13 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, err
 	}
 	return common.Value{}, rows.Err()
+}
+
+// GetMemoryFootprint provides the size of the archive in memory in bytes
+func (a *Archive) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
+	var address common.Address
+	var reincarnation int
+	mf.AddChild("reincarnationNumberCache", common.NewMemoryFootprint(uintptr(len(a.reincarnationNumberCache))*(unsafe.Sizeof(address)+unsafe.Sizeof(reincarnation))))
+	return mf
 }

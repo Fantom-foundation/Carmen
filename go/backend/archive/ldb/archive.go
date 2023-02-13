@@ -3,16 +3,20 @@ package ldb
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"unsafe"
 )
 
 type Archive struct {
-	db *common.LevelDbMemoryFootprintWrapper
+	db                       *common.LevelDbMemoryFootprintWrapper
+	reincarnationNumberCache map[common.Address]int
 }
 
 func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
 	return &Archive{
-		db: db,
+		db:                       db,
+		reincarnationNumberCache: map[common.Address]int{},
 	}, nil
 }
 
@@ -22,27 +26,36 @@ func (a *Archive) Close() error {
 }
 
 func (a *Archive) Add(block uint64, update common.Update) error {
-	tx, err := a.db.OpenTransaction()
-	if err != nil {
-		return err
-	}
-	var succeed bool
-	defer func() {
-		if !succeed {
-			tx.Discard()
+	batch := leveldb.Batch{}
+
+	getReincarnationNumber := func(account common.Address) (int, error) {
+		if res, exists := a.reincarnationNumberCache[account]; exists {
+			return res, nil
 		}
-	}()
+
+		var key accountBlockKey
+		key.set(common.AccountArchiveKey, account, block)
+		keyRange := key.getRange()
+		it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
+		defer it.Release()
+
+		if it.Next() {
+			var accountStatusV accountStatusValue
+			copy(accountStatusV[:], it.Value())
+			_, res := accountStatusV.get()
+			a.reincarnationNumberCache[account] = res
+			return res, nil
+		}
+		return 0, it.Error()
+	}
 
 	hash := update.GetHash()
 	var blockK blockKey
 	blockK.set(block)
-	err = tx.Put(blockK[:], hash[:], nil)
-	if err != nil {
-		return fmt.Errorf("failed to add block; %s", err)
-	}
+	batch.Put(blockK[:], hash[:])
 
 	for _, account := range update.DeletedAccounts {
-		_, reincarnation, err := a.getStatus(tx, block, account)
+		reincarnation, err := getReincarnationNumber(account)
 		if err != nil {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
@@ -50,14 +63,12 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		accountK.set(common.AccountArchiveKey, account, block)
 		var accountStatusV accountStatusValue
 		accountStatusV.set(false, reincarnation+1)
-		err = tx.Put(accountK[:], accountStatusV[:], nil)
-		if err != nil {
-			return fmt.Errorf("failed to add status; %s", err)
-		}
+		batch.Put(accountK[:], accountStatusV[:])
+		a.reincarnationNumberCache[account] = reincarnation + 1
 	}
 
 	for _, account := range update.CreatedAccounts {
-		_, reincarnation, err := a.getStatus(tx, block, account)
+		reincarnation, err := getReincarnationNumber(account)
 		if err != nil {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
@@ -65,74 +76,43 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		accountK.set(common.AccountArchiveKey, account, block)
 		var accountStatusV accountStatusValue
 		accountStatusV.set(true, reincarnation+1)
-		err = tx.Put(accountK[:], accountStatusV[:], nil)
-		if err != nil {
-			return fmt.Errorf("failed to add status; %s", err)
-		}
+		batch.Put(accountK[:], accountStatusV[:])
+		a.reincarnationNumberCache[account] = reincarnation + 1
 	}
 
 	for _, balanceUpdate := range update.Balances {
 		var accountK accountBlockKey
 		accountK.set(common.BalanceArchiveKey, balanceUpdate.Account, block)
-		err = tx.Put(accountK[:], balanceUpdate.Balance[:], nil)
-		if err != nil {
-			return fmt.Errorf("failed to add balance; %s", err)
-		}
+		batch.Put(accountK[:], balanceUpdate.Balance[:])
 	}
 
 	for _, codeUpdate := range update.Codes {
 		var accountK accountBlockKey
 		accountK.set(common.CodeArchiveKey, codeUpdate.Account, block)
-		err = tx.Put(accountK[:], codeUpdate.Code[:], nil)
-		if err != nil {
-			return fmt.Errorf("failed to add code; %s", err)
-		}
+		batch.Put(accountK[:], codeUpdate.Code[:])
 	}
 
 	for _, nonceUpdate := range update.Nonces {
 		var accountK accountBlockKey
 		accountK.set(common.NonceArchiveKey, nonceUpdate.Account, block)
-		err = tx.Put(accountK[:], nonceUpdate.Nonce[:], nil)
-		if err != nil {
-			return fmt.Errorf("failed to add nonce; %s", err)
-		}
+		batch.Put(accountK[:], nonceUpdate.Nonce[:])
 	}
 
 	for _, slotUpdate := range update.Slots {
-		_, reincarnation, err := a.getStatus(tx, block, slotUpdate.Account) // use changes from status updates above
+		reincarnation, err := getReincarnationNumber(slotUpdate.Account) // use changes from status updates above
 		if err != nil {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
 		var slotK accountKeyBlockKey
 		slotK.set(common.StorageArchiveKey, slotUpdate.Account, reincarnation, slotUpdate.Key, block)
-		err = tx.Put(slotK[:], slotUpdate.Value[:], nil)
-		if err != nil {
-			return fmt.Errorf("failed to add storage value; %s", err)
-		}
+		batch.Put(slotK[:], slotUpdate.Value[:])
 	}
 
-	succeed = true
-	return tx.Commit()
-}
-
-func (a *Archive) getStatus(tx common.LevelDB, block uint64, account common.Address) (exists bool, reincarnation int, err error) {
-	var key accountBlockKey
-	key.set(common.AccountArchiveKey, account, block)
-	keyRange := key.getRange()
-	it := tx.NewIterator(&keyRange, &opt.ReadOptions{})
-	defer it.Release()
-
-	if it.Next() {
-		var accountStatusV accountStatusValue
-		copy(accountStatusV[:], it.Value())
-		exists, reincarnation = accountStatusV.get()
-		return exists, reincarnation, nil
-	}
-	return false, 0, it.Error()
+	return a.db.Write(&batch, nil)
 }
 
 func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
-	keyRange := getLastBlockRange()
+	keyRange := getBlockKeyRangeFromHighest()
 	it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
 	defer it.Release()
 
@@ -145,8 +125,24 @@ func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
 	return 0, it.Error()
 }
 
+func (a *Archive) getStatus(block uint64, account common.Address) (exists bool, reincarnation int, err error) {
+	var key accountBlockKey
+	key.set(common.AccountArchiveKey, account, block)
+	keyRange := key.getRange()
+	it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
+	defer it.Release()
+
+	if it.Next() {
+		var accountStatusV accountStatusValue
+		copy(accountStatusV[:], it.Value())
+		exists, reincarnation = accountStatusV.get()
+		return exists, reincarnation, nil
+	}
+	return false, 0, it.Error()
+}
+
 func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err error) {
-	exists, _, err = a.getStatus(a.db, block, account)
+	exists, _, err = a.getStatus(block, account)
 	return exists, err
 }
 
@@ -194,7 +190,7 @@ func (a *Archive) GetNonce(block uint64, account common.Address) (nonce common.N
 }
 
 func (a *Archive) GetStorage(block uint64, account common.Address, slot common.Key) (value common.Value, err error) {
-	accountExists, reincarnation, err := a.getStatus(a.db, block, account)
+	accountExists, reincarnation, err := a.getStatus(block, account)
 	if !accountExists || err != nil {
 		return common.Value{}, err
 	}
@@ -210,4 +206,13 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, nil
 	}
 	return common.Value{}, it.Error()
+}
+
+// GetMemoryFootprint provides the size of the archive in memory in bytes
+func (a *Archive) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
+	var address common.Address
+	var reincarnation int
+	mf.AddChild("reincarnationNumberCache", common.NewMemoryFootprint(uintptr(len(a.reincarnationNumberCache))*(unsafe.Sizeof(address)+unsafe.Sizeof(reincarnation))))
+	return mf
 }
