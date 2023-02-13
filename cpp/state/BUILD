@@ -19,10 +19,18 @@ cc_test(
     deps = [
         ":configurations",
         ":state",
+        ":test_util",
+        ":update",
+        "//backend/depot:test_util",
+        "//backend/index:test_util",
+        "//backend/multimap:test_util",
+        "//backend/store:test_util",
         "//common:account_state",
         "//common:file_util",
         "//common:status_test_util",
         "//common:type",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -31,6 +39,7 @@ cc_library(
     name = "configurations",
     hdrs = ["configurations.h"],
     deps = [
+        ":archive",
         ":state",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
@@ -154,5 +163,20 @@ cc_test(
         "//common:status_test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "test_util",
+    testonly = True,
+    hdrs = ["test_util.h"],
+    deps = [
+        ":archive",
+        ":update",
+        "//common:memory_usage",
+        "//common:type",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest",
     ],
 )

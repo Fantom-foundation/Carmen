@@ -2,7 +2,7 @@
 
 #include <utility>
 
-#include "backend/index/memory/index.h"
+#include "backend/index/index_test_suite.h"
 #include "backend/index/test_util.h"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
@@ -23,9 +23,9 @@ using CachedIndex = Cached<TestIndex>;
 INSTANTIATE_TYPED_TEST_SUITE_P(Cached, IndexTest, CachedIndex);
 
 TEST(CachedIndex, CachedKeysAreNotFetched) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+  Cached<MockIndex<int, int>> index(std::move(wrapper));
 
   // The underlying index is only accessed once.
   EXPECT_CALL(mock, GetOrAdd(12))
@@ -38,9 +38,9 @@ TEST(CachedIndex, CachedKeysAreNotFetched) {
 }
 
 TEST(CachedIndex, MissingEntriesAreCached) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+  Cached<MockIndex<int, int>> index(std::move(wrapper));
 
   // The underlying index is only accessed once.
   EXPECT_CALL(mock, Get(12))
@@ -52,9 +52,9 @@ TEST(CachedIndex, MissingEntriesAreCached) {
 }
 
 TEST(CachedIndex, ErrorStatusIsNotCached) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+  Cached<MockIndex<int, int>> index(std::move(wrapper));
 
   // The underlying index is accesses repeatedly because error status is not
   // cached.
@@ -67,9 +67,9 @@ TEST(CachedIndex, ErrorStatusIsNotCached) {
 }
 
 TEST(CachedIndex, HashesAreCached) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+  Cached<MockIndex<int, int>> index(std::move(wrapper));
 
   // The underlying index is only accessed once.
   Hash hash{0x01, 0x23};
@@ -81,9 +81,9 @@ TEST(CachedIndex, HashesAreCached) {
 }
 
 TEST(CachedIndex, AddNewElementInvalidatesHash) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+  Cached<MockIndex<int, int>> index(std::move(wrapper));
 
   // The underlying index is computing the hash twice.
   Hash hash_a{0x01, 0x23};
@@ -104,9 +104,9 @@ TEST(CachedIndex, AddNewElementInvalidatesHash) {
 }
 
 TEST(CachedIndex, GetExistingElementPreservesHash) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper));
+  Cached<MockIndex<int, int>> index(std::move(wrapper));
 
   // The underlying index is only asked for a hash once.
   Hash hash_a{0x01, 0x23};
@@ -123,10 +123,10 @@ TEST(CachedIndex, GetExistingElementPreservesHash) {
 }
 
 TEST(CachedIndex, CacheSizeLimitIsEnforced) {
-  MockIndexWrapper<int, int> wrapper;
+  MockIndex<int, int> wrapper;
   auto& mock = wrapper.GetMockIndex();
-  Cached<MockIndexWrapper<int, int>> index(std::move(wrapper),
-                                           /*max_entries=*/2);
+  Cached<MockIndex<int, int>> index(std::move(wrapper),
+                                    /*max_entries=*/2);
 
   // The underlying index is only asked for a hash once.
   EXPECT_CALL(mock, GetOrAdd(0))

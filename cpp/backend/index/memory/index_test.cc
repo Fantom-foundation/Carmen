@@ -1,6 +1,6 @@
 #include "backend/index/memory/index.h"
 
-#include "backend/index/test_util.h"
+#include "backend/index/index_test_suite.h"
 #include "common/status_test_util.h"
 #include "gtest/gtest.h"
 

@@ -1,6 +1,7 @@
 #include "backend/index/leveldb/multi_db/index.h"
 
-#include "backend/index/test_util.h"
+#include "absl/status/status.h"
+#include "backend/index/index_test_suite.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
@@ -9,11 +10,9 @@
 namespace carmen::backend::index {
 namespace {
 
-using ::testing::IsOk;
+using ::testing::_;
 using ::testing::IsOkAndHolds;
-using ::testing::Not;
 using ::testing::StatusIs;
-using ::testing::StrEq;
 
 using TestIndex = MultiLevelDbIndex<int, int>;
 
@@ -22,7 +21,7 @@ INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, IndexTest, TestIndex);
 
 TEST(LevelDbMultiFileIndex, TestOpen) {
   auto dir = TempDir();
-  ASSERT_THAT(TestIndex::Open(dir.GetPath()), IsOk());
+  EXPECT_OK(TestIndex::Open(dir.GetPath()));
 }
 
 TEST(LevelDbMultiFileIndex, IndexIsPersistent) {

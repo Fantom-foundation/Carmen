@@ -1,6 +1,7 @@
 #include "backend/index/memory/linear_hash_index.h"
 
-#include "backend/index/test_util.h"
+#include "backend/index/index_test_suite.h"
+#include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 

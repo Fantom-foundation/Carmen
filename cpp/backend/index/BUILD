@@ -12,6 +12,7 @@ cc_test(
     name = "index_test",
     srcs = ["index_test.cc"],
     deps = [
+        "//backend/common:file",
         "//backend/index/memory:index",
         "//common:status_test_util",
         "//common:test_util",
@@ -24,14 +25,11 @@ cc_library(
     name = "test_util",
     testonly = True,
     hdrs = ["test_util.h"],
-    visibility = ["//backend/index:__subpackages__"],
+    visibility = ["//visibility:public"],
     deps = [
-        ":index",
         "//backend:structure",
-        "//backend/index:index_handler",
-        "//backend/index/memory:index",
-        "//common:hash",
-        "//common:status_test_util",
+        "//common:memory_usage",
+        "//common:type",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest",
@@ -62,7 +60,9 @@ cc_library(
         "//backend/index/leveldb/single_db:index",
         "//common:file_util",
         "//common:type",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_googletest//:gtest_main",
     ],
 )
 
@@ -81,5 +81,21 @@ cc_binary(
         "//common:status_test_util",
         "//third_party/gperftools:profiler",
         "@com_github_google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_library(
+    name = "index_test_suite",
+    testonly = True,
+    hdrs = ["index_test_suite.h"],
+    visibility = ["//backend/index:__subpackages__"],
+    deps = [
+        ":index",
+        "//backend/index:index_handler",
+        "//backend/index/memory:index",
+        "//common:hash",
+        "//common:status_test_util",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest",
     ],
 )

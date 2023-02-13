@@ -1,10 +1,9 @@
 #include "backend/index/leveldb/single_db/index.h"
 
-#include "absl/status/statusor.h"
-#include "backend/index/test_util.h"
+#include "absl/status/status.h"
+#include "backend/index/index_test_suite.h"
 #include "common/file_util.h"
 #include "common/status_test_util.h"
-#include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 

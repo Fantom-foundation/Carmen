@@ -28,7 +28,7 @@ cc_library(
     name = "test_util",
     testonly = True,
     hdrs = ["test_util.h"],
-    visibility = ["//backend/depot:__subpackages__"],
+    visibility = ["//visibility:public"],
     deps = [
         "//common:memory_usage",
         "//common:type",

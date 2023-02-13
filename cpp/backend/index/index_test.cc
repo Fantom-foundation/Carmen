@@ -1,9 +1,9 @@
 #include "backend/index/memory/index.h"
 
+#include "backend/common/file.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
 #include "common/type.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace carmen::backend::index {

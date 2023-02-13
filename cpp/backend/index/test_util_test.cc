@@ -11,7 +11,7 @@ GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IndexTest);
 
 // Check that the MockIndexWrapper implementation is a valid Index.
 TEST(MockIndexWrapperTest, IsIndex) {
-  EXPECT_TRUE((Index<MockIndexWrapper<int, int>>));
+  EXPECT_TRUE((Index<MockIndex<int, int>>));
 }
 
 }  // namespace

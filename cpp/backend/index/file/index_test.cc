@@ -1,8 +1,9 @@
 #include "backend/index/file/index.h"
 
 #include "backend/common/file.h"
-#include "backend/index/test_util.h"
+#include "backend/index/index_test_suite.h"
 #include "backend/structure.h"
+#include "common/file_util.h"
 #include "common/status_test_util.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
