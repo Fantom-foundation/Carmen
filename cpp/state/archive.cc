@@ -270,7 +270,10 @@ class Archive {
     return result;
   }
 
-  absl::Status Verify(BlockId block, const Hash& expected_hash) {
+  absl::Status Verify(
+      BlockId block, const Hash& expected_hash,
+      absl::FunctionRef<void(std::string_view)> progress_callback) {
+    progress_callback("DB integrity check");
     // Start by checking the DB integrity.
     ASSIGN_OR_RETURN(auto integrity_check_stmt,
                      db_.Prepare("PRAGMA integrity_check"));
@@ -291,21 +294,23 @@ class Archive {
     }
 
     // Next, check the expected hash.
+    progress_callback("checking archive root hash");
     ASSIGN_OR_RETURN(auto hash, GetHash(block));
     if (hash != expected_hash) {
       return absl::InternalError("Archive hash does not match expected hash.");
     }
 
     // Validate all individual accounts.
-    // TODO: run this in parallel
+    progress_callback("getting list of accounts");
     ASSIGN_OR_RETURN(auto accounts, GetAccountList(block));
+    progress_callback(absl::StrFormat("checking %d accounts", accounts.size()));
     for (const auto& cur : accounts) {
       RETURN_IF_ERROR(VerifyAccount(block, cur));
     }
 
     // Check that there is no extra information in any of the content tables.
     ASSIGN_OR_RETURN(BlockId latestBlock, GetLastBlockHeight());
-    // TODO: run this in parallel
+    progress_callback("checking for extra data in tables");
     for (auto table : {"status", "balance", "nonce", "code", "storage"}) {
       // Check that there are no additional addresses referenced.
       ASSIGN_OR_RETURN(
@@ -793,9 +798,11 @@ absl::StatusOr<Hash> Archive::GetAccountHash(BlockId block,
   return impl_->GetAccountHash(block, account);
 }
 
-absl::Status Archive::Verify(BlockId block, const Hash& expected_hash) {
+absl::Status Archive::Verify(
+    BlockId block, const Hash& expected_hash,
+    absl::FunctionRef<void(std::string_view)> progress_callback) {
   RETURN_IF_ERROR(CheckState());
-  return impl_->Verify(block, expected_hash);
+  return impl_->Verify(block, expected_hash, progress_callback);
 }
 
 absl::Status Archive::VerifyAccount(BlockId block,

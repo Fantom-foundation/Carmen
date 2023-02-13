@@ -45,16 +45,26 @@ absl::Status Verify(int argc, char** argv) {
   ASSIGN_OR_RETURN(auto archive, Archive::Open(path));
   ASSIGN_OR_RETURN(auto height, archive.GetLatestBlock());
   std::cout << "\tBlock height: " << height << "\n";
-  ASSIGN_OR_RETURN(auto hash, archive.GetHash(height));
-  std::cout << "\tArchive Hash: " << hash << "\n";
-  std::cout << "\tRunning verification ...\n";
   auto start = absl::Now();
-  // TODO: add some progress reporting.
-  auto verify_result = archive.Verify(height, hash);
+  ASSIGN_OR_RETURN(auto hash, archive.GetHash(height));
   auto duration = absl::Now() - start;
+  std::cout << "\tArchive Hash: " << hash << " (took ";
+  auto sec = absl::ToInt64Seconds(duration);
+  std::cout << absl::StrFormat("%d:%02d", sec / 60, sec % 60) << ")\n";
+  std::cout << "\tRunning verification ...\n";
+  start = absl::Now();
+  // TODO: add some progress reporting.
+  auto verify_result =
+      archive.Verify(height, hash, [&](std::string_view phase) {
+        auto time = absl::Now() - start;
+        auto sec = absl::ToInt64Seconds(time);
+        std::cout << "\t\tt=" << absl::StrFormat("%3d:%02d", sec / 60, sec % 60)
+                  << ": " << phase << " ... \n";
+      });
+  duration = absl::Now() - start;
   if (verify_result.ok()) {
     std::cout << "\tVerification: successful (took ";
-    auto sec = absl::ToInt64Seconds(duration);
+    sec = absl::ToInt64Seconds(duration);
     std::cout << absl::StrFormat("%d:%02d", sec / 60, sec % 60);
     std::cout << ")\n";
   } else {
