@@ -867,14 +867,14 @@ TEST(Archive, VerificationDetectsMissingHash) {
       [](Sqlite& db) {
         ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 5"));
       },
-      "Archive hash does not match expected hash.");
+      "Validation of hash of block 5 failed.");
 
   // Delete a historic account update hash.
   TestArchiveCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 3"));
       },
-      "Archive contains update for block 3 but no hash for it.");
+      "Validation of hash of block 3 failed.");
 }
 
 TEST(Archive, VerificationDetectsModifiedHashes) {
@@ -884,7 +884,7 @@ TEST(Archive, VerificationDetectsModifiedHashes) {
         ASSERT_OK(
             db.Run("UPDATE account_hash SET hash = ? WHERE block = 5", Hash{}));
       },
-      "Archive hash does not match expected hash.");
+      "Validation of hash of block 5 failed.");
 
   // A corrupted hash for a past account update.
   TestArchiveCorruption(
@@ -892,7 +892,7 @@ TEST(Archive, VerificationDetectsModifiedHashes) {
         ASSERT_OK(
             db.Run("UPDATE account_hash SET hash = ? WHERE block = 3", Hash{}));
       },
-      "Hash for diff at block 3 does not match.");
+      "Validation of hash of block 3 failed.");
 }
 
 TEST(Archive, VerificationDetectsAdditionalHashes) {
@@ -903,7 +903,7 @@ TEST(Archive, VerificationDetectsAdditionalHashes) {
             "INSERT INTO account_hash(account,block,hash) VALUES (?,7,?)",
             Address{0x01}, Hash{}));
       },
-      "Archive hash does not match expected hash.");
+      "Found change in block 7 not covered by archive hash.");
 
   // An additional hash somewhere in the history.
   TestArchiveCorruption(
@@ -912,7 +912,7 @@ TEST(Archive, VerificationDetectsAdditionalHashes) {
             "INSERT INTO account_hash(account,block,hash) VALUES (?,4,?)",
             Address{0x01}, Hash{}));
       },
-      "Archive contains hash for update at block 4 but no change for it.");
+      "Found account update for block 4 but no hash for this block.");
 }
 
 TEST(Archive, VerificationDetectsExtraAccountStatus) {
@@ -1028,7 +1028,14 @@ TEST(Archive, VerificationDetectsCorruptedAccount) {
       "Hash for diff at block 3 does not match.");
 }
 
-TEST(Archive, ArchiveHashIsHashOfAccountHashes) {
+TEST(Archive, HashOfEmptyArchiveIsZero) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  EXPECT_THAT(archive.GetHash(0), Hash{});
+  EXPECT_THAT(archive.GetHash(5), Hash{});
+}
+
+TEST(Archive, ArchiveHashIsHashOfAccountDiffHashesChain) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
   Address addr1{0x1};
@@ -1046,10 +1053,11 @@ TEST(Archive, ArchiveHashIsHashOfAccountHashes) {
 
   Update update3;
   update3.Create(addr2);
+  update3.Set(addr1, balance2);
   update3.Set(addr2, balance2);
 
   Update update5;
-  update5.Set(addr1, balance2);
+  update5.Set(addr1, balance1);
   update5.Set(addr1, nonce2);
   update5.Set(addr1, Code{0x01, 0x02});
   update5.Set(addr1, key, Value{0x01});
@@ -1058,18 +1066,25 @@ TEST(Archive, ArchiveHashIsHashOfAccountHashes) {
   EXPECT_OK(archive.Add(3, update3));
   EXPECT_OK(archive.Add(5, update5));
 
-  for (BlockId block = 0; block <= 6; block++) {
-    ASSERT_OK_AND_ASSIGN(auto addr1_hash, archive.GetAccountHash(block, addr1));
-    ASSERT_OK_AND_ASSIGN(auto addr2_hash, archive.GetAccountHash(block, addr2));
-    ASSERT_OK_AND_ASSIGN(auto archive_hash, archive.GetHash(block));
-    if (block < 1) {
-      EXPECT_EQ(archive_hash, GetSha256Hash());
-    } else if (block < 3) {
-      EXPECT_EQ(archive_hash, GetSha256Hash(addr1_hash));
-    } else {
-      EXPECT_EQ(archive_hash, GetSha256Hash(addr1_hash, addr2_hash));
-    }
-  }
+  ASSERT_OK_AND_ASSIGN(auto hash11, archive.GetAccountHash(1, addr1));
+  ASSERT_OK_AND_ASSIGN(auto hash31, archive.GetAccountHash(3, addr1));
+  ASSERT_OK_AND_ASSIGN(auto hash32, archive.GetAccountHash(3, addr2));
+  ASSERT_OK_AND_ASSIGN(auto hash51, archive.GetAccountHash(5, addr1));
+
+  Hash hash{};
+  EXPECT_THAT(archive.GetHash(0), hash);
+
+  hash = GetSha256Hash(hash, hash11);
+  EXPECT_THAT(archive.GetHash(1), hash);
+  EXPECT_THAT(archive.GetHash(2), hash);
+
+  hash = GetSha256Hash(hash, hash31, hash32);
+  EXPECT_THAT(archive.GetHash(3), hash);
+  EXPECT_THAT(archive.GetHash(4), hash);
+
+  hash = GetSha256Hash(hash, hash51);
+  EXPECT_THAT(archive.GetHash(5), hash);
+  EXPECT_THAT(archive.GetHash(6), hash);
 }
 
 TEST(Archive, ArchiveCanBeVerifiedForCustomBlockHeight) {

@@ -6,6 +6,7 @@ cc_library(
     deps = [
         "//common:memory_usage",
         "//common:status_util",
+        "//common:type",
         "@com_github_rockwotj_sqlite_bazel//:sqlite3",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",

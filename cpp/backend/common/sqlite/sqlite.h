@@ -9,6 +9,7 @@
 #include "absl/status/statusor.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
+#include "common/type.h"
 #include "sqlite3.h"
 
 namespace carmen::backend {
@@ -212,6 +213,10 @@ class SqlRow {
   // this SqlRow.
   std::span<const std::byte> GetBytes(int column) const;
 
+  // Retrieves a trivial value from the store in the given value.
+  template <Trivial T>
+  T Get(int column) const;
+
  private:
   SqlRow(sqlite3_stmt* stmt) : stmt_(stmt) {}
   sqlite3_stmt* stmt_;
@@ -317,6 +322,14 @@ template <typename... Args>
 absl::StatusOr<SqlIterator> SqlStatement::Open(const Args&... args) {
   RETURN_IF_ERROR(BindParameters(args...));
   return Open();
+}
+
+template <Trivial T>
+T SqlRow::Get(int column) const {
+  auto bytes = GetBytes(column);
+  T res;
+  std::memcpy(&res, bytes.data(), std::min(sizeof(T), bytes.size()));
+  return res;
 }
 
 }  // namespace carmen::backend
