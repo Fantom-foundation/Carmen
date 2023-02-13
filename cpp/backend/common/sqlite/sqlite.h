@@ -30,6 +30,7 @@ namespace carmen::backend {
 
 class Sqlite;
 class SqlStatement;
+class SqlIterator;
 class SqlRow;
 
 namespace internal {
@@ -126,6 +127,12 @@ class SqlStatement {
   // to the given consumer.
   absl::Status Run(absl::FunctionRef<void(const SqlRow& row)> consumer);
 
+  // Runs this statement and returns an iterator on its results. Only one
+  // iterator can be alive at any time and this statement must outlive the
+  // returned iterator. If all results should be consumed, use the Run() methods
+  // above for convenience.
+  absl::StatusOr<SqlIterator> Open();
+
  private:
   SqlStatement(std::shared_ptr<internal::SqliteDb> db, sqlite3_stmt* stmt)
       : db_(std::move(db)), stmt_(stmt) {}
@@ -145,7 +152,7 @@ class SqlStatement {
 // query results.
 class SqlRow {
  public:
-  friend class SqlStatement;
+  friend class SqlIterator;
 
   // Retrieves the number of columns in this row.
   int GetNumberOfColumns() const;
@@ -177,6 +184,28 @@ class SqlRow {
  private:
   SqlRow(sqlite3_stmt* stmt) : stmt_(stmt) {}
   sqlite3_stmt* stmt_;
+};
+
+// A SQL iterator provides a way to iterate through the results of an SQL query.
+class SqlIterator {
+ public:
+  friend class SqlStatement;
+
+  // Move to the next element, returning true if there is one, false otherwise.
+  absl::StatusOr<bool> Next();
+
+  // True when the end of the results has been reached, false otherwise.
+  bool Finished();
+
+  // Retrieves a reference to the current result row.
+  SqlRow& operator*();
+  SqlRow* operator->();
+
+ private:
+  SqlIterator(internal::SqliteDb* db, sqlite3_stmt* stmt)
+      : db_(db), row_(stmt) {}
+  internal::SqliteDb* db_;
+  SqlRow row_;
 };
 
 }  // namespace carmen::backend

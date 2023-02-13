@@ -3,9 +3,10 @@ package state
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"hash"
 	"io"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap"
 
@@ -35,6 +36,17 @@ type GoState struct {
 	cleanup         []func()
 	hasher          hash.Hash
 	archive         archive.Archive
+
+	// Channels are only present if archive is enabled.
+	archiveWriter          chan<- archiveUpdate
+	archiveWriterFlushDone <-chan bool
+	archiveWriterDone      <-chan bool
+	archiveWriterError     <-chan error
+}
+
+type archiveUpdate = struct {
+	block  uint64
+	update *common.Update // nil to signal a flush
 }
 
 func (s *GoState) createAccount(address common.Address) (err error) {
@@ -255,10 +267,55 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		return err
 	}
 	if s.archive != nil {
-		// TODO add into archive in a separated thread
-		err = s.archive.Add(block, update)
-		if err != nil {
-			return err
+		// If the writer is not yet active, start it.
+		if s.archiveWriter == nil {
+			in := make(chan archiveUpdate, 10)
+			flush := make(chan bool)
+			done := make(chan bool)
+			err := make(chan error, 10)
+
+			go func() {
+				defer close(flush)
+				defer close(done)
+				// Process all incoming updates, no not stop on errors.
+				for update := range in {
+					// If there is no update, the state is asking for a flush signal.
+					if update.update == nil {
+						flush <- true
+					} else {
+						// Otherwise, process the update.
+						issue := s.archive.Add(update.block, *update.update)
+						if issue != nil {
+							err <- issue
+						}
+					}
+				}
+			}()
+
+			s.archiveWriter = in
+			s.archiveWriterDone = done
+			s.archiveWriterFlushDone = flush
+			s.archiveWriterError = err
+		}
+
+		// Send the update to the writer to be processessed asynchroniously.
+		s.archiveWriter <- archiveUpdate{block, &update}
+
+		// Drain potential errors, but do not wait for them.
+		var last error
+		done := false
+		for !done {
+			select {
+			// In case there was an error, process it.
+			case err := <-s.archiveWriterError:
+				last = err
+			default:
+				// all errors consumed, moving on
+				done = true
+			}
+		}
+		if last != nil {
+			return last
 		}
 	}
 	return nil
@@ -326,6 +383,15 @@ func (s *GoState) Flush() error {
 			last = err
 		}
 	}
+
+	// Flush the archive.
+	if s.archiveWriter != nil {
+		// Signal to the archive worker that a flush should be conducted.
+		s.archiveWriter <- archiveUpdate{}
+		// Wait until the flush was processed.
+		<-s.archiveWriterFlushDone
+	}
+
 	return last
 }
 
@@ -346,6 +412,22 @@ func (s *GoState) Close() error {
 	var last error = nil
 	for _, closeable := range closeables {
 		if err := closeable.Close(); err != nil {
+			last = err
+		}
+	}
+
+	// Shut down archive writer background worker.
+	if s.archiveWriter != nil {
+		// Close archive stream, signaling writer to shut down.
+		close(s.archiveWriter)
+		// Wait for the shutdown to be complete.
+		<-s.archiveWriterDone
+		s.archiveWriter = nil
+	}
+
+	// Close the archive.
+	if s.archive != nil {
+		if err := s.archive.Close(); err != nil {
 			last = err
 		}
 	}

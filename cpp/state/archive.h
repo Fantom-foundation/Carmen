@@ -56,6 +56,24 @@ class Archive {
   absl::StatusOr<Value> GetStorage(BlockId block, const Address& account,
                                    const Key& key);
 
+  // Obtains the last block included in this archive, 0 if empty.
+  absl::StatusOr<BlockId> GetLatestBlock();
+
+  // Computes a hash for the entire archive up until the given block.
+  absl::StatusOr<Hash> GetHash(BlockId block);
+
+  // Obtains a full list of addresses encountered up until the given block.
+  absl::StatusOr<std::vector<Address>> GetAccountList(BlockId block);
+
+  // Obtains a hash on the content of the given hash at the given block height.
+  absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& account);
+
+  // Verifies that the content of this archive up until the given block.
+  absl::Status Verify(BlockId block, const Hash& expected_hash);
+
+  // Verifies the given account at the given block height.
+  absl::Status VerifyAccount(BlockId block, const Address& account) const;
+
   // Flushes all temporary changes to disk.
   absl::Status Flush();
 

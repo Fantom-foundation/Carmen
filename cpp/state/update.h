@@ -4,6 +4,7 @@
 #include <span>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "common/type.h"
 
@@ -12,9 +13,6 @@ namespace carmen {
 // A BlockUpdate summarizes all the updates produced by processing a block in
 // the chain. It is the unit of data used to update archives and to synchronize
 // data between archive instances.
-// TODO:
-//  - implement cryptographic hashing of updates
-//  - implement serialization and de-serialization of updates
 class Update {
  public:
   struct BalanceUpdate {
@@ -144,6 +142,52 @@ class Update {
 
   // Retains all storage modifications of slots.
   std::vector<SlotUpdate> storage_;
+};
+
+// An AccountUpdate combines the updates applied to a single account in one
+// block. Its main intention is to be utilized as the diff unit for hashing
+// incremental updates on accounts in archives.
+struct AccountUpdate {
+  // The update of a slot.
+  struct SlotUpdate {
+    Key key;
+    Value value;
+    friend auto operator<=>(const SlotUpdate&, const SlotUpdate&) = default;
+    friend std::ostream& operator<<(std::ostream& out, const SlotUpdate&);
+  };
+
+  // Converts the provided update in a list of account updates. If the update
+  // was normalized, the entries of the resulting list are normalized.
+  static absl::flat_hash_map<Address, AccountUpdate> From(const Update& update);
+
+  // --- Normalization ---
+
+  // Checks whether this update is in normal form. In particular, it validates
+  // that slot updates are in order and unique.
+  absl::Status IsNormalized() const;
+
+  // Attempts to normalize the content of this update by sorting slot updates.
+  // Normalization fails if there are slot update duplciates. If normalization
+  // fails, the update is in an undefined state and should be discarded.
+  absl::Status Normalize();
+
+  // --- Hashing ---
+
+  // Computes a cryptographic hash of this update.
+  Hash GetHash() const;
+
+  // --- Operators ---
+
+  friend bool operator==(const AccountUpdate&, const AccountUpdate&) = default;
+
+  friend std::ostream& operator<<(std::ostream& out, const AccountUpdate&);
+
+  bool deleted = false;
+  bool created = false;
+  std::optional<Balance> balance;
+  std::optional<Nonce> nonce;
+  std::optional<Code> code;
+  std::vector<SlotUpdate> storage;
 };
 
 }  // namespace carmen

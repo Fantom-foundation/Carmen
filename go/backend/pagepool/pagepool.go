@@ -13,17 +13,12 @@ const (
 // It uses an LRU cache to determine if the page has been recently used or not. The least used page
 // is evicted when the capacity exceeds, and stored using PageStorage. When the pool is asked for
 // a page that does not exist in this pool, it tries to load it from the PageStorage.
-// The pool also creates and deletes pages when asked, and it generates new IDs for new pages.
-// It maintains a list of released ID of the removed pages, which are re-claimed for newly created pages.
-// It prevents empty space on the disk, when the pages are stored via PageStorage.
-type PagePool[T Page] struct {
-	pagePool    *common.Cache[PageId, T]
-	pageStore   PageStorage[PageId] // store where the overflown pages will be stored and where they are read from
+type PagePool[ID comparable, T Page] struct {
+	pagePool    *common.Cache[ID, T]
+	pageStore   PageStorage[ID] // store where the overflown pages will be stored and where they are read from
 	pageFactory func() T
 
-	currentId int   // current ID which is incremented with every new page
-	freePages []T   // list of free pages reused between a page eviction and a page load, an instance is re-used no to allocate memory again and again.
-	freeIds   []int // freeIDs are released IDs used for re-allocating disk space for deleted pages
+	freePages []T // list of free pages reused between a page eviction and a page load, an instance is re-used no to allocate memory again and again.
 }
 
 // PageStorage is an interface to be implemented to persistent pages.
@@ -32,46 +27,38 @@ type PagePool[T Page] struct {
 type PageStorage[ID any] interface {
 	common.MemoryFootprintProvider
 
+	// Load retrieves a page for the input ID from the storage and fills-in the input page
 	Load(pageId ID, page Page) error
+
+	// Store stores the input Page content under input ID
 	Store(pageId ID, page Page) error
+
+	// Remove deletes the page for the input ID from the storage
 	Remove(pageId ID) error
+
+	// NextId returns next free ID
+	NextId() ID
 }
 
 // NewPagePool creates a new instance. It sets the capacity, i.e. the number of pages hold in-memory by this pool.
 // freeIds are used for allocating IDs for new pages, when they are all used, this pool starts to allocate new IDs.
-func NewPagePool[T Page](capacity int, freeIds []int, pageStore PageStorage[PageId], pageFactory func() T) *PagePool[T] {
-	var freeIdsCopy []int
-	if len(freeIds) == 0 {
-		freeIdsCopy = make([]int, 0, releasedIdsCap)
-	} else {
-		freeIdsCopy = make([]int, len(freeIds))
-		copy(freeIdsCopy, freeIds)
-	}
-	return &PagePool[T]{
-		pagePool:    common.NewCache[PageId, T](capacity),
+func NewPagePool[ID comparable, T Page](capacity int, pageStore PageStorage[ID], pageFactory func() T) *PagePool[ID, T] {
+	return &PagePool[ID, T]{
+		pagePool:    common.NewCache[ID, T](capacity),
 		pageStore:   pageStore,
 		pageFactory: pageFactory,
-		freeIds:     freeIdsCopy,
 		freePages:   make([]T, 0, capacity),
 	}
 }
 
 // GenerateNextId generates next unique ID.
-func (p *PagePool[P]) GenerateNextId() (id int) {
-	if len(p.freeIds) > 0 {
-		id = p.freeIds[len(p.freeIds)-1]
-		p.freeIds = p.freeIds[0 : len(p.freeIds)-1]
-	} else {
-		p.currentId += 1
-		id = p.currentId
-	}
-
-	return
+func (p *PagePool[ID, T]) GenerateNextId() (id ID) {
+	return p.pageStore.NextId()
 }
 
 // Get returns a Page from the pool, or load it from the storage if the page is not in the pool.
 // Another Page may be potentially evicted.
-func (p *PagePool[T]) Get(id PageId) (page T, err error) {
+func (p *PagePool[ID, T]) Get(id ID) (page T, err error) {
 	page, exists := p.pagePool.Get(id)
 	if !exists {
 		page, err = p.loadPage(id)
@@ -85,7 +72,7 @@ func (p *PagePool[T]) Get(id PageId) (page T, err error) {
 
 // put associates a new Page with this pool. Another Page may be potentially evicted,
 // when the pool exceeds its capacity.
-func (p *PagePool[T]) put(pageId PageId, page T) (err error) {
+func (p *PagePool[ID, T]) put(pageId ID, page T) (err error) {
 	evictedId, evictedPage, evicted := p.pagePool.Set(pageId, page)
 	if evicted {
 		err = p.storePage(evictedId, evictedPage)
@@ -97,7 +84,7 @@ func (p *PagePool[T]) put(pageId PageId, page T) (err error) {
 
 // Remove deletes a page from this pool, which may cause deletion of the page
 // from the storage.
-func (p *PagePool[T]) Remove(id PageId) (bool, error) {
+func (p *PagePool[ID, T]) Remove(id ID) (bool, error) {
 	original, exists := p.pagePool.Remove(id)
 	if exists {
 		p.freePages = append(p.freePages, original)
@@ -107,15 +94,11 @@ func (p *PagePool[T]) Remove(id PageId) (bool, error) {
 		return exists, err
 	}
 
-	if id.IsOverFlowPage() {
-		p.freeIds = append(p.freeIds, id.overflow)
-	}
-
 	return exists, nil
 }
 
-func (p *PagePool[T]) Flush() (err error) {
-	p.pagePool.Iterate(func(k PageId, v T) bool {
+func (p *PagePool[ID, T]) Flush() (err error) {
+	p.pagePool.Iterate(func(k ID, v T) bool {
 		err = p.storePage(k, v)
 		return err == nil
 	})
@@ -123,7 +106,7 @@ func (p *PagePool[T]) Flush() (err error) {
 	return nil
 }
 
-func (p *PagePool[T]) Close() (err error) {
+func (p *PagePool[ID, T]) Close() (err error) {
 	err = p.Flush()
 	if err != nil {
 		p.pagePool.Clear()
@@ -132,13 +115,8 @@ func (p *PagePool[T]) Close() (err error) {
 	return
 }
 
-// GetFreeIds returns ID of removed pages, which can be used later to re-allocate space.
-func (p *PagePool[T]) GetFreeIds() []int {
-	return p.freeIds
-}
-
 // storePage persist the Page to the disk
-func (p *PagePool[T]) storePage(pageId PageId, page T) error {
+func (p *PagePool[ID, T]) storePage(pageId ID, page T) error {
 	if page.IsDirty() {
 		if err := p.pageStore.Store(pageId, page); err != nil {
 			return err
@@ -149,14 +127,14 @@ func (p *PagePool[T]) storePage(pageId PageId, page T) error {
 }
 
 // loadPage loads a page from the disk.
-func (p *PagePool[T]) loadPage(pageId PageId) (page T, err error) {
+func (p *PagePool[ID, T]) loadPage(pageId ID) (page T, err error) {
 	page = p.createPage() // it creates a new page instance or re-use from the freelist
 	err = p.pageStore.Load(pageId, page)
 	return
 }
 
 // createPage returns a new page either from the free list or it creates a new Page.
-func (p *PagePool[T]) createPage() (page T) {
+func (p *PagePool[ID, T]) createPage() (page T) {
 	if len(p.freePages) > 0 {
 		page = p.freePages[len(p.freePages)-1]
 		p.freePages = p.freePages[0 : len(p.freePages)-1]
@@ -168,13 +146,11 @@ func (p *PagePool[T]) createPage() (page T) {
 	return
 }
 
-func (p *PagePool[T]) GetMemoryFootprint() *common.MemoryFootprint {
+func (p *PagePool[ID, T]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*p)
 	pageSize := p.pageFactory().GetMemoryFootprint()
-	var x int
 	footprint := common.NewMemoryFootprint(selfSize)
 	footprint.AddChild("freeList", common.NewMemoryFootprint(uintptr(len(p.freePages))*pageSize.Value()))
-	footprint.AddChild("freeIds", common.NewMemoryFootprint(uintptr(len(p.freeIds))*unsafe.Sizeof(x)))
 	footprint.AddChild("pagePool", p.pagePool.GetMemoryFootprint(pageSize.Value()))
 	footprint.AddChild("pageStore", p.pageStore.GetMemoryFootprint())
 	return footprint

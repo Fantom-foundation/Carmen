@@ -163,7 +163,6 @@ cc_test(
         ":page_manager",
         "//common:status_test_util",
         "//third_party/gperftools:profiler",
-        "@com_github_google_benchmark//:benchmark_main",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_googletest//:gtest_main",

@@ -1,4 +1,4 @@
-package pagepool
+package file
 
 import "fmt"
 
@@ -43,4 +43,13 @@ type PageIdComparator struct{}
 
 func (c PageIdComparator) Compare(a, b PageId) int {
 	return a.Compare(b)
+}
+
+func NextPageIdGenerator() func() PageId {
+	var id int
+	return func() PageId {
+		id += 1
+		pageId := NewPageId(0, id)
+		return pageId
+	}
 }

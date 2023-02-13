@@ -2,11 +2,12 @@ package state
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 
@@ -98,7 +99,7 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		nil, nil, nil}
+		nil, nil, nil, nil, nil, nil, nil}
 	return state, nil
 }
 
@@ -204,7 +205,7 @@ func NewGoFileState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		nil, nil, arch}
+		nil, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -311,7 +312,7 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		nil, nil, arch}
+		nil, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -411,7 +412,7 @@ func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch}
+		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -512,7 +513,7 @@ func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch}
+		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -626,7 +627,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(params Parameters) (State, erro
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanup, nil, arch}
+		cleanup, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -701,7 +702,7 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch}
+		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -776,7 +777,7 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch}
+		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -864,7 +865,7 @@ func NewGoTransactCachedLeveLIndexAndStoreState(params Parameters) (State, error
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanup, nil, arch}
+		cleanup, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }

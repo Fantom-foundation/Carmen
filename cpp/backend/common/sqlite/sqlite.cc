@@ -88,7 +88,17 @@ absl::StatusOr<Sqlite> Sqlite::Open(std::filesystem::path db_file) {
     return absl::InternalError(
         absl::StrCat("Unable to create Sqlite DB: ", err_msg));
   }
-  return Sqlite(std::make_shared<internal::SqliteDb>(db));
+
+  auto sqlite = Sqlite(std::make_shared<internal::SqliteDb>(db));
+
+  // See https://www.sqlite.org/pragma.html
+  RETURN_IF_ERROR(sqlite.Run("PRAGMA journal_mode = OFF"));
+  RETURN_IF_ERROR(sqlite.Run("PRAGMA synchronous = OFF"));
+  RETURN_IF_ERROR(
+      sqlite.Run("PRAGMA cache_size = -1048576"));  // absl(N*1024) = 1GB
+  RETURN_IF_ERROR(sqlite.Run("PRAGMA locking_mode = EXCLUSIVE"));
+
+  return sqlite;
 }
 
 absl::Status Sqlite::Run(std::string_view statement) {
@@ -174,16 +184,18 @@ absl::Status SqlStatement::Run() {
 absl::Status SqlStatement::Run(
     absl::FunctionRef<void(const SqlRow& row)> consumer) {
   RETURN_IF_ERROR(CheckState());
-  // See  https://www.sqlite.org/c3ref/step.html
-  int result = sqlite3_step(stmt_);
-  while (result == SQLITE_ROW) {
-    consumer(SqlRow(stmt_));
-    result = sqlite3_step(stmt_);
-  }
-  if (result != SQLITE_DONE) {
-    return db_->HandleError(result);
+  ASSIGN_OR_RETURN(auto iter, Open());
+  ASSIGN_OR_RETURN(auto has_next, iter.Next());
+  while (has_next) {
+    consumer(*iter);
+    ASSIGN_OR_RETURN(has_next, iter.Next());
   }
   return absl::OkStatus();
+}
+
+absl::StatusOr<SqlIterator> SqlStatement::Open() {
+  RETURN_IF_ERROR(CheckState());
+  return SqlIterator(db_.get(), stmt_);
 }
 
 absl::Status SqlStatement::CheckState() {
@@ -221,5 +233,25 @@ std::span<const std::byte> SqlRow::GetBytes(int column) const {
   int size = sqlite3_column_bytes(stmt_, column);
   return std::span(reinterpret_cast<const std::byte*>(data), size);
 }
+
+absl::StatusOr<bool> SqlIterator::Next() {
+  // See  https://www.sqlite.org/c3ref/step.html
+  if (Finished()) return false;
+  int result = sqlite3_step(row_.stmt_);
+  if (result == SQLITE_DONE) {
+    row_.stmt_ = nullptr;
+    return false;
+  }
+  if (result == SQLITE_ROW) {
+    return true;
+  }
+  return db_->HandleError(result);
+}
+
+bool SqlIterator::Finished() { return row_.stmt_ == nullptr; }
+
+SqlRow& SqlIterator::operator*() { return row_; }
+
+SqlRow* SqlIterator::operator->() { return &row_; }
 
 }  // namespace carmen::backend
