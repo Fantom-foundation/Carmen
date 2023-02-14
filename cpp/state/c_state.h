@@ -61,6 +61,13 @@ void Carmen_Close(C_State state);
 // no more operations may be applied on it.
 void Carmen_ReleaseState(C_State state);
 
+// ----------------------------- Archive State --------------------------------
+
+// Creates a  state snapshot reflecting the state at the given block height. The
+// resulting state must be released and must not outlive the life time of the
+// provided state.
+C_State Carmen_GetArchiveState(C_State state, uint64_t block);
+
 // ------------------------------- Accounts -----------------------------------
 
 // Gets the current state of the given account.
@@ -100,10 +107,6 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
 // Applies the provided block update to the maintained state.
 void Carmen_Apply(C_State state, uint64_t block, C_Update update,
                   uint32_t length);
-
-// Applies the provided update to the current state only. This is intended for
-// the bulk load interface support.
-void Carmen_ApplyToState(C_State state, C_Update update, uint32_t length);
 
 // ------------------------------ Global Hash ---------------------------------
 

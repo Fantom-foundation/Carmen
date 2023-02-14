@@ -202,6 +202,12 @@ absl::StatusOr<Update> Update::FromBytes(std::span<const std::byte> data) {
   return update;
 }
 
+bool Update::Empty() const {
+  return deleted_accounts_.empty() && created_accounts_.empty() &&
+         balances_.empty() && nonces_.empty() && codes_.empty() &&
+         storage_.empty();
+}
+
 absl::StatusOr<Hash> Update::GetHash() const {
   ASSIGN_OR_RETURN(auto data, ToBytes());
   return GetSha256Hash(data);

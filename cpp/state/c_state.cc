@@ -24,19 +24,19 @@ class WorldState {
 
   virtual absl::StatusOr<AccountState> GetAccountState(const Address&) = 0;
 
-  virtual StatusOrRef<const Balance> GetBalance(const Address&) = 0;
+  virtual absl::StatusOr<Balance> GetBalance(const Address&) = 0;
 
-  virtual StatusOrRef<const Nonce> GetNonce(const Address&) = 0;
+  virtual absl::StatusOr<Nonce> GetNonce(const Address&) = 0;
 
-  virtual StatusOrRef<const Value> GetValue(const Address&, const Key&) = 0;
+  virtual absl::StatusOr<Value> GetValue(const Address&, const Key&) = 0;
 
-  virtual absl::StatusOr<std::span<const std::byte>> GetCode(
-      const Address&) = 0;
+  virtual absl::StatusOr<Code> GetCode(const Address&) = 0;
   virtual absl::StatusOr<std::uint32_t> GetCodeSize(const Address&) = 0;
   virtual absl::StatusOr<Hash> GetCodeHash(const Address&) = 0;
 
   virtual absl::Status Apply(std::uint64_t block, const Update&) = 0;
-  virtual absl::Status ApplyToState(const Update&) = 0;
+
+  virtual WorldState* GetArchiveState(std::uint64_t block) = 0;
 
   virtual absl::StatusOr<Hash> GetHash() = 0;
 
@@ -59,21 +59,19 @@ class WorldStateWrapper : public WorldState {
     return state_.GetAccountState(addr);
   }
 
-  StatusOrRef<const Balance> GetBalance(const Address& address) override {
+  absl::StatusOr<Balance> GetBalance(const Address& address) override {
     return state_.GetBalance(address);
   }
 
-  StatusOrRef<const Nonce> GetNonce(const Address& addr) override {
+  absl::StatusOr<Nonce> GetNonce(const Address& addr) override {
     return state_.GetNonce(addr);
   }
 
-  StatusOrRef<const Value> GetValue(const Address& addr,
-                                    const Key& key) override {
+  absl::StatusOr<Value> GetValue(const Address& addr, const Key& key) override {
     return state_.GetStorageValue(addr, key);
   }
 
-  absl::StatusOr<std::span<const std::byte>> GetCode(
-      const Address& addr) override {
+  absl::StatusOr<Code> GetCode(const Address& addr) override {
     return state_.GetCode(addr);
   }
 
@@ -89,8 +87,10 @@ class WorldStateWrapper : public WorldState {
     return state_.Apply(block, update);
   }
 
-  absl::Status ApplyToState(const Update& update) override {
-    return state_.ApplyToState(update);
+  WorldState* GetArchiveState(std::uint64_t block) override {
+    auto archive = state_.GetArchive();
+    if (archive == nullptr) return nullptr;
+    return new ArchiveState(*archive, block);
   }
 
   absl::StatusOr<Hash> GetHash() override { return state_.GetHash(); }
@@ -105,6 +105,69 @@ class WorldStateWrapper : public WorldState {
 
  protected:
   State state_;
+
+ private:
+  using Archive = typename State::Archive;
+
+  class ArchiveState : public WorldState {
+   public:
+    ArchiveState(Archive& archive, BlockId block)
+        : archive_(archive), block_(block) {}
+
+    absl::StatusOr<AccountState> GetAccountState(const Address& addr) override {
+      ASSIGN_OR_RETURN(bool exists, archive_.Exists(block_, addr));
+      return exists ? AccountState::kExists : AccountState::kUnknown;
+    }
+
+    absl::StatusOr<Balance> GetBalance(const Address& address) override {
+      return archive_.GetBalance(block_, address);
+    }
+
+    absl::StatusOr<Nonce> GetNonce(const Address& addr) override {
+      return archive_.GetNonce(block_, addr);
+    }
+
+    absl::StatusOr<Value> GetValue(const Address& addr,
+                                   const Key& key) override {
+      return archive_.GetStorage(block_, addr, key);
+    }
+
+    absl::StatusOr<Code> GetCode(const Address& addr) override {
+      return archive_.GetCode(block_, addr);
+    }
+
+    absl::StatusOr<std::uint32_t> GetCodeSize(const Address& addr) override {
+      ASSIGN_OR_RETURN(auto code, GetCode(addr));
+      return code.Size();
+    }
+
+    absl::StatusOr<Hash> GetCodeHash(const Address& addr) override {
+      ASSIGN_OR_RETURN(auto code, GetCode(addr));
+      return GetKeccak256Hash(code);
+    }
+
+    absl::Status Apply(std::uint64_t, const Update&) override {
+      return absl::InvalidArgumentError("Cannot apply update on archive");
+    }
+
+    WorldState* GetArchiveState(std::uint64_t block) override {
+      return new ArchiveState(archive_, block);
+    }
+
+    absl::StatusOr<Hash> GetHash() override { return Hash{}; }
+
+    absl::Status Flush() override { return absl::OkStatus(); }
+
+    absl::Status Close() override { return absl::OkStatus(); }
+
+    MemoryFootprint GetMemoryFootprint() const override {
+      return MemoryFootprint(*this);
+    }
+
+   private:
+    Archive& archive_;
+    BlockId block_;
+  };
 };
 
 template <typename State>
@@ -154,6 +217,11 @@ void Carmen_Close(C_State state) {
 
 void Carmen_ReleaseState(C_State state) {
   delete reinterpret_cast<carmen::WorldState*>(state);
+}
+
+C_State Carmen_GetArchiveState(C_State state, uint64_t block) {
+  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
+  return s.GetArchiveState(block);
 }
 
 void Carmen_GetAccountState(C_State state, C_Address addr,
@@ -219,13 +287,13 @@ void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
     return;
   }
   auto capacity = *out_length;
-  *out_length = code->size();
-  if (code->size() > capacity) {
-    std::cout << "WARNING: Code buffer too small: " << code->size() << " > "
+  *out_length = code->Size();
+  if (code->Size() > capacity) {
+    std::cout << "WARNING: Code buffer too small: " << code->Size() << " > "
               << capacity << "\n";
     return;
   }
-  memcpy(out_code, code->data(), code->size());
+  memcpy(out_code, code->Data(), code->Size());
 }
 
 void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
@@ -263,22 +331,6 @@ void Carmen_Apply(C_State state, uint64_t block, C_Update update,
     return;
   }
   auto res = s.Apply(block, *std::move(change));
-  if (!res.ok()) {
-    std::cout << "WARNING: Failed to apply update: " << res << "\n";
-  }
-}
-
-void Carmen_ApplyToState(C_State state, C_Update update, uint32_t length) {
-  auto& s = *reinterpret_cast<carmen::WorldState*>(state);
-  std::span<const std::byte> data(reinterpret_cast<const std::byte*>(update),
-                                  length);
-  auto change = carmen::Update::FromBytes(data);
-  if (!change.ok()) {
-    std::cout << "WARNING: Failed to decode update: " << change.status()
-              << "\n";
-    return;
-  }
-  auto res = s.ApplyToState(*std::move(change));
   if (!res.ok()) {
     std::cout << "WARNING: Failed to apply update: " << res << "\n";
   }

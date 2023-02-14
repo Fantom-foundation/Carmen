@@ -455,11 +455,21 @@ TEST(Archive, IncreasingBlockNumbersCanBeAdded) {
   EXPECT_OK(archive.Add(10, update));
 }
 
-TEST(Archive, RepeatedBlockNumbersCanNotBeAdded) {
+TEST(Archive, AddingEmptyUpdateDoesNotChangeHash) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+
+  ASSERT_OK_AND_ASSIGN(Hash hash, archive.GetHash(0));
+  EXPECT_OK(archive.Add(0, Update{}));
+  EXPECT_THAT(archive.GetHash(0), hash);
+}
+
+TEST(Archive, BlocksCannotBeAddedMoreThanOnce) {
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
   Update update;
+  update.Create(Address{});
   EXPECT_OK(archive.Add(0, update));
   EXPECT_THAT(
       archive.Add(0, update),
@@ -474,6 +484,7 @@ TEST(Archive, BlocksCanNotBeAddedOutOfOrder) {
   ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
 
   Update update;
+  update.Create(Address{});
   EXPECT_OK(archive.Add(0, update));
   EXPECT_OK(archive.Add(2, update));
   EXPECT_THAT(

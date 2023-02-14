@@ -92,6 +92,14 @@ class Archive {
           newestBlock));
     }
 
+    // Empty updates are ignored since non-logged blocks are empty by default.
+    // However, this is important since the hash of a block introducing no
+    // changes is equivalent to the hash of its predecessor. If an empty block
+    // would be added, the hash would change.
+    if (update.Empty()) {
+      return absl::OkStatus();
+    }
+
     // Compute hashes of account updates.
     absl::btree_map<Address, Hash> diff_hashes;
     for (const auto& [addr, diff] : AccountUpdate::From(update)) {

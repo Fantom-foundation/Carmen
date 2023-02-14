@@ -19,9 +19,6 @@
 namespace carmen {
 
 using ::testing::_;
-using ::testing::ElementsAre;
-using ::testing::ElementsAreArray;
-using ::testing::IsEmpty;
 using ::testing::IsOkAndHolds;
 using ::testing::Return;
 using ::testing::StatusIs;
@@ -235,32 +232,32 @@ TYPED_TEST_P(StateTest, DefaultCodeIsEmpty) {
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
-  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
-  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(Code()));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(Code()));
 }
 
 TYPED_TEST_P(StateTest, CodesCanBeUpdated) {
   Address a{0x01};
   Address b{0x02};
-  std::vector<std::byte> code1{std::byte{1}, std::byte{2}};
-  std::vector<std::byte> code2{std::byte{3}, std::byte{4}};
+  Code code1{0x01, 0x02};
+  Code code2{0x03, 0x04};
 
   TempDir dir;
   ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir));
-  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAre()));
-  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(Code()));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(Code()));
 
   EXPECT_OK(state.SetCode(a, code1));
-  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
-  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(code1));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(Code()));
 
   EXPECT_OK(state.SetCode(b, code2));
-  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code1)));
-  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(code1));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(code2));
 
   EXPECT_OK(state.SetCode(a, code2));
-  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(ElementsAreArray(code2)));
-  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(ElementsAreArray(code2)));
+  EXPECT_THAT(state.GetCode(a), IsOkAndHolds(code2));
+  EXPECT_THAT(state.GetCode(b), IsOkAndHolds(code2));
 }
 
 TYPED_TEST_P(StateTest, UpdatingCodesUpdatesCodeHashes) {
@@ -345,8 +342,7 @@ TYPED_TEST_P(StateTest, UpdatesCanBeApplied) {
   EXPECT_THAT(state.GetNonce(Address{0x04}), IsOkAndHolds(Nonce{0xA1}));
   EXPECT_THAT(state.GetStorageValue(Address{0x05}, Key{0x06}),
               IsOkAndHolds(Value{0x07}));
-  EXPECT_THAT(state.GetCode(Address{0x06}),
-              IsOkAndHolds(ElementsAre(std::byte{0x01}, std::byte{0x02})));
+  EXPECT_THAT(state.GetCode(Address{0x06}), IsOkAndHolds(Code{0x01, 0x02}));
 }
 
 TYPED_TEST_P(StateTest, UpdatesCanBeAppliedWithArchive) {
@@ -363,8 +359,82 @@ TYPED_TEST_P(StateTest, UpdatesCanBeAppliedWithArchive) {
   update.Set(Address{0x06}, Code{0x01, 0x02});
 
   EXPECT_OK(state.Apply(12, update));
+}
 
-  // TODO: once history is accessible, check results.
+TYPED_TEST_P(StateTest, ArchiveDataCanBeRetrieved) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto state, TypeParam::Open(dir, /*with_archive=*/true));
+
+  Address addr{0x01};
+  Key key{0x02};
+
+  Balance balance0{};
+  Balance balance1{0xB1};
+  Balance balance2{0xB2};
+
+  Nonce nonce0{};
+  Nonce nonce1{0xA1};
+  Nonce nonce2{0xA2};
+
+  Code code0{};
+  Code code1{0xC1};
+  Code code2{0xC2};
+
+  Value value0{};
+  Value value1{0x01};
+  Value value2{0x02};
+
+  Update update1;
+  update1.Create(addr);
+  update1.Set(addr, balance1);
+  update1.Set(addr, nonce1);
+  update1.Set(addr, code1);
+  update1.Set(addr, key, value1);
+
+  Update update3;
+  update3.Delete(addr);
+  update3.Set(addr, balance2);
+  update3.Set(addr, nonce2);
+  update3.Set(addr, code2);
+  update3.Set(addr, key, value2);
+
+  EXPECT_OK(state.Apply(1, update1));
+  EXPECT_OK(state.Apply(3, update3));
+
+  // Retrieve historical information from the archive.
+  auto archive_ptr = state.GetArchive();
+  ASSERT_NE(archive_ptr, nullptr);
+  auto& archive = *archive_ptr;
+
+  EXPECT_THAT(archive.Exists(0, addr), false);
+  EXPECT_THAT(archive.Exists(1, addr), true);
+  EXPECT_THAT(archive.Exists(2, addr), true);
+  EXPECT_THAT(archive.Exists(3, addr), false);
+  EXPECT_THAT(archive.Exists(4, addr), false);
+
+  EXPECT_THAT(archive.GetBalance(0, addr), balance0);
+  EXPECT_THAT(archive.GetBalance(1, addr), balance1);
+  EXPECT_THAT(archive.GetBalance(2, addr), balance1);
+  EXPECT_THAT(archive.GetBalance(3, addr), balance2);
+  EXPECT_THAT(archive.GetBalance(4, addr), balance2);
+
+  EXPECT_THAT(archive.GetNonce(0, addr), nonce0);
+  EXPECT_THAT(archive.GetNonce(1, addr), nonce1);
+  EXPECT_THAT(archive.GetNonce(2, addr), nonce1);
+  EXPECT_THAT(archive.GetNonce(3, addr), nonce2);
+  EXPECT_THAT(archive.GetNonce(4, addr), nonce2);
+
+  EXPECT_THAT(archive.GetCode(0, addr), code0);
+  EXPECT_THAT(archive.GetCode(1, addr), code1);
+  EXPECT_THAT(archive.GetCode(2, addr), code1);
+  EXPECT_THAT(archive.GetCode(3, addr), code2);
+  EXPECT_THAT(archive.GetCode(4, addr), code2);
+
+  EXPECT_THAT(archive.GetStorage(0, addr, key), value0);
+  EXPECT_THAT(archive.GetStorage(1, addr, key), value1);
+  EXPECT_THAT(archive.GetStorage(2, addr, key), value1);
+  EXPECT_THAT(archive.GetStorage(3, addr, key), value2);
+  EXPECT_THAT(archive.GetStorage(4, addr, key), value2);
 }
 
 TYPED_TEST_P(StateTest, CanProduceAMemoryFootprint) {
@@ -390,7 +460,8 @@ REGISTER_TYPED_TEST_SUITE_P(
     NoncesAreCoveredByGlobalStateHash, NoncesCanBeUpdated,
     UpdatingCodesUpdatesCodeHashes, ValuesAddedCanBeRetrieved,
     UpdatesCanBeApplied, UpdatesCanBeAppliedWithArchive,
-    CanProduceAMemoryFootprint, CanBeOpenedWithArchive);
+    ArchiveDataCanBeRetrieved, CanProduceAMemoryFootprint,
+    CanBeOpenedWithArchive);
 
 using StateConfigurations =
     ::testing::Types<InMemoryState, FileBasedState, LevelDbBasedState>;
@@ -716,11 +787,11 @@ TEST_F(MockStateTest, GetCodeNotFoundErrorIsHandled) {
   EXPECT_CALL(state.GetAddressIndex(), Get(_))
       .WillOnce(Return(absl::NotFoundError("Address not found")))
       .WillRepeatedly(Return(absl::StatusOr<MockState::AddressId>(1)));
-  EXPECT_THAT(state.GetCode(Address{}), IsOkAndHolds(IsEmpty()));
+  EXPECT_THAT(state.GetCode(Address{}), IsOkAndHolds(Code()));
 
   EXPECT_CALL(state.GetCodesDepot(), Get(_))
       .WillOnce(Return(absl::NotFoundError("Code not found")));
-  EXPECT_THAT(state.GetCode(Address{}), IsOkAndHolds(IsEmpty()));
+  EXPECT_THAT(state.GetCode(Address{}), IsOkAndHolds(Code()));
 }
 
 TEST_F(MockStateTest, GetCodeErrorIsForwarded) {

@@ -64,7 +64,7 @@ func toCBool(flag bool) C.C_bool {
 func (cs *CppState) createAccount(address common.Address) error {
 	update := common.Update{}
 	update.AppendCreateAccount(address)
-	return cs.applyToState(update)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) Exists(address common.Address) (bool, error) {
@@ -76,7 +76,7 @@ func (cs *CppState) Exists(address common.Address) (bool, error) {
 func (cs *CppState) deleteAccount(address common.Address) error {
 	update := common.Update{}
 	update.AppendDeleteAccount(address)
-	return cs.applyToState(update)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
@@ -88,7 +88,7 @@ func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
 func (cs *CppState) setBalance(address common.Address, balance common.Balance) error {
 	update := common.Update{}
 	update.AppendBalanceUpdate(address, balance)
-	return cs.applyToState(update)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
@@ -100,7 +100,7 @@ func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
 func (cs *CppState) setNonce(address common.Address, nonce common.Nonce) error {
 	update := common.Update{}
 	update.AppendNonceUpdate(address, nonce)
-	return cs.applyToState(update)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
@@ -112,7 +112,7 @@ func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.V
 func (cs *CppState) setStorage(address common.Address, key common.Key, value common.Value) error {
 	update := common.Update{}
 	update.AppendSlotUpdate(address, key, value)
-	return cs.applyToState(update)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
@@ -141,7 +141,7 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 func (cs *CppState) setCode(address common.Address, code []byte) error {
 	update := common.Update{}
 	update.AppendCodeUpdate(address, code)
-	return cs.applyToState(update)
+	return cs.Apply(0, update)
 }
 
 func (cs *CppState) GetCodeHash(address common.Address) (common.Hash, error) {
@@ -163,23 +163,12 @@ func (cs *CppState) GetHash() (common.Hash, error) {
 }
 
 func (cs *CppState) Apply(block uint64, update common.Update) error {
+	if update.IsEmpty() {
+		return nil
+	}
 	data := update.ToBytes()
 	dataPtr := unsafe.Pointer(&data[0])
 	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint32_t(len(data)))
-	// Apply code changes to Go-sided code cache.
-	for _, change := range update.Codes {
-		cs.codeCache.Set(change.Account, change.Code)
-	}
-	return nil
-}
-
-// applyToState allows to only update the current state of the DB, not
-// affecting the archive. It is intended to be used by the bulk load interface.
-func (cs *CppState) applyToState(update common.Update) error {
-	data := update.ToBytes()
-	dataPtr := unsafe.Pointer(&data[0])
-	C.Carmen_ApplyToState(cs.state, dataPtr, C.uint32_t(len(data)))
-
 	// Apply code changes to Go-sided code cache.
 	for _, change := range update.Codes {
 		cs.codeCache.Set(change.Account, change.Code)
@@ -231,7 +220,10 @@ func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (cs *CppState) GetArchiveState(block uint64) (State, error) {
-	return nil, fmt.Errorf("archive not implemented for CPP state")
+	return &CppState{
+		state:     C.Carmen_GetArchiveState(cs.state, C.uint64_t(block)),
+		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
+	}, nil
 }
 
 type objectId struct {

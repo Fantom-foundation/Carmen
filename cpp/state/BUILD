@@ -74,6 +74,7 @@ cc_test(
         ":c_state",
         "//common:account_state",
         "//common:file_util",
+        "//common:status_test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
     ],

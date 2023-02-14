@@ -23,12 +23,39 @@ using ::testing::StrEq;
 
 TEST(Update, IntialUpdateIsEmpty) {
   Update update;
+  EXPECT_TRUE(update.Empty());
   EXPECT_THAT(update.GetDeletedAccounts(), IsEmpty());
   EXPECT_THAT(update.GetCreatedAccounts(), IsEmpty());
   EXPECT_THAT(update.GetBalances(), IsEmpty());
   EXPECT_THAT(update.GetNonces(), IsEmpty());
   EXPECT_THAT(update.GetCodes(), IsEmpty());
   EXPECT_THAT(update.GetStorage(), IsEmpty());
+}
+
+TEST(Update, DeletedAccountsAreVisible) {
+  Address addr1{0x01};
+  Address addr2{0x02};
+
+  Update update;
+  EXPECT_THAT(update.GetDeletedAccounts(), ElementsAre());
+  update.Delete(addr1);
+  EXPECT_THAT(update.GetDeletedAccounts(), ElementsAre(addr1));
+  update.Delete(addr2);
+  EXPECT_THAT(update.GetDeletedAccounts(), ElementsAre(addr1, addr2));
+  EXPECT_FALSE(update.Empty());
+}
+
+TEST(Update, CreatedAccountsAreVisible) {
+  Address addr1{0x01};
+  Address addr2{0x02};
+
+  Update update;
+  EXPECT_THAT(update.GetCreatedAccounts(), ElementsAre());
+  update.Create(addr1);
+  EXPECT_THAT(update.GetCreatedAccounts(), ElementsAre(addr1));
+  update.Create(addr2);
+  EXPECT_THAT(update.GetCreatedAccounts(), ElementsAre(addr1, addr2));
+  EXPECT_FALSE(update.Empty());
 }
 
 TEST(Update, AddedBalancesAreVisible) {
@@ -44,6 +71,7 @@ TEST(Update, AddedBalancesAreVisible) {
   update.Set(addr2, two);
   EXPECT_THAT(update.GetBalances(),
               ElementsAre(FieldsAre(addr1, one), FieldsAre(addr2, two)));
+  EXPECT_FALSE(update.Empty());
 }
 
 TEST(Update, AddedCodesAreVisible) {
@@ -59,6 +87,7 @@ TEST(Update, AddedCodesAreVisible) {
   update.Set(addr2, two);
   EXPECT_THAT(update.GetCodes(),
               ElementsAre(FieldsAre(addr1, one), FieldsAre(addr2, two)));
+  EXPECT_FALSE(update.Empty());
 }
 
 TEST(Update, AddedNoncesAreVisible) {
@@ -74,6 +103,7 @@ TEST(Update, AddedNoncesAreVisible) {
   update.Set(addr2, two);
   EXPECT_THAT(update.GetNonces(),
               ElementsAre(FieldsAre(addr1, one), FieldsAre(addr2, two)));
+  EXPECT_FALSE(update.Empty());
 }
 
 TEST(Update, AddedStorageUpdatesAreVisible) {
@@ -91,6 +121,7 @@ TEST(Update, AddedStorageUpdatesAreVisible) {
   update.Set(addr2, key2, two);
   EXPECT_THAT(update.GetStorage(), ElementsAre(FieldsAre(addr1, key1, one),
                                                FieldsAre(addr2, key2, two)));
+  EXPECT_FALSE(update.Empty());
 }
 
 TEST(Update, EmptyDataCanBeSerializedAndRestored) {

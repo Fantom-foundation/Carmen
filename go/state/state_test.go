@@ -5,7 +5,6 @@ import (
 	"flag"
 	"math/big"
 	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -393,7 +392,7 @@ func TestArchive(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 
 			// skip in-memory (we don't have an in-memory archive implementation)
-			if config.name == "go-Memory" || strings.HasPrefix(config.name, "cpp-") {
+			if config.name == "go-Memory" {
 				t.Skip("Archive not implemented for this variant")
 			}
 

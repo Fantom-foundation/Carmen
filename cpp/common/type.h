@@ -171,6 +171,7 @@ class Code {
   }
 
   auto Size() const { return code_.size(); }
+  auto Data() const { return code_.data(); }
 
   friend bool operator==(const Code&, const Code&) = default;
 
