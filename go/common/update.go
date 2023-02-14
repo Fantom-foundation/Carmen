@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"sort"
 )
@@ -119,7 +120,7 @@ func (u *Update) Normalize() error {
 const updateEncodingVersion byte = 0
 
 func UpdateFromBytes(data []byte) (Update, error) {
-	if len(data) < 1+6*2 {
+	if len(data) < 1+6*4 {
 		return Update{}, fmt.Errorf("invalid encoding, too few bytes")
 	}
 	if data[0] != updateEncodingVersion {
@@ -127,14 +128,14 @@ func UpdateFromBytes(data []byte) (Update, error) {
 	}
 
 	data = data[1:]
-	deletedAccountSize := readUint16(data[0:])
-	createdAccountSize := readUint16(data[2:])
-	balancesSize := readUint16(data[4:])
-	codesSize := readUint16(data[6:])
-	noncesSize := readUint16(data[8:])
-	slotsSize := readUint16(data[10:])
+	deletedAccountSize := readUint32(data[0:])
+	createdAccountSize := readUint32(data[4:])
+	balancesSize := readUint32(data[8:])
+	codesSize := readUint32(data[12:])
+	noncesSize := readUint32(data[16:])
+	slotsSize := readUint32(data[20:])
 
-	data = data[12:]
+	data = data[24:]
 
 	res := Update{}
 
@@ -231,7 +232,7 @@ func UpdateFromBytes(data []byte) (Update, error) {
 
 func (u *Update) ToBytes() []byte {
 	const addrLength = len(Address{})
-	size := 1 + 6*2 // version + sizes
+	size := 1 + 6*4 // version + sizes
 	size += len(u.DeletedAccounts) * addrLength
 	size += len(u.CreatedAccounts) * addrLength
 	size += len(u.Balances) * (addrLength + len(Balance{}))
@@ -244,12 +245,12 @@ func (u *Update) ToBytes() []byte {
 	res := make([]byte, 0, size)
 
 	res = append(res, updateEncodingVersion)
-	res = appendUint16(res, len(u.DeletedAccounts))
-	res = appendUint16(res, len(u.CreatedAccounts))
-	res = appendUint16(res, len(u.Balances))
-	res = appendUint16(res, len(u.Codes))
-	res = appendUint16(res, len(u.Nonces))
-	res = appendUint16(res, len(u.Slots))
+	res = appendUint32(res, uint32(len(u.DeletedAccounts)))
+	res = appendUint32(res, uint32(len(u.CreatedAccounts)))
+	res = appendUint32(res, uint32(len(u.Balances)))
+	res = appendUint32(res, uint32(len(u.Codes)))
+	res = appendUint32(res, uint32(len(u.Nonces)))
+	res = appendUint32(res, uint32(len(u.Slots)))
 
 	for _, addr := range u.DeletedAccounts {
 		res = append(res, addr[:]...)
@@ -263,7 +264,7 @@ func (u *Update) ToBytes() []byte {
 	}
 	for _, cur := range u.Codes {
 		res = append(res, cur.Account[:]...)
-		res = appendUint16(res, len(cur.Code))
+		res = appendUint16(res, uint16(len(cur.Code)))
 		res = append(res, cur.Code...)
 	}
 	for _, cur := range u.Nonces {
@@ -280,13 +281,19 @@ func (u *Update) ToBytes() []byte {
 }
 
 func readUint16(data []byte) uint16 {
-	return uint16(data[0])<<8 | uint16(data[1])
+	return binary.BigEndian.Uint16(data)
 }
 
-func appendUint16(data []byte, value int) []byte {
-	data = append(data, byte(value>>8))
-	data = append(data, byte(value))
-	return data
+func readUint32(data []byte) uint32 {
+	return binary.BigEndian.Uint32(data)
+}
+
+func appendUint16(data []byte, value uint16) []byte {
+	return binary.BigEndian.AppendUint16(data, value)
+}
+
+func appendUint32(data []byte, value uint32) []byte {
+	return binary.BigEndian.AppendUint32(data, value)
 }
 
 // Check verifies that all updates are unique and in order.

@@ -34,6 +34,16 @@ class Reader {
     return res;
   }
 
+  absl::StatusOr<std::uint32_t> ReadUint32() {
+    RETURN_IF_ERROR(CheckEnd(4));
+    auto res = std::uint32_t(data_[pos_]) << 24 |
+               std::uint32_t(data_[pos_ + 1]) << 16 |
+               std::uint32_t(data_[pos_ + 2]) << 8 |
+               std::uint32_t(data_[pos_ + 3]);
+    pos_ += 4;
+    return res;
+  }
+
   absl::StatusOr<std::vector<std::byte>> ReadBytes(int length) {
     RETURN_IF_ERROR(CheckEnd(length));
     std::vector<std::byte> result;
@@ -104,6 +114,15 @@ class Writer {
     return *this;
   }
 
+  Writer& Append(std::uint32_t value) {
+    // Make sure values are written in big-endian.
+    buffer_.push_back(std::byte(value >> 24));
+    buffer_.push_back(std::byte(value >> 16));
+    buffer_.push_back(std::byte(value >> 8));
+    buffer_.push_back(std::byte(value));
+    return *this;
+  }
+
   template <Trivial T>
   Writer& Append(const T& value) {
     auto span = std::as_bytes(std::span(&value, 1));
@@ -147,7 +166,7 @@ class Writer {
 absl::StatusOr<Update> Update::FromBytes(std::span<const std::byte> data) {
   // The encoding should at least have the version number and the number of
   // entries.
-  if (data.size() < 1 + 6 * 2) {
+  if (data.size() < 1 + 6 * 4) {
     return absl::InvalidArgumentError(
         "Encoded update has less than minimum length.");
   }
@@ -160,12 +179,12 @@ absl::StatusOr<Update> Update::FromBytes(std::span<const std::byte> data) {
         absl::StrFormat("Invalid version number: %d", version));
   }
 
-  ASSIGN_OR_RETURN(auto deleted_account_size, reader.ReadUint16());
-  ASSIGN_OR_RETURN(auto created_account_size, reader.ReadUint16());
-  ASSIGN_OR_RETURN(auto balances_size, reader.ReadUint16());
-  ASSIGN_OR_RETURN(auto codes_size, reader.ReadUint16());
-  ASSIGN_OR_RETURN(auto nonces_size, reader.ReadUint16());
-  ASSIGN_OR_RETURN(auto storage_size, reader.ReadUint16());
+  ASSIGN_OR_RETURN(auto deleted_account_size, reader.ReadUint32());
+  ASSIGN_OR_RETURN(auto created_account_size, reader.ReadUint32());
+  ASSIGN_OR_RETURN(auto balances_size, reader.ReadUint32());
+  ASSIGN_OR_RETURN(auto codes_size, reader.ReadUint32());
+  ASSIGN_OR_RETURN(auto nonces_size, reader.ReadUint32());
+  ASSIGN_OR_RETURN(auto storage_size, reader.ReadUint32());
 
   Update update;
   ASSIGN_OR_RETURN(update.deleted_accounts_,
@@ -191,7 +210,7 @@ absl::StatusOr<Hash> Update::GetHash() const {
 absl::StatusOr<std::vector<std::byte>> Update::ToBytes() const {
   // Compute the total size of required buffer.
   std::size_t size = 1;  // the version number
-  size += 6 * 2;         // 2 bytes for the length  of the respective list
+  size += 6 * 4;         // 4 bytes for the length  of the respective list
   size += deleted_accounts_.size() * sizeof(Address);
   size += created_accounts_.size() * sizeof(Address);
   size += balances_.size() * (sizeof(Address) + sizeof(Balance));
@@ -206,12 +225,12 @@ absl::StatusOr<std::vector<std::byte>> Update::ToBytes() const {
 
   // Start by version number and length of lists.
   out.Append(kVersion0);
-  out.Append(std::uint16_t(deleted_accounts_.size()));
-  out.Append(std::uint16_t(created_accounts_.size()));
-  out.Append(std::uint16_t(balances_.size()));
-  out.Append(std::uint16_t(codes_.size()));
-  out.Append(std::uint16_t(nonces_.size()));
-  out.Append(std::uint16_t(storage_.size()));
+  out.Append(std::uint32_t(deleted_accounts_.size()));
+  out.Append(std::uint32_t(created_accounts_.size()));
+  out.Append(std::uint32_t(balances_.size()));
+  out.Append(std::uint32_t(codes_.size()));
+  out.Append(std::uint32_t(nonces_.size()));
+  out.Append(std::uint32_t(storage_.size()));
 
   // Followed by the serialization of the individual lists.
   out.Append(GetDeletedAccounts());
