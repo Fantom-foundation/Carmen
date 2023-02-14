@@ -78,6 +78,9 @@ class Update {
 
   // --- Observers ---
 
+  // True if this update implies no changes to the state, false otherwise.
+  bool Empty() const;
+
   // Returns a span of deleted addresses, valid until the next modification or
   // the end of the life cycle of this update.
   const std::vector<Address>& GetDeletedAccounts() const {

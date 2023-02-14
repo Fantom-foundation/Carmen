@@ -35,6 +35,7 @@ class State {
   using AddressId = std::uint32_t;
   using KeyId = std::uint32_t;
   using SlotId = std::uint32_t;
+  using Archive = ArchiveType;
 
   // Identifies a single slot by its address/key values.
   struct Slot {
@@ -62,25 +63,24 @@ class State {
 
   absl::Status DeleteAccount(const Address& address);
 
-  StatusOrRef<const Balance> GetBalance(const Address& address) const;
+  absl::StatusOr<Balance> GetBalance(const Address& address) const;
 
   absl::Status SetBalance(const Address& address, Balance value);
 
-  StatusOrRef<const Nonce> GetNonce(const Address& address) const;
+  absl::StatusOr<Nonce> GetNonce(const Address& address) const;
 
   absl::Status SetNonce(const Address& address, Nonce value);
 
   // Obtains the current value of the given storage slot.
-  StatusOrRef<const Value> GetStorageValue(const Address& address,
-                                           const Key& key) const;
+  absl::StatusOr<Value> GetStorageValue(const Address& address,
+                                        const Key& key) const;
 
   // Updates the current value of the given storage slot.
   absl::Status SetStorageValue(const Address& address, const Key& key,
                                const Value& value);
 
   // Retrieve the code stored under the given address.
-  absl::StatusOr<std::span<const std::byte>> GetCode(
-      const Address& address) const;
+  absl::StatusOr<Code> GetCode(const Address& address) const;
 
   // Updates the code stored under the given address.
   absl::Status SetCode(const Address& address, std::span<const std::byte> code);
@@ -96,6 +96,10 @@ class State {
 
   // Applies the changes of the provided update to the current state.
   absl::Status ApplyToState(const Update& update);
+
+  // Retrieves a pointer to the owned archive or nullptr, if no archive is
+  // maintained.
+  ArchiveType* GetArchive() { return archive_.get(); }
 
   // Obtains a state hash providing a unique cryptographic fingerprint of the
   // entire maintained state.
@@ -312,7 +316,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
           class ArchiveType>
-StatusOrRef<const Balance>
+absl::StatusOr<Balance>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetBalance(
     const Address& address) const {
   constexpr static const Balance kZero{};
@@ -341,7 +345,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
           class ArchiveType>
-StatusOrRef<const Nonce>
+absl::StatusOr<Nonce>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetNonce(
     const Address& address) const {
   constexpr static const Nonce kZero{};
@@ -369,7 +373,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
           class ArchiveType>
-StatusOrRef<const Value>
+absl::StatusOr<Value>
 State<IndexType, StoreType, DepotType, MultiMapType,
       ArchiveType>::GetStorageValue(const Address& address,
                                     const Key& key) const {
@@ -421,9 +425,8 @@ template <template <typename K, typename V> class IndexType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
           class ArchiveType>
-absl::StatusOr<std::span<const std::byte>>
-State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetCode(
-    const Address& address) const {
+absl::StatusOr<Code> State<IndexType, StoreType, DepotType, MultiMapType,
+                           ArchiveType>::GetCode(const Address& address) const {
   constexpr static const std::span<const std::byte> kZero{};
   auto addr_id = address_index_.Get(address);
   if (absl::IsNotFound(addr_id.status())) {

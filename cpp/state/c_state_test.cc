@@ -3,6 +3,7 @@
 #include "common/account_state.h"
 #include "common/file_util.h"
 #include "common/hash.h"
+#include "common/status_test_util.h"
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -377,6 +378,84 @@ TEST_P(CStateTest, CodeSizesMatchCodes) {
   Carmen_SetCode(state, &addr, code.data(), code.size());
   Carmen_GetCodeSize(state, &addr, &size);
   EXPECT_EQ(size, 0);
+}
+
+TEST_P(CStateTest, ArchiveCanBeAccessedIfEnabled) {
+  auto state = GetState();
+  auto archive = Carmen_GetArchiveState(state, 0);
+  EXPECT_EQ(archive != nullptr, GetParam().with_archive);
+  Carmen_ReleaseState(archive);
+}
+
+TEST_P(CStateTest, ArchiveCanBeQueried) {
+  if (!GetParam().with_archive) {
+    return;  // This test is only relevant when archives are enabled
+  }
+  auto state = GetState();
+
+  Address addr{0x12};
+  Balance balance{0x45};
+  Nonce nonce{0x67};
+  Code code{0x89};
+  Key key{0xAB};
+  Value value{0xCD};
+
+  Update update;
+  update.Create(addr);
+  update.Set(addr, balance);
+  update.Set(addr, nonce);
+  update.Set(addr, code);
+  update.Set(addr, key, value);
+
+  ASSERT_OK_AND_ASSIGN(auto data, update.ToBytes());
+  Carmen_Apply(state, 1, data.data(), data.size());
+
+  Balance balance_restored{0x99};
+  Nonce nonce_restored{0x99};
+  Value value_restored{0x99};
+
+  // Check archive state at block 0.
+  auto archive0 = Carmen_GetArchiveState(state, 0);
+  ASSERT_TRUE(archive0);
+
+  AccountState account_state;
+  Carmen_GetAccountState(archive0, &addr, &account_state);
+  EXPECT_EQ(account_state, AccountState::kUnknown);
+  Carmen_GetBalance(archive0, &addr, &balance_restored);
+  EXPECT_EQ(balance_restored, Balance{});
+  Carmen_GetNonce(archive0, &addr, &nonce_restored);
+  EXPECT_EQ(nonce_restored, Nonce{});
+  Carmen_GetStorageValue(archive0, &addr, &key, &value_restored);
+  EXPECT_EQ(value_restored, Value{});
+
+  std::vector<std::byte> restored_code;
+  restored_code.resize(100);
+  uint32_t size = restored_code.size();
+  Carmen_GetCode(archive0, &addr, restored_code.data(), &size);
+  restored_code.resize(size);
+  EXPECT_EQ(Code{restored_code}, Code{});
+
+  // Check archive state at block 1.
+  auto archive1 = Carmen_GetArchiveState(archive0, 1);
+  ASSERT_TRUE(archive1);
+  Carmen_GetAccountState(archive1, &addr, &account_state);
+  EXPECT_EQ(account_state, AccountState::kExists);
+  Carmen_GetBalance(archive1, &addr, &balance_restored);
+  EXPECT_EQ(balance_restored, balance);
+  Carmen_GetNonce(archive1, &addr, &nonce_restored);
+  EXPECT_EQ(nonce_restored, nonce);
+  Carmen_GetStorageValue(archive1, &addr, &key, &value_restored);
+  EXPECT_EQ(value_restored, value);
+
+  restored_code.clear();
+  restored_code.resize(100);
+  size = restored_code.size();
+  Carmen_GetCode(archive1, &addr, restored_code.data(), &size);
+  restored_code.resize(size);
+  EXPECT_EQ(Code{restored_code}, code);
+
+  Carmen_ReleaseState(archive0);
+  Carmen_ReleaseState(archive1);
 }
 
 TEST_P(CStateTest, StateCanBeFlushed) {
