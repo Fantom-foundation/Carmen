@@ -143,7 +143,7 @@ TEST(Update, ParsingEmptyDataFailsWithError) {
 }
 
 TEST(Update, InvalidVersionNumberIsDetected) {
-  std::vector<std::byte> data(1 + 6 * 2);
+  std::vector<std::byte> data(1 + 6 * 4);
   data[0] = std::byte{12};
   EXPECT_THAT(Update::FromBytes(data),
               StatusIs(absl::StatusCode::kInvalidArgument,
@@ -151,7 +151,7 @@ TEST(Update, InvalidVersionNumberIsDetected) {
 }
 
 TEST(Update, OutOfBoundsCheckIsDetected) {
-  std::vector<std::byte> data(1 + 6 * 2);
+  std::vector<std::byte> data(1 + 6 * 4);
   data[3] = std::byte{12};  // = 12 deleted accounts
   EXPECT_THAT(
       Update::FromBytes(data),
@@ -174,11 +174,11 @@ TEST(Update, KnownEncodings) {
   ASSERT_OK_AND_ASSIGN(auto empty, Update().GetHash());
   EXPECT_THAT(
       Print(empty),
-      "0xdd46c3eebb1884ff3b5258c0a2fc9398e560a29e0780d4b53869b6254aa46a96");
+      "0x61126de1b795b976f3ac878f48e88fa77a87d7308ba57c7642b9e1068403a496");
   ASSERT_OK_AND_ASSIGN(auto example, GetExampleUpdate().GetHash());
   EXPECT_THAT(
       Print(example),
-      "0xbc283c81ee1607c83e557420bf3763ab99aca2a59a99d0c66d7105e1ff2fea26");
+      "0x5524cf120229bc99ef762303b408900b8998f1d725958e62ac49fea69a5f7901");
 }
 
 TEST(AccountUpdate, IsNormalizedDetectsOutOfOrderSlotUpdates) {

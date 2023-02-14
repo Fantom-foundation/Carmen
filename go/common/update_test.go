@@ -448,11 +448,11 @@ func TestUpdateKnownEncodings(t *testing.T) {
 	}{
 		{
 			Update{},
-			"dd46c3eebb1884ff3b5258c0a2fc9398e560a29e0780d4b53869b6254aa46a96",
+			"61126de1b795b976f3ac878f48e88fa77a87d7308ba57c7642b9e1068403a496",
 		},
 		{
 			getExampleUpdate(),
-			"bc283c81ee1607c83e557420bf3763ab99aca2a59a99d0c66d7105e1ff2fea26",
+			"5524cf120229bc99ef762303b408900b8998f1d725958e62ac49fea69a5f7901",
 		},
 	}
 	for _, test := range testCases {
