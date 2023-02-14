@@ -76,8 +76,8 @@ type StateDB interface {
 	// of StateDB instances. BulkLoads must not run while there open blocks.
 	StartBulkLoad() BulkLoad
 
-	// GetArchiveState provides a historical State view for given block.
-	GetArchiveState(block uint64) (StateDB, error)
+	// GetArchiveStateDB provides a historical State view for given block.
+	GetArchiveStateDB(block uint64) (StateDB, error)
 
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
@@ -238,13 +238,21 @@ type storedDataCacheValue struct {
 }
 
 func CreateStateDBUsing(state State) *stateDB {
+	return createStateDBWith(state, StoredDataCacheSize)
+}
+
+func createLiteStateDBUsing(state State) *stateDB {
+	return createStateDBWith(state, 1000)
+}
+
+func createStateDBWith(state State, storedDataCacheCapacity int) *stateDB {
 	return &stateDB{
 		state:             state,
 		accounts:          map[common.Address]*accountState{},
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
-		storedDataCache:   common.NewCache[slotId, storedDataCacheValue](StoredDataCacheSize),
+		storedDataCache:   common.NewCache[slotId, storedDataCacheValue](storedDataCacheCapacity),
 		reincarnation:     map[common.Address]uint64{},
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,
@@ -554,6 +562,7 @@ func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
 		return common.Value{}
 	}
 	reincarnation := s.reincarnation[sid.addr]
+	var stored storedDataCacheValue
 	stored, found := s.storedDataCache.Get(sid)
 	if !found {
 		var err error
@@ -991,14 +1000,6 @@ func (s *stateDB) StartBulkLoad() BulkLoad {
 	return &bulkLoad{s.state, common.Update{}}
 }
 
-func (s *stateDB) GetArchiveState(block uint64) (StateDB, error) {
-	state, err := s.state.GetArchiveState(block)
-	if err != nil {
-		return nil, err
-	}
-	return CreateStateDBUsing(state), nil
-}
-
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	const addressSize = 20
 	const keySize = 32
@@ -1040,7 +1041,7 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return CreateStateDBUsing(archiveState), nil
+	return createLiteStateDBUsing(archiveState), nil
 }
 
 func (s *stateDB) resetTransactionContext() {
