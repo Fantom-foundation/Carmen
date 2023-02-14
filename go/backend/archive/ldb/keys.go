@@ -83,7 +83,7 @@ func (k *accountKeyBlockKey) getRange() util.Range {
 }
 
 // accountStatusValue is a value for account status, it consists of
-// * the tablespace
+// * the account existence status (1 for existing account, 0 otherwise)
 // * the reincarnation number (references the storage, incremented on account creation/destroying)
 type accountStatusValue [1 + reincSize]byte
 

@@ -32,21 +32,8 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
 			return res, nil
 		}
-
-		var key accountBlockKey
-		key.set(common.AccountArchiveKey, account, block)
-		keyRange := key.getRange()
-		it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
-		defer it.Release()
-
-		if it.Next() {
-			var accountStatusV accountStatusValue
-			copy(accountStatusV[:], it.Value())
-			_, res := accountStatusV.get()
-			a.reincarnationNumberCache[account] = res
-			return res, nil
-		}
-		return 0, it.Error()
+		_, reincarnation, err := a.getStatus(block, account)
+		return reincarnation, err
 	}
 
 	hash := update.GetHash()

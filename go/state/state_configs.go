@@ -105,7 +105,7 @@ func NewGoMemoryState(params Parameters) (State, error) {
 
 // NewGoFileState creates File based Index and Store implementations
 func NewGoFileState(params Parameters) (State, error) {
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func NewGoFileState(params Parameters) (State, error) {
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(storePath + string(filepath.Separator) + "archive.sqlite")
+		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +212,7 @@ func NewGoFileState(params Parameters) (State, error) {
 
 // NewGoCachedFileState creates File based Index and Store implementations
 func NewGoCachedFileState(params Parameters) (State, error) {
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(storePath + string(filepath.Separator) + "archive.sqlite")
+		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
 		if err != nil {
 			return nil, err
 		}
@@ -317,9 +317,123 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	return state, nil
 }
 
+// NewGoCachedFileLdbArchiveState creates File based Index and Store implementations with LevelDB based archive (if enabled)
+func NewGoCachedFileLdbArchiveState(params Parameters) (State, error) {
+	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	if err != nil {
+		return nil, err
+	}
+
+	addressIndexPath := indexPath + string(filepath.Separator) + "addresses"
+	if err = os.MkdirAll(addressIndexPath, 0700); err != nil {
+		return nil, err
+	}
+	addressIndex, err := file.NewIndex[common.Address, uint32](addressIndexPath, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressHasher{}, common.AddressComparator{})
+	if err != nil {
+		return nil, err
+	}
+	slotsIndexPath := indexPath + string(filepath.Separator) + "slots"
+	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
+		return nil, err
+	}
+	slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdxHasher{}, common.Identifier32Comparator{})
+	if err != nil {
+		return nil, err
+	}
+	keysIndexPath := indexPath + string(filepath.Separator) + "keys"
+	if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
+		return nil, err
+	}
+	keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
+	if err != nil {
+		return nil, err
+	}
+
+	accountStorePath := storePath + string(filepath.Separator) + "accounts"
+	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
+		return nil, err
+	}
+	accountsStore, err := pagedfile.NewStore[uint32, common.AccountState](accountStorePath, common.AccountStateSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(accountStorePath, HashTreeFactor), PoolSize)
+	if err != nil {
+		return nil, err
+	}
+	noncesStorePath := storePath + string(filepath.Separator) + "nonces"
+	if err = os.MkdirAll(noncesStorePath, 0700); err != nil {
+		return nil, err
+	}
+	noncesStore, err := pagedfile.NewStore[uint32, common.Nonce](noncesStorePath, common.NonceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(noncesStorePath, HashTreeFactor), PoolSize)
+	if err != nil {
+		return nil, err
+	}
+	balancesStorePath := storePath + string(filepath.Separator) + "balances"
+	if err = os.MkdirAll(balancesStorePath, 0700); err != nil {
+		return nil, err
+	}
+	balancesStore, err := pagedfile.NewStore[uint32, common.Balance](balancesStorePath, common.BalanceSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(balancesStorePath, HashTreeFactor), PoolSize)
+	if err != nil {
+		return nil, err
+	}
+	valuesStorePath := storePath + string(filepath.Separator) + "values"
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
+		return nil, err
+	}
+	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+	if err != nil {
+		return nil, err
+	}
+
+	codesPath := storePath + string(filepath.Separator) + "codes"
+	if err = os.MkdirAll(codesPath, 0700); err != nil {
+		return nil, err
+	}
+	codesDepot, err := fileDepot.NewDepot[uint32](codesPath, common.Identifier32Serializer{}, htfile.CreateHashTreeFactory(codesPath, HashTreeFactor), CodeHashGroupSize)
+	if err != nil {
+		return nil, err
+	}
+	codeHashesStorePath := storePath + string(filepath.Separator) + "codeHashes"
+	if err = os.MkdirAll(codeHashesStorePath, 0700); err != nil {
+		return nil, err
+	}
+	codeHashesStore, err := pagedfile.NewStore[uint32, common.Hash](codeHashesStorePath, common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), PoolSize)
+	if err != nil {
+		return nil, err
+	}
+	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
+
+	var arch archive.Archive
+	var cleanup []func() = nil
+	if params.WithArchive {
+		db, err := common.OpenLevelDb(archivePath, nil)
+		if err != nil {
+			return nil, err
+		}
+		cleanup = cleanUpByClosing(db)
+
+		arch, err = archldb.NewArchive(db)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	state := &GoState{
+		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+		addressToSlots,
+		cleanup, nil, arch, nil, nil, nil, nil}
+
+	return state, nil
+}
+
 // NewGoLeveLIndexFileStoreState creates LevelDB Index and File Store implementations
 func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +509,7 @@ func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(storePath + string(filepath.Separator) + "archive.sqlite")
+		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
 		if err != nil {
 			return nil, err
 		}
@@ -419,7 +533,7 @@ func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
 
 // NewGoCachedLeveLIndexFileStoreState creates Cached LevelDB Index and File Store implementations
 func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +610,7 @@ func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(storePath + string(filepath.Separator) + "archive.sqlite")
+		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
 		if err != nil {
 			return nil, err
 		}
@@ -520,7 +634,7 @@ func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
 
 // NewGoCachedTransactLeveLIndexFileStoreState creates Cached and Transactional LevelDB Index and File Store implementations
 func NewGoCachedTransactLeveLIndexFileStoreState(params Parameters) (State, error) {
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -603,7 +717,7 @@ func NewGoCachedTransactLeveLIndexFileStoreState(params Parameters) (State, erro
 
 	var arch archive.Archive
 	if params.WithArchive {
-		arch, err = sqlite.NewArchive(storePath + string(filepath.Separator) + "archive.sqlite")
+		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
 		if err != nil {
 			return nil, err
 		}
@@ -871,14 +985,19 @@ func NewGoTransactCachedLeveLIndexAndStoreState(params Parameters) (State, error
 }
 
 // createSubDirs creates two subdirectories of the given for the Store and the Index
-func createSubDirs(rootPath string) (indexPath, storePath string, err error) {
+func createSubDirs(rootPath string) (indexPath, storePath, archivePath string, err error) {
 	indexPath = rootPath + string(filepath.Separator) + "index"
 	if err = os.MkdirAll(indexPath, 0700); err != nil {
 		return
 	}
 
 	storePath = rootPath + string(filepath.Separator) + "store"
-	err = os.MkdirAll(storePath, 0700)
+	if err = os.MkdirAll(storePath, 0700); err != nil {
+		return
+	}
+
+	archivePath = rootPath + string(filepath.Separator) + "archive"
+	err = os.MkdirAll(archivePath, 0700)
 
 	return
 }
