@@ -20,27 +20,27 @@ var (
 )
 
 const (
-	kCreateBlockTable   = "CREATE TABLE block (number INT PRIMARY KEY, hash BLOB)"
+	kCreateBlockTable   = "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY, hash BLOB)"
 	kAddBlockStmt       = "INSERT INTO block(number, hash) VALUES (?,?)"
 	kGetBlockHeightStmt = "SELECT number FROM block ORDER BY number DESC LIMIT 1"
 
-	kCreateStatusTable = "CREATE TABLE status (account BLOB, block INT, exist INT, reincarnation INT, PRIMARY KEY (account,block))"
+	kCreateStatusTable = "CREATE TABLE IF NOT EXISTS status (account BLOB, block INT, exist INT, reincarnation INT, PRIMARY KEY (account,block))"
 	kAddStatusStmt     = "INSERT INTO status(account,block,exist,reincarnation) VALUES (?,?,?,?)"
 	kGetStatusStmt     = "SELECT exist, reincarnation FROM status WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 
-	kCreateBalanceTable = "CREATE TABLE balance (account BLOB, block INT, value BLOB, PRIMARY KEY (account,block))"
+	kCreateBalanceTable = "CREATE TABLE IF NOT EXISTS balance (account BLOB, block INT, value BLOB, PRIMARY KEY (account,block))"
 	kAddBalanceStmt     = "INSERT INTO balance(account,block,value) VALUES (?,?,?)"
 	kGetBalanceStmt     = "SELECT value FROM balance WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 
-	kCreateCodeTable = "CREATE TABLE code (account BLOB, block INT, code BLOB, PRIMARY KEY (account,block))"
+	kCreateCodeTable = "CREATE TABLE IF NOT EXISTS code (account BLOB, block INT, code BLOB, PRIMARY KEY (account,block))"
 	kAddCodeStmt     = "INSERT INTO code(account,block,code) VALUES (?,?,?)"
 	kGetCodeStmt     = "SELECT code FROM code WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 
-	kCreateNonceTable = "CREATE TABLE nonce (account BLOB, block INT, value BLOB, PRIMARY KEY (account,block))"
+	kCreateNonceTable = "CREATE TABLE IF NOT EXISTS nonce (account BLOB, block INT, value BLOB, PRIMARY KEY (account,block))"
 	kAddNonceStmt     = "INSERT INTO nonce(account,block,value) VALUES (?,?,?)"
 	kGetNonceStmt     = "SELECT value FROM nonce WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 
-	kCreateValueTable = "CREATE TABLE storage (account BLOB, reincarnation INT, slot BLOB, block INT, value BLOB, PRIMARY KEY (account,reincarnation,slot,block))"
+	kCreateValueTable = "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, slot BLOB, block INT, value BLOB, PRIMARY KEY (account,reincarnation,slot,block))"
 	kAddValueStmt     = "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES (?,?,?,?,?)"
 	kGetValueStmt     = "SELECT value FROM storage WHERE account = ? AND reincarnation = ? AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 )
@@ -171,6 +171,11 @@ func (a *Archive) Close() error {
 }
 
 func (a *Archive) Add(block uint64, update common.Update) error {
+	// Empty updates can be skipped. Blocks are implicitly empty,
+	// and being tolerante here makes client code easier.
+	if update.IsEmpty() {
+		return nil
+	}
 	tx, err := a.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
@@ -187,7 +192,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	hash := update.GetHash()
 	_, err = tx.Stmt(a.addBlockStmt).Exec(block, hash[:])
 	if err != nil {
-		return fmt.Errorf("failed to add block; %s", err)
+		return fmt.Errorf("failed to add block %d; %s", block, err)
 	}
 
 	getReincarnationNumber := func(account common.Address) (int, error) {

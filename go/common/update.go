@@ -32,6 +32,16 @@ type Update struct {
 	Slots           []SlotUpdate
 }
 
+// IsEmpty is true if there is no change covered by this update.
+func (u *Update) IsEmpty() bool {
+	return len(u.DeletedAccounts) == 0 &&
+		len(u.CreatedAccounts) == 0 &&
+		len(u.Balances) == 0 &&
+		len(u.Nonces) == 0 &&
+		len(u.Codes) == 0 &&
+		len(u.Slots) == 0
+}
+
 // AppendDeleteAccount registers an account to be deleted in this block. Delete
 // operations are the first to be carried out, leading to a clearing of the
 // account's storage. Subsequent account creations or balance / nonce / slot

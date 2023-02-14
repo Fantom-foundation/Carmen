@@ -76,6 +76,9 @@ type StateDB interface {
 	// of StateDB instances. BulkLoads must not run while there open blocks.
 	StartBulkLoad() BulkLoad
 
+	// GetArchiveState provides a historical State view for given block.
+	GetArchiveState(block uint64) (StateDB, error)
+
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
 }
@@ -985,7 +988,15 @@ func (s *stateDB) Close() error {
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock(0)
 	s.storedDataCache.Clear()
-	return &bulkLoad{s.state.(directUpdateState)}
+	return &bulkLoad{s.state, common.Update{}}
+}
+
+func (s *stateDB) GetArchiveState(block uint64) (StateDB, error) {
+	state, err := s.state.GetArchiveState(block)
+	if err != nil {
+		return nil, err
+	}
+	return CreateStateDBUsing(state), nil
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -1050,14 +1061,12 @@ func (s *stateDB) reset() {
 }
 
 type bulkLoad struct {
-	state directUpdateState
+	state  State
+	update common.Update
 }
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
-	err := l.state.createAccount(addr)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create account: %v", err))
-	}
+	l.update.AppendCreateAccount(addr)
 }
 
 func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
@@ -1065,33 +1074,28 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
-	err = l.state.setBalance(addr, newBalance)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to set balance: %v", err))
-	}
+	l.update.AppendBalanceUpdate(addr, newBalance)
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
-	err := l.state.setNonce(addr, common.ToNonce(value))
-	if err != nil {
-		panic(fmt.Sprintf("Failed to set nonce: %v", err))
-	}
+	l.update.AppendNonceUpdate(addr, common.ToNonce(value))
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
-	err := l.state.setStorage(addr, key, value)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to set storage: %v", err))
-	}
+	l.update.AppendSlotUpdate(addr, key, value)
 }
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
-	err := l.state.setCode(addr, code)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to set code: %v", err))
-	}
+	l.update.AppendCodeUpdate(addr, code)
 }
 
 func (l *bulkLoad) Close() error {
+	// Apply the update to the DB -- all in one go.
+	if err := l.update.Normalize(); err != nil {
+		return err
+	}
+	if err := l.state.Apply(0, l.update); err != nil {
+		return err
+	}
 	// Flush out all inserted data.
 	if err := l.state.Flush(); err != nil {
 		return err
