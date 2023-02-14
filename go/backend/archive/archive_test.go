@@ -2,8 +2,10 @@ package archive
 
 import (
 	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"io"
 	"testing"
 )
 
@@ -24,7 +26,35 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 				return archive
 			},
 		},
+		{
+			label: "LevelDB",
+			getArchive: func(tempDir string) Archive {
+				db, err := common.OpenLevelDb(tempDir, nil)
+				if err != nil {
+					tb.Fatalf("failed to open LevelDB; %s", err)
+				}
+				archive, err := ldb.NewArchive(db)
+				if err != nil {
+					tb.Fatalf("failed to create archive; %s", err)
+				}
+				return &ldbArchiveWrapper{archive, db}
+			},
+		},
 	}
+}
+
+// ldbArchiveWrapper wraps the ldb.Archive to close the LevelDB on the archive Close
+type ldbArchiveWrapper struct {
+	Archive
+	db io.Closer
+}
+
+func (w *ldbArchiveWrapper) Close() error {
+	err := w.Archive.Close()
+	if err != nil {
+		return err
+	}
+	return w.db.Close()
 }
 
 var (
@@ -166,6 +196,93 @@ func TestAccountDeleteCreate(t *testing.T) {
 				t.Errorf("unexpected value at block 9: %x; %s", value, err)
 			}
 
+		})
+	}
+}
+
+func TestAccountStatusOnly(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+			}); err != nil {
+				t.Fatalf("failed to add block 1; %s", err)
+			}
+
+			if exists, err := a.Exists(2, addr1); err != nil || !exists {
+				t.Errorf("unexpected account status at block 1: %t; %s", exists, err)
+			}
+		})
+	}
+}
+
+func TestBalanceOnly(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Balances: []common.BalanceUpdate{
+					{addr1, common.Balance{0x12}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 1; %s", err)
+			}
+
+			if err := a.Add(200, common.Update{
+				Balances: []common.BalanceUpdate{
+					{addr1, common.Balance{0x34}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 2; %s", err)
+			}
+
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
+				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
+			}
+
+			if balance, err := a.GetBalance(300, addr1); err != nil || balance != (common.Balance{0x34}) {
+				t.Errorf("unexpected balance at block 3: %x; %s", balance, err)
+			}
+		})
+	}
+}
+
+func TestStorageOnly(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Slots: []common.SlotUpdate{
+					{addr1, common.Key{0x37}, common.Value{0x12}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 1; %s", err)
+			}
+
+			if err := a.Add(2, common.Update{
+				Slots: []common.SlotUpdate{
+					{addr1, common.Key{0x37}, common.Value{0x34}},
+				},
+			}); err != nil {
+				t.Fatalf("failed to add block 2; %s", err)
+			}
+
+			if value, err := a.GetStorage(1, addr1, common.Key{0x37}); err != nil || value != (common.Value{0x12}) {
+				t.Errorf("unexpected value at block 1: %x; %s", value, err)
+			}
+
+			if value, err := a.GetStorage(2, addr1, common.Key{0x37}); err != nil || value != (common.Value{0x34}) {
+				t.Errorf("unexpected value at block 2: %x; %s", value, err)
+			}
 		})
 	}
 }

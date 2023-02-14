@@ -205,7 +205,7 @@ func createLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySeri
 		b.Fatalf("failed to init leveldb; %s", err)
 	}
 
-	idx, err := ldb.NewIndex[K, I](db, common.SlotStoreKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](db, common.KeyIndexKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
@@ -224,7 +224,7 @@ func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing
 		b.Fatalf("failed to init leveldb; %s", err)
 	}
 
-	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.SlotStoreKey, common.ValueStoreKey}
+	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.KeyIndexKey, common.ValueStoreKey}
 	indexArray := index.NewIndexArray[K, I]()
 	for _, tableSpace := range tableSpaces {
 		if idx, err := ldb.NewIndex[K, I](db, tableSpace, keySerializer, indexSerializer); err != nil {
@@ -241,7 +241,7 @@ func createSharedMultiLevelDbIndex[K comparable, I common.Identifier](b *testing
 
 // createEachMultiLevelDbIndex creates many instances of the index with each having its LevelDB instance
 func createEachMultiLevelDbIndex[K comparable, I common.Identifier](b *testing.B, keySerializer common.Serializer[K], indexSerializer common.Serializer[I]) indexWrapper[K, I] {
-	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.SlotStoreKey, common.ValueStoreKey}
+	tableSpaces := []common.TableSpace{common.BalanceStoreKey, common.NonceStoreKey, common.KeyIndexKey, common.ValueStoreKey}
 	indexArray := index.NewIndexArray[K, I]()
 	wrapper := newIndexWrapper[K, I](keySerializer, indexArray)
 	for _, tableSpace := range tableSpaces {
@@ -276,7 +276,7 @@ func createTransactLevelDbIndex[K comparable, I common.Identifier](b *testing.B,
 		b.Errorf("failed to init leveldb transaction; %s", err)
 	}
 
-	idx, err := ldb.NewIndex[K, I](tr, common.SlotStoreKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](tr, common.KeyIndexKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
@@ -300,7 +300,7 @@ func createCachedTransactLevelDbIndex[K comparable, I common.Identifier](b *test
 		b.Errorf("failed to init leveldb transaction; %s", err)
 	}
 
-	idx, err := ldb.NewIndex[K, I](tr, common.SlotStoreKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](tr, common.KeyIndexKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}
@@ -319,7 +319,7 @@ func createCachedLevelDbIndex[K comparable, I common.Identifier](b *testing.B, c
 		b.Errorf("failed to init leveldb; %s", err)
 	}
 
-	idx, err := ldb.NewIndex[K, I](db, common.SlotStoreKey, keySerializer, indexSerializer)
+	idx, err := ldb.NewIndex[K, I](db, common.KeyIndexKey, keySerializer, indexSerializer)
 	if err != nil {
 		b.Fatalf("failed to init leveldb index; %s", err)
 	}

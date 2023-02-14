@@ -40,11 +40,17 @@ type Identifier interface {
 	uint64 | uint32
 }
 
+// AddressSize is the size of Ethereum-like address.
+const AddressSize = 20
+
 // Address is an EVM-like account address.
-type Address [20]byte
+type Address [AddressSize]byte
+
+// KeySize is the size of EVM-like storage slot key.
+const KeySize = 32
 
 // Key is an EVM-like key of a storage slot.
-type Key [32]byte
+type Key [KeySize]byte
 
 // HashSize is the byte-size of the Hash type
 const HashSize = 32
@@ -52,14 +58,23 @@ const HashSize = 32
 // Hash is an Ethereum-like hash of a state.
 type Hash [HashSize]byte
 
+// BalanceSize is the size of Ethereum-like balance.
+const BalanceSize = 16
+
 // Balance is an Ethereum-like account balance.
-type Balance [16]byte
+type Balance [BalanceSize]byte
+
+// NonceSize is the size of Ethereum-like nonce.
+const NonceSize = 8
 
 // Nonce is an Ethereum-like nonce.
-type Nonce [8]byte
+type Nonce [NonceSize]byte
+
+// ValueSize is the size of EVM-like storage slot value.
+const ValueSize = 32
 
 // Value is an Ethereum-like smart contract memory slot.
-type Value [32]byte
+type Value [ValueSize]byte
 
 type SlotIdx[I Identifier] struct {
 	AddressIdx I
