@@ -44,7 +44,7 @@ type State interface {
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
 
-	// GetArchiveState provides a historical State for given block.
+	// GetArchiveState provides a historical State view for given block.
 	GetArchiveState(block uint64) (State, error)
 }
 
