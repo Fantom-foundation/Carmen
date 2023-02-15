@@ -629,6 +629,25 @@ TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
   EXPECT_OK(archive.VerifyAccount(6, addr2));
 }
 
+TEST(Archive, AccountValidationCanHandleBlockZeroUpdate) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  Address addr1{0x1};
+
+  Update update0;
+  update0.Create(addr1);
+
+  Update update1;
+  update1.Set(addr1, Balance{});
+
+  EXPECT_OK(archive.Add(0, update0));
+  EXPECT_OK(archive.Add(1, update1));
+
+  EXPECT_OK(archive.VerifyAccount(0, addr1));
+  EXPECT_OK(archive.VerifyAccount(1, addr1));
+  EXPECT_OK(archive.VerifyAccount(2, addr1));
+}
+
 template <typename Check>
 void TestCorruption(absl::FunctionRef<void(Sqlite& db)> change,
                     const Check& check) {
