@@ -1,7 +1,8 @@
-package archive
+package archive_test
 
 import (
 	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -11,14 +12,14 @@ import (
 
 type archiveFactory struct {
 	label      string
-	getArchive func(tempDir string) Archive
+	getArchive func(tempDir string) archive.Archive
 }
 
 func getArchiveFactories(tb testing.TB) []archiveFactory {
 	return []archiveFactory{
 		{
 			label: "SQLite",
-			getArchive: func(tempDir string) Archive {
+			getArchive: func(tempDir string) archive.Archive {
 				archive, err := sqlite.NewArchive(tempDir + "/archive.sqlite")
 				if err != nil {
 					tb.Fatalf("failed to create archive; %s", err)
@@ -28,7 +29,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		},
 		{
 			label: "LevelDB",
-			getArchive: func(tempDir string) Archive {
+			getArchive: func(tempDir string) archive.Archive {
 				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
@@ -45,7 +46,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 
 // ldbArchiveWrapper wraps the ldb.Archive to close the LevelDB on the archive Close
 type ldbArchiveWrapper struct {
-	Archive
+	archive.Archive
 	db io.Closer
 }
 

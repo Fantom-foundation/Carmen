@@ -1,7 +1,9 @@
 package ldb
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -93,6 +95,15 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		var slotK accountKeyBlockKey
 		slotK.set(common.StorageArchiveKey, slotUpdate.Account, reincarnation, slotUpdate.Key, block)
 		batch.Put(slotK[:], slotUpdate.Value[:])
+	}
+
+	hasher := sha256.New()
+	accountUpdates := archive.AccountUpdatesFrom(&update)
+	for account, accountUpdate := range accountUpdates {
+		accountHash := accountUpdate.GetHash(hasher)
+		var accountK accountBlockKey
+		accountK.set(common.AccountHashArchiveKey, account, block)
+		batch.Put(accountK[:], accountHash[:])
 	}
 
 	return a.db.Write(&batch, nil)
@@ -193,6 +204,20 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, nil
 	}
 	return common.Value{}, it.Error()
+}
+
+func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
+	var key accountBlockKey
+	key.set(common.AccountHashArchiveKey, account, block)
+	keyRange := key.getRange()
+	it := a.db.NewIterator(&keyRange, nil)
+	defer it.Release()
+
+	if it.Next() {
+		copy(hash[:], it.Value())
+		return hash, nil
+	}
+	return common.Hash{}, it.Error()
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

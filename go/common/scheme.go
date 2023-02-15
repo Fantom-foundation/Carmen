@@ -39,6 +39,8 @@ const (
 	NonceArchiveKey TableSpace = '5'
 	// StorageArchiveKey is a tablespace for storage slots values
 	StorageArchiveKey TableSpace = '6'
+	// AccountHashArchiveKey is a tablespace for archive account hashes
+	AccountHashArchiveKey TableSpace = '7'
 )
 
 // DbKey expects max size of the 32B key plus at most two bytes

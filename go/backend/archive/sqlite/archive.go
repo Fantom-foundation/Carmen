@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -44,6 +46,10 @@ const (
 	kCreateValueTable = "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, slot BLOB, block INT, value BLOB, PRIMARY KEY (account,reincarnation,slot,block))"
 	kAddValueStmt     = "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES (?,?,?,?,?)"
 	kGetValueStmt     = "SELECT value FROM storage WHERE account = ? AND reincarnation = ? AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1"
+
+	kCreateAccountHashTable = "CREATE TABLE IF NOT EXISTS account_hash (account BLOB, block INT, hash BLOB, PRIMARY KEY(account,block))"
+	kAddAccountHashStmt     = "INSERT INTO account_hash(account, block, hash) VALUES (?,?,?)"
+	kGetAccountHashStmt     = "SELECT hash FROM account_hash WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 )
 
 type Archive struct {
@@ -60,6 +66,8 @@ type Archive struct {
 	getNonceStmt       *sql.Stmt
 	addValueStmt       *sql.Stmt
 	getValueStmt       *sql.Stmt
+	addAccountHashStmt *sql.Stmt
+	getAccountHashStmt *sql.Stmt
 
 	reincarnationNumberCache map[common.Address]int
 }
@@ -98,6 +106,10 @@ func NewArchive(file string) (*Archive, error) {
 	_, err = db.Exec(kCreateValueTable)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create value table; %s", err)
+	}
+	_, err = db.Exec(kCreateAccountHashTable)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create account hash table; %s", err)
 	}
 
 	addBlock, err := db.Prepare(kAddBlockStmt)
@@ -148,6 +160,14 @@ func NewArchive(file string) (*Archive, error) {
 	if err != nil {
 		return nil, err
 	}
+	addAccountHash, err := db.Prepare(kAddAccountHashStmt)
+	if err != nil {
+		return nil, err
+	}
+	getAccountHash, err := db.Prepare(kGetAccountHashStmt)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Archive{
 		db:                       db,
@@ -163,6 +183,8 @@ func NewArchive(file string) (*Archive, error) {
 		getNonceStmt:             getNonce,
 		addValueStmt:             addValue,
 		getValueStmt:             getValue,
+		addAccountHashStmt:       addAccountHash,
+		getAccountHashStmt:       getAccountHash,
 		reincarnationNumberCache: map[common.Address]int{},
 	}, nil
 }
@@ -269,6 +291,17 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 	}
 
+	hasher := sha256.New()
+	stmt = tx.Stmt(a.addAccountHashStmt)
+	accountUpdates := archive.AccountUpdatesFrom(&update)
+	for account, accountUpdate := range accountUpdates {
+		accountHash := accountUpdate.GetHash(hasher)
+		_, err = stmt.Exec(account[:], block, accountHash[:])
+		if err != nil {
+			return fmt.Errorf("failed to add account hash value; %s", err)
+		}
+	}
+
 	succeed = true
 	return tx.Commit()
 }
@@ -369,6 +402,21 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, err
 	}
 	return common.Value{}, rows.Err()
+}
+
+func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
+	rows, err := a.getAccountHashStmt.Query(account[:], block)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var bytes sql.RawBytes
+		err = rows.Scan(&bytes)
+		copy(hash[:], bytes)
+		return hash, err
+	}
+	return common.Hash{}, rows.Err()
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes
