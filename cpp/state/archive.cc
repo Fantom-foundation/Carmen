@@ -401,14 +401,15 @@ class Archive {
     int reincarnation = -1;
 
     Hash hash{};
-    BlockId last = next - 1;
+    std::optional<BlockId> last;
     while (next <= block) {
       BlockId current = next;
-      if (current <= last) {
+      if (last.has_value() && current <= last) {
         // This should only be possible if primary key constraints are violated.
         return absl::InternalError(
-            "Multiple updates for same information in same block found.");
+            absl::StrFormat("Multiple updates for block %d found", current));
       }
+      last = current;
 
       // --- Recreate Update for Current Block ---
       AccountUpdate update;
