@@ -37,7 +37,10 @@ type Archive interface {
 	// GetAccountHash provides a hash of the account state at the given block height.
 	GetAccountHash(block uint64, account common.Address) (common.Hash, error)
 
-	// provides the size of the store in memory in bytes
+	// GetHash provides a hash of the state at the given block height.
+	GetHash(block uint64) (hash common.Hash, err error)
+
+	// MemoryFootprintProvider provides the size of the store in memory in bytes.
 	common.MemoryFootprintProvider
 
 	io.Closer
