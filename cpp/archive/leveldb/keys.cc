@@ -115,11 +115,11 @@ std::array<char, 1 + 4> AccountState::Encode() const {
   return res;
 }
 
-void AccountState::SetBytes(std::span<const char> span) {
+void AccountState::SetBytes(std::span<const std::byte> span) {
   if (span.size() != 5) return;
-  exists = span[0] != 0;
-  reincarnation_number =
-      ReadUint32(std::span<const char, 4>(span.data() + 1, 4));
+  exists = std::uint8_t(span[0]) != 0;
+  reincarnation_number = ReadUint32(std::span<const char, 4>(
+      reinterpret_cast<const char*>(span.data()) + 1, 4));
 }
 
 }  // namespace carmen::archive::leveldb

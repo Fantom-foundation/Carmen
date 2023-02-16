@@ -83,5 +83,16 @@ TEST(Keys, BlockIdCanBeExtractedFromStorageKey) {
   }
 }
 
+TEST(AccountState, ReincarnationNumberCanBeEncodedAndDecoded) {
+  AccountState state;
+  for (ReincarnationNumber i = 1; i < (ReincarnationNumber(1) << 31); i <<= 1) {
+    state.reincarnation_number = i;
+    auto encoded = state.Encode();
+    AccountState restored;
+    restored.SetBytes(std::as_bytes(std::span(encoded)));
+    EXPECT_EQ(state.reincarnation_number, restored.reincarnation_number);
+  }
+}
+
 }  // namespace
 }  // namespace carmen::archive::leveldb

@@ -42,10 +42,10 @@ StorageKey GetStorageKey(const Address& address,
 BlockId GetBlockId(std::span<const char> data);
 
 struct AccountState {
-  std::array<char, 1 + 4> Encode() const;
-  void SetBytes(std::span<const char>);
-  bool exists;
-  ReincarnationNumber reincarnation_number;
+  std::array<char, 5> Encode() const;
+  void SetBytes(std::span<const std::byte>);
+  bool exists = false;
+  ReincarnationNumber reincarnation_number = 0;
 };
 
 }  // namespace carmen::archive::leveldb

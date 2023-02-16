@@ -23,11 +23,7 @@ cc_test(
     srcs = ["archive_test.cc"],
     deps = [
         ":archive",
-        "//archive",
-        "//common:file_util",
-        "//common:hash",
-        "//common:status_test_util",
-        "//common:type",
+        "//archive:archive_test_suite",
         "@com_google_googletest//:gtest_main",
     ],
 )

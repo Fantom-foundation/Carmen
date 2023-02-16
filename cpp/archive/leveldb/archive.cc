@@ -91,6 +91,31 @@ class Archive {
                                     GetStorageKey(address, r, key, block));
   }
 
+  absl::StatusOr<BlockId> GetLatestBlock() {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  absl::StatusOr<Hash> GetHash(BlockId) {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  absl::StatusOr<std::vector<Address>> GetAccountList(BlockId) {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  absl::StatusOr<Hash> GetAccountHash(BlockId, const Address&) {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  absl::Status Verify(BlockId, const Hash&,
+                      absl::FunctionRef<void(std::string_view)>) {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  absl::Status VerifyAccount(BlockId, const Address&) const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
   absl::Status Flush() { return db_.Flush(); }
 
   absl::Status Close() { return db_.Close(); }
@@ -98,8 +123,7 @@ class Archive {
  private:
   Archive(LevelDb db) : db_(std::move(db)) {}
 
-  // A utility function to locate the LevelDB entry valid at a given block
-  // height.
+  // A utility function to locate the LevelDB entry valid at a block height.
   template <typename Value>
   absl::StatusOr<Value> FindMostRecentFor(BlockId block,
                                           std::span<const char> key) {
@@ -122,16 +146,15 @@ class Archive {
       return Value{};
     }
 
-    if (!std::is_same_v<Value, Code> && iter.Value().size() != sizeof(Value)) {
+    auto expected_size = std::is_same_v<Value, AccountState>
+                             ? sizeof(AccountState().Encode())
+                             : sizeof(Value);
+    if (!std::is_same_v<Value, Code> && iter.Value().size() != expected_size) {
       return absl::InternalError("stored value has wrong format");
     }
 
     Value result;
-    if constexpr (std::is_same_v<Value, AccountState>) {
-      std::memcpy(&result, iter.Value().data(), sizeof(Value));
-    } else {
-      result.SetBytes(std::as_bytes(iter.Value()));
-    }
+    result.SetBytes(std::as_bytes(iter.Value()));
     return result;
   }
 
@@ -200,6 +223,41 @@ absl::StatusOr<Value> LevelDbArchive::GetStorage(BlockId block,
                                                  const Key& key) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetStorage(block, account, key);
+}
+
+absl::StatusOr<BlockId> LevelDbArchive::GetLatestBlock() {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetLatestBlock();
+}
+
+absl::StatusOr<Hash> LevelDbArchive::GetHash(BlockId block) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetHash(block);
+}
+
+absl::StatusOr<std::vector<Address>> LevelDbArchive::GetAccountList(
+    BlockId block) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetAccountList(block);
+}
+
+absl::StatusOr<Hash> LevelDbArchive::GetAccountHash(BlockId block,
+                                                    const Address& account) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetAccountHash(block, account);
+}
+
+absl::Status LevelDbArchive::Verify(
+    BlockId block, const Hash& expected_hash,
+    absl::FunctionRef<void(std::string_view)> progress_callback) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->Verify(block, expected_hash, progress_callback);
+}
+
+absl::Status LevelDbArchive::VerifyAccount(BlockId block,
+                                           const Address& account) const {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->VerifyAccount(block, account);
 }
 
 absl::Status LevelDbArchive::Flush() {
