@@ -35,5 +35,49 @@ TEST(LevelDbArchive, OpenAndClosingEmptyDbWorks) {
   EXPECT_OK(archive.Close());
 }
 
+TEST(LevelDbArchive, InAnEmptyArchiveEverythingIsZero) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, LevelDbArchive::Open(dir));
+
+  for (BlockId block = 0; block < 5; block++) {
+    for (Address addr; addr[0] < 5; addr[0]++) {
+      EXPECT_THAT(archive.GetBalance(block, addr), Balance{});
+      /*
+      EXPECT_THAT(archive.GetCode(block, addr), Code{});
+      EXPECT_THAT(archive.GetNonce(block, addr), Nonce{});
+      for (Key key; key[0] < 5; key[0]++) {
+        EXPECT_THAT(archive.GetStorage(block, addr, key), Value{});
+      }
+      */
+    }
+  }
+}
+
+TEST(LevelDbArchive, MultipleBalancesOfTheSameAccountCanBeRetained) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, LevelDbArchive::Open(dir));
+
+  Address addr{};
+
+  Balance zero{};
+  Balance one{0x01};
+  Balance two{0x02};
+
+  Update update1;
+  update1.Set(addr, one);
+  EXPECT_OK(archive.Add(BlockId(2), update1));
+
+  Update update2;
+  update2.Set(addr, two);
+  EXPECT_OK(archive.Add(BlockId(4), update2));
+
+  EXPECT_THAT(archive.GetBalance(0, addr), zero);
+  EXPECT_THAT(archive.GetBalance(1, addr), zero);
+  EXPECT_THAT(archive.GetBalance(2, addr), one);
+  EXPECT_THAT(archive.GetBalance(3, addr), one);
+  EXPECT_THAT(archive.GetBalance(4, addr), two);
+  EXPECT_THAT(archive.GetBalance(5, addr), two);
+}
+
 }  // namespace
 }  // namespace carmen::archive::leveldb
