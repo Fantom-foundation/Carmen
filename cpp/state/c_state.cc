@@ -154,7 +154,7 @@ class WorldStateWrapper : public WorldState {
       return new ArchiveState(archive_, block);
     }
 
-    absl::StatusOr<Hash> GetHash() override { return Hash{}; }
+    absl::StatusOr<Hash> GetHash() override { return archive_.GetHash(block_); }
 
     absl::Status Flush() override { return absl::OkStatus(); }
 
