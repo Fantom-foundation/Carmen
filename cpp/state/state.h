@@ -7,13 +7,13 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "archive/archive.h"
 #include "backend/structure.h"
 #include "common/account_state.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
-#include "state/archive.h"
 #include "state/update.h"
 
 namespace carmen {
@@ -28,7 +28,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 class State {
  public:
   // The types used for internal indexing.
@@ -171,7 +171,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 const Hash State<IndexType, StoreType, DepotType, MultiMapType,
                  ArchiveType>::kEmptyCodeHash = GetKeccak256Hash({});
 
@@ -179,7 +179,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<
     State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Open(
@@ -228,7 +228,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::State(
     IndexType<Address, AddressId> address_index,
     IndexType<Key, KeyId> key_index, IndexType<Slot, SlotId> slot_index,
@@ -254,7 +254,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::CreateAccount(const Address& address) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
@@ -266,7 +266,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<AccountState>
 State<IndexType, StoreType, DepotType, MultiMapType,
       ArchiveType>::GetAccountState(const Address& address) const {
@@ -282,7 +282,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::DeleteAccount(const Address& address) {
   auto addr_id = address_index_.Get(address);
@@ -298,7 +298,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::ClearAccount(AddressId addr_id) {
   // Reset slots associated to account.
@@ -315,7 +315,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<Balance>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetBalance(
     const Address& address) const {
@@ -332,7 +332,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::SetBalance(const Address& address,
                                             Balance value) {
@@ -344,7 +344,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<Nonce>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetNonce(
     const Address& address) const {
@@ -361,7 +361,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::SetNonce(const Address& address, Nonce value) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
@@ -372,7 +372,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<Value>
 State<IndexType, StoreType, DepotType, MultiMapType,
       ArchiveType>::GetStorageValue(const Address& address,
@@ -401,7 +401,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::SetStorageValue(const Address& address,
                                                  const Key& key,
@@ -424,7 +424,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<Code> State<IndexType, StoreType, DepotType, MultiMapType,
                            ArchiveType>::GetCode(const Address& address) const {
   constexpr static const std::span<const std::byte> kZero{};
@@ -445,7 +445,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::SetCode(const Address& address,
                                          std::span<const std::byte> code) {
@@ -459,7 +459,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<std::uint32_t>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetCodeSize(
     const Address& address) const {
@@ -481,7 +481,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<Hash>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetCodeHash(
     const Address& address) const {
@@ -508,7 +508,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::Apply(std::uint64_t block,
                                        const Update& update) {
@@ -526,7 +526,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                    ArchiveType>::ApplyToState(const Update& update) {
   // It is important to keep the update order.
@@ -555,7 +555,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::StatusOr<Hash>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetHash() {
   ASSIGN_OR_RETURN(auto addr_idx_hash, address_index_.GetHash());
@@ -575,7 +575,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Flush() {
   RETURN_IF_ERROR(address_index_.Flush());
@@ -598,7 +598,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 absl::Status
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Close() {
   RETURN_IF_ERROR(address_index_.Close());
@@ -621,7 +621,7 @@ template <template <typename K, typename V> class IndexType,
           template <typename K, typename V> class StoreType,
           template <typename K> class DepotType,
           template <typename K, typename V> class MultiMapType,
-          class ArchiveType>
+          Archive ArchiveType>
 MemoryFootprint State<IndexType, StoreType, DepotType, MultiMapType,
                       ArchiveType>::GetMemoryFootprint() const {
   MemoryFootprint res(*this);

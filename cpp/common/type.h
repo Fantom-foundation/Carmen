@@ -201,4 +201,7 @@ class Code {
   std::vector<std::byte> code_;
 };
 
+// A type alias for block numbers.
+using BlockId = std::uint32_t;
+
 }  // namespace carmen

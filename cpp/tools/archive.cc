@@ -1,7 +1,7 @@
 // This file provides an executable that can be used to perform operations on
 // archive files.
 
-#include "state/archive.h"
+#include "archive/sqlite/archive.h"
 
 #include <stdlib.h>
 
@@ -20,6 +20,8 @@
 namespace carmen {
 namespace {
 
+using ::carmen::archive::sqlite::SqliteArchive;
+
 absl::Status PrintStats(int argc, char** argv) {
   if (argc != 3) {
     std::cout << "Stats needs exactly one argument: <archive_file>\n";
@@ -27,7 +29,7 @@ absl::Status PrintStats(int argc, char** argv) {
   }
   std::string_view path = argv[2];
   std::cout << "Opening " << path << " ..\n";
-  ASSIGN_OR_RETURN(auto archive, Archive::Open(path));
+  ASSIGN_OR_RETURN(auto archive, SqliteArchive::Open(path));
   ASSIGN_OR_RETURN(auto height, archive.GetLatestBlock());
   std::cout << "\tBlock height: " << height << "\n";
   ASSIGN_OR_RETURN(auto hash, archive.GetHash(height));
@@ -42,7 +44,7 @@ absl::Status Verify(int argc, char** argv) {
   }
   std::string_view path = argv[2];
   std::cout << "Opening " << path << " ..\n";
-  ASSIGN_OR_RETURN(auto archive, Archive::Open(path));
+  ASSIGN_OR_RETURN(auto archive, SqliteArchive::Open(path));
   ASSIGN_OR_RETURN(auto height, archive.GetLatestBlock());
   std::cout << "\tBlock height: " << height << "\n";
   auto start = absl::Now();

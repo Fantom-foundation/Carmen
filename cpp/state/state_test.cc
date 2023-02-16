@@ -2,6 +2,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "archive/test_util.h"
 #include "backend/depot/test_util.h"
 #include "backend/index/test_util.h"
 #include "backend/multimap/test_util.h"
@@ -13,7 +14,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "state/configurations.h"
-#include "state/test_util.h"
 #include "state/update.h"
 
 namespace carmen {

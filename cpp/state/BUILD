@@ -2,8 +2,8 @@ cc_library(
     name = "state",
     hdrs = ["state.h"],
     deps = [
-        ":archive",
         ":update",
+        "//archive",
         "//backend:structure",
         "//common:account_state",
         "//common:type",
@@ -19,8 +19,8 @@ cc_test(
     deps = [
         ":configurations",
         ":state",
-        ":test_util",
         ":update",
+        "//archive:test_util",
         "//backend/depot:test_util",
         "//backend/index:test_util",
         "//backend/multimap:test_util",
@@ -39,8 +39,8 @@ cc_library(
     name = "configurations",
     hdrs = ["configurations.h"],
     deps = [
-        ":archive",
         ":state",
+        "//archive/sqlite:archive",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
         "//backend/depot/memory:depot",
@@ -113,6 +113,10 @@ cc_library(
     name = "update",
     srcs = ["update.cc"],
     hdrs = ["update.h"],
+    visibility = [
+        "//archive:__subpackages__",
+        "//state:__subpackages__",
+    ],
     deps = [
         "//common:hash",
         "//common:status_util",
@@ -133,52 +137,5 @@ cc_test(
         "//common:test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "archive",
-    srcs = ["archive.cc"],
-    hdrs = ["archive.h"],
-    visibility = [
-        "//state:__subpackages__",
-        "//tools:__subpackages__",
-    ],
-    deps = [
-        ":update",
-        "//backend/common/sqlite",
-        "//common:type",
-        "@com_google_absl//absl/container:btree",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-    ],
-)
-
-cc_test(
-    name = "archive_test",
-    srcs = ["archive_test.cc"],
-    deps = [
-        ":archive",
-        "//common:file_util",
-        "//common:hash",
-        "//common:status_test_util",
-        "//common:type",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "test_util",
-    testonly = True,
-    hdrs = ["test_util.h"],
-    deps = [
-        ":archive",
-        ":update",
-        "//common:memory_usage",
-        "//common:type",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_googletest//:gtest",
     ],
 )
