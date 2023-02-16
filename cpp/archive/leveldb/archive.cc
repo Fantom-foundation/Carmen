@@ -5,6 +5,7 @@
 #include <span>
 #include <type_traits>
 
+#include "absl/base/attributes.h"
 #include "archive/leveldb/keys.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "common/byte_util.h"
@@ -44,12 +45,46 @@ class Archive {
       RETURN_IF_ERROR(db_.Add({GetNonceKey(addr, block), AsChars(nonce)}));
     }
 
+    for (const auto& [addr, key, value] : update.GetStorage()) {
+      ASSIGN_OR_RETURN((auto [_, r]), GetAccountState(block, addr));
+      RETURN_IF_ERROR(
+          db_.Add({GetStorageKey(addr, r, key, block), AsChars(value)}));
+    }
+
     return absl::OkStatus();
     // return db_.AddBatch(entries);
   }
 
+  absl::StatusOr<Balance> GetBalance(BlockId block, const Address& address) {
+    return FindMostRecentFor<Balance>(block, GetBalanceKey(address, block));
+  }
+
+  absl::StatusOr<Code> GetCode(BlockId block, const Address& address) {
+    return FindMostRecentFor<Code>(block, GetCodeKey(address, block));
+  }
+
+  absl::StatusOr<Nonce> GetNonce(BlockId block, const Address& address) {
+    return FindMostRecentFor<Nonce>(block, GetNonceKey(address, block));
+  }
+
+  absl::StatusOr<Value> GetStorage(BlockId block, const Address& address,
+                                   const Key& key) {
+    ASSIGN_OR_RETURN((auto [_, r]), GetAccountState(block, address));
+    return FindMostRecentFor<Value>(block,
+                                    GetStorageKey(address, r, key, block));
+  }
+
+  absl::Status Flush() { return db_.Flush(); }
+
+  absl::Status Close() { return db_.Close(); }
+
+ private:
+  Archive(LevelDb db) : db_(std::move(db)) {}
+
+  // A utility function to locate the LevelDB entry valid at a given block
+  // height.
   template <typename Value>
-  absl::StatusOr<Value> FindMostRecentFor(BlockId block, const Address& address,
+  absl::StatusOr<Value> FindMostRecentFor(BlockId block,
                                           std::span<const char> key) {
     ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(key));
     if (iter.IsEnd()) {
@@ -64,39 +99,31 @@ class Archive {
       return Value{};
     }
 
-    ASSIGN_OR_RETURN(auto view, PropertyKeyView::Parse(iter.Key()));
-    if (block < view.GetBlockId() || address != view.GetAddress()) {
+    if (block < GetBlockId(iter.Key()) ||
+        std::memcmp(key.data(), iter.Key().data(), key.size() - kBlockIdSize) !=
+            0) {
       return Value{};
     }
 
     if (!std::is_same_v<Value, Code> && iter.Value().size() != sizeof(Value)) {
       return absl::InternalError("stored value has wrong format");
     }
+
     Value result;
-    result.SetBytes(std::as_bytes(iter.Value()));
+    if constexpr (std::is_same_v<Value, AccountState>) {
+      std::memcpy(&result, iter.Value().data(), sizeof(Value));
+    } else {
+      result.SetBytes(std::as_bytes(iter.Value()));
+    }
     return result;
   }
 
-  absl::StatusOr<Balance> GetBalance(BlockId block, const Address& address) {
-    return FindMostRecentFor<Balance>(block, address,
-                                      GetBalanceKey(address, block));
+  absl::StatusOr<AccountState> GetAccountState(BlockId block,
+                                               const Address& account) {
+    return FindMostRecentFor<AccountState>(block,
+                                           GetAccountKey(account, block));
   }
 
-  absl::StatusOr<Code> GetCode(BlockId block, const Address& address) {
-    return FindMostRecentFor<Code>(block, address, GetCodeKey(address, block));
-  }
-
-  absl::StatusOr<Nonce> GetNonce(BlockId block, const Address& address) {
-    return FindMostRecentFor<Nonce>(block, address,
-                                    GetNonceKey(address, block));
-  }
-
-  absl::Status Flush() { return db_.Flush(); }
-
-  absl::Status Close() { return db_.Close(); }
-
- private:
-  Archive(LevelDb db) : db_(std::move(db)) {}
   LevelDb db_;
 };
 
@@ -143,6 +170,13 @@ absl::StatusOr<Nonce> LevelDbArchive::GetNonce(BlockId block,
                                                const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetNonce(block, account);
+}
+
+absl::StatusOr<Value> LevelDbArchive::GetStorage(BlockId block,
+                                                 const Address& account,
+                                                 const Key& key) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetStorage(block, account, key);
 }
 
 absl::Status LevelDbArchive::Flush() {

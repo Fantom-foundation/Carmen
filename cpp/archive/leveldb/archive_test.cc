@@ -44,11 +44,9 @@ TEST(LevelDbArchive, InAnEmptyArchiveEverythingIsZero) {
       EXPECT_THAT(archive.GetBalance(block, addr), Balance{});
       EXPECT_THAT(archive.GetCode(block, addr), Code{});
       EXPECT_THAT(archive.GetNonce(block, addr), Nonce{});
-      /*
       for (Key key; key[0] < 5; key[0]++) {
         EXPECT_THAT(archive.GetStorage(block, addr, key), Value{});
       }
-      */
     }
   }
 }
@@ -129,6 +127,33 @@ TEST(LevelDbArchive, MultipleNoncesOfTheSameAccountCanBeRetained) {
   EXPECT_THAT(archive.GetNonce(3, addr), one);
   EXPECT_THAT(archive.GetNonce(4, addr), two);
   EXPECT_THAT(archive.GetNonce(5, addr), two);
+}
+
+TEST(LevelDbArchive, MultipleValuesOfTheSameSlotCanBeRetained) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, LevelDbArchive::Open(dir));
+
+  Address addr{};
+  Key key{};
+
+  Value zero{};
+  Value one{0x01};
+  Value two{0x02};
+
+  Update update1;
+  update1.Set(addr, key, one);
+  EXPECT_OK(archive.Add(BlockId(2), update1));
+
+  Update update2;
+  update2.Set(addr, key, two);
+  EXPECT_OK(archive.Add(BlockId(4), update2));
+
+  EXPECT_THAT(archive.GetStorage(0, addr, key), zero);
+  EXPECT_THAT(archive.GetStorage(1, addr, key), zero);
+  EXPECT_THAT(archive.GetStorage(2, addr, key), one);
+  EXPECT_THAT(archive.GetStorage(3, addr, key), one);
+  EXPECT_THAT(archive.GetStorage(4, addr, key), two);
+  EXPECT_THAT(archive.GetStorage(5, addr, key), two);
 }
 
 }  // namespace

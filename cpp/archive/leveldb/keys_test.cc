@@ -25,7 +25,7 @@ TEST(Keys, BlockIdIsEncodedUsingBigEndian) {
 
 TEST(Keys, StorageKeyEncodesValuesCorrectly) {
   Address addr{1, 2, 3, 4, 5};
-  ReincarnationId r = 0x12345678;
+  ReincarnationNumber r = 0x12345678;
   Key key{6, 7, 8, 9};
   BlockId b = 0x12345678;
   auto res = GetStorageKey(addr, r, key, b);
@@ -59,12 +59,27 @@ TEST(Keys, StorageKeyEncodesValuesCorrectly) {
   EXPECT_EQ(span[7], 0x78);
 }
 
-TEST(Keys, PropertyKeyParsingObtainsCorrectBlockId) {
+TEST(Keys, BlockIdCanBeExtractedFromBlockKey) {
+  for (BlockId i = 1; i < (BlockId(1) << 31); i <<= 1) {
+    auto key = GetBlockKey(i);
+    EXPECT_EQ(GetBlockId(key), i);
+  }
+}
+
+TEST(Keys, BlockIdCanBeExtractedFromPropertyKey) {
   Address addr{};
   for (BlockId i = 1; i < (BlockId(1) << 31); i <<= 1) {
     auto key = GetBalanceKey(addr, i);
-    ASSERT_OK_AND_ASSIGN(auto view, PropertyKeyView::Parse(key));
-    EXPECT_EQ(view.GetBlockId(), i);
+    EXPECT_EQ(GetBlockId(key), i);
+  }
+}
+
+TEST(Keys, BlockIdCanBeExtractedFromStorageKey) {
+  Address addr{};
+  Key slot{};
+  for (BlockId i = 1; i < (BlockId(1) << 31); i <<= 1) {
+    auto key = GetStorageKey(addr, 12, slot, i);
+    EXPECT_EQ(GetBlockId(key), i);
   }
 }
 

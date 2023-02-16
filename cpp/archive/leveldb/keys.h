@@ -8,7 +8,7 @@
 
 namespace carmen::archive::leveldb {
 
-using ReincarnationId = std::uint32_t;
+using ReincarnationNumber = std::uint32_t;
 
 static constexpr const std::size_t kBlockIdSize = 8;
 static constexpr const std::size_t kPropertyKeySize =
@@ -22,7 +22,7 @@ using BalanceKey = PropertyKey;
 using CodeKey = PropertyKey;
 using NonceKey = PropertyKey;
 using StorageKey =
-    std::array<char, 1 + sizeof(Address) + sizeof(ReincarnationId) +
+    std::array<char, 1 + sizeof(Address) + sizeof(ReincarnationNumber) +
                          sizeof(Key) + kBlockIdSize>;
 
 BlockKey GetBlockKey(BlockId block);
@@ -35,36 +35,17 @@ CodeKey GetCodeKey(const Address& address, BlockId block);
 
 NonceKey GetNonceKey(const Address& address, BlockId block);
 
-StorageKey GetStorageKey(const Address& address, ReincarnationId reincarnation,
-                         const Key& key, BlockId block);
+StorageKey GetStorageKey(const Address& address,
+                         ReincarnationNumber reincarnation, const Key& key,
+                         BlockId block);
 
-class PropertyKeyView {
- public:
-  static absl::StatusOr<PropertyKeyView> Parse(std::span<const char> data) {
-    if (data.size() != kPropertyKeySize) {
-      return absl::InvalidArgumentError("wrong size of key");
-    }
-    return PropertyKeyView(
-        std::span<const char, kPropertyKeySize>{data.data(), kPropertyKeySize});
-  }
-  BlockId GetBlockId() {
-    static_assert(sizeof(BlockId) == 4);
-    constexpr const std::size_t offset = 1 + sizeof(Address) + 4;
-    auto cast = [](char v) { return std::uint32_t(std::uint8_t(v)); };
-    return cast(span_[offset + 0]) << 24 | cast(span_[offset + 1]) << 16 |
-           cast(span_[offset + 2]) << 8 | cast(span_[offset + 3]);
-  }
+BlockId GetBlockId(std::span<const char> data);
 
-  Address GetAddress() {
-    Address res;
-    res.SetBytes(
-        std::as_bytes(std::span<const char, 20>{span_.data() + 1, 20}));
-    return res;
-  }
-
- private:
-  PropertyKeyView(std::span<const char, kPropertyKeySize> span) : span_(span) {}
-  std::span<const char, kPropertyKeySize> span_;
+struct AccountState {
+  std::array<char, 1 + 4> Encode() const;
+  void SetBytes(std::span<const char>);
+  bool exists;
+  ReincarnationNumber reincarnation_number;
 };
 
 }  // namespace carmen::archive::leveldb
