@@ -413,6 +413,7 @@ TEST_P(CStateTest, ArchiveCanBeQueried) {
   Balance balance_restored{0x99};
   Nonce nonce_restored{0x99};
   Value value_restored{0x99};
+  Hash hash{0x99};
 
   // Check archive state at block 0.
   auto archive0 = Carmen_GetArchiveState(state, 0);
@@ -427,6 +428,8 @@ TEST_P(CStateTest, ArchiveCanBeQueried) {
   EXPECT_EQ(nonce_restored, Nonce{});
   Carmen_GetStorageValue(archive0, &addr, &key, &value_restored);
   EXPECT_EQ(value_restored, Value{});
+  Carmen_GetHash(archive0, &hash);
+  EXPECT_EQ(hash, Hash{});
 
   std::vector<std::byte> restored_code;
   restored_code.resize(100);
@@ -446,6 +449,10 @@ TEST_P(CStateTest, ArchiveCanBeQueried) {
   EXPECT_EQ(nonce_restored, nonce);
   Carmen_GetStorageValue(archive1, &addr, &key, &value_restored);
   EXPECT_EQ(value_restored, value);
+  Carmen_GetHash(archive1, &hash);
+  EXPECT_EQ(
+      testing::PrintToString(hash),
+      "0xd7773ecad3a405cd549808c2e8430a789eb904c7174d41fd4cc45ae73f5cfa9f");
 
   restored_code.clear();
   restored_code.resize(100);
