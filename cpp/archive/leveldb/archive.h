@@ -11,28 +11,23 @@
 #include "common/type.h"
 #include "state/update.h"
 
-namespace carmen::archive::sqlite {
+namespace carmen::archive::leveldb {
 
 namespace internal {
 class Archive;
 }
 
-// An archive retains a history of state mutations in a block chain on a
-// block-level granularity. The history is recorded by adding per-block updates.
-// All updates are append-only. History written once can no longer be altered.
-//
-// Archive Add(..) and GetXXX(..) operations are thread safe and may thus be run
-// in parallel.
-class SqliteArchive {
+// A LevelDB key/value store based implementation of an Archive.
+class LevelDbArchive {
  public:
   // Opens the archive located in the given directory. May fail if the directory
   // can not be accessed or the data format in the contained database does not
   // match requirements.
-  static absl::StatusOr<SqliteArchive> Open(std::filesystem::path directory);
+  static absl::StatusOr<LevelDbArchive> Open(std::filesystem::path directory);
 
-  SqliteArchive(SqliteArchive&&);
-  ~SqliteArchive();
-  SqliteArchive& operator=(SqliteArchive&&);
+  LevelDbArchive(LevelDbArchive&&);
+  LevelDbArchive& operator=(LevelDbArchive&&);
+  ~LevelDbArchive();
 
   // Adds the changes of the given block to this archive.
   absl::Status Add(BlockId block, const Update& update);
@@ -85,7 +80,7 @@ class SqliteArchive {
   MemoryFootprint GetMemoryFootprint() const;
 
  private:
-  SqliteArchive(std::unique_ptr<internal::Archive> archive);
+  LevelDbArchive(std::unique_ptr<internal::Archive> archive);
 
   absl::Status CheckState() const;
 
@@ -93,4 +88,4 @@ class SqliteArchive {
   std::unique_ptr<internal::Archive> impl_;
 };
 
-}  // namespace carmen::archive::sqlite
+}  // namespace carmen::archive::leveldb
