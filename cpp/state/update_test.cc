@@ -292,21 +292,21 @@ TEST(AccountUpdate, HashOfBalanceChangeIsHashOfBalance) {
   AccountUpdate update;
   Balance b{0x1, 0x2};
   update.balance = b;
-  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), b));
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(4), b));
 }
 
 TEST(AccountUpdate, HashOfNonceChangeIsHashOfBalance) {
   AccountUpdate update;
   Nonce n{0x1, 0x2};
   update.nonce = n;
-  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), n));
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(8), n));
 }
 
 TEST(AccountUpdate, HashOfCodeChangeIsHashOfCode) {
   AccountUpdate update;
   Code c{0x1, 0x2, 0x3};
   update.code = c;
-  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), c));
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(16), std::uint32_t(c.Size()), c));
 }
 
 TEST(AccountUpdate, SlotUpdatesAreHashedInOrder) {
@@ -331,7 +331,7 @@ TEST(AccountUpdate, BlanceNonceCodeAndStorageAreHashedInOrder) {
   update.nonce = n;
   update.code = c;
   update.storage.push_back({k1, v1});
-  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(0), b, n, c, k1, v1));
+  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(4+8+16), b, n, std::uint32_t(c.Size()), c, k1, v1));
 }
 
 }  // namespace
