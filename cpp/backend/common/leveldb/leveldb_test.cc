@@ -8,6 +8,7 @@
 namespace carmen::backend {
 namespace {
 
+using ::testing::ElementsAreArray;
 using ::testing::IsOk;
 using ::testing::IsOkAndHolds;
 using ::testing::Not;
@@ -45,5 +46,96 @@ TEST(LevelDb, TestAddBatchAndGet) {
   EXPECT_THAT(db.Get(key1), IsOkAndHolds(StrEq(value1)));
   EXPECT_THAT(db.Get(key2), IsOkAndHolds(StrEq(value2)));
 }
+
+TEST(LevelDb, BeginIteratorPointsToEndInEmptyDB) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto db, LevelDb::Open(dir.GetPath()));
+  ASSERT_OK_AND_ASSIGN(auto iter, db.Begin());
+  EXPECT_TRUE(iter.IsEnd());
+}
+
+TEST(LevelDb, CanIterateThroughKeysForward) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto db, LevelDb::Open(dir.GetPath()));
+  EXPECT_OK(db.Add({"key1", "value1"}));
+  EXPECT_OK(db.Add({"key3", "value3"}));
+  EXPECT_OK(db.Add({"key2", "value2"}));
+
+  ASSERT_OK_AND_ASSIGN(auto iter, db.Begin());
+  EXPECT_OK(iter.Status());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key1"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value1"));
+
+  EXPECT_OK(iter.Next());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key2"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value2"));
+
+  EXPECT_OK(iter.Next());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key3"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value3"));
+
+  EXPECT_OK(iter.Next());
+  EXPECT_TRUE(iter.IsEnd());
+}
+
+TEST(LevelDb, CanIterateThroughKeysBackward) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto db, LevelDb::Open(dir.GetPath()));
+  EXPECT_OK(db.Add({"key1", "value1"}));
+  EXPECT_OK(db.Add({"key3", "value3"}));
+  EXPECT_OK(db.Add({"key2", "value2"}));
+
+  ASSERT_OK_AND_ASSIGN(auto iter, db.End());
+  EXPECT_OK(iter.Prev());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key3"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value3"));
+
+  EXPECT_OK(iter.Prev());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key2"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value2"));
+
+  EXPECT_OK(iter.Prev());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key1"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value1"));
+
+  EXPECT_OK(iter.Prev());
+  EXPECT_TRUE(iter.IsBegin());
+}
+
+TEST(LevelDb, LowerBoundFindsKeyAndCanNavigate) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto db, LevelDb::Open(dir.GetPath()));
+  EXPECT_OK(db.Add({"key1", "value1"}));
+  EXPECT_OK(db.Add({"key3", "value3"}));
+  EXPECT_OK(db.Add({"key2", "value2"}));
+
+  ASSERT_OK_AND_ASSIGN(auto iter, db.GetLowerBound("key2"));
+  EXPECT_TRUE(iter.Valid());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key2"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value2"));
+
+  EXPECT_OK(iter.Prev());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key1"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value1"));
+
+  EXPECT_OK(iter.Next());
+  EXPECT_OK(iter.Next());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key3"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value3"));
+}
+
+TEST(LevelDb, LowerBoundFindsNextHigherValueIfKeyIsMissing) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto db, LevelDb::Open(dir.GetPath()));
+  EXPECT_OK(db.Add({"key1", "value1"}));
+  EXPECT_OK(db.Add({"key3", "value3"}));
+  EXPECT_OK(db.Add({"key3", "value3"}));
+
+  ASSERT_OK_AND_ASSIGN(auto iter, db.GetLowerBound("key2"));
+  EXPECT_TRUE(iter.Valid());
+  EXPECT_THAT(iter.Key(), ElementsAreArray("key3"));
+  EXPECT_THAT(iter.Value(), ElementsAreArray("value3"));
+}
+
 }  // namespace
 }  // namespace carmen::backend
