@@ -35,6 +35,23 @@ class LevelDbImpl {
     return LevelDbImpl(db);
   }
 
+  absl::StatusOr<LevelDbIterator> Begin() const {
+    auto iter = db_->NewIterator(kReadOptions);
+    iter->SeekToFirst();
+    auto result = LevelDbIterator(std::unique_ptr<leveldb::Iterator>(iter));
+    RETURN_IF_ERROR(result.Status());
+    return result;
+  }
+
+  absl::StatusOr<LevelDbIterator> End() const {
+    auto iter = db_->NewIterator(kReadOptions);
+    iter->SeekToLast();
+    auto result = LevelDbIterator(std::unique_ptr<leveldb::Iterator>(iter));
+    RETURN_IF_ERROR(result.Status());
+    RETURN_IF_ERROR(result.Next());
+    return result;
+  }
+
   // Get value for given key.
   absl::StatusOr<std::string> Get(std::span<const char> key) const {
     std::string value;
@@ -46,6 +63,15 @@ class LevelDbImpl {
     if (!status.ok()) return absl::InternalError(status.ToString());
 
     return value;
+  }
+
+  absl::StatusOr<LevelDbIterator> GetLowerBound(
+      std::span<const char> key) const {
+    auto iter = db_->NewIterator(kReadOptions);
+    iter->Seek({key.data(), key.size()});
+    auto result = LevelDbIterator(std::unique_ptr<leveldb::Iterator>(iter));
+    RETURN_IF_ERROR(result.Status());
+    return result;
   }
 
   // Add single value for given key.
@@ -96,9 +122,24 @@ absl::StatusOr<LevelDb> LevelDb::Open(const std::filesystem::path& path,
   return LevelDb(std::make_unique<LevelDbImpl>(std::move(db)));
 }
 
+// Obtains an iterator pointing to the first element or End() if empty.
+absl::StatusOr<LevelDbIterator> LevelDb::Begin() const {
+  return impl_->Begin();
+}
+
+// Obtains an iterator pointing to the position after the last entry.
+absl::StatusOr<LevelDbIterator> LevelDb::End() const { return impl_->End(); }
+
 // Get value for given key.
 absl::StatusOr<std::string> LevelDb::Get(std::span<const char> key) const {
   return impl_->Get(key);
+}
+
+// Returns an iterator pointing to the first element in the DB with a key
+// greater or equal to the given key.
+absl::StatusOr<LevelDbIterator> LevelDb::GetLowerBound(
+    std::span<const char> key) const {
+  return impl_->GetLowerBound(key);
 }
 
 // Add single value for given key.
@@ -129,6 +170,71 @@ LevelDb::~LevelDb() = default;
 
 MemoryFootprint LevelDb::GetMemoryFootprint() const {
   return impl_->GetMemoryFootprint();
+}
+
+LevelDbIterator::LevelDbIterator(LevelDbIterator&&) = default;
+LevelDbIterator::~LevelDbIterator() = default;
+
+LevelDbIterator::LevelDbIterator(std::unique_ptr<leveldb::Iterator> iterator)
+    : state_(iterator->Valid() ? kValid : kEnd),
+      iterator_(std::move(iterator)) {}
+
+bool LevelDbIterator::IsBegin() const {
+  return state_ == kBegin && Status().ok();
+}
+
+bool LevelDbIterator::IsEnd() const { return state_ == kEnd && Status().ok(); }
+
+bool LevelDbIterator::Valid() const {
+  return state_ == kValid && Status().ok();
+}
+
+absl::Status LevelDbIterator::Next() {
+  if (state_ == kValid) {
+    iterator_->Next();
+  } else if (state_ == kBegin) {
+    iterator_->SeekToFirst();
+    state_ = kValid;
+  } else if (state_ == kEnd) {
+    // nothing
+  }
+  if (!iterator_->Valid()) {
+    state_ = kEnd;
+  }
+  return Status();
+}
+
+absl::Status LevelDbIterator::Prev() {
+  if (state_ == kValid) {
+    iterator_->Prev();
+  } else if (state_ == kBegin) {
+    // nothing
+  } else if (state_ == kEnd) {
+    iterator_->SeekToLast();
+    state_ = kValid;
+  }
+  if (!iterator_->Valid()) {
+    state_ = kBegin;
+  }
+  return Status();
+}
+
+std::span<const char> LevelDbIterator::Key() const {
+  auto slice = iterator_->key();
+  return {slice.data(), slice.size()};
+}
+
+std::span<const char> LevelDbIterator::Value() const {
+  auto slice = iterator_->value();
+  return {slice.data(), slice.size()};
+}
+
+absl::Status LevelDbIterator::Status() const {
+  auto status = iterator_->status();
+  if (status.ok()) {
+    return absl::OkStatus();
+  }
+  return absl::InternalError(status.ToString());
 }
 
 }  // namespace carmen::backend
