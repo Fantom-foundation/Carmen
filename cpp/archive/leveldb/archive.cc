@@ -15,7 +15,6 @@ namespace carmen::archive::leveldb {
 
 using ::carmen::backend::LDBEntry;
 using ::carmen::backend::LevelDb;
-using ::carmen::backend::LevelDbIterator;
 
 namespace internal {
 
@@ -29,6 +28,20 @@ class Archive {
 
   absl::Status Add(BlockId block, const Update& update) {
     // TODO: use a batch insert.
+
+    for (const auto& addr : update.GetDeletedAccounts()) {
+      ASSIGN_OR_RETURN((auto state), GetAccountState(block, addr));
+      state.exists = false;
+      state.reincarnation_number++;
+      RETURN_IF_ERROR(db_.Add({GetAccountKey(addr, block), state.Encode()}));
+    }
+
+    for (const auto& addr : update.GetCreatedAccounts()) {
+      ASSIGN_OR_RETURN((auto state), GetAccountState(block, addr));
+      state.exists = true;
+      state.reincarnation_number++;
+      RETURN_IF_ERROR(db_.Add({GetAccountKey(addr, block), state.Encode()}));
+    }
 
     for (const auto& [addr, balance] : update.GetBalances()) {
       RETURN_IF_ERROR(db_.Add({GetBalanceKey(addr, block), AsChars(balance)}));
@@ -52,7 +65,11 @@ class Archive {
     }
 
     return absl::OkStatus();
-    // return db_.AddBatch(entries);
+  }
+
+  absl::StatusOr<bool> Exists(BlockId block, const Address& address) {
+    ASSIGN_OR_RETURN((auto [exists, _]), GetAccountState(block, address));
+    return exists;
   }
 
   absl::StatusOr<Balance> GetBalance(BlockId block, const Address& address) {
@@ -152,6 +169,12 @@ absl::StatusOr<LevelDbArchive> LevelDbArchive::Open(
 absl::Status LevelDbArchive::Add(BlockId block, const Update& update) {
   RETURN_IF_ERROR(CheckState());
   return impl_->Add(block, update);
+}
+
+absl::StatusOr<bool> LevelDbArchive::Exists(BlockId block,
+                                            const Address& account) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->Exists(block, account);
 }
 
 absl::StatusOr<Balance> LevelDbArchive::GetBalance(BlockId block,
