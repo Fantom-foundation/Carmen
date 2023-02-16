@@ -424,6 +424,8 @@ func TestArchive(t *testing.T) {
 			if err := s.Apply(2, common.Update{
 				Balances: []common.BalanceUpdate{
 					{address1, balance34},
+					{address2, balance12},
+					{address3, balance12},
 				},
 				Codes: []common.CodeUpdate{
 					{address1, []byte{0x12, 0x23}},
@@ -488,7 +490,7 @@ func TestArchive(t *testing.T) {
 				t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
 			}
 			hash2, err := state2.GetHash()
-			if err != nil || fmt.Sprintf("%x", hash2) != "a6ba6db30eb7029393e45b1a94463e0aa60438b67125093c1d179233eb8dfe24" {
+			if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
 				t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
 			}
 		})

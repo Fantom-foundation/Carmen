@@ -100,8 +100,10 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	blockHasher.Write(lastBlockHash[:])
 
 	reusedHasher := sha256.New()
-	accountUpdates := archive.AccountUpdatesFrom(&update)
-	for account, accountUpdate := range accountUpdates {
+	updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
+	for _, account := range updatedAccounts {
+		accountUpdate := accountUpdates[account]
+
 		lastAccountHash, err := a.GetAccountHash(block, account)
 		if err != nil {
 			return fmt.Errorf("failed to get previous account hash; %s", err)

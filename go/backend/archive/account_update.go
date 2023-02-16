@@ -1,9 +1,11 @@
 package archive
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
+	"sort"
 )
 
 // AccountUpdate combines the updates applied to a single account in one block.
@@ -26,7 +28,7 @@ type AccountSlotUpdate struct {
 }
 
 // AccountUpdatesFrom process a common.Update into a map of AccountUpdate
-func AccountUpdatesFrom(update *common.Update) map[common.Address]*AccountUpdate {
+func AccountUpdatesFrom(update *common.Update) ([]common.Address, map[common.Address]*AccountUpdate) {
 	accountUpdates := make(map[common.Address]*AccountUpdate)
 
 	get := func(address common.Address) *AccountUpdate {
@@ -67,7 +69,16 @@ func AccountUpdatesFrom(update *common.Update) map[common.Address]*AccountUpdate
 		})
 	}
 
-	return accountUpdates
+	// get sorted list of updated accounts
+	accounts := make([]common.Address, len(accountUpdates))
+	i := 0
+	for account := range accountUpdates {
+		accounts[i] = account
+		i++
+	}
+	sort.Slice(accounts, func(i, j int) bool { return bytes.Compare(accounts[i][:], accounts[j][:]) == -1 })
+
+	return accounts, accountUpdates
 }
 
 func (au *AccountUpdate) GetHash(hasher hash.Hash) common.Hash {

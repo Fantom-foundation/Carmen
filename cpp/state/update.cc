@@ -312,11 +312,8 @@ Hash AccountUpdate::GetHash() const {
   //   - the concatenated list of updated slots
   Sha256Hasher hasher;
   std::uint8_t state_change =
-   (created ? 1 : 0) |
-   (deleted ? 2 : 0) |
-   (balance.has_value() ? 4 : 0) |
-   (nonce.has_value() ? 8 : 0) |
-   (code.has_value() ? 16 : 0);
+      (created ? 1 : 0) | (deleted ? 2 : 0) | (balance.has_value() ? 4 : 0) |
+      (nonce.has_value() ? 8 : 0) | (code.has_value() ? 16 : 0);
   hasher.Ingest(state_change);
   if (balance.has_value()) {
     hasher.Ingest(*balance);

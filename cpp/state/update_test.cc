@@ -306,7 +306,8 @@ TEST(AccountUpdate, HashOfCodeChangeIsHashOfCode) {
   AccountUpdate update;
   Code c{0x1, 0x2, 0x3};
   update.code = c;
-  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(16), std::uint32_t(c.Size()), c));
+  EXPECT_EQ(update.GetHash(),
+            GetSha256Hash(std::uint8_t(16), std::uint32_t(c.Size()), c));
 }
 
 TEST(AccountUpdate, SlotUpdatesAreHashedInOrder) {
@@ -331,7 +332,9 @@ TEST(AccountUpdate, BlanceNonceCodeAndStorageAreHashedInOrder) {
   update.nonce = n;
   update.code = c;
   update.storage.push_back({k1, v1});
-  EXPECT_EQ(update.GetHash(), GetSha256Hash(std::uint8_t(4+8+16), b, n, std::uint32_t(c.Size()), c, k1, v1));
+  EXPECT_EQ(update.GetHash(),
+            GetSha256Hash(std::uint8_t(4 + 8 + 16), b, n,
+                          std::uint32_t(c.Size()), c, k1, v1));
 }
 
 }  // namespace
