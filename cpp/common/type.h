@@ -162,16 +162,17 @@ class Nonce : public ByteValue<kNonceLength> {
 class Code {
  public:
   Code(std::vector<std::byte> code = {}) : code_(std::move(code)) {}
-  Code(std::span<const std::byte> code) {
-    code_.assign(code.begin(), code.end());
-  }
+  Code(std::span<const std::byte> code) { SetBytes(code); }
   Code(std::initializer_list<std::uint8_t> il) {
-    auto bytes = std::as_bytes(std::span(il.begin(), il.size()));
-    code_.assign(bytes.begin(), bytes.end());
+    SetBytes(std::as_bytes(std::span(il.begin(), il.size())));
   }
 
   auto Size() const { return code_.size(); }
   auto Data() const { return code_.data(); }
+
+  void SetBytes(std::span<const std::byte> code) {
+    code_.assign(code.begin(), code.end());
+  }
 
   friend bool operator==(const Code&, const Code&) = default;
 

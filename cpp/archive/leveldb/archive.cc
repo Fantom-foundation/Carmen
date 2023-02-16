@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 #include <span>
+#include <type_traits>
 
 #include "archive/leveldb/keys.h"
 #include "backend/common/leveldb/leveldb.h"
@@ -13,6 +14,7 @@ namespace carmen::archive::leveldb {
 
 using ::carmen::backend::LDBEntry;
 using ::carmen::backend::LevelDb;
+using ::carmen::backend::LevelDbIterator;
 
 namespace internal {
 
@@ -31,40 +33,62 @@ class Archive {
       RETURN_IF_ERROR(db_.Add({GetBalanceKey(addr, block), AsChars(balance)}));
     }
 
+    for (const auto& [addr, code] : update.GetCodes()) {
+      RETURN_IF_ERROR(db_.Add(
+          {GetCodeKey(addr, block),
+           std::span<const char>(reinterpret_cast<const char*>(code.Data()),
+                                 code.Size())}));
+    }
+
+    for (const auto& [addr, nonce] : update.GetNonces()) {
+      RETURN_IF_ERROR(db_.Add({GetNonceKey(addr, block), AsChars(nonce)}));
+    }
+
     return absl::OkStatus();
     // return db_.AddBatch(entries);
   }
 
-  absl::StatusOr<Balance> GetBalance(BlockId block, const Address& address) {
-    auto key = GetBalanceKey(address, block);
+  template <typename Value>
+  absl::StatusOr<Value> FindMostRecentFor(BlockId block, const Address& address,
+                                          std::span<const char> key) {
     ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(key));
     if (iter.IsEnd()) {
       RETURN_IF_ERROR(iter.Prev());
     } else {
-      if (iter.Key().size() != key.size()) {
-        return Balance{};
-      }
-
-      if (std::memcmp(iter.Key().data(), key.data(), key.size()) != 0) {
+      if (iter.Key().size() != key.size() ||
+          std::memcmp(iter.Key().data(), key.data(), key.size()) != 0) {
         RETURN_IF_ERROR(iter.Prev());
       }
     }
-
     if (!iter.Valid() || iter.Key().size() != key.size()) {
-      return Balance{};
+      return Value{};
     }
 
     ASSIGN_OR_RETURN(auto view, PropertyKeyView::Parse(iter.Key()));
-    if (view.GetBlockId() > block || view.GetAddress() != address) {
-      return Balance{};
+    if (block < view.GetBlockId() || address != view.GetAddress()) {
+      return Value{};
     }
 
-    if (iter.Value().size() != sizeof(Balance)) {
-      return absl::InternalError("stored balance has wrong format");
+    if (!std::is_same_v<Value, Code> && iter.Value().size() != sizeof(Value)) {
+      return absl::InternalError("stored value has wrong format");
     }
-    Balance result;
+    Value result;
     result.SetBytes(std::as_bytes(iter.Value()));
     return result;
+  }
+
+  absl::StatusOr<Balance> GetBalance(BlockId block, const Address& address) {
+    return FindMostRecentFor<Balance>(block, address,
+                                      GetBalanceKey(address, block));
+  }
+
+  absl::StatusOr<Code> GetCode(BlockId block, const Address& address) {
+    return FindMostRecentFor<Code>(block, address, GetCodeKey(address, block));
+  }
+
+  absl::StatusOr<Nonce> GetNonce(BlockId block, const Address& address) {
+    return FindMostRecentFor<Nonce>(block, address,
+                                    GetNonceKey(address, block));
   }
 
   absl::Status Flush() { return db_.Flush(); }
@@ -107,6 +131,18 @@ absl::StatusOr<Balance> LevelDbArchive::GetBalance(BlockId block,
                                                    const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetBalance(block, account);
+}
+
+absl::StatusOr<Code> LevelDbArchive::GetCode(BlockId block,
+                                             const Address& account) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetCode(block, account);
+}
+
+absl::StatusOr<Nonce> LevelDbArchive::GetNonce(BlockId block,
+                                               const Address& account) {
+  RETURN_IF_ERROR(CheckState());
+  return impl_->GetNonce(block, account);
 }
 
 absl::Status LevelDbArchive::Flush() {
