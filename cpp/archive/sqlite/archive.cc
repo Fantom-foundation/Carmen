@@ -1,4 +1,4 @@
-#include "state/archive.h"
+#include "archive/sqlite/archive.h"
 
 #include <algorithm>
 #include <queue>
@@ -16,7 +16,7 @@
 #include "common/status_util.h"
 #include "common/type.h"
 
-namespace carmen {
+namespace carmen::archive::sqlite {
 
 using ::carmen::backend::Sqlite;
 using ::carmen::backend::SqlRow;
@@ -836,104 +836,110 @@ class Archive {
 
 }  // namespace internal
 
-Archive::Archive(std::unique_ptr<internal::Archive> impl)
+SqliteArchive::SqliteArchive(std::unique_ptr<internal::Archive> impl)
     : impl_(std::move(impl)) {}
 
-Archive::Archive(Archive&&) = default;
+SqliteArchive::SqliteArchive(SqliteArchive&&) = default;
 
-Archive::~Archive() { Close().IgnoreError(); }
+SqliteArchive::~SqliteArchive() { Close().IgnoreError(); }
 
-Archive& Archive::operator=(Archive&&) = default;
+SqliteArchive& SqliteArchive::operator=(SqliteArchive&&) = default;
 
-absl::StatusOr<Archive> Archive::Open(std::filesystem::path directory) {
+absl::StatusOr<SqliteArchive> SqliteArchive::Open(
+    std::filesystem::path directory) {
   // TODO: create directory if it does not exist.
   auto path = directory;
   if (std::filesystem::is_directory(directory)) {
     path = path / "archive.sqlite";
   }
   ASSIGN_OR_RETURN(auto impl, internal::Archive::Open(path));
-  return Archive(std::move(impl));
+  return SqliteArchive(std::move(impl));
 }
 
-absl::Status Archive::Add(BlockId block, const Update& update) {
+absl::Status SqliteArchive::Add(BlockId block, const Update& update) {
   RETURN_IF_ERROR(CheckState());
   return impl_->Add(block, update);
 }
 
-absl::StatusOr<bool> Archive::Exists(BlockId block, const Address& account) {
+absl::StatusOr<bool> SqliteArchive::Exists(BlockId block,
+                                           const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->Exists(block, account);
 }
 
-absl::StatusOr<Balance> Archive::GetBalance(BlockId block,
-                                            const Address& account) {
+absl::StatusOr<Balance> SqliteArchive::GetBalance(BlockId block,
+                                                  const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetBalance(block, account);
 }
 
-absl::StatusOr<Code> Archive::GetCode(BlockId block, const Address& account) {
+absl::StatusOr<Code> SqliteArchive::GetCode(BlockId block,
+                                            const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetCode(block, account);
 }
 
-absl::StatusOr<Nonce> Archive::GetNonce(BlockId block, const Address& account) {
+absl::StatusOr<Nonce> SqliteArchive::GetNonce(BlockId block,
+                                              const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetNonce(block, account);
 }
 
-absl::StatusOr<Value> Archive::GetStorage(BlockId block, const Address& account,
-                                          const Key& key) {
+absl::StatusOr<Value> SqliteArchive::GetStorage(BlockId block,
+                                                const Address& account,
+                                                const Key& key) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetStorage(block, account, key);
 }
 
-absl::StatusOr<BlockId> Archive::GetLatestBlock() {
+absl::StatusOr<BlockId> SqliteArchive::GetLatestBlock() {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetLastBlockHeight();
 }
 
-absl::StatusOr<Hash> Archive::GetHash(BlockId block) {
+absl::StatusOr<Hash> SqliteArchive::GetHash(BlockId block) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetHash(block);
 }
 
-absl::StatusOr<std::vector<Address>> Archive::GetAccountList(BlockId block) {
+absl::StatusOr<std::vector<Address>> SqliteArchive::GetAccountList(
+    BlockId block) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetAccountList(block);
 }
 
-absl::StatusOr<Hash> Archive::GetAccountHash(BlockId block,
-                                             const Address& account) {
+absl::StatusOr<Hash> SqliteArchive::GetAccountHash(BlockId block,
+                                                   const Address& account) {
   RETURN_IF_ERROR(CheckState());
   return impl_->GetAccountHash(block, account);
 }
 
-absl::Status Archive::Verify(
+absl::Status SqliteArchive::Verify(
     BlockId block, const Hash& expected_hash,
     absl::FunctionRef<void(std::string_view)> progress_callback) {
   RETURN_IF_ERROR(CheckState());
   return impl_->Verify(block, expected_hash, progress_callback);
 }
 
-absl::Status Archive::VerifyAccount(BlockId block,
-                                    const Address& account) const {
+absl::Status SqliteArchive::VerifyAccount(BlockId block,
+                                          const Address& account) const {
   RETURN_IF_ERROR(CheckState());
   return impl_->VerifyAccount(block, account);
 }
 
-absl::Status Archive::Flush() {
+absl::Status SqliteArchive::Flush() {
   if (!impl_) return absl::OkStatus();
   return impl_->Flush();
 }
 
-absl::Status Archive::Close() {
+absl::Status SqliteArchive::Close() {
   if (!impl_) return absl::OkStatus();
   auto result = impl_->Close();
   impl_ = nullptr;
   return result;
 }
 
-MemoryFootprint Archive::GetMemoryFootprint() const {
+MemoryFootprint SqliteArchive::GetMemoryFootprint() const {
   MemoryFootprint res(*this);
   if (impl_) {
     res.Add("impl", impl_->GetMemoryFootprint());
@@ -941,9 +947,9 @@ MemoryFootprint Archive::GetMemoryFootprint() const {
   return res;
 }
 
-absl::Status Archive::CheckState() const {
+absl::Status SqliteArchive::CheckState() const {
   if (impl_) return absl::OkStatus();
   return absl::FailedPreconditionError("Archive not connected to DB.");
 }
 
-}  // namespace carmen
+}  // namespace carmen::archive::sqlite

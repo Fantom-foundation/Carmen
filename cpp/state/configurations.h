@@ -1,5 +1,6 @@
 #pragma once
 
+#include "archive/sqlite/archive.h"
 #include "backend/depot/file/depot.h"
 #include "backend/depot/leveldb/depot.h"
 #include "backend/depot/memory/depot.h"
@@ -11,7 +12,6 @@
 #include "backend/store/file/store.h"
 #include "backend/store/leveldb/store.h"
 #include "backend/store/memory/store.h"
-#include "state/archive.h"
 #include "state/state.h"
 
 namespace carmen {
@@ -34,8 +34,10 @@ using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 template <typename K, typename V>
 using InMemoryMultiMap = backend::multimap::InMemoryMultiMap<K, V>;
 
+using InMemoryArchive = archive::sqlite::SqliteArchive;
+
 using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot,
-                            InMemoryMultiMap, Archive>;
+                            InMemoryMultiMap, InMemoryArchive>;
 
 // ----------------------------------------------------------------------------
 //                         File-Based Configuration
@@ -52,8 +54,10 @@ using FileBasedStore =
 template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
+using FileBasedArchive = archive::sqlite::SqliteArchive;
+
 using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot,
-                             InMemoryMultiMap, Archive>;
+                             InMemoryMultiMap, FileBasedArchive>;
 
 // ----------------------------------------------------------------------------
 //                         LevelDB-Based Configuration
@@ -69,7 +73,10 @@ using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
 template <typename K>
 using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
-using LevelDbBasedState = State<LevelDbBasedIndex, LevelDbBasedStore,
-                                LevelDbBasedDepot, InMemoryMultiMap, Archive>;
+using LevelDbBasedArchive = archive::sqlite::SqliteArchive;
+
+using LevelDbBasedState =
+    State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot,
+          InMemoryMultiMap, LevelDbBasedArchive>;
 
 }  // namespace carmen

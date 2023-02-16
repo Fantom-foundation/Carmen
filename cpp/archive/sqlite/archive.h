@@ -11,12 +11,7 @@
 #include "common/type.h"
 #include "state/update.h"
 
-namespace carmen {
-
-// A type alias for block numbers.
-using BlockId = std::uint32_t;
-
-class BlockUpdate;
+namespace carmen::archive::sqlite {
 
 namespace internal {
 class Archive;
@@ -28,16 +23,16 @@ class Archive;
 //
 // Archive Add(..) and GetXXX(..) operations are thread safe and may thus be run
 // in parallel.
-class Archive {
+class SqliteArchive {
  public:
   // Opens the archive located in the given directory. May fail if the directory
   // can not be accessed or the data format in the contained database does not
   // match requirements.
-  static absl::StatusOr<Archive> Open(std::filesystem::path directory);
+  static absl::StatusOr<SqliteArchive> Open(std::filesystem::path directory);
 
-  Archive(Archive&&);
-  ~Archive();
-  Archive& operator=(Archive&&);
+  SqliteArchive(SqliteArchive&&);
+  ~SqliteArchive();
+  SqliteArchive& operator=(SqliteArchive&&);
 
   // Adds the changes of the given block to this archive.
   absl::Status Add(BlockId block, const Update& update);
@@ -90,7 +85,7 @@ class Archive {
   MemoryFootprint GetMemoryFootprint() const;
 
  private:
-  Archive(std::unique_ptr<internal::Archive> archive);
+  SqliteArchive(std::unique_ptr<internal::Archive> archive);
 
   absl::Status CheckState() const;
 
@@ -98,4 +93,4 @@ class Archive {
   std::unique_ptr<internal::Archive> impl_;
 };
 
-}  // namespace carmen
+}  // namespace carmen::archive::sqlite

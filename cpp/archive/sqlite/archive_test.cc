@@ -1,7 +1,8 @@
-#include "state/archive.h"
+#include "archive/sqlite/archive.h"
 
 #include <type_traits>
 
+#include "archive/archive.h"
 #include "backend/common/sqlite/sqlite.h"
 #include "common/file_util.h"
 #include "common/hash.h"
@@ -9,7 +10,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-namespace carmen {
+namespace carmen::archive::sqlite {
 namespace {
 
 using ::carmen::backend::Sqlite;
@@ -19,24 +20,26 @@ using ::testing::HasSubstr;
 using ::testing::IsOkAndHolds;
 using ::testing::StatusIs;
 
-TEST(Archive, TypeProperties) {
-  EXPECT_FALSE(std::is_default_constructible_v<Archive>);
-  EXPECT_FALSE(std::is_copy_constructible_v<Archive>);
-  EXPECT_TRUE(std::is_move_constructible_v<Archive>);
-  EXPECT_FALSE(std::is_copy_assignable_v<Archive>);
-  EXPECT_TRUE(std::is_move_assignable_v<Archive>);
-  EXPECT_TRUE(std::is_destructible_v<Archive>);
+TEST(SqliteArchive, TypeProperties) {
+  EXPECT_FALSE(std::is_default_constructible_v<SqliteArchive>);
+  EXPECT_FALSE(std::is_copy_constructible_v<SqliteArchive>);
+  EXPECT_TRUE(std::is_move_constructible_v<SqliteArchive>);
+  EXPECT_FALSE(std::is_copy_assignable_v<SqliteArchive>);
+  EXPECT_TRUE(std::is_move_assignable_v<SqliteArchive>);
+  EXPECT_TRUE(std::is_destructible_v<SqliteArchive>);
+
+  EXPECT_TRUE(Archive<SqliteArchive>);
 }
 
-TEST(Archive, OpenAndClosingEmptyDbWorks) {
+TEST(SqliteArchive, OpenAndClosingEmptyDbWorks) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   EXPECT_OK(archive.Close());
 }
 
-TEST(Archive, InAnEmptyArchiveEverythingIsZero) {
+TEST(SqliteArchive, InAnEmptyArchiveEverythingIsZero) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   for (BlockId block = 0; block < 5; block++) {
     for (Address addr; addr[0] < 5; addr[0]++) {
@@ -50,9 +53,9 @@ TEST(Archive, InAnEmptyArchiveEverythingIsZero) {
   }
 }
 
-TEST(Archive, MultipleBalancesOfTheSameAccountCanBeRetained) {
+TEST(SqliteArchive, MultipleBalancesOfTheSameAccountCanBeRetained) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{};
 
@@ -76,9 +79,9 @@ TEST(Archive, MultipleBalancesOfTheSameAccountCanBeRetained) {
   EXPECT_THAT(archive.GetBalance(5, addr), two);
 }
 
-TEST(Archive, MultipleCodesOfTheSameAccountCanBeRetained) {
+TEST(SqliteArchive, MultipleCodesOfTheSameAccountCanBeRetained) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{};
 
@@ -102,9 +105,9 @@ TEST(Archive, MultipleCodesOfTheSameAccountCanBeRetained) {
   EXPECT_THAT(archive.GetCode(5, addr), two);
 }
 
-TEST(Archive, MultipleNoncesOfTheSameAccountCanBeRetained) {
+TEST(SqliteArchive, MultipleNoncesOfTheSameAccountCanBeRetained) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{};
 
@@ -128,9 +131,9 @@ TEST(Archive, MultipleNoncesOfTheSameAccountCanBeRetained) {
   EXPECT_THAT(archive.GetNonce(5, addr), two);
 }
 
-TEST(Archive, MultipleValuesOfTheSameSlotCanBeRetained) {
+TEST(SqliteArchive, MultipleValuesOfTheSameSlotCanBeRetained) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{};
   Key key{};
@@ -155,9 +158,9 @@ TEST(Archive, MultipleValuesOfTheSameSlotCanBeRetained) {
   EXPECT_THAT(archive.GetStorage(5, addr, key), two);
 }
 
-TEST(Archive, BalancesOfDifferentAccountsAreDifferentiated) {
+TEST(SqliteArchive, BalancesOfDifferentAccountsAreDifferentiated) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr1{0x01};
   Address addr2{0x02};
@@ -180,9 +183,9 @@ TEST(Archive, BalancesOfDifferentAccountsAreDifferentiated) {
   EXPECT_THAT(archive.GetBalance(2, addr2), two);
 }
 
-TEST(Archive, CodesOfDifferentAccountsAreDifferentiated) {
+TEST(SqliteArchive, CodesOfDifferentAccountsAreDifferentiated) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr1{0x01};
   Address addr2{0x02};
@@ -205,9 +208,9 @@ TEST(Archive, CodesOfDifferentAccountsAreDifferentiated) {
   EXPECT_THAT(archive.GetCode(2, addr2), two);
 }
 
-TEST(Archive, NoncesOfDifferentAccountsAreDifferentiated) {
+TEST(SqliteArchive, NoncesOfDifferentAccountsAreDifferentiated) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr1{0x01};
   Address addr2{0x02};
@@ -230,9 +233,9 @@ TEST(Archive, NoncesOfDifferentAccountsAreDifferentiated) {
   EXPECT_THAT(archive.GetNonce(2, addr2), two);
 }
 
-TEST(Archive, ValuesOfDifferentAccountsAreDifferentiated) {
+TEST(SqliteArchive, ValuesOfDifferentAccountsAreDifferentiated) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr1{0x01};
   Address addr2{0x02};
@@ -267,9 +270,9 @@ TEST(Archive, ValuesOfDifferentAccountsAreDifferentiated) {
   EXPECT_THAT(archive.GetStorage(2, addr2, key2), one);
 }
 
-TEST(Archive, CreatingAnAccountUpdatesItsExistenceState) {
+TEST(SqliteArchive, CreatingAnAccountUpdatesItsExistenceState) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
 
@@ -282,9 +285,9 @@ TEST(Archive, CreatingAnAccountUpdatesItsExistenceState) {
   EXPECT_THAT(archive.Exists(2, addr), IsOkAndHolds(true));
 }
 
-TEST(Archive, DeletingAnNonExistingAccountKeepsAccountNonExisting) {
+TEST(SqliteArchive, DeletingAnNonExistingAccountKeepsAccountNonExisting) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
 
@@ -297,9 +300,9 @@ TEST(Archive, DeletingAnNonExistingAccountKeepsAccountNonExisting) {
   EXPECT_THAT(archive.Exists(2, addr), IsOkAndHolds(false));
 }
 
-TEST(Archive, DeletingAnExistingAccountKeepsMakesAccountNonExisting) {
+TEST(SqliteArchive, DeletingAnExistingAccountKeepsMakesAccountNonExisting) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
 
@@ -318,9 +321,9 @@ TEST(Archive, DeletingAnExistingAccountKeepsMakesAccountNonExisting) {
   EXPECT_THAT(archive.Exists(4, addr), IsOkAndHolds(false));
 }
 
-TEST(Archive, AccountCanBeRecreatedWithoutDelete) {
+TEST(SqliteArchive, AccountCanBeRecreatedWithoutDelete) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
 
@@ -339,9 +342,9 @@ TEST(Archive, AccountCanBeRecreatedWithoutDelete) {
   EXPECT_THAT(archive.Exists(4, addr), IsOkAndHolds(true));
 }
 
-TEST(Archive, DeletingAnAccountInvalidatesStorage) {
+TEST(SqliteArchive, DeletingAnAccountInvalidatesStorage) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
   Key key{0x02};
@@ -364,9 +367,9 @@ TEST(Archive, DeletingAnAccountInvalidatesStorage) {
   EXPECT_THAT(archive.GetStorage(4, addr, key), zero);
 }
 
-TEST(Archive, RecreatingAnAccountInvalidatesStorage) {
+TEST(SqliteArchive, RecreatingAnAccountInvalidatesStorage) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
   Key key{0x02};
@@ -389,9 +392,9 @@ TEST(Archive, RecreatingAnAccountInvalidatesStorage) {
   EXPECT_THAT(archive.GetStorage(4, addr, key), zero);
 }
 
-TEST(Archive, StorageOfRecreatedAccountCanBeUpdated) {
+TEST(SqliteArchive, StorageOfRecreatedAccountCanBeUpdated) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Address addr{0x01};
 
@@ -436,17 +439,17 @@ TEST(Archive, StorageOfRecreatedAccountCanBeUpdated) {
   EXPECT_THAT(archive.GetStorage(4, addr, key3), one);
 }
 
-TEST(Archive, BlockZeroCanBeAdded) {
+TEST(SqliteArchive, BlockZeroCanBeAdded) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Update update;
   EXPECT_OK(archive.Add(0, update));
 }
 
-TEST(Archive, IncreasingBlockNumbersCanBeAdded) {
+TEST(SqliteArchive, IncreasingBlockNumbersCanBeAdded) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Update update;
   EXPECT_OK(archive.Add(0, update));
@@ -455,18 +458,18 @@ TEST(Archive, IncreasingBlockNumbersCanBeAdded) {
   EXPECT_OK(archive.Add(10, update));
 }
 
-TEST(Archive, AddingEmptyUpdateDoesNotChangeHash) {
+TEST(SqliteArchive, AddingEmptyUpdateDoesNotChangeHash) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   ASSERT_OK_AND_ASSIGN(Hash hash, archive.GetHash(0));
   EXPECT_OK(archive.Add(0, Update{}));
   EXPECT_THAT(archive.GetHash(0), hash);
 }
 
-TEST(Archive, BlocksCannotBeAddedMoreThanOnce) {
+TEST(SqliteArchive, BlocksCannotBeAddedMoreThanOnce) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Update update;
   update.Create(Address{});
@@ -479,9 +482,9 @@ TEST(Archive, BlocksCannotBeAddedMoreThanOnce) {
               "Unable to insert block 0, archive already contains block 0")));
 }
 
-TEST(Archive, BlocksCanNotBeAddedOutOfOrder) {
+TEST(SqliteArchive, BlocksCanNotBeAddedOutOfOrder) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
 
   Update update;
   update.Create(Address{});
@@ -495,9 +498,9 @@ TEST(Archive, BlocksCanNotBeAddedOutOfOrder) {
               "Unable to insert block 1, archive already contains block 2")));
 }
 
-TEST(Archive, InitialAccountHashIsZero) {
+TEST(SqliteArchive, InitialAccountHashIsZero) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x01};
   Address addr2{0x02};
   Hash zero{};
@@ -507,9 +510,9 @@ TEST(Archive, InitialAccountHashIsZero) {
   EXPECT_THAT(archive.GetAccountHash(8, addr2), zero);
 }
 
-TEST(Archive, AccountListIncludesAllTouchedAccounts) {
+TEST(SqliteArchive, AccountListIncludesAllTouchedAccounts) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x01};
   Address addr2{0x02};
   Balance balance{0x10};
@@ -540,9 +543,9 @@ TEST(Archive, AccountListIncludesAllTouchedAccounts) {
               IsOkAndHolds(ElementsAre(addr1, addr2)));
 }
 
-TEST(Archive, AccountHashesChainUp) {
+TEST(SqliteArchive, AccountHashesChainUp) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x01};
   Address addr2{0x02};
   Balance balance{0x10};
@@ -593,9 +596,9 @@ TEST(Archive, AccountHashesChainUp) {
   EXPECT_THAT(archive.GetAccountHash(6, addr2), hash_account2_b3);
 }
 
-TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
+TEST(SqliteArchive, AccountValidationPassesOnIncrementalUpdates) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x1};
   Address addr2{0x2};
   Balance balance1{0x1};
@@ -640,9 +643,9 @@ TEST(Archive, AccountValidationPassesOnIncrementalUpdates) {
   EXPECT_OK(archive.VerifyAccount(6, addr2));
 }
 
-TEST(Archive, AccountValidationCanHandleBlockZeroUpdate) {
+TEST(SqliteArchive, AccountValidationCanHandleBlockZeroUpdate) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x1};
 
   Update update0;
@@ -667,7 +670,7 @@ void TestCorruption(absl::FunctionRef<void(Sqlite& db)> change,
   Hash hash;
   // Initialize an account with a bit of history.
   {
-    ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+    ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
     Update update1;
     update1.Create(addr);
     update1.Set(addr, Balance{0x12});
@@ -705,20 +708,20 @@ void TestCorruption(absl::FunctionRef<void(Sqlite& db)> change,
   }
   // Reopen the archive and make sure the issue is detected.
   {
-    ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+    ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
     check(archive, hash);
   }
 }
 
 void TestAccountCorruption(absl::FunctionRef<void(Sqlite& db)> change,
                            std::string_view error = "") {
-  TestCorruption(change, [&](Archive& archive, const Hash&) {
+  TestCorruption(change, [&](SqliteArchive& archive, const Hash&) {
     EXPECT_THAT(archive.VerifyAccount(10, Address{0x01}),
                 StatusIs(_, HasSubstr(error)));
   });
 }
 
-TEST(Archive, AccountVerificationDetectsMissingHash) {
+TEST(SqliteArchive, AccountVerificationDetectsMissingHash) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run("DELETE FROM account_hash WHERE block = 3"));
@@ -726,13 +729,13 @@ TEST(Archive, AccountVerificationDetectsMissingHash) {
       "Archive contains update for block 3 but no hash for it.");
 }
 
-TEST(Archive, AccountVerificationDetectsModifiedStatusUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsModifiedStatusUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) { ASSERT_OK(db.Run("UPDATE status SET exist = 0")); },
       "Hash for diff at block 1 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsAdditionalStatusUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsAdditionalStatusUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(
@@ -743,7 +746,7 @@ TEST(Archive, AccountVerificationDetectsAdditionalStatusUpdate) {
       "Archive contains update for block 2 but no hash for it.");
 }
 
-TEST(Archive, AccountVerificationDetectsModifiedReincarnationNumber) {
+TEST(SqliteArchive, AccountVerificationDetectsModifiedReincarnationNumber) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run("UPDATE status SET reincarnation = 0"));
@@ -751,7 +754,7 @@ TEST(Archive, AccountVerificationDetectsModifiedReincarnationNumber) {
       "Reincarnation numbers are not incremental");
 }
 
-TEST(Archive, AccountVerificationDetectsMissingStatusUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsMissingStatusUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run("DELETE FROM status WHERE block = 3"));
@@ -760,13 +763,13 @@ TEST(Archive, AccountVerificationDetectsMissingStatusUpdate) {
       "got 1");
 }
 
-TEST(Archive, AccountVerificationDetectsMissingBalanceUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsMissingBalanceUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM balance WHERE true")); },
       "Hash for diff at block 1 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsModifiedBalanceUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsModifiedBalanceUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run("UPDATE balance SET value = ? WHERE block = 3",
@@ -775,7 +778,7 @@ TEST(Archive, AccountVerificationDetectsModifiedBalanceUpdate) {
       "Hash for diff at block 3 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsAdditionalBalanceUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsAdditionalBalanceUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(
@@ -785,13 +788,13 @@ TEST(Archive, AccountVerificationDetectsAdditionalBalanceUpdate) {
       "Archive contains update for block 4 but no hash for it.");
 }
 
-TEST(Archive, AccountVerificationDetectsMissingNonceUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsMissingNonceUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM nonce WHERE true")); },
       "Hash for diff at block 1 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsModifiedNonceUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsModifiedNonceUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(
@@ -800,7 +803,7 @@ TEST(Archive, AccountVerificationDetectsModifiedNonceUpdate) {
       "Hash for diff at block 3 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsAdditionalNonceUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsAdditionalNonceUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(
@@ -810,13 +813,13 @@ TEST(Archive, AccountVerificationDetectsAdditionalNonceUpdate) {
       "Archive contains update for block 4 but no hash for it.");
 }
 
-TEST(Archive, AccountVerificationDetectsMissingCodeUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsMissingCodeUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM code WHERE true")); },
       "Hash for diff at block 1 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsModifiedCodeUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsModifiedCodeUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(
@@ -825,7 +828,7 @@ TEST(Archive, AccountVerificationDetectsModifiedCodeUpdate) {
       "Hash for diff at block 3 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsAdditionalCodeUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsAdditionalCodeUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run("INSERT INTO code(account,block,code) VALUES (?,4,?)",
@@ -834,13 +837,13 @@ TEST(Archive, AccountVerificationDetectsAdditionalCodeUpdate) {
       "Archive contains update for block 4 but no hash for it.");
 }
 
-TEST(Archive, AccountVerificationDetectsMissingStorageUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsMissingStorageUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) { ASSERT_OK(db.Run("DELETE FROM storage WHERE true")); },
       "Hash for diff at block 1 does not match.");
 }
 
-TEST(Archive, AccountVerificationDetectsModifiedStorageUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsModifiedStorageUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(
@@ -864,7 +867,7 @@ TEST(Archive, AccountVerificationDetectsModifiedStorageUpdate) {
       "got 2");
 }
 
-TEST(Archive, AccountVerificationDetectsAdditionalStorageUpdate) {
+TEST(SqliteArchive, AccountVerificationDetectsAdditionalStorageUpdate) {
   TestAccountCorruption(
       [](Sqlite& db) {
         ASSERT_OK(db.Run(
@@ -886,12 +889,12 @@ TEST(Archive, AccountVerificationDetectsAdditionalStorageUpdate) {
 
 void TestArchiveCorruption(absl::FunctionRef<void(Sqlite& db)> change,
                            std::string_view error = "") {
-  TestCorruption(change, [&](Archive& archive, const Hash& hash) {
+  TestCorruption(change, [&](SqliteArchive& archive, const Hash& hash) {
     EXPECT_THAT(archive.Verify(10, hash), StatusIs(_, HasSubstr(error)));
   });
 }
 
-TEST(Archive, VerificationDetectsMissingHash) {
+TEST(SqliteArchive, VerificationDetectsMissingHash) {
   // Delete a most-recent account update.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -907,7 +910,7 @@ TEST(Archive, VerificationDetectsMissingHash) {
       "Validation of hash of block 3 failed.");
 }
 
-TEST(Archive, VerificationDetectsModifiedHashes) {
+TEST(SqliteArchive, VerificationDetectsModifiedHashes) {
   // A corrupted hash for a most-recent account update.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -925,7 +928,7 @@ TEST(Archive, VerificationDetectsModifiedHashes) {
       "Validation of hash of block 3 failed.");
 }
 
-TEST(Archive, VerificationDetectsAdditionalHashes) {
+TEST(SqliteArchive, VerificationDetectsAdditionalHashes) {
   // An addition hash representing the most recent update.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -945,7 +948,7 @@ TEST(Archive, VerificationDetectsAdditionalHashes) {
       "Found account update for block 4 but no hash for this block.");
 }
 
-TEST(Archive, VerificationDetectsExtraAccountStatus) {
+TEST(SqliteArchive, VerificationDetectsExtraAccountStatus) {
   // An entry in the past with uncovered address.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -967,7 +970,7 @@ TEST(Archive, VerificationDetectsExtraAccountStatus) {
       "Found entry of future block height in `status`.");
 }
 
-TEST(Archive, VerificationDetectsExtraBalance) {
+TEST(SqliteArchive, VerificationDetectsExtraBalance) {
   // An entry in the past with uncovered address.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -987,7 +990,7 @@ TEST(Archive, VerificationDetectsExtraBalance) {
       "Found entry of future block height in `balance`.");
 }
 
-TEST(Archive, VerificationDetectsExtraNonce) {
+TEST(SqliteArchive, VerificationDetectsExtraNonce) {
   // An entry in the past with uncovered address.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -1007,7 +1010,7 @@ TEST(Archive, VerificationDetectsExtraNonce) {
       "Found entry of future block height in `nonce`.");
 }
 
-TEST(Archive, VerificationDetectsExtraCode) {
+TEST(SqliteArchive, VerificationDetectsExtraCode) {
   // An entry in the past with uncovered address.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -1025,7 +1028,7 @@ TEST(Archive, VerificationDetectsExtraCode) {
       "Found entry of future block height in `code`.");
 }
 
-TEST(Archive, VerificationDetectsExtraStorage) {
+TEST(SqliteArchive, VerificationDetectsExtraStorage) {
   // An entry in the past with uncovered address.
   TestArchiveCorruption(
       [](Sqlite& db) {
@@ -1047,7 +1050,7 @@ TEST(Archive, VerificationDetectsExtraStorage) {
       "Found entry of future block height in `storage`.");
 }
 
-TEST(Archive, VerificationDetectsCorruptedAccount) {
+TEST(SqliteArchive, VerificationDetectsCorruptedAccount) {
   // Account verification is tested with its own set of tests. Here we only test
   // that account verification is indeed involved in state validation.
   TestArchiveCorruption(
@@ -1058,16 +1061,16 @@ TEST(Archive, VerificationDetectsCorruptedAccount) {
       "Hash for diff at block 3 does not match.");
 }
 
-TEST(Archive, HashOfEmptyArchiveIsZero) {
+TEST(SqliteArchive, HashOfEmptyArchiveIsZero) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   EXPECT_THAT(archive.GetHash(0), Hash{});
   EXPECT_THAT(archive.GetHash(5), Hash{});
 }
 
-TEST(Archive, ArchiveHashIsHashOfAccountDiffHashesChain) {
+TEST(SqliteArchive, ArchiveHashIsHashOfAccountDiffHashesChain) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x1};
   Address addr2{0x2};
   Balance balance1{0x1};
@@ -1117,9 +1120,9 @@ TEST(Archive, ArchiveHashIsHashOfAccountDiffHashesChain) {
   EXPECT_THAT(archive.GetHash(6), hash);
 }
 
-TEST(Archive, ArchiveCanBeVerifiedForCustomBlockHeight) {
+TEST(SqliteArchive, ArchiveCanBeVerifiedForCustomBlockHeight) {
   TempDir dir;
-  ASSERT_OK_AND_ASSIGN(auto archive, Archive::Open(dir));
+  ASSERT_OK_AND_ASSIGN(auto archive, SqliteArchive::Open(dir));
   Address addr1{0x1};
   Address addr2{0x2};
   Balance balance1{0x1};
@@ -1154,4 +1157,4 @@ TEST(Archive, ArchiveCanBeVerifiedForCustomBlockHeight) {
 }
 
 }  // namespace
-}  // namespace carmen
+}  // namespace carmen::archive::sqlite
