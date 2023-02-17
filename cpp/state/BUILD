@@ -40,6 +40,7 @@ cc_library(
     hdrs = ["configurations.h"],
     deps = [
         ":state",
+        "//archive/leveldb:archive",
         "//archive/sqlite:archive",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",

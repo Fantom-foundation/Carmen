@@ -1,5 +1,6 @@
 #pragma once
 
+#include "archive/leveldb/archive.h"
 #include "archive/sqlite/archive.h"
 #include "backend/depot/file/depot.h"
 #include "backend/depot/leveldb/depot.h"
@@ -54,7 +55,7 @@ using FileBasedStore =
 template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
-using FileBasedArchive = archive::sqlite::SqliteArchive;
+using FileBasedArchive = archive::leveldb::LevelDbArchive;
 
 using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot,
                              InMemoryMultiMap, FileBasedArchive>;
@@ -73,7 +74,7 @@ using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
 template <typename K>
 using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
-using LevelDbBasedArchive = archive::sqlite::SqliteArchive;
+using LevelDbBasedArchive = archive::leveldb::LevelDbArchive;
 
 using LevelDbBasedState =
     State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot,

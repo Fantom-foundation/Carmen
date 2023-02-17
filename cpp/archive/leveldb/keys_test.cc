@@ -62,7 +62,7 @@ TEST(Keys, StorageKeyEncodesValuesCorrectly) {
 TEST(Keys, BlockIdCanBeExtractedFromBlockKey) {
   for (BlockId i = 1; i < (BlockId(1) << 31); i <<= 1) {
     auto key = GetBlockKey(i);
-    EXPECT_EQ(GetBlockId(key), i);
+    EXPECT_EQ(GetBlockFromKey(key), i);
   }
 }
 
@@ -70,7 +70,7 @@ TEST(Keys, BlockIdCanBeExtractedFromPropertyKey) {
   Address addr{};
   for (BlockId i = 1; i < (BlockId(1) << 31); i <<= 1) {
     auto key = GetBalanceKey(addr, i);
-    EXPECT_EQ(GetBlockId(key), i);
+    EXPECT_EQ(GetBlockFromKey(key), i);
   }
 }
 
@@ -79,7 +79,7 @@ TEST(Keys, BlockIdCanBeExtractedFromStorageKey) {
   Key slot{};
   for (BlockId i = 1; i < (BlockId(1) << 31); i <<= 1) {
     auto key = GetStorageKey(addr, 12, slot, i);
-    EXPECT_EQ(GetBlockId(key), i);
+    EXPECT_EQ(GetBlockFromKey(key), i);
   }
 }
 

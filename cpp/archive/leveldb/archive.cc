@@ -187,6 +187,12 @@ class Archive {
 
   absl::Status Close() { return db_.Close(); }
 
+  MemoryFootprint GetMemoryFootprint() const {
+    MemoryFootprint res(*this);
+    res.Add("leveldb", db_.GetMemoryFootprint());
+    return res;
+  }
+
  private:
   Archive(LevelDb db) : db_(std::move(db)) {}
 
@@ -255,12 +261,7 @@ LevelDbArchive::~LevelDbArchive() { Close().IgnoreError(); };
 
 absl::StatusOr<LevelDbArchive> LevelDbArchive::Open(
     std::filesystem::path directory) {
-  // TODO: create directory if it does not exist.
-  auto path = directory;
-  if (std::filesystem::is_directory(directory)) {
-    path = path / "archive.sqlite";
-  }
-  ASSIGN_OR_RETURN(auto impl, internal::Archive::Open(path));
+  ASSIGN_OR_RETURN(auto impl, internal::Archive::Open(directory));
   return LevelDbArchive(std::move(impl));
 }
 
@@ -345,6 +346,14 @@ absl::Status LevelDbArchive::Close() {
   auto result = impl_->Close();
   impl_ = nullptr;
   return result;
+}
+
+MemoryFootprint LevelDbArchive::GetMemoryFootprint() const {
+  MemoryFootprint res(*this);
+  if (impl_) {
+    res.Add("impl", impl_->GetMemoryFootprint());
+  }
+  return res;
 }
 
 absl::Status LevelDbArchive::CheckState() const {

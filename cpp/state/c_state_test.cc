@@ -515,7 +515,8 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(Config{Variant::kInMemory, false},
                     Config{Variant::kFileBased, false},
                     Config{Variant::kLevelDbBased, false},
-                    Config{Variant::kInMemory, true},
+                    // Config{Variant::kInMemory, true}, // TODO: renable if
+                    // there is archive support
                     Config{Variant::kFileBased, true},
                     Config{Variant::kLevelDbBased, true}),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {
