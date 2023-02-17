@@ -18,6 +18,7 @@ enum class KeyType : char {
   kCode = '4',
   kNonce = '5',
   kStorage = '6',
+  kAccountHash = '7',
 };
 
 namespace {
@@ -89,6 +90,10 @@ NonceKey GetNonceKey(const Address& address, BlockId block) {
   return Get<KeyType::kNonce, NonceKey>(address, block);
 }
 
+AccountHashKey GetAccountHashKey(const Address& address, BlockId block) {
+  return Get<KeyType::kAccountHash, AccountHashKey>(address, block);
+}
+
 StorageKey GetStorageKey(const Address& address,
                          ReincarnationNumber reincarnation, const Key& key,
                          BlockId block) {
@@ -101,7 +106,7 @@ StorageKey GetStorageKey(const Address& address,
   return res;
 }
 
-BlockId GetBlockId(std::span<const char> data) {
+BlockId GetBlockFromKey(std::span<const char> data) {
   // The block ID is always stored in the last 4 bytes.
   assert(data.size() >= 4);
   if (data.size() < 4) return 0;

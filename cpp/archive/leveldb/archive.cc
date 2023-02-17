@@ -1,14 +1,18 @@
 #include "archive/leveldb/archive.h"
 
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <span>
 #include <type_traits>
 
 #include "absl/base/attributes.h"
+#include "absl/container/btree_map.h"
+#include "absl/strings/str_format.h"
 #include "archive/leveldb/keys.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "common/byte_util.h"
+#include "common/hash.h"
 #include "common/status_util.h"
 
 namespace carmen::archive::leveldb {
@@ -28,6 +32,24 @@ class Archive {
 
   absl::Status Add(BlockId block, const Update& update) {
     // TODO: use a batch insert.
+
+    ASSIGN_OR_RETURN(std::int64_t latest, GetLatestBlock());
+    if (std::int64_t(block) <= latest) {
+      return absl::InternalError(absl::StrFormat(
+          "Unable to insert block %d, archive already contains block %d", block,
+          latest));
+    }
+
+    // Empty updates are ignored, no hashes are altered.
+    if (update.Empty()) {
+      return absl::OkStatus();
+    }
+
+    // Compute hashes of account updates.
+    absl::btree_map<Address, Hash> diff_hashes;
+    for (const auto& [addr, diff] : AccountUpdate::From(update)) {
+      diff_hashes[addr] = diff.GetHash();
+    }
 
     for (const auto& addr : update.GetDeletedAccounts()) {
       ASSIGN_OR_RETURN((auto state), GetAccountState(block, addr));
@@ -64,6 +86,20 @@ class Archive {
           db_.Add({GetStorageKey(addr, r, key, block), AsChars(value)}));
     }
 
+    Sha256Hasher hasher;
+    ASSIGN_OR_RETURN(auto last_block_hash, GetHash(block));
+    hasher.Ingest(last_block_hash);
+
+    for (auto& [addr, hash] : diff_hashes) {
+      ASSIGN_OR_RETURN(auto last_hash, GetAccountHash(block, addr));
+      auto new_hash = GetSha256Hash(last_hash, hash);
+      RETURN_IF_ERROR(
+          db_.Add({GetAccountHashKey(addr, block), AsChars(new_hash)}));
+      hasher.Ingest(new_hash);
+    }
+
+    RETURN_IF_ERROR(db_.Add({GetBlockKey(block), AsChars(hasher.GetHash())}));
+
     return absl::OkStatus();
   }
 
@@ -91,20 +127,51 @@ class Archive {
                                     GetStorageKey(address, r, key, block));
   }
 
-  absl::StatusOr<BlockId> GetLatestBlock() {
-    return absl::UnimplementedError("to be implemented");
+  // Gets the maximum block height insert so far, returns -1 if there is none.
+  absl::StatusOr<std::int64_t> GetLatestBlock() {
+    BlockId max_block = std::numeric_limits<BlockId>::max();
+    auto key = GetBlockKey(max_block);
+    ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(key));
+    if (iter.IsEnd()) {
+      RETURN_IF_ERROR(iter.Prev());
+    } else if (Equal(key, iter.Key())) {
+      return max_block;
+    } else {
+      RETURN_IF_ERROR(iter.Prev());
+    }
+    if (iter.IsBegin()) {
+      return -1;
+    }
+    auto got = iter.Key();
+    if (key.size() != got.size() || key[0] != got[0]) {
+      return -1;
+    }
+    return GetBlockFromKey(got);
   }
 
-  absl::StatusOr<Hash> GetHash(BlockId) {
-    return absl::UnimplementedError("to be implemented");
+  absl::StatusOr<Hash> GetHash(BlockId block) {
+    return FindMostRecentFor<Hash>(block, GetBlockKey(block));
   }
 
-  absl::StatusOr<std::vector<Address>> GetAccountList(BlockId) {
-    return absl::UnimplementedError("to be implemented");
+  absl::StatusOr<std::vector<Address>> GetAccountList(BlockId block) {
+    std::vector<Address> result;
+    auto min_key = GetAccountHashKey(Address{}, 0);
+    ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(min_key));
+    while (!iter.IsEnd() && iter.Key()[0] == min_key[0]) {
+      auto current_block = GetBlockFromKey(iter.Key());
+      const Address* current =
+          reinterpret_cast<const Address*>(iter.Key().data() + 1);
+      if (current_block <= block &&
+          (result.empty() || result.back() != *current)) {
+        result.push_back(*current);
+      }
+      RETURN_IF_ERROR(iter.Next());
+    }
+    return result;
   }
 
-  absl::StatusOr<Hash> GetAccountHash(BlockId, const Address&) {
-    return absl::UnimplementedError("to be implemented");
+  absl::StatusOr<Hash> GetAccountHash(BlockId block, const Address& address) {
+    return FindMostRecentFor<Hash>(block, GetAccountHashKey(address, block));
   }
 
   absl::Status Verify(BlockId, const Hash&,
@@ -123,7 +190,15 @@ class Archive {
  private:
   Archive(LevelDb db) : db_(std::move(db)) {}
 
-  // A utility function to locate the LevelDB entry valid at a block height.
+  // Utility function to compare two spans of charaters for equaltity.
+  static bool Equal(std::span<const char> a, std::span<const char> b) {
+    return a.size() == b.size() &&
+           std::memcmp(a.data(), b.data(), a.size()) == 0;
+  }
+
+  // A utility function to locate the value mapped to the given key, or, if not
+  // present, the value mapped to the same key with the next smaller block
+  // number. If there is no such entry, the default value is returned.
   template <typename Value>
   absl::StatusOr<Value> FindMostRecentFor(BlockId block,
                                           std::span<const char> key) {
@@ -131,8 +206,7 @@ class Archive {
     if (iter.IsEnd()) {
       RETURN_IF_ERROR(iter.Prev());
     } else {
-      if (iter.Key().size() != key.size() ||
-          std::memcmp(iter.Key().data(), key.data(), key.size()) != 0) {
+      if (!Equal(key, iter.Key())) {
         RETURN_IF_ERROR(iter.Prev());
       }
     }
@@ -140,9 +214,10 @@ class Archive {
       return Value{};
     }
 
-    if (block < GetBlockId(iter.Key()) ||
-        std::memcmp(key.data(), iter.Key().data(), key.size() - kBlockIdSize) !=
-            0) {
+    auto want_without_block = key.subspan(0, key.size() - kBlockIdSize);
+    auto have_without_block = iter.Key().subspan(0, key.size() - kBlockIdSize);
+    if (block < GetBlockFromKey(iter.Key()) ||
+        !Equal(want_without_block, have_without_block)) {
       return Value{};
     }
 

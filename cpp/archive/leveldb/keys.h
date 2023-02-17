@@ -21,6 +21,7 @@ using AccountKey = PropertyKey;
 using BalanceKey = PropertyKey;
 using CodeKey = PropertyKey;
 using NonceKey = PropertyKey;
+using AccountHashKey = PropertyKey;
 using StorageKey =
     std::array<char, 1 + sizeof(Address) + sizeof(ReincarnationNumber) +
                          sizeof(Key) + kBlockIdSize>;
@@ -35,12 +36,15 @@ CodeKey GetCodeKey(const Address& address, BlockId block);
 
 NonceKey GetNonceKey(const Address& address, BlockId block);
 
+NonceKey GetAccountHashKey(const Address& address, BlockId block);
+
 StorageKey GetStorageKey(const Address& address,
                          ReincarnationNumber reincarnation, const Key& key,
                          BlockId block);
 
-BlockId GetBlockId(std::span<const char> data);
+BlockId GetBlockFromKey(std::span<const char> data);
 
+// TODO: move to extra file.
 struct AccountState {
   std::array<char, 5> Encode() const;
   void SetBytes(std::span<const std::byte>);
