@@ -2,6 +2,8 @@ cc_binary(
     name = "archive",
     srcs = ["archive.cc"],
     deps = [
+        "//archive",
+        "//archive/leveldb:archive",
         "//archive/sqlite:archive",
         "//third_party/gperftools:profiler",
         "@com_google_absl//absl/status",
