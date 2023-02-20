@@ -20,6 +20,7 @@ namespace carmen::archive::leveldb {
 using ::carmen::backend::LDBEntry;
 using ::carmen::backend::LevelDb;
 using ::carmen::backend::LevelDbIterator;
+using ::carmen::backend::LevelDbWriteBatch;
 
 namespace internal {
 
@@ -138,8 +139,7 @@ class Archive {
   }
 
   absl::Status Add(BlockId block, const Update& update) {
-    // TODO: use a batch insert.
-
+    absl::MutexLock guard(&update_lock_);
     ASSIGN_OR_RETURN(std::int64_t latest, GetLatestBlock());
     if (std::int64_t(block) <= latest) {
       return absl::InternalError(absl::StrFormat(
@@ -158,39 +158,52 @@ class Archive {
       diff_hashes[addr] = diff.GetHash();
     }
 
+    // Utility to fetch the latest reincarnation number of an account.
+    auto get_reincarnation =
+        [&](const Address& addr) -> absl::StatusOr<ReincarnationNumber> {
+      auto pos = reincarnation_cache_.find(addr);
+      if (pos != reincarnation_cache_.end()) {
+        return pos->second;
+      }
+      ASSIGN_OR_RETURN((auto [_, r]), GetAccountState(block, addr));
+      reincarnation_cache_[addr] = r;
+      return r;
+    };
+
+    LevelDbWriteBatch batch;
     for (const auto& addr : update.GetDeletedAccounts()) {
       ASSIGN_OR_RETURN((auto state), GetAccountState(block, addr));
       state.exists = false;
       state.reincarnation_number++;
-      RETURN_IF_ERROR(db_.Add({GetAccountKey(addr, block), state.Encode()}));
+      reincarnation_cache_[addr] = state.reincarnation_number;
+      batch.Put(GetAccountKey(addr, block), state.Encode());
     }
 
     for (const auto& addr : update.GetCreatedAccounts()) {
       ASSIGN_OR_RETURN((auto state), GetAccountState(block, addr));
       state.exists = true;
       state.reincarnation_number++;
-      RETURN_IF_ERROR(db_.Add({GetAccountKey(addr, block), state.Encode()}));
+      reincarnation_cache_[addr] = state.reincarnation_number;
+      batch.Put(GetAccountKey(addr, block), state.Encode());
     }
 
     for (const auto& [addr, balance] : update.GetBalances()) {
-      RETURN_IF_ERROR(db_.Add({GetBalanceKey(addr, block), AsChars(balance)}));
+      batch.Put(GetBalanceKey(addr, block), AsChars(balance));
     }
 
     for (const auto& [addr, code] : update.GetCodes()) {
-      RETURN_IF_ERROR(db_.Add(
-          {GetCodeKey(addr, block),
-           std::span<const char>(reinterpret_cast<const char*>(code.Data()),
-                                 code.Size())}));
+      batch.Put(GetCodeKey(addr, block),
+                std::span<const char>(
+                    reinterpret_cast<const char*>(code.Data()), code.Size()));
     }
 
     for (const auto& [addr, nonce] : update.GetNonces()) {
-      RETURN_IF_ERROR(db_.Add({GetNonceKey(addr, block), AsChars(nonce)}));
+      batch.Put(GetNonceKey(addr, block), AsChars(nonce));
     }
 
     for (const auto& [addr, key, value] : update.GetStorage()) {
-      ASSIGN_OR_RETURN((auto [_, r]), GetAccountState(block, addr));
-      RETURN_IF_ERROR(
-          db_.Add({GetStorageKey(addr, r, key, block), AsChars(value)}));
+      ASSIGN_OR_RETURN(auto r, get_reincarnation(addr));
+      batch.Put(GetStorageKey(addr, r, key, block), AsChars(value));
     }
 
     Sha256Hasher hasher;
@@ -200,14 +213,13 @@ class Archive {
     for (auto& [addr, hash] : diff_hashes) {
       ASSIGN_OR_RETURN(auto last_hash, GetAccountHash(block, addr));
       auto new_hash = GetSha256Hash(last_hash, hash);
-      RETURN_IF_ERROR(
-          db_.Add({GetAccountHashKey(addr, block), AsChars(new_hash)}));
+      batch.Put(GetAccountHashKey(addr, block), AsChars(new_hash));
       hasher.Ingest(new_hash);
     }
 
-    RETURN_IF_ERROR(db_.Add({GetBlockKey(block), AsChars(hasher.GetHash())}));
+    batch.Put(GetBlockKey(block), AsChars(hasher.GetHash()));
 
-    return absl::OkStatus();
+    return db_.Add(std::move(batch));
   }
 
   absl::StatusOr<bool> Exists(BlockId block, const Address& address) {
@@ -641,6 +653,15 @@ class Archive {
   }
 
   LevelDb db_;
+
+  // A cache holding the reincarnation number of all addresses at the latest
+  // block height.
+  absl::flat_hash_map<Address, ReincarnationNumber> reincarnation_cache_;
+
+  // A mutex making sure that Archive updates are written with exclusive access
+  // to the DB. This exclusive access is required to keep the internal
+  // reincarnation cache in sync.
+  absl::Mutex update_lock_;
 };
 
 }  // namespace internal
