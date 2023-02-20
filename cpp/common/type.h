@@ -87,6 +87,10 @@ class ByteValue {
     }
   }
 
+  // Same as above, overing a convenience wrapper for cases where data is typed
+  // as const char instead of std::byte.
+  void SetBytes(std::span<const char> data) { SetBytes(std::as_bytes(data)); }
+
   // Overload of << operator to make class printable.
   friend std::ostream& operator<<(std::ostream& out,
                                   const ByteValue<N>& hexContainer) {
@@ -162,6 +166,7 @@ class Nonce : public ByteValue<kNonceLength> {
 class Code {
  public:
   Code(std::vector<std::byte> code = {}) : code_(std::move(code)) {}
+  Code(std::span<const char> code) { SetBytes(code); }
   Code(std::span<const std::byte> code) { SetBytes(code); }
   Code(std::initializer_list<std::uint8_t> il) {
     SetBytes(std::as_bytes(std::span(il.begin(), il.size())));
@@ -173,6 +178,8 @@ class Code {
   void SetBytes(std::span<const std::byte> code) {
     code_.assign(code.begin(), code.end());
   }
+
+  void SetBytes(std::span<const char> data) { SetBytes(std::as_bytes(data)); }
 
   friend bool operator==(const Code&, const Code&) = default;
 

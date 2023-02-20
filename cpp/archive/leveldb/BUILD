@@ -10,6 +10,7 @@ cc_library(
         ":keys",
         "//backend/common/leveldb",
         "//common:byte_util",
+        "//common:status_util",
         "//common:type",
         "//state:update",
         "@com_google_absl//absl/container:btree",
@@ -34,6 +35,7 @@ cc_library(
     srcs = ["keys.cc"],
     hdrs = ["keys.h"],
     deps = [
+        "//common:status_util",
         "//common:type",
         "@com_google_absl//absl/status:statusor",
     ],

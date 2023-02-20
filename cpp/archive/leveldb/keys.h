@@ -36,7 +36,7 @@ CodeKey GetCodeKey(const Address& address, BlockId block);
 
 NonceKey GetNonceKey(const Address& address, BlockId block);
 
-NonceKey GetAccountHashKey(const Address& address, BlockId block);
+AccountHashKey GetAccountHashKey(const Address& address, BlockId block);
 
 StorageKey GetStorageKey(const Address& address,
                          ReincarnationNumber reincarnation, const Key& key,
@@ -44,8 +44,15 @@ StorageKey GetStorageKey(const Address& address,
 
 BlockId GetBlockFromKey(std::span<const char> data);
 
+ReincarnationNumber GetReincarnationNumber(const StorageKey& key);
+Key GetSlotKey(const StorageKey& key);
+
+std::span<const char> GetAccountPrefix(const PropertyKey& key);
+std::span<const char> GetAccountPrefix(const StorageKey& key);
+
 // TODO: move to extra file.
 struct AccountState {
+  static absl::StatusOr<AccountState> From(std::span<const std::byte>);
   std::array<char, 5> Encode() const;
   void SetBytes(std::span<const std::byte>);
   bool exists = false;

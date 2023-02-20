@@ -4,6 +4,7 @@
 #include <cstring>
 #include <span>
 
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::archive::leveldb {
@@ -27,6 +28,12 @@ template <std::size_t offset, std::size_t count, typename T, std::size_t Extend>
 std::span<T, count> subspan(std::array<T, Extend>& array) {
   static_assert(Extend >= offset + count);
   return std::span<T, count>(&array[offset], count);
+}
+
+template <std::size_t offset, std::size_t count, typename T, std::size_t Extend>
+std::span<const T, count> subspan(const std::array<T, Extend>& array) {
+  static_assert(Extend >= offset + count);
+  return std::span<const T, count>(&array[offset], count);
 }
 
 // Numerical values have to be encoded using big-endian such that LevelDB's
@@ -113,6 +120,34 @@ BlockId GetBlockFromKey(std::span<const char> data) {
   return ReadUint32(std::span<const char, 4>(data.data() + data.size() - 4, 4));
 }
 
+ReincarnationNumber GetReincarnationNumber(const StorageKey& key) {
+  return ReadUint32(subspan<1 + 20, 4>(key));
+}
+
+Key GetSlotKey(const StorageKey& key) {
+  Key res;
+  res.SetBytes(subspan<1 + 20 + 4, 32>(key));
+  return res;
+}
+
+std::span<const char> GetAccountPrefix(const PropertyKey& key) {
+  return std::span(key).subspan(0, 1 + sizeof(Address));
+}
+
+std::span<const char> GetAccountPrefix(const StorageKey& key) {
+  return std::span(key).subspan(0, 1 + sizeof(Address));
+}
+
+absl::StatusOr<AccountState> AccountState::From(
+    std::span<const std::byte> data) {
+  if (data.size() != 5) {
+    return absl::InvalidArgumentError("Invalid encoding of AccountState");
+  }
+  AccountState res;
+  res.SetBytes(data);
+  return res;
+}
+
 std::array<char, 1 + 4> AccountState::Encode() const {
   std::array<char, 5> res;
   res[0] = exists ? 1 : 0;
@@ -121,7 +156,6 @@ std::array<char, 1 + 4> AccountState::Encode() const {
 }
 
 void AccountState::SetBytes(std::span<const std::byte> span) {
-  if (span.size() != 5) return;
   exists = std::uint8_t(span[0]) != 0;
   reincarnation_number = ReadUint32(std::span<const char, 4>(
       reinterpret_cast<const char*>(span.data()) + 1, 4));
