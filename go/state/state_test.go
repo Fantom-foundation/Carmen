@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"math/big"
 	"os/exec"
 	"testing"
@@ -423,6 +424,8 @@ func TestArchive(t *testing.T) {
 			if err := s.Apply(2, common.Update{
 				Balances: []common.BalanceUpdate{
 					{address1, balance34},
+					{address2, balance12},
+					{address3, balance12},
 				},
 				Codes: []common.CodeUpdate{
 					{address1, []byte{0x12, 0x23}},
@@ -480,6 +483,15 @@ func TestArchive(t *testing.T) {
 			}
 			if value, err := state2.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x89}) {
 				t.Errorf("invalid slot value at block 2: %s, %s", value, err)
+			}
+
+			hash1, err := state1.GetHash()
+			if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
+				t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
+			}
+			hash2, err := state2.GetHash()
+			if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
+				t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
 			}
 		})
 	}

@@ -24,12 +24,17 @@ func (k *blockKey) get() (block uint64) {
 	return maxBlock - binary.BigEndian.Uint64(k[1:])
 }
 
-// getBlockKeyRangeFromHighest provides a key range for iterating from the highest block to the first
-func getBlockKeyRangeFromHighest() util.Range {
+// getBlockKeyRangeFrom provides a key range for iterating blocks from the given block to the first block
+func getBlockKeyRangeFrom(block uint64) util.Range {
 	var start, end blockKey
-	start.set(maxBlock)
+	start.set(block)
 	end.set(0)
 	return util.Range{Start: start[:], Limit: end[:]}
+}
+
+// getBlockKeyRangeFromHighest provides a key range for iterating from the highest block to the first
+func getBlockKeyRangeFromHighest() util.Range {
+	return getBlockKeyRangeFrom(maxBlock)
 }
 
 // accountBlockKey is a key for account details tables, it consists of

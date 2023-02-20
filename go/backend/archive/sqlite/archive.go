@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -24,6 +26,7 @@ const (
 	kCreateBlockTable   = "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY, hash BLOB)"
 	kAddBlockStmt       = "INSERT INTO block(number, hash) VALUES (?,?)"
 	kGetBlockHeightStmt = "SELECT number FROM block ORDER BY number DESC LIMIT 1"
+	kGetBlockHashStmt   = "SELECT hash FROM block WHERE number <= ? ORDER BY number DESC LIMIT 1"
 
 	kCreateStatusTable = "CREATE TABLE IF NOT EXISTS status (account BLOB, block INT, exist INT, reincarnation INT, PRIMARY KEY (account,block))"
 	kAddStatusStmt     = "INSERT INTO status(account,block,exist,reincarnation) VALUES (?,?,?,?)"
@@ -44,12 +47,17 @@ const (
 	kCreateValueTable = "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, slot BLOB, block INT, value BLOB, PRIMARY KEY (account,reincarnation,slot,block))"
 	kAddValueStmt     = "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES (?,?,?,?,?)"
 	kGetValueStmt     = "SELECT value FROM storage WHERE account = ? AND reincarnation = ? AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1"
+
+	kCreateAccountHashTable = "CREATE TABLE IF NOT EXISTS account_hash (account BLOB, block INT, hash BLOB, PRIMARY KEY(account,block))"
+	kAddAccountHashStmt     = "INSERT INTO account_hash(account, block, hash) VALUES (?,?,?)"
+	kGetAccountHashStmt     = "SELECT hash FROM account_hash WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 )
 
 type Archive struct {
 	db                 *sql.DB
 	addBlockStmt       *sql.Stmt
 	getBlockHeightStmt *sql.Stmt
+	getBlockHashStmt   *sql.Stmt
 	addStatusStmt      *sql.Stmt
 	getStatusStmt      *sql.Stmt
 	addBalanceStmt     *sql.Stmt
@@ -60,6 +68,8 @@ type Archive struct {
 	getNonceStmt       *sql.Stmt
 	addValueStmt       *sql.Stmt
 	getValueStmt       *sql.Stmt
+	addAccountHashStmt *sql.Stmt
+	getAccountHashStmt *sql.Stmt
 
 	reincarnationNumberCache map[common.Address]int
 }
@@ -99,12 +109,20 @@ func NewArchive(file string) (*Archive, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create value table; %s", err)
 	}
+	_, err = db.Exec(kCreateAccountHashTable)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create account hash table; %s", err)
+	}
 
 	addBlock, err := db.Prepare(kAddBlockStmt)
 	if err != nil {
 		return nil, err
 	}
 	getBlockHeight, err := db.Prepare(kGetBlockHeightStmt)
+	if err != nil {
+		return nil, err
+	}
+	getBlockHash, err := db.Prepare(kGetBlockHashStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +166,20 @@ func NewArchive(file string) (*Archive, error) {
 	if err != nil {
 		return nil, err
 	}
+	addAccountHash, err := db.Prepare(kAddAccountHashStmt)
+	if err != nil {
+		return nil, err
+	}
+	getAccountHash, err := db.Prepare(kGetAccountHashStmt)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Archive{
 		db:                       db,
 		addBlockStmt:             addBlock,
 		getBlockHeightStmt:       getBlockHeight,
+		getBlockHashStmt:         getBlockHash,
 		addStatusStmt:            addStatus,
 		getStatusStmt:            getStatus,
 		addBalanceStmt:           addBalance,
@@ -163,6 +190,8 @@ func NewArchive(file string) (*Archive, error) {
 		getNonceStmt:             getNonce,
 		addValueStmt:             addValue,
 		getValueStmt:             getValue,
+		addAccountHashStmt:       addAccountHash,
+		getAccountHashStmt:       getAccountHash,
 		reincarnationNumberCache: map[common.Address]int{},
 	}, nil
 }
@@ -190,12 +219,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 	}()
 
-	hash := update.GetHash()
-	_, err = tx.Stmt(a.addBlockStmt).Exec(block, hash[:])
-	if err != nil {
-		return fmt.Errorf("failed to add block %d; %s", block, err)
-	}
-
+	// helper function for obtaining current reincarnation number of an account
 	getReincarnationNumber := func(account common.Address) (int, error) {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
 			return res, nil
@@ -267,6 +291,44 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		if err != nil {
 			return fmt.Errorf("failed to add storage value; %s", err)
 		}
+	}
+
+	blockHasher := sha256.New()
+	lastBlockHash, err := a.getBlockHash(tx, block) // needs to be in tx, otherwise database is locked
+	if err != nil {
+		return fmt.Errorf("failed to get previous block hash; %s", err)
+	}
+	blockHasher.Write(lastBlockHash[:])
+
+	// calculate changed accounts hashes
+	reusedHasher := sha256.New()
+	stmt = tx.Stmt(a.addAccountHashStmt)
+	updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
+	for _, account := range updatedAccounts {
+		accountUpdate := accountUpdates[account]
+
+		lastAccountHash, err := a.getAccountHash(tx, block, account) // needs to be in tx, otherwise database is locked
+		if err != nil {
+			return fmt.Errorf("failed to get previous account hash; %s", err)
+		}
+		accountUpdateHash := accountUpdate.GetHash(reusedHasher)
+
+		reusedHasher.Reset()
+		reusedHasher.Write(lastAccountHash[:])
+		reusedHasher.Write(accountUpdateHash[:])
+		newAccountHash := reusedHasher.Sum(nil)
+		blockHasher.Write(newAccountHash)
+
+		_, err = stmt.Exec(account[:], block, newAccountHash[:])
+		if err != nil {
+			return fmt.Errorf("failed to add account hash; %s", err)
+		}
+	}
+
+	blockHash := blockHasher.Sum(nil)
+	_, err = tx.Stmt(a.addBlockStmt).Exec(block, blockHash)
+	if err != nil {
+		return fmt.Errorf("failed to add block %d; %s", block, err)
 	}
 
 	succeed = true
@@ -369,6 +431,52 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, err
 	}
 	return common.Value{}, rows.Err()
+}
+
+func (a *Archive) getBlockHash(tx *sql.Tx, block uint64) (hash common.Hash, err error) {
+	stmt := a.getBlockHashStmt
+	if tx != nil {
+		stmt = tx.Stmt(stmt)
+	}
+	rows, err := stmt.Query(block)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var bytes sql.RawBytes
+		err = rows.Scan(&bytes)
+		copy(hash[:], bytes)
+		return hash, err
+	}
+	return common.Hash{}, rows.Err()
+}
+
+func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
+	return a.getBlockHash(nil, block)
+}
+
+func (a *Archive) getAccountHash(tx *sql.Tx, block uint64, account common.Address) (hash common.Hash, err error) {
+	stmt := a.getAccountHashStmt
+	if tx != nil {
+		stmt = tx.Stmt(stmt)
+	}
+	rows, err := stmt.Query(account[:], block)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var bytes sql.RawBytes
+		err = rows.Scan(&bytes)
+		copy(hash[:], bytes)
+		return hash, err
+	}
+	return common.Hash{}, rows.Err()
+}
+
+func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
+	return a.getAccountHash(nil, block, account)
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

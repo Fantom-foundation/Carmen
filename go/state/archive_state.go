@@ -56,7 +56,7 @@ func (s *ArchiveState) Apply(block uint64, update common.Update) error {
 }
 
 func (s *ArchiveState) GetHash() (hash common.Hash, err error) {
-	return common.Hash{}, err
+	return s.archive.GetHash(s.block)
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
