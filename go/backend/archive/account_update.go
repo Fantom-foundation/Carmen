@@ -1,7 +1,6 @@
 package archive
 
 import (
-	"bytes"
 	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
@@ -76,7 +75,7 @@ func AccountUpdatesFrom(update *common.Update) ([]common.Address, map[common.Add
 		accounts[i] = account
 		i++
 	}
-	sort.Slice(accounts, func(i, j int) bool { return bytes.Compare(accounts[i][:], accounts[j][:]) == -1 })
+	sort.Slice(accounts, func(i, j int) bool { return accounts[i].Compare(&accounts[j]) < 0 })
 
 	return accounts, accountUpdates
 }
