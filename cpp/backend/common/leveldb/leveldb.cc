@@ -85,19 +85,19 @@ class LevelDbImpl {
     return absl::OkStatus();
   }
 
+  absl::Status Add(LevelDbWriteBatch batch) {
+    leveldb::Status status = db_->Write(kWriteOptions, batch.batch_.get());
+    if (!status.ok()) return absl::InternalError(status.ToString());
+    return absl::OkStatus();
+  }
+
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(std::span<LDBEntry> batch) {
-    leveldb::WriteBatch write_batch;
-
+    LevelDbWriteBatch write_batch;
     for (const auto& [key, value] : batch) {
-      write_batch.Put({key.data(), key.size()}, {value.data(), value.size()});
+      write_batch.Put(key, value);
     }
-
-    leveldb::Status status = db_->Write(kWriteOptions, &write_batch);
-
-    if (!status.ok()) return absl::InternalError(status.ToString());
-
-    return absl::OkStatus();
+    return Add(std::move(write_batch));
   }
 
   // Summarizes the memory usage of this instance.
@@ -144,6 +144,10 @@ absl::StatusOr<LevelDbIterator> LevelDb::GetLowerBound(
 
 // Add single value for given key.
 absl::Status LevelDb::Add(LDBEntry entry) { return impl_->Add(entry); }
+
+absl::Status LevelDb::Add(LevelDbWriteBatch batch) {
+  return impl_->Add(std::move(batch));
+}
 
 // Add batch of values. Input is a span of pairs of key and value.
 absl::Status LevelDb::AddBatch(std::span<LDBEntry> batch) {
@@ -235,6 +239,17 @@ absl::Status LevelDbIterator::Status() const {
     return absl::OkStatus();
   }
   return absl::InternalError(status.ToString());
+}
+
+LevelDbWriteBatch::LevelDbWriteBatch()
+    : batch_(std::make_unique<leveldb::WriteBatch>()) {}
+
+LevelDbWriteBatch::LevelDbWriteBatch(LevelDbWriteBatch&&) = default;
+LevelDbWriteBatch::~LevelDbWriteBatch() = default;
+
+void LevelDbWriteBatch::Put(std::span<const char> key,
+                            std::span<const char> value) {
+  batch_->Put({key.data(), key.size()}, {value.data(), value.size()});
 }
 
 }  // namespace carmen::backend
