@@ -462,21 +462,50 @@ class Archive {
     ASSIGN_OR_RETURN(auto code_iter, (TypedKeyRangeIterator<CodeKey, Code>::Get(
                                          db_, code_key)));
 
-    auto storage_key = GetStorageKey(account, 0, Key{}, 0);
-    ASSIGN_OR_RETURN(
-        auto storage_iter,
-        (TypedKeyRangeIterator<StorageKey, Value>::Get(db_, storage_key)));
+    // Storage data is stored in DB using [account,reincarnation,key,block]
+    // order, but for the verification we need it in [account,block,key] order.
+    absl::btree_map<std::pair<BlockId, Key>,
+                    std::pair<ReincarnationNumber, Value>>
+        storage_data;
 
-    KeyRangeIterator* property_iterators[] = {
-        &state_iter, &balance_iter, &nonce_iter, &code_iter, &storage_iter};
+    {
+      auto storage_key = GetStorageKey(account, 0, Key{}, 0);
+      ASSIGN_OR_RETURN(
+          auto storage_iter,
+          (TypedKeyRangeIterator<StorageKey, Value>::Get(db_, storage_key)));
 
-    // Find the first block referencing the account.
-    BlockId next = block + 1;
-    for (KeyRangeIterator* iter : property_iterators) {
-      if (!iter->Finished()) {
-        next = std::min<BlockId>(next, iter->GetBlock());
+      while (!storage_iter.Finished()) {
+        ASSIGN_OR_RETURN(StorageKey storage_key, storage_iter.Key());
+        auto current_block = GetBlockFromKey(storage_key);
+        if (current_block <= block) {
+          auto key = GetSlotKey(storage_key);
+          auto reincarnation = GetReincarnationNumber(storage_key);
+          ASSIGN_OR_RETURN(Value value, storage_iter.Value());
+          storage_data[{current_block, key}] = {reincarnation, value};
+        }
+        RETURN_IF_ERROR(storage_iter.Next());
       }
     }
+    auto storage_iter = storage_data.begin();
+    auto storage_iter_end = storage_data.end();
+
+    KeyRangeIterator* property_iterators[] = {&state_iter, &balance_iter,
+                                              &nonce_iter, &code_iter};
+
+    // Find the first block referencing the account.
+    auto get_next_block = [&]() -> BlockId {
+      BlockId next = block + 1;
+      for (KeyRangeIterator* iter : property_iterators) {
+        if (!iter->Finished()) {
+          next = std::min<BlockId>(next, iter->GetBlock());
+        }
+      }
+      if (storage_iter != storage_iter_end) {
+        next = std::min<BlockId>(next, storage_iter->first.first);
+      }
+      return next;
+    };
+    BlockId next = get_next_block();
 
     // Keep track of the reincarnation number.
     ReincarnationNumber reincarnation = 0;
@@ -529,19 +558,19 @@ class Archive {
         RETURN_IF_ERROR(code_iter.Next());
       }
 
-      while (!storage_iter.Finished() && storage_iter.GetBlock() == current) {
-        ASSIGN_OR_RETURN(StorageKey storage_key, storage_iter.Key());
-        auto cur_reincarnation = GetReincarnationNumber(storage_key);
+      while (storage_iter != storage_iter_end &&
+             storage_iter->first.first == current) {
+        ReincarnationNumber cur_reincarnation = storage_iter->second.first;
         if (cur_reincarnation != reincarnation) {
           return absl::InternalError(
               absl::StrFormat("Invalid reincarnation number for storage value "
                               "at block %d, expected %d, got %d",
                               current, reincarnation, cur_reincarnation));
         }
-        Key key = GetSlotKey(storage_key);
-        ASSIGN_OR_RETURN(Value value, storage_iter.Value());
+        Key key = storage_iter->first.second;
+        Value value = storage_iter->second.second;
         update.storage.push_back({key, value});
-        RETURN_IF_ERROR(storage_iter.Next());
+        ++storage_iter;
       }
 
       // --- Check that the current update matches the current block ---
@@ -578,12 +607,7 @@ class Archive {
       RETURN_IF_ERROR(hash_iter.Next());
 
       // Find next block to be processed.
-      next = block + 1;
-      for (KeyRangeIterator* iter : property_iterators) {
-        if (!iter->Finished()) {
-          next = std::min<BlockId>(next, iter->GetBlock());
-        }
-      }
+      next = get_next_block();
     }
 
     // Check whether there are additional updates in the hash table.

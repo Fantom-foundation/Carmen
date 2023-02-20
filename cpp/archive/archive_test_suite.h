@@ -667,6 +667,33 @@ TYPED_TEST_P(ArchiveTest, AccountValidationCanHandleBlockZeroUpdate) {
   EXPECT_OK(archive.VerifyAccount(2, addr1));
 }
 
+TYPED_TEST_P(ArchiveTest, AccountValidationCanHandleMultipleStateUpdates) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, TypeParam::Open(dir));
+  Address addr1{0x1};
+  Key key1{0x1};
+  Key key2{0x2};
+
+  // Verifying updates like this requires to read values out of order from the
+  // primary key / key of the value store.
+
+  Update update0;
+  update0.Create(addr1);
+  update0.Set(addr1, key1, Value{0x01});
+  update0.Set(addr1, key2, Value{0x02});
+
+  Update update1;
+  update1.Set(addr1, key1, Value{0x03});
+  update1.Set(addr1, key2, Value{0x04});
+
+  EXPECT_OK(archive.Add(0, update0));
+  EXPECT_OK(archive.Add(1, update1));
+
+  EXPECT_OK(archive.VerifyAccount(0, addr1));
+  EXPECT_OK(archive.VerifyAccount(1, addr1));
+  EXPECT_OK(archive.VerifyAccount(2, addr1));
+}
+
 TYPED_TEST_P(ArchiveTest, ArchiveCanBeVerifiedOnDifferentBlockHeights) {
   TempDir dir;
   Address addr{0x01};
@@ -708,6 +735,7 @@ REGISTER_TYPED_TEST_SUITE_P(
     ArchiveTest, TypeProperties, AccountHashesChainUp,
     AccountListIncludesAllTouchedAccounts,
     AccountValidationCanHandleBlockZeroUpdate,
+    AccountValidationCanHandleMultipleStateUpdates,
     AccountValidationPassesOnIncrementalUpdates,
     AccountCanBeRecreatedWithoutDelete, AddingEmptyUpdateDoesNotChangeHash,
     ArchiveCanBeVerifiedOnDifferentBlockHeights,
