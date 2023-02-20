@@ -116,11 +116,11 @@ TEST(ByteValueTest, ValuesCanBeUpdatedUsingDifferentLengthSpan) {
   ByteValue<3> a{};
 
   ByteValue<4> b{0x01, 0x02, 0x03, 0x04};
-  a.SetBytes(b);
+  a.SetBytes(std::span<const std::byte>(b));
   EXPECT_EQ(a, (ByteValue<3>{0x01, 0x02, 0x03}));
 
   ByteValue<2> c{0x04, 0x05};
-  a.SetBytes(c);
+  a.SetBytes(std::span<const std::byte>(c));
   EXPECT_EQ(a, (ByteValue<3>{0x04, 0x05, 0x00}));
 }
 

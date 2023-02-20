@@ -8,10 +8,12 @@
 namespace carmen::backend {
 namespace {
 
+using ::testing::_;
 using ::testing::ElementsAreArray;
 using ::testing::IsOk;
 using ::testing::IsOkAndHolds;
 using ::testing::Not;
+using ::testing::StatusIs;
 using ::testing::StrEq;
 
 TEST(LevelDb, TestOpen) {
@@ -63,6 +65,18 @@ TEST(LevelDb, TestAddLevelDbBatchAndGet) {
   ASSERT_OK(db.Add(std::move(batch)));
   EXPECT_THAT(db.Get(std::string("key1")), IsOkAndHolds(StrEq("value1")));
   EXPECT_THAT(db.Get(std::string("key2")), IsOkAndHolds(StrEq("value2")));
+}
+
+TEST(LevelDb, DeleteRemovesKey) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto db, LevelDb::Open(dir.GetPath()));
+  std::string key1("key1");
+  std::string value1("value1");
+  EXPECT_THAT(db.Get(key1), StatusIs(absl::StatusCode::kNotFound, _));
+  ASSERT_OK(db.Add({key1, value1}));
+  EXPECT_THAT(db.Get(key1), IsOkAndHolds(StrEq(value1)));
+  EXPECT_OK(db.Delete(key1));
+  EXPECT_THAT(db.Get(key1), StatusIs(absl::StatusCode::kNotFound, _));
 }
 
 TEST(LevelDb, BeginIteratorPointsToEndInEmptyDB) {

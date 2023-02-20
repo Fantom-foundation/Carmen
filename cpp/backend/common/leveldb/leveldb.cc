@@ -100,6 +100,13 @@ class LevelDbImpl {
     return Add(std::move(write_batch));
   }
 
+  absl::Status Delete(std::span<const char> key) {
+    leveldb::Status status =
+        db_->Delete(kWriteOptions, {key.data(), key.size()});
+    if (!status.ok()) return absl::InternalError(status.ToString());
+    return absl::OkStatus();
+  }
+
   // Summarizes the memory usage of this instance.
   MemoryFootprint GetMemoryFootprint() const {
     MemoryFootprint res(*this);
@@ -152,6 +159,10 @@ absl::Status LevelDb::Add(LevelDbWriteBatch batch) {
 // Add batch of values. Input is a span of pairs of key and value.
 absl::Status LevelDb::AddBatch(std::span<LDBEntry> batch) {
   return impl_->AddBatch(batch);
+}
+
+absl::Status LevelDb::Delete(std::span<const char> key) {
+  return impl_->Delete(key);
 }
 
 absl::Status LevelDb::Flush() {

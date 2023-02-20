@@ -56,6 +56,9 @@ class LevelDb {
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(std::span<LDBEntry> batch);
 
+  // Deletes a single key from the store.
+  absl::Status Delete(std::span<const char> key);
+
   // Flush all pending writes to database.
   absl::Status Flush();
 

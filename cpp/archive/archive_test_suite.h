@@ -731,6 +731,101 @@ TYPED_TEST_P(ArchiveTest, ArchiveCanBeVerifiedOnDifferentBlockHeights) {
   }
 }
 
+TYPED_TEST_P(ArchiveTest, HashOfEmptyArchiveIsZero) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, TypeParam::Open(dir));
+  EXPECT_THAT(archive.GetHash(0), Hash{});
+  EXPECT_THAT(archive.GetHash(5), Hash{});
+}
+
+TYPED_TEST_P(ArchiveTest, ArchiveHashIsHashOfAccountDiffHashesChain) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, TypeParam::Open(dir));
+  Address addr1{0x1};
+  Address addr2{0x2};
+  Balance balance1{0x1};
+  Balance balance2{0x2};
+  Nonce nonce1{0x1};
+  Nonce nonce2{0x2};
+  Key key{0x1};
+
+  Update update1;
+  update1.Create(addr1);
+  update1.Set(addr1, balance1);
+  update1.Set(addr1, nonce1);
+
+  Update update3;
+  update3.Create(addr2);
+  update3.Set(addr1, balance2);
+  update3.Set(addr2, balance2);
+
+  Update update5;
+  update5.Set(addr1, balance1);
+  update5.Set(addr1, nonce2);
+  update5.Set(addr1, Code{0x01, 0x02});
+  update5.Set(addr1, key, Value{0x01});
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  ASSERT_OK_AND_ASSIGN(auto hash11, archive.GetAccountHash(1, addr1));
+  ASSERT_OK_AND_ASSIGN(auto hash31, archive.GetAccountHash(3, addr1));
+  ASSERT_OK_AND_ASSIGN(auto hash32, archive.GetAccountHash(3, addr2));
+  ASSERT_OK_AND_ASSIGN(auto hash51, archive.GetAccountHash(5, addr1));
+
+  Hash hash{};
+  EXPECT_THAT(archive.GetHash(0), hash);
+
+  hash = GetSha256Hash(hash, hash11);
+  EXPECT_THAT(archive.GetHash(1), hash);
+  EXPECT_THAT(archive.GetHash(2), hash);
+
+  hash = GetSha256Hash(hash, hash31, hash32);
+  EXPECT_THAT(archive.GetHash(3), hash);
+  EXPECT_THAT(archive.GetHash(4), hash);
+
+  hash = GetSha256Hash(hash, hash51);
+  EXPECT_THAT(archive.GetHash(5), hash);
+  EXPECT_THAT(archive.GetHash(6), hash);
+}
+
+TYPED_TEST_P(ArchiveTest, ArchiveCanBeVerifiedForCustomBlockHeight) {
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto archive, TypeParam::Open(dir));
+  Address addr1{0x1};
+  Address addr2{0x2};
+  Balance balance1{0x1};
+  Balance balance2{0x2};
+  Nonce nonce1{0x1};
+  Nonce nonce2{0x2};
+  Key key{0x1};
+
+  Update update1;
+  update1.Create(addr1);
+  update1.Set(addr1, balance1);
+  update1.Set(addr1, nonce1);
+
+  Update update3;
+  update3.Create(addr2);
+  update3.Set(addr2, balance2);
+
+  Update update5;
+  update5.Set(addr1, balance2);
+  update5.Set(addr1, nonce2);
+  update5.Set(addr1, Code{0x01, 0x02});
+  update5.Set(addr1, key, Value{0x01});
+
+  EXPECT_OK(archive.Add(1, update1));
+  EXPECT_OK(archive.Add(3, update3));
+  EXPECT_OK(archive.Add(5, update5));
+
+  for (BlockId block = 0; block <= 6; block++) {
+    ASSERT_OK_AND_ASSIGN(auto archive_hash, archive.GetHash(block));
+    EXPECT_OK(archive.Verify(block, archive_hash));
+  }
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     ArchiveTest, TypeProperties, AccountHashesChainUp,
     AccountListIncludesAllTouchedAccounts,
@@ -739,6 +834,8 @@ REGISTER_TYPED_TEST_SUITE_P(
     AccountValidationPassesOnIncrementalUpdates,
     AccountCanBeRecreatedWithoutDelete, AddingEmptyUpdateDoesNotChangeHash,
     ArchiveCanBeVerifiedOnDifferentBlockHeights,
+    ArchiveCanBeVerifiedForCustomBlockHeight,
+    ArchiveHashIsHashOfAccountDiffHashesChain,
     BalancesOfDifferentAccountsAreDifferentiated, BlockZeroCanBeAdded,
     BlocksCanNotBeAddedOutOfOrder, BlocksCannotBeAddedMoreThanOnce,
     CodesOfDifferentAccountsAreDifferentiated,
@@ -746,8 +843,9 @@ REGISTER_TYPED_TEST_SUITE_P(
     DeletingAnAccountInvalidatesStorage,
     DeletingAnExistingAccountKeepsMakesAccountNonExisting,
     DeletingAnNonExistingAccountKeepsAccountNonExisting,
-    InAnEmptyArchiveEverythingIsZero, IncreasingBlockNumbersCanBeAdded,
-    InitialAccountHashIsZero, MultipleBalancesOfTheSameAccountCanBeRetained,
+    HashOfEmptyArchiveIsZero, InAnEmptyArchiveEverythingIsZero,
+    IncreasingBlockNumbersCanBeAdded, InitialAccountHashIsZero,
+    MultipleBalancesOfTheSameAccountCanBeRetained,
     MultipleCodesOfTheSameAccountCanBeRetained,
     MultipleNoncesOfTheSameAccountCanBeRetained,
     MultipleValuesOfTheSameSlotCanBeRetained,

@@ -72,6 +72,14 @@ class ByteValue {
     return std::as_bytes(std::span(data_));
   }
 
+  // Enables the implicit conversion into fixed-length spans of char.
+  operator std::span<const char, N>() const { return std::span(data_); }
+
+  // Enables the implicit conversion into spans of char with dynamic extend.
+  operator std::span<const char>() const {
+    return std::span(reinterpret_cast<const char*>(data_.data()), N);
+  }
+
   // Sets the bytes of this value to the provided data.
   void SetBytes(std::span<const std::byte, N> data) {
     std::memcpy(&data_[0], data.data(), data.size());
