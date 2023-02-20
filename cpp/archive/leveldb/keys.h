@@ -8,6 +8,19 @@
 
 namespace carmen::archive::leveldb {
 
+// Prefixes for LevelDB keys to differentiated between different table spaces.
+// These keys are aligned with the Go implementation of the Carmen archive, and
+// should be kept aligned for compatiblity.
+enum class KeyType : char {
+  kBlock = '1',
+  kAccount = '2',
+  kBalance = '3',
+  kCode = '4',
+  kNonce = '5',
+  kStorage = '6',
+  kAccountHash = '7',
+};
+
 using ReincarnationNumber = std::uint32_t;
 
 static constexpr const std::size_t kBlockIdSize = 8;
@@ -43,6 +56,7 @@ StorageKey GetStorageKey(const Address& address,
                          BlockId block);
 
 BlockId GetBlockFromKey(std::span<const char> data);
+const Address& GetAddressFromKey(std::span<const char> data);
 
 ReincarnationNumber GetReincarnationNumber(const StorageKey& key);
 Key GetSlotKey(const StorageKey& key);

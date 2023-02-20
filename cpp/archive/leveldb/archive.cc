@@ -281,9 +281,145 @@ class Archive {
     return FindMostRecentFor<Hash>(block, GetAccountHashKey(address, block));
   }
 
-  absl::Status Verify(BlockId, const Hash&,
-                      absl::FunctionRef<void(std::string_view)>) {
-    return absl::UnimplementedError("to be implemented");
+  absl::Status Verify(
+      BlockId block, const Hash& expected_hash,
+      absl::FunctionRef<void(std::string_view)> progress_callback) {
+    // First, check the expected hash.
+    progress_callback("checking archive root hash");
+    ASSIGN_OR_RETURN(auto hash, GetHash(block));
+    if (hash != expected_hash) {
+      return absl::InternalError("Archive hash does not match expected hash.");
+    }
+
+    // Verify that the block hashes are consistent within the archive.
+    RETURN_IF_ERROR(VerifyHashes(block));
+
+    // Validate all individual accounts.
+    progress_callback("getting list of accounts");
+    ASSIGN_OR_RETURN(auto accounts, GetAccountList(block));
+    progress_callback(absl::StrFormat("checking %d accounts", accounts.size()));
+    for (const auto& cur : accounts) {
+      RETURN_IF_ERROR(VerifyAccount(block, cur));
+    }
+
+    // Check that there is no extra information in any of the content tables.
+    progress_callback("checking for extra data not covered by hashes");
+    ASSIGN_OR_RETURN(auto latest_block, GetLatestBlock());
+    absl::flat_hash_set<Address> valid_accounts(accounts.begin(),
+                                                accounts.end());
+    for (KeyType type :
+         {KeyType::kAccount, KeyType::kAccountHash, KeyType::kBalance,
+          KeyType::kCode, KeyType::kNonce, KeyType::kStorage}) {
+      char prefix = static_cast<char>(type);
+      ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(std::span(&prefix, 1)));
+      while (!iter.IsEnd() && iter.Key()[0] == prefix) {
+        auto current_block = GetBlockFromKey(iter.Key());
+
+        // Make sure there are no extra accounts included.
+        if (current_block <= block) {
+          auto& addr = GetAddressFromKey(iter.Key());
+          if (!valid_accounts.contains(addr)) {
+            return absl::InternalError(absl::StrFormat(
+                "Found extra key/value pair with prefix `%c`.", prefix));
+          }
+        }
+
+        // Make sure there is are no future blocks included.
+        if (current_block > latest_block) {
+          return absl::InternalError(absl::StrFormat(
+              "Found entry of future block height with prefix `%c`.", prefix));
+        }
+        RETURN_IF_ERROR(iter.Next());
+      }
+    }
+
+    // All checks have passed. DB is verified.
+    return absl::OkStatus();
+  }
+
+  // Verifies the consistency of the stored full archive hashes up until (and
+  // including) the given block number.
+  absl::Status VerifyHashes(BlockId max_block) {
+    // For the verification we need to have all account hashes indexed by block
+    // height. However, the key store is sorted by account. Thus, we need to
+    // create a temporary index. We place this currently in memory, if this
+    // becomes a problem, a disk-backed index (e.g. Btree) will be required.
+
+    // Used to index the diff hashes for each block, in order of the account
+    // addresses.
+    absl::btree_map<std::pair<BlockId, int>, Hash> account_hashes;
+
+    {
+      // Used to count the number of diffs per block.
+      absl::btree_map<BlockId, int> num_diffs;
+      char prefix = static_cast<char>(KeyType::kAccountHash);
+      ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(std::span(&prefix, 1)));
+      while (!iter.IsEnd() && iter.Key()[0] == prefix) {
+        if (iter.Key().size() != sizeof(AccountHashKey)) {
+          return absl::InternalError(
+              "Invalid account hash key length encountered.");
+        }
+        if (iter.Value().size() != sizeof(Hash)) {
+          return absl::InternalError(
+              "Invalid account hash value length encountered.");
+        }
+        BlockId block = GetBlockFromKey(iter.Key());
+        if (block <= max_block) {
+          auto pos = num_diffs[block]++;
+          account_hashes[{block, pos}].SetBytes(iter.Value());
+        }
+        RETURN_IF_ERROR(iter.Next());
+      }
+    }
+
+    // Verify the block hash for each block.
+    auto account_hash_iter = account_hashes.begin();
+
+    Hash hash{};
+    Sha256Hasher hasher;
+    char prefix = static_cast<char>(KeyType::kBlock);
+    ASSIGN_OR_RETURN(auto block_hash_iter,
+                     db_.GetLowerBound(std::span(&prefix, 1)));
+    while (!block_hash_iter.IsEnd() && block_hash_iter.Key()[0] == prefix) {
+      if (block_hash_iter.Key().size() != sizeof(BlockKey)) {
+        return absl::InternalError("Invalid block key length encountered.");
+      }
+      if (block_hash_iter.Value().size() != sizeof(Hash)) {
+        return absl::InternalError("Invalid block value length encountered.");
+      }
+
+      auto current_block = GetBlockFromKey(block_hash_iter.Key());
+      if (current_block > max_block) {
+        break;
+      }
+
+      if (account_hash_iter == account_hashes.end() ||
+          account_hash_iter->first.first != current_block) {
+        return absl::InternalError(
+            absl::StrFormat("No diffs found for block %d.", current_block));
+      }
+
+      // Re-compute hash for current block.
+      hasher.Reset();
+      hasher.Ingest(hash);
+      while (account_hash_iter != account_hashes.end() &&
+             account_hash_iter->first.first == current_block) {
+        hasher.Ingest(account_hash_iter->second);
+        account_hash_iter++;
+      }
+      hash = hasher.GetHash();
+
+      Hash have;
+      have.SetBytes(block_hash_iter.Value());
+      if (hash != have) {
+        return absl::InternalError(absl::StrFormat(
+            "Validation of hash of block %d failed.", current_block));
+      }
+
+      RETURN_IF_ERROR(block_hash_iter.Next());
+    }
+
+    return absl::OkStatus();
   }
 
   absl::Status VerifyAccount(BlockId block, const Address& account) const {

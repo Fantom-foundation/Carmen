@@ -667,12 +667,50 @@ TYPED_TEST_P(ArchiveTest, AccountValidationCanHandleBlockZeroUpdate) {
   EXPECT_OK(archive.VerifyAccount(2, addr1));
 }
 
+TYPED_TEST_P(ArchiveTest, ArchiveCanBeVerifiedOnDifferentBlockHeights) {
+  TempDir dir;
+  Address addr{0x01};
+  Hash hash;
+
+  ASSERT_OK_AND_ASSIGN(auto archive, TypeParam::Open(dir));
+  Update update1;
+  update1.Create(addr);
+  update1.Set(addr, Balance{0x12});
+  update1.Set(addr, Nonce{0x13});
+  update1.Set(addr, Code{0x14});
+  update1.Set(addr, Key{0x15}, Value{0x16});
+  EXPECT_OK(archive.Add(1, update1));
+
+  Update update3;
+  update3.Delete(addr);
+  update3.Set(addr, Balance{0x31});
+  update3.Set(addr, Nonce{0x33});
+  update3.Set(addr, Code{0x34});
+  update3.Set(addr, Key{0x35}, Value{0x36});
+  EXPECT_OK(archive.Add(3, update3));
+
+  Update update5;
+  update5.Create(addr);
+  update5.Set(addr, Balance{0x51});
+  EXPECT_OK(archive.Add(5, update5));
+
+  for (BlockId i = 0; i < 10; i++) {
+    EXPECT_OK(archive.VerifyAccount(i, addr));
+  }
+
+  for (BlockId i = 0; i < 10; i++) {
+    ASSERT_OK_AND_ASSIGN(hash, archive.GetHash(i));
+    EXPECT_OK(archive.Verify(i, hash));
+  }
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     ArchiveTest, TypeProperties, AccountHashesChainUp,
     AccountListIncludesAllTouchedAccounts,
     AccountValidationCanHandleBlockZeroUpdate,
     AccountValidationPassesOnIncrementalUpdates,
     AccountCanBeRecreatedWithoutDelete, AddingEmptyUpdateDoesNotChangeHash,
+    ArchiveCanBeVerifiedOnDifferentBlockHeights,
     BalancesOfDifferentAccountsAreDifferentiated, BlockZeroCanBeAdded,
     BlocksCanNotBeAddedOutOfOrder, BlocksCannotBeAddedMoreThanOnce,
     CodesOfDifferentAccountsAreDifferentiated,
