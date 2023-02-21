@@ -22,9 +22,8 @@ func newLeafNode[K any](capacity int, comparator common.Comparator[K]) *LeafNode
 }
 
 func (m *LeafNode[K]) insert(key K) (right node[K], middle K, split bool) {
-	index, exists := m.findItem(key)
-	if !exists {
-		m.insertAt(key, index)
+	if index, exists := m.findItem(key); !exists {
+		m.insertAt(index, key, nil, nil)
 
 		// split when overflow
 		if len(m.keys) == m.capacity+1 {
@@ -39,6 +38,14 @@ func (m *LeafNode[K]) insert(key K) (right node[K], middle K, split bool) {
 func (m *LeafNode[K]) contains(key K) bool {
 	_, exists := m.findItem(key)
 	return exists
+}
+
+func (m *LeafNode[K]) remove(key K) node[K] {
+	if index, exists := m.findItem(key); exists {
+		m.removeAt(index)
+	}
+
+	return m
 }
 
 func (m *LeafNode[K]) hasNext(iterator *Iterator[K]) bool {
@@ -69,10 +76,29 @@ func (m *LeafNode[K]) split() (right *LeafNode[K], middle K) {
 	return
 }
 
-// insertAt extends the leaf of one item and inserts the input key
-// at the input position. The keys beyond this index
-// are shifted right.
-func (m *LeafNode[K]) insertAt(key K, index int) {
+func (m *LeafNode[K]) removeAt(index int) (K, node[K]) {
+	removed := m.keys[index]
+	for i := index; i < len(m.keys)-1; i++ {
+		m.keys[i] = m.keys[i+1]
+	}
+	m.keys = m.keys[0 : len(m.keys)-1]
+
+	return removed, nil
+}
+
+func (m *LeafNode[K]) append(k K, sibling node[K]) {
+	m.keys = append(m.keys, k)
+	m.keys = append(m.keys, sibling.getKeys()...)
+}
+
+func (m *LeafNode[K]) getAt(index int) (K, node[K]) {
+	if index > 0 && index == len(m.keys) {
+		return m.keys[index-1], nil
+	}
+	return m.keys[index], nil
+}
+
+func (m *LeafNode[K]) insertAt(index int, key K, left, right node[K]) {
 	if index == len(m.keys) {
 		m.keys = append(m.keys, key) // does not matter that we add the input key, it will get replaced
 	} else {
@@ -85,19 +111,10 @@ func (m *LeafNode[K]) insertAt(key K, index int) {
 			}
 		}
 	}
-
 	m.keys[index] = key
-
 	return
 }
 
-// findItem finds a key in the list, if it exists.
-// It returns the index of the key that was found, and it returns true.
-// If the key does not exist, it returns false and the index is equal to the last
-// visited position in the list, traversed using binary search.
-// The index is increased by one when the last visited key was lower than the input key
-// so the new key may be inserted after this key.
-// It means the index can be used as a position to insert the key in the list.
 func (m *LeafNode[K]) findItem(key K) (index int, exists bool) {
 	end := len(m.keys) - 1
 	var res, start, mid int
@@ -119,6 +136,14 @@ func (m *LeafNode[K]) findItem(key K) (index int, exists bool) {
 	return mid, false
 }
 
+func (m *LeafNode[K]) size() int {
+	return len(m.keys)
+}
+
+func (m *LeafNode[K]) getKeys() []K {
+	return m.keys
+}
+
 // ForEach iterates ordered keys
 func (m *LeafNode[K]) ForEach(callback func(k K)) {
 	for _, key := range m.keys {
@@ -127,5 +152,38 @@ func (m *LeafNode[K]) ForEach(callback func(k K)) {
 }
 
 func (m LeafNode[K]) String() string {
-	return fmt.Sprintf("%v", m.keys)
+	var str string
+	for i, key := range m.keys {
+		str += fmt.Sprintf("%v", key)
+		if i < len(m.keys)-1 {
+			str += ", "
+		}
+	}
+
+	return fmt.Sprintf("[%v]", str)
+}
+
+func (m LeafNode[K]) checkProperties(treeDepth *int, currentLevel int) error {
+	// check depth
+	if *treeDepth == -1 {
+		*treeDepth = currentLevel
+	} else {
+		if currentLevel != *treeDepth {
+			return fmt.Errorf("leaf has wrong depth: %d != %d", currentLevel, *treeDepth)
+		}
+	}
+
+	// check order
+	for i := 0; i < m.size()-1; i++ {
+		if m.comparator.Compare(&m.keys[i], &m.keys[i+1]) >= 0 {
+			return fmt.Errorf("keys not ordered: %v >= %v", m.keys[i], m.keys[i+1])
+		}
+	}
+
+	// check capacity (for non-root leaf)
+	if currentLevel > 0 && m.size() < m.capacity/2 {
+		return fmt.Errorf("size below minimal capacity: %d < %d", m.size(), m.capacity/2)
+	}
+
+	return nil
 }

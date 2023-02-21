@@ -37,6 +37,11 @@ func (m *BTree[K]) Insert(key K) {
 	}
 }
 
+// Remove deletes the input key from this BTree. If the key already exists, nothing happens
+func (m *BTree[K]) Remove(key K) {
+	m.root = m.root.remove(key)
+}
+
 // NewIterator creates am iterator for the input key ranges.
 func (m *BTree[K]) NewIterator(start, end K) *Iterator[K] {
 	return newIterator[K](start, end, m.root)
@@ -53,23 +58,10 @@ func (m *BTree[K]) ForEach(callback func(k K)) {
 }
 
 func (m BTree[K]) String() string {
-	return m.printDump()
+	return fmt.Sprintf("%v", m.root)
 }
 
-// printDump collects debug print of this tree
-func (m BTree[K]) printDump() string {
-	switch v := m.root.(type) {
-	case *LeafNode[K]:
-		return fmt.Sprintf("%v", v)
-	case *InnerNode[K]:
-		lines := v.printDump(make([]string, 0), 0)
-		str := fmt.Sprintf("%v\n", v.keys)
-		for _, line := range lines {
-			str = str + line + "\n"
-		}
-		return str
-	default:
-	}
-
-	return ""
+func (m *BTree[K]) checkProperties() error {
+	height := -1
+	return m.root.checkProperties(&height, 0)
 }
