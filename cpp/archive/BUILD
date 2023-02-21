@@ -25,3 +25,19 @@ cc_library(
         "@com_google_googletest//:gtest",
     ],
 )
+
+cc_library(
+    name = "archive_test_suite",
+    testonly = True,
+    hdrs = ["archive_test_suite.h"],
+    visibility = ["//archive:__subpackages__"],
+    deps = [
+        ":archive",
+        "//common:file_util",
+        "//common:hash",
+        "//common:status_test_util",
+        "//common:type",
+        "@com_google_absl//absl/status",
+        "@com_google_googletest//:gtest",
+    ],
+)
