@@ -2,7 +2,10 @@ cc_library(
     name = "leveldb",
     srcs = ["leveldb.cc"],
     hdrs = ["leveldb.h"],
-    visibility = ["//backend:__subpackages__"],
+    visibility = [
+        "//archive:__subpackages__",
+        "//backend:__subpackages__",
+    ],
     deps = [
         "//common:memory_usage",
         "//common:status_util",
