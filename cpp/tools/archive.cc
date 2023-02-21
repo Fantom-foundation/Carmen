@@ -1,7 +1,7 @@
 // This file provides an executable that can be used to perform operations on
 // archive files.
 
-#include "archive/sqlite/archive.h"
+#include "archive/archive.h"
 
 #include <stdlib.h>
 
@@ -12,6 +12,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
+#include "archive/leveldb/archive.h"
+#include "archive/sqlite/archive.h"
 #include "common/status_util.h"
 
 // To run this binary with bazel, use the following command:
@@ -20,16 +22,13 @@
 namespace carmen {
 namespace {
 
+using ::carmen::archive::leveldb::LevelDbArchive;
 using ::carmen::archive::sqlite::SqliteArchive;
 
-absl::Status PrintStats(int argc, char** argv) {
-  if (argc != 3) {
-    std::cout << "Stats needs exactly one argument: <archive_file>\n";
-    return absl::InvalidArgumentError("missing arguments");
-  }
-  std::string_view path = argv[2];
+template <Archive Archive>
+absl::Status PrintStats(std::string_view path) {
   std::cout << "Opening " << path << " ..\n";
-  ASSIGN_OR_RETURN(auto archive, SqliteArchive::Open(path));
+  ASSIGN_OR_RETURN(auto archive, Archive::Open(path));
   ASSIGN_OR_RETURN(auto height, archive.GetLatestBlock());
   std::cout << "\tBlock height: " << height << "\n";
   ASSIGN_OR_RETURN(auto hash, archive.GetHash(height));
@@ -37,14 +36,22 @@ absl::Status PrintStats(int argc, char** argv) {
   return archive.Close();
 }
 
-absl::Status Verify(int argc, char** argv) {
+absl::Status PrintStats(int argc, char** argv) {
   if (argc != 3) {
-    std::cout << "Verify needs exactly one argument: <archive_file>\n";
+    std::cout << "Stats needs exactly one argument: <archive_file>\n";
     return absl::InvalidArgumentError("missing arguments");
   }
   std::string_view path = argv[2];
+  if (path.ends_with("sqlite")) {
+    return PrintStats<SqliteArchive>(path);
+  }
+  return PrintStats<LevelDbArchive>(path);
+}
+
+template <Archive Archive>
+absl::Status Verify(std::string_view path) {
   std::cout << "Opening " << path << " ..\n";
-  ASSIGN_OR_RETURN(auto archive, SqliteArchive::Open(path));
+  ASSIGN_OR_RETURN(auto archive, Archive::Open(path));
   ASSIGN_OR_RETURN(auto height, archive.GetLatestBlock());
   std::cout << "\tBlock height: " << height << "\n";
   auto start = absl::Now();
@@ -55,7 +62,6 @@ absl::Status Verify(int argc, char** argv) {
   std::cout << absl::StrFormat("%d:%02d", sec / 60, sec % 60) << ")\n";
   std::cout << "\tRunning verification ...\n";
   start = absl::Now();
-  // TODO: add some progress reporting.
   auto verify_result =
       archive.Verify(height, hash, [&](std::string_view phase) {
         auto time = absl::Now() - start;
@@ -74,6 +80,18 @@ absl::Status Verify(int argc, char** argv) {
     std::cout << "\t\t" << verify_result.message() << "\n";
   }
   return archive.Close();
+}
+
+absl::Status Verify(int argc, char** argv) {
+  if (argc != 3) {
+    std::cout << "Verify needs exactly one argument: <archive_file>\n";
+    return absl::InvalidArgumentError("missing arguments");
+  }
+  std::string_view path = argv[2];
+  if (path.ends_with("sqlite")) {
+    return PrintStats<SqliteArchive>(path);
+  }
+  return Verify<LevelDbArchive>(path);
 }
 
 absl::Status Main(int argc, char** argv) {

@@ -2,6 +2,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "archive/leveldb/archive.h"
 #include "archive/test_util.h"
 #include "backend/depot/test_util.h"
 #include "backend/index/test_util.h"
@@ -463,8 +464,11 @@ REGISTER_TYPED_TEST_SUITE_P(
     ArchiveDataCanBeRetrieved, CanProduceAMemoryFootprint,
     CanBeOpenedWithArchive);
 
+using TestArchive = archive::leveldb::LevelDbArchive;
+
 using StateConfigurations =
-    ::testing::Types<InMemoryState, FileBasedState, LevelDbBasedState>;
+    ::testing::Types<InMemoryState<TestArchive>, FileBasedState<TestArchive>,
+                     LevelDbBasedState<TestArchive>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(Config, StateTest, StateConfigurations);
 

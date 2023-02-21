@@ -213,7 +213,7 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Open(
 
   std::unique_ptr<ArchiveType> archive;
   if (with_archive) {
-    ASSIGN_OR_RETURN(auto instance, ArchiveType::Open(dir));
+    ASSIGN_OR_RETURN(auto instance, ArchiveType::Open(dir / "archive"));
     archive = std::make_unique<ArchiveType>(std::move(instance));
   }
 

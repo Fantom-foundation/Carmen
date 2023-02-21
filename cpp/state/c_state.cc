@@ -7,6 +7,8 @@
 #include <sstream>
 #include <string_view>
 
+#include "archive/leveldb/archive.h"
+#include "archive/sqlite/archive.h"
 #include "common/account_state.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -171,7 +173,8 @@ class WorldStateWrapper : public WorldState {
 };
 
 template <typename State>
-WorldState* Open(const std::filesystem::path& directory, C_bool with_archive) {
+WorldState* OpenState(const std::filesystem::path& directory,
+                      bool with_archive) {
   auto state = State::Open(directory, with_archive);
   if (!state.ok()) {
     std::cout << "WARNING: Failed to open state: " << state.status() << "\n"
@@ -181,25 +184,40 @@ WorldState* Open(const std::filesystem::path& directory, C_bool with_archive) {
   return new WorldStateWrapper<State>(*std::move(state));
 }
 
+template <template <class Archive> class State>
+WorldState* Open(const std::filesystem::path& directory, ArchiveImpl archive) {
+  switch (archive) {
+    case kArchive_None:
+      // We have no none-archive implementation, so we take the LevelDB one and
+      // disable it.
+      return OpenState<State<archive::leveldb::LevelDbArchive>>(directory,
+                                                                false);
+    case kArchive_LevelDb:
+      return OpenState<State<archive::leveldb::LevelDbArchive>>(directory,
+                                                                true);
+    case kArchive_Sqlite:
+      return OpenState<State<archive::sqlite::SqliteArchive>>(directory, true);
+  }
+  return nullptr;
+}
+
 }  // namespace
 }  // namespace carmen
 
 extern "C" {
 
-C_State Carmen_CreateInMemoryState(C_bool with_archive) {
-  return carmen::Open<carmen::InMemoryState>("", with_archive);
-}
-
-C_State Carmen_CreateFileBasedState(const char* directory, int length,
-                                    C_bool with_archive) {
-  return carmen::Open<carmen::FileBasedState>(
-      std::string_view(directory, length), with_archive);
-}
-
-C_State Carmen_CreateLevelDbBasedState(const char* directory, int length,
-                                       C_bool with_archive) {
-  return carmen::Open<carmen::LevelDbBasedState>(
-      std::string_view(directory, length), with_archive);
+C_State Carmen_OpenState(StateImpl state, ArchiveImpl archive,
+                         const char* directory, int length) {
+  std::string_view dir(directory, length);
+  switch (state) {
+    case kState_Memory:
+      return carmen::Open<carmen::InMemoryState>(dir, archive);
+    case kState_File:
+      return carmen::Open<carmen::FileBasedState>(dir, archive);
+    case kState_LevelDb:
+      return carmen::Open<carmen::LevelDbBasedState>(dir, archive);
+  }
+  return nullptr;
 }
 
 void Carmen_Flush(C_State state) {

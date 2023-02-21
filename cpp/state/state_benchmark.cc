@@ -1,4 +1,5 @@
 
+#include "archive/leveldb/archive.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
 #include "common/file_util.h"
@@ -9,12 +10,14 @@
 namespace carmen::backend::store {
 namespace {
 
+using Archive = archive::leveldb::LevelDbArchive;
+
 // To run benchmarks, use the following command:
 //    bazel run -c opt //state:state_benchmark
 
 // Defines the list of configurations to be benchmarked.
-BENCHMARK_TYPE_LIST(StateConfigList, InMemoryState, FileBasedState,
-                    LevelDbBasedState);
+BENCHMARK_TYPE_LIST(StateConfigList, InMemoryState<Archive>,
+                    FileBasedState<Archive>, LevelDbBasedState<Archive>);
 
 // Benchmarks the time it takes to open and close a state DB.
 template <typename State>
