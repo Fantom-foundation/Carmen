@@ -2,6 +2,7 @@
 
 #include <array>
 #include <span>
+#include <string_view>
 
 #include "absl/status/statusor.h"
 #include "common/type.h"
@@ -13,7 +14,7 @@ namespace carmen::archive::leveldb {
 // should be kept aligned for compatiblity.
 enum class KeyType : char {
   kBlock = '1',
-  kAccount = '2',
+  kAccountState = '2',
   kBalance = '3',
   kCode = '4',
   kNonce = '5',
@@ -21,29 +22,38 @@ enum class KeyType : char {
   kAccountHash = '7',
 };
 
+// Provides a label for each key type, or `unknown` for everything else.
 std::string_view ToString(KeyType type);
 
+// To differentiate multiple reincarnations of accounts, reincarnation numbers
+// are utilized in the LevelDB archive. Each time an account is created or
+// deleted, it is increased by 1, starting at 0.
 using ReincarnationNumber = std::uint32_t;
 
-static constexpr const std::size_t kBlockIdSize = 8;
-static constexpr const std::size_t kPropertyKeySize =
-    1 + sizeof(Address) + kBlockIdSize;
+// The key type used for per-block information.
+using BlockKey = std::array<char, 1 + sizeof(BlockId)>;
 
-using PropertyKey = std::array<char, kPropertyKeySize>;
-
-using BlockKey = std::array<char, 1 + kBlockIdSize>;
-using AccountKey = PropertyKey;
+// Most account properties share a common key format.
+using PropertyKey = std::array<char, 1 + sizeof(Address) + sizeof(BlockId)>;
+using AccountStateKey = PropertyKey;
 using BalanceKey = PropertyKey;
 using CodeKey = PropertyKey;
 using NonceKey = PropertyKey;
 using AccountHashKey = PropertyKey;
+
+// The key to store storage information includes the reincarnation number to
+// suppor efficient state clearing.
 using StorageKey =
     std::array<char, 1 + sizeof(Address) + sizeof(ReincarnationNumber) +
-                         sizeof(Key) + kBlockIdSize>;
+                         sizeof(Key) + sizeof(BlockId)>;
+
+// -- Factory functions for storage keys ---
 
 BlockKey GetBlockKey(BlockId block);
 
-AccountKey GetAccountKey(const Address& address, BlockId block);
+AccountStateKey GetAccountStateKey(const Address& address, BlockId block);
+
+AccountHashKey GetAccountHashKey(const Address& address, BlockId block);
 
 BalanceKey GetBalanceKey(const Address& address, BlockId block);
 
@@ -51,28 +61,27 @@ CodeKey GetCodeKey(const Address& address, BlockId block);
 
 NonceKey GetNonceKey(const Address& address, BlockId block);
 
-AccountHashKey GetAccountHashKey(const Address& address, BlockId block);
-
 StorageKey GetStorageKey(const Address& address,
                          ReincarnationNumber reincarnation, const Key& key,
                          BlockId block);
 
-BlockId GetBlockFromKey(std::span<const char> data);
+// Retrieves the block ID from any type of key. Note: for performance reasons it
+// does not check that the given span encodes a valid key. It only interprets
+// the portion of the provided span that is expected to contain the BlockId.
+BlockId GetBlockFromKey(std::span<const char> key);
+
+// Returns the prefix of the key covering the key space and account.
+std::span<const char> GetAccountPrefix(std::span<const char> key);
+
+// Returns the address encoded in the key. Note: for performance reasons it does
+// not check that the given span encodes a valid key. It merely interprets the
+// protion of the span where an address would be expected.
 const Address& GetAddressFromKey(std::span<const char> data);
 
+// Returns the reincarnation number encoded in a storage key.
 ReincarnationNumber GetReincarnationNumber(const StorageKey& key);
-Key GetSlotKey(const StorageKey& key);
 
-std::span<const char> GetAccountPrefix(const PropertyKey& key);
-std::span<const char> GetAccountPrefix(const StorageKey& key);
-
-// TODO: move to extra file.
-struct AccountState {
-  static absl::StatusOr<AccountState> From(std::span<const std::byte>);
-  std::array<char, 5> Encode() const;
-  void SetBytes(std::span<const std::byte>);
-  bool exists = false;
-  ReincarnationNumber reincarnation_number = 0;
-};
+// Returns the slot key encoded in a storage key.
+const Key& GetSlotKey(const StorageKey& key);
 
 }  // namespace carmen::archive::leveldb

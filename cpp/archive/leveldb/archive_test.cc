@@ -3,6 +3,7 @@
 #include "absl/strings/str_format.h"
 #include "archive/archive_test_suite.h"
 #include "archive/leveldb/keys.h"
+#include "archive/leveldb/values.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "gtest/gtest.h"
 
@@ -89,7 +90,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountHashKey) {
         ASSERT_OK(db.Delete(key));
         ASSERT_OK(db.Add(std::span(key).subspan(0, key.size() - 1), Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 28");
+      "Invalid key length, expected 25 byte, got 24");
 
   // Detects a too long key.
   TestAccountCorruption(
@@ -100,7 +101,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountHashKey) {
         extended.push_back('x');
         ASSERT_OK(db.Add(extended, Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 30");
+      "Invalid key length, expected 25 byte, got 26");
 }
 
 TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountHashValue) {
@@ -124,7 +125,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountHashValue) {
 TEST(LevelDbArchive, AccountVerificationDetectsModifiedStatusUpdate) {
   TestAccountCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x01}, 1),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x01}, 1),
                          AccountState{false, 1}.Encode()));
       },
       "Hash for diff at block 1 does not match.");
@@ -133,7 +134,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsModifiedStatusUpdate) {
 TEST(LevelDbArchive, AccountVerificationDetectsAdditionalStatusUpdate) {
   TestAccountCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x01}, 2),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x01}, 2),
                          AccountState{true, 2}.Encode()));
       },
       "Archive contains update for block 2 but no hash for it.");
@@ -142,7 +143,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsAdditionalStatusUpdate) {
 TEST(LevelDbArchive, AccountVerificationDetectsModifiedReincarnationNumber) {
   TestAccountCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x01}, 1),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x01}, 1),
                          AccountState{true, 2}.Encode()));
       },
       "Reincarnation numbers are not incremental");
@@ -151,7 +152,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsModifiedReincarnationNumber) {
 TEST(LevelDbArchive, AccountVerificationDetectsMissingStatusUpdate) {
   TestAccountCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Delete(GetAccountKey(Address{0x01}, 3)));
+        ASSERT_OK(db.Delete(GetAccountStateKey(Address{0x01}, 3)));
       },
       "Invalid reincarnation number for storage value at block 3, expected 1, "
       "got 2");
@@ -161,22 +162,22 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountStatusKey) {
   // Detects a too short key.
   TestAccountCorruption(
       [](LevelDb& db) {
-        auto key = GetAccountKey(Address{0x01}, 1);
+        auto key = GetAccountStateKey(Address{0x01}, 1);
         ASSERT_OK(db.Delete(key));
         ASSERT_OK(db.Add(std::span(key).subspan(0, key.size() - 1), Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 28");
+      "Invalid key length, expected 25 byte, got 24");
 
   // Detects a too long key.
   TestAccountCorruption(
       [](LevelDb& db) {
-        auto key = GetAccountKey(Address{0x01}, 1);
+        auto key = GetAccountStateKey(Address{0x01}, 1);
         ASSERT_OK(db.Delete(key));
         std::vector<char> extended(key.begin(), key.end());
         extended.push_back('x');
         ASSERT_OK(db.Add(extended, Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 30");
+      "Invalid key length, expected 25 byte, got 26");
 }
 
 TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountStatusValue) {
@@ -184,7 +185,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountStatusValue) {
   // Detects a too short value.
   TestAccountCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x01}, 3),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x01}, 3),
                          std::vector<char>(kAccountStateSize - 1, 'x')));
       },
       "Invalid value length, expected 5 byte, got 4");
@@ -192,7 +193,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedAccountStatusValue) {
   // Detects a too long value.
   TestAccountCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x01}, 3),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x01}, 3),
                          std::vector<char>(kAccountStateSize + 1, 'x')));
       },
       "Invalid value length, expected 5 byte, got 6");
@@ -230,7 +231,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedBalanceKey) {
         ASSERT_OK(db.Delete(key));
         ASSERT_OK(db.Add(std::span(key).subspan(0, key.size() - 1), Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 28");
+      "Invalid key length, expected 25 byte, got 24");
 
   // Detects a too long key.
   TestAccountCorruption(
@@ -241,7 +242,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedBalanceKey) {
         extended.push_back('x');
         ASSERT_OK(db.Add(extended, Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 30");
+      "Invalid key length, expected 25 byte, got 26");
 }
 
 TEST(LevelDbArchive, AccountVerificationDetectsMailformedBalanceValue) {
@@ -294,7 +295,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedNonceKey) {
         ASSERT_OK(db.Delete(key));
         ASSERT_OK(db.Add(std::span(key).subspan(0, key.size() - 1), Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 28");
+      "Invalid key length, expected 25 byte, got 24");
 
   // Detects a too long key.
   TestAccountCorruption(
@@ -305,7 +306,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedNonceKey) {
         extended.push_back('x');
         ASSERT_OK(db.Add(extended, Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 30");
+      "Invalid key length, expected 25 byte, got 26");
 }
 
 TEST(LevelDbArchive, AccountVerificationDetectsMailformedNonceValue) {
@@ -358,7 +359,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedCodeKey) {
         ASSERT_OK(db.Delete(key));
         ASSERT_OK(db.Add(std::span(key).subspan(0, key.size() - 1), Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 28");
+      "Invalid key length, expected 25 byte, got 24");
 
   // Detects a too long key.
   TestAccountCorruption(
@@ -369,7 +370,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedCodeKey) {
         extended.push_back('x');
         ASSERT_OK(db.Add(extended, Hash{}));
       },
-      "Invalid key length, expected 29 byte, got 30");
+      "Invalid key length, expected 25 byte, got 26");
 }
 
 TEST(LevelDbArchive, AccountVerificationDetectsMissingStorageUpdate) {
@@ -431,7 +432,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedStorageKey) {
         ASSERT_OK(db.Delete(key));
         ASSERT_OK(db.Add(std::span(key).subspan(0, key.size() - 1), Hash{}));
       },
-      "Invalid key length, expected 65 byte, got 64");
+      "Invalid key length, expected 61 byte, got 60");
 
   // Detects a too long key.
   TestAccountCorruption(
@@ -442,7 +443,7 @@ TEST(LevelDbArchive, AccountVerificationDetectsMailformedStorageKey) {
         extended.push_back('x');
         ASSERT_OK(db.Add(extended, Hash{}));
       },
-      "Invalid key length, expected 65 byte, got 66");
+      "Invalid key length, expected 61 byte, got 62");
 }
 
 TEST(LevelDbArchive, AccountVerificationDetectsMailformedStorageValue) {
@@ -564,7 +565,7 @@ TEST(LevelDbArchive, VerificationDetectsExtraAccountStatus) {
   // An entry in the past with uncovered address.
   TestArchiveCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x02}, 1),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x02}, 1),
                          AccountState{true, 0}.Encode()));
       },
       "Found extra key/value pair in key space `account_state`.");
@@ -572,7 +573,7 @@ TEST(LevelDbArchive, VerificationDetectsExtraAccountStatus) {
   // An entry in the future.
   TestArchiveCorruption(
       [](LevelDb& db) {
-        ASSERT_OK(db.Add(GetAccountKey(Address{0x01}, 20),
+        ASSERT_OK(db.Add(GetAccountStateKey(Address{0x01}, 20),
                          AccountState{true, 0}.Encode()));
       },
       "Found entry of future block height in key space `account_state`.");

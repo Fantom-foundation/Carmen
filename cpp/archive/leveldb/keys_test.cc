@@ -2,7 +2,6 @@
 
 #include <span>
 
-#include "common/status_test_util.h"
 #include "common/type.h"
 #include "gtest/gtest.h"
 
@@ -13,14 +12,10 @@ TEST(Keys, BlockIdIsEncodedUsingBigEndian) {
   BlockId id = 0x12345678;
   auto key = GetBlockKey(id);
   auto span = std::span(key).subspan(1);
-  EXPECT_EQ(span[0], 0);
-  EXPECT_EQ(span[1], 0);
-  EXPECT_EQ(span[2], 0);
-  EXPECT_EQ(span[3], 0);
-  EXPECT_EQ(span[4], 0x12);
-  EXPECT_EQ(span[5], 0x34);
-  EXPECT_EQ(span[6], 0x56);
-  EXPECT_EQ(span[7], 0x78);
+  EXPECT_EQ(span[0], 0x12);
+  EXPECT_EQ(span[1], 0x34);
+  EXPECT_EQ(span[2], 0x56);
+  EXPECT_EQ(span[3], 0x78);
 }
 
 TEST(Keys, StorageKeyEncodesValuesCorrectly) {
@@ -49,14 +44,10 @@ TEST(Keys, StorageKeyEncodesValuesCorrectly) {
   EXPECT_EQ(key, restored_key);
 
   auto span = std::span(res).subspan(1 + 20 + 4 + 32);
-  EXPECT_EQ(span[0], 0);
-  EXPECT_EQ(span[1], 0);
-  EXPECT_EQ(span[2], 0);
-  EXPECT_EQ(span[3], 0);
-  EXPECT_EQ(span[4], 0x12);
-  EXPECT_EQ(span[5], 0x34);
-  EXPECT_EQ(span[6], 0x56);
-  EXPECT_EQ(span[7], 0x78);
+  EXPECT_EQ(span[0], 0x12);
+  EXPECT_EQ(span[1], 0x34);
+  EXPECT_EQ(span[2], 0x56);
+  EXPECT_EQ(span[3], 0x78);
 }
 
 TEST(Keys, BlockIdCanBeExtractedFromBlockKey) {
@@ -74,6 +65,14 @@ TEST(Keys, BlockIdCanBeExtractedFromPropertyKey) {
   }
 }
 
+TEST(Keys, AccountPrefixCanBeExtractedFromPropertyKey) {
+  Address addr{1, 2, 3, 4};
+  auto key = GetBalanceKey(addr, 12);
+  auto span = GetAccountPrefix(key);
+  EXPECT_EQ(span.data(), key.data());
+  EXPECT_EQ(span.size(), 1 + sizeof(Address));
+}
+
 TEST(Keys, BlockIdCanBeExtractedFromStorageKey) {
   Address addr{};
   Key slot{};
@@ -83,15 +82,11 @@ TEST(Keys, BlockIdCanBeExtractedFromStorageKey) {
   }
 }
 
-TEST(AccountState, ReincarnationNumberCanBeEncodedAndDecoded) {
-  AccountState state;
-  for (ReincarnationNumber i = 1; i < (ReincarnationNumber(1) << 31); i <<= 1) {
-    state.reincarnation_number = i;
-    auto encoded = state.Encode();
-    AccountState restored;
-    restored.SetBytes(std::as_bytes(std::span(encoded)));
-    EXPECT_EQ(state.reincarnation_number, restored.reincarnation_number);
-  }
+TEST(Keys, SlotKeyBeExtractedFromStorageKey) {
+  Address addr{};
+  Key slot{1, 2, 3, 4};
+  auto key = GetStorageKey(addr, 12, slot, 0);
+  EXPECT_EQ(GetSlotKey(key), slot);
 }
 
 }  // namespace

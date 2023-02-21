@@ -10,6 +10,7 @@
 #include "absl/container/btree_map.h"
 #include "absl/strings/str_format.h"
 #include "archive/leveldb/keys.h"
+#include "archive/leveldb/values.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
@@ -114,7 +115,7 @@ class TypedKeyRangeIterator final : public KeyRangeIterator {
             absl::StrFormat("Invalid value length, expected %d byte, got %d",
                             sizeof(AccountState().Encode()), value.size()));
       }
-      return AccountState::From(std::as_bytes(value));
+      return AccountState::From(value);
     } else if constexpr (std::is_same_v<V, Code>) {
       return Code(value);
     } else {
@@ -134,6 +135,8 @@ class TypedKeyRangeIterator final : public KeyRangeIterator {
 
 }  // namespace
 
+// The Archive is the actual implementation of the LevelDbArchive, hidding in
+// the implementation file to avoid overloading headers.
 class Archive {
  public:
   static absl::StatusOr<std::unique_ptr<Archive>> Open(
@@ -180,7 +183,7 @@ class Archive {
       state.exists = false;
       state.reincarnation_number++;
       reincarnation_cache_[addr] = state.reincarnation_number;
-      batch.Put(GetAccountKey(addr, block), state.Encode());
+      batch.Put(GetAccountStateKey(addr, block), state.Encode());
     }
 
     for (const auto& addr : update.GetCreatedAccounts()) {
@@ -188,7 +191,7 @@ class Archive {
       state.exists = true;
       state.reincarnation_number++;
       reincarnation_cache_[addr] = state.reincarnation_number;
-      batch.Put(GetAccountKey(addr, block), state.Encode());
+      batch.Put(GetAccountStateKey(addr, block), state.Encode());
     }
 
     for (const auto& [addr, balance] : update.GetBalances()) {
@@ -324,7 +327,7 @@ class Archive {
     absl::flat_hash_set<Address> valid_accounts(accounts.begin(),
                                                 accounts.end());
     for (KeyType type :
-         {KeyType::kAccount, KeyType::kAccountHash, KeyType::kBalance,
+         {KeyType::kAccountState, KeyType::kAccountHash, KeyType::kBalance,
           KeyType::kCode, KeyType::kNonce, KeyType::kStorage}) {
       char prefix = static_cast<char>(type);
       ASSIGN_OR_RETURN(auto iter, db_.GetLowerBound(std::span(&prefix, 1)));
@@ -454,10 +457,10 @@ class Archive {
                      (TypedKeyRangeIterator<AccountHashKey, Hash>::Get(
                          db_, account_hash_key)));
 
-    auto state_key = GetAccountKey(account, 0);
-    ASSIGN_OR_RETURN(
-        auto state_iter,
-        (TypedKeyRangeIterator<AccountKey, AccountState>::Get(db_, state_key)));
+    auto state_key = GetAccountStateKey(account, 0);
+    ASSIGN_OR_RETURN(auto state_iter,
+                     (TypedKeyRangeIterator<AccountStateKey, AccountState>::Get(
+                         db_, state_key)));
 
     auto balance_key = GetBalanceKey(account, 0);
     ASSIGN_OR_RETURN(
@@ -663,8 +666,9 @@ class Archive {
       return Value{};
     }
 
-    auto want_without_block = key.subspan(0, key.size() - kBlockIdSize);
-    auto have_without_block = iter.Key().subspan(0, key.size() - kBlockIdSize);
+    auto want_without_block = key.subspan(0, key.size() - sizeof(BlockId));
+    auto have_without_block =
+        iter.Key().subspan(0, key.size() - sizeof(BlockId));
     if (block < GetBlockFromKey(iter.Key()) ||
         !Equal(want_without_block, have_without_block)) {
       return Value{};
@@ -677,15 +681,19 @@ class Archive {
       return absl::InternalError("stored value has wrong format");
     }
 
-    Value result;
-    result.SetBytes(std::as_bytes(iter.Value()));
-    return result;
+    if constexpr (std::is_same_v<Value, AccountState>) {
+      return AccountState::From(iter.Value());
+    } else {
+      Value result;
+      result.SetBytes(std::as_bytes(iter.Value()));
+      return result;
+    }
   }
 
   absl::StatusOr<AccountState> GetAccountState(BlockId block,
                                                const Address& account) {
     return FindMostRecentFor<AccountState>(block,
-                                           GetAccountKey(account, block));
+                                           GetAccountStateKey(account, block));
   }
 
   LevelDb db_;

@@ -8,6 +8,7 @@ cc_library(
     ],
     deps = [
         ":keys",
+        ":values",
         "//backend/common/leveldb",
         "//common:byte_util",
         "//common:status_util",
@@ -31,10 +32,30 @@ cc_test(
 )
 
 cc_library(
+    name = "encoding",
+    srcs = ["encoding.cc"],
+    hdrs = ["encoding.h"],
+    deps = [
+        "//common:type",
+    ],
+)
+
+cc_test(
+    name = "encoding_test",
+    srcs = ["encoding_test.cc"],
+    deps = [
+        ":encoding",
+        "//common:type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "keys",
     srcs = ["keys.cc"],
     hdrs = ["keys.h"],
     deps = [
+        ":encoding",
         "//common:status_util",
         "//common:type",
         "@com_google_absl//absl/status:statusor",
@@ -46,6 +67,30 @@ cc_test(
     srcs = ["keys_test.cc"],
     deps = [
         ":keys",
+        "//common:status_test_util",
+        "//common:type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "values",
+    srcs = ["values.cc"],
+    hdrs = ["values.h"],
+    deps = [
+        ":encoding",
+        ":keys",
+        "//common:status_util",
+        "//common:type",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "values_test",
+    srcs = ["values_test.cc"],
+    deps = [
+        ":values",
         "//common:status_test_util",
         "//common:type",
         "@com_google_googletest//:gtest_main",
