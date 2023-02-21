@@ -11,7 +11,8 @@
 // Forward declaration of opaque LevelDB dependencies.
 namespace leveldb {
 class Iterator;
-}
+class WriteBatch;
+}  // namespace leveldb
 
 namespace carmen::backend {
 using LDBEntry = std::pair<std::span<const char>, std::span<const char>>;
@@ -19,6 +20,7 @@ using LDBEntry = std::pair<std::span<const char>, std::span<const char>>;
 // Forward declaration. See leveldb.cc for implementation.
 class LevelDbImpl;
 class LevelDbIterator;
+class LevelDbWriteBatch;
 
 // LevelDb provides a simple interface to interact with leveldb.
 class LevelDb {
@@ -45,11 +47,23 @@ class LevelDb {
   absl::StatusOr<LevelDbIterator> GetLowerBound(
       std::span<const char> key) const;
 
+  // All Add functions also serve as update functions.
+  // TODO: rename Add => Put;
+
   // Add single value for given key.
   absl::Status Add(LDBEntry entry);
 
+  // Add the given key mapping to the given value.
+  absl::Status Add(std::span<const char> key, std::span<const char> value);
+
+  // Add a batch of changes in one go.
+  absl::Status Add(LevelDbWriteBatch batch);
+
   // Add batch of values. Input is a span of pairs of key and value.
   absl::Status AddBatch(std::span<LDBEntry> batch);
+
+  // Deletes a single key from the store.
+  absl::Status Delete(std::span<const char> key);
 
   // Flush all pending writes to database.
   absl::Status Flush();
@@ -117,6 +131,23 @@ class LevelDbIterator {
   enum State { kBegin, kValid, kEnd };
   State state_;
   std::unique_ptr<leveldb::Iterator> iterator_;
+};
+
+// A utility type to batch-submit changes to LevelDB.
+class LevelDbWriteBatch {
+ public:
+  LevelDbWriteBatch();
+  LevelDbWriteBatch(LevelDbWriteBatch&&);
+  ~LevelDbWriteBatch();
+
+  // Adds an update for the given key/value pair. The data referenced by the
+  // span is copied into an internal buffer and may be modified or discarded
+  // after the call.
+  void Put(std::span<const char> key, std::span<const char> value);
+
+ private:
+  friend class LevelDbImpl;
+  std::unique_ptr<leveldb::WriteBatch> batch_;
 };
 
 }  // namespace carmen::backend
