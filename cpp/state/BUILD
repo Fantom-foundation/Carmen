@@ -21,6 +21,7 @@ cc_test(
         ":state",
         ":update",
         "//archive:test_util",
+        "//archive/leveldb:archive",
         "//backend/depot:test_util",
         "//backend/index:test_util",
         "//backend/multimap:test_util",
@@ -40,7 +41,6 @@ cc_library(
     hdrs = ["configurations.h"],
     deps = [
         ":state",
-        "//archive/sqlite:archive",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
         "//backend/depot/memory:depot",
@@ -62,6 +62,8 @@ cc_library(
     deps = [
         ":configurations",
         ":state",
+        "//archive/leveldb:archive",
+        "//archive/sqlite:archive",
         "@com_google_absl//absl/status",
     ],
     alwayslink = True,
@@ -86,6 +88,7 @@ cc_binary(
     srcs = ["state_benchmark.cc"],
     deps = [
         ":configurations",
+        "//archive/leveldb:archive",
         "//common:benchmark",
         "//common:file_util",
         "//common:status_test_util",

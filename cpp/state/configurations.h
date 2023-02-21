@@ -1,6 +1,5 @@
 #pragma once
 
-#include "archive/sqlite/archive.h"
 #include "backend/depot/file/depot.h"
 #include "backend/depot/leveldb/depot.h"
 #include "backend/depot/memory/depot.h"
@@ -34,10 +33,9 @@ using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 template <typename K, typename V>
 using InMemoryMultiMap = backend::multimap::InMemoryMultiMap<K, V>;
 
-using InMemoryArchive = archive::sqlite::SqliteArchive;
-
+template <Archive Archive>
 using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot,
-                            InMemoryMultiMap, InMemoryArchive>;
+                            InMemoryMultiMap, Archive>;
 
 // ----------------------------------------------------------------------------
 //                         File-Based Configuration
@@ -54,10 +52,9 @@ using FileBasedStore =
 template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
-using FileBasedArchive = archive::sqlite::SqliteArchive;
-
+template <Archive Archive>
 using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot,
-                             InMemoryMultiMap, FileBasedArchive>;
+                             InMemoryMultiMap, Archive>;
 
 // ----------------------------------------------------------------------------
 //                         LevelDB-Based Configuration
@@ -73,10 +70,8 @@ using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
 template <typename K>
 using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
-using LevelDbBasedArchive = archive::sqlite::SqliteArchive;
-
-using LevelDbBasedState =
-    State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot,
-          InMemoryMultiMap, LevelDbBasedArchive>;
+template <Archive Archive>
+using LevelDbBasedState = State<LevelDbBasedIndex, LevelDbBasedStore,
+                                LevelDbBasedDepot, InMemoryMultiMap, Archive>;
 
 }  // namespace carmen

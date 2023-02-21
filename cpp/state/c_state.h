@@ -30,25 +30,30 @@ extern "C" {
 #define C_Hash void*
 #define C_AccountState void*
 
+// An enumeration of supported state implementations.
+enum StateImpl { kState_Memory = 0, kState_File = 1, kState_LevelDb = 2 };
+
+// An enumeration of supported archive implementations.
+enum ArchiveImpl {
+  kArchive_None = 0,
+  kArchive_LevelDb = 1,
+  kArchive_Sqlite = 2
+};
+
 // ------------------------------ Life Cycle ----------------------------------
 
-// Creates a new state retaining all data in memory and returns an opaque
-// pointer to it. Ownership of the state is transfered to the caller, which is
-// required to release it eventually.
-C_State Carmen_CreateInMemoryState(C_bool with_archive);
-
-// Creates a new state object maintaining data in files of the given directory
-// and returns an opaque pointer to it. Ownership of the state is transfered to
-// the caller, which is required to release it eventually.
-C_State Carmen_CreateFileBasedState(const char* directory, int length,
-                                    C_bool with_archive);
-
-// Creates a new state object maintaining data in a LevelDB instance located in
-// the given directory and returns an opaque pointer to it. Ownership of the
-// state is transferred to the caller, which is required to release it
-// eventually.
-C_State Carmen_CreateLevelDbBasedState(const char* directory, int length,
-                                       C_bool with_archive);
+// Opens a new state object based on the provided implementation maintaining
+// its data in the given directory. If the directory does not exist, it is
+// created. If it is empty, a new, empty state is initialized. If it contains
+// state information, the information is loaded.
+//
+// The function returns an opaque pointer to a state object that can be used
+// with the remaining functions in this file. Ownership is transfered to the
+// caller, which is required for releasing it eventually using Carmen_Release().
+// If for some reason the creation of the state instance failed, a nullptr is
+// returned.
+C_State Carmen_OpenState(StateImpl state, ArchiveImpl archive,
+                         const char* directory, int length);
 
 // Flushes all committed state information to disk to guarantee permanent
 // storage. All internally cached modifications is synced to disk.

@@ -14,28 +14,34 @@ namespace {
 
 using ::testing::ElementsAre;
 
-enum class Variant {
-  kInMemory,
-  kFileBased,
-  kLevelDbBased,
-};
-
-std::string ToString(Variant c) {
+std::string ToString(StateImpl c) {
   switch (c) {
-    case Variant::kInMemory:
-      return "InMemory";
-    case Variant::kFileBased:
-      return "FileBased";
-    case Variant::kLevelDbBased:
-      return "LevelDbBased";
+    case kState_Memory:
+      return "Memory";
+    case kState_File:
+      return "File";
+    case kState_LevelDb:
+      return "LevelDb";
+  }
+  return "Unknown";
+}
+
+std::string ToString(ArchiveImpl c) {
+  switch (c) {
+    case kArchive_None:
+      return "None";
+    case kArchive_LevelDb:
+      return "LevelDb";
+    case kArchive_Sqlite:
+      return "SQLite";
   }
   return "Unknown";
 }
 
 // A configuration struct for the parameterized test below.
 struct Config {
-  Variant variant;
-  bool with_archive;
+  StateImpl state;
+  ArchiveImpl archive;
 };
 
 // Wrapper functions for updateing individual elements.
@@ -92,31 +98,12 @@ void Carmen_SetStorageValue(C_State state, C_Address addr, C_Key key,
 class CStateTest : public testing::TestWithParam<Config> {
  public:
   void SetUp() override {
+    dir_ = std::make_unique<TempDir>();
+    auto path = dir_->GetPath().string();
     const Config& config = GetParam();
-    switch (config.variant) {
-      case Variant::kInMemory: {
-        state_ = Carmen_CreateInMemoryState(config.with_archive);
-        ASSERT_NE(state_, nullptr);
-        return;
-      }
-      case Variant::kFileBased: {
-        dir_ = std::make_unique<TempDir>();
-        auto path = dir_->GetPath().string();
-        state_ = Carmen_CreateFileBasedState(path.c_str(), path.size(),
-                                             config.with_archive);
-        ASSERT_NE(state_, nullptr);
-        return;
-      }
-      case Variant::kLevelDbBased: {
-        dir_ = std::make_unique<TempDir>();
-        auto path = dir_->GetPath().string();
-        state_ = Carmen_CreateLevelDbBasedState(path.c_str(), path.size(),
-                                                config.with_archive);
-        ASSERT_NE(state_, nullptr);
-        return;
-      }
-    }
-    FAIL() << "Unknown variant: " << ToString(config.variant);
+    state_ = Carmen_OpenState(config.state, config.archive, path.c_str(),
+                              path.size());
+    ASSERT_NE(state_, nullptr);
   }
 
   void TearDown() override {
@@ -383,12 +370,12 @@ TEST_P(CStateTest, CodeSizesMatchCodes) {
 TEST_P(CStateTest, ArchiveCanBeAccessedIfEnabled) {
   auto state = GetState();
   auto archive = Carmen_GetArchiveState(state, 0);
-  EXPECT_EQ(archive != nullptr, GetParam().with_archive);
+  EXPECT_EQ(archive != nullptr, GetParam().archive != kArchive_None);
   Carmen_ReleaseState(archive);
 }
 
 TEST_P(CStateTest, ArchiveCanBeQueried) {
-  if (!GetParam().with_archive) {
+  if (GetParam().archive == kArchive_None) {
     return;  // This test is only relevant when archives are enabled
   }
   auto state = GetState();
@@ -510,100 +497,60 @@ TEST_P(CStateTest, MemoryFootprintCanBeObtained) {
   free(data);
 }
 
+TEST_P(CStateTest, CanBeStoredAndReloaded) {
+  const Config& config = GetParam();
+  if (config.state == kState_Memory) {
+    return;  // In-memory state is by definition not persistent.
+  }
+  TempDir dir;
+  auto path = dir.GetPath().string();
+  Hash hash;
+  {
+    auto state = Carmen_OpenState(config.state, config.archive, path.c_str(),
+                                  path.size());
+    ASSERT_NE(state, nullptr);
+
+    Address addr{0x01};
+    Key key{0x02};
+    Value value{0x03};
+    Carmen_SetStorageValue(state, &addr, &key, &value);
+    Carmen_GetHash(state, &hash);
+    Carmen_ReleaseState(state);
+  }
+  {
+    auto state = Carmen_OpenState(config.state, config.archive, path.c_str(),
+                                  path.size());
+    ASSERT_NE(state, nullptr);
+
+    Address addr{0x01};
+    Key key{0x02};
+    Value value{};
+    Carmen_GetStorageValue(state, &addr, &key, &value);
+    EXPECT_EQ(value, Value{0x03});
+    Hash recovered;
+    Carmen_GetHash(state, &recovered);
+    EXPECT_EQ(hash, recovered);
+    Carmen_ReleaseState(state);
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(
     All, CStateTest,
-    testing::Values(Config{Variant::kInMemory, false},
-                    Config{Variant::kFileBased, false},
-                    Config{Variant::kLevelDbBased, false},
-                    Config{Variant::kInMemory, true},
-                    Config{Variant::kFileBased, true},
-                    Config{Variant::kLevelDbBased, true}),
+    testing::Values(Config{kState_Memory, kArchive_None},
+                    Config{kState_File, kArchive_None},
+                    Config{kState_LevelDb, kArchive_None},
+
+                    Config{kState_Memory, kArchive_LevelDb},
+                    Config{kState_File, kArchive_LevelDb},
+                    Config{kState_LevelDb, kArchive_LevelDb},
+
+                    Config{kState_Memory, kArchive_Sqlite},
+                    Config{kState_File, kArchive_Sqlite},
+                    Config{kState_LevelDb, kArchive_Sqlite}),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {
-      const char* archive = info.param.with_archive ? "with" : "without";
-      return ToString(info.param.variant) + "_" + archive + "_archive";
+      return "state_" + ToString(info.param.state) + "_archive_" +
+             ToString(info.param.archive);
     });
-
-void StoreAndReloadFileBasedStore(bool with_archive) {
-  TempDir dir;
-  auto path = dir.GetPath().string();
-  Hash hash;
-  {
-    auto state =
-        Carmen_CreateFileBasedState(path.c_str(), path.length(), with_archive);
-    ASSERT_NE(state, nullptr);
-
-    Address addr{0x01};
-    Key key{0x02};
-    Value value{0x03};
-    Carmen_SetStorageValue(state, &addr, &key, &value);
-    Carmen_GetHash(state, &hash);
-    Carmen_ReleaseState(state);
-  }
-  {
-    auto state =
-        Carmen_CreateFileBasedState(path.c_str(), path.length(), with_archive);
-    ASSERT_NE(state, nullptr);
-
-    Address addr{0x01};
-    Key key{0x02};
-    Value value{};
-    Carmen_GetStorageValue(state, &addr, &key, &value);
-    EXPECT_EQ(value, Value{0x03});
-    Hash recovered;
-    Carmen_GetHash(state, &recovered);
-    EXPECT_EQ(hash, recovered);
-    Carmen_ReleaseState(state);
-  }
-}
-
-TEST(FileBasedStateTest, CanBeStoredAndReloadedWithoutArchive) {
-  StoreAndReloadFileBasedStore(/*with_archive=*/false);
-}
-
-TEST(FileBasedStateTest, CanBeStoredAndReloadedWithArchive) {
-  StoreAndReloadFileBasedStore(/*with_archive=*/true);
-}
-
-void StoreAndReloadLevelDbBasedStore(bool with_archive) {
-  TempDir dir;
-  auto path = dir.GetPath().string();
-  Hash hash;
-  {
-    auto state = Carmen_CreateLevelDbBasedState(path.c_str(), path.length(),
-                                                with_archive);
-    ASSERT_NE(state, nullptr);
-
-    Address addr{0x01};
-    Key key{0x02};
-    Value value{0x03};
-    Carmen_SetStorageValue(state, &addr, &key, &value);
-    Carmen_GetHash(state, &hash);
-    Carmen_ReleaseState(state);
-  }
-  {
-    auto state = Carmen_CreateLevelDbBasedState(path.c_str(), path.length(),
-                                                with_archive);
-    ASSERT_NE(state, nullptr);
-
-    Address addr{0x01};
-    Key key{0x02};
-    Value value{};
-    Carmen_GetStorageValue(state, &addr, &key, &value);
-    EXPECT_EQ(value, Value{0x03});
-    Hash recovered;
-    Carmen_GetHash(state, &recovered);
-    EXPECT_EQ(hash, recovered);
-    Carmen_ReleaseState(state);
-  }
-}
-
-TEST(LevelDbBasedStateTest, CanBeStoredAndReloadedWithoutArchive) {
-  StoreAndReloadLevelDbBasedStore(/*with_archive=*/false);
-}
-
-TEST(LevelDbBasedStateTest, CanBeStoredAndReloadedWithArchive) {
-  StoreAndReloadLevelDbBasedStore(/*with_archive=*/true);
-}
 
 }  // namespace
 }  // namespace carmen
