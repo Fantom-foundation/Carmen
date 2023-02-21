@@ -360,6 +360,7 @@ func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("valuesStore", s.valuesStore.GetMemoryFootprint())
 	mf.AddChild("codesDepot", s.codesDepot.GetMemoryFootprint())
 	mf.AddChild("codeHashesStore", s.codeHashesStore.GetMemoryFootprint())
+	mf.AddChild("addressToSlots", s.addressToSlots.GetMemoryFootprint())
 	if s.archive != nil {
 		mf.AddChild("archive", s.archive.GetMemoryFootprint())
 	}
