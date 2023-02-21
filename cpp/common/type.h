@@ -72,6 +72,14 @@ class ByteValue {
     return std::as_bytes(std::span(data_));
   }
 
+  // Enables the implicit conversion into fixed-length spans of char.
+  operator std::span<const char, N>() const { return std::span(data_); }
+
+  // Enables the implicit conversion into spans of char with dynamic extend.
+  operator std::span<const char>() const {
+    return std::span(reinterpret_cast<const char*>(data_.data()), N);
+  }
+
   // Sets the bytes of this value to the provided data.
   void SetBytes(std::span<const std::byte, N> data) {
     std::memcpy(&data_[0], data.data(), data.size());
@@ -86,6 +94,10 @@ class ByteValue {
       std::memset(&data_[0] + data.size(), 0, N - data.size());
     }
   }
+
+  // Same as above, overing a convenience wrapper for cases where data is typed
+  // as const char instead of std::byte.
+  void SetBytes(std::span<const char> data) { SetBytes(std::as_bytes(data)); }
 
   // Overload of << operator to make class printable.
   friend std::ostream& operator<<(std::ostream& out,
@@ -162,16 +174,20 @@ class Nonce : public ByteValue<kNonceLength> {
 class Code {
  public:
   Code(std::vector<std::byte> code = {}) : code_(std::move(code)) {}
-  Code(std::span<const std::byte> code) {
-    code_.assign(code.begin(), code.end());
-  }
+  Code(std::span<const char> code) { SetBytes(code); }
+  Code(std::span<const std::byte> code) { SetBytes(code); }
   Code(std::initializer_list<std::uint8_t> il) {
-    auto bytes = std::as_bytes(std::span(il.begin(), il.size()));
-    code_.assign(bytes.begin(), bytes.end());
+    SetBytes(std::as_bytes(std::span(il.begin(), il.size())));
   }
 
   auto Size() const { return code_.size(); }
   auto Data() const { return code_.data(); }
+
+  void SetBytes(std::span<const std::byte> code) {
+    code_.assign(code.begin(), code.end());
+  }
+
+  void SetBytes(std::span<const char> data) { SetBytes(std::as_bytes(data)); }
 
   friend bool operator==(const Code&, const Code&) = default;
 
@@ -195,6 +211,10 @@ class Code {
 
   operator std::span<const std::byte>() const {
     return {code_.data(), code_.size()};
+  }
+
+  operator std::span<const char>() const {
+    return {reinterpret_cast<const char*>(code_.data()), code_.size()};
   }
 
  private:
