@@ -213,6 +213,10 @@ class Code {
     return {code_.data(), code_.size()};
   }
 
+  operator std::span<const char>() const {
+    return {reinterpret_cast<const char*>(code_.data()), code_.size()};
+  }
+
  private:
   std::vector<std::byte> code_;
 };

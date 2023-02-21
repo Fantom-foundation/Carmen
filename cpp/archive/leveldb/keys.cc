@@ -9,6 +9,26 @@
 
 namespace carmen::archive::leveldb {
 
+std::string_view ToString(KeyType type) {
+  switch (type) {
+    case KeyType::kAccount:
+      return "account_state";
+    case KeyType::kAccountHash:
+      return "account_hash";
+    case KeyType::kBlock:
+      return "block";
+    case KeyType::kBalance:
+      return "balance";
+    case KeyType::kCode:
+      return "code";
+    case KeyType::kNonce:
+      return "nonce";
+    case KeyType::kStorage:
+      return "storage";
+  }
+  return "unknown";
+}
+
 namespace {
 
 template <std::size_t offset, std::size_t count, typename T, std::size_t Extend>

@@ -75,10 +75,9 @@ class LevelDbImpl {
   }
 
   // Add single value for given key.
-  absl::Status Add(LDBEntry entry) {
-    leveldb::Status status =
-        db_->Put(kWriteOptions, {entry.first.data(), entry.first.size()},
-                 {entry.second.data(), entry.second.size()});
+  absl::Status Add(std::span<const char> key, std::span<const char> value) {
+    leveldb::Status status = db_->Put(kWriteOptions, {key.data(), key.size()},
+                                      {value.data(), value.size()});
 
     if (!status.ok()) return absl::InternalError(status.ToString());
 
@@ -150,7 +149,14 @@ absl::StatusOr<LevelDbIterator> LevelDb::GetLowerBound(
 }
 
 // Add single value for given key.
-absl::Status LevelDb::Add(LDBEntry entry) { return impl_->Add(entry); }
+absl::Status LevelDb::Add(LDBEntry entry) {
+  return impl_->Add(entry.first, entry.second);
+}
+
+absl::Status LevelDb::Add(std::span<const char> key,
+                          std::span<const char> value) {
+  return impl_->Add(key, value);
+}
 
 absl::Status LevelDb::Add(LevelDbWriteBatch batch) {
   return impl_->Add(std::move(batch));

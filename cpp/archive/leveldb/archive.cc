@@ -55,7 +55,7 @@ class KeyRangeIterator {
   }
 
   // Retrieves the block number referenced by the current iterator position.
-  virtual BlockId GetBlock() const = 0;
+  virtual absl::StatusOr<BlockId> GetBlock() const = 0;
 
  protected:
   KeyRangeIterator(LevelDbIterator iter, std::span<const char> prefix)
@@ -89,14 +89,18 @@ class TypedKeyRangeIterator final : public KeyRangeIterator {
 
   // The block the entry pointed to by the iterator is associated to. Invalid if
   // the iterator is finished.
-  BlockId GetBlock() const override { return GetBlockFromKey(iterator_.Key()); }
+  absl::StatusOr<BlockId> GetBlock() const override {
+    ASSIGN_OR_RETURN(const K& key, Key());
+    return GetBlockFromKey(key);
+  }
 
   // Returns a length-checked view on the current key.
   StatusOrRef<const K> Key() const {
     auto key = iterator_.Key();
     if (key.size() != sizeof(K)) {
-      return absl::InternalError(absl::StrFormat(
-          "Invalid key length, expected %d, got %d", sizeof(K), key.size()));
+      return absl::InternalError(
+          absl::StrFormat("Invalid key length, expected %d byte, got %d",
+                          sizeof(K), key.size()));
     }
     return *reinterpret_cast<const K*>(key.data());
   }
@@ -107,7 +111,7 @@ class TypedKeyRangeIterator final : public KeyRangeIterator {
     if constexpr (std::is_same_v<V, AccountState>) {
       if (value.size() != sizeof(AccountState().Encode())) {
         return absl::InternalError(
-            absl::StrFormat("Invalid value length, expected %d, got %d",
+            absl::StrFormat("Invalid value length, expected %d byte, got %d",
                             sizeof(AccountState().Encode()), value.size()));
       }
       return AccountState::From(std::as_bytes(value));
@@ -117,7 +121,7 @@ class TypedKeyRangeIterator final : public KeyRangeIterator {
       static_assert(Trivial<V>);
       if (value.size() != sizeof(V)) {
         return absl::InternalError(
-            absl::StrFormat("Invalid value length, expected %d, got %d",
+            absl::StrFormat("Invalid value length, expected %d byte, got %d",
                             sizeof(V), value.size()));
       }
       return *reinterpret_cast<const V*>(value.data());
@@ -297,7 +301,7 @@ class Archive {
       BlockId block, const Hash& expected_hash,
       absl::FunctionRef<void(std::string_view)> progress_callback) {
     // First, check the expected hash.
-    progress_callback("checking archive root hash");
+    progress_callback("checking block hashes");
     ASSIGN_OR_RETURN(auto hash, GetHash(block));
     if (hash != expected_hash) {
       return absl::InternalError("Archive hash does not match expected hash.");
@@ -331,15 +335,17 @@ class Archive {
         if (current_block <= block) {
           auto& addr = GetAddressFromKey(iter.Key());
           if (!valid_accounts.contains(addr)) {
-            return absl::InternalError(absl::StrFormat(
-                "Found extra key/value pair with prefix `%c`.", prefix));
+            return absl::InternalError(
+                absl::StrFormat("Found extra key/value pair in key space `%s`.",
+                                ToString(type)));
           }
         }
 
         // Make sure there is are no future blocks included.
         if (current_block > latest_block) {
           return absl::InternalError(absl::StrFormat(
-              "Found entry of future block height with prefix `%c`.", prefix));
+              "Found entry of future block height in key space `%s`.",
+              ToString(type)));
         }
         RETURN_IF_ERROR(iter.Next());
       }
@@ -406,9 +412,14 @@ class Archive {
       }
 
       if (account_hash_iter == account_hashes.end() ||
-          account_hash_iter->first.first != current_block) {
+          account_hash_iter->first.first > current_block) {
         return absl::InternalError(
-            absl::StrFormat("No diffs found for block %d.", current_block));
+            absl::StrFormat("No diff hash found for block %d.", current_block));
+      }
+      if (account_hash_iter->first.first < current_block) {
+        return absl::InternalError(absl::StrFormat(
+            "Found account update for block %d but no hash for this block.",
+            account_hash_iter->first.first));
       }
 
       // Re-compute hash for current block.
@@ -493,11 +504,12 @@ class Archive {
                                               &nonce_iter, &code_iter};
 
     // Find the first block referencing the account.
-    auto get_next_block = [&]() -> BlockId {
+    auto get_next_block = [&]() -> absl::StatusOr<BlockId> {
       BlockId next = block + 1;
       for (KeyRangeIterator* iter : property_iterators) {
         if (!iter->Finished()) {
-          next = std::min<BlockId>(next, iter->GetBlock());
+          ASSIGN_OR_RETURN(auto block, iter->GetBlock());
+          next = std::min<BlockId>(next, block);
         }
       }
       if (storage_iter != storage_iter_end) {
@@ -505,7 +517,7 @@ class Archive {
       }
       return next;
     };
-    BlockId next = get_next_block();
+    ASSIGN_OR_RETURN(BlockId next, get_next_block());
 
     // Keep track of the reincarnation number.
     ReincarnationNumber reincarnation = 0;
@@ -525,7 +537,7 @@ class Archive {
       // --- Recreate Update for Current Block ---
       AccountUpdate update;
 
-      if (!state_iter.Finished() && state_iter.GetBlock() == current) {
+      if (!state_iter.Finished() && *state_iter.GetBlock() == current) {
         ASSIGN_OR_RETURN(auto state, state_iter.Value());
         if (state.exists) {
           update.created = true;
@@ -543,17 +555,17 @@ class Archive {
         RETURN_IF_ERROR(state_iter.Next());
       }
 
-      if (!balance_iter.Finished() && balance_iter.GetBlock() == current) {
+      if (!balance_iter.Finished() && *balance_iter.GetBlock() == current) {
         ASSIGN_OR_RETURN(update.balance, balance_iter.Value());
         RETURN_IF_ERROR(balance_iter.Next());
       }
 
-      if (!nonce_iter.Finished() && nonce_iter.GetBlock() == current) {
+      if (!nonce_iter.Finished() && *nonce_iter.GetBlock() == current) {
         ASSIGN_OR_RETURN(update.nonce, nonce_iter.Value());
         RETURN_IF_ERROR(nonce_iter.Next());
       }
 
-      if (!code_iter.Finished() && code_iter.GetBlock() == current) {
+      if (!code_iter.Finished() && *code_iter.GetBlock() == current) {
         ASSIGN_OR_RETURN(update.code, code_iter.Value());
         RETURN_IF_ERROR(code_iter.Next());
       }
@@ -581,7 +593,7 @@ class Archive {
             "Archive contains update for block %d but no hash for it.",
             current));
       }
-      BlockId diff_block = hash_iter.GetBlock();
+      ASSIGN_OR_RETURN(BlockId diff_block, hash_iter.GetBlock());
       if (diff_block != current) {
         if (diff_block < current) {
           return absl::InternalError(
@@ -607,14 +619,14 @@ class Archive {
       RETURN_IF_ERROR(hash_iter.Next());
 
       // Find next block to be processed.
-      next = get_next_block();
+      ASSIGN_OR_RETURN(next, get_next_block());
     }
 
     // Check whether there are additional updates in the hash table.
-    if (!hash_iter.Finished() && hash_iter.GetBlock() < block) {
+    if (!hash_iter.Finished() && *hash_iter.GetBlock() < block) {
       return absl::InternalError(absl::StrFormat(
-          "DB contains hash for update on block %d but no data.",
-          hash_iter.GetBlock()));
+          "Found change in block %d not covered by archive hash.",
+          *hash_iter.GetBlock()));
     }
 
     return absl::OkStatus();

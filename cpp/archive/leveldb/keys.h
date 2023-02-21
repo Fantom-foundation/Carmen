@@ -21,6 +21,8 @@ enum class KeyType : char {
   kAccountHash = '7',
 };
 
+std::string_view ToString(KeyType type);
+
 using ReincarnationNumber = std::uint32_t;
 
 static constexpr const std::size_t kBlockIdSize = 8;

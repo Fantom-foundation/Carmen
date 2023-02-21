@@ -47,8 +47,14 @@ class LevelDb {
   absl::StatusOr<LevelDbIterator> GetLowerBound(
       std::span<const char> key) const;
 
+  // All Add functions also serve as update functions.
+  // TODO: rename Add => Put;
+
   // Add single value for given key.
   absl::Status Add(LDBEntry entry);
+
+  // Add the given key mapping to the given value.
+  absl::Status Add(std::span<const char> key, std::span<const char> value);
 
   // Add a batch of changes in one go.
   absl::Status Add(LevelDbWriteBatch batch);
