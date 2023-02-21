@@ -23,6 +23,7 @@ cc_test(
     deps = [
         ":archive",
         "//archive",
+        "//archive:archive_test_suite",
         "//common:file_util",
         "//common:hash",
         "//common:status_test_util",

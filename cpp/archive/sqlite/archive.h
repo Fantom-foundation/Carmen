@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string_view>
 
 #include "absl/functional/function_ref.h"
