@@ -106,7 +106,7 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length);
 
 // Applies the provided block update to the maintained state.
 void Carmen_Apply(C_State state, uint64_t block, C_Update update,
-                  uint32_t length);
+                  uint64_t length);
 
 // ------------------------------ Global Hash ---------------------------------
 

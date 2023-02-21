@@ -174,7 +174,8 @@ template <typename State>
 WorldState* Open(const std::filesystem::path& directory, C_bool with_archive) {
   auto state = State::Open(directory, with_archive);
   if (!state.ok()) {
-    std::cout << "WARNING: Failed to open state: " << state.status() << "\n";
+    std::cout << "WARNING: Failed to open state: " << state.status() << "\n"
+              << std::flush;
     return nullptr;
   }
   return new WorldStateWrapper<State>(*std::move(state));
@@ -204,14 +205,16 @@ C_State Carmen_CreateLevelDbBasedState(const char* directory, int length,
 void Carmen_Flush(C_State state) {
   auto res = reinterpret_cast<carmen::WorldState*>(state)->Flush();
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to flush state: " << res << "\n";
+    std::cout << "WARNING: Failed to flush state: " << res << "\n"
+              << std::flush;
   }
 }
 
 void Carmen_Close(C_State state) {
   auto res = reinterpret_cast<carmen::WorldState*>(state)->Close();
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to close state: " << res << "\n";
+    std::cout << "WARNING: Failed to close state: " << res << "\n"
+              << std::flush;
   }
 }
 
@@ -232,7 +235,8 @@ void Carmen_GetAccountState(C_State state, C_Address addr,
   auto res = s.GetAccountState(a);
   if (!res.ok()) {
     std::cout << "WARNING: Failed to get account state: " << res.status()
-              << "\n";
+              << "\n"
+              << std::flush;
     return;
   }
   r = *res;
@@ -244,7 +248,8 @@ void Carmen_GetBalance(C_State state, C_Address addr, C_Balance out_balance) {
   auto& b = *reinterpret_cast<carmen::Balance*>(out_balance);
   auto res = s.GetBalance(a);
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to get balance: " << res.status() << "\n";
+    std::cout << "WARNING: Failed to get balance: " << res.status() << "\n"
+              << std::flush;
     return;
   }
   b = *res;
@@ -256,7 +261,8 @@ void Carmen_GetNonce(C_State state, C_Address addr, C_Nonce out_nonce) {
   auto& n = *reinterpret_cast<carmen::Nonce*>(out_nonce);
   auto res = s.GetNonce(a);
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to get nonce: " << res.status() << "\n";
+    std::cout << "WARNING: Failed to get nonce: " << res.status() << "\n"
+              << std::flush;
     return;
   }
   n = *res;
@@ -271,7 +277,8 @@ void Carmen_GetStorageValue(C_State state, C_Address addr, C_Key key,
   auto res = s.GetValue(a, k);
   if (!res.ok()) {
     std::cout << "WARNING: Failed to get storage value: " << res.status()
-              << "\n";
+              << "\n"
+              << std::flush;
     return;
   }
   v = *res;
@@ -283,14 +290,16 @@ void Carmen_GetCode(C_State state, C_Address addr, C_Code out_code,
   auto& a = *reinterpret_cast<carmen::Address*>(addr);
   auto code = s.GetCode(a);
   if (!code.ok()) {
-    std::cout << "WARNING: Failed to get code: " << code.status() << "\n";
+    std::cout << "WARNING: Failed to get code: " << code.status() << "\n"
+              << std::flush;
     return;
   }
   auto capacity = *out_length;
   *out_length = code->Size();
   if (code->Size() > capacity) {
     std::cout << "WARNING: Code buffer too small: " << code->Size() << " > "
-              << capacity << "\n";
+              << capacity << "\n"
+              << std::flush;
     return;
   }
   memcpy(out_code, code->Data(), code->Size());
@@ -302,7 +311,8 @@ void Carmen_GetCodeHash(C_State state, C_Address addr, C_Hash out_hash) {
   auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);
   auto res = s.GetCodeHash(a);
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to get code hash: " << res.status() << "\n";
+    std::cout << "WARNING: Failed to get code hash: " << res.status() << "\n"
+              << std::flush;
     return;
   }
   h = *res;
@@ -313,26 +323,29 @@ void Carmen_GetCodeSize(C_State state, C_Address addr, uint32_t* out_length) {
   auto& a = *reinterpret_cast<carmen::Address*>(addr);
   auto res = s.GetCodeSize(a);
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to get code size: " << res.status() << "\n";
+    std::cout << "WARNING: Failed to get code size: " << res.status() << "\n"
+              << std::flush;
     return;
   }
   *out_length = *res;
 }
 
 void Carmen_Apply(C_State state, uint64_t block, C_Update update,
-                  uint32_t length) {
+                  uint64_t length) {
   auto& s = *reinterpret_cast<carmen::WorldState*>(state);
   std::span<const std::byte> data(reinterpret_cast<const std::byte*>(update),
                                   length);
   auto change = carmen::Update::FromBytes(data);
   if (!change.ok()) {
-    std::cout << "WARNING: Failed to decode update: " << change.status()
-              << "\n";
+    std::cout << "WARNING: Failed to decode update: " << change.status() << "\n"
+              << std::flush;
+
     return;
   }
   auto res = s.Apply(block, *std::move(change));
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to apply update: " << res << "\n";
+    std::cout << "WARNING: Failed to apply update: " << res << "\n"
+              << std::flush;
   }
 }
 
@@ -341,7 +354,8 @@ void Carmen_GetHash(C_State state, C_Hash out_hash) {
   auto& h = *reinterpret_cast<carmen::Hash*>(out_hash);
   auto res = s.GetHash();
   if (!res.ok()) {
-    std::cout << "WARNING: Failed to get hash: " << res.status() << "\n";
+    std::cout << "WARNING: Failed to get hash: " << res.status() << "\n"
+              << std::flush;
     return;
   }
   h = *res;

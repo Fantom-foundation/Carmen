@@ -168,7 +168,7 @@ func (cs *CppState) Apply(block uint64, update common.Update) error {
 	}
 	data := update.ToBytes()
 	dataPtr := unsafe.Pointer(&data[0])
-	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint32_t(len(data)))
+	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint64_t(len(data)))
 	// Apply code changes to Go-sided code cache.
 	for _, change := range update.Codes {
 		cs.codeCache.Set(change.Account, change.Code)
