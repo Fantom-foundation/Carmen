@@ -13,11 +13,14 @@ cc_library(
     ],
 )
 
-cc_test(
-    name = "state_test",
-    srcs = ["state_test.cc"],
+cc_library(
+    name = "state_test_suite",
+    testonly = True,
+    hdrs = ["state_test_suite.h"],
+    visibility = [
+        "//state:__subpackages__",
+    ],
     deps = [
-        ":configurations",
         ":state",
         ":update",
         "//archive:test_util",
@@ -32,6 +35,15 @@ cc_test(
         "//common:type",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "state_test",
+    srcs = ["state_test.cc"],
+    deps = [
+        ":configurations",
+        ":state_test_suite",
         "@com_google_googletest//:gtest_main",
     ],
 )
@@ -40,7 +52,6 @@ cc_library(
     name = "configurations",
     hdrs = ["configurations.h"],
     deps = [
-        ":state",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
         "//backend/depot/memory:depot",
@@ -52,6 +63,7 @@ cc_library(
         "//backend/store/file:store",
         "//backend/store/leveldb:store",
         "//backend/store/memory:store",
+        "//state/s1:state",
     ],
 )
 

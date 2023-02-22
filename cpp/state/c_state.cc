@@ -52,7 +52,7 @@ class WorldState {
 // function calls to an owned state instance. This class is the adapter between
 // the static template based state implementations and the polymorph virtual
 // WorldState interface.
-template <typename State>
+template <State State>
 class WorldStateWrapper : public WorldState {
  public:
   WorldStateWrapper(State state) : state_(std::move(state)) {}
