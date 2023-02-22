@@ -3,6 +3,7 @@ package btree
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // InnerNode contains keys as the LeafNode, in addition, it contains array of children elements.
@@ -417,4 +418,15 @@ func (m InnerNode[K]) checkProperties(treeDepth *int, currentLevel int) error {
 	}
 
 	return nil
+}
+
+func (m *InnerNode[K]) GetMemoryFootprint() *common.MemoryFootprint {
+	selfSize := unsafe.Sizeof(*m)
+	var k K
+	keysSize := uintptr(len(m.keys)) * unsafe.Sizeof(k)
+	var childrenSize uintptr
+	for _, child := range m.children {
+		childrenSize += child.GetMemoryFootprint().Value()
+	}
+	return common.NewMemoryFootprint(selfSize + keysSize + childrenSize)
 }

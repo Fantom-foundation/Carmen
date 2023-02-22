@@ -1,8 +1,11 @@
 package btree
 
+import "github.com/Fantom-foundation/Carmen/go/common"
+
 type node[K any] interface {
 	ForEacher[K]
 	nodeChecker[K]
+	common.MemoryFootprintProvider
 
 	// insert finds an in-order position of the key and inserts it in this node.
 	// When the key already exits, nothing happens.

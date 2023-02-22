@@ -162,6 +162,19 @@ func (c Uint32Comparator) Compare(a, b *uint32) int {
 	return 0
 }
 
+type Uint64Comparator struct{}
+
+func (c Uint64Comparator) Compare(a, b *uint64) int {
+	if *a > *b {
+		return 1
+	}
+	if *a < *b {
+		return -1
+	}
+
+	return 0
+}
+
 var (
 	one        = big.NewInt(1)
 	maxBalance = getMaxBalance()

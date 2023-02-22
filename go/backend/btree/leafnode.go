@@ -3,6 +3,7 @@ package btree
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // LeafNode contains a list of keys. The node has a maximal capacity, i.e. the number of keys it can hold.
@@ -186,4 +187,11 @@ func (m LeafNode[K]) checkProperties(treeDepth *int, currentLevel int) error {
 	}
 
 	return nil
+}
+
+func (m *LeafNode[K]) GetMemoryFootprint() *common.MemoryFootprint {
+	selfSize := unsafe.Sizeof(*m)
+	var k K
+	keysSize := uintptr(len(m.keys)) * unsafe.Sizeof(k)
+	return common.NewMemoryFootprint(selfSize + keysSize)
 }
