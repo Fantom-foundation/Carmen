@@ -438,7 +438,9 @@ func (s *GoState) Close() error {
 
 	if s.cleanup != nil {
 		for _, clean := range s.cleanup {
-			clean()
+			if clean != nil {
+				clean()
+			}
 		}
 	}
 	return last
