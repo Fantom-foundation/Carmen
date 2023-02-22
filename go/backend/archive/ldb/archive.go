@@ -13,6 +13,7 @@ import (
 type Archive struct {
 	db                       *common.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
+	batch                    leveldb.Batch
 }
 
 func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
@@ -28,7 +29,7 @@ func (a *Archive) Close() error {
 }
 
 func (a *Archive) Add(block uint64, update common.Update) error {
-	batch := leveldb.Batch{}
+	a.batch.Reset()
 
 	getReincarnationNumber := func(account common.Address) (int, error) {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
@@ -47,7 +48,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		accountK.set(common.AccountArchiveKey, account, block)
 		var accountStatusV accountStatusValue
 		accountStatusV.set(false, reincarnation+1)
-		batch.Put(accountK[:], accountStatusV[:])
+		a.batch.Put(accountK[:], accountStatusV[:])
 		a.reincarnationNumberCache[account] = reincarnation + 1
 	}
 
@@ -60,26 +61,26 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		accountK.set(common.AccountArchiveKey, account, block)
 		var accountStatusV accountStatusValue
 		accountStatusV.set(true, reincarnation+1)
-		batch.Put(accountK[:], accountStatusV[:])
+		a.batch.Put(accountK[:], accountStatusV[:])
 		a.reincarnationNumberCache[account] = reincarnation + 1
 	}
 
 	for _, balanceUpdate := range update.Balances {
 		var accountK accountBlockKey
 		accountK.set(common.BalanceArchiveKey, balanceUpdate.Account, block)
-		batch.Put(accountK[:], balanceUpdate.Balance[:])
+		a.batch.Put(accountK[:], balanceUpdate.Balance[:])
 	}
 
 	for _, codeUpdate := range update.Codes {
 		var accountK accountBlockKey
 		accountK.set(common.CodeArchiveKey, codeUpdate.Account, block)
-		batch.Put(accountK[:], codeUpdate.Code[:])
+		a.batch.Put(accountK[:], codeUpdate.Code[:])
 	}
 
 	for _, nonceUpdate := range update.Nonces {
 		var accountK accountBlockKey
 		accountK.set(common.NonceArchiveKey, nonceUpdate.Account, block)
-		batch.Put(accountK[:], nonceUpdate.Nonce[:])
+		a.batch.Put(accountK[:], nonceUpdate.Nonce[:])
 	}
 
 	for _, slotUpdate := range update.Slots {
@@ -89,7 +90,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 		var slotK accountKeyBlockKey
 		slotK.set(common.StorageArchiveKey, slotUpdate.Account, reincarnation, slotUpdate.Key, block)
-		batch.Put(slotK[:], slotUpdate.Value[:])
+		a.batch.Put(slotK[:], slotUpdate.Value[:])
 	}
 
 	blockHasher := sha256.New()
@@ -118,15 +119,15 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 
 		var accountK accountBlockKey
 		accountK.set(common.AccountHashArchiveKey, account, block)
-		batch.Put(accountK[:], newAccountHash)
+		a.batch.Put(accountK[:], newAccountHash)
 	}
 
 	blockHash := blockHasher.Sum(nil)
 	var blockK blockKey
 	blockK.set(block)
-	batch.Put(blockK[:], blockHash[:])
+	a.batch.Put(blockK[:], blockHash[:])
 
-	return a.db.Write(&batch, nil)
+	return a.db.Write(&a.batch, nil)
 }
 
 func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
