@@ -2,6 +2,7 @@ cc_library(
     name = "state",
     hdrs = ["state.h"],
     deps = [
+        ":schema",
         ":update",
         "//archive",
         "//backend:structure",
@@ -44,6 +45,24 @@ cc_test(
     deps = [
         ":configurations",
         ":state_test_suite",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "schema",
+    srcs = ["schema.cc"],
+    hdrs = ["schema.h"],
+    visibility = [
+        "//state:__subpackages__",
+    ],
+)
+
+cc_test(
+    name = "schema_test",
+    srcs = ["schema_test.cc"],
+    deps = [
+        ":schema",
         "@com_google_googletest//:gtest_main",
     ],
 )
