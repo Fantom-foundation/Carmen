@@ -2,12 +2,13 @@ package state
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 
@@ -45,18 +46,35 @@ const PoolSize = 100000
 // CodeHashGroupSize represents the number of codes grouped together in depots to form one leaf node of the hash tree.
 const CodeHashGroupSize = 4
 
+type ArchiveType int
+
+const (
+	NoArchive      ArchiveType = 0
+	LevelDbArchive ArchiveType = 1
+	SqliteArchive  ArchiveType = 2
+)
+
+func (a ArchiveType) String() string {
+	switch a {
+	case NoArchive:
+		return "NoArchive"
+	case LevelDbArchive:
+		return "LevelDbArchive"
+	case SqliteArchive:
+		return "SqliteArchive"
+	}
+	return "unknown"
+}
+
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
-	Directory   string
-	WithArchive bool
+	Directory string
+	Archive   ArchiveType
 }
 
 // NewGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
 func NewGoMemoryState(params Parameters) (State, error) {
-	if params.WithArchive {
-		return nil, fmt.Errorf("archive mode not supported yet in go-memory variant")
-	}
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
@@ -89,6 +107,11 @@ func NewGoMemoryState(params Parameters) (State, error) {
 
 	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
 
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
+	}
+
 	state := &GoState{
 		addressIndex,
 		keyIndex,
@@ -100,13 +123,13 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		nil, nil, nil, nil, nil, nil, nil}
+		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
 	return state, nil
 }
 
 // NewGoFileState creates File based Index and Store implementations
 func NewGoFileState(params Parameters) (State, error) {
-	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -187,12 +210,9 @@ func NewGoFileState(params Parameters) (State, error) {
 	}
 	addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -206,14 +226,14 @@ func NewGoFileState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		nil, nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
 
 // NewGoCachedFileState creates File based Index and Store implementations
 func NewGoCachedFileState(params Parameters) (State, error) {
-	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -294,12 +314,9 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	}
 	addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -313,14 +330,14 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		nil, nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
 
 // NewGoCachedFileLdbArchiveState creates File based Index and Store implementations with LevelDB based archive (if enabled)
 func NewGoCachedFileLdbArchiveState(params Parameters) (State, error) {
-	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -401,19 +418,9 @@ func NewGoCachedFileLdbArchiveState(params Parameters) (State, error) {
 	}
 	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
 
-	var arch archive.Archive
-	var cleanup []func() = nil
-	if params.WithArchive {
-		db, err := common.OpenLevelDb(archivePath, nil)
-		if err != nil {
-			return nil, err
-		}
-		cleanup = cleanUpByClosing(db)
-
-		arch, err = archldb.NewArchive(db)
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -427,14 +434,14 @@ func NewGoCachedFileLdbArchiveState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanup, nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
 
 // NewGoLeveLIndexFileStoreState creates LevelDB Index and File Store implementations
 func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
-	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -508,12 +515,9 @@ func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
 
 	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -527,14 +531,14 @@ func NewGoLeveLIndexFileStoreState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup, cleanUpByClosing(db)}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
 
 // NewGoCachedLeveLIndexFileStoreState creates Cached LevelDB Index and File Store implementations
 func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
-	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -609,12 +613,9 @@ func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
 
 	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -628,14 +629,14 @@ func NewGoCachedLeveLIndexFileStoreState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup, cleanUpByClosing(db)}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
 
 // NewGoCachedTransactLeveLIndexFileStoreState creates Cached and Transactional LevelDB Index and File Store implementations
 func NewGoCachedTransactLeveLIndexFileStoreState(params Parameters) (State, error) {
-	indexPath, storePath, archivePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
@@ -716,15 +717,13 @@ func NewGoCachedTransactLeveLIndexFileStoreState(params Parameters) (State, erro
 
 	addressToSlots := mapldb.NewMultiMap[uint32, uint32](tx, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = sqlite.NewArchive(archivePath + string(filepath.Separator) + "archive.sqlite")
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	cleanup := []func(){
+		archiveCleanup,
 		func() {
 			_ = tx.Commit()
 			_ = db.Close()
@@ -798,12 +797,9 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 
 	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = archldb.NewArchive(db)
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -817,7 +813,7 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup, cleanUpByClosing(db)}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -873,12 +869,9 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 
 	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = archldb.NewArchive(db)
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	state := &GoState{
@@ -892,7 +885,7 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		cleanUpByClosing(db), nil, arch, nil, nil, nil, nil}
+		[]func(){archiveCleanup, cleanUpByClosing(db)}, nil, arch, nil, nil, nil, nil}
 
 	return state, nil
 }
@@ -954,15 +947,13 @@ func NewGoTransactCachedLeveLIndexAndStoreState(params Parameters) (State, error
 
 	addressToSlots := mapldb.NewMultiMap[uint32, uint32](tx, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-	var arch archive.Archive
-	if params.WithArchive {
-		arch, err = sqlite.NewArchive(params.Directory + string(filepath.Separator) + "archive.sqlite")
-		if err != nil {
-			return nil, err
-		}
+	arch, archiveCleanup, err := openArchive(params)
+	if err != nil {
+		return nil, err
 	}
 
 	cleanup := []func(){
+		archiveCleanup,
 		func() {
 			_ = tx.Commit()
 			_ = db.Close()
@@ -986,7 +977,7 @@ func NewGoTransactCachedLeveLIndexAndStoreState(params Parameters) (State, error
 }
 
 // createSubDirs creates two subdirectories of the given for the Store and the Index
-func createSubDirs(rootPath string) (indexPath, storePath, archivePath string, err error) {
+func createSubDirs(rootPath string) (indexPath, storePath string, err error) {
 	indexPath = rootPath + string(filepath.Separator) + "index"
 	if err = os.MkdirAll(indexPath, 0700); err != nil {
 		return
@@ -997,17 +988,48 @@ func createSubDirs(rootPath string) (indexPath, storePath, archivePath string, e
 		return
 	}
 
-	archivePath = rootPath + string(filepath.Separator) + "archive"
-	err = os.MkdirAll(archivePath, 0700)
-
 	return
 }
 
 // cleanUpByClosing provides a clean-up function, which ensure closing the resource on the state clean-up
-func cleanUpByClosing(db io.Closer) []func() {
-	return []func(){
-		func() {
-			_ = db.Close()
-		},
+func cleanUpByClosing(db io.Closer) func() {
+	return func() {
+		_ = db.Close()
 	}
+}
+
+func openArchive(params Parameters) (archive archive.Archive, cleanup func(), err error) {
+
+	getArchivePath := func() (string, error) {
+		path := params.Directory + string(filepath.Separator) + "archive"
+		return path, os.MkdirAll(path, 0700)
+	}
+
+	switch params.Archive {
+
+	case NoArchive:
+		return nil, nil, nil
+
+	case LevelDbArchive:
+		path, err := getArchivePath()
+		if err != nil {
+			return nil, nil, err
+		}
+		db, err := common.OpenLevelDb(path, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		cleanup = func() { _ = db.Close() }
+		arch, err := archldb.NewArchive(db)
+		return arch, cleanup, err
+
+	case SqliteArchive:
+		path, err := getArchivePath()
+		if err != nil {
+			return nil, nil, err
+		}
+		arch, err := sqlite.NewArchive(path + string(filepath.Separator) + "archive.sqlite")
+		return arch, nil, err
+	}
+	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)
 }

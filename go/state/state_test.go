@@ -20,8 +20,8 @@ func (c *namedStateConfig) createState(directory string) (directUpdateState, err
 	return c.factory(Parameters{Directory: directory})
 }
 
-func (c *namedStateConfig) createStateWithArchive(directory string) (directUpdateState, error) {
-	return c.factory(Parameters{Directory: directory, WithArchive: true})
+func (c *namedStateConfig) createStateWithArchive(directory string, archiveType ArchiveType) (directUpdateState, error) {
+	return c.factory(Parameters{Directory: directory, Archive: archiveType})
 }
 
 func castToDirectUpdateState(factory func(params Parameters) (State, error)) func(params Parameters) (directUpdateState, error) {
@@ -390,110 +390,106 @@ func TestDeleteAccountClearsStorage(t *testing.T) {
 // TestArchive inserts data into the state and tries to obtain the history from the archive.
 func TestArchive(t *testing.T) {
 	for _, config := range initStates() {
-		t.Run(config.name, func(t *testing.T) {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				dir := t.TempDir()
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				defer s.Close()
 
-			// skip in-memory (we don't have an in-memory archive implementation)
-			if config.name == "go-Memory" {
-				t.Skip("Archive not implemented for this variant")
-			}
+				balance12, _ := common.ToBalance(big.NewInt(0x12))
+				balance34, _ := common.ToBalance(big.NewInt(0x34))
 
-			dir := t.TempDir()
-			s, err := config.createStateWithArchive(dir)
-			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
-			}
-			defer s.Close()
+				if err := s.Apply(1, common.Update{
+					CreatedAccounts: []common.Address{address1},
+					Balances: []common.BalanceUpdate{
+						{address1, balance12},
+					},
+					Codes:  nil,
+					Nonces: nil,
+					Slots: []common.SlotUpdate{
+						{address1, common.Key{0x05}, common.Value{0x47}},
+					},
+				}); err != nil {
+					t.Fatalf("failed to add block 1; %s", err)
+				}
 
-			balance12, _ := common.ToBalance(big.NewInt(0x12))
-			balance34, _ := common.ToBalance(big.NewInt(0x34))
+				if err := s.Apply(2, common.Update{
+					Balances: []common.BalanceUpdate{
+						{address1, balance34},
+						{address2, balance12},
+						{address3, balance12},
+					},
+					Codes: []common.CodeUpdate{
+						{address1, []byte{0x12, 0x23}},
+					},
+					Nonces: []common.NonceUpdate{
+						{address1, common.Nonce{0x54}},
+					},
+					Slots: []common.SlotUpdate{
+						{address1, common.Key{0x05}, common.Value{0x89}},
+					},
+				}); err != nil {
+					t.Fatalf("failed to add block 2; %s", err)
+				}
 
-			if err := s.Apply(1, common.Update{
-				CreatedAccounts: []common.Address{address1},
-				Balances: []common.BalanceUpdate{
-					{address1, balance12},
-				},
-				Codes:  nil,
-				Nonces: nil,
-				Slots: []common.SlotUpdate{
-					{address1, common.Key{0x05}, common.Value{0x47}},
-				},
-			}); err != nil {
-				t.Fatalf("failed to add block 1; %s", err)
-			}
+				if err := s.Flush(); err != nil {
+					t.Fatalf("failed to flush updates, %s", err)
+				}
 
-			if err := s.Apply(2, common.Update{
-				Balances: []common.BalanceUpdate{
-					{address1, balance34},
-					{address2, balance12},
-					{address3, balance12},
-				},
-				Codes: []common.CodeUpdate{
-					{address1, []byte{0x12, 0x23}},
-				},
-				Nonces: []common.NonceUpdate{
-					{address1, common.Nonce{0x54}},
-				},
-				Slots: []common.SlotUpdate{
-					{address1, common.Key{0x05}, common.Value{0x89}},
-				},
-			}); err != nil {
-				t.Fatalf("failed to add block 2; %s", err)
-			}
+				state1, err := s.GetArchiveState(1)
+				if err != nil {
+					t.Fatalf("failed to get state of block 1; %s", err)
+				}
 
-			if err := s.Flush(); err != nil {
-				t.Fatalf("failed to flush updates, %s", err)
-			}
+				state2, err := s.GetArchiveState(2)
+				if err != nil {
+					t.Fatalf("failed to get state of block 2; %s", err)
+				}
 
-			state1, err := s.GetArchiveState(1)
-			if err != nil {
-				t.Fatalf("failed to get state of block 1; %s", err)
-			}
+				if as, err := state1.Exists(address1); err != nil || as != true {
+					t.Errorf("invalid account state at block 1: %t, %s", as, err)
+				}
+				if as, err := state2.Exists(address1); err != nil || as != true {
+					t.Errorf("invalid account state at block 2: %t, %s", as, err)
+				}
+				if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
+					t.Errorf("invalid balance at block 1: %s, %s", balance.ToBigInt(), err)
+				}
+				if balance, err := state2.GetBalance(address1); err != nil || balance != balance34 {
+					t.Errorf("invalid balance at block 2: %s, %s", balance.ToBigInt(), err)
+				}
+				if code, err := state1.GetCode(address1); err != nil || code != nil {
+					t.Errorf("invalid code at block 1: %s, %s", code, err)
+				}
+				if code, err := state2.GetCode(address1); err != nil || !bytes.Equal(code, []byte{0x12, 0x23}) {
+					t.Errorf("invalid code at block 2: %s, %s", code, err)
+				}
+				if nonce, err := state1.GetNonce(address1); err != nil || nonce != (common.Nonce{}) {
+					t.Errorf("invalid nonce at block 1: %s, %s", nonce, err)
+				}
+				if nonce, err := state2.GetNonce(address1); err != nil || nonce != (common.Nonce{0x54}) {
+					t.Errorf("invalid nonce at block 2: %s, %s", nonce, err)
+				}
+				if value, err := state1.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x47}) {
+					t.Errorf("invalid slot value at block 1: %s, %s", value, err)
+				}
+				if value, err := state2.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x89}) {
+					t.Errorf("invalid slot value at block 2: %s, %s", value, err)
+				}
 
-			state2, err := s.GetArchiveState(2)
-			if err != nil {
-				t.Fatalf("failed to get state of block 2; %s", err)
-			}
-
-			if as, err := state1.Exists(address1); err != nil || as != true {
-				t.Errorf("invalid account state at block 1: %t, %s", as, err)
-			}
-			if as, err := state2.Exists(address1); err != nil || as != true {
-				t.Errorf("invalid account state at block 2: %t, %s", as, err)
-			}
-			if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
-				t.Errorf("invalid balance at block 1: %s, %s", balance.ToBigInt(), err)
-			}
-			if balance, err := state2.GetBalance(address1); err != nil || balance != balance34 {
-				t.Errorf("invalid balance at block 2: %s, %s", balance.ToBigInt(), err)
-			}
-			if code, err := state1.GetCode(address1); err != nil || code != nil {
-				t.Errorf("invalid code at block 1: %s, %s", code, err)
-			}
-			if code, err := state2.GetCode(address1); err != nil || !bytes.Equal(code, []byte{0x12, 0x23}) {
-				t.Errorf("invalid code at block 2: %s, %s", code, err)
-			}
-			if nonce, err := state1.GetNonce(address1); err != nil || nonce != (common.Nonce{}) {
-				t.Errorf("invalid nonce at block 1: %s, %s", nonce, err)
-			}
-			if nonce, err := state2.GetNonce(address1); err != nil || nonce != (common.Nonce{0x54}) {
-				t.Errorf("invalid nonce at block 2: %s, %s", nonce, err)
-			}
-			if value, err := state1.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x47}) {
-				t.Errorf("invalid slot value at block 1: %s, %s", value, err)
-			}
-			if value, err := state2.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x89}) {
-				t.Errorf("invalid slot value at block 2: %s, %s", value, err)
-			}
-
-			hash1, err := state1.GetHash()
-			if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
-				t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
-			}
-			hash2, err := state2.GetHash()
-			if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
-				t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
-			}
-		})
+				hash1, err := state1.GetHash()
+				if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
+					t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
+				}
+				hash2, err := state2.GetHash()
+				if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
+					t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
+				}
+			})
+		}
 	}
 }
 

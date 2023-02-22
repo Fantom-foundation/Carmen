@@ -52,7 +52,7 @@ enum ArchiveImpl {
 // caller, which is required for releasing it eventually using Carmen_Release().
 // If for some reason the creation of the state instance failed, a nullptr is
 // returned.
-C_State Carmen_OpenState(StateImpl state, ArchiveImpl archive,
+C_State Carmen_OpenState(enum StateImpl state, enum ArchiveImpl archive,
                          const char* directory, int length);
 
 // Flushes all committed state information to disk to guarantee permanent
