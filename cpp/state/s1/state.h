@@ -14,6 +14,7 @@
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
+#include "state/schema.h"
 #include "state/update.h"
 
 namespace carmen::s1 {
@@ -49,6 +50,9 @@ class State {
       return H::combine(std::move(h), l.address, l.key);
     }
   };
+
+  // This implementation does not include any special features.
+  static constexpr Schema GetSchema() { return {}; }
 
   // Creates a new state by opening the content stored in the given directory.
   static absl::StatusOr<State> Open(const std::filesystem::path& directory,

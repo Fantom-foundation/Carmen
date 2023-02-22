@@ -9,6 +9,7 @@ cc_library(
         "//backend:structure",
         "//common:account_state",
         "//common:type",
+        "//state:schema",
         "//state:update",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",

@@ -8,12 +8,16 @@
 #include "archive/archive.h"
 #include "backend/structure.h"
 #include "common/type.h"
+#include "state/schema.h"
 #include "state/update.h"
 
 namespace carmen {
 
 template <typename S>
 concept State = requires(S s, const S c) {
+  // All states must declare the Schema they are implementing.
+  { S::GetSchema() } -> std::same_as<Schema>;
+
   // All states must be open-able through a static factory function.
   // The provided path points to the directory containing the data files to be
   // opened. If the files (or the directory) is missing, new files should be
