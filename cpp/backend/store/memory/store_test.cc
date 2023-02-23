@@ -18,13 +18,13 @@ using Store = InMemoryStore<int, int>;
 
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.
-    StoreTestConfig<InMemoryStore<int, Value, 32>, 32>,
+    StoreTestConfig<InMemoryStore, 32, 32>,
     // Page size 64, branching size 3.
-    StoreTestConfig<InMemoryStore<int, Value, 64>, 3>,
+    StoreTestConfig<InMemoryStore, 64, 3>,
     // Page size 64, branching size 8.
-    StoreTestConfig<InMemoryStore<int, Value, 64>, 8>,
+    StoreTestConfig<InMemoryStore, 64, 8>,
     // Page size 128, branching size 4.
-    StoreTestConfig<InMemoryStore<int, Value, 128>, 4>>;
+    StoreTestConfig<InMemoryStore, 128, 4>>;
 
 // Instantiates common store tests for the InMemory store type.
 INSTANTIATE_TYPED_TEST_SUITE_P(InMemory, StoreTest, StoreTypes);

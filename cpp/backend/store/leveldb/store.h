@@ -154,7 +154,7 @@ class LevelDbStore {
 
    private:
     const LevelDb& db_;
-    std::array<std::byte, kPageSize> page_buffer_;
+    std::array<std::byte, elements_per_page * sizeof(V)> page_buffer_;
   };
 
   // The underlying LevelDb instance. Wrapped in a unique_ptr to allow

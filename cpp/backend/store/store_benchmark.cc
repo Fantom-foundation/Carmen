@@ -4,6 +4,7 @@
 #include "backend/store/store_handler.h"
 #include "benchmark/benchmark.h"
 #include "common/benchmark.h"
+#include "common/file_util.h"
 #include "common/status_test_util.h"
 
 namespace carmen::backend::store {
@@ -38,11 +39,11 @@ void InitStore(Store& store, std::size_t num_elements) {
 // Benchmarks the sequential insertion of keys into stores.
 template <typename Store>
 void BM_SequentialInsert(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
+  TempDir dir;
   auto num_elements = state.range(0);
   for (auto _ : state) {
-    ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
-    auto& store = wrapper.GetStore();
+    Context ctx;
+    ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
     for (int i = 0; i < num_elements; i++) {
       ASSERT_OK(store.Set(i, Value{}));
     }
@@ -54,13 +55,13 @@ BENCHMARK_ALL(BM_SequentialInsert, StoreConfigList)->ArgList(kSizes);
 // Benchmarks the appending of new elements to the store.
 template <typename Store>
 void BM_Insert(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   // The size of the store before the inserts.
   auto num_elements = state.range(0);
 
   // Initialize the store with the initial number of elements.
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   // Append additional elements to the end of the store.
@@ -75,12 +76,12 @@ BENCHMARK_ALL(BM_Insert, StoreConfigList)->ArgList(kSizes);
 // Benchmarks sequential read of keys.
 template <typename Store>
 void BM_SequentialRead(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   int i = 0;
@@ -95,12 +96,12 @@ BENCHMARK_ALL(BM_SequentialRead, StoreConfigList)->ArgList(kSizes);
 // Benchmarks random, uniformly distributed reads
 template <typename Store>
 void BM_UniformRandomRead(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   std::random_device rd;
@@ -117,12 +118,12 @@ BENCHMARK_ALL(BM_UniformRandomRead, StoreConfigList)->ArgList(kSizes);
 // Benchmarks random, exponentially distributed reads
 template <typename Store>
 void BM_ExponentialRandomRead(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   std::random_device rd;
@@ -139,12 +140,12 @@ BENCHMARK_ALL(BM_ExponentialRandomRead, StoreConfigList)->ArgList(kSizes);
 // Benchmarks sequential writes of keys.
 template <typename Store>
 void BM_SequentialWrite(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   int i = 0;
@@ -159,12 +160,12 @@ BENCHMARK_ALL(BM_SequentialWrite, StoreConfigList)->ArgList(kSizes);
 // Benchmarks random, uniformly distributed writes.
 template <typename Store>
 void BM_UniformRandomWrite(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   int i = 0;
@@ -182,12 +183,12 @@ BENCHMARK_ALL(BM_UniformRandomWrite, StoreConfigList)->ArgList(kSizes);
 // Benchmarks sequential read of keys.
 template <typename Store>
 void BM_ExponentialRandomWrite(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
 
   int i = 0;
@@ -204,12 +205,12 @@ BENCHMARK_ALL(BM_ExponentialRandomWrite, StoreConfigList)->ArgList(kSizes);
 
 template <typename Store, bool include_write_time>
 void RunHashSequentialUpdates(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
   ASSERT_OK(store.GetHash());
 
@@ -240,12 +241,12 @@ BENCHMARK_ALL(BM_HashSequentialUpdates, StoreConfigList)->ArgList(kSizes);
 
 template <typename Store, bool include_write_time>
 void RunHashUniformUpdates(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
   ASSERT_OK(store.GetHash());
 
@@ -280,12 +281,12 @@ BENCHMARK_ALL(BM_HashUniformUpdates, StoreConfigList)->ArgList(kSizes);
 
 template <typename Store, bool include_write_time>
 void RunHashExponentialUpdates(benchmark::State& state) {
-  using Handler = StoreHandler<Store, kBranchFactor>;
   auto num_elements = state.range(0);
-  ASSERT_OK_AND_ASSIGN(auto wrapper, Handler::Create());
 
   // Initialize the store with the total number of elements.
-  auto& store = wrapper.GetStore();
+  TempDir dir;
+  Context ctx;
+  ASSERT_OK_AND_ASSIGN(auto store, Store::Open(ctx, dir, kBranchFactor));
   InitStore(store, num_elements);
   ASSERT_OK(store.GetHash());
 

@@ -13,23 +13,32 @@ namespace {
 
 using ::testing::IsOkAndHolds;
 
+template <typename K, typename V, std::size_t ps>
+using EagerInMemoryFileStore = EagerFileStore<K, V, InMemoryFile, ps>;
+
+template <typename K, typename V, std::size_t ps>
+using EagerSingleFileStore = EagerFileStore<K, V, SingleFile, ps>;
+
+template <typename K, typename V, std::size_t ps>
+using LazySingleFileStore = LazyFileStore<K, V, SingleFile, ps>;
+
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.
-    StoreTestConfig<EagerFileStore<int, Value, InMemoryFile, 32>, 32>,
-    StoreTestConfig<EagerFileStore<int, Value, SingleFile, 32>, 32>,
-    StoreTestConfig<LazyFileStore<int, Value, SingleFile, 32>, 32>,
+    StoreTestConfig<EagerInMemoryFileStore, 32, 32>,
+    StoreTestConfig<EagerSingleFileStore, 32, 32>,
+    StoreTestConfig<LazySingleFileStore, 32, 32>,
     // Page size 64, branching size 3.
-    StoreTestConfig<EagerFileStore<int, Value, InMemoryFile, 64>, 3>,
-    StoreTestConfig<EagerFileStore<int, Value, SingleFile, 64>, 3>,
-    StoreTestConfig<LazyFileStore<int, Value, SingleFile, 64>, 3>,
+    StoreTestConfig<EagerInMemoryFileStore, 64, 3>,
+    StoreTestConfig<EagerSingleFileStore, 64, 3>,
+    StoreTestConfig<LazySingleFileStore, 64, 3>,
     // Page size 64, branching size 8.
-    StoreTestConfig<EagerFileStore<int, Value, InMemoryFile, 64>, 8>,
-    StoreTestConfig<EagerFileStore<int, Value, SingleFile, 64>, 8>,
-    StoreTestConfig<LazyFileStore<int, Value, SingleFile, 64>, 8>,
+    StoreTestConfig<EagerInMemoryFileStore, 64, 8>,
+    StoreTestConfig<EagerSingleFileStore, 64, 8>,
+    StoreTestConfig<LazySingleFileStore, 64, 8>,
     // Page size 128, branching size 4.
-    StoreTestConfig<EagerFileStore<int, Value, InMemoryFile, 128>, 4>,
-    StoreTestConfig<EagerFileStore<int, Value, SingleFile, 128>, 4>,
-    StoreTestConfig<LazyFileStore<int, Value, SingleFile, 128>, 4>>;
+    StoreTestConfig<EagerInMemoryFileStore, 128, 4>,
+    StoreTestConfig<EagerSingleFileStore, 128, 4>,
+    StoreTestConfig<LazySingleFileStore, 128, 4>>;
 
 // Instantiates common store tests for the File store type.
 INSTANTIATE_TYPED_TEST_SUITE_P(File, StoreTest, StoreTypes);
