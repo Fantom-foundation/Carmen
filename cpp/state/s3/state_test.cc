@@ -1,4 +1,4 @@
-#include "state/s1/state.h"
+#include "state/s3/state.h"
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -20,7 +20,7 @@
 #include "state/state_test_suite.h"
 #include "state/update.h"
 
-namespace carmen::s1 {
+namespace carmen::s3 {
 namespace {
 
 using ::testing::_;
@@ -51,7 +51,7 @@ using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot,
 
 using StateConfigurations = ::testing::Types<InMemoryState>;
 
-INSTANTIATE_TYPED_TEST_SUITE_P(Schema_1_State, StateTest, StateConfigurations);
+INSTANTIATE_TYPED_TEST_SUITE_P(Schema_3_State, StateTest, StateConfigurations);
 
 // ------------------------ Error Handling Tests ------------------------------
 
@@ -80,27 +80,23 @@ class MockStateTest : public ::testing::Test {
   class Mock : public MockState {
    public:
     Mock()
-        : MockState(MockIndex<Address, AddressId>(), MockIndex<Key, KeyId>(),
+        : MockState(MockIndex<Address, AddressId>(), 
                     MockIndex<Slot, SlotId>(), MockStore<AddressId, Balance>(),
-                    MockStore<AddressId, Nonce>(), MockStore<SlotId, Value>(),
+                    MockStore<AddressId, Nonce>(), MockStore<AddressId, Reincarnation>(), MockStore<SlotId, SlotValue>(),
                     MockStore<AddressId, AccountState>(),
                     MockDepot<AddressId>(), MockStore<AddressId, Hash>(),
-                    MockMultiMap<AddressId, SlotId>(),
                     std::make_unique<MockArchive>()) {}
     auto& GetAddressIndex() { return this->address_index_.GetMockIndex(); }
-    auto& GetKeyIndex() { return this->key_index_.GetMockIndex(); }
     auto& GetSlotIndex() { return this->slot_index_.GetMockIndex(); }
     auto& GetBalancesStore() { return this->balances_.GetMockStore(); }
     auto& GetNoncesStore() { return this->nonces_.GetMockStore(); }
+    auto& GetReincarnationsStore() { return this->reincarnations_.GetMockStore(); }
     auto& GetValueStore() { return this->value_store_.GetMockStore(); }
     auto& GetAccountStatesStore() {
       return this->account_states_.GetMockStore();
     }
     auto& GetCodesDepot() { return this->codes_.GetMockDepot(); }
     auto& GetCodeHashesStore() { return this->code_hashes_.GetMockStore(); }
-    auto& GetAddressToSlotsMap() {
-      return this->address_to_slots_.GetMockMultiMap();
-    }
     // archive will always be available, because it is created in the
     // constructor.
     auto& GetArchive() { return this->archive_->GetMockArchive(); }
@@ -174,29 +170,19 @@ TEST_F(MockStateTest, DeleteAccountErrorIsForwarded) {
       state.DeleteAccount(Address{}),
       StatusIs(absl::StatusCode::kInternal, "Account state store error"));
 
-  EXPECT_CALL(state.GetAddressToSlotsMap(), ForEach(_, _))
-      .WillOnce(Return(absl::InternalError("Address to slot multimap error")))
-      .WillOnce([](const MockState::AddressId& id,
-                   const std::function<void(std::uint32_t)>& op) {
-        op(id);
-        return absl::OkStatus();
-      })
+EXPECT_CALL(state.GetReincarnationsStore(), Get(_))
+      .WillOnce(Return(absl::InternalError("Reincarnation read error")))
+      .WillRepeatedly(Return(absl::StatusOr<MockState::Reincarnation>(1)));
+  EXPECT_THAT(
+      state.DeleteAccount(Address{}),
+      StatusIs(absl::StatusCode::kInternal, "Reincarnation read error"));
+
+  EXPECT_CALL(state.GetReincarnationsStore(), Set(_, _))
+      .WillOnce(Return(absl::InternalError("Reincarnation store error")))
       .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(
       state.DeleteAccount(Address{}),
-      StatusIs(absl::StatusCode::kInternal, "Address to slot multimap error"));
-
-  // return value store error inside ForEach callback
-  EXPECT_CALL(state.GetValueStore(), Set(_, _))
-      .WillOnce(Return(absl::InternalError("Value store error")));
-  EXPECT_THAT(state.DeleteAccount(Address{}),
-              StatusIs(absl::StatusCode::kInternal, "Value store error"));
-
-  EXPECT_CALL(state.GetAddressToSlotsMap(), Erase(_))
-      .WillOnce(Return(absl::InternalError("Address to slot multimap error")));
-  EXPECT_THAT(
-      state.DeleteAccount(Address{}),
-      StatusIs(absl::StatusCode::kInternal, "Address to slot multimap error"));
+      StatusIs(absl::StatusCode::kInternal, "Reincarnation store error"));
 }
 
 TEST_F(MockStateTest, GetBalanceNotFoundErrorIsHandled) {
@@ -285,11 +271,6 @@ TEST_F(MockStateTest, GeStorageValueNotFoundErrorIsHandled) {
       .WillRepeatedly(Return(absl::StatusOr<MockState::AddressId>(1)));
   EXPECT_THAT(state.GetStorageValue(Address{}, Key{}), IsOkAndHolds(Value{}));
 
-  EXPECT_CALL(state.GetKeyIndex(), Get(_))
-      .WillOnce(Return(absl::NotFoundError("Key not found")))
-      .WillRepeatedly(Return(absl::StatusOr<MockState::KeyId>(1)));
-  EXPECT_THAT(state.GetStorageValue(Address{}, Key{}), IsOkAndHolds(Value{}));
-
   EXPECT_CALL(state.GetSlotIndex(), Get(_))
       .WillOnce(Return(absl::NotFoundError("Slot not found")))
       .WillRepeatedly(Return(absl::StatusOr<MockState::SlotId>(1)));
@@ -305,17 +286,17 @@ TEST_F(MockStateTest, GetStorageValueErrorIsForwarded) {
   EXPECT_THAT(state.GetStorageValue(Address{}, Key{}),
               StatusIs(absl::StatusCode::kInternal, "Address index error"));
 
-  EXPECT_CALL(state.GetKeyIndex(), Get(_))
-      .WillOnce(Return(absl::InternalError("Key index error")))
-      .WillRepeatedly(Return(absl::StatusOr<MockState::KeyId>(1)));
-  EXPECT_THAT(state.GetStorageValue(Address{}, Key{}),
-              StatusIs(absl::StatusCode::kInternal, "Key index error"));
-
   EXPECT_CALL(state.GetSlotIndex(), Get(_))
       .WillOnce(Return(absl::InternalError("Slot index error")))
       .WillRepeatedly(Return(absl::StatusOr<MockState::SlotId>(1)));
   EXPECT_THAT(state.GetStorageValue(Address{}, Key{}),
               StatusIs(absl::StatusCode::kInternal, "Slot index error"));
+
+  EXPECT_CALL(state.GetReincarnationsStore(), Get(_))
+      .WillOnce(Return(absl::InternalError("Reincarnation store error")))
+      .WillRepeatedly(Return(absl::StatusOr<MockState::Reincarnation>(1)));
+  EXPECT_THAT(state.GetStorageValue(Address{}, Key{}),
+              StatusIs(absl::StatusCode::kInternal, "Reincarnation store error"));
 
   EXPECT_CALL(state.GetValueStore(), Get(_))
       .WillOnce(Return(absl::InternalError("Values store error")));
@@ -333,13 +314,6 @@ TEST_F(MockStateTest, SetStorageValueErrorIsForwarded) {
   EXPECT_THAT(state.SetStorageValue(Address{}, Key{}, Value{}),
               StatusIs(absl::StatusCode::kInternal, "Address index error"));
 
-  EXPECT_CALL(state.GetKeyIndex(), GetOrAdd(_))
-      .WillOnce(Return(absl::InternalError("Key index error")))
-      .WillRepeatedly(
-          Return(absl::StatusOr<std::pair<MockState::KeyId, bool>>({1, true})));
-  EXPECT_THAT(state.SetStorageValue(Address{}, Key{}, Value{}),
-              StatusIs(absl::StatusCode::kInternal, "Key index error"));
-
   EXPECT_CALL(state.GetSlotIndex(), GetOrAdd(_))
       .WillOnce(Return(absl::InternalError("Slot index error")))
       .WillRepeatedly(Return(
@@ -347,25 +321,17 @@ TEST_F(MockStateTest, SetStorageValueErrorIsForwarded) {
   EXPECT_THAT(state.SetStorageValue(Address{}, Key{}, Value{}),
               StatusIs(absl::StatusCode::kInternal, "Slot index error"));
 
+  EXPECT_CALL(state.GetReincarnationsStore(), Get(_))
+      .WillOnce(Return(absl::InternalError("Reincarnation store error")))
+      .WillRepeatedly(Return(absl::StatusOr<MockState::Reincarnation>(1)));
+  EXPECT_THAT(state.SetStorageValue(Address{}, Key{}, Value{}),
+              StatusIs(absl::StatusCode::kInternal, "Reincarnation store error"));
+
   EXPECT_CALL(state.GetValueStore(), Set(_, _))
       .WillOnce(Return(absl::InternalError("Values store error")))
       .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.SetStorageValue(Address{}, Key{}, Value{}),
               StatusIs(absl::StatusCode::kInternal, "Values store error"));
-
-  // for empty value Erase(...) is called on address to slots map
-  EXPECT_CALL(state.GetAddressToSlotsMap(), Erase(_, _))
-      .WillOnce(Return(absl::InternalError("Address to slots map error")));
-  EXPECT_THAT(
-      state.SetStorageValue(Address{}, Key{}, Value{}),
-      StatusIs(absl::StatusCode::kInternal, "Address to slots map error"));
-
-  // for non-empty value Insert(...) is called on address to slots map
-  EXPECT_CALL(state.GetAddressToSlotsMap(), Insert(_, _))
-      .WillOnce(Return(absl::InternalError("Address to slots map error")));
-  EXPECT_THAT(
-      state.SetStorageValue(Address{}, Key{}, Value{1}),
-      StatusIs(absl::StatusCode::kInternal, "Address to slots map error"));
 }
 
 TEST_F(MockStateTest, GetCodeNotFoundErrorIsHandled) {
@@ -485,12 +451,6 @@ TEST_F(MockStateTest, GetHashErrorIsForwarded) {
   EXPECT_THAT(state.GetHash(),
               StatusIs(absl::StatusCode::kInternal, "Address index error"));
 
-  EXPECT_CALL(state.GetKeyIndex(), GetHash())
-      .WillOnce(Return(absl::InternalError("Key index error")))
-      .WillRepeatedly(Return(absl::StatusOr<Hash>(Hash{})));
-  EXPECT_THAT(state.GetHash(),
-              StatusIs(absl::StatusCode::kInternal, "Key index error"));
-
   EXPECT_CALL(state.GetSlotIndex(), GetHash())
       .WillOnce(Return(absl::InternalError("Slot index error")))
       .WillRepeatedly(Return(absl::StatusOr<Hash>(Hash{})));
@@ -508,6 +468,12 @@ TEST_F(MockStateTest, GetHashErrorIsForwarded) {
       .WillRepeatedly(Return(absl::StatusOr<Hash>(Hash{})));
   EXPECT_THAT(state.GetHash(),
               StatusIs(absl::StatusCode::kInternal, "Nonces store error"));
+
+  EXPECT_CALL(state.GetReincarnationsStore(), GetHash())
+      .WillOnce(Return(absl::InternalError("Reincarnation store error")))
+      .WillRepeatedly(Return(absl::StatusOr<Hash>(Hash{})));
+  EXPECT_THAT(state.GetHash(),
+              StatusIs(absl::StatusCode::kInternal, "Reincarnation store error"));
 
   EXPECT_CALL(state.GetValueStore(), GetHash())
       .WillOnce(Return(absl::InternalError("Value store error")))
@@ -536,12 +502,6 @@ TEST_F(MockStateTest, FlushErrorIsForwarded) {
   EXPECT_THAT(state.Flush(),
               StatusIs(absl::StatusCode::kInternal, "Address index error"));
 
-  EXPECT_CALL(state.GetKeyIndex(), Flush())
-      .WillOnce(Return(absl::InternalError("Key index error")))
-      .WillRepeatedly(Return(absl::OkStatus()));
-  EXPECT_THAT(state.Flush(),
-              StatusIs(absl::StatusCode::kInternal, "Key index error"));
-
   EXPECT_CALL(state.GetSlotIndex(), Flush())
       .WillOnce(Return(absl::InternalError("Slot index error")))
       .WillRepeatedly(Return(absl::OkStatus()));
@@ -559,6 +519,12 @@ TEST_F(MockStateTest, FlushErrorIsForwarded) {
       .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.Flush(),
               StatusIs(absl::StatusCode::kInternal, "Nonce store error"));
+
+  EXPECT_CALL(state.GetReincarnationsStore(), Flush())
+      .WillOnce(Return(absl::InternalError("Reincarnation store error")))
+      .WillRepeatedly(Return(absl::OkStatus()));
+  EXPECT_THAT(state.Flush(),
+              StatusIs(absl::StatusCode::kInternal, "Reincarnation store error"));
 
   EXPECT_CALL(state.GetValueStore(), Flush())
       .WillOnce(Return(absl::InternalError("Value store error")))
@@ -584,12 +550,6 @@ TEST_F(MockStateTest, FlushErrorIsForwarded) {
   EXPECT_THAT(state.Flush(),
               StatusIs(absl::StatusCode::kInternal, "Code hash store error"));
 
-  EXPECT_CALL(state.GetAddressToSlotsMap(), Flush())
-      .WillOnce(Return(absl::InternalError("Address to slot multimap error")))
-      .WillRepeatedly(Return(absl::OkStatus()));
-  EXPECT_THAT(state.Flush(), StatusIs(absl::StatusCode::kInternal,
-                                      "Address to slot multimap error"));
-
   EXPECT_CALL(state.GetArchive(), Flush())
       .WillOnce(Return(absl::InternalError("Archive error")));
   EXPECT_THAT(state.Flush(),
@@ -604,12 +564,6 @@ TEST_F(MockStateTest, CloseErrorIsForwarded) {
       .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.Close(),
               StatusIs(absl::StatusCode::kInternal, "Address index error"));
-
-  EXPECT_CALL(state.GetKeyIndex(), Close())
-      .WillOnce(Return(absl::InternalError("Key index error")))
-      .WillRepeatedly(Return(absl::OkStatus()));
-  EXPECT_THAT(state.Close(),
-              StatusIs(absl::StatusCode::kInternal, "Key index error"));
 
   EXPECT_CALL(state.GetSlotIndex(), Close())
       .WillOnce(Return(absl::InternalError("Slot index error")))
@@ -628,6 +582,12 @@ TEST_F(MockStateTest, CloseErrorIsForwarded) {
       .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.Close(),
               StatusIs(absl::StatusCode::kInternal, "Nonce store error"));
+
+  EXPECT_CALL(state.GetReincarnationsStore(), Close())
+      .WillOnce(Return(absl::InternalError("Reincarnation store error")))
+      .WillRepeatedly(Return(absl::OkStatus()));
+  EXPECT_THAT(state.Close(),
+              StatusIs(absl::StatusCode::kInternal, "Reincarnation store error"));
 
   EXPECT_CALL(state.GetValueStore(), Close())
       .WillOnce(Return(absl::InternalError("Value store error")))
@@ -652,12 +612,6 @@ TEST_F(MockStateTest, CloseErrorIsForwarded) {
       .WillRepeatedly(Return(absl::OkStatus()));
   EXPECT_THAT(state.Close(),
               StatusIs(absl::StatusCode::kInternal, "Code hash store error"));
-
-  EXPECT_CALL(state.GetAddressToSlotsMap(), Close())
-      .WillOnce(Return(absl::InternalError("Address to slot multimap error")))
-      .WillRepeatedly(Return(absl::OkStatus()));
-  EXPECT_THAT(state.Close(), StatusIs(absl::StatusCode::kInternal,
-                                      "Address to slot multimap error"));
 
   EXPECT_CALL(state.GetArchive(), Close())
       .WillOnce(Return(absl::InternalError("Archive error")));

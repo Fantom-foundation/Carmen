@@ -17,10 +17,10 @@
 #include "state/schema.h"
 #include "state/update.h"
 
-namespace carmen::s1 {
+namespace carmen::s2 {
 
-// A state maintains all persistent state of the blockchain. In particular,
-// it maintains the balance of accounts, accounts nonces, and storage.
+// This implementation of a state utilizes a schema where Addresses are indexed,
+// but slot keys are not.
 //
 // This implementation of the state can be parameterized by the implementation
 // of index and store types, which are instantiated internally to form the
@@ -34,26 +34,11 @@ class State {
  public:
   // The types used for internal indexing.
   using AddressId = std::uint32_t;
-  using KeyId = std::uint32_t;
   using SlotId = std::uint32_t;
   using Archive = ArchiveType;
 
-  // Identifies a single slot by its address/key values.
-  struct Slot {
-    AddressId address;
-    KeyId key;
-
-    friend auto operator<=>(const Slot& a, const Slot& b) = default;
-
-    template <typename H>
-    friend H AbslHashValue(H h, const Slot& l) {
-      return H::combine(std::move(h), l.address, l.key);
-    }
-  };
-
-  // This implementation utilizes address and key indexing.
   static constexpr Schema GetSchema() {
-    return StateFeature::kAddressId & StateFeature::kKeyId;
+    return StateFeature::kAddressId;
   }
 
   // Creates a new state by opening the content stored in the given directory.
@@ -123,11 +108,28 @@ class State {
   MemoryFootprint GetMemoryFootprint() const;
 
  protected:
+  // Identifies a single slot by its address/key values.
+  struct Slot {
+    AddressId address;
+    Key key;
+
+    friend auto operator<=>(const Slot& a, const Slot& b) = default;
+
+    template <typename H>
+    friend H AbslHashValue(H h, const Slot& l) {
+      return H::combine(std::move(h), l.address, l.key);
+    }
+  };
+
+  // Make sure the slot value is packed without padding since it is stored on
+  // disk as a trivial value, included in hashing.
+  static_assert(sizeof(Slot) == sizeof(AddressId) + sizeof(Key));
+
   // Make the state constructor protected to prevent direct instantiation. The
   // state should be created by calling the static Open method. This allows
   // the state to be mocked in tests.
   State(IndexType<Address, AddressId> address_index,
-        IndexType<Key, KeyId> key_index, IndexType<Slot, SlotId> slot_index,
+        IndexType<Slot, SlotId> slot_index,
         StoreType<AddressId, Balance> balances,
         StoreType<AddressId, Nonce> nonces,
         StoreType<SlotId, Value> value_store,
@@ -138,9 +140,8 @@ class State {
 
   absl::Status ClearAccount(AddressId addr_id);
 
-  // Indexes for mapping address, keys, and slots to dense, numeric IDs.
+  // Indexes for mapping address and slots to dense, numeric IDs.
   IndexType<Address, AddressId> address_index_;
-  IndexType<Key, KeyId> key_index_;
   IndexType<Slot, SlotId> slot_index_;
 
   // A store retaining the current balance of all accounts.
@@ -193,8 +194,6 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Open(
   backend::Context context;
   ASSIGN_OR_RETURN(auto address_index, (IndexType<Address, AddressId>::Open(
                                            context, dir / "addresses")));
-  ASSIGN_OR_RETURN(auto key_index,
-                   (IndexType<Key, KeyId>::Open(context, dir / "keys")));
   ASSIGN_OR_RETURN(auto slot_index,
                    (IndexType<Slot, SlotId>::Open(context, dir / "slots")));
 
@@ -223,7 +222,7 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Open(
     archive = std::make_unique<ArchiveType>(std::move(instance));
   }
 
-  return State(std::move(address_index), std::move(key_index),
+  return State(std::move(address_index),
                std::move(slot_index), std::move(balances), std::move(nonces),
                std::move(values), std::move(account_state), std::move(codes),
                std::move(code_hashes), std::move(address_to_slots),
@@ -237,7 +236,7 @@ template <template <typename K, typename V> class IndexType,
           Archive ArchiveType>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::State(
     IndexType<Address, AddressId> address_index,
-    IndexType<Key, KeyId> key_index, IndexType<Slot, SlotId> slot_index,
+    IndexType<Slot, SlotId> slot_index,
     StoreType<AddressId, Balance> balances, StoreType<AddressId, Nonce> nonces,
     StoreType<SlotId, Value> value_store,
     StoreType<AddressId, AccountState> account_states,
@@ -245,7 +244,6 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::State(
     MultiMapType<AddressId, SlotId> address_to_slots,
     std::unique_ptr<ArchiveType> archive)
     : address_index_(std::move(address_index)),
-      key_index_(std::move(key_index)),
       slot_index_(std::move(slot_index)),
       balances_(std::move(balances)),
       nonces_(std::move(nonces)),
@@ -389,12 +387,7 @@ State<IndexType, StoreType, DepotType, MultiMapType,
     return kZero;
   }
   RETURN_IF_ERROR(addr_id);
-  auto key_id = key_index_.Get(key);
-  if (absl::IsNotFound(key_id.status())) {
-    return kZero;
-  }
-  RETURN_IF_ERROR(key_id);
-  Slot slot{*addr_id, *key_id};
+  Slot slot{*addr_id, key};
   auto slot_id = slot_index_.Get(slot);
   if (absl::IsNotFound(slot_id.status())) {
     return kZero;
@@ -413,8 +406,7 @@ absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
                                                  const Key& key,
                                                  const Value& value) {
   ASSIGN_OR_RETURN(auto addr_id, address_index_.GetOrAdd(address));
-  ASSIGN_OR_RETURN(auto key_id, key_index_.GetOrAdd(key));
-  Slot slot{addr_id.first, key_id.first};
+  Slot slot{addr_id.first, key};
   ASSIGN_OR_RETURN(auto slot_id, slot_index_.GetOrAdd(slot));
   RETURN_IF_ERROR(value_store_.Set(slot_id.first, value));
   // Keep track of slots containing values.
@@ -564,14 +556,13 @@ template <template <typename K, typename V> class IndexType,
 absl::StatusOr<Hash>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetHash() {
   ASSIGN_OR_RETURN(auto addr_idx_hash, address_index_.GetHash());
-  ASSIGN_OR_RETURN(auto key_idx_hash, key_index_.GetHash());
   ASSIGN_OR_RETURN(auto slot_idx_hash, slot_index_.GetHash());
   ASSIGN_OR_RETURN(auto bal_hash, balances_.GetHash());
   ASSIGN_OR_RETURN(auto nonces_hash, nonces_.GetHash());
   ASSIGN_OR_RETURN(auto val_store_hash, value_store_.GetHash());
   ASSIGN_OR_RETURN(auto acc_states_hash, account_states_.GetHash());
   ASSIGN_OR_RETURN(auto codes_hash, codes_.GetHash());
-  return GetSha256Hash(addr_idx_hash, key_idx_hash, slot_idx_hash, bal_hash,
+  return GetSha256Hash(addr_idx_hash, slot_idx_hash, bal_hash,
                        nonces_hash, val_store_hash, acc_states_hash,
                        codes_hash);
 }
@@ -584,7 +575,6 @@ template <template <typename K, typename V> class IndexType,
 absl::Status
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Flush() {
   RETURN_IF_ERROR(address_index_.Flush());
-  RETURN_IF_ERROR(key_index_.Flush());
   RETURN_IF_ERROR(slot_index_.Flush());
   RETURN_IF_ERROR(account_states_.Flush());
   RETURN_IF_ERROR(balances_.Flush());
@@ -607,7 +597,6 @@ template <template <typename K, typename V> class IndexType,
 absl::Status
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Close() {
   RETURN_IF_ERROR(address_index_.Close());
-  RETURN_IF_ERROR(key_index_.Close());
   RETURN_IF_ERROR(slot_index_.Close());
   RETURN_IF_ERROR(account_states_.Close());
   RETURN_IF_ERROR(balances_.Close());
@@ -631,7 +620,6 @@ MemoryFootprint State<IndexType, StoreType, DepotType, MultiMapType,
                       ArchiveType>::GetMemoryFootprint() const {
   MemoryFootprint res(*this);
   res.Add("address_index", address_index_.GetMemoryFootprint());
-  res.Add("key_index", key_index_.GetMemoryFootprint());
   res.Add("slot_index", slot_index_.GetMemoryFootprint());
   res.Add("balances", balances_.GetMemoryFootprint());
   res.Add("nonces", nonces_.GetMemoryFootprint());

@@ -12,6 +12,8 @@
 #include "backend/store/leveldb/store.h"
 #include "backend/store/memory/store.h"
 #include "state/s1/state.h"
+#include "state/s2/state.h"
+#include "state/s3/state.h"
 
 namespace carmen {
 
@@ -53,7 +55,7 @@ template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
 template <Archive Archive>
-using FileBasedState = s1::State<FileBasedIndex, FileBasedStore, FileBasedDepot,
+using FileBasedState = s2::State<FileBasedIndex, FileBasedStore, FileBasedDepot,
                                  InMemoryMultiMap, Archive>;
 
 // ----------------------------------------------------------------------------
@@ -72,7 +74,7 @@ using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
 template <Archive Archive>
 using LevelDbBasedState =
-    s1::State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot,
+    s3::State<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot,
               InMemoryMultiMap, Archive>;
 
 }  // namespace carmen
