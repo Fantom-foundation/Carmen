@@ -997,7 +997,7 @@ func (s *stateDB) Close() error {
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock(0)
 	s.storedDataCache.Clear()
-	return &bulkLoad{s.state, common.Update{}}
+	return &bulkLoad{s.state, common.Update{}, 0, nil}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -1064,10 +1064,17 @@ func (s *stateDB) reset() {
 type bulkLoad struct {
 	state  State
 	update common.Update
+	blocks uint64
+	errs   []error
 }
+
+const maxBulkSize = 100_000 // 212 bulks for priming block 10M
 
 func (l *bulkLoad) CreateAccount(addr common.Address) {
 	l.update.AppendCreateAccount(addr)
+	if len(l.update.CreatedAccounts) >= maxBulkSize {
+		l.apply()
+	}
 }
 
 func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
@@ -1076,27 +1083,53 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
 	l.update.AppendBalanceUpdate(addr, newBalance)
+	if len(l.update.Balances) >= maxBulkSize {
+		l.apply()
+	}
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
 	l.update.AppendNonceUpdate(addr, common.ToNonce(value))
+	if len(l.update.Nonces) >= maxBulkSize {
+		l.apply()
+	}
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
 	l.update.AppendSlotUpdate(addr, key, value)
+	if len(l.update.Slots) >= maxBulkSize {
+		l.apply()
+	}
 }
+
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
 	l.update.AppendCodeUpdate(addr, code)
+	if len(l.update.Codes) >= maxBulkSize {
+		l.apply()
+	}
+}
+
+func (l *bulkLoad) apply() {
+	// Apply the update to the DB as one new block.
+	if err := l.update.Normalize(); err != nil {
+		l.errs = append(l.errs, err)
+		return
+	}
+	err := l.state.Apply(l.blocks, l.update)
+	l.update = common.Update{}
+	l.blocks++
+	if err != nil {
+		l.errs = append(l.errs, err)
+	}
 }
 
 func (l *bulkLoad) Close() error {
-	// Apply the update to the DB -- all in one go.
-	if err := l.update.Normalize(); err != nil {
-		return err
+	l.apply()
+	// Return if errors occurred
+	if l.errs != nil {
+		return l.errs[0]
 	}
-	if err := l.state.Apply(0, l.update); err != nil {
-		return err
-	}
+
 	// Flush out all inserted data.
 	if err := l.state.Flush(); err != nil {
 		return err
