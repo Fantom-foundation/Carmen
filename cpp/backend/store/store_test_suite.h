@@ -19,8 +19,9 @@ using ::testing::IsOkAndHolds;
 using ::testing::StrEq;
 
 // A test configuration for store implementations.
-template <Store store, std::size_t branching_factor>
-using StoreTestConfig = StoreHandler<store, branching_factor>;
+template <template <typename K, typename V, std::size_t page_size> class store,
+          std::size_t page_size, std::size_t branching_factor>
+using StoreTestConfig = StoreHandler<store, page_size, branching_factor>;
 
 Value ToValue(std::int64_t value) {
   return Value{static_cast<std::uint8_t>(value >> 32),
@@ -184,6 +185,25 @@ TYPED_TEST_P(StoreTest, KnownHashesAreReproduced) {
   }
 }
 
+TYPED_TEST_P(StoreTest, HashComputationIgnoresUnusedBytes) {
+  // This test computes hashes for values not fully occupying each page.
+  using Value = std::array<char, 7>;
+
+  // There is space for one value and some padding is required.
+  static_assert(TypeParam::kPageSize / sizeof(Value) > 1);
+  static_assert(TypeParam::kPageSize % sizeof(Value) != 0);
+
+  TempDir dir;
+  ASSERT_OK_AND_ASSIGN(auto store, TypeParam::template Create<Value>(dir));
+  ASSERT_OK(store.Set(0, Value{1, 2, 3}));
+
+  // The hash should be the hash of the content of the only page.
+  constexpr std::size_t kContentSize =
+      TypeParam::kPageSize / sizeof(Value) * sizeof(Value);
+  std::array<char, kContentSize> content{1, 2, 3};
+  EXPECT_THAT(store.GetHash(), GetSha256Hash(content));
+}
+
 TYPED_TEST_P(StoreTest, HashesRespectBranchingFactor) {
   // This test computes the hash expected for a store containing 2*branching
   // factor empty pages.
@@ -268,14 +288,12 @@ TYPED_TEST_P(StoreTest, CanProduceMemoryFootprint) {
   EXPECT_GT(summary.GetTotal(), Memory(0));
 }
 
-REGISTER_TYPED_TEST_SUITE_P(StoreTest, TypeProperties,
-                            UninitializedValuesAreZero,
-                            DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
-                            EmptyStoreHasZeroHash, KnownHashesAreReproduced,
-                            HashesRespectBranchingFactor,
-                            HashesEqualReferenceImplementation,
-                            HashesRespectEmptyPages, HashesChangeWithUpdates,
-                            HashesCoverMultiplePages,
-                            CanProduceMemoryFootprint);
+REGISTER_TYPED_TEST_SUITE_P(
+    StoreTest, TypeProperties, UninitializedValuesAreZero,
+    DataCanBeAddedAndRetrieved, EntriesCanBeUpdated, EmptyStoreHasZeroHash,
+    KnownHashesAreReproduced, HashComputationIgnoresUnusedBytes,
+    HashesRespectBranchingFactor, HashesEqualReferenceImplementation,
+    HashesRespectEmptyPages, HashesChangeWithUpdates, HashesCoverMultiplePages,
+    CanProduceMemoryFootprint);
 }  // namespace
 }  // namespace carmen::backend::store

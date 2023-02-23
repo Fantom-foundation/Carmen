@@ -17,13 +17,13 @@ using TestStore = LevelDbStore<int, int>;
 
 using StoreTypes = ::testing::Types<
     // Page size 32, branching size 32.
-    StoreTestConfig<LevelDbStore<int, Value, 32>, 32>,
+    StoreTestConfig<LevelDbStore, 32, 32>,
     // Page size 64, branching size 3.
-    StoreTestConfig<LevelDbStore<int, Value, 64>, 3>,
+    StoreTestConfig<LevelDbStore, 64, 3>,
     // Page size 64, branching size 8.
-    StoreTestConfig<LevelDbStore<int, Value, 64>, 8>,
+    StoreTestConfig<LevelDbStore, 64, 8>,
     // Page size 128, branching size 4.
-    StoreTestConfig<LevelDbStore<int, Value, 128>, 4>>;
+    StoreTestConfig<LevelDbStore, 128, 4>>;
 
 // Instantiates common store tests for the LevelDb store type.
 INSTANTIATE_TYPED_TEST_SUITE_P(LevelDb, StoreTest, StoreTypes);

@@ -24,10 +24,12 @@ using ReferenceStore = InMemoryStore<int, Value, page_size>;
 //
 // This generic StoreHandler is a mere wrapper on a store reference, while
 // specializations may add additional setup and tear-down operations.
-template <typename Store, std::size_t branching_factor>
+template <template <typename K, typename V, std::size_t page_size> class S,
+          std::size_t page_size, std::size_t branching_factor>
 class StoreHandler {
  public:
-  constexpr static std::size_t kPageSize = Store::kPageSize;
+  using Store = S<int, Value, page_size>;
+  constexpr static std::size_t kPageSize = page_size;
   constexpr static std::size_t kBranchingFactor = branching_factor;
 
   template <typename... Args>
@@ -38,6 +40,13 @@ class StoreHandler {
                      Store::Open(ctx, dir.GetPath(), branching_factor,
                                  std::forward<Args>(args)...));
     return StoreHandler(std::move(store), std::move(ctx), std::move(dir));
+  }
+
+  template <typename Value>
+  static absl::StatusOr<S<int, Value, page_size>> Create(
+      std::filesystem::path dir) {
+    Context ctx;
+    return S<int, Value, page_size>::Open(ctx, dir, branching_factor);
   }
 
   Store& GetStore() { return store_; }
