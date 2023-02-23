@@ -274,9 +274,13 @@ func TestSetAndGetCodeHash(t *testing.T) {
 }
 
 func initCppStates() []namedStateConfig {
-	return []namedStateConfig{
-		{"InMemory", castToDirectUpdateState(NewCppInMemoryState)},
-		{"FileBased", castToDirectUpdateState(NewCppFileBasedState)},
-		{"LevelDbBased", castToDirectUpdateState(NewCppLevelDbBasedState)},
+	list := []namedStateConfig{}
+	for _, s := range GetAllSchemas() {
+		list = append(list, []namedStateConfig{
+			{"memory", s, castToDirectUpdateState(NewCppInMemoryState)},
+			{"file", s, castToDirectUpdateState(NewCppFileBasedState)},
+			{"leveldb", s, castToDirectUpdateState(NewCppLevelDbBasedState)},
+		}...)
 	}
+	return list
 }
