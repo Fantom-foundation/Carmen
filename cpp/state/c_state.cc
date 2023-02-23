@@ -13,6 +13,9 @@
 #include "common/memory_usage.h"
 #include "common/type.h"
 #include "state/configurations.h"
+#include "state/s1/state.h"
+#include "state/s2/state.h"
+#include "state/s3/state.h"
 #include "state/state.h"
 #include "state/update.h"
 
@@ -201,21 +204,63 @@ WorldState* Open(const std::filesystem::path& directory, ArchiveImpl archive) {
   return nullptr;
 }
 
+#define Schema                                                    \
+  template <template <typename K, typename V> class IndexType,    \
+            template <typename K, typename V> class StoreType,    \
+            template <typename K> class DepotType,                \
+            template <typename K, typename V> class MultiMapType, \
+            typename ArchiveType>                                 \
+  class
+
+template <template <Schema S, class A> class State, Schema S>
+WorldState* Open(const std::filesystem::path& directory, ArchiveImpl archive) {
+  switch (archive) {
+    case kArchive_None:
+      // We have no none-archive implementation, so we take the LevelDB one and
+      // disable it.
+      return OpenState<State<S, archive::leveldb::LevelDbArchive>>(directory,
+                                                                   false);
+    case kArchive_LevelDb:
+      return OpenState<State<S, archive::leveldb::LevelDbArchive>>(directory,
+                                                                   true);
+    case kArchive_Sqlite:
+      return OpenState<State<S, archive::sqlite::SqliteArchive>>(directory,
+                                                                 true);
+  }
+  return nullptr;
+}
+
+template <template <Schema S, class A> class Config>
+WorldState* Open(const std::filesystem::path& directory, std::uint8_t schema,
+                 ArchiveImpl archive) {
+  switch (schema) {
+    case 1:
+      return Open<Config, s1::State>(directory, archive);
+    case 2:
+      return Open<Config, s2::State>(directory, archive);
+    case 3:
+      return Open<Config, s3::State>(directory, archive);
+  }
+  return nullptr;
+}
+
+#undef Schema
+
 }  // namespace
 }  // namespace carmen
 
 extern "C" {
 
-C_State Carmen_OpenState(StateImpl state, ArchiveImpl archive,
+C_State Carmen_OpenState(C_Schema schema, StateImpl state, ArchiveImpl archive,
                          const char* directory, int length) {
   std::string_view dir(directory, length);
   switch (state) {
     case kState_Memory:
-      return carmen::Open<carmen::InMemoryState>(dir, archive);
+      return carmen::Open<carmen::InMemoryState>(dir, schema, archive);
     case kState_File:
-      return carmen::Open<carmen::FileBasedState>(dir, archive);
+      return carmen::Open<carmen::FileBasedState>(dir, schema, archive);
     case kState_LevelDb:
-      return carmen::Open<carmen::LevelDbBasedState>(dir, archive);
+      return carmen::Open<carmen::LevelDbBasedState>(dir, schema, archive);
   }
   return nullptr;
 }

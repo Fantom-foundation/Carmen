@@ -17,6 +17,7 @@
 #include "common/type.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "state/configurations.h"
 #include "state/state_test_suite.h"
 #include "state/update.h"
 
@@ -30,28 +31,14 @@ using ::testing::StatusIs;
 
 // ------------------------- Functionality Tests ------------------------------
 
-constexpr const std::size_t kPageSize = 1 << 12;  // 4 KiB
-
-template <typename K, typename V>
-using InMemoryIndex = backend::index::InMemoryIndex<K, V>;
-
-template <typename K, typename V>
-using InMemoryStore = backend::store::InMemoryStore<K, V, kPageSize>;
-
-template <typename K>
-using InMemoryDepot = backend::depot::InMemoryDepot<K>;
-
-template <typename K, typename V>
-using InMemoryMultiMap = backend::multimap::InMemoryMultiMap<K, V>;
-
 using TestArchive = archive::leveldb::LevelDbArchive;
 
-using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot,
-                                InMemoryMultiMap, TestArchive>;
+using StateConfigurations =
+    ::testing::Types<InMemoryState<State, TestArchive>,
+                     FileBasedState<State, TestArchive>,
+                     LevelDbBasedState<State, TestArchive>>;
 
-using StateConfigurations = ::testing::Types<InMemoryState>;
-
-INSTANTIATE_TYPED_TEST_SUITE_P(Schema_1_State, StateTest, StateConfigurations);
+INSTANTIATE_TYPED_TEST_SUITE_P(Schema_1, StateTest, StateConfigurations);
 
 // ------------------------ Error Handling Tests ------------------------------
 
