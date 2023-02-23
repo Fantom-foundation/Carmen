@@ -287,3 +287,31 @@ func TestStorageOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestPreventingBlockOverrides(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+			}); err != nil {
+				t.Fatalf("failed to add block 1; %s", err)
+			}
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Slots: []common.SlotUpdate{
+					{addr1, common.Key{0x37}, common.Value{0x12}},
+				},
+			}); err == nil {
+				t.Errorf("allowed overriding already written block 1")
+			}
+
+			if value, err := a.GetStorage(1, addr1, common.Key{0x37}); err != nil || value != (common.Value{}) {
+				t.Errorf("unexpected value at block 1: %x; %s", value, err)
+			}
+		})
+	}
+}

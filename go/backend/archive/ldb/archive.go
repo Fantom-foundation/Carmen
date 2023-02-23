@@ -94,11 +94,14 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	}
 
 	blockHasher := sha256.New()
-	lastBlockHash, err := a.GetHash(block)
+	prevBlockNumber, prevBlockHash, err := a.getLastBlock()
 	if err != nil {
-		return fmt.Errorf("failed to get previous block hash; %s", err)
+		return fmt.Errorf("failed to get preceding block hash; %s", err)
 	}
-	blockHasher.Write(lastBlockHash[:])
+	if prevBlockNumber >= block {
+		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	}
+	blockHasher.Write(prevBlockHash[:])
 
 	reusedHasher := sha256.New()
 	updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
@@ -130,18 +133,23 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	return a.db.Write(&a.batch, nil)
 }
 
-func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
+func (a *Archive) getLastBlock() (number uint64, hash common.Hash, err error) {
 	keyRange := getBlockKeyRangeFromHighest()
-	it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
+	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
 
 	if it.Next() {
-		var key blockKey
-		copy(key[:], it.Key())
-		block = key.get()
-		return block, nil
+		var blockK blockKey
+		copy(blockK[:], it.Key())
+		copy(hash[:], it.Value())
+		return blockK.get(), hash, nil
 	}
-	return 0, it.Error()
+	return 0, common.Hash{}, it.Error()
+}
+
+func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
+	block, _, err = a.getLastBlock()
+	return block, err
 }
 
 func (a *Archive) getStatus(block uint64, account common.Address) (exists bool, reincarnation int, err error) {
@@ -228,15 +236,11 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 }
 
 func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
-	keyRange := getBlockKeyRangeFrom(block)
-	it := a.db.NewIterator(&keyRange, nil)
-	defer it.Release()
-
-	if it.Next() {
-		copy(hash[:], it.Value())
-		return hash, nil
-	}
-	return common.Hash{}, it.Error()
+	var blockK blockKey
+	blockK.set(block)
+	hashBytes, err := a.db.Get(blockK[:], nil)
+	copy(hash[:], hashBytes)
+	return hash, err
 }
 
 func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
