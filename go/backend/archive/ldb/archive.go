@@ -7,6 +7,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"sync"
 	"unsafe"
 )
 
@@ -14,6 +15,7 @@ type Archive struct {
 	db                       *common.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
 	batch                    leveldb.Batch
+	lastBlockCache           blockCache
 }
 
 func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
@@ -128,12 +130,25 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	blockHash := blockHasher.Sum(nil)
 	var blockK blockKey
 	blockK.set(block)
-	a.batch.Put(blockK[:], blockHash[:])
+	a.batch.Put(blockK[:], blockHash)
+
+	var hash common.Hash
+	copy(hash[:], blockHash)
+	a.lastBlockCache.set(block, hash)
 
 	return a.db.Write(&a.batch, nil)
 }
 
 func (a *Archive) getLastBlock() (number uint64, hash common.Hash, err error) {
+	number, hash = a.lastBlockCache.get()
+	if number != 0 {
+		return number, hash, nil
+	}
+	return a.getLastBlockSlow()
+}
+
+// getLastBlockSlow represents the slow path of getLastBlock() method (extracted to allow inlining the fast path)
+func (a *Archive) getLastBlockSlow() (number uint64, hash common.Hash, err error) {
 	keyRange := getBlockKeyRangeFromHighest()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
@@ -264,4 +279,24 @@ func (a *Archive) GetMemoryFootprint() *common.MemoryFootprint {
 	var reincarnation int
 	mf.AddChild("reincarnationNumberCache", common.NewMemoryFootprint(uintptr(len(a.reincarnationNumberCache))*(unsafe.Sizeof(address)+unsafe.Sizeof(reincarnation))))
 	return mf
+}
+
+// blockCache caches info about the last block in the archive
+type blockCache struct {
+	mu            sync.Mutex
+	lastBlockNum  uint64
+	lastBlockHash common.Hash
+}
+
+func (c *blockCache) set(number uint64, hash common.Hash) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastBlockNum = number
+	c.lastBlockHash = hash
+}
+
+func (c *blockCache) get() (number uint64, hash common.Hash) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastBlockNum, c.lastBlockHash
 }
