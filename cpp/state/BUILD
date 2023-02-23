@@ -83,6 +83,8 @@ cc_library(
         "//backend/store/leveldb:store",
         "//backend/store/memory:store",
         "//state/s1:state",
+        "//state/s2:state",
+        "//state/s3:state",
     ],
 )
 

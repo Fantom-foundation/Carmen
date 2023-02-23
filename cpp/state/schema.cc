@@ -1,29 +1,33 @@
 #include "state/schema.h"
 
+#include <string_view>
 #include <ostream>
 
 namespace carmen {
 
 std::ostream& operator<<(std::ostream& out, const Schema& s) {
+  static const StateFeature features[] = {
+    StateFeature::kAddressId,
+    StateFeature::kKeyId,
+    StateFeature::kAccountReincarnation,
+  };
+  static const std::string_view names[] = {
+    "address_id",
+    "key_id",
+    "account_reincarnation",
+  };
+
   out << '{';
-  bool first = false;
-  if (s.HashFeature(StateFeature::kKeyId)) {
-    out << "key_id";
-    first = false;
-  }
-  if (s.HashFeature(StateFeature::kAccountReincarnation)) {
+  bool first = true;
+  for (std::size_t i=0; i<sizeof(features); i++) {
+    if (!s.HashFeature(features[i])) continue;
     if (!first) {
-      out << ',';
+        out << ',';
     }
-    out << "account_reincarnation";
     first = false;
+    out << names[i];
   }
   return out << '}';
-}
-
-bool ProduceSameHash(Schema a, Schema b) {
-  return (a.HashFeature(StateFeature::kAccountReincarnation) ==
-          b.HashFeature(StateFeature::kAccountReincarnation));
 }
 
 }  // namespace carmen

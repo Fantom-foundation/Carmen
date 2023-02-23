@@ -8,11 +8,17 @@ namespace carmen {
 
 // An enum of schema featurs that implementations may offer.
 enum class StateFeature : std::uint8_t {
+  // An implementation offering this feature is indexing account addresses
+  // internally. This additional address index forms a part of the state that
+  // needs to be hashed and synced. Thus, implementations with this
+  // feature are not compatible with implementations without this feature.
+  kAddressId = 1 << 0,
+
   // An implementation offering this feature is indexing storage slot keys
-  // internally. This is a performance feature and does not influence any
-  // observable behaviour. Thus, implementations different in only this feature
-  // are functionally indistinguishable.
-  kKeyId = 1 << 0,
+  // internally. This additional address index forms a part of the state that
+  // needs to be hashed and synced. Thus, implementations with this
+  // feature are not compatible with implementations without this feature.
+  kKeyId = 1 << 1,
 
   // An implementation using account reincarnation is tracking the number of
   // times an account has been recreated, in addition to its basic properties.
@@ -20,7 +26,7 @@ enum class StateFeature : std::uint8_t {
   // accounts. However, the additional information to be tracked causes
   // different state hashes to be produced. Thus, implementations with this
   // feature are not compatible with implementations without this feature.
-  kAccountReincarnation = 1 << 1,
+  kAccountReincarnation = 1 << 2,
 };
 
 // A state Schema is a description of the internal organization of Carmen State
@@ -67,9 +73,5 @@ class Schema {
 constexpr Schema operator&(StateFeature a, StateFeature b) {
   return Schema(a, b);
 }
-
-// Test whether implementations for the given schemas are supposed to produce
-// the same hash.
-bool ProduceSameHash(Schema a, Schema b);
 
 }  // namespace carmen
