@@ -18,6 +18,7 @@ extern "C" {
 // increase readability, not to enforce any type constraints.
 
 #define C_State void*
+#define C_Schema uint8_t
 
 #define C_bool uint8_t
 #define C_Address void*
@@ -52,8 +53,9 @@ enum ArchiveImpl {
 // caller, which is required for releasing it eventually using Carmen_Release().
 // If for some reason the creation of the state instance failed, a nullptr is
 // returned.
-C_State Carmen_OpenState(enum StateImpl state, enum ArchiveImpl archive,
-                         const char* directory, int length);
+C_State Carmen_OpenState(C_Schema schema, enum StateImpl state,
+                         enum ArchiveImpl archive, const char* directory,
+                         int length);
 
 // Flushes all committed state information to disk to guarantee permanent
 // storage. All internally cached modifications is synced to disk.

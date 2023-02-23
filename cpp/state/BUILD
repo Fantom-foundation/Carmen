@@ -70,7 +70,11 @@ cc_test(
 cc_library(
     name = "configurations",
     hdrs = ["configurations.h"],
+    visibility = [
+        "//state:__subpackages__",
+    ],
     deps = [
+        "//archive",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",
         "//backend/depot/memory:depot",
@@ -82,9 +86,6 @@ cc_library(
         "//backend/store/file:store",
         "//backend/store/leveldb:store",
         "//backend/store/memory:store",
-        "//state/s1:state",
-        "//state/s2:state",
-        "//state/s3:state",
     ],
 )
 
@@ -95,8 +96,12 @@ cc_library(
     deps = [
         ":configurations",
         ":state",
+        "//archive",
         "//archive/leveldb:archive",
         "//archive/sqlite:archive",
+        "//state/s1:state",
+        "//state/s2:state",
+        "//state/s3:state",
         "@com_google_absl//absl/status",
     ],
     alwayslink = True,
@@ -125,6 +130,9 @@ cc_binary(
         "//common:benchmark",
         "//common:file_util",
         "//common:status_test_util",
+        "//state/s1:state",
+        "//state/s2:state",
+        "//state/s3:state",
         "//third_party/gperftools:profiler",
         "@com_github_google_benchmark//:benchmark_main",
     ],

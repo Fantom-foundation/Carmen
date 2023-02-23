@@ -25,8 +25,7 @@ TEST(Schema, FeaturesHaveSetSemantic) {
   EXPECT_EQ(Schema(F::kKeyId), Schema(F::kKeyId));
   EXPECT_EQ(Schema(F::kKeyId), Schema(F::kKeyId, F::kKeyId));
 
-  EXPECT_EQ(Schema(F::kAddressId, F::kKeyId),
-            Schema(F::kKeyId, F::kAddressId));
+  EXPECT_EQ(Schema(F::kAddressId, F::kKeyId), Schema(F::kKeyId, F::kAddressId));
 
   EXPECT_NE(Schema(), Schema(F::kKeyId));
 }

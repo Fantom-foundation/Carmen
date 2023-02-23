@@ -35,6 +35,7 @@ cc_test(
         "//common:account_state",
         "//common:status_test_util",
         "//common:type",
+        "//state:configurations",
         "//state:state_test_suite",
         "//state:update",
         "@com_google_absl//absl/status",

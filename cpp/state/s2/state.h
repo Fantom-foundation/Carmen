@@ -37,9 +37,7 @@ class State {
   using SlotId = std::uint32_t;
   using Archive = ArchiveType;
 
-  static constexpr Schema GetSchema() {
-    return StateFeature::kAddressId;
-  }
+  static constexpr Schema GetSchema() { return StateFeature::kAddressId; }
 
   // Creates a new state by opening the content stored in the given directory.
   static absl::StatusOr<State> Open(const std::filesystem::path& directory,
@@ -222,9 +220,9 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::Open(
     archive = std::make_unique<ArchiveType>(std::move(instance));
   }
 
-  return State(std::move(address_index),
-               std::move(slot_index), std::move(balances), std::move(nonces),
-               std::move(values), std::move(account_state), std::move(codes),
+  return State(std::move(address_index), std::move(slot_index),
+               std::move(balances), std::move(nonces), std::move(values),
+               std::move(account_state), std::move(codes),
                std::move(code_hashes), std::move(address_to_slots),
                std::move(archive));
 }
@@ -236,9 +234,8 @@ template <template <typename K, typename V> class IndexType,
           Archive ArchiveType>
 State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::State(
     IndexType<Address, AddressId> address_index,
-    IndexType<Slot, SlotId> slot_index,
-    StoreType<AddressId, Balance> balances, StoreType<AddressId, Nonce> nonces,
-    StoreType<SlotId, Value> value_store,
+    IndexType<Slot, SlotId> slot_index, StoreType<AddressId, Balance> balances,
+    StoreType<AddressId, Nonce> nonces, StoreType<SlotId, Value> value_store,
     StoreType<AddressId, AccountState> account_states,
     DepotType<AddressId> codes, StoreType<AddressId, Hash> code_hashes,
     MultiMapType<AddressId, SlotId> address_to_slots,
@@ -562,9 +559,8 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetHash() {
   ASSIGN_OR_RETURN(auto val_store_hash, value_store_.GetHash());
   ASSIGN_OR_RETURN(auto acc_states_hash, account_states_.GetHash());
   ASSIGN_OR_RETURN(auto codes_hash, codes_.GetHash());
-  return GetSha256Hash(addr_idx_hash, slot_idx_hash, bal_hash,
-                       nonces_hash, val_store_hash, acc_states_hash,
-                       codes_hash);
+  return GetSha256Hash(addr_idx_hash, slot_idx_hash, bal_hash, nonces_hash,
+                       val_store_hash, acc_states_hash, codes_hash);
 }
 
 template <template <typename K, typename V> class IndexType,
@@ -633,4 +629,4 @@ MemoryFootprint State<IndexType, StoreType, DepotType, MultiMapType,
   return res;
 }
 
-}  // namespace carmen::s1
+}  // namespace carmen::s2

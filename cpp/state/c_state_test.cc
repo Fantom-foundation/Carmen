@@ -40,6 +40,7 @@ std::string ToString(ArchiveImpl c) {
 
 // A configuration struct for the parameterized test below.
 struct Config {
+  int schema;
   StateImpl state;
   ArchiveImpl archive;
 };
@@ -101,8 +102,8 @@ class CStateTest : public testing::TestWithParam<Config> {
     dir_ = std::make_unique<TempDir>();
     auto path = dir_->GetPath().string();
     const Config& config = GetParam();
-    state_ = Carmen_OpenState(config.state, config.archive, path.c_str(),
-                              path.size());
+    state_ = Carmen_OpenState(config.schema, config.state, config.archive,
+                              path.c_str(), path.size());
     ASSERT_NE(state_, nullptr);
   }
 
@@ -506,8 +507,8 @@ TEST_P(CStateTest, CanBeStoredAndReloaded) {
   auto path = dir.GetPath().string();
   Hash hash;
   {
-    auto state = Carmen_OpenState(config.state, config.archive, path.c_str(),
-                                  path.size());
+    auto state = Carmen_OpenState(config.schema, config.state, config.archive,
+                                  path.c_str(), path.size());
     ASSERT_NE(state, nullptr);
 
     Address addr{0x01};
@@ -518,8 +519,8 @@ TEST_P(CStateTest, CanBeStoredAndReloaded) {
     Carmen_ReleaseState(state);
   }
   {
-    auto state = Carmen_OpenState(config.state, config.archive, path.c_str(),
-                                  path.size());
+    auto state = Carmen_OpenState(config.schema, config.state, config.archive,
+                                  path.c_str(), path.size());
     ASSERT_NE(state, nullptr);
 
     Address addr{0x01};
@@ -536,19 +537,21 @@ TEST_P(CStateTest, CanBeStoredAndReloaded) {
 
 INSTANTIATE_TEST_SUITE_P(
     All, CStateTest,
-    testing::Values(Config{kState_Memory, kArchive_None},
-                    Config{kState_File, kArchive_None},
-                    Config{kState_LevelDb, kArchive_None},
+    // Tests each schema with each config, and all 3 archive modes.
+    testing::Values(Config{1, kState_Memory, kArchive_None},
+                    Config{2, kState_File, kArchive_None},
+                    Config{3, kState_LevelDb, kArchive_None},
 
-                    Config{kState_Memory, kArchive_LevelDb},
-                    Config{kState_File, kArchive_LevelDb},
-                    Config{kState_LevelDb, kArchive_LevelDb},
+                    Config{2, kState_Memory, kArchive_LevelDb},
+                    Config{3, kState_File, kArchive_LevelDb},
+                    Config{1, kState_LevelDb, kArchive_LevelDb},
 
-                    Config{kState_Memory, kArchive_Sqlite},
-                    Config{kState_File, kArchive_Sqlite},
-                    Config{kState_LevelDb, kArchive_Sqlite}),
+                    Config{3, kState_Memory, kArchive_Sqlite},
+                    Config{1, kState_File, kArchive_Sqlite},
+                    Config{2, kState_LevelDb, kArchive_Sqlite}),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {
-      return "state_" + ToString(info.param.state) + "_archive_" +
+      return "schema_" + std::to_string(info.param.schema) + "_impl_" +
+             ToString(info.param.state) + "_archive_" +
              ToString(info.param.archive);
     });
 
