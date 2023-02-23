@@ -66,15 +66,25 @@ func (a ArchiveType) String() string {
 	return "unknown"
 }
 
+type StateSchema uint8
+
+func GetAllSchemas() []StateSchema {
+	return []StateSchema{1, 2, 3}
+}
+
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
 	Directory string
+	Schema    StateSchema
 	Archive   ArchiveType
 }
 
 // NewGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
 func NewGoMemoryState(params Parameters) (State, error) {
+	if params.Schema != 1 {
+		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
+	}
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
@@ -129,6 +139,9 @@ func NewGoMemoryState(params Parameters) (State, error) {
 
 // NewGoFileState creates File based Index and Store implementations
 func NewGoFileState(params Parameters) (State, error) {
+	if params.Schema != 1 {
+		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
+	}
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
@@ -233,6 +246,9 @@ func NewGoFileState(params Parameters) (State, error) {
 
 // NewGoCachedFileState creates File based Index and Store implementations
 func NewGoCachedFileState(params Parameters) (State, error) {
+	if params.Schema != 1 {
+		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
+	}
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
@@ -337,6 +353,9 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 
 // NewGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
 func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.Schema != 1 {
+		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
+	}
 	db, err := common.OpenLevelDb(params.Directory, nil)
 	if err != nil {
 		return nil, err
@@ -409,6 +428,9 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 
 // NewGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
 func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.Schema != 1 {
+		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
+	}
 	db, err := common.OpenLevelDb(params.Directory, nil)
 	if err != nil {
 		return nil, err

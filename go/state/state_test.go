@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -13,15 +14,16 @@ import (
 
 type namedStateConfig struct {
 	name    string
+	schema  StateSchema
 	factory func(params Parameters) (directUpdateState, error)
 }
 
 func (c *namedStateConfig) createState(directory string) (directUpdateState, error) {
-	return c.factory(Parameters{Directory: directory})
+	return c.factory(Parameters{Directory: directory, Schema: c.schema})
 }
 
 func (c *namedStateConfig) createStateWithArchive(directory string, archiveType ArchiveType) (directUpdateState, error) {
-	return c.factory(Parameters{Directory: directory, Archive: archiveType})
+	return c.factory(Parameters{Directory: directory, Archive: archiveType, Schema: c.schema})
 }
 
 func castToDirectUpdateState(factory func(params Parameters) (State, error)) func(params Parameters) (directUpdateState, error) {
@@ -37,15 +39,15 @@ func castToDirectUpdateState(factory func(params Parameters) (State, error)) fun
 func initStates() []namedStateConfig {
 	var res []namedStateConfig
 	for _, s := range initCppStates() {
-		res = append(res, namedStateConfig{name: "cpp-" + s.name, factory: s.factory})
+		res = append(res, namedStateConfig{name: fmt.Sprintf("cpp-%s/s%d", s.name, s.schema), schema: s.schema, factory: s.factory})
 	}
 	for _, s := range initGoStates() {
-		res = append(res, namedStateConfig{name: "go-" + s.name, factory: s.factory})
+		res = append(res, namedStateConfig{name: fmt.Sprintf("go-%s/s%d", s.name, s.schema), schema: s.schema, factory: s.factory})
 	}
 	return res
 }
 
-func testEachConfiguration(t *testing.T, test func(t *testing.T, s directUpdateState)) {
+func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedStateConfig, s directUpdateState)) {
 	for _, config := range initStates() {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
@@ -54,28 +56,33 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, s directUpdateS
 			}
 			defer state.Close()
 
-			test(t, state)
+			test(t, &config, state)
 		})
 	}
 }
 
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
-	ref, err := NewGoMemoryState(Parameters{})
-	if err != nil {
-		t.Fatalf("failed to create reference state: %v", err)
+	want := map[StateSchema]common.Hash{}
+	for _, s := range GetAllSchemas() {
+		ref, err := NewCppInMemoryState(Parameters{Directory: t.TempDir(), Schema: s})
+		if err != nil {
+			t.Fatalf("failed to create reference state: %v", err)
+		}
+		mod(ref.(directUpdateState))
+		hash, err := ref.GetHash()
+		if err != nil {
+			t.Fatalf("failed to get hash of reference state: %v", err)
+		}
+		want[s] = hash
 	}
-	mod(ref.(directUpdateState))
-	want, err := ref.GetHash()
-	if err != nil {
-		t.Fatalf("failed to get hash of reference state: %v", err)
-	}
-	testEachConfiguration(t, func(t *testing.T, state directUpdateState) {
+
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, state directUpdateState) {
 		mod(state)
 		got, err := state.GetHash()
 		if err != nil {
 			t.Fatalf("failed to compute hash: %v", err)
 		}
-		if want != got {
+		if want[config.schema] != got {
 			t.Errorf("Invalid hash, wanted %v, got %v", want, got)
 		}
 	})
@@ -187,7 +194,7 @@ func TestLargeStateHashes(t *testing.T) {
 }
 
 func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
-	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		fp := s.GetMemoryFootprint()
 		if fp == nil {
 			t.Fatalf("state produces invalid footprint: %v", fp)
@@ -202,7 +209,7 @@ func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
 }
 
 func TestCodeCanBeUpdated(t *testing.T) {
-	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		// Initially, the code of an account is empty.
 		code, err := s.GetCode(address1)
 		if err != nil {
@@ -256,7 +263,7 @@ func TestCodeCanBeUpdated(t *testing.T) {
 }
 
 func TestCodeHashesMatchCodes(t *testing.T) {
-	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		hashOfEmptyCode := common.GetKeccak256Hash([]byte{})
 
 		// For a non-existing account the code is empty and the hash should match.
@@ -303,7 +310,7 @@ func TestCodeHashesMatchCodes(t *testing.T) {
 }
 
 func TestDeleteNotExistingAccount(t *testing.T) {
-	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		if err := s.createAccount(address1); err != nil {
 			t.Fatalf("Error: %s", err)
 		}
@@ -321,7 +328,7 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 }
 
 func TestCreatingAccountClearsStorage(t *testing.T) {
-	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
 		val, err := s.GetStorage(address1, key1)
 		if err != nil {
@@ -358,7 +365,7 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 }
 
 func TestDeleteAccountClearsStorage(t *testing.T) {
-	testEachConfiguration(t, func(t *testing.T, s directUpdateState) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
 
 		if err := s.setStorage(address1, key1, val1); err != nil {
@@ -500,7 +507,7 @@ func TestPersistentState(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 
 			// skip in-memory
-			if config.name == "cpp-InMemory" || config.name == "go-Memory" {
+			if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 				return
 			}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -2542,16 +2543,19 @@ func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 }
 
 func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
-	ref_state, err := NewGoMemoryState(Parameters{})
-	if err != nil {
-		t.Fatalf("failed to create reference state: %v", err)
+	want := map[StateSchema]common.Hash{}
+	for _, s := range GetAllSchemas() {
+		ref_state, err := NewCppInMemoryState(Parameters{Directory: t.TempDir(), Schema: s})
+		if err != nil {
+			t.Fatalf("failed to create reference state: %v", err)
+		}
+		ref := CreateStateDBUsing(ref_state)
+		defer ref.Close()
+		mod(ref)
+		ref.EndTransaction()
+		ref.EndBlock(1)
+		want[s] = ref.GetHash()
 	}
-	ref := CreateStateDBUsing(ref_state)
-	defer ref.Close()
-	mod(ref)
-	ref.EndTransaction()
-	ref.EndBlock(1)
-	want := ref.GetHash()
 	for i := 0; i < 3; i++ {
 		for _, config := range initStates() {
 			t.Run(fmt.Sprintf("%v/run=%d", config.name, i), func(t *testing.T) {
@@ -2565,7 +2569,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 				mod(stateDb)
 				stateDb.EndTransaction()
 				stateDb.EndBlock(1)
-				if got := stateDb.GetHash(); want != got {
+				if got := stateDb.GetHash(); want[config.schema] != got {
 					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
 				}
 			})
@@ -2668,7 +2672,7 @@ func TestPersistentStateDB(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 
 			// skip in-memory
-			if config.name == "cpp-InMemory" || config.name == "go-Memory" {
+			if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 				return
 			}
 

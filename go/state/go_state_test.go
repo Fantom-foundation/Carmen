@@ -36,11 +36,11 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory", castToDirectUpdateState(NewGoMemoryState)},
-		{"File Index and Store", castToDirectUpdateState(NewGoFileState)},
-		{"Cached File Index and Store", castToDirectUpdateState(NewGoCachedFileState)},
-		{"LevelDB Index and Store", castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store", castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		{"Memory", 1, castToDirectUpdateState(NewGoMemoryState)},
+		{"File Index and Store", 1, castToDirectUpdateState(NewGoFileState)},
+		{"Cached File Index and Store", 1, castToDirectUpdateState(NewGoCachedFileState)},
+		{"LevelDB Index and Store", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
 	}
 }
 
@@ -261,7 +261,7 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewGoMemoryState(Parameters{})
+	state, err := NewGoMemoryState(Parameters{Schema: 1})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
@@ -291,7 +291,7 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewGoMemoryState(Parameters{})
+	state, err := NewGoMemoryState(Parameters{Schema: 1})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
