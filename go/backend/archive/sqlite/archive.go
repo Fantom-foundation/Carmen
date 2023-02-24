@@ -25,7 +25,7 @@ var (
 const (
 	kCreateBlockTable   = "CREATE TABLE IF NOT EXISTS block (number INT PRIMARY KEY, hash BLOB)"
 	kAddBlockStmt       = "INSERT INTO block(number, hash) VALUES (?,?)"
-	kGetBlockHeightStmt = "SELECT number FROM block ORDER BY number DESC LIMIT 1"
+	kGetBlockHeightStmt = "SELECT number, hash FROM block ORDER BY number DESC LIMIT 1"
 	kGetBlockHashStmt   = "SELECT hash FROM block WHERE number <= ? ORDER BY number DESC LIMIT 1"
 
 	kCreateStatusTable = "CREATE TABLE IF NOT EXISTS status (account BLOB, block INT, exist INT, reincarnation INT, PRIMARY KEY (account,block))"
@@ -202,7 +202,7 @@ func (a *Archive) Close() error {
 
 func (a *Archive) Add(block uint64, update common.Update) error {
 	// Empty updates can be skipped. Blocks are implicitly empty,
-	// and being tolerante here makes client code easier.
+	// and being tolerant here makes client code easier.
 	if update.IsEmpty() {
 		return nil
 	}
@@ -294,11 +294,14 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	}
 
 	blockHasher := sha256.New()
-	lastBlockHash, err := a.getBlockHash(tx, block) // needs to be in tx, otherwise database is locked
+	prevBlockNumber, prevBlockHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
 	if err != nil {
-		return fmt.Errorf("failed to get previous block hash; %s", err)
+		return fmt.Errorf("failed to get preceding block hash; %s", err)
 	}
-	blockHasher.Write(lastBlockHash[:])
+	if prevBlockNumber >= block {
+		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	}
+	blockHasher.Write(prevBlockHash[:])
 
 	// calculate changed accounts hashes
 	reusedHasher := sha256.New()
@@ -353,16 +356,27 @@ func (a *Archive) getStatus(tx *sql.Tx, block uint64, account common.Address) (e
 }
 
 func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
-	rows, err := a.getBlockHeightStmt.Query()
+	block, _, err = a.getLastBlock(nil)
+	return block, err
+}
+
+func (a *Archive) getLastBlock(tx *sql.Tx) (number uint64, hash common.Hash, err error) {
+	stmt := a.getBlockHeightStmt
+	if tx != nil {
+		stmt = tx.Stmt(stmt)
+	}
+	rows, err := stmt.Query()
 	if err != nil {
-		return 0, err
+		return 0, common.Hash{}, err
 	}
 	defer rows.Close()
 	if rows.Next() {
-		err = rows.Scan(&block)
-		return block, err
+		var hashBytes sql.RawBytes
+		err = rows.Scan(&number, &hashBytes)
+		copy(hash[:], hashBytes)
+		return number, hash, err
 	}
-	return 0, rows.Err()
+	return 0, common.Hash{}, rows.Err()
 }
 
 func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err error) {
@@ -433,12 +447,8 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 	return common.Value{}, rows.Err()
 }
 
-func (a *Archive) getBlockHash(tx *sql.Tx, block uint64) (hash common.Hash, err error) {
-	stmt := a.getBlockHashStmt
-	if tx != nil {
-		stmt = tx.Stmt(stmt)
-	}
-	rows, err := stmt.Query(block)
+func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
+	rows, err := a.getBlockHashStmt.Query(block)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -450,10 +460,6 @@ func (a *Archive) getBlockHash(tx *sql.Tx, block uint64) (hash common.Hash, err 
 		return hash, err
 	}
 	return common.Hash{}, rows.Err()
-}
-
-func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
-	return a.getBlockHash(nil, block)
 }
 
 func (a *Archive) getAccountHash(tx *sql.Tx, block uint64, account common.Address) (hash common.Hash, err error) {

@@ -315,3 +315,31 @@ func TestPreventingBlockOverrides(t *testing.T) {
 		})
 	}
 }
+
+func TestPreventingBlockOutOfOrder(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(2, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+			}); err != nil {
+				t.Fatalf("failed to add block 2; %s", err)
+			}
+
+			if err := a.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Slots: []common.SlotUpdate{
+					{addr1, common.Key{0x37}, common.Value{0x12}},
+				},
+			}); err == nil {
+				t.Errorf("allowed inserting block 1 while block 2 already exists")
+			}
+
+			if value, err := a.GetStorage(1, addr1, common.Key{0x37}); err != nil || value != (common.Value{}) {
+				t.Errorf("unexpected value at block 1: %x; %s", value, err)
+			}
+		})
+	}
+}

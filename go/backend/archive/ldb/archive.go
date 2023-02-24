@@ -31,6 +31,11 @@ func (a *Archive) Close() error {
 }
 
 func (a *Archive) Add(block uint64, update common.Update) error {
+	// Empty updates can be skipped. Blocks are implicitly empty,
+	// and being tolerant here makes client code easier.
+	if update.IsEmpty() {
+		return nil
+	}
 	a.batch.Reset()
 
 	getReincarnationNumber := func(account common.Address) (int, error) {
