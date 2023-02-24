@@ -16,6 +16,7 @@ type Archive struct {
 	reincarnationNumberCache map[common.Address]int
 	batch                    leveldb.Batch
 	lastBlockCache           blockCache
+	addMutex                 sync.Mutex
 }
 
 func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
@@ -32,13 +33,70 @@ func (a *Archive) Close() error {
 
 // Add a new update as a new block into the archive. Should be called from a single thread only.
 func (a *Archive) Add(block uint64, update common.Update) error {
-	// Empty updates can be skipped. Blocks are implicitly empty,
-	// and being tolerant here makes client code easier.
-	if update.IsEmpty() {
-		return nil
-	}
-	a.batch.Reset()
+	a.addMutex.Lock()
+	defer a.addMutex.Unlock()
 
+	prevBlockNumber, prevBlockHash, err := a.getLastBlock()
+	if err != nil {
+		return fmt.Errorf("failed to get preceding block hash; %s", err)
+	}
+	if prevBlockNumber >= block {
+		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	}
+
+	a.batch.Reset()
+	var blockHash common.Hash
+	if update.IsEmpty() {
+		blockHash = prevBlockHash
+	} else {
+		err := a.addUpdateIntoBatch(block, update)
+		if err != nil {
+			return err
+		}
+
+		blockHasher := sha256.New()
+		blockHasher.Write(prevBlockHash[:])
+
+		reusedHasher := sha256.New()
+		updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
+		for _, account := range updatedAccounts {
+			accountUpdate := accountUpdates[account]
+
+			lastAccountHash, err := a.GetAccountHash(block, account)
+			if err != nil {
+				return fmt.Errorf("failed to get previous account hash; %s", err)
+			}
+			accountUpdateHash := accountUpdate.GetHash(reusedHasher)
+
+			reusedHasher.Reset()
+			reusedHasher.Write(lastAccountHash[:])
+			reusedHasher.Write(accountUpdateHash[:])
+			newAccountHash := reusedHasher.Sum(nil)
+			blockHasher.Write(newAccountHash)
+
+			var accountK accountBlockKey
+			accountK.set(common.AccountHashArchiveKey, account, block)
+			a.batch.Put(accountK[:], newAccountHash)
+		}
+
+		hash := blockHasher.Sum(nil)
+		copy(blockHash[:], hash)
+	}
+
+	var blockK blockKey
+	blockK.set(block)
+	a.batch.Put(blockK[:], blockHash[:])
+
+	err = a.db.Write(&a.batch, nil)
+	if err != nil {
+		return err
+	}
+
+	a.lastBlockCache.set(block, blockHash)
+	return nil
+}
+
+func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 	getReincarnationNumber := func(account common.Address) (int, error) {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
 			return res, nil
@@ -101,51 +159,6 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		a.batch.Put(slotK[:], slotUpdate.Value[:])
 	}
 
-	blockHasher := sha256.New()
-	prevBlockNumber, prevBlockHash, err := a.getLastBlock()
-	if err != nil {
-		return fmt.Errorf("failed to get preceding block hash; %s", err)
-	}
-	if prevBlockNumber >= block {
-		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
-	}
-	blockHasher.Write(prevBlockHash[:])
-
-	reusedHasher := sha256.New()
-	updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
-	for _, account := range updatedAccounts {
-		accountUpdate := accountUpdates[account]
-
-		lastAccountHash, err := a.GetAccountHash(block, account)
-		if err != nil {
-			return fmt.Errorf("failed to get previous account hash; %s", err)
-		}
-		accountUpdateHash := accountUpdate.GetHash(reusedHasher)
-
-		reusedHasher.Reset()
-		reusedHasher.Write(lastAccountHash[:])
-		reusedHasher.Write(accountUpdateHash[:])
-		newAccountHash := reusedHasher.Sum(nil)
-		blockHasher.Write(newAccountHash)
-
-		var accountK accountBlockKey
-		accountK.set(common.AccountHashArchiveKey, account, block)
-		a.batch.Put(accountK[:], newAccountHash)
-	}
-
-	blockHash := blockHasher.Sum(nil)
-	var blockK blockKey
-	blockK.set(block)
-	a.batch.Put(blockK[:], blockHash)
-
-	err = a.db.Write(&a.batch, nil)
-	if err != nil {
-		return err
-	}
-
-	var hash common.Hash
-	copy(hash[:], blockHash)
-	a.lastBlockCache.set(block, hash)
 	return nil
 }
 

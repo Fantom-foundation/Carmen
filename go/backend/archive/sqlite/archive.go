@@ -201,24 +201,69 @@ func (a *Archive) Close() error {
 }
 
 func (a *Archive) Add(block uint64, update common.Update) error {
-	// Empty updates can be skipped. Blocks are implicitly empty,
-	// and being tolerant here makes client code easier.
-	if update.IsEmpty() {
-		return nil
-	}
 	tx, err := a.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
-	var succeed bool
 	defer func() {
-		if !succeed {
-			if err := tx.Rollback(); err != nil {
-				panic(fmt.Errorf("failed to rollback; %s", err))
-			}
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			panic(fmt.Errorf("failed to rollback; %s", err))
 		}
 	}()
 
+	prevBlockNumber, prevBlockHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
+	if err != nil {
+		return fmt.Errorf("failed to get preceding block hash; %s", err)
+	}
+	if prevBlockNumber >= block {
+		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	}
+
+	var blockHash []byte
+	if update.IsEmpty() {
+		blockHash = prevBlockHash[:] // empty update does not change the archive hash
+	} else {
+		err = a.addUpdateIntoTx(tx, block, update)
+
+		blockHasher := sha256.New()
+		blockHasher.Write(prevBlockHash[:])
+
+		// calculate changed accounts hashes
+		reusedHasher := sha256.New()
+		stmt := tx.Stmt(a.addAccountHashStmt)
+		updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
+		for _, account := range updatedAccounts {
+			accountUpdate := accountUpdates[account]
+
+			lastAccountHash, err := a.getAccountHash(tx, block, account) // needs to be in tx, otherwise database is locked
+			if err != nil {
+				return fmt.Errorf("failed to get previous account hash; %s", err)
+			}
+			accountUpdateHash := accountUpdate.GetHash(reusedHasher)
+
+			reusedHasher.Reset()
+			reusedHasher.Write(lastAccountHash[:])
+			reusedHasher.Write(accountUpdateHash[:])
+			newAccountHash := reusedHasher.Sum(nil)
+			blockHasher.Write(newAccountHash)
+
+			_, err = stmt.Exec(account[:], block, newAccountHash[:])
+			if err != nil {
+				return fmt.Errorf("failed to add account hash; %s", err)
+			}
+		}
+
+		blockHash = blockHasher.Sum(nil)
+	}
+
+	_, err = tx.Stmt(a.addBlockStmt).Exec(block, blockHash)
+	if err != nil {
+		return fmt.Errorf("failed to add block %d; %s", block, err)
+	}
+	return tx.Commit()
+}
+
+func (a *Archive) addUpdateIntoTx(tx *sql.Tx, block uint64, update common.Update) error {
 	// helper function for obtaining current reincarnation number of an account
 	getReincarnationNumber := func(account common.Address) (int, error) {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
@@ -259,7 +304,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 
 	stmt = tx.Stmt(a.addBalanceStmt)
 	for _, balanceUpdate := range update.Balances {
-		_, err = stmt.Exec(balanceUpdate.Account[:], block, balanceUpdate.Balance[:])
+		_, err := stmt.Exec(balanceUpdate.Account[:], block, balanceUpdate.Balance[:])
 		if err != nil {
 			return fmt.Errorf("failed to add balance; %s", err)
 		}
@@ -267,7 +312,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 
 	stmt = tx.Stmt(a.addCodeStmt)
 	for _, codeUpdate := range update.Codes {
-		_, err = stmt.Exec(codeUpdate.Account[:], block, codeUpdate.Code)
+		_, err := stmt.Exec(codeUpdate.Account[:], block, codeUpdate.Code)
 		if err != nil {
 			return fmt.Errorf("failed to add code; %s", err)
 		}
@@ -275,7 +320,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 
 	stmt = tx.Stmt(a.addNonceStmt)
 	for _, nonceUpdate := range update.Nonces {
-		_, err = stmt.Exec(nonceUpdate.Account[:], block, nonceUpdate.Nonce[:])
+		_, err := stmt.Exec(nonceUpdate.Account[:], block, nonceUpdate.Nonce[:])
 		if err != nil {
 			return fmt.Errorf("failed to add nonce; %s", err)
 		}
@@ -293,49 +338,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 	}
 
-	blockHasher := sha256.New()
-	prevBlockNumber, prevBlockHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
-	if err != nil {
-		return fmt.Errorf("failed to get preceding block hash; %s", err)
-	}
-	if prevBlockNumber >= block {
-		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
-	}
-	blockHasher.Write(prevBlockHash[:])
-
-	// calculate changed accounts hashes
-	reusedHasher := sha256.New()
-	stmt = tx.Stmt(a.addAccountHashStmt)
-	updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
-	for _, account := range updatedAccounts {
-		accountUpdate := accountUpdates[account]
-
-		lastAccountHash, err := a.getAccountHash(tx, block, account) // needs to be in tx, otherwise database is locked
-		if err != nil {
-			return fmt.Errorf("failed to get previous account hash; %s", err)
-		}
-		accountUpdateHash := accountUpdate.GetHash(reusedHasher)
-
-		reusedHasher.Reset()
-		reusedHasher.Write(lastAccountHash[:])
-		reusedHasher.Write(accountUpdateHash[:])
-		newAccountHash := reusedHasher.Sum(nil)
-		blockHasher.Write(newAccountHash)
-
-		_, err = stmt.Exec(account[:], block, newAccountHash[:])
-		if err != nil {
-			return fmt.Errorf("failed to add account hash; %s", err)
-		}
-	}
-
-	blockHash := blockHasher.Sum(nil)
-	_, err = tx.Stmt(a.addBlockStmt).Exec(block, blockHash)
-	if err != nil {
-		return fmt.Errorf("failed to add block %d; %s", block, err)
-	}
-
-	succeed = true
-	return tx.Commit()
+	return nil
 }
 
 func (a *Archive) getStatus(tx *sql.Tx, block uint64, account common.Address) (exists bool, reincarnation int, err error) {

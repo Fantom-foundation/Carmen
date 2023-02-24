@@ -294,9 +294,7 @@ func TestPreventingBlockOverrides(t *testing.T) {
 			a := factory.getArchive(t.TempDir())
 			defer a.Close()
 
-			if err := a.Add(1, common.Update{
-				CreatedAccounts: []common.Address{addr1},
-			}); err != nil {
+			if err := a.Add(1, common.Update{}); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -312,6 +310,7 @@ func TestPreventingBlockOverrides(t *testing.T) {
 			if value, err := a.GetStorage(1, addr1, common.Key{0x37}); err != nil || value != (common.Value{}) {
 				t.Errorf("unexpected value at block 1: %x; %s", value, err)
 			}
+
 		})
 	}
 }
@@ -339,6 +338,41 @@ func TestPreventingBlockOutOfOrder(t *testing.T) {
 
 			if value, err := a.GetStorage(1, addr1, common.Key{0x37}); err != nil || value != (common.Value{}) {
 				t.Errorf("unexpected value at block 1: %x; %s", value, err)
+			}
+		})
+	}
+}
+
+func TestEmptyBlockHash(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(1, common.Update{}); err != nil {
+				t.Fatalf("failed to add empty block 1; %s", err)
+			}
+
+			if err := a.Add(2, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+			}); err != nil {
+				t.Fatalf("failed to add block 2; %s", err)
+			}
+
+			if err := a.Add(3, common.Update{}); err != nil {
+				t.Fatalf("failed to add empty block 3; %s", err)
+			}
+
+			if hash, err := a.GetHash(1); err != nil || hash != (common.Hash{}) {
+				t.Errorf("unexpected hash of block 1: %s; %s", hash, err)
+			}
+			hash2, err := a.GetHash(2)
+			if err != nil || hash2 == (common.Hash{}) {
+				t.Errorf("unexpected hash of block 1: %s; %s", hash2, err)
+			}
+			hash3, err := a.GetHash(3)
+			if err != nil || hash2 != hash3 {
+				t.Errorf("unexpected hash of block 3: %s != %s; %s", hash2, hash3, err)
 			}
 		})
 	}
