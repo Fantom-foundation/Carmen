@@ -30,6 +30,7 @@ func (a *Archive) Close() error {
 	return nil
 }
 
+// Add a new update as a new block into the archive. Should be called from a single thread only.
 func (a *Archive) Add(block uint64, update common.Update) error {
 	// Empty updates can be skipped. Blocks are implicitly empty,
 	// and being tolerant here makes client code easier.
@@ -137,13 +138,18 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	blockK.set(block)
 	a.batch.Put(blockK[:], blockHash)
 
+	err = a.db.Write(&a.batch, nil)
+	if err != nil {
+		return err
+	}
+
 	var hash common.Hash
 	copy(hash[:], blockHash)
 	a.lastBlockCache.set(block, hash)
-
-	return a.db.Write(&a.batch, nil)
+	return nil
 }
 
+// getLastBlock provides info about the last completely written block
 func (a *Archive) getLastBlock() (number uint64, hash common.Hash, err error) {
 	number, hash = a.lastBlockCache.get()
 	if number != 0 {
