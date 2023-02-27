@@ -7,6 +7,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"sync"
 	"unsafe"
 )
 
@@ -14,6 +15,8 @@ type Archive struct {
 	db                       *common.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
 	batch                    leveldb.Batch
+	lastBlockCache           blockCache
+	addMutex                 sync.Mutex
 }
 
 func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
@@ -28,9 +31,72 @@ func (a *Archive) Close() error {
 	return nil
 }
 
+// Add a new update as a new block into the archive. Should be called from a single thread only.
 func (a *Archive) Add(block uint64, update common.Update) error {
-	a.batch.Reset()
+	a.addMutex.Lock()
+	defer a.addMutex.Unlock()
 
+	prevBlockNumber, prevBlockHash, err := a.getLastBlock()
+	if err != nil {
+		return fmt.Errorf("failed to get preceding block hash; %s", err)
+	}
+	if prevBlockNumber >= block {
+		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	}
+
+	a.batch.Reset()
+	var blockHash common.Hash
+	if update.IsEmpty() {
+		blockHash = prevBlockHash
+	} else {
+		err := a.addUpdateIntoBatch(block, update)
+		if err != nil {
+			return err
+		}
+
+		blockHasher := sha256.New()
+		blockHasher.Write(prevBlockHash[:])
+
+		reusedHasher := sha256.New()
+		updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
+		for _, account := range updatedAccounts {
+			accountUpdate := accountUpdates[account]
+
+			lastAccountHash, err := a.GetAccountHash(block, account)
+			if err != nil {
+				return fmt.Errorf("failed to get previous account hash; %s", err)
+			}
+			accountUpdateHash := accountUpdate.GetHash(reusedHasher)
+
+			reusedHasher.Reset()
+			reusedHasher.Write(lastAccountHash[:])
+			reusedHasher.Write(accountUpdateHash[:])
+			newAccountHash := reusedHasher.Sum(nil)
+			blockHasher.Write(newAccountHash)
+
+			var accountK accountBlockKey
+			accountK.set(common.AccountHashArchiveKey, account, block)
+			a.batch.Put(accountK[:], newAccountHash)
+		}
+
+		hash := blockHasher.Sum(nil)
+		copy(blockHash[:], hash)
+	}
+
+	var blockK blockKey
+	blockK.set(block)
+	a.batch.Put(blockK[:], blockHash[:])
+
+	err = a.db.Write(&a.batch, nil)
+	if err != nil {
+		return err
+	}
+
+	a.lastBlockCache.set(block, blockHash)
+	return nil
+}
+
+func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 	getReincarnationNumber := func(account common.Address) (int, error) {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
 			return res, nil
@@ -93,55 +159,36 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		a.batch.Put(slotK[:], slotUpdate.Value[:])
 	}
 
-	blockHasher := sha256.New()
-	lastBlockHash, err := a.GetHash(block)
-	if err != nil {
-		return fmt.Errorf("failed to get previous block hash; %s", err)
-	}
-	blockHasher.Write(lastBlockHash[:])
-
-	reusedHasher := sha256.New()
-	updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
-	for _, account := range updatedAccounts {
-		accountUpdate := accountUpdates[account]
-
-		lastAccountHash, err := a.GetAccountHash(block, account)
-		if err != nil {
-			return fmt.Errorf("failed to get previous account hash; %s", err)
-		}
-		accountUpdateHash := accountUpdate.GetHash(reusedHasher)
-
-		reusedHasher.Reset()
-		reusedHasher.Write(lastAccountHash[:])
-		reusedHasher.Write(accountUpdateHash[:])
-		newAccountHash := reusedHasher.Sum(nil)
-		blockHasher.Write(newAccountHash)
-
-		var accountK accountBlockKey
-		accountK.set(common.AccountHashArchiveKey, account, block)
-		a.batch.Put(accountK[:], newAccountHash)
-	}
-
-	blockHash := blockHasher.Sum(nil)
-	var blockK blockKey
-	blockK.set(block)
-	a.batch.Put(blockK[:], blockHash[:])
-
-	return a.db.Write(&a.batch, nil)
+	return nil
 }
 
-func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
+// getLastBlock provides info about the last completely written block
+func (a *Archive) getLastBlock() (number uint64, hash common.Hash, err error) {
+	number, hash = a.lastBlockCache.get()
+	if number != 0 {
+		return number, hash, nil
+	}
+	return a.getLastBlockSlow()
+}
+
+// getLastBlockSlow represents the slow path of getLastBlock() method (extracted to allow inlining the fast path)
+func (a *Archive) getLastBlockSlow() (number uint64, hash common.Hash, err error) {
 	keyRange := getBlockKeyRangeFromHighest()
-	it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
+	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
 
 	if it.Next() {
-		var key blockKey
-		copy(key[:], it.Key())
-		block = key.get()
-		return block, nil
+		var blockK blockKey
+		copy(blockK[:], it.Key())
+		copy(hash[:], it.Value())
+		return blockK.get(), hash, nil
 	}
-	return 0, it.Error()
+	return 0, common.Hash{}, it.Error()
+}
+
+func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
+	block, _, err = a.getLastBlock()
+	return block, err
 }
 
 func (a *Archive) getStatus(block uint64, account common.Address) (exists bool, reincarnation int, err error) {
@@ -228,15 +275,11 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 }
 
 func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
-	keyRange := getBlockKeyRangeFrom(block)
-	it := a.db.NewIterator(&keyRange, nil)
-	defer it.Release()
-
-	if it.Next() {
-		copy(hash[:], it.Value())
-		return hash, nil
-	}
-	return common.Hash{}, it.Error()
+	var blockK blockKey
+	blockK.set(block)
+	hashBytes, err := a.db.Get(blockK[:], nil)
+	copy(hash[:], hashBytes)
+	return hash, err
 }
 
 func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
@@ -260,4 +303,24 @@ func (a *Archive) GetMemoryFootprint() *common.MemoryFootprint {
 	var reincarnation int
 	mf.AddChild("reincarnationNumberCache", common.NewMemoryFootprint(uintptr(len(a.reincarnationNumberCache))*(unsafe.Sizeof(address)+unsafe.Sizeof(reincarnation))))
 	return mf
+}
+
+// blockCache caches info about the last block in the archive
+type blockCache struct {
+	mu            sync.Mutex
+	lastBlockNum  uint64
+	lastBlockHash common.Hash
+}
+
+func (c *blockCache) set(number uint64, hash common.Hash) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastBlockNum = number
+	c.lastBlockHash = hash
+}
+
+func (c *blockCache) get() (number uint64, hash common.Hash) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastBlockNum, c.lastBlockHash
 }
