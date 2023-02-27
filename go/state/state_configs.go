@@ -68,6 +68,8 @@ func (a ArchiveType) String() string {
 
 type StateSchema uint8
 
+const defaultSchema StateSchema = 1
+
 func GetAllSchemas() []StateSchema {
 	return []StateSchema{1, 2, 3}
 }
@@ -82,6 +84,9 @@ type Parameters struct {
 // NewGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
 func NewGoMemoryState(params Parameters) (State, error) {
+	if params.Schema == 0 {
+		params.Schema = defaultSchema
+	}
 	if params.Schema != 1 {
 		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
 	}
@@ -139,6 +144,9 @@ func NewGoMemoryState(params Parameters) (State, error) {
 
 // NewGoFileState creates File based Index and Store implementations
 func NewGoFileState(params Parameters) (State, error) {
+	if params.Schema == 0 {
+		params.Schema = defaultSchema
+	}
 	if params.Schema != 1 {
 		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
 	}
@@ -246,6 +254,9 @@ func NewGoFileState(params Parameters) (State, error) {
 
 // NewGoCachedFileState creates File based Index and Store implementations
 func NewGoCachedFileState(params Parameters) (State, error) {
+	if params.Schema == 0 {
+		params.Schema = defaultSchema
+	}
 	if params.Schema != 1 {
 		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
 	}
@@ -353,6 +364,9 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 
 // NewGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
 func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.Schema == 0 {
+		params.Schema = defaultSchema
+	}
 	if params.Schema != 1 {
 		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
 	}
@@ -428,6 +442,9 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 
 // NewGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
 func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
+	if params.Schema == 0 {
+		params.Schema = defaultSchema
+	}
 	if params.Schema != 1 {
 		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
 	}

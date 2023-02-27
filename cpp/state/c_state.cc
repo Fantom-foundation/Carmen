@@ -234,6 +234,7 @@ template <template <Schema S, class A> class Config>
 WorldState* Open(const std::filesystem::path& directory, std::uint8_t schema,
                  ArchiveImpl archive) {
   switch (schema) {
+    case 0:  // default option is schema 1, fall-through
     case 1:
       return Open<Config, s1::State>(directory, archive);
     case 2:
