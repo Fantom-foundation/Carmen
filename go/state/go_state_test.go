@@ -39,13 +39,8 @@ func initGoStates() []namedStateConfig {
 		{"Memory", castToDirectUpdateState(NewGoMemoryState)},
 		{"File Index and Store", castToDirectUpdateState(NewGoFileState)},
 		{"Cached File Index and Store", castToDirectUpdateState(NewGoCachedFileState)},
-		{"Cached File Index and Store with LevelDB archive", castToDirectUpdateState(NewGoCachedFileLdbArchiveState)},
-		{"LevelDB Index, File Store", castToDirectUpdateState(NewGoLeveLIndexFileStoreState)},
-		{"Cached LevelDB Index, File Store", castToDirectUpdateState(NewGoCachedLeveLIndexFileStoreState)},
-		{"Cached Transact LevelDB, Index File Store", castToDirectUpdateState(NewGoCachedTransactLeveLIndexFileStoreState)},
 		{"LevelDB Index and Store", castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
 		{"Cached LevelDB Index and Store", castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
-		{"Cached Transact LevelDB Index and Store", castToDirectUpdateState(NewGoTransactCachedLeveLIndexAndStoreState)}, // cannot combine transact and non-transact access
 	}
 }
 
