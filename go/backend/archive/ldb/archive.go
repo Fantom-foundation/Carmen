@@ -97,11 +97,16 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 }
 
 func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
+	// helper function for obtaining current reincarnation number of an account
 	getReincarnationNumber := func(account common.Address) (int, error) {
 		if res, exists := a.reincarnationNumberCache[account]; exists {
 			return res, nil
 		}
 		_, reincarnation, err := a.getStatus(block, account)
+		if err != nil {
+			return 0, err
+		}
+		a.reincarnationNumberCache[account] = reincarnation
 		return reincarnation, err
 	}
 
