@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -504,47 +505,43 @@ func TestArchive(t *testing.T) {
 // is re-opened in another process, and it is tested that data are available, i.e. all was successfully persisted
 func TestPersistentState(t *testing.T) {
 	for _, config := range initStates() {
-		t.Run(config.name, func(t *testing.T) {
+		// skip in-memory
+		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
+			continue
+		}
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
 
-			// skip in-memory
-			if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
-				return
-			}
+				dir := t.TempDir()
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s", t.Name())
+				}
 
-			dir := t.TempDir()
-			s, err := config.createState(dir)
-			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
-			}
+				// init state data
+				update := common.Update{}
+				update.AppendCreateAccount(address1)
+				update.AppendBalanceUpdate(address1, balance1)
+				update.AppendNonceUpdate(address1, nonce1)
+				update.AppendSlotUpdate(address1, key1, val1)
+				update.AppendCodeUpdate(address1, []byte{1, 2, 3})
+				if err := s.Apply(1, update); err != nil {
+					t.Errorf("Error to init state: %v", err)
+				}
 
-			// init state data
-			if err := s.createAccount(address1); err != nil {
-				t.Errorf("Error to init state: %v", err)
-			}
-			if err := s.setBalance(address1, balance1); err != nil {
-				t.Errorf("Error to init state: %v", err)
-			}
-			if err := s.setNonce(address1, nonce1); err != nil {
-				t.Errorf("Error to init state: %v", err)
-			}
-			if err := s.setStorage(address1, key1, val1); err != nil {
-				t.Errorf("Error to init state: %v", err)
-			}
-			if err := s.setCode(address1, []byte{1, 2, 3}); err != nil {
-				t.Errorf("Error to init state: %v", err)
-			}
+				if err := s.Close(); err != nil {
+					t.Errorf("Cannot close state: %e", err)
+				}
 
-			if err := s.Close(); err != nil {
-				t.Errorf("Cannot close state: %e", err)
-			}
-
-			execSubProcessTest(t, dir, config.name, "TestStateRead")
-		})
+				execSubProcessTest(t, dir, config.name, archiveType, "TestStateRead")
+			})
+		}
 	}
 }
 
 var stateDir = flag.String("statedir", "DEFAULT", "directory where the state is persisted")
 var stateImpl = flag.String("stateimpl", "DEFAULT", "name of the state implementation")
+var archiveImpl = flag.Int("archiveimpl", 0, "number of the archive implementation")
 
 // TestReadState verifies data are available in a state.
 // The given state reads the data from the given directory and verifies the data are present.
@@ -555,7 +552,7 @@ func TestStateRead(t *testing.T) {
 		return
 	}
 
-	s := createState(t, *stateImpl, *stateDir)
+	s := createState(t, *stateImpl, *stateDir, *archiveImpl)
 	defer func() {
 		_ = s.Close()
 	}()
@@ -575,10 +572,30 @@ func TestStateRead(t *testing.T) {
 	if code, err := s.GetCode(address1); err != nil || bytes.Compare(code, []byte{1, 2, 3}) != 0 {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", code, []byte{1, 2, 3}, err)
 	}
+
+	as, err := s.GetArchiveState(1)
+	if as == nil || err != nil {
+		t.Fatalf("Unable to get archive state, err: %v", err)
+	}
+	if state, err := as.Exists(address1); err != nil || state != true {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", state, true, err)
+	}
+	if balance, err := as.GetBalance(address1); err != nil || balance != balance1 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", balance, balance1, err)
+	}
+	if nonce, err := as.GetNonce(address1); err != nil || nonce != nonce1 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", nonce, nonce1, err)
+	}
+	if storage, err := as.GetStorage(address1, key1); err != nil || storage != val1 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", storage, val1, err)
+	}
+	if code, err := as.GetCode(address1); err != nil || bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", code, []byte{1, 2, 3}, err)
+	}
 }
 
-func execSubProcessTest(t *testing.T, dir, stateImpl, execTestName string) {
-	cmd := exec.Command("go", "test", "-v", "-run", execTestName, "-args", "-statedir="+dir, "-stateimpl="+stateImpl)
+func execSubProcessTest(t *testing.T, dir string, stateImpl string, archiveImpl ArchiveType, execTestName string) {
+	cmd := exec.Command("go", "test", "-v", "-run", execTestName, "-args", "-statedir="+dir, "-stateimpl="+stateImpl, "-archiveimpl="+strconv.FormatInt(int64(archiveImpl), 10))
 
 	errBuf := new(bytes.Buffer)
 	cmd.Stderr = errBuf
@@ -591,10 +608,10 @@ func execSubProcessTest(t *testing.T, dir, stateImpl, execTestName string) {
 }
 
 // createState creates a state with the given name and directory
-func createState(t *testing.T, name, dir string) State {
-	for _, s := range initStates() {
-		if s.name == name {
-			state, err := s.createState(dir)
+func createState(t *testing.T, name, dir string, archiveImpl int) State {
+	for _, config := range initStates() {
+		if config.name == name {
+			state, err := config.createStateWithArchive(dir, ArchiveType(archiveImpl))
 			if err != nil {
 				t.Fatalf("Cannot init state: %s, err: %v", name, err)
 			}
