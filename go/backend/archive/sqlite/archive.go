@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"unsafe"
@@ -20,6 +21,10 @@ var (
 		"PRAGMA cache_size = -1048576", // abs(N*1024) = 1GB
 		"PRAGMA locking_mode = EXCLUSIVE",
 	}
+)
+
+var (
+	ErrNoLastBlock = errors.New("sqlite archive: no block in archive")
 )
 
 const (
@@ -211,22 +216,25 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 	}()
 
-	prevBlockNumber, prevBlockHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
-	if err != nil {
+	lastBlock, lastHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
+	if err != nil && err != ErrNoLastBlock {
 		return fmt.Errorf("failed to get preceding block hash; %s", err)
 	}
-	if prevBlockNumber >= block {
-		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	if block <= lastBlock && err != ErrNoLastBlock {
+		return fmt.Errorf("unable to add block %d, is lower or equal to already present block %d", block, lastBlock)
 	}
 
 	var blockHash []byte
 	if update.IsEmpty() {
-		blockHash = prevBlockHash[:] // empty update does not change the archive hash
+		blockHash = lastHash[:] // empty update does not change the archive hash
 	} else {
-		err = a.addUpdateIntoTx(tx, block, update)
+
+		if err := a.addUpdateIntoTx(tx, block, update); err != nil {
+			return fmt.Errorf("failed to add update into sqlite tx; %s", err)
+		}
 
 		blockHasher := sha256.New()
-		blockHasher.Write(prevBlockHash[:])
+		blockHasher.Write(lastHash[:])
 
 		// calculate changed accounts hashes
 		reusedHasher := sha256.New()
@@ -260,6 +268,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	if err != nil {
 		return fmt.Errorf("failed to add block %d; %s", block, err)
 	}
+
 	return tx.Commit()
 }
 
@@ -379,7 +388,11 @@ func (a *Archive) getLastBlock(tx *sql.Tx) (number uint64, hash common.Hash, err
 		copy(hash[:], hashBytes)
 		return number, hash, err
 	}
-	return 0, common.Hash{}, rows.Err()
+	err = rows.Err()
+	if err == nil {
+		err = ErrNoLastBlock
+	}
+	return 0, common.Hash{}, err
 }
 
 func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err error) {
@@ -451,7 +464,8 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 }
 
 func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
-	rows, err := a.getBlockHashStmt.Query(block)
+	stmt := a.getBlockHashStmt
+	rows, err := stmt.Query(block)
 	if err != nil {
 		return common.Hash{}, err
 	}
