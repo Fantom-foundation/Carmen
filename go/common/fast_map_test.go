@@ -478,3 +478,155 @@ func BenchmarkMapInsertAndClear(b *testing.B) {
 		})
 	}
 }
+
+// ------------------------------ Fuzzing --------------------------------
+
+// To run a fuzzer on a fast map, we are generating sequences of commands
+// executing modifications on fast maps and regular maps, and check whether
+// their content is in sync.
+//
+// To make operations easy and fast, the targeted key and value types are bytes.
+//
+// To run this fuzz test, us the following command:
+//
+//     go test ./common -run FuzzMap -fuzz=FuzzMapOperations
+//
+// It will start the fuzzing and try to find inputs breaking the test case. For
+// more information see: https://go.dev/security/fuzz/
+
+// testByteHasher is the hashing algorithm used in the fuzzer, deliberately producing collisions.
+type testByteHasher struct{}
+
+func (b testByteHasher) Hash(d byte) uint16 {
+	// By only using 6 of the 8 bytes for the hash, groups of 4 values have the same hash.
+	return uint16(d & byte(0x3F))
+}
+
+// command is the interface of all commands that can be triggered by the fuzzer.
+type command interface {
+	apply(trg *FastMap[byte, byte], ref *map[byte]byte)
+}
+
+// clear is the command clearing the maps content.
+type clear struct{}
+
+func (c clear) apply(trg *FastMap[byte, byte], ref *map[byte]byte) {
+	trg.Clear()
+	*ref = map[byte]byte{}
+}
+
+// put is a command adding a key/value pair to the map.
+type put struct {
+	key, value byte
+}
+
+func (c put) apply(trg *FastMap[byte, byte], ref *map[byte]byte) {
+	trg.Put(c.key, c.value)
+	(*ref)[c.key] = c.value
+}
+
+// remove eliminates a key from the map.
+type remove struct {
+	key byte
+}
+
+func (c remove) apply(trg *FastMap[byte, byte], ref *map[byte]byte) {
+	trg.Remove(c.key)
+	delete(*ref, c.key)
+}
+
+const (
+	op_clear byte = iota
+	op_put
+	op_remove
+
+	// not really an op, must be last
+	num_ops
+)
+
+// parseCommands interprets the given byte sequence as a sequence of commands.
+func parseCommands(encoded []byte) []command {
+	res := []command{}
+	for len(encoded) > 1 {
+		switch encoded[0] % num_ops {
+		case op_clear:
+			res = append(res, clear{})
+			encoded = encoded[1:]
+		case op_put:
+			if len(encoded) < 3 {
+				return res
+			}
+			res = append(res, put{encoded[1], encoded[2]})
+			encoded = encoded[3:]
+		case op_remove:
+			if len(encoded) < 2 {
+				return res
+			}
+			res = append(res, remove{encoded[1]})
+			encoded = encoded[2:]
+		}
+	}
+	return res
+}
+
+func FuzzMapOperations(f *testing.F) {
+	// the no-op case.
+	f.Add([]byte{})
+
+	// a case for each command
+	f.Add([]byte{op_clear})
+	f.Add([]byte{op_put, 2, 3})
+	f.Add([]byte{op_remove, 3})
+
+	// a combined case
+	f.Add([]byte{op_put, 2, 3, op_remove, 2, op_put, 2, 4, op_clear})
+
+	// Test a full map
+	data := make([]byte, 0, 256*3)
+	for i := 0; i < 256; i++ {
+		data = append(data, []byte{op_put, byte(i), ^byte(i)}...)
+	}
+	f.Add(data)
+
+	// A case where all elements are added and removed.
+	data = make([]byte, 0, 256*3+256*2)
+	for i := 0; i < 256; i++ {
+		data = append(data, []byte{op_put, byte(i), ^byte(i)}...)
+	}
+	for i := 0; i < 256; i++ {
+		data = append(data, []byte{op_remove, byte(i)}...)
+	}
+	f.Add(data)
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		cmds := parseCommands(data)
+		trg := NewFastMap[byte, byte](testByteHasher{})
+		ref := map[byte]byte{}
+		for _, cmd := range cmds {
+
+			// Apply the next operation.
+			cmd.apply(trg, &ref)
+
+			// Check that the test map and the reference map are identical.
+			want_size := len(ref)
+			have_size := trg.Size()
+			if want_size != have_size {
+				t.Errorf("invalid number of elements in map, wanted %d, got %d", want_size, have_size)
+				return
+			}
+
+			for i := 0; i < 256; i++ {
+				want_value, want_exists := ref[byte(i)]
+				have_value, have_exists := trg.Get(byte(i))
+				if want_exists != have_exists {
+					t.Errorf("existence of %d wrong, wanted %v, got %v", i, want_exists, have_exists)
+					return
+				}
+				if want_exists && want_value != have_value {
+					t.Errorf("value of %d wrong, wanted %v, got %v", i, want_value, have_value)
+					return
+				}
+			}
+		}
+	})
+}
