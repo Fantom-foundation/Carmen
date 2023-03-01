@@ -36,18 +36,18 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()
 
-	prevBlockNumber, prevBlockHash, err := a.getLastBlock()
-	if err != nil {
+	lastBlock, lastHash, err := a.getLastBlock()
+	if err != nil && err != leveldb.ErrNotFound {
 		return fmt.Errorf("failed to get preceding block hash; %s", err)
 	}
-	if prevBlockNumber >= block {
-		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, prevBlockNumber)
+	if block <= lastBlock && err != leveldb.ErrNotFound {
+		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, lastBlock)
 	}
 
 	a.batch.Reset()
 	var blockHash common.Hash
 	if update.IsEmpty() {
-		blockHash = prevBlockHash
+		blockHash = lastHash
 	} else {
 		err := a.addUpdateIntoBatch(block, update)
 		if err != nil {
@@ -55,7 +55,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 
 		blockHasher := sha256.New()
-		blockHasher.Write(prevBlockHash[:])
+		blockHasher.Write(lastHash[:])
 
 		reusedHasher := sha256.New()
 		updatedAccounts, accountUpdates := archive.AccountUpdatesFrom(&update)
@@ -173,7 +173,8 @@ func (a *Archive) getLastBlock() (number uint64, hash common.Hash, err error) {
 	if number != 0 {
 		return number, hash, nil
 	}
-	return a.getLastBlockSlow()
+	number, hash, err = a.getLastBlockSlow()
+	return number, hash, err
 }
 
 // getLastBlockSlow represents the slow path of getLastBlock() method (extracted to allow inlining the fast path)
@@ -188,7 +189,11 @@ func (a *Archive) getLastBlockSlow() (number uint64, hash common.Hash, err error
 		copy(hash[:], it.Value())
 		return blockK.get(), hash, nil
 	}
-	return 0, common.Hash{}, it.Error()
+	err = it.Error()
+	if err == nil {
+		err = leveldb.ErrNotFound
+	}
+	return 0, common.Hash{}, err
 }
 
 func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
