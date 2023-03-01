@@ -502,9 +502,19 @@ func (b testByteHasher) Hash(d byte) uint16 {
 	return uint16(d & byte(0x3F))
 }
 
+const (
+	op_clear byte = iota
+	op_put
+	op_remove
+
+	// not really an op, must be last
+	num_ops
+)
+
 // command is the interface of all commands that can be triggered by the fuzzer.
 type command interface {
 	apply(trg *FastMap[byte, byte], ref *map[byte]byte)
+	appendTo([]byte) []byte
 }
 
 // clear is the command clearing the maps content.
@@ -513,6 +523,10 @@ type clear struct{}
 func (c clear) apply(trg *FastMap[byte, byte], ref *map[byte]byte) {
 	trg.Clear()
 	*ref = map[byte]byte{}
+}
+
+func (c clear) appendTo(code []byte) []byte {
+	return append(code, op_clear)
 }
 
 // put is a command adding a key/value pair to the map.
@@ -525,6 +539,10 @@ func (c put) apply(trg *FastMap[byte, byte], ref *map[byte]byte) {
 	(*ref)[c.key] = c.value
 }
 
+func (c put) appendTo(code []byte) []byte {
+	return append(code, []byte{op_put, c.key, c.value}...)
+}
+
 // remove eliminates a key from the map.
 type remove struct {
 	key byte
@@ -535,14 +553,9 @@ func (c remove) apply(trg *FastMap[byte, byte], ref *map[byte]byte) {
 	delete(*ref, c.key)
 }
 
-const (
-	op_clear byte = iota
-	op_put
-	op_remove
-
-	// not really an op, must be last
-	num_ops
-)
+func (c remove) appendTo(code []byte) []byte {
+	return append(code, []byte{op_remove, c.key}...)
+}
 
 // parseCommands interprets the given byte sequence as a sequence of commands.
 func parseCommands(encoded []byte) []command {
@@ -569,34 +582,43 @@ func parseCommands(encoded []byte) []command {
 	return res
 }
 
+// toBytes encodes a list of commands into a byte sequence.
+func toBytes(cmds []command) []byte {
+	res := []byte{}
+	for _, cmd := range cmds {
+		res = cmd.appendTo(res)
+	}
+	return res
+}
+
 func FuzzMapOperations(f *testing.F) {
 	// the no-op case.
-	f.Add([]byte{})
+	f.Add(toBytes([]command{}))
 
 	// a case for each command
-	f.Add([]byte{op_clear})
-	f.Add([]byte{op_put, 2, 3})
-	f.Add([]byte{op_remove, 3})
+	f.Add(toBytes([]command{clear{}}))
+	f.Add(toBytes([]command{put{2, 3}}))
+	f.Add(toBytes([]command{remove{3}}))
 
 	// a combined case
-	f.Add([]byte{op_put, 2, 3, op_remove, 2, op_put, 2, 4, op_clear})
+	f.Add(toBytes([]command{put{2, 3}, remove{2}, put{2, 4}, clear{}}))
 
 	// Test a full map
-	data := make([]byte, 0, 256*3)
+	cmds := make([]command, 0, 256)
 	for i := 0; i < 256; i++ {
-		data = append(data, []byte{op_put, byte(i), ^byte(i)}...)
+		cmds = append(cmds, put{byte(i), ^byte(i)})
 	}
-	f.Add(data)
+	f.Add(toBytes(cmds))
 
 	// A case where all elements are added and removed.
-	data = make([]byte, 0, 256*3+256*2)
+	cmds = cmds[0:0]
 	for i := 0; i < 256; i++ {
-		data = append(data, []byte{op_put, byte(i), ^byte(i)}...)
+		cmds = append(cmds, put{byte(i), ^byte(i)})
 	}
 	for i := 0; i < 256; i++ {
-		data = append(data, []byte{op_remove, byte(i)}...)
+		cmds = append(cmds, remove{byte(i)})
 	}
-	f.Add(data)
+	f.Add(toBytes(cmds))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		cmds := parseCommands(data)
