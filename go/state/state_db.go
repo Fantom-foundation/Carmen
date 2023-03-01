@@ -997,7 +997,7 @@ func (s *stateDB) Close() error {
 func (s *stateDB) StartBulkLoad() BulkLoad {
 	s.EndBlock(0)
 	s.storedDataCache.Clear()
-	return &bulkLoad{s.state, common.Update{}, 0, nil}
+	return &bulkLoad{s.state, common.Update{}, 1, nil}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {

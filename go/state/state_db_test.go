@@ -2804,3 +2804,59 @@ func toKey(key uint64) common.Key {
 	binary.BigEndian.PutUint64(keyBytes, key)
 	return common.KeySerializer{}.FromBytes(keyBytes)
 }
+
+func TestStateDBArchive(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				dir := t.TempDir()
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				defer s.Close()
+				stateDb := CreateStateDBUsing(s)
+
+				stateDb.AddBalance(address2, big.NewInt(22))
+
+				bl := stateDb.StartBulkLoad()
+				bl.CreateAccount(address1)
+				bl.SetBalance(address1, big.NewInt(12))
+				if err := bl.Close(); err != nil {
+					t.Fatalf("failed to bulkload StateDB with archive; %s", err)
+				}
+
+				stateDb.BeginBlock()
+				stateDb.AddBalance(address1, big.NewInt(22))
+				stateDb.EndBlock(2)
+
+				if err := stateDb.Flush(); err != nil { // wait until archives are written
+					t.Fatalf("failed to flush StateDB; %s", err)
+				}
+
+				state1, err := stateDb.GetArchiveStateDB(1)
+				if err != nil {
+					t.Fatalf("failed to get state of block 1; %s", err)
+				}
+
+				state2, err := stateDb.GetArchiveStateDB(2)
+				if err != nil {
+					t.Fatalf("failed to get state of block 2; %s", err)
+				}
+
+				if exist := state1.Exist(address1); err != nil || exist != true {
+					t.Errorf("invalid account state at block 1: %t", exist)
+				}
+				if exist := state2.Exist(address1); err != nil || exist != true {
+					t.Errorf("invalid account state at block 2: %t", exist)
+				}
+				if balance := state1.GetBalance(address1); balance.Cmp(big.NewInt(12)) != 0 {
+					t.Errorf("invalid balance at block 1: %s", balance)
+				}
+				if balance := state2.GetBalance(address1); balance.Cmp(big.NewInt(34)) != 0 {
+					t.Errorf("invalid balance at block 2: %s", balance)
+				}
+			})
+		}
+	}
+}
