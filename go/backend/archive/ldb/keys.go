@@ -7,8 +7,10 @@ import (
 )
 
 const blockSize = 8                 // block number size (uint64)
-const maxBlock = 0xFFFFFFFFFFFFFFFE // max block number (uint64)
+const maxBlock = 0xFFFFFFFFFFFFFFFE // max block number (uint64) - must be less than the max value to fit into limit range
 const reincSize = 4                 // reincarnation (uint32)
+
+var limitBlock = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} // max range value, must be greater than maxBlock
 
 // blockKey is a key for block table, it consists of
 // * the tablespace
@@ -29,7 +31,7 @@ func getBlockKeyRangeFrom(block uint64) util.Range {
 	var start, end blockKey
 	start.set(block)
 	end[0] = start[0]
-	copy(end[1:], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	copy(end[1:], limitBlock)
 	return util.Range{Start: start[:], Limit: end[:]}
 }
 
@@ -53,7 +55,7 @@ func (k *accountBlockKey) set(table common.TableSpace, account common.Address, b
 // getRange provides a key range for iterating the account value from the given block to the first block
 func (k *accountBlockKey) getRange() util.Range {
 	end := *k
-	copy(end[1+common.AddressSize:], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	copy(end[1+common.AddressSize:], limitBlock)
 	return util.Range{Start: k[:], Limit: end[:]}
 }
 
@@ -76,7 +78,7 @@ func (k *accountKeyBlockKey) set(table common.TableSpace, account common.Address
 // getRange provides a key range for iterating the slot value from the given block to the first block
 func (k *accountKeyBlockKey) getRange() util.Range {
 	end := *k
-	copy(end[1+common.AddressSize+reincSize+common.KeySize:], []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
+	copy(end[1+common.AddressSize+reincSize+common.KeySize:], limitBlock)
 	return util.Range{Start: k[:], Limit: end[:]}
 }
 

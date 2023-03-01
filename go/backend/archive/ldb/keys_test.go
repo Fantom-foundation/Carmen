@@ -46,9 +46,9 @@ func TestAccountBlockKey(t *testing.T) {
 func TestAccountKeyBlockKey(t *testing.T) {
 	var addr = common.Address{0x01}
 	var block0, block1, block2 accountKeyBlockKey
-	block0.set(common.NonceArchiveKey, addr, 0, common.Key{0x01}, 0)
-	block1.set(common.NonceArchiveKey, addr, 0, common.Key{0x01}, 1)
-	block2.set(common.NonceArchiveKey, addr, 0, common.Key{0x01}, 2)
+	block0.set(common.StorageArchiveKey, addr, 0, common.Key{0x01}, 0)
+	block1.set(common.StorageArchiveKey, addr, 0, common.Key{0x01}, 1)
+	block2.set(common.StorageArchiveKey, addr, 0, common.Key{0x01}, 2)
 	blockRange := block2.getRange()
 
 	if !bytes.Equal(blockRange.Start, block2[:]) {
