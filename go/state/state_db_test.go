@@ -2669,63 +2669,63 @@ const numSlots = 1000
 // and it is tested that data are available, i.e. all was successfully persisted
 func TestPersistentStateDB(t *testing.T) {
 	for _, config := range initStates() {
-		t.Run(config.name, func(t *testing.T) {
+		// skip in-memory
+		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
+			continue
+		}
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				dir := t.TempDir()
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s", t.Name())
+				}
 
-			// skip in-memory
-			if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
-				return
-			}
+				stateDb := CreateStateDBUsing(s)
 
-			dir := t.TempDir()
-			s, err := config.createState(dir)
-			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
-			}
+				stateDb.BeginEpoch()
+				stateDb.BeginBlock()
+				stateDb.BeginTransaction()
 
-			stateDb := CreateStateDBUsing(s)
+				// init state DB data
+				stateDb.CreateAccount(address1)
+				stateDb.AddBalance(address1, big.NewInt(153))
+				stateDb.SetNonce(address1, 58)
+				stateDb.SetCode(address1, []byte{1, 2, 3})
 
-			stateDb.BeginEpoch()
-			stateDb.BeginBlock()
-			stateDb.BeginTransaction()
+				// insert number of slots to address 1
+				for i := 0; i < numSlots; i++ {
+					val := toVal(uint64(i))
+					stateDb.SetState(address1, toKey(uint64(i)), val)
+				}
 
-			// init state DB data
-			stateDb.CreateAccount(address1)
-			stateDb.AddBalance(address1, big.NewInt(153))
-			stateDb.SetNonce(address1, 58)
-			stateDb.SetCode(address1, []byte{1, 2, 3})
+				stateDb.EndTransaction()
+				stateDb.EndBlock(1)
+				stateDb.BeginBlock()
+				stateDb.BeginTransaction()
 
-			// insert number of slots to address 1
-			for i := 0; i < numSlots; i++ {
-				val := toVal(uint64(i))
-				stateDb.SetState(address1, toKey(uint64(i)), val)
-			}
+				stateDb.CreateAccount(address2)
+				stateDb.AddBalance(address2, big.NewInt(6789))
+				stateDb.SetNonce(address2, 91)
+				stateDb.SetCode(address2, []byte{3, 2, 1})
 
-			stateDb.EndTransaction()
-			stateDb.EndBlock(1)
-			stateDb.BeginBlock()
-			stateDb.BeginTransaction()
+				// insert number of slots to address 2
+				for i := 0; i < numSlots; i++ {
+					val := toVal(uint64(i + numSlots))
+					stateDb.SetState(address2, toKey(uint64(i)), val)
+				}
 
-			stateDb.CreateAccount(address2)
-			stateDb.AddBalance(address2, big.NewInt(6789))
-			stateDb.SetNonce(address2, 91)
-			stateDb.SetCode(address2, []byte{3, 2, 1})
+				stateDb.EndTransaction()
+				stateDb.EndBlock(2)
+				stateDb.EndEpoch(1)
 
-			// insert number of slots to address 2
-			for i := 0; i < numSlots; i++ {
-				val := toVal(uint64(i + numSlots))
-				stateDb.SetState(address2, toKey(uint64(i)), val)
-			}
+				if err := stateDb.Close(); err != nil {
+					t.Errorf("Cannot close state: %e", err)
+				}
 
-			stateDb.EndTransaction()
-			stateDb.EndBlock(2)
-			stateDb.EndEpoch(1)
-
-			if err := stateDb.Close(); err != nil {
-				t.Errorf("Cannot close state: %e", err)
-			}
-
-			execSubProcessTest(t, dir, config.name, "TestStateDBRead")
-		})
+				execSubProcessTest(t, dir, config.name, archiveType, "TestStateDBRead")
+			})
+		}
 	}
 }
 
@@ -2738,7 +2738,7 @@ func TestStateDBRead(t *testing.T) {
 		return
 	}
 
-	s := createState(t, *stateImpl, *stateDir)
+	s := createState(t, *stateImpl, *stateDir, *archiveImpl)
 	defer func() {
 		_ = s.Close()
 	}()
@@ -2791,6 +2791,52 @@ func TestStateDBRead(t *testing.T) {
 		}
 	}
 
+	// state in archive
+	as1, err := stateDb.GetArchiveStateDB(1)
+	if as1 == nil || err != nil {
+		t.Fatalf("Unable to get archive stateDB, err: %v", err)
+	}
+	if state := as1.Exist(address1); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if state := as1.Exist(address2); state != false {
+		t.Errorf("Unexpected value, val: %v != %v", state, false)
+	}
+	if balance := as1.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
+	}
+	if balance := as1.GetBalance(address2); balance.Cmp(big.NewInt(0)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 0)
+	}
+
+	as2, err := stateDb.GetArchiveStateDB(2)
+	if as2 == nil || err != nil {
+		t.Fatalf("Unable to get archive stateDB, err: %v", err)
+	}
+	if state := as2.Exist(address1); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if state := as2.Exist(address2); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if balance := as2.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
+	}
+	if balance := as2.GetBalance(address2); balance.Cmp(big.NewInt(6789)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 6789)
+	}
+	if nonce := as2.GetNonce(address1); nonce != 58 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 58)
+	}
+	if nonce := as2.GetNonce(address2); nonce != 91 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 91)
+	}
+	if code := as2.GetCode(address1); bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{1, 2, 3})
+	}
+	if code := as2.GetCode(address2); bytes.Compare(code, []byte{3, 2, 1}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{3, 2, 1})
+	}
 }
 
 func toVal(key uint64) common.Value {
