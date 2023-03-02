@@ -2,6 +2,9 @@ package state
 
 import (
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
@@ -63,6 +66,11 @@ type archiveUpdate = struct {
 	update *common.Update // nil to signal a flush
 }
 
+var counter, numFull int
+var waitFull, waitNonFull = big.NewInt(0), big.NewInt(0)
+
+const WINDOW = 100_000
+
 func (s *GoState) Apply(block uint64, update common.Update) error {
 	err := applyUpdate(s, update)
 	if err != nil {
@@ -101,7 +109,36 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		}
 
 		// Send the update to the writer to be processessed asynchroniously.
-		s.archiveWriter <- archiveUpdate{block, &update}
+		now := time.Now()
+		var isFull bool
+		select {
+		case s.archiveWriter <- archiveUpdate{block, &update}:
+		default:
+			isFull = true // could not write - the channel was full
+			s.archiveWriter <- archiveUpdate{block, &update}
+		}
+		nanos := now.UnixNano()
+
+		if isFull {
+			numFull += 1
+			waitFull = waitFull.Add(waitFull, big.NewInt(nanos))
+		} else {
+			waitNonFull = waitNonFull.Add(waitNonFull, big.NewInt(nanos))
+		}
+
+		counter += 1
+
+		if counter%WINDOW == 0 {
+			avrOverhead := big.NewInt(0).Div(waitNonFull, big.NewInt(int64(WINDOW-numFull)))
+			waitOnlyTime := big.NewInt(0).Sub(waitFull, avrOverhead.Mul(avrOverhead, big.NewInt(int64(numFull))))
+			waitOnlyTime = waitOnlyTime.Div(waitOnlyTime, big.NewInt(1000*1000))
+
+			waitFullMs := waitFull.Div(waitFull, big.NewInt(1000*1000))
+			waitNonFullMs := waitNonFull.Div(waitNonFull, big.NewInt(1000*1000))
+			fmt.Printf("queue full %d times, time:  full: %d non-full: %d blocked-time: %d (ms) \n", numFull, waitFullMs.Uint64(), waitNonFullMs.Uint64(), waitOnlyTime.Uint64())
+			numFull = 0
+			waitFull, waitNonFull = big.NewInt(0), big.NewInt(0)
+		}
 
 		// Drain potential errors, but do not wait for them.
 		var last error
