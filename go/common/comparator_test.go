@@ -9,9 +9,9 @@ var (
 	keyA = &Key{byte(0xA)}
 	keyB = &Key{byte(0xB)}
 
-	slotA = &SlotIdx[uint32]{uint32(10), uint32(20)}
-	slotB = &SlotIdx[uint32]{uint32(30), uint32(40)}
-	slotC = &SlotIdx[uint32]{uint32(10), uint32(40)}
+	slotA = &SlotIdx1[uint32]{uint32(10), uint32(20)}
+	slotB = &SlotIdx1[uint32]{uint32(30), uint32(40)}
+	slotC = &SlotIdx1[uint32]{uint32(10), uint32(40)}
 )
 
 func TestAddressComparator(t *testing.T) {

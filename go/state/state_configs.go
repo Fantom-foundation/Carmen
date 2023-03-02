@@ -91,7 +91,7 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
 	}
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
-	slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdxSerializer32{})
+	slotIndex := indexmem.NewIndex[common.SlotIdx1[uint32], uint32](common.SlotIdxSerializer32{})
 	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
 
 	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
@@ -127,7 +127,7 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{
+	state := NewGoState(&GoSchema1{
 		addressIndex,
 		keyIndex,
 		slotIndex,
@@ -138,7 +138,8 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
+		nil,
+	}, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -167,7 +168,7 @@ func NewGoFileState(params Parameters) (State, error) {
 	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
 		return nil, err
 	}
-	slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdxHasher{}, common.Identifier32Comparator{})
+	slotIndex, err := file.NewIndex[common.SlotIdx1[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +237,7 @@ func NewGoFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{
+	state := NewGoState(&GoSchema1{
 		addressIndex,
 		keyIndex,
 		slotIndex,
@@ -247,8 +248,8 @@ func NewGoFileState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
-
+		nil,
+	}, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -277,7 +278,7 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
 		return nil, err
 	}
-	slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdxHasher{}, common.Identifier32Comparator{})
+	slotIndex, err := file.NewIndex[common.SlotIdx1[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
 	if err != nil {
 		return nil, err
 	}
@@ -346,10 +347,10 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{
+	state := NewGoState(&GoSchema1{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx1[uint32], uint32](slotIndex, CacheCapacity),
 		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
@@ -357,8 +358,8 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		[]func(){archiveCleanup}, nil, arch, nil, nil, nil, nil}
-
+		nil,
+	}, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -378,7 +379,7 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
+	slotIndex, err := ldb.NewIndex[common.SlotIdx1[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +425,7 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{
+	state := NewGoState(&GoSchema1{
 		addressIndex,
 		keyIndex,
 		slotIndex,
@@ -435,8 +436,8 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		codesDepot,
 		codeHashesStore,
 		addressToSlots,
-		[]func(){archiveCleanup, cleanUpByClosing(db)}, nil, arch, nil, nil, nil, nil}
-
+		nil,
+	}, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 
@@ -456,7 +457,7 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
+	slotIndex, err := ldb.NewIndex[common.SlotIdx1[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
@@ -502,10 +503,10 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := &GoState{
+	state := NewGoState(&GoSchema1{
 		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+		cachedIndex.NewIndex[common.SlotIdx1[uint32], uint32](slotIndex, CacheCapacity),
 		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
@@ -513,8 +514,8 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
 		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
 		addressToSlots,
-		[]func(){archiveCleanup, cleanUpByClosing(db)}, nil, arch, nil, nil, nil, nil}
-
+		nil,
+	}, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 

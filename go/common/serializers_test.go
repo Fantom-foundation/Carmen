@@ -36,10 +36,10 @@ func TestBalanceSerializer(t *testing.T) {
 
 func TestSlotIdxSerializer32(t *testing.T) {
 	var s common.SlotIdxSerializer32
-	var _ common.Serializer[common.SlotIdx[uint32]] = s
+	var _ common.Serializer[common.SlotIdx1[uint32]] = s
 
 	// convert back and forth
-	slotIdx := common.SlotIdx[uint32]{
+	slotIdx := common.SlotIdx1[uint32]{
 		AddressIdx: 123,
 		KeyIdx:     456,
 	}

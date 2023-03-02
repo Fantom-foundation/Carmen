@@ -265,14 +265,14 @@ func TestFailingStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goState := state.(*GoState)
-	goState.balancesStore = failingStore[uint32, common.Balance]{goState.balancesStore}
-	goState.noncesStore = failingStore[uint32, common.Nonce]{goState.noncesStore}
-	goState.valuesStore = failingStore[uint32, common.Value]{goState.valuesStore}
+	goSchema := state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema.balancesStore = failingStore[uint32, common.Balance]{goSchema.balancesStore}
+	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
+	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
 
-	_ = goState.setBalance(address1, common.Balance{})
-	_ = goState.setNonce(address1, common.Nonce{})
-	_ = goState.setStorage(address1, key1, common.Value{})
+	_ = goSchema.setBalance(address1, common.Balance{})
+	_ = goSchema.setNonce(address1, common.Nonce{})
+	_ = goSchema.setStorage(address1, key1, common.Value{})
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {
@@ -295,8 +295,8 @@ func TestFailingIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goState := state.(*GoState)
-	goState.addressIndex = failingIndex[common.Address, uint32]{goState.addressIndex}
+	goSchema := state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {
