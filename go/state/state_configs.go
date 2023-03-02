@@ -87,13 +87,7 @@ func NewGoMemoryState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	if params.Schema != 1 {
-		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
-	}
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
-	slotIndex := indexmem.NewIndex[common.SlotIdx1[uint32], uint32](common.SlotIdxSerializer32{})
-	keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
-
 	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
@@ -106,11 +100,6 @@ func NewGoMemoryState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
-	if err != nil {
-		return nil, err
-	}
-
 	codesDepot, err := memory.NewDepot[uint32](CodeHashGroupSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
 		return nil, err
@@ -120,26 +109,83 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
+	var schema GoSchema
+	switch params.Schema {
+	case 1:
+		slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdx32Serializer{})
+		keyIndex := indexmem.NewIndex[common.Key, uint32](common.KeySerializer{})
+		valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+		if err != nil {
+			return nil, err
+		}
+		addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
+
+		schema = &GoSchema1{
+			addressIndex,
+			keyIndex,
+			slotIndex,
+			accountsStore,
+			noncesStore,
+			balancesStore,
+			valuesStore,
+			codesDepot,
+			codeHashesStore,
+			addressToSlots,
+			nil,
+		}
+	case 2:
+		slotIndex := indexmem.NewIndex[common.SlotIdxKey[uint32], uint32](common.SlotIdx32KeySerializer{})
+		valuesStore, err := storemem.NewStore[uint32, common.Value](common.ValueSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+		if err != nil {
+			return nil, err
+		}
+		addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
+
+		schema = &GoSchema2{
+			addressIndex,
+			slotIndex,
+			accountsStore,
+			noncesStore,
+			balancesStore,
+			valuesStore,
+			codesDepot,
+			codeHashesStore,
+			addressToSlots,
+			nil,
+		}
+	case 3:
+		slotIndex := indexmem.NewIndex[common.SlotIdxKey[uint32], uint32](common.SlotIdx32KeySerializer{})
+		reincarnationsStore, err := storemem.NewStore[uint32, common.Reincarnation](common.ReincarnationSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := storemem.NewStore[uint32, common.SlotReincValue](common.SlotReincValueSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
+		if err != nil {
+			return nil, err
+		}
+
+		schema = &GoSchema3{
+			addressIndex,
+			slotIndex,
+			accountsStore,
+			noncesStore,
+			balancesStore,
+			reincarnationsStore,
+			valuesStore,
+			codesDepot,
+			codeHashesStore,
+			nil,
+		}
+	default:
+		return nil, fmt.Errorf("the go implementation only supports schemas 1,2,3")
+	}
 
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 
-	state := NewGoState(&GoSchema1{
-		addressIndex,
-		keyIndex,
-		slotIndex,
-		accountsStore,
-		noncesStore,
-		balancesStore,
-		valuesStore,
-		codesDepot,
-		codeHashesStore,
-		addressToSlots,
-		nil,
-	}, arch, []func(){archiveCleanup})
+	state := NewGoState(schema, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -148,14 +194,10 @@ func NewGoFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	if params.Schema != 1 {
-		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
-	}
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
-
 	addressIndexPath := indexPath + string(filepath.Separator) + "addresses"
 	if err = os.MkdirAll(addressIndexPath, 0700); err != nil {
 		return nil, err
@@ -168,19 +210,6 @@ func NewGoFileState(params Parameters) (State, error) {
 	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
 		return nil, err
 	}
-	slotIndex, err := file.NewIndex[common.SlotIdx1[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
-	if err != nil {
-		return nil, err
-	}
-	keysIndexPath := indexPath + string(filepath.Separator) + "keys"
-	if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
-		return nil, err
-	}
-	keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
-	if err != nil {
-		return nil, err
-	}
-
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
@@ -205,15 +234,6 @@ func NewGoFileState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
-		return nil, err
-	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
-	if err != nil {
-		return nil, err
-	}
-
 	codesPath := storePath + string(filepath.Separator) + "codes"
 	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
@@ -230,26 +250,85 @@ func NewGoFileState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
+	valuesStorePath := storePath + string(filepath.Separator) + "values"
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
+		return nil, err
+	}
+
+	var schema GoSchema
+	switch params.Schema {
+	case 1:
+		slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdx32Serializer{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
+		if err != nil {
+			return nil, err
+		}
+		keysIndexPath := indexPath + string(filepath.Separator) + "keys"
+		if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
+			return nil, err
+		}
+		keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+		if err != nil {
+			return nil, err
+		}
+		addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
+
+		schema = &GoSchema1{
+			addressIndex,
+			keyIndex,
+			slotIndex,
+			accountsStore,
+			noncesStore,
+			balancesStore,
+			valuesStore,
+			codesDepot,
+			codeHashesStore,
+			addressToSlots,
+			nil,
+		}
+	case 3:
+		slotIndex, err := file.NewIndex[common.SlotIdxKey[uint32], uint32](slotsIndexPath, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{}, common.SlotIdx32KeyHasher{}, common.SlotIdx32KeyComparator{})
+		if err != nil {
+			return nil, err
+		}
+		reincStorePath := indexPath + string(filepath.Separator) + "reinc"
+		if err = os.MkdirAll(reincStorePath, 0700); err != nil {
+			return nil, err
+		}
+		reincarnationsStore, err := pagedfile.NewStore[uint32, common.Reincarnation](reincStorePath, common.ReincarnationSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(reincStorePath, HashTreeFactor), PoolSize)
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := pagedfile.NewStore[uint32, common.SlotReincValue](valuesStorePath, common.SlotReincValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+		if err != nil {
+			return nil, err
+		}
+
+		schema = &GoSchema3{
+			addressIndex,
+			slotIndex,
+			accountsStore,
+			noncesStore,
+			balancesStore,
+			reincarnationsStore,
+			valuesStore,
+			codesDepot,
+			codeHashesStore,
+			nil,
+		}
+	default:
+		return nil, fmt.Errorf("the go implementation only supports schemas 1,3")
+	}
 
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 
-	state := NewGoState(&GoSchema1{
-		addressIndex,
-		keyIndex,
-		slotIndex,
-		accountsStore,
-		noncesStore,
-		balancesStore,
-		valuesStore,
-		codesDepot,
-		codeHashesStore,
-		addressToSlots,
-		nil,
-	}, arch, []func(){archiveCleanup})
+	state := NewGoState(schema, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -258,14 +337,10 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	if params.Schema != 1 {
-		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
-	}
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
 	}
-
 	addressIndexPath := indexPath + string(filepath.Separator) + "addresses"
 	if err = os.MkdirAll(addressIndexPath, 0700); err != nil {
 		return nil, err
@@ -278,19 +353,6 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if err = os.MkdirAll(slotsIndexPath, 0700); err != nil {
 		return nil, err
 	}
-	slotIndex, err := file.NewIndex[common.SlotIdx1[uint32], uint32](slotsIndexPath, common.SlotIdxSerializer32{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
-	if err != nil {
-		return nil, err
-	}
-	keysIndexPath := indexPath + string(filepath.Separator) + "keys"
-	if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
-		return nil, err
-	}
-	keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
-	if err != nil {
-		return nil, err
-	}
-
 	accountStorePath := storePath + string(filepath.Separator) + "accounts"
 	if err = os.MkdirAll(accountStorePath, 0700); err != nil {
 		return nil, err
@@ -315,15 +377,6 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	valuesStorePath := storePath + string(filepath.Separator) + "values"
-	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
-		return nil, err
-	}
-	valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
-	if err != nil {
-		return nil, err
-	}
-
 	codesPath := storePath + string(filepath.Separator) + "codes"
 	if err = os.MkdirAll(codesPath, 0700); err != nil {
 		return nil, err
@@ -340,26 +393,85 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
+	valuesStorePath := storePath + string(filepath.Separator) + "values"
+	if err = os.MkdirAll(valuesStorePath, 0700); err != nil {
+		return nil, err
+	}
+
+	var schema GoSchema
+	switch params.Schema {
+	case 1:
+		slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdx32Serializer{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
+		if err != nil {
+			return nil, err
+		}
+		keysIndexPath := indexPath + string(filepath.Separator) + "keys"
+		if err = os.MkdirAll(keysIndexPath, 0700); err != nil {
+			return nil, err
+		}
+		keyIndex, err := file.NewIndex[common.Key, uint32](keysIndexPath, common.KeySerializer{}, common.Identifier32Serializer{}, common.KeyHasher{}, common.KeyComparator{})
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := pagedfile.NewStore[uint32, common.Value](valuesStorePath, common.ValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+		if err != nil {
+			return nil, err
+		}
+		addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
+
+		schema = &GoSchema1{
+			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+			addressToSlots,
+			nil,
+		}
+	case 3:
+		slotIndex, err := file.NewIndex[common.SlotIdxKey[uint32], uint32](slotsIndexPath, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{}, common.SlotIdx32KeyHasher{}, common.SlotIdx32KeyComparator{})
+		if err != nil {
+			return nil, err
+		}
+		reincStorePath := indexPath + string(filepath.Separator) + "reinc"
+		if err = os.MkdirAll(reincStorePath, 0700); err != nil {
+			return nil, err
+		}
+		reincarnationsStore, err := pagedfile.NewStore[uint32, common.Reincarnation](reincStorePath, common.ReincarnationSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(reincStorePath, HashTreeFactor), PoolSize)
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := pagedfile.NewStore[uint32, common.SlotReincValue](valuesStorePath, common.SlotReincValueSerializer{}, common.PageSize, htfile.CreateHashTreeFactory(valuesStorePath, HashTreeFactor), PoolSize)
+		if err != nil {
+			return nil, err
+		}
+
+		schema = &GoSchema3{
+			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
+			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Reincarnation](reincarnationsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.SlotReincValue](valuesStore, CacheCapacity),
+			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+			nil,
+		}
+	default:
+		return nil, fmt.Errorf("the go implementation only supports schemas 1,3")
+	}
 
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 
-	state := NewGoState(&GoSchema1{
-		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.SlotIdx1[uint32], uint32](slotIndex, CacheCapacity),
-		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
-		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
-		addressToSlots,
-		nil,
-	}, arch, []func(){archiveCleanup})
+	state := NewGoState(schema, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -368,9 +480,6 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	if params.Schema != 1 {
-		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
-	}
 	db, err := common.OpenLevelDb(params.Directory, nil)
 	if err != nil {
 		return nil, err
@@ -379,15 +488,6 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := ldb.NewIndex[common.SlotIdx1[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-
 	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
 	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
@@ -403,12 +503,6 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
-	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, common.PageSize)
-	if err != nil {
-		return nil, err
-	}
-
 	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
@@ -418,26 +512,72 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+	var schema GoSchema
+	switch params.Schema {
+	case 1:
+		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
+		if err != nil {
+			return nil, err
+		}
+		keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		if err != nil {
+			return nil, err
+		}
+		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+
+		schema = &GoSchema1{
+			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+			addressToSlots,
+			nil,
+		}
+	case 3:
+		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+		if err != nil {
+			return nil, err
+		}
+		reincarnationsStore, err := ldbstore.NewStore[uint32, common.Reincarnation](db, common.ReincarnationStoreKey, common.ReincarnationSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ReincarnationStoreKey, HashTreeFactor), common.PageSize)
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := ldbstore.NewStore[uint32, common.SlotReincValue](db, common.ValueStoreKey, common.SlotReincValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		if err != nil {
+			return nil, err
+		}
+
+		schema = &GoSchema3{
+			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
+			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Reincarnation](reincarnationsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.SlotReincValue](valuesStore, CacheCapacity),
+			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+			nil,
+		}
+	default:
+		return nil, fmt.Errorf("the go implementation only supports schemas 1,3")
+	}
 
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 
-	state := NewGoState(&GoSchema1{
-		addressIndex,
-		keyIndex,
-		slotIndex,
-		accountsStore,
-		noncesStore,
-		balancesStore,
-		valuesStore,
-		codesDepot,
-		codeHashesStore,
-		addressToSlots,
-		nil,
-	}, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
+	state := NewGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 
@@ -446,9 +586,6 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	if params.Schema != 1 {
-		return nil, fmt.Errorf("the go implementation only supports schema 1 for now")
-	}
 	db, err := common.OpenLevelDb(params.Directory, nil)
 	if err != nil {
 		return nil, err
@@ -457,15 +594,6 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	slotIndex, err := ldb.NewIndex[common.SlotIdx1[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdxSerializer32{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-	keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
-	if err != nil {
-		return nil, err
-	}
-
 	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
 	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
@@ -481,12 +609,6 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	valueHashTreeFactory := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor)
-	valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, valueHashTreeFactory, common.PageSize)
-	if err != nil {
-		return nil, err
-	}
-
 	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
@@ -496,26 +618,72 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+	var schema GoSchema
+	switch params.Schema {
+	case 1:
+		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
+		if err != nil {
+			return nil, err
+		}
+		keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		if err != nil {
+			return nil, err
+		}
+		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+
+		schema = &GoSchema1{
+			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
+			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
+			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
+			cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
+			cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
+			addressToSlots,
+			nil,
+		}
+	case 3:
+		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+		if err != nil {
+			return nil, err
+		}
+		reincarnationsStore, err := ldbstore.NewStore[uint32, common.Reincarnation](db, common.ReincarnationStoreKey, common.ReincarnationSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ReincarnationStoreKey, HashTreeFactor), common.PageSize)
+		if err != nil {
+			return nil, err
+		}
+		valuesStore, err := ldbstore.NewStore[uint32, common.SlotReincValue](db, common.ValueStoreKey, common.SlotReincValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		if err != nil {
+			return nil, err
+		}
+
+		schema = &GoSchema3{
+			addressIndex,
+			slotIndex,
+			accountsStore,
+			noncesStore,
+			balancesStore,
+			reincarnationsStore,
+			valuesStore,
+			codesDepot,
+			codeHashesStore,
+			nil,
+		}
+	default:
+		return nil, fmt.Errorf("the go implementation only supports schemas 1,3")
+	}
 
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 
-	state := NewGoState(&GoSchema1{
-		cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
-		cachedIndex.NewIndex[common.SlotIdx1[uint32], uint32](slotIndex, CacheCapacity),
-		cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Nonce](noncesStore, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Balance](balancesStore, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Value](valuesStore, CacheCapacity),
-		cachedDepot.NewDepot[uint32](codesDepot, CacheCapacity, CacheCapacity),
-		cachedStore.NewStore[uint32, common.Hash](codeHashesStore, CacheCapacity),
-		addressToSlots,
-		nil,
-	}, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
+	state := NewGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 

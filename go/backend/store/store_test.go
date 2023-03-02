@@ -1,7 +1,9 @@
 package store_test
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
@@ -12,7 +14,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"testing"
 )
 
@@ -23,18 +24,18 @@ const (
 	PoolSize        = 10
 )
 
-type storeFactory struct {
+type storeFactory[V any] struct {
 	label    string
-	getStore func(tempDir string) store.Store[uint32, common.Value]
+	getStore func(tempDir string) store.Store[uint32, V]
 }
 
-func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSize int) (stores []storeFactory) {
-	return []storeFactory{
+func getStoresFactories[V any](tb testing.TB, serializer common.Serializer[V], branchingFactor int, pageSize int, poolSize int) (stores []storeFactory[V]) {
+	return []storeFactory[V]{
 		{
 			label: "Memory",
-			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+			getStore: func(tempDir string) store.Store[uint32, V] {
 				hashTreeFac := htmemory.CreateHashTreeFactory(branchingFactor)
-				str, err := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, pageSize, hashTreeFac)
+				str, err := memory.NewStore[uint32, V](serializer, pageSize, hashTreeFac)
 				if err != nil {
 					tb.Fatalf("failed to init memory store; %s", err)
 				}
@@ -43,9 +44,9 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 		},
 		{
 			label: "File",
-			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+			getStore: func(tempDir string) store.Store[uint32, V] {
 				hashTreeFac := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
-				str, err := file.NewStore[uint32, common.Value](tempDir, common.ValueSerializer{}, pageSize, hashTreeFac)
+				str, err := file.NewStore[uint32, V](tempDir, serializer, pageSize, hashTreeFac)
 				if err != nil {
 					tb.Fatalf("failed to init file store; %s", err)
 				}
@@ -54,9 +55,9 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 		},
 		{
 			label: "PagedFile",
-			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+			getStore: func(tempDir string) store.Store[uint32, V] {
 				hashTreeFac := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
-				str, err := pagedfile.NewStore[uint32, common.Value](tempDir, common.ValueSerializer{}, int64(pageSize), hashTreeFac, poolSize)
+				str, err := pagedfile.NewStore[uint32, V](tempDir, serializer, int64(pageSize), hashTreeFac, poolSize)
 				if err != nil {
 					tb.Fatalf("failed to init pagedfile store; %s", err)
 				}
@@ -65,71 +66,47 @@ func getStoresFactories(tb testing.TB, branchingFactor int, pageSize int, poolSi
 		},
 		{
 			label: "LevelDb",
-			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+			getStore: func(tempDir string) store.Store[uint32, V] {
 				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
 				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				str, err := ldb.NewStore[uint32, V](db, common.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
-				return &storeClosingWrapper{str, []func() error{db.Close}}
-			},
-		},
-		{
-			label: "TransactLevelDb",
-			getStore: func(tempDir string) store.Store[uint32, common.Value] {
-				writeBufferSize := 1024 * opt.MiB
-				opts := opt.Options{WriteBuffer: writeBufferSize}
-				db, err := common.OpenLevelDb(tempDir, &opts)
-				if err != nil {
-					tb.Fatalf("failed to init leveldb store; %s", err)
-				}
-
-				tr, err := db.OpenTransaction()
-				if err != nil {
-					tb.Errorf("failed to init leveldb transaction; %s", err)
-				}
-
-				hashTreeFac := htldb.CreateHashTreeFactory(tr, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, common.Value](tr, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, pageSize)
-				if err != nil {
-					tb.Fatalf("failed to init leveldb store; %s", err)
-				}
-
-				return &storeClosingWrapper{str, []func() error{tr.Commit, db.Close}}
+				return &storeClosingWrapper[V]{str, []func() error{db.Close}}
 			},
 		},
 		{
 			label: "CachedLevelDb",
-			getStore: func(tempDir string) store.Store[uint32, common.Value] {
+			getStore: func(tempDir string) store.Store[uint32, V] {
 				cacheCapacity := 1 << 18
 				db, err := common.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
 				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				str, err := ldb.NewStore[uint32, V](db, common.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
-				cached := cache.NewStore[uint32, common.Value](str, cacheCapacity)
-				return &storeClosingWrapper{cached, []func() error{db.Close}}
+				cached := cache.NewStore[uint32, V](str, cacheCapacity)
+				return &storeClosingWrapper[V]{cached, []func() error{db.Close}}
 			},
 		},
 	}
 }
 
 // storeClosingWrapper wraps an instance of the Store to clean-up related resources when the Store is closed
-type storeClosingWrapper struct {
-	store.Store[uint32, common.Value]
+type storeClosingWrapper[V any] struct {
+	store.Store[uint32, V]
 	cleanups []func() error
 }
 
 // Close executes clean-up
-func (s *storeClosingWrapper) Close() error {
+func (s *storeClosingWrapper[V]) Close() error {
 	for _, f := range s.cleanups {
 		_ = f()
 	}
@@ -137,7 +114,7 @@ func (s *storeClosingWrapper) Close() error {
 }
 
 func TestStoresInitialHash(t *testing.T) {
-	for _, factory := range getStoresFactories(t, BranchingFactor, PageSize, PoolSize) {
+	for _, factory := range getStoresFactories[common.Value](t, common.ValueSerializer{}, BranchingFactor, PageSize, PoolSize) {
 		t.Run(factory.label, func(t *testing.T) {
 			s := factory.getStore(t.TempDir())
 			defer s.Close()
@@ -156,7 +133,7 @@ func TestStoresInitialHash(t *testing.T) {
 
 func TestStoresHashingByComparison(t *testing.T) {
 	stores := make(map[string]store.Store[uint32, common.Value])
-	for _, factory := range getStoresFactories(t, BranchingFactor, PageSize, PoolSize) {
+	for _, factory := range getStoresFactories[common.Value](t, common.ValueSerializer{}, BranchingFactor, PageSize, PoolSize) {
 		stores[factory.label] = factory.getStore(t.TempDir())
 	}
 	defer func() {
@@ -200,7 +177,7 @@ func TestStoresHashesAgainstReferenceOutput(t *testing.T) {
 		"6f060e465bb1b155a6b4822a13b704d3986ab43d7928c14b178e07a8f7673951",
 	}
 
-	for _, factory := range getStoresFactories(t, BranchingFactor, PageSize, PoolSize) {
+	for _, factory := range getStoresFactories[common.Value](t, common.ValueSerializer{}, BranchingFactor, PageSize, PoolSize) {
 		t.Run(factory.label, func(t *testing.T) {
 			s := factory.getStore(t.TempDir())
 			defer s.Close()
@@ -237,4 +214,42 @@ func compareHashes(stores map[string]store.Store[uint32, common.Value]) error {
 		}
 	}
 	return nil
+}
+
+func TestStoresUnalignedPage(t *testing.T) {
+	serializer := common.SlotReincValueSerializer{}
+	pageSize := serializer.Size()*2 + 4 // page for two values + 3 bytes of padding
+	var ref []byte = nil
+	for _, factory := range getStoresFactories[common.SlotReincValue](t, serializer, BranchingFactor, pageSize, PoolSize) {
+		t.Run(factory.label, func(t *testing.T) {
+			s := factory.getStore(t.TempDir())
+			defer s.Close()
+
+			innerStore := s
+			wrappingStore, casted := s.(*storeClosingWrapper[common.SlotReincValue])
+			if casted {
+				innerStore = wrappingStore.Store
+			}
+			pageProvider, casted := innerStore.(hashtree.PageProvider)
+			if !casted {
+				t.Skip("not a PageProvider")
+			}
+
+			err := s.Set(1, common.SlotReincValue{Reincarnation: 1234, Value: common.Value{0x56}})
+			if err != nil {
+				t.Fatalf("failed to set into store; %s", err)
+			}
+
+			page, err := pageProvider.GetPage(0)
+			if err != nil {
+				t.Fatalf("failed to get page; %s", err)
+			}
+
+			if ref == nil {
+				ref = page
+			} else if !bytes.Equal(ref, page) {
+				t.Errorf("page value from %s does not match the reference:\n page: %x\n ref:  %x", factory.label, page, ref)
+			}
+		})
+	}
 }

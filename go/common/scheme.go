@@ -26,6 +26,8 @@ const (
 	CodeHashStoreKey TableSpace = 'c'
 	// AddressSlotMultiMapKey is a tablespace for slots-used-by-address multimap
 	AddressSlotMultiMapKey TableSpace = 'M'
+	// ReincarnationStoreKey is a tablespace for accounts reincarnations counters
+	ReincarnationStoreKey TableSpace = 'R'
 
 	// BlockArchiveKey is a tablespace for archive mapping from block numbers to block hashes
 	BlockArchiveKey TableSpace = '1'

@@ -36,7 +36,7 @@ var sinkValue common.Value
 var sinkHash common.Hash
 
 func BenchmarkInsert(b *testing.B) {
-	for _, fac := range getStoresFactories(b, BmBranchingFactor, BmPageSize, BmPoolSize) {
+	for _, fac := range getStoresFactories[common.Value](b, common.ValueSerializer{}, BmBranchingFactor, BmPageSize, BmPoolSize) {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b.TempDir())
 			b.Run(fmt.Sprintf("Store %s initialSize %d", fac.label, initialSize), func(b *testing.B) {
@@ -55,7 +55,7 @@ func BenchmarkInsert(b *testing.B) {
 }
 
 func BenchmarkRead(b *testing.B) {
-	for _, fac := range getStoresFactories(b, BmBranchingFactor, BmPageSize, BmPoolSize) {
+	for _, fac := range getStoresFactories[common.Value](b, common.ValueSerializer{}, BmBranchingFactor, BmPageSize, BmPoolSize) {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b.TempDir())
 			initialized := false
@@ -81,7 +81,7 @@ func BenchmarkRead(b *testing.B) {
 }
 
 func BenchmarkWrite(b *testing.B) {
-	for _, fac := range getStoresFactories(b, BmBranchingFactor, BmPageSize, BmPoolSize) {
+	for _, fac := range getStoresFactories[common.Value](b, common.ValueSerializer{}, BmBranchingFactor, BmPageSize, BmPoolSize) {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b.TempDir())
 			initialized := false
@@ -106,7 +106,7 @@ func BenchmarkWrite(b *testing.B) {
 }
 
 func BenchmarkHash(b *testing.B) {
-	for _, fac := range getStoresFactories(b, BmBranchingFactor, BmPageSize, BmPoolSize) {
+	for _, fac := range getStoresFactories[common.Value](b, common.ValueSerializer{}, BmBranchingFactor, BmPageSize, BmPoolSize) {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b.TempDir())
 			initialized := false
@@ -143,7 +143,7 @@ func BenchmarkHash(b *testing.B) {
 }
 
 func BenchmarkWriteAndHash(b *testing.B) {
-	for _, fac := range getStoresFactories(b, BmBranchingFactor, BmPageSize, BmPoolSize) {
+	for _, fac := range getStoresFactories[common.Value](b, common.ValueSerializer{}, BmBranchingFactor, BmPageSize, BmPoolSize) {
 		for _, initialSize := range initialSizes {
 			s := fac.getStore(b.TempDir())
 			initialized := false

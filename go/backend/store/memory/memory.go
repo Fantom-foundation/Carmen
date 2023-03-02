@@ -10,12 +10,13 @@ import (
 
 // Store is an in-memory store.Store implementation - it maps IDs to values
 type Store[I common.Identifier, V any] struct {
-	data       [][]byte // data of pages [page][byte of page]
-	hashTree   hashtree.HashTree
-	serializer common.Serializer[V]
-	pageSize   int // the amount of bytes of one page
-	pageItems  int // the amount of items stored in one page
-	itemSize   int // the amount of bytes per one value
+	data           [][]byte // data of pages [page][byte of page]
+	hashTree       hashtree.HashTree
+	serializer     common.Serializer[V]
+	pageSize       int // the amount of bytes of one page
+	pageItems      int // the amount of items stored in one page
+	hashedPageSize int // the amount of the page bytes to be passed into the hashing function - rounded to whole items
+	itemSize       int // the amount of bytes per one value
 }
 
 // NewStore constructs a new instance of Store.
@@ -25,12 +26,14 @@ func NewStore[I common.Identifier, V any](serializer common.Serializer[V], pageS
 		return nil, fmt.Errorf("memory store pageSize too small (minimum %d)", serializer.Size())
 	}
 
+	itemSize := serializer.Size()
 	memory := &Store[I, V]{
-		data:       [][]byte{},
-		serializer: serializer,
-		pageSize:   pageSize,
-		pageItems:  pageSize / serializer.Size(),
-		itemSize:   serializer.Size(),
+		data:           [][]byte{},
+		serializer:     serializer,
+		pageSize:       pageSize,
+		pageItems:      pageSize / itemSize,
+		hashedPageSize: pageSize / itemSize * itemSize,
+		itemSize:       itemSize,
 	}
 	memory.hashTree = hashtreeFactory.Create(memory)
 	return memory, nil
@@ -43,7 +46,7 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
 }
 
 func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
-	return m.data[page], nil
+	return m.data[page][0:m.hashedPageSize], nil
 }
 
 // Set a value of an item

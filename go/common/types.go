@@ -2,7 +2,6 @@ package common
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -104,8 +103,6 @@ func (a *Key) Compare(b *Key) int {
 	return bytes.Compare(a[:], b[:])
 }
 
-
-
 type AddressComparator struct{}
 
 func (c AddressComparator) Compare(a, b *Address) int {
@@ -191,12 +188,6 @@ func ToNonce(value uint64) (res Nonce) {
 // ToUint64 converts the value of a nonce into a integer value.
 func (n *Nonce) ToUint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
-}
-
-// GetSha256Hash computes the Sha256 hash of the given data.
-func GetSha256Hash(data []byte) Hash {
-	hasher := sha256.New()
-	return GetHash(hasher, data)
 }
 
 // GetKeccak256Hash computes the Keccak256 hash of the given data.
