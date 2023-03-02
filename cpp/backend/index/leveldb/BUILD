@@ -5,6 +5,7 @@ cc_library(
     deps = [
         "//backend:structure",
         "//backend/common/leveldb",
+        "//backend/index:snapshot",
         "//common:hash",
         "//common:memory_usage",
         "//common:status_util",

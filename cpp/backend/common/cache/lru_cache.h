@@ -30,6 +30,9 @@ class LeastRecentlyUsedCache {
     }
   }
 
+  // Returns the maximum number of elements retained in this cache.
+  std::size_t GetCapacity() const { return entries_.size(); }
+
   // Returns a pointer to the value mapped to the given key or nullptr, if there
   // is no such value in this cache. The access to the key is considered a use,
   // promoting the value in the LRU order.

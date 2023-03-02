@@ -21,6 +21,8 @@ class Cached {
   using key_type = typename I::key_type;
   // The value type of ordinal values mapped to keys.
   using value_type = typename I::value_type;
+  // The snapshot type supported by this index.
+  using Snapshot = typename I::Snapshot;
 
   // A factory function creating an instance of this index type.
   template <typename... Args>
@@ -85,6 +87,29 @@ class Cached {
     // Cache the hash of the wrapped index.
     ASSIGN_OR_RETURN(hash_, index_.GetHash());
     return *hash_;
+  }
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    return index_.GetProof();
+  }
+
+  // Creates a snapshot of this index shielded from future additions that can be
+  // safely accessed concurrently to other operations. It internally references
+  // state of this index and thus must not outlive this index object.
+  absl::StatusOr<Snapshot> CreateSnapshot() const {
+    return index_.CreateSnapshot();
+  }
+
+  // Updates this index to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this index before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot& snapshot) {
+    // Reset cached information in addition to syncing underlying index.
+    cache_ = LeastRecentlyUsedCache<key_type, absl::StatusOr<value_type>>(
+        cache_.GetCapacity());
+    hash_.reset();
+    return index_.SyncTo(snapshot);
   }
 
   // Flush unsaved index keys to disk.

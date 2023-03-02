@@ -14,6 +14,7 @@
 #include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
+#include "common/status_util.h"
 #include "common/type.h"
 
 namespace carmen::backend::index {
@@ -33,6 +34,8 @@ class InMemoryIndex {
   using key_type = K;
   // The value type of ordinal values mapped to keys.
   using value_type = I;
+  // The type of snapshot produced by this index.
+  using Snapshot = IndexSnapshot<K>;
 
   // A factory function creating an instance of this index type.
   static absl::StatusOr<InMemoryIndex> Open(Context&,
@@ -40,9 +43,6 @@ class InMemoryIndex {
 
   // Initializes an empty index.
   InMemoryIndex();
-
-  // Initializes an index based on the content of the given snapshot.
-  InMemoryIndex(const IndexSnapshot<K>& snapshot);
 
   // Retrieves the ordinal number for the given key. If the key
   // is known, it will return a previously established value
@@ -77,14 +77,28 @@ class InMemoryIndex {
     auto& list = *list_;
     while (next_to_hash_ != list.size()) {
       hash_ = carmen::GetHash(hasher_, hash_, list[next_to_hash_++]);
+      if (next_to_hash_ % kKeysPerPart == 0) {
+        hashes_->push_back(hash_);
+      }
     }
     return hash_;
+  }
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    ASSIGN_OR_RETURN(auto hash, GetHash());
+    return typename Snapshot::Proof(hash);
   }
 
   // Creates a snapshot of this index shielded from future additions that can be
   // safely accessed concurrently to other operations. It internally references
   // state of this index and thus must not outlive this index object.
-  std::unique_ptr<IndexSnapshot<K>> CreateSnapshot() const;
+  absl::StatusOr<Snapshot> CreateSnapshot() const;
+
+  // Updates this index to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this index before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot&);
 
   // Flush unsafed index keys to disk.
   absl::Status Flush() { return absl::OkStatus(); }
@@ -96,43 +110,57 @@ class InMemoryIndex {
   MemoryFootprint GetMemoryFootprint() const {
     MemoryFootprint res(*this);
     res.Add("list", SizeOf(*list_));
+    res.Add("hashes", SizeOf(*hashes_));
     res.Add("index", SizeOf(data_));
     return res;
   }
 
  private:
-  // Implements a snapshot by capturing the current index's size and a view to
-  // its key list.
-  class Snapshot final : public IndexSnapshot<K> {
+  static constexpr auto kKeysPerPart = IndexSnapshotDataSource<K>::kKeysPerPart;
+
+  class SnapshotDataSource final : public IndexSnapshotDataSource<K> {
    public:
-    Snapshot(const std::deque<K>& list) : size_(list.size()), list_(list) {}
+    SnapshotDataSource(Hash hash, const std::deque<K>& list,
+                       const std::deque<Hash>& hashes)
+        : IndexSnapshotDataSource<K>(list.size()),
+          hash_(hash),
+          num_keys_(list.size()),
+          list_(list),
+          hashes_(hashes) {}
 
-    // Obtains the number of keys stored in the snapshot.
-    std::size_t GetSize() const override { return size_; }
+    absl::StatusOr<IndexProof> GetProof(
+        std::size_t part_number) const override {
+      Hash begin = part_number == 0 ? Hash{} : hashes_[part_number - 1];
+      Hash end =
+          part_number == this->GetSize() - 1 ? hash_ : hashes_[part_number];
+      return IndexProof(begin, end);
+    }
 
-    std::span<const K> GetKeys(std::size_t from,
-                               std::size_t to) const override {
-      from = std::max<std::size_t>(0, std::min(from, size_));
-      to = std::max<std::size_t>(from, std::min(to, size_));
-      if (from == to) {
-        return {};
+    absl::StatusOr<IndexPart<K>> GetPart(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto proof, GetProof(part_number));
+
+      auto begin = part_number * kKeysPerPart;
+      auto end = std::min(num_keys_, begin + kKeysPerPart);
+      std::vector<K> keys;
+      keys.reserve(end - begin);
+      for (std::size_t i = begin; i < end; i++) {
+        keys.push_back(list_[i]);
       }
-      buffer_.clear();
-      buffer_.reserve(to - from);
-      for (auto i = from; i < to; i++) {
-        buffer_.push_back(list_[i]);
-      }
-      return std::span<const K>(buffer_).subspan(0, to - from);
+      return IndexPart<K>(proof, std::move(keys));
     }
 
    private:
-    // The number of elements in the index when the snapshot was created.
-    const std::size_t size_;
+    // The hash of the index at time of the snapshot creation.
+    const Hash hash_;
+    // The number of known keys when the snapshot was created.
+    const std::size_t num_keys_;
     // A reference to the index's main key list which might get extended after
     // the snapshot was created.
     const std::deque<K>& list_;
-    // An internal buffer used to retain ownership while accessing keys.
-    mutable std::vector<K> buffer_;
+    // A reference to the index's history of hashes which might get extended
+    // after the snapshot was created.
+    const std::deque<Hash>& hashes_;
   };
 
   // The full list of keys in order of insertion. Thus, a key at position i is
@@ -140,6 +168,10 @@ class InMemoryIndex {
   // wrapped into a unique_ptr to support pointer stability under move
   // operations.
   std::unique_ptr<std::deque<K>> list_;
+
+  // A list of historic hashes observed at regular intervals. Those hashes are
+  // required for synchronization.
+  std::unique_ptr<std::deque<Hash>> hashes_;
 
   // An index mapping keys to their identifier values.
   absl::flat_hash_map<K, I> data_;
@@ -157,28 +189,42 @@ absl::StatusOr<InMemoryIndex<K, I>> InMemoryIndex<K, I>::Open(
 
 template <Trivial K, std::integral I>
 InMemoryIndex<K, I>::InMemoryIndex()
-    : list_(std::make_unique<std::deque<K>>()) {}
+    : list_(std::make_unique<std::deque<K>>()),
+      hashes_(std::make_unique<std::deque<Hash>>()) {}
 
 template <Trivial K, std::integral I>
-InMemoryIndex<K, I>::InMemoryIndex(const IndexSnapshot<K>& snapshot)
-    : InMemoryIndex() {
-  // Insert all the keys in order.
-  constexpr static const std::size_t kBlockSize = 1024;
-  auto num_elements = snapshot.GetSize();
-  for (std::size_t i = 0; i < num_elements; i += kBlockSize) {
-    auto to = std::min(i + kBlockSize, num_elements);
-    for (const auto& key : snapshot.GetKeys(i, to)) {
-      // TODO: Handle errors.
-      GetOrAdd(key).IgnoreError();
-    }
-  }
-  // Refresh the hash.
-  GetHash().IgnoreError();
+absl::StatusOr<IndexSnapshot<K>> InMemoryIndex<K, I>::CreateSnapshot() const {
+  ASSIGN_OR_RETURN(auto hash, GetHash());
+  return IndexSnapshot<K>(
+      hash, std::make_unique<SnapshotDataSource>(hash, *list_, *hashes_));
 }
 
 template <Trivial K, std::integral I>
-std::unique_ptr<IndexSnapshot<K>> InMemoryIndex<K, I>::CreateSnapshot() const {
-  return std::make_unique<Snapshot>(*list_);
+absl::Status InMemoryIndex<K, I>::SyncTo(const Snapshot& snapshot) {
+  // Reset the content of this Index.
+  list_->clear();
+  hashes_->clear();
+  data_.clear();
+  next_to_hash_ = 0;
+  hash_ = Hash{};
+
+  // Load data from the snapshot.
+  for (std::size_t i = 0; i < snapshot.GetSize(); i++) {
+    ASSIGN_OR_RETURN(auto part, snapshot.GetPart(i));
+    for (const auto& key : part.GetKeys()) {
+      data_[key] = list_->size();
+      list_->push_back(key);
+    }
+    if (part.GetKeys().size() == kKeysPerPart) {
+      ASSIGN_OR_RETURN(auto proof, snapshot.GetProof(i));
+      hashes_->push_back(proof.end);
+    }
+  }
+
+  // Refresh the hash.
+  hash_ = snapshot.GetProof().end;
+  next_to_hash_ = list_->size();
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::index

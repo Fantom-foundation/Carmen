@@ -3,6 +3,7 @@ cc_library(
     hdrs = ["index.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":snapshot",
         "//backend:structure",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -17,6 +18,30 @@ cc_test(
         "//common:status_test_util",
         "//common:test_util",
         "//common:type",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "snapshot",
+    hdrs = ["snapshot.h"],
+    visibility = ["//backend/index:__subpackages__"],
+    deps = [
+        "//backend:snapshot",
+        "//common:hash",
+        "//common:status_util",
+        "//common:type",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "snapshot_test",
+    srcs = ["snapshot_test.cc"],
+    deps = [
+        ":snapshot",
+        "//backend:snapshot",
+        "//common:status_test_util",
         "@com_google_googletest//:gtest_main",
     ],
 )

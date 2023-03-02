@@ -8,6 +8,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/index/memory/linear_hash_map.h"
+#include "backend/index/snapshot.h"
 #include "backend/structure.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -20,6 +21,7 @@ class InMemoryLinearHashIndex {
  public:
   using key_type = K;
   using value_type = I;
+  using Snapshot = IndexSnapshot<K>;
 
   // A factory function creating an instance of this index type.
   static absl::StatusOr<InMemoryLinearHashIndex> Open(
@@ -50,6 +52,19 @@ class InMemoryLinearHashIndex {
       unhashed_keys_.pop();
     }
     return hash_;
+  }
+
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    ASSIGN_OR_RETURN(auto hash, GetHash());
+    return typename Snapshot::Proof(hash);
+  }
+
+  absl::StatusOr<Snapshot> CreateSnapshot() const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  absl::Status SyncTo(const Snapshot&) {
+    return absl::UnimplementedError("to be implemented");
   }
 
   absl::Status Flush() { return absl::OkStatus(); }

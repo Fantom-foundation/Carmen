@@ -3,6 +3,7 @@ cc_library(
     hdrs = ["index.h"],
     visibility = ["//visibility:public"],
     deps = [
+        "//backend:snapshot",
         "//backend:structure",
         "//backend/index",
         "//common:hash",

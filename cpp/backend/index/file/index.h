@@ -15,6 +15,7 @@
 #include "backend/common/page_pool.h"
 #include "backend/index/file/hash_page.h"
 #include "backend/index/file/stable_hash.h"
+#include "backend/index/snapshot.h"
 #include "backend/structure.h"
 #include "common/fstream.h"
 #include "common/hash.h"
@@ -50,6 +51,7 @@ class FileIndex {
   using hash_t = std::size_t;
   using key_type = K;
   using value_type = I;
+  using Snapshot = IndexSnapshot<K>;
 
   // The page type used by this index.
   using Page = HashPage<hash_t, K, I, page_size>;
@@ -81,6 +83,26 @@ class FileIndex {
 
   // Computes a hash over the full content of this index.
   absl::StatusOr<Hash> GetHash() const;
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    ASSIGN_OR_RETURN(auto hash, GetHash());
+    return typename Snapshot::Proof(hash);
+  }
+
+  // Creates a snapshot of this index shielded from future additions that can be
+  // safely accessed concurrently to other operations. It internally references
+  // state of this index and thus must not outlive this index object.
+  absl::StatusOr<Snapshot> CreateSnapshot() const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  // Updates this index to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this index before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot&) {
+    return absl::UnimplementedError("to be implemented");
+  }
 
   // Flush unsaved index keys to disk.
   absl::Status Flush();

@@ -10,6 +10,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
+#include "backend/index/snapshot.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -44,6 +45,7 @@ class LevelDbIndexBase {
  public:
   using key_type = K;
   using value_type = I;
+  using Snapshot = IndexSnapshot<K>;
 
   LevelDbIndexBase(LevelDbIndexBase&&) noexcept = default;
   virtual ~LevelDbIndexBase() = default;
@@ -76,6 +78,25 @@ class LevelDbIndexBase {
   absl::StatusOr<Hash> GetHash() {
     RETURN_IF_ERROR(Commit());
     return GetLastHash();
+  }
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  // Creates a snapshot of this index shielded from future additions that can be
+  // safely accessed concurrently to other operations. It internally references
+  // state of this index and thus must not outlive this index object.
+  absl::StatusOr<Snapshot> CreateSnapshot() const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  // Updates this index to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this index before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot&) {
+    return absl::UnimplementedError("to be implemented");
   }
 
   // Flush unsaved index keys to disk.

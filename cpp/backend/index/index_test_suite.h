@@ -17,7 +17,9 @@ namespace carmen::backend::index {
 using ::testing::_;
 using ::testing::IsOk;
 using ::testing::IsOkAndHolds;
+using ::testing::Not;
 using ::testing::Optional;
+using ::testing::Pair;
 using ::testing::StatusIs;
 
 // Implements a generic test suite for index implementations checking basic
@@ -131,10 +133,152 @@ TYPED_TEST_P(IndexTest, HashesMatchReferenceImplementation) {
   EXPECT_THAT(reference_index.GetHash(), IsOkAndHolds(hash));
 }
 
+// TODO: remove this and all its calls once all indexes support snapshots.
+template <typename Index>
+bool SupportsSnapshots(const Index& index) {
+  auto s = index.CreateSnapshot();
+  return s.ok() || s.status().code() != absl::StatusCode::kUnimplemented;
+}
+
+TYPED_TEST_P(IndexTest, SnapshotHasSameProofAsIndex) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot1, index.CreateSnapshot());
+  EXPECT_THAT(index.GetProof(), snapshot1.GetProof());
+
+  EXPECT_OK(index.GetOrAdd(10));
+  EXPECT_THAT(index.GetProof(), Not(snapshot1.GetProof()));
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot2, index.CreateSnapshot());
+  EXPECT_THAT(index.GetProof(), snapshot2.GetProof());
+}
+
+TYPED_TEST_P(IndexTest, SnapshotShieldsMutations) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_THAT(index.GetOrAdd(10), IsOkAndHolds(Pair(0, true)));
+  EXPECT_THAT(index.GetOrAdd(12), IsOkAndHolds(Pair(1, true)));
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+
+  EXPECT_THAT(index.GetOrAdd(14), IsOkAndHolds(Pair(2, true)));
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, IndexHandler<TypeParam>::Create());
+  auto& restored = wrapper2.GetIndex();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.Get(10), 0);
+  EXPECT_THAT(restored.Get(12), 1);
+  EXPECT_THAT(restored.GetOrAdd(14), IsOkAndHolds(Pair(2, true)));
+}
+
+TYPED_TEST_P(IndexTest, SnapshotRecoveryHasSameHash) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK(index.GetOrAdd(10));
+  ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, IndexHandler<TypeParam>::Create());
+  auto& restored = wrapper2.GetIndex();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
+TYPED_TEST_P(IndexTest, LargeSnapshotRecoveryWorks) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(index.GetOrAdd(i + 10), IsOkAndHolds(Pair(i, true)));
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, IndexHandler<TypeParam>::Create());
+  auto& restored = wrapper2.GetIndex();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(index.Get(i + 10), IsOkAndHolds(i));
+  }
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
+TYPED_TEST_P(IndexTest, SnapshotsCanBeVerified) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(index.GetOrAdd(i + 10), IsOkAndHolds(Pair(i, true)));
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // This step verifies that the proofs are consistent.
+  EXPECT_OK(snapshot.VerifyProofs());
+
+  // Verify that the content of parts is consistent with the proofs.
+  for (std::size_t i = 0; i < snapshot.GetSize(); i++) {
+    ASSERT_OK_AND_ASSIGN(auto proof, snapshot.GetProof(i));
+    ASSERT_OK_AND_ASSIGN(auto part, snapshot.GetPart(i));
+    EXPECT_THAT(part.GetProof(), proof);
+    EXPECT_TRUE(part.Verify());
+  }
+}
+
+TYPED_TEST_P(IndexTest, AnEmptySnapshotCanBeVerified) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+  EXPECT_EQ(0, snapshot.GetSize());
+  EXPECT_OK(snapshot.VerifyProofs());
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     IndexTest, TypeProperties, IdentifiersAreAssignedInorder,
     SameKeyLeadsToSameIdentifier, ContainsIdentifiesIndexedElements,
     GetRetrievesPresentKeys, EmptyIndexHasHashEqualsZero,
     IndexHashIsEqualToInsertionOrder, CanProduceMemoryFootprint,
-    HashesMatchReferenceImplementation);
+    HashesMatchReferenceImplementation, SnapshotHasSameProofAsIndex,
+    LargeSnapshotRecoveryWorks, SnapshotRecoveryHasSameHash,
+    SnapshotShieldsMutations, SnapshotsCanBeVerified,
+    AnEmptySnapshotCanBeVerified);
+
 }  // namespace carmen::backend::index

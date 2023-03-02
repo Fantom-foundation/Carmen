@@ -156,5 +156,44 @@ TEST(CachedIndex, CacheSizeLimitIsEnforced) {
   EXPECT_THAT(index.GetOrAdd(0), IsOkAndHolds(Pair(0, false)));
 }
 
+TEST(CachedIndex, SyncToResetsCachedContent) {
+  Context ctxt;
+  TempDir src_dir;
+  ASSERT_OK_AND_ASSIGN(auto src, CachedIndex::Open(ctxt, src_dir));
+  EXPECT_THAT(src.GetOrAdd(10), IsOkAndHolds(Pair(0, true)));
+  EXPECT_THAT(src.GetOrAdd(20), IsOkAndHolds(Pair(1, true)));
+
+  TempDir trg_dir;
+  ASSERT_OK_AND_ASSIGN(auto trg, CachedIndex::Open(ctxt, trg_dir));
+  EXPECT_THAT(trg.GetOrAdd(20), IsOkAndHolds(Pair(0, true)));
+  EXPECT_THAT(trg.GetOrAdd(10), IsOkAndHolds(Pair(1, true)));
+
+  // Replace the content of the target with the content of the source.
+  ASSERT_OK_AND_ASSIGN(auto snapshot, src.CreateSnapshot());
+  EXPECT_OK(trg.SyncTo(snapshot));
+  EXPECT_THAT(trg.GetOrAdd(10), IsOkAndHolds(Pair(0, false)));
+  EXPECT_THAT(trg.GetOrAdd(20), IsOkAndHolds(Pair(1, false)));
+}
+
+TEST(CachedIndex, SyncToResetsHash) {
+  Context ctxt;
+  TempDir src_dir;
+  ASSERT_OK_AND_ASSIGN(auto src, CachedIndex::Open(ctxt, src_dir));
+  EXPECT_THAT(src.GetOrAdd(10), IsOkAndHolds(Pair(0, true)));
+  EXPECT_THAT(src.GetOrAdd(20), IsOkAndHolds(Pair(1, true)));
+
+  TempDir trg_dir;
+  ASSERT_OK_AND_ASSIGN(auto trg, CachedIndex::Open(ctxt, trg_dir));
+  EXPECT_THAT(trg.GetOrAdd(20), IsOkAndHolds(Pair(0, true)));
+  EXPECT_THAT(trg.GetOrAdd(10), IsOkAndHolds(Pair(1, true)));
+
+  EXPECT_NE(src.GetHash(), trg.GetHash());
+
+  // Replace the content of the target with the content of the source.
+  ASSERT_OK_AND_ASSIGN(auto snapshot, src.CreateSnapshot());
+  EXPECT_OK(trg.SyncTo(snapshot));
+  EXPECT_EQ(src.GetHash(), trg.GetHash());
+}
+
 }  // namespace
 }  // namespace carmen::backend::index
