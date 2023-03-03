@@ -11,6 +11,30 @@ cc_library(
 )
 
 cc_library(
+    name = "snapshot",
+    hdrs = ["snapshot.h"],
+    visibility = ["//backend/store:__subpackages__"],
+    deps = [
+        "//backend:snapshot",
+        "//common:hash",
+        "//common:status_util",
+        "//common:type",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+cc_test(
+    name = "snapshot_test",
+    srcs = ["snapshot_test.cc"],
+    deps = [
+        ":snapshot",
+        "//backend:snapshot",
+        "//common:status_test_util",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "store_handler",
     testonly = True,
     hdrs = ["store_handler.h"],
