@@ -74,7 +74,6 @@ class InMemoryStore {
   StatusOrRef<const V> Get(const K& key) const {
     constexpr static const V default_value{};
     auto page_number = key / elements_per_page;
-    hashes_.RegisterPage(page_number);
     if (page_number >= pages_->size()) {
       return default_value;
     }

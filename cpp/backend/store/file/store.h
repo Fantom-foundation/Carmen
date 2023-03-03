@@ -161,6 +161,9 @@ class FileStoreBase {
                 std::filesystem::path hash_file,
                 std::size_t hash_branching_factor);
 
+  // Tracks the number of pages in the underlying file.
+  std::size_t num_pages_;
+
   // The page pool handling the in-memory buffer of pages fetched from disk. The
   // pool is placed in a unique pointer to ensure pointer stability when the
   // store is moved.
@@ -199,7 +202,8 @@ requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
 FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
     std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file,
     std::size_t hash_branching_factor)
-    : pool_(std::make_unique<PagePool>(std::move(file))),
+    : num_pages_(file->GetNumPages()),
+      pool_(std::make_unique<PagePool>(std::move(file))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
       hash_file_(std::move(hash_file)) {
@@ -210,6 +214,7 @@ template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
 requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::Status
 FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
+  num_pages_ = std::max(num_pages_, key / kNumElementsPerPage + 1);
   ASSIGN_OR_RETURN(Page & page,
                    pool_->template Get<Page>(key / kNumElementsPerPage));
   auto& trg = page[key % kNumElementsPerPage];
@@ -227,6 +232,11 @@ requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
     StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
         const K& key)
 const {
+  static const V kDefault{};
+  auto page_id = key / kNumElementsPerPage;
+  if (page_id >= num_pages_) {
+    return kDefault;
+  }
   ASSIGN_OR_RETURN(Page & page,
                    pool_->template Get<Page>(key / kNumElementsPerPage));
   return page[key % kNumElementsPerPage];

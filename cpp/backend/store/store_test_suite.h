@@ -96,6 +96,25 @@ TYPED_TEST_P(StoreTest, HashesChangeWithUpdates) {
   EXPECT_NE(hash_a, hash_b);
 }
 
+TYPED_TEST_P(StoreTest, HashesDoNotChangeWithReads) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  ASSERT_OK_AND_ASSIGN(auto empty_hash, store.GetHash());
+  EXPECT_THAT(store.Get(1), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.GetHash(), empty_hash);
+  EXPECT_THAT(store.Get(10000), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.GetHash(), empty_hash);
+
+  EXPECT_OK(store.Set(10, Value{0xAA}));
+  ASSERT_OK_AND_ASSIGN(auto non_empty_hash, store.GetHash());
+  EXPECT_NE(empty_hash, non_empty_hash);
+  EXPECT_THAT(store.Get(1), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.GetHash(), non_empty_hash);
+  EXPECT_THAT(store.Get(10000), IsOkAndHolds(Value{}));
+  EXPECT_THAT(store.GetHash(), non_empty_hash);
+}
+
 TYPED_TEST_P(StoreTest, HashesCoverMultiplePages) {
   ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& store = wrapper.GetStore();
@@ -270,9 +289,9 @@ TYPED_TEST_P(StoreTest, HashesRespectEmptyPages) {
   auto& store = wrapper.GetStore();
   auto& reference = wrapper.GetReferenceStore();
 
-  // Implicitly create empty pages by asking for an element with a high ID.
-  ASSERT_OK(reference.Get(10000));
-  ASSERT_OK(store.Get(10000));
+  // Implicitly create empty pages by setting an element with a high ID.
+  ASSERT_OK(reference.Set(10000, Value{0x12}));
+  ASSERT_OK(store.Set(10000, Value{0x12}));
 
   // Hash is computed as if all pages are initialized.
   ASSERT_OK_AND_ASSIGN(auto ref_hash, reference.GetHash());
@@ -293,7 +312,9 @@ REGISTER_TYPED_TEST_SUITE_P(
     DataCanBeAddedAndRetrieved, EntriesCanBeUpdated, EmptyStoreHasZeroHash,
     KnownHashesAreReproduced, HashComputationIgnoresUnusedBytes,
     HashesRespectBranchingFactor, HashesEqualReferenceImplementation,
-    HashesRespectEmptyPages, HashesChangeWithUpdates, HashesCoverMultiplePages,
+    HashesRespectEmptyPages, HashesChangeWithUpdates,
+    HashesDoNotChangeWithReads, HashesCoverMultiplePages,
     CanProduceMemoryFootprint);
+
 }  // namespace
 }  // namespace carmen::backend::store
