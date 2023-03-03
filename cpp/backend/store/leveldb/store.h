@@ -68,7 +68,6 @@ class LevelDbStore {
   StatusOrRef<const V> Get(const K& key) const {
     constexpr static const V default_value{};
     static V result;
-    hashes_.RegisterPage(GetPageId(key));
     auto buffer = db_->Get(AsChars(key));
     if (absl::IsNotFound(buffer.status())) {
       return default_value;
