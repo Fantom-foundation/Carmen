@@ -4,6 +4,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//backend:structure",
+        "//backend/depot:snapshot",
         "//backend/store:hash_tree",
         "//common:hash",
         "//common:type",

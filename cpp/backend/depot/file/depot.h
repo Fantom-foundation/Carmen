@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "backend/common/file.h"
+#include "backend/depot/snapshot.h"
 #include "backend/store/hash_tree.h"
 #include "backend/structure.h"
 #include "common/fstream.h"
@@ -26,6 +27,9 @@ class FileDepot {
  public:
   // The type of the depot key.
   using key_type = K;
+
+  // The snapshot type offered by this depot implementation.
+  using Snapshot = DepotSnapshot;
 
   // Creates a new FileDepot using the provided context and directory path.
   static absl::StatusOr<FileDepot> Open(Context&,
@@ -134,6 +138,28 @@ class FileDepot {
 
   // Computes a hash over the full content of this depot.
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<DepotProof> GetProof() const {
+    ASSIGN_OR_RETURN(auto hash, GetHash());
+    return DepotProof(hash);
+  }
+
+  // Creates a snapshot of the data maintained in this depot. Snapshots may be
+  // used to transfer state information between instances without the need of
+  // blocking other operations on the depot.
+  // The resulting snapshot references content in this depot and must not
+  // outlive the depot instance.
+  absl::StatusOr<Snapshot> CreateSnapshot() const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  // Updates this depot to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this depot before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot&) {
+    return absl::UnimplementedError("to be implemented");
+  }
 
   // Flush all pending changes to disk.
   absl::Status Flush() {

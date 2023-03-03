@@ -5,6 +5,7 @@ cc_library(
     deps = [
         "//backend/common/cache:lru_cache",
         "//backend/depot",
+        "//backend/depot:snapshot",
         "//common:memory_usage",
         "//common:status_util",
         "//common:type",

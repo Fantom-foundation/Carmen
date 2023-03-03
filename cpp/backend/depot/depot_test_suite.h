@@ -4,6 +4,7 @@
 #include "backend/depot/depot_handler.h"
 #include "common/status_test_util.h"
 #include "common/test_util.h"
+#include "common/type.h"
 #include "gmock/gmock-matchers.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -13,8 +14,10 @@ namespace {
 
 using ::testing::_;
 using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
 using ::testing::IsEmpty;
 using ::testing::IsOkAndHolds;
+using ::testing::Not;
 using ::testing::StatusIs;
 using ::testing::StrEq;
 
@@ -186,11 +189,199 @@ TYPED_TEST_P(DepotTest, HashesEqualReferenceImplementation) {
   }
 }
 
-REGISTER_TYPED_TEST_SUITE_P(DepotTest, TypeProperties, EmptyCodeCanBeStored,
-                            DataCanBeAddedAndRetrieved, EntriesCanBeUpdated,
-                            SizeCanBeFatched, EmptyDepotHasZeroHash,
-                            NonEmptyDepotHasHash, HashChangesBack,
-                            KnownHashesAreReproduced,
-                            HashesEqualReferenceImplementation);
+// TODO: remove this and all its calls once all depots support snapshots.
+template <typename Depot>
+bool SupportsSnapshots(const Depot& depot) {
+  auto s = depot.CreateSnapshot();
+  return s.ok() || s.status().code() != absl::StatusCode::kUnimplemented;
+}
+
+TYPED_TEST_P(DepotTest, SnapshotHasSameProofAsStore) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot1, depot.CreateSnapshot());
+  EXPECT_THAT(depot.GetProof(), snapshot1.GetProof());
+
+  EXPECT_OK(depot.Set(10, Code{1, 2, 3}));
+  EXPECT_THAT(depot.GetProof(), Not(snapshot1.GetProof()));
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot2, depot.CreateSnapshot());
+  EXPECT_THAT(depot.GetProof(), snapshot2.GetProof());
+}
+
+TYPED_TEST_P(DepotTest, SnapshotShieldsMutations) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_OK(depot.Set(10, Code{1, 2, 3}));
+  EXPECT_OK(depot.Set(12, Code{2, 4}));
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  EXPECT_OK(depot.Set(14, Code{2, 6}));
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetDepot();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.Get(10), IsOkAndHolds(ElementsAre(
+                                    std::byte{1}, std::byte{2}, std::byte{3})));
+  EXPECT_THAT(restored.Get(12),
+              IsOkAndHolds(ElementsAre(std::byte{2}, std::byte{4})));
+  EXPECT_THAT(restored.Get(14), StatusIs(absl::StatusCode::kNotFound, _));
+}
+
+TYPED_TEST_P(DepotTest, SnapshotRecoveryHasSameHash) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK(depot.Set(10, Code{1, 2, 3}));
+  ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetDepot();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
+TYPED_TEST_P(DepotTest, LargeSnapshotRecoveryWorks) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    if (i % 2) {
+      EXPECT_OK(depot.Set(i, Code{std::uint8_t(i)}));
+    } else {
+      EXPECT_OK(depot.Set(i, Code{std::uint8_t(i >> 8), std::uint8_t(i)}));
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetDepot();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  for (int i = 0; i < kNumElements; i++) {
+    if (i % 2) {
+      EXPECT_THAT(restored.Get(i), IsOkAndHolds(ElementsAre(std::byte(i))));
+    } else {
+      EXPECT_THAT(restored.Get(i),
+                  IsOkAndHolds(ElementsAre(std::byte(i >> 8), std::byte(i))));
+    }
+  }
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
+TYPED_TEST_P(DepotTest, SnycCanShrinkStoreSize) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_OK(depot.Set(10, Code{1, 2, 3}));
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  ASSERT_OK_AND_ASSIGN(auto hash_of_small_depot, depot.GetHash());
+
+  // Fill the restore target with data.
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetDepot();
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_OK(restored.Set(i, Code{2, 3, 4}));
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash_of_large_depot, restored.GetHash());
+  EXPECT_NE(hash_of_small_depot, hash_of_large_depot);
+
+  // Sync to smaller depot, should remove extra data.
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.Get(0), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(restored.Get(1), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(restored.Get(9), IsOkAndHolds(ElementsAre()));
+  EXPECT_THAT(restored.Get(10), IsOkAndHolds(ElementsAre(
+                                    std::byte{1}, std::byte{2}, std::byte{3})));
+  EXPECT_THAT(restored.Get(11), StatusIs(absl::StatusCode::kNotFound, _));
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash_of_small_depot));
+}
+
+TYPED_TEST_P(DepotTest, SnapshotsCanBeVerified) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_OK(depot.Set(i, Value{std::uint8_t(i)}));
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // This step verifies that the proofs are consistent.
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(snapshot.GetProof().hash));
+  EXPECT_OK(snapshot.VerifyProofs());
+
+  // Verify that the content of parts is consistent with the proofs.
+  for (std::size_t i = 0; i < snapshot.GetSize(); i++) {
+    ASSERT_OK_AND_ASSIGN(auto proof, snapshot.GetProof(i));
+    ASSERT_OK_AND_ASSIGN(auto part, snapshot.GetPart(i));
+    EXPECT_THAT(part.GetProof(), proof);
+    EXPECT_TRUE(part.Verify());
+  }
+}
+
+TYPED_TEST_P(DepotTest, AnEmptySnapshotCanBeVerified) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  EXPECT_EQ(0, snapshot.GetSize());
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(snapshot.GetProof().hash));
+  EXPECT_OK(snapshot.VerifyProofs());
+}
+
+REGISTER_TYPED_TEST_SUITE_P(
+    DepotTest, TypeProperties, EmptyCodeCanBeStored, DataCanBeAddedAndRetrieved,
+    EntriesCanBeUpdated, SizeCanBeFatched, EmptyDepotHasZeroHash,
+    NonEmptyDepotHasHash, HashChangesBack, KnownHashesAreReproduced,
+    HashesEqualReferenceImplementation, SnapshotHasSameProofAsStore,
+    SnapshotShieldsMutations, SnapshotRecoveryHasSameHash,
+    LargeSnapshotRecoveryWorks, SnycCanShrinkStoreSize, SnapshotsCanBeVerified,
+    AnEmptySnapshotCanBeVerified);
+
 }  // namespace
 }  // namespace carmen::backend::depot

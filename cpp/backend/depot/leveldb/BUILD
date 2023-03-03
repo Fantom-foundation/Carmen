@@ -4,6 +4,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//backend/common/leveldb",
+        "//backend/depot:snapshot",
         "//backend/store:hash_tree",
         "//common:byte_util",
         "//common:hash",

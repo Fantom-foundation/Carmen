@@ -7,6 +7,8 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "backend/depot/snapshot.h"
+#include "backend/snapshot.h"
 #include "backend/structure.h"
 #include "common/memory_usage.h"
 #include "common/type.h"
@@ -37,8 +39,17 @@ concept Depot = requires(D a, const D b) {
   {
     b.GetSize(std::declval<typename D::key_type>())
     } -> std::same_as<absl::StatusOr<std::uint32_t>>;
+
+  // A depot implementation must support syncing to given snapshot.
+  {
+    a.SyncTo(std::declval<typename D::Snapshot>())
+    } -> std::same_as<absl::Status>;
 }
 // Depots must satisfy the requirements for backend data structures.
-&&HashableStructure<D>;
+&&HashableStructure<D>
+    // Depots must be snapshotable.
+    &&Snapshotable<D>
+        // The offered snapshot type must be a DepotSnapshot.
+        &&std::same_as<typename D::Snapshot, DepotSnapshot>;
 
 }  // namespace carmen::backend::depot

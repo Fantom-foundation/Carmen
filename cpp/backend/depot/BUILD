@@ -56,6 +56,7 @@ cc_library(
     hdrs = ["test_util.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":snapshot",
         "//common:memory_usage",
         "//common:type",
         "@com_google_googletest//:gtest",
@@ -72,6 +73,7 @@ cc_library(
         ":depot_handler",
         "//common:status_test_util",
         "//common:test_util",
+        "//common:type",
         "@com_google_googletest//:gtest_main",
     ],
 )
