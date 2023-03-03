@@ -223,7 +223,7 @@ TYPED_TEST_P(IndexTest, LargeSnapshotRecoveryWorks) {
   auto& restored = wrapper2.GetIndex();
   EXPECT_OK(restored.SyncTo(snapshot));
   for (int i = 0; i < kNumElements; i++) {
-    EXPECT_THAT(index.Get(i + 10), IsOkAndHolds(i));
+    EXPECT_THAT(restored.Get(i + 10), IsOkAndHolds(i));
   }
   EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }

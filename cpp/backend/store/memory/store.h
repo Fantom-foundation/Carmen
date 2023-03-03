@@ -32,6 +32,9 @@ class InMemoryStore {
   // The type of value stored in this store.
   using value_type = V;
 
+  // The snapshot type offered by this store implementation.
+  using Snapshot = StoreSnapshot<V>;
+
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
 
@@ -53,9 +56,6 @@ class InMemoryStore {
   InMemoryStore(const InMemoryStore&) = delete;
 
   InMemoryStore(InMemoryStore&&) = default;
-
-  // Initializes a new store instance based on the given snapshot data.
-  InMemoryStore(const StoreSnapshot&, std::size_t hash_branching_factor = 32);
 
   // Updates the value associated to the given key.
   absl::Status Set(const K& key, V value) {
@@ -80,15 +80,26 @@ class InMemoryStore {
     return (*pages_)[page_number][key % elements_per_page];
   }
 
+  // Computes a hash over the full content of this store.
+  absl::StatusOr<Hash> GetHash() const;
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    ASSIGN_OR_RETURN(auto hash, GetHash());
+    return typename Snapshot::Proof(hash);
+  }
+
   // Creates a snapshot of the data maintained in this store. Snapshots may be
   // used to transfer state information between instances without the need of
   // blocking other operations on the store.
   // The resulting snapshot references content in this store and must not
   // outlive the store instance.
-  std::unique_ptr<StoreSnapshot> CreateSnapshot() const;
+  absl::StatusOr<Snapshot> CreateSnapshot() const;
 
-  // Computes a hash over the full content of this store.
-  absl::StatusOr<Hash> GetHash() const;
+  // Updates this store to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this store before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot&);
 
   // Ignored, since store is not backed by disk storage.
   absl::Status Flush() { return absl::OkStatus(); }
@@ -138,18 +149,30 @@ class InMemoryStore {
 
   // A naive snapshot implementation accepting a deep copy of all the data in
   // the store.
-  class DeepSnapshot : public StoreSnapshot {
+  class DeepSnapshot final : public StoreSnapshotDataSource<V> {
    public:
-    DeepSnapshot(Pages pages) : pages_(std::move(pages)) {}
+    DeepSnapshot(Pages pages)
+        : StoreSnapshotDataSource<V>(pages.size()), pages_(std::move(pages)) {}
 
-    std::size_t GetNumPages() const override { return pages_.size(); }
-
-    std::span<const std::byte> GetPageData(PageId id) const override {
-      static const Page empty{};
-      if (id >= pages_.size()) {
-        return empty.AsBytes();
+    absl::StatusOr<StoreProof> GetProof(
+        std::size_t part_number) const override {
+      if (part_number >= pages_.size()) {
+        return absl::InvalidArgumentError("No such part.");
       }
-      return pages_[id].AsBytes();
+      auto hash = GetSha256Hash(pages_[part_number].AsBytes());
+      return StoreProof(hash);
+    }
+
+    absl::StatusOr<StorePart<V>> GetPart(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto proof, GetProof(part_number));
+      std::vector<V> values;
+      values.reserve(elements_per_page);
+      auto& page = pages_[part_number];
+      for (std::size_t i = 0; i < elements_per_page; i++) {
+        values.push_back(page[i]);
+      }
+      return StorePart<V>(proof, std::move(values));
     }
 
    private:
@@ -157,7 +180,7 @@ class InMemoryStore {
   };
 
   // A page source providing the owned hash tree access to the stored pages.
-  class PageProvider : public PageSource {
+  class PageProvider final : public PageSource {
    public:
     PageProvider(Pages& pages) : pages_(pages) {}
 
@@ -187,26 +210,35 @@ absl::StatusOr<Hash> InMemoryStore<K, V, page_size>::GetHash() const {
 }
 
 template <typename K, Trivial V, std::size_t page_size>
-InMemoryStore<K, V, page_size>::InMemoryStore(const StoreSnapshot& snapshot,
-                                              std::size_t hash_branching_factor)
-    : InMemoryStore(hash_branching_factor) {
-  // Load all pages from the snapshot.
-  auto num_pages = snapshot.GetNumPages();
-  for (std::size_t i = 0; i < num_pages; i++) {
-    pages_->emplace_back();
-    auto dest = pages_->back().AsBytes();
-    auto src = snapshot.GetPageData(i);
-    std::memcpy(dest.data(), src.data(), dest.size());
-    hashes_.MarkDirty(i);
-  }
-  // Refresh the hashes.
-  hashes_.GetHash().IgnoreError();
+absl::StatusOr<typename InMemoryStore<K, V, page_size>::Snapshot>
+InMemoryStore<K, V, page_size>::CreateSnapshot() const {
+  ASSIGN_OR_RETURN(auto hash, GetHash());
+  return Snapshot(hashes_.GetBranchingFactor(), hash,
+                  std::make_unique<DeepSnapshot>(*pages_));
 }
 
 template <typename K, Trivial V, std::size_t page_size>
-std::unique_ptr<StoreSnapshot> InMemoryStore<K, V, page_size>::CreateSnapshot()
-    const {
-  return std::make_unique<DeepSnapshot>(*pages_);
+absl::Status InMemoryStore<K, V, page_size>::SyncTo(const Snapshot& snapshot) {
+  // Copy in all pages form the snapshot.
+  auto num_pages = snapshot.GetSize();
+  pages_->resize(num_pages);
+  for (std::size_t i = 0; i < num_pages; i++) {
+    ASSIGN_OR_RETURN(auto part, snapshot.GetPart(i));
+    auto& values = part.GetValues();
+    if (values.size() != elements_per_page) {
+      return absl::InvalidArgumentError(
+          "Different number of elements per page in snapshot.");
+    }
+    auto& trg = pages_->at(i);
+    for (std::size_t j = 0; j < elements_per_page; j++) {
+      trg[j] = values[j];
+    }
+  }
+
+  // Reset and recompute the hash tree.
+  hashes_.ResetNumPages(num_pages);
+  RETURN_IF_ERROR(GetHash());
+  return absl::OkStatus();
 }
 
 }  // namespace carmen::backend::store

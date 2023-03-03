@@ -6,32 +6,12 @@
 
 #include "absl/status/status.h"
 #include "backend/common/page_id.h"
+#include "backend/snapshot.h"
+#include "backend/store/snapshot.h"
 #include "backend/structure.h"
 #include "common/status_util.h"
 
 namespace carmen::backend::store {
-
-// A snapshot of the state of a store providing access to the contained data
-// frozen at it creation time. This defines an interface for store
-// implementation specific implementations.
-//
-// The life cycle of a snapshot defines the duration of its availability.
-// Snapshots are volatile, thus not persistent over application restarts. A
-// snapshot is created by a call to `CreateSnapshot()` on a store instance, and
-// destroyed upon destruction. It does not (need) to persist beyond the lifetime
-// of the current process.
-class StoreSnapshot {
- public:
-  virtual ~StoreSnapshot() {}
-
-  // The total number of pages captured by this snapshot.
-  virtual std::size_t GetNumPages() const = 0;
-
-  // Gains read access to an individual page in the range [0,..,GetNumPages()).
-  // The provided page data is only valid until the next call to this function
-  // or destruction of the snapshot.
-  virtual std::span<const std::byte> GetPageData(PageId) const = 0;
-};
 
 // Defines the interface expected for a Store S providing an unbound array-like
 // data structure.
@@ -53,8 +33,18 @@ concept Store = requires(S a, const S b) {
   {
     b.Get(std::declval<typename S::key_type>())
     } -> std::same_as<StatusOrRef<const typename S::value_type>>;
+
+  // A store implementation must support syncing to given snapshot.
+  {
+    a.SyncTo(std::declval<typename S::Snapshot>())
+    } -> std::same_as<absl::Status>;
 }
 // Stores must satisfy the requirements for backend data structures.
-&&HashableStructure<S>;
+&&HashableStructure<S>
+    // Stores must be snapshotable.
+    &&Snapshotable<S>
+        // The offered snapshot type must be a StoreSnapshot.
+        &&std::same_as<typename S::Snapshot,
+                       StoreSnapshot<typename S::value_type>>;
 
 }  // namespace carmen::backend::store

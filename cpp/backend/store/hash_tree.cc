@@ -40,6 +40,15 @@ void HashTree::MarkDirty(PageId page) {
   dirty_pages_.insert(page);
 }
 
+void HashTree::ResetNumPages(std::size_t num) {
+  num_pages_ = num;
+  hashes_.clear();
+  dirty_pages_.clear();
+  for (std::size_t i = 0; i < num; i++) {
+    dirty_pages_.insert(i);
+  }
+}
+
 absl::StatusOr<Hash> HashTree::GetHash() {
   // If there are no pages, the full hash is zero by definition.
   if (num_pages_ == 0) {

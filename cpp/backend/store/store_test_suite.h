@@ -16,6 +16,7 @@ namespace carmen::backend::store {
 namespace {
 
 using ::testing::IsOkAndHolds;
+using ::testing::Not;
 using ::testing::StrEq;
 
 // A test configuration for store implementations.
@@ -39,7 +40,7 @@ TYPED_TEST_SUITE_P(StoreTest);
 
 TYPED_TEST_P(StoreTest, TypeProperties) {
   ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
-  EXPECT_TRUE(Store<std::decay_t<decltype(wrapper.GetStore())>>);
+  static_assert(Store<std::decay_t<decltype(wrapper.GetStore())>>);
   EXPECT_TRUE(std::is_move_constructible_v<decltype(wrapper.GetStore())>);
 }
 
@@ -307,6 +308,180 @@ TYPED_TEST_P(StoreTest, CanProduceMemoryFootprint) {
   EXPECT_GT(summary.GetTotal(), Memory(0));
 }
 
+// TODO: remove this and all its calls once all stores support snapshots.
+template <typename Store>
+bool SupportsSnapshots(const Store& store) {
+  auto s = store.CreateSnapshot();
+  return s.ok() || s.status().code() != absl::StatusCode::kUnimplemented;
+}
+
+TYPED_TEST_P(StoreTest, SnapshotHasSameProofAsStore) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot1, store.CreateSnapshot());
+  EXPECT_THAT(store.GetProof(), snapshot1.GetProof());
+
+  EXPECT_OK(store.Set(10, Value{1, 2, 3}));
+  EXPECT_THAT(store.GetProof(), Not(snapshot1.GetProof()));
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot2, store.CreateSnapshot());
+  EXPECT_THAT(store.GetProof(), snapshot2.GetProof());
+}
+
+TYPED_TEST_P(StoreTest, SnapshotShieldsMutations) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_OK(store.Set(10, Value{1}));
+  EXPECT_OK(store.Set(12, Value{2}));
+  ASSERT_OK_AND_ASSIGN(auto snapshot, store.CreateSnapshot());
+
+  EXPECT_OK(store.Set(14, Value{3}));
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetStore();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.Get(10), IsOkAndHolds(Value{1}));
+  EXPECT_THAT(restored.Get(12), IsOkAndHolds(Value{2}));
+  EXPECT_THAT(restored.Get(14), IsOkAndHolds(Value{}));
+}
+
+TYPED_TEST_P(StoreTest, SnapshotRecoveryHasSameHash) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK(store.Set(10, Value{0xAB}));
+  ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, store.CreateSnapshot());
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetStore();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
+TYPED_TEST_P(StoreTest, LargeSnapshotRecoveryWorks) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  auto toValue = [](int i) {
+    return Value{std::uint8_t(i), std::uint8_t(i >> 8), std::uint8_t(i >> 16),
+                 std::uint8_t(i >> 24)};
+  };
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_OK(store.Set(i, toValue(i)));
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash, store.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, store.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetStore();
+  EXPECT_OK(restored.SyncTo(snapshot));
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(restored.Get(i), IsOkAndHolds(toValue(i)));
+  }
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
+TYPED_TEST_P(StoreTest, SnycCanShrinkStoreSize) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  EXPECT_OK(store.Set(10, Value{12}));
+  ASSERT_OK_AND_ASSIGN(auto snapshot, store.CreateSnapshot());
+  ASSERT_OK_AND_ASSIGN(auto hash_of_small_store, store.GetHash());
+
+  // Fill the restore target with data.
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetStore();
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_OK(restored.Set(i, Value{14}));
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash_of_large_store, restored.GetHash());
+  EXPECT_NE(hash_of_small_store, hash_of_large_store);
+
+  // Sync to smaller store, should remove extra data.
+  EXPECT_OK(restored.SyncTo(snapshot));
+  EXPECT_THAT(restored.Get(10), IsOkAndHolds(Value{12}));
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash_of_small_store));
+}
+
+TYPED_TEST_P(StoreTest, SnapshotsCanBeVerified) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_OK(store.Set(i, Value{std::uint8_t(i)}));
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, store.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // This step verifies that the proofs are consistent.
+  EXPECT_THAT(store.GetHash(), IsOkAndHolds(snapshot.GetProof().hash));
+  EXPECT_OK(snapshot.VerifyProofs());
+
+  // Verify that the content of parts is consistent with the proofs.
+  for (std::size_t i = 0; i < snapshot.GetSize(); i++) {
+    ASSERT_OK_AND_ASSIGN(auto proof, snapshot.GetProof(i));
+    ASSERT_OK_AND_ASSIGN(auto part, snapshot.GetPart(i));
+    EXPECT_THAT(part.GetProof(), proof);
+    EXPECT_TRUE(part.Verify());
+  }
+}
+
+TYPED_TEST_P(StoreTest, AnEmptySnapshotCanBeVerified) {
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& store = wrapper.GetStore();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(store)) {
+    GTEST_SKIP();
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto snapshot, store.CreateSnapshot());
+  EXPECT_EQ(0, snapshot.GetSize());
+  EXPECT_OK(snapshot.VerifyProofs());
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     StoreTest, TypeProperties, UninitializedValuesAreZero,
     DataCanBeAddedAndRetrieved, EntriesCanBeUpdated, EmptyStoreHasZeroHash,
@@ -314,7 +489,10 @@ REGISTER_TYPED_TEST_SUITE_P(
     HashesRespectBranchingFactor, HashesEqualReferenceImplementation,
     HashesRespectEmptyPages, HashesChangeWithUpdates,
     HashesDoNotChangeWithReads, HashesCoverMultiplePages,
-    CanProduceMemoryFootprint);
+    CanProduceMemoryFootprint, SnapshotHasSameProofAsStore,
+    SnapshotShieldsMutations, SnapshotRecoveryHasSameHash,
+    LargeSnapshotRecoveryWorks, SnycCanShrinkStoreSize, SnapshotsCanBeVerified,
+    AnEmptySnapshotCanBeVerified);
 
 }  // namespace
 }  // namespace carmen::backend::store

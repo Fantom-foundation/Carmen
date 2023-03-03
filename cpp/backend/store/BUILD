@@ -3,6 +3,8 @@ cc_library(
     hdrs = ["store.h"],
     visibility = ["//visibility:public"],
     deps = [
+        ":snapshot",
+        "//backend:snapshot",
         "//backend:structure",
         "//backend/common:page_id",
         "//common:status_util",

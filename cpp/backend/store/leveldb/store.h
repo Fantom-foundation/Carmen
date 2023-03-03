@@ -8,6 +8,7 @@
 #include "absl/status/statusor.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "backend/store/hash_tree.h"
+#include "backend/store/snapshot.h"
 #include "backend/store/store.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
@@ -28,6 +29,9 @@ class LevelDbStore {
 
   // The type of value stored in this store.
   using value_type = V;
+
+  // The snapshot type offered by this store implementation.
+  using Snapshot = StoreSnapshot<V>;
 
   // The page size in byte used by this store.
   constexpr static std::size_t kPageSize = page_size;
@@ -79,6 +83,28 @@ class LevelDbStore {
 
   // Computes a hash over the full content of this store.
   absl::StatusOr<Hash> GetHash() const { return hashes_.GetHash(); }
+
+  // Retrieves the proof a snapshot of the current state would exhibit.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const {
+    ASSIGN_OR_RETURN(auto hash, GetHash());
+    return typename Snapshot::Proof(hash);
+  }
+
+  // Creates a snapshot of the data maintained in this store. Snapshots may be
+  // used to transfer state information between instances without the need of
+  // blocking other operations on the store.
+  // The resulting snapshot references content in this store and must not
+  // outlive the store instance.
+  absl::StatusOr<Snapshot> CreateSnapshot() const {
+    return absl::UnimplementedError("to be implemented");
+  }
+
+  // Updates this store to match the content of the given snapshot. This
+  // invalidates all former snapshots taken from this store before starting to
+  // sync. Thus, instances can not sync to a former version of itself.
+  absl::Status SyncTo(const Snapshot&) {
+    return absl::UnimplementedError("to be implemented");
+  }
 
   // Flush all pending changes to disk.
   absl::Status Flush() {

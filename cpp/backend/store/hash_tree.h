@@ -39,6 +39,9 @@ class HashTree {
   HashTree(std::unique_ptr<PageSource> source, int branching_factor = 32)
       : branching_factor_(branching_factor), page_source_(std::move(source)) {}
 
+  // Obtains the branching factor used by this tree.
+  int GetBranchingFactor() const { return branching_factor_; }
+
   // Informs the HashTree about the existence of the given page. This may lead
   // to and adaptation of the internal hash data structures and dirty pages.
   // Note: registration is implicit for all other operations on pages.
@@ -58,6 +61,10 @@ class HashTree {
   // Marks the given page as being modified. Consequently, the page's hash will
   // have to be recomputed the next time a global hash is requested.
   void MarkDirty(PageId page);
+
+  // Resets the number of pages to be covered by this tree. This also implicitly
+  // marks all pages as dirty.
+  void ResetNumPages(std::size_t num);
 
   // Computes a global hash for all pages managed by this HashTree. It will
   // update outdated partial hashes cached internally, which may imply the need

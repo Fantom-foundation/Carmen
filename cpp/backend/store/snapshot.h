@@ -87,9 +87,11 @@ class StoreSnapshot {
   using Proof = StoreProof;
   using Part = StorePart<V>;
 
-  StoreSnapshot(const Hash& hash,
+  StoreSnapshot(const std::size_t branching_factor, const Hash& hash,
                 std::unique_ptr<StoreSnapshotDataSource<V>> source)
-      : proof_(hash), source_(std::move(source)) {}
+      : branching_factor_(branching_factor),
+        proof_(hash),
+        source_(std::move(source)) {}
 
   // Obtains the number of parts stored in the snapshot.
   std::size_t GetSize() const { return source_->GetSize(); }
@@ -113,6 +115,9 @@ class StoreSnapshot {
   absl::Status VerifyProofs() const;
 
  private:
+  // The branching factor used in the reduction tree for computing hashes.
+  const std::size_t branching_factor_;
+
   // The full-store proof of this snapshot.
   const Proof proof_;
 
@@ -201,27 +206,25 @@ absl::Status StoreSnapshot<V>::VerifyProofs() const {
                : absl::InternalError("Proof chain is inconsistent.");
   }
 
-  // Aggregate those hashes hierarchically.
-  const std::size_t kBranching = 32;  // for now constant, update if needed
-
   // Create a utility padding the hash vector to a length being a multiple of
   // the branching factor.
   auto pad_hashes = [&]() {
-    if (hashes.size() % kBranching != 0) {
-      hashes.resize(hashes.size() + (kBranching - hashes.size() % kBranching));
+    if (hashes.size() % branching_factor_ != 0) {
+      hashes.resize(hashes.size() +
+                    (branching_factor_ - hashes.size() % branching_factor_));
     }
-    assert(hashes.size() % kBranching == 0);
+    assert(hashes.size() % branching_factor_ == 0);
   };
 
-  pad_hashes();
   while (hashes.size() > 1) {
-    for (std::size_t i = 0; i < hashes.size(); i += kBranching) {
-      hashes[i] = GetSha256Hash(
-          std::as_bytes(std::span(hashes).subspan(i * kBranching, kBranching)));
-    }
-    hashes.resize(hashes.size() / kBranching);
     pad_hashes();
+    for (std::size_t i = 0; i < hashes.size() / branching_factor_; i++) {
+      hashes[i] = GetSha256Hash(std::as_bytes(
+          std::span(hashes).subspan(i * branching_factor_, branching_factor_)));
+    }
+    hashes.resize(hashes.size() / branching_factor_);
   }
+
   return proof_.hash == hashes[0]
              ? absl::OkStatus()
              : absl::InternalError("Proof chain is inconsistent.");
