@@ -4,6 +4,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "backend/store/snapshot.h"
 #include "backend/structure.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
@@ -18,6 +19,7 @@ class MockStore {
  public:
   using key_type = K;
   using value_type = V;
+  using Snapshot = StoreSnapshot<V>;
   constexpr static std::size_t kPageSize = page_size;
 
   static absl::StatusOr<MockStore> Open(Context&,

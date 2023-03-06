@@ -220,7 +220,7 @@ class UnionSnapshot {
     (check(snapshots), ...);
     RETURN_IF_ERROR(err);
     // Combine snapshots into a single snapshot.
-    return UnionSnapshot(*snapshots...);
+    return UnionSnapshot(*std::move(snapshots)...);
   }
 
   std::size_t GetSize() const {

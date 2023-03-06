@@ -68,6 +68,10 @@ concept Snapshot =
     // A snapshot must define a part type.
     Part<typename S::Part> &&
 
+    // A snapshost can be move-constructed, to support moving it in and out of a
+    // absl::StatusOr instance.
+    std::is_move_constructible_v<S> &&
+
     requires(const S s) {
   // --- Part Inspection ---
 
