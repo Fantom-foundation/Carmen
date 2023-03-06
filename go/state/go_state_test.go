@@ -36,11 +36,17 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory", 1, castToDirectUpdateState(NewGoMemoryState)},
-		{"File Index and Store", 1, castToDirectUpdateState(NewGoFileState)},
-		{"Cached File Index and Store", 1, castToDirectUpdateState(NewGoCachedFileState)},
-		{"LevelDB Index and Store", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
+		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
+		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
+		{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
+		{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
+		{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
+		{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
+		{"LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+		{"LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
 	}
 }
 
@@ -179,7 +185,7 @@ func TestMoreInserts(t *testing.T) {
 }
 
 func TestHashing(t *testing.T) {
-	var hashes []common.Hash
+	var hashes = [][]common.Hash{nil, nil, nil, nil}
 	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
@@ -228,14 +234,16 @@ func TestHashing(t *testing.T) {
 			if initialHash == hash4 || hash3 == hash4 {
 				t.Errorf("hash of changed state not changed; %s", err)
 			}
-			hashes = append(hashes, hash4) // store the last hash
+			hashes[int(config.schema)] = append(hashes[int(config.schema)], hash4) // store the last hash
 		})
 	}
 
-	// check all final hashes are the same
-	for i := 0; i < len(hashes)-1; i++ {
-		if hashes[i] != hashes[i+1] {
-			t.Errorf("hashes differ ")
+	// check all final hashes for each schema are the same
+	for schema := 0; schema < len(hashes); schema++ {
+		for i := 0; i < len(hashes[schema])-1; i++ {
+			if hashes[schema][i] != hashes[schema][i+1] {
+				t.Errorf("hashes differ in schema %d", schema)
+			}
 		}
 	}
 }
@@ -265,14 +273,14 @@ func TestFailingStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goState := state.(*GoState)
-	goState.balancesStore = failingStore[uint32, common.Balance]{goState.balancesStore}
-	goState.noncesStore = failingStore[uint32, common.Nonce]{goState.noncesStore}
-	goState.valuesStore = failingStore[uint32, common.Value]{goState.valuesStore}
+	goSchema := state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema.balancesStore = failingStore[uint32, common.Balance]{goSchema.balancesStore}
+	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
+	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
 
-	_ = goState.setBalance(address1, common.Balance{})
-	_ = goState.setNonce(address1, common.Nonce{})
-	_ = goState.setStorage(address1, key1, common.Value{})
+	_ = goSchema.setBalance(address1, common.Balance{})
+	_ = goSchema.setNonce(address1, common.Nonce{})
+	_ = goSchema.setStorage(address1, key1, common.Value{})
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {
@@ -295,8 +303,8 @@ func TestFailingIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goState := state.(*GoState)
-	goState.addressIndex = failingIndex[common.Address, uint32]{goState.addressIndex}
+	goSchema := state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {

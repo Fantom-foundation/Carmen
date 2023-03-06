@@ -2,7 +2,6 @@ package common
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"hash"
@@ -76,11 +75,6 @@ const ValueSize = 32
 // Value is an Ethereum-like smart contract memory slot.
 type Value [ValueSize]byte
 
-type SlotIdx[I Identifier] struct {
-	AddressIdx I
-	KeyIdx     I
-}
-
 // AccountState is the base type of account states enum.
 type AccountState byte
 
@@ -109,28 +103,6 @@ func (a *Key) Compare(b *Key) int {
 	return bytes.Compare(a[:], b[:])
 }
 
-// Compare slots first by the address and then by the key if the addresses are the same.
-// It returns zero when both addresses and keys are the same
-// otherwise it returns a negative number when A is lower than B
-// or a positive number when A is higher than B.
-func (a *SlotIdx[I]) Compare(b *SlotIdx[I]) int {
-	if a.AddressIdx > b.AddressIdx {
-		return 1
-	}
-	if a.AddressIdx < b.AddressIdx {
-		return -1
-	}
-
-	if a.KeyIdx > b.KeyIdx {
-		return 1
-	}
-	if a.KeyIdx < b.KeyIdx {
-		return -1
-	}
-
-	return 0
-}
-
 type AddressComparator struct{}
 
 func (c AddressComparator) Compare(a, b *Address) int {
@@ -140,12 +112,6 @@ func (c AddressComparator) Compare(a, b *Address) int {
 type KeyComparator struct{}
 
 func (c KeyComparator) Compare(a, b *Key) int {
-	return a.Compare(b)
-}
-
-type Identifier32Comparator struct{}
-
-func (c Identifier32Comparator) Compare(a, b *SlotIdx[uint32]) int {
 	return a.Compare(b)
 }
 
@@ -222,12 +188,6 @@ func ToNonce(value uint64) (res Nonce) {
 // ToUint64 converts the value of a nonce into a integer value.
 func (n *Nonce) ToUint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
-}
-
-// GetSha256Hash computes the Sha256 hash of the given data.
-func GetSha256Hash(data []byte) Hash {
-	hasher := sha256.New()
-	return GetHash(hasher, data)
 }
 
 // GetKeccak256Hash computes the Keccak256 hash of the given data.
@@ -314,18 +274,6 @@ func (s KeyHasher) Hash(data *Key) uint64 {
 	h = h*prime + uint64(data[29])
 	h = h*prime + uint64(data[30])
 	h = h*prime + uint64(data[31])
-
-	return h
-}
-
-type SlotIdxHasher struct{}
-
-func (s SlotIdxHasher) Hash(a *SlotIdx[uint32]) uint64 {
-	var h uint64 = 17
-	var prime uint64 = 31
-
-	h = h*prime + uint64(a.AddressIdx)
-	h = h*prime + uint64(a.KeyIdx)
 
 	return h
 }

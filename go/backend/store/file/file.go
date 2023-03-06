@@ -13,12 +13,13 @@ import (
 
 // Store is a filesystem-based store.Store implementation - it stores mapping of ID to value in binary files.
 type Store[I common.Identifier, V any] struct {
-	file       *os.File
-	hashTree   hashtree.HashTree
-	serializer common.Serializer[V]
-	pageSize   int // the amount of bytes of one page
-	pageItems  int // the amount of items stored in one page
-	itemSize   int // the amount of bytes per one value
+	file           *os.File
+	hashTree       hashtree.HashTree
+	serializer     common.Serializer[V]
+	pageSize       int // the amount of bytes of one page
+	pageItems      int // the amount of items stored in one page
+	hashedPageSize int // the amount of the page bytes to be passed into the hashing function - rounded to whole items
+	itemSize       int // the amount of bytes per one value
 }
 
 // NewStore constructs a new instance of FileStore.
@@ -33,12 +34,14 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		return nil, fmt.Errorf("failed to open/create data file; %s", err)
 	}
 
+	itemSize := serializer.Size()
 	s := &Store[I, V]{
-		file:       file,
-		serializer: serializer,
-		pageSize:   pageSize,
-		pageItems:  pageSize / serializer.Size(),
-		itemSize:   serializer.Size(),
+		file:           file,
+		serializer:     serializer,
+		pageSize:       pageSize,
+		pageItems:      pageSize / itemSize,
+		hashedPageSize: pageSize / itemSize * itemSize,
+		itemSize:       itemSize,
 	}
 	s.hashTree = hashtreeFactory.Create(s)
 	return s, nil
@@ -55,7 +58,7 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
 
 // GetPage provides a page bytes for needs of the hash obtaining
 func (m *Store[I, V]) GetPage(page int) ([]byte, error) {
-	buffer := make([]byte, m.pageSize)
+	buffer := make([]byte, m.hashedPageSize)
 
 	_, err := m.file.ReadAt(buffer, int64(page)*int64(m.pageSize))
 	if err != nil && !errors.Is(err, io.EOF) {
