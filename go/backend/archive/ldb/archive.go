@@ -14,6 +14,7 @@ import (
 type Archive struct {
 	db                       *common.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
+	accountHashCache         *common.Cache[common.Address, common.Hash]
 	batch                    leveldb.Batch
 	lastBlockCache           blockCache
 	addMutex                 sync.Mutex
@@ -23,6 +24,7 @@ func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
 	return &Archive{
 		db:                       db,
 		reincarnationNumberCache: map[common.Address]int{},
+		accountHashCache:         common.NewCache[common.Address, common.Hash](100_000),
 	}, nil
 }
 
@@ -62,7 +64,7 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		for _, account := range updatedAccounts {
 			accountUpdate := accountUpdates[account]
 
-			lastAccountHash, err := a.GetAccountHash(block, account)
+			lastAccountHash, err := a.getLastAccountHash(account)
 			if err != nil {
 				return fmt.Errorf("failed to get previous account hash; %s", err)
 			}
@@ -71,12 +73,14 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 			reusedHasher.Reset()
 			reusedHasher.Write(lastAccountHash[:])
 			reusedHasher.Write(accountUpdateHash[:])
-			newAccountHash := reusedHasher.Sum(nil)
-			blockHasher.Write(newAccountHash)
+			hash := reusedHasher.Sum(nil)
+			newAccountHash := *(*common.Hash)(hash)
+			blockHasher.Write(newAccountHash[:])
 
 			var accountK accountBlockKey
 			accountK.set(common.AccountHashArchiveKey, account, block)
-			a.batch.Put(accountK[:], newAccountHash)
+			a.batch.Put(accountK[:], newAccountHash[:])
+			a.accountHashCache.Set(account, newAccountHash)
 		}
 
 		hash := blockHasher.Sum(nil)
@@ -292,6 +296,17 @@ func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
 	return hash, err
 }
 
+func (a *Archive) getLastAccountHash(account common.Address) (hash common.Hash, err error) {
+	hash, exists := a.accountHashCache.Get(account)
+	if !exists {
+		hash, err = a.GetAccountHash(maxBlock, account)
+		if err == nil {
+			a.accountHashCache.Set(account, hash)
+		}
+	}
+	return hash, err
+}
+
 func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
 	var key accountBlockKey
 	key.set(common.AccountHashArchiveKey, account, block)
@@ -312,6 +327,7 @@ func (a *Archive) GetMemoryFootprint() *common.MemoryFootprint {
 	var address common.Address
 	var reincarnation int
 	mf.AddChild("reincarnationNumberCache", common.NewMemoryFootprint(uintptr(len(a.reincarnationNumberCache))*(unsafe.Sizeof(address)+unsafe.Sizeof(reincarnation))))
+	mf.AddChild("accountHashCache", a.accountHashCache.GetMemoryFootprint(0))
 	return mf
 }
 
