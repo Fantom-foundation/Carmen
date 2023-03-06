@@ -14,6 +14,15 @@ import (
 // GoSchema3 implementation of a state utilizes a schema where Addresses are indexed,
 // but slot keys are not. Also, it utilizes account reincarnation numbers to
 // lazily purge the state of deleted accounts.
+//
+// It uses addressIndex to map an address to an id
+// and the couple (addressId, slotKey) is mapped by slotIndex to the id into the valuesStore,
+// where are slots values stored.
+//
+// The valuesStore maps the slotId to a couple (slotValue, reincarnationNumber) where the reincarnation
+// number express the version of the contract to which the value belongs.
+// It allows to invalidate all slots of a deleted contract by incrementing the account reincarnation number
+// in the reincarnationsStore.
 type GoSchema3 struct {
 	addressIndex        index.Index[common.Address, uint32]
 	slotIndex           index.Index[common.SlotIdxKey[uint32], uint32]

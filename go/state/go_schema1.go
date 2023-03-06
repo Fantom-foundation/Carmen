@@ -14,6 +14,13 @@ import (
 
 // GoSchema1 maintains all persistent state of the blockchain. In particular,
 // it maintains the balance of accounts, accounts nonces, and storage.
+//
+// It uses addressIndex to map an address to an id,
+// keyIndex to map a slot key to a key id
+// and this couple of ids is mapped by slotIndex to the id into the valuesStore,
+// where are slots values stored.
+//
+// It uses a MultiMap to keep track of slots, which must be reset, when a contract is self-destructed.
 type GoSchema1 struct {
 	addressIndex    index.Index[common.Address, uint32]
 	keyIndex        index.Index[common.Key, uint32]
