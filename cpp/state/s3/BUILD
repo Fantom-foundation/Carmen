@@ -7,6 +7,7 @@ cc_library(
     deps = [
         "//archive",
         "//backend:structure",
+        "//backend:union_snapshot",
         "//common:account_state",
         "//common:type",
         "//state:schema",

@@ -40,6 +40,76 @@ using StateConfigurations =
 
 INSTANTIATE_TYPED_TEST_SUITE_P(Schema_3, StateTest, StateConfigurations);
 
+// -------------------------- Snapshot Tests ----------------------------------
+
+TEST(StateTest, CanCreateEmptySnapshot) {
+  InMemoryState<State, TestArchive> state;
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_EQ(snapshot.GetSize(), 0);
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+}
+
+TEST(StateTest, CanCreateAndRestoreNonEmptySnapshot) {
+  InMemoryState<State, TestArchive> state;
+  for (std::uint8_t i = 0; i < 100; i++) {
+    Address addr{i};
+    EXPECT_OK(state.CreateAccount(addr));
+    EXPECT_OK(state.SetBalance(addr, Balance{i, 0xAB}));
+    EXPECT_OK(state.SetNonce(addr, Nonce{i, 0xCD}));
+    EXPECT_OK(state.SetCode(addr, Code{i, 0xEF}));
+    for (std::uint8_t j = 0; j < 50; j++) {
+      EXPECT_OK(state.SetStorageValue(addr, Key{j}, Value{j, 0x90}));
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_GT(snapshot.GetSize(), 0);
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+
+  InMemoryState<State, TestArchive> restored;
+  EXPECT_OK(restored.SyncTo(snapshot));
+
+  for (std::uint8_t i = 0; i < 100; i++) {
+    Address addr{i};
+    EXPECT_THAT(restored.GetAccountState(addr), AccountState::kExists);
+    EXPECT_THAT(restored.GetBalance(addr), (Balance{i, 0xAB}));
+    EXPECT_THAT(restored.GetNonce(addr), (Nonce{i, 0xCD}));
+    EXPECT_THAT(restored.GetCode(addr), (Code{i, 0xEF}));
+    for (std::uint8_t j = 0; j < 50; j++) {
+      EXPECT_THAT(restored.GetStorageValue(addr, Key{j}), (Value{j, 0x90}));
+    }
+  }
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+}
+
+TEST(StateTest, SnaphshotCanBeVerified) {
+  InMemoryState<State, TestArchive> state;
+  for (std::uint8_t i = 0; i < 100; i++) {
+    Address addr{i};
+    EXPECT_OK(state.CreateAccount(addr));
+    EXPECT_OK(state.SetBalance(addr, Balance{i, 0xAB}));
+    EXPECT_OK(state.SetNonce(addr, Nonce{i, 0xCD}));
+    EXPECT_OK(state.SetCode(addr, Code{i, 0xEF}));
+    for (std::uint8_t j = 0; j < 50; j++) {
+      EXPECT_OK(state.SetStorageValue(addr, Key{j}, Value{j, 0x90}));
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_GT(snapshot.GetSize(), 0);
+
+  // Verify the proof tree.
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+  EXPECT_OK(snapshot.VerifyProofs());
+
+  // Verify each individual part.
+  auto size = snapshot.GetSize();
+  for (std::size_t i = 0; i < size; i++) {
+    ASSERT_OK_AND_ASSIGN(auto proof, snapshot.GetProof(i));
+    ASSERT_OK_AND_ASSIGN(auto part, snapshot.GetPart(i));
+    EXPECT_EQ(part.GetProof(), proof);
+    EXPECT_TRUE(part.Verify());
+  }
+}
+
 // ------------------------ Error Handling Tests ------------------------------
 
 template <typename K, typename V>

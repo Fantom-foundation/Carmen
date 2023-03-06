@@ -9,6 +9,7 @@
 #include "absl/status/statusor.h"
 #include "archive/archive.h"
 #include "backend/structure.h"
+#include "backend/union_snapshot.h"
 #include "common/account_state.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -39,6 +40,47 @@ class State {
   using AddressId = std::uint32_t;
   using SlotId = std::uint32_t;
   using Reincarnation = std::uint32_t;
+
+ protected:
+  // Identifies a single slot by its address/key values.
+  struct Slot {
+    AddressId address;
+    Key key;
+
+    friend auto operator<=>(const Slot& a, const Slot& b) = default;
+
+    template <typename H>
+    friend H AbslHashValue(H h, const Slot& l) {
+      return H::combine(std::move(h), l.address, l.key);
+    }
+  };
+
+  // Make sure the slot identifier is packed without padding since it is stored
+  // on disk as a trivial value, included in hashing.
+  static_assert(sizeof(Slot) == sizeof(AddressId) + sizeof(Key));
+
+  // The value stored per storage slot.
+  struct SlotValue {
+    Reincarnation reincarnation;
+    Value value;
+    friend auto operator<=>(const SlotValue& a, const SlotValue& b) = default;
+  };
+
+  // Make sure the slot value is packed without padding since it is stored on
+  // disk as a trivial value, included in hashing.
+  static_assert(sizeof(SlotValue) == sizeof(Reincarnation) + sizeof(Value));
+
+ public:
+  // The snapshot type used by this schema.
+  using Snapshot = backend::UnionSnapshot<
+      typename IndexType<Address, AddressId>::Snapshot,
+      typename IndexType<Slot, SlotId>::Snapshot,
+      typename StoreType<AddressId, Balance>::Snapshot,
+      typename StoreType<AddressId, Nonce>::Snapshot,
+      typename StoreType<AddressId, Reincarnation>::Snapshot,
+      typename StoreType<SlotId, SlotValue>::Snapshot,
+      typename StoreType<AddressId, AccountState>::Snapshot,
+      typename DepotType<AddressId>::Snapshot>;
 
   static constexpr Schema GetSchema() {
     return StateFeature::kAddressId & StateFeature::kAccountReincarnation;
@@ -99,6 +141,17 @@ class State {
   // entire maintained state.
   absl::StatusOr<Hash> GetHash();
 
+  // Create a proof that would cerify a snapshot of the current state.
+  absl::StatusOr<typename Snapshot::Proof> GetProof() const;
+
+  // Create a snapshot of this state.
+  absl::StatusOr<Snapshot> CreateSnapshot() const;
+
+  // Sync this state to the given snapshot. This invalidates any former snapshot
+  // before starting the sync operation. Thus, states cannot be synced to former
+  // versions of themselfs.
+  absl::Status SyncTo(const Snapshot& snapshot);
+
   // Syncs internally modified write-buffers to disk.
   absl::Status Flush();
 
@@ -111,34 +164,6 @@ class State {
   MemoryFootprint GetMemoryFootprint() const;
 
  protected:
-  // Identifies a single slot by its address/key values.
-  struct Slot {
-    AddressId address;
-    Key key;
-
-    friend auto operator<=>(const Slot& a, const Slot& b) = default;
-
-    template <typename H>
-    friend H AbslHashValue(H h, const Slot& l) {
-      return H::combine(std::move(h), l.address, l.key);
-    }
-  };
-
-  // Make sure the slot identifier is packed without padding since it is stored
-  // on disk as a trivial value, included in hashing.
-  static_assert(sizeof(Slot) == sizeof(AddressId) + sizeof(Key));
-
-  // The value stored per storage slot.
-  struct SlotValue {
-    Reincarnation reincarnation;
-    Value value;
-    friend auto operator<=>(const SlotValue& a, const SlotValue& b) = default;
-  };
-
-  // Make sure the slot value is packed without padding since it is stored on
-  // disk as a trivial value, included in hashing.
-  static_assert(sizeof(SlotValue) == sizeof(Reincarnation) + sizeof(Value));
-
   // Make the state constructor protected to prevent direct instantiation. The
   // state should be created by calling the static Open method. This allows
   // the state to be mocked in tests.
@@ -560,6 +585,63 @@ State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetHash() {
   return GetSha256Hash(addr_idx_hash, slot_idx_hash, bal_hash, nonces_hash,
                        reincarnation_hash, val_store_hash, acc_states_hash,
                        codes_hash);
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType,
+          Archive ArchiveType>
+absl::StatusOr<typename State<IndexType, StoreType, DepotType, MultiMapType,
+                              ArchiveType>::Snapshot::Proof>
+State<IndexType, StoreType, DepotType, MultiMapType, ArchiveType>::GetProof()
+    const {
+  ASSIGN_OR_RETURN(auto addr_idx_proof, address_index_.GetProof());
+  ASSIGN_OR_RETURN(auto slot_idx_proof, slot_index_.GetProof());
+  ASSIGN_OR_RETURN(auto bal_proof, balances_.GetProof());
+  ASSIGN_OR_RETURN(auto nonces_proof, nonces_.GetProof());
+  ASSIGN_OR_RETURN(auto reincarnation_proof, reincarnations_.GetProof());
+  ASSIGN_OR_RETURN(auto val_store_proof, value_store_.GetProof());
+  ASSIGN_OR_RETURN(auto acc_states_proof, account_states_.GetProof());
+  ASSIGN_OR_RETURN(auto codes_proof, codes_.GetProof());
+  return Snapshot::Proof::Create(
+      addr_idx_proof, slot_idx_proof, bal_proof, nonces_proof,
+      reincarnation_proof, val_store_proof, acc_states_proof, codes_proof);
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType,
+          Archive ArchiveType>
+absl::StatusOr<typename State<IndexType, StoreType, DepotType, MultiMapType,
+                              ArchiveType>::Snapshot>
+State<IndexType, StoreType, DepotType, MultiMapType,
+      ArchiveType>::CreateSnapshot() const {
+  return Snapshot::Create(
+      address_index_.CreateSnapshot(), slot_index_.CreateSnapshot(),
+      balances_.CreateSnapshot(), nonces_.CreateSnapshot(),
+      reincarnations_.CreateSnapshot(), value_store_.CreateSnapshot(),
+      account_states_.CreateSnapshot(), codes_.CreateSnapshot());
+}
+
+template <template <typename K, typename V> class IndexType,
+          template <typename K, typename V> class StoreType,
+          template <typename K> class DepotType,
+          template <typename K, typename V> class MultiMapType,
+          Archive ArchiveType>
+absl::Status State<IndexType, StoreType, DepotType, MultiMapType,
+                   ArchiveType>::SyncTo(const Snapshot& snapshot) {
+  auto& snapshots = snapshot.GetSnapshots();
+  RETURN_IF_ERROR(address_index_.SyncTo(std::get<0>(snapshots)));
+  RETURN_IF_ERROR(slot_index_.SyncTo(std::get<1>(snapshots)));
+  RETURN_IF_ERROR(balances_.SyncTo(std::get<2>(snapshots)));
+  RETURN_IF_ERROR(nonces_.SyncTo(std::get<3>(snapshots)));
+  RETURN_IF_ERROR(reincarnations_.SyncTo(std::get<4>(snapshots)));
+  RETURN_IF_ERROR(value_store_.SyncTo(std::get<5>(snapshots)));
+  RETURN_IF_ERROR(account_states_.SyncTo(std::get<6>(snapshots)));
+  RETURN_IF_ERROR(codes_.SyncTo(std::get<7>(snapshots)));
+  return absl::OkStatus();
 }
 
 template <template <typename K, typename V> class IndexType,
