@@ -216,9 +216,9 @@ func compareHashes(stores map[string]store.Store[uint32, common.Value]) error {
 	return nil
 }
 
-func TestStoresUnalignedPage(t *testing.T) {
+func TestStoresPaddedPages(t *testing.T) {
 	serializer := common.SlotReincValueSerializer{}
-	pageSize := serializer.Size()*2 + 4 // page for two values + 3 bytes of padding
+	pageSize := serializer.Size()*2 + 4 // page for two values + 4 bytes of padding
 	var ref []byte = nil
 	for _, factory := range getStoresFactories[common.SlotReincValue](t, serializer, BranchingFactor, pageSize, PoolSize) {
 		t.Run(factory.label, func(t *testing.T) {
