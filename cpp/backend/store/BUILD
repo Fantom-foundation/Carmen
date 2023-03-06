@@ -14,6 +14,7 @@ cc_library(
 
 cc_library(
     name = "snapshot",
+    srcs = ["snapshot.cc"],
     hdrs = ["snapshot.h"],
     visibility = ["//backend/store:__subpackages__"],
     deps = [

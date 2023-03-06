@@ -30,6 +30,10 @@ struct StoreProof {
 
   bool operator==(const StoreProof&) const = default;
 
+  // Serialization and deserialization.
+  static absl::StatusOr<StoreProof> FromBytes(std::span<const std::byte>);
+  std::vector<std::byte> ToBytes() const;
+
   // The hash of the store at the snapshot time.
   Hash hash;
 };

@@ -76,12 +76,12 @@ struct to_variant_type<First, Rest...> {
 // A type alias combining the given types into a variant by pruning types listed
 // more than once.
 //
-// For instance, the std::variant<..> type would now allow a type like
-// std::vector<int,bool,int>, since int is listed more than once. However, for
-// most use cases, such a type is equivalent to std::variant<int,bool>. This
-// type alias is removing duplicates types and produces a variant listing each
-// type exactly once. In particular, Variant<int,bool,int> is the same as
-// std::variant<int,bool>.
+// For instance, the std::variant<..> type would now allow accessing or
+// assigning an int in std::vector<int,bool,int>, since int is listed more than
+// once. However, for most use cases, such a type is equivalent to
+// std::variant<int,bool>. This type alias is removing duplicates types and
+// produces a variant listing each type exactly once. In particular,
+// Variant<int,bool,int> is the same as std::variant<int,bool>.
 template <typename... Types>
 using Variant =
     typename internal::to_variant_type<Types...>::template to_type<>;

@@ -1,4 +1,4 @@
-#include "backend/snapshot.h"
+#pragma once
 
 #include <algorithm>
 #include <cstddef>
@@ -6,21 +6,48 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "backend/snapshot.h"
 #include "common/hash.h"
-#include "common/status_test_util.h"
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
+#include "common/status_util.h"
 
 namespace carmen::backend {
-namespace {
 
-// TestProof is an example proof implementation for test cases in this file.
-using TestProof = Hash;
+// This test utility file contains a complete example implementation of a
+// snapshot-able type, including a proof, part, snapshot, and test-data type
+// definition. It is intended to serve as a test utility for generic snapshot
+// infrastructure, independent of any concrete snapshot implementation.
+
+// TestProof is an example proof implementation for test cases.
+class TestProof {
+ public:
+  TestProof(const Hash& hash) : hash_(hash) {}
+
+  static absl::StatusOr<TestProof> FromBytes(std::span<const std::byte> data) {
+    if (data.size() != sizeof(Hash)) {
+      return absl::InvalidArgumentError(
+          "Serialized TestProof has invalid length");
+    }
+    Hash hash;
+    hash.SetBytes(data);
+    return TestProof(hash);
+  }
+
+  std::vector<std::byte> ToBytes() const {
+    std::span<const std::byte> data(hash_);
+    return {data.begin(), data.end()};
+  }
+
+  const Hash& GetHash() const { return hash_; }
+
+  bool operator==(const TestProof&) const = default;
+
+ private:
+  Hash hash_;
+};
+
 static_assert(Proof<TestProof>);
 
-// TestPart is an example part implementation for tests cases in this file.
+// TestPart is an example part implementation for tests cases.
 class TestPart {
  public:
   using Proof = TestProof;
@@ -33,14 +60,14 @@ class TestPart {
       return absl::InvalidArgumentError(
           "Invalid encoding of TestPart, too few bytes");
     }
-    Proof proof;
-    proof.SetBytes(data.subspan(0, sizeof(Proof)));
+    ASSIGN_OR_RETURN(auto proof,
+                     Proof::FromBytes(data.subspan(0, sizeof(Proof))));
     return TestPart(proof, data.subspan(sizeof(Proof)));
   }
 
   const Proof& GetProof() const { return proof_; }
 
-  bool Verify() const { return GetSha256Hash(data_) == proof_; }
+  bool Verify() const { return GetSha256Hash(data_) == proof_.GetHash(); }
 
   const std::vector<std::byte>& GetData() const { return data_; }
 
@@ -48,7 +75,7 @@ class TestPart {
     // Serialized as proof, followed by data.
     std::vector<std::byte> res;
     res.reserve(sizeof(Hash) + data_.size());
-    std::span<const std::byte> hash = proof_;
+    auto hash = proof_.ToBytes();
     res.insert(res.end(), hash.begin(), hash.end());
     res.insert(res.end(), data_.begin(), data_.end());
     return res;
@@ -103,13 +130,13 @@ class TestSnapshot {
   Proof GetProof() const { return proof_; }
 
   absl::StatusOr<Proof> GetProof(std::size_t i) const {
-    return i < proofs_.size() ? proofs_[i] : Proof{};
+    return i < proofs_.size() ? proofs_[i] : Proof(Hash{});
   }
 
   absl::Status VerifyProofs() const {
     Sha256Hasher hasher;
     for (const auto& proof : proofs_) {
-      hasher.Ingest(proof);
+      hasher.Ingest(proof.ToBytes());
     }
     Proof should = hasher.GetHash();
     if (should != proof_) {
@@ -186,68 +213,4 @@ class TestData {
 
 static_assert(Snapshotable<TestData>);
 
-TEST(Snapshot, SnapshotCanBeCreated) {
-  TestData data("some test data");
-  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
-  ASSERT_THAT(data.GetData().size(), 14);
-  EXPECT_THAT(snapshot.GetSize(), 14 / 4 + 1);
-}
-
-TEST(Snapshot, ProofOfDataEqualsProofOfSnapshot) {
-  TestData data("some test data");
-  ASSERT_OK_AND_ASSIGN(auto data_proof, data.GetProof());
-
-  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
-  auto shot_proof = snapshot.GetProof();
-
-  EXPECT_EQ(data_proof, shot_proof);
-}
-
-TEST(Snapshot, ChangingTheDataDoesNotChangeTheSnapshotProof) {
-  TestData data("some test data");
-  ASSERT_OK_AND_ASSIGN(auto old_data_proof, data.GetProof());
-
-  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
-  auto old_shot_proof = snapshot.GetProof();
-
-  data = "some other content";
-
-  // The proof of the data has changed.
-  ASSERT_OK_AND_ASSIGN(auto new_data_proof, data.GetProof());
-  EXPECT_NE(old_data_proof, new_data_proof);
-
-  // The proof of the snapshot has not changed.
-  auto new_shot_proof = snapshot.GetProof();
-  EXPECT_EQ(old_shot_proof, new_shot_proof);
-}
-
-TEST(Snapshot, SnapshotCanBeRestored) {
-  TestData data("some test data");
-  ASSERT_OK_AND_ASSIGN(auto data_proof, data.GetProof());
-  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
-  data = "some other content";
-
-  ASSERT_OK_AND_ASSIGN(auto restored, TestData::Restore(snapshot));
-  EXPECT_EQ(restored.GetData(), "some test data");
-  EXPECT_THAT(restored.GetProof(), data_proof);
-}
-
-TEST(Snapshot, PartProofsCanBeVerified) {
-  TestData data("some test data");
-  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
-  ASSERT_LT(1, snapshot.GetSize());
-  for (std::size_t i = 0; i < snapshot.GetSize(); i++) {
-    ASSERT_OK_AND_ASSIGN(auto part, snapshot.GetPart(i));
-    EXPECT_THAT(snapshot.GetProof(i), part.GetProof());
-  }
-}
-
-TEST(Snapshot, SnapshotProofsCanBeVerified) {
-  TestData data("some test data");
-  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
-  ASSERT_LT(1, snapshot.GetSize());
-  EXPECT_OK(snapshot.VerifyProofs());
-}
-
-}  // namespace
 }  // namespace carmen::backend

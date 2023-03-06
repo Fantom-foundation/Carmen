@@ -24,6 +24,7 @@ cc_test(
 
 cc_library(
     name = "snapshot",
+    srcs = ["snapshot.cc"],
     hdrs = ["snapshot.h"],
     visibility = ["//backend/index:__subpackages__"],
     deps = [

@@ -28,6 +28,10 @@ struct DepotProof {
   DepotProof(Hash hash) : hash(hash) {}
   bool operator==(const DepotProof&) const = default;
 
+  // Serialization and deserialization.
+  static absl::StatusOr<DepotProof> FromBytes(std::span<const std::byte>);
+  std::vector<std::byte> ToBytes() const;
+
   // The hash of the depot at the snapshot time.
   Hash hash;
 };

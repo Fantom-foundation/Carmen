@@ -28,31 +28,36 @@ namespace carmen::backend {
 // pointers to facilitate polymorthism in the interfaces let us decide against
 // it.
 
+template <typename S>
+concept Serializable = requires(const S s) {
+  // Types have to be serializable into a sequence of bytes.
+  { s.ToBytes() } -> std::convertible_to<std::vector<std::byte>>;
+
+  // The deserialization should be able to reconstruct a instance that was
+  // previously serialized using ToBytes().
+  {
+    S::FromBytes(std::declval<std::span<const std::byte>>())
+    } -> std::same_as<absl::StatusOr<S>>;
+};
+
 template <typename P>
 concept Proof =
-    // We demand of a proof to be trivial to enable simple serialization.
-    Trivial<P> &&
+    // Proof have to be serializable to be exchangeable between nodes.
+    Serializable<P> &&
     // Proofs also need to be comparable.
     std::equality_comparable<P>;
 
 template <typename P>
 concept Part =
     // Parts have to define a proof type.
-    Proof<typename P::Proof> && requires(const P p) {
+    Proof<typename P::Proof> &&
+    // Parts have to be serializable to be exchangeable between nodes.
+    Serializable<P> && requires(const P p) {
   // Parts have to be able to produce proof of their content.
   { p.GetProof() } -> std::convertible_to<typename P::Proof>;
 
   // Verifies that the contained proof matches the data of this part.
   { p.Verify() } -> std::convertible_to<bool>;
-
-  // Parts have to be serializable into a sequence of bytes.
-  { p.ToBytes() } -> std::convertible_to<std::span<const std::byte>>;
-
-  // The deserialization should be able to reconstruct a part that was
-  // previously serialized using ToBytes().
-  {
-    P::FromBytes(std::declval<std::span<const std::byte>>())
-    } -> std::same_as<absl::StatusOr<P>>;
 };
 
 template <typename S>

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -29,6 +31,10 @@ struct IndexProof {
   IndexProof(Hash begin, Hash end) : begin(begin), end(end) {}
 
   bool operator==(const IndexProof&) const = default;
+
+  // Serialization and deserialization.
+  static absl::StatusOr<IndexProof> FromBytes(std::span<const std::byte>);
+  std::vector<std::byte> ToBytes() const;
 
   // The hash before the first key of the certified range.
   Hash begin;

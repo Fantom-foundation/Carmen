@@ -8,6 +8,25 @@
 
 namespace carmen::backend::depot {
 
+absl::StatusOr<DepotProof> DepotProof::FromBytes(
+    std::span<const std::byte> data) {
+  if (data.size() != sizeof(Hash)) {
+    return absl::InvalidArgumentError(
+        "Serialized DepotProof has invalid length");
+  }
+  Hash hash;
+  hash.SetBytes(data.subspan(0, sizeof(Hash)));
+  return DepotProof(hash);
+}
+
+std::vector<std::byte> DepotProof::ToBytes() const {
+  std::vector<std::byte> res;
+  res.reserve(sizeof(Hash));
+  auto data = std::span<const std::byte>(hash);
+  res.insert(res.end(), data.begin(), data.end());
+  return res;
+}
+
 absl::StatusOr<DepotPart> DepotPart::FromBytes(
     std::span<const std::byte> data) {
   if (data.size() < sizeof(Proof)) {
