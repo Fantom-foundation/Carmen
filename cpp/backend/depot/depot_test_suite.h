@@ -294,6 +294,47 @@ TYPED_TEST_P(DepotTest, LargeSnapshotRecoveryWorks) {
   EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }
 
+TYPED_TEST_P(DepotTest, LargeSnapshotSerializationAndRecoveryWorks) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    if (i % 2) {
+      EXPECT_OK(depot.Set(i, Code{std::uint8_t(i)}));
+    } else {
+      EXPECT_OK(depot.Set(i, Code{std::uint8_t(i >> 8), std::uint8_t(i)}));
+    }
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash, depot.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // Create a second snapshot, based on a raw data source, provided by the first
+  // snapshot.
+  ASSERT_OK_AND_ASSIGN(auto remote,
+                       DepotSnapshot::FromSource(snapshot.GetDataSource()));
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, TypeParam::Create());
+  auto& restored = wrapper2.GetDepot();
+  EXPECT_OK(restored.SyncTo(remote));
+  for (int i = 0; i < kNumElements; i++) {
+    if (i % 2) {
+      EXPECT_THAT(restored.Get(i), IsOkAndHolds(ElementsAre(std::byte(i))));
+    } else {
+      EXPECT_THAT(restored.Get(i),
+                  IsOkAndHolds(ElementsAre(std::byte(i >> 8), std::byte(i))));
+    }
+  }
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
 TYPED_TEST_P(DepotTest, SnycCanShrinkStoreSize) {
   constexpr const int kNumElements = 100000;
 
@@ -359,6 +400,41 @@ TYPED_TEST_P(DepotTest, SnapshotsCanBeVerified) {
   }
 }
 
+TYPED_TEST_P(DepotTest, SnapshotsCanBeSerializedAndVerified) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
+  auto& depot = wrapper.GetDepot();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(depot)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_OK(depot.Set(i, Value{std::uint8_t(i)}));
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, depot.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // Create a second snapshot, based on a raw data source, provided by the first
+  // snapshot.
+  ASSERT_OK_AND_ASSIGN(auto remote,
+                       DepotSnapshot::FromSource(snapshot.GetDataSource()));
+
+  // This step verifies that the proofs are consistent.
+  EXPECT_THAT(depot.GetHash(), IsOkAndHolds(remote.GetProof().hash));
+  EXPECT_OK(remote.VerifyProofs());
+
+  // Verify that the content of parts is consistent with the proofs.
+  for (std::size_t i = 0; i < remote.GetSize(); i++) {
+    ASSERT_OK_AND_ASSIGN(auto proof, remote.GetProof(i));
+    ASSERT_OK_AND_ASSIGN(auto part, remote.GetPart(i));
+    EXPECT_THAT(part.GetProof(), proof);
+    EXPECT_TRUE(part.Verify());
+  }
+}
+
 TYPED_TEST_P(DepotTest, AnEmptySnapshotCanBeVerified) {
   ASSERT_OK_AND_ASSIGN(auto wrapper, TypeParam::Create());
   auto& depot = wrapper.GetDepot();
@@ -380,8 +456,9 @@ REGISTER_TYPED_TEST_SUITE_P(
     NonEmptyDepotHasHash, HashChangesBack, KnownHashesAreReproduced,
     HashesEqualReferenceImplementation, SnapshotHasSameProofAsStore,
     SnapshotShieldsMutations, SnapshotRecoveryHasSameHash,
-    LargeSnapshotRecoveryWorks, SnycCanShrinkStoreSize, SnapshotsCanBeVerified,
-    AnEmptySnapshotCanBeVerified);
+    LargeSnapshotRecoveryWorks, LargeSnapshotSerializationAndRecoveryWorks,
+    SnycCanShrinkStoreSize, SnapshotsCanBeVerified,
+    SnapshotsCanBeSerializedAndVerified, AnEmptySnapshotCanBeVerified);
 
 }  // namespace
 }  // namespace carmen::backend::depot

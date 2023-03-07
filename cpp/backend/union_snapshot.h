@@ -189,15 +189,17 @@ class UnionPart {
 namespace internal {
 
 template <class Tuple, class Op, std::size_t... Is>
-constexpr void for_each_impl(const Tuple& t, Op&& op,
-                             std::index_sequence<Is...>) {
-  (op(std::integral_constant<std::size_t, Is>{}, std::get<Is>(t)), ...);
+constexpr void for_each_impl(Tuple&& t, Op&& op, std::index_sequence<Is...>) {
+  (op.template operator()<std::integral_constant<std::size_t, Is>::value>(
+       std::get<Is>(t)),
+   ...);
 }
 
-template <class... T, class Op>
-constexpr void for_each(const std::tuple<T...>& t, Op&& op) {
-  for_each_impl(t, std::forward<Op>(op),
-                std::make_index_sequence<sizeof...(T)>{});
+template <class Tuple, class Op>
+constexpr void for_each(Tuple&& t, Op&& op) {
+  for_each_impl(std::forward<Tuple>(t), std::forward<Op>(op),
+                std::make_index_sequence<
+                    std::tuple_size_v<std::remove_cvref_t<Tuple>>>{});
 }
 
 }  // namespace internal
@@ -208,7 +210,11 @@ class UnionSnapshot {
   using Proof = UnionProof<typename Snapshots::Proof...>;
   using Part = UnionPart<typename Snapshots::Part...>;
 
+ private:
+  class SubSnapshotDataSource;
+
   static absl::StatusOr<UnionSnapshot> Create(
+      std::unique_ptr<std::vector<SubSnapshotDataSource>> sub_sources,
       absl::StatusOr<Snapshots>... snapshots) {
     // Check provided snapshots for errors ...
     absl::Status err = absl::OkStatus();
@@ -220,13 +226,76 @@ class UnionSnapshot {
     (check(snapshots), ...);
     RETURN_IF_ERROR(err);
     // Combine snapshots into a single snapshot.
-    return UnionSnapshot(*std::move(snapshots)...);
+    return UnionSnapshot(std::move(sub_sources), *std::move(snapshots)...);
   }
+
+ public:
+  static absl::StatusOr<UnionSnapshot> Create(
+      absl::StatusOr<Snapshots>... snapshots) {
+    return Create(nullptr, std::move(snapshots)...);
+  }
+
+  static absl::StatusOr<UnionSnapshot> FromSource(
+      const SnapshotDataSource& source) {
+    ASSIGN_OR_RETURN(auto metadata, source.GetMetaData());
+    std::span<const std::byte> data = metadata;
+
+    // Read length of metadata of sub-snapshots.
+    static constexpr auto kSizeOfLengthPrefix =
+        sizeof(std::size_t) * sizeof...(Snapshots);
+    if (data.size() < kSizeOfLengthPrefix) {
+      return absl::InvalidArgumentError(
+          "Invalid metadata encoding, to few bytes.");
+    }
+
+    // Split combined metadata into meta data of individual sub-snapshots.
+    const std::size_t* meta_data_size =
+        reinterpret_cast<const std::size_t*>(data.data());
+    std::size_t offset = kSizeOfLengthPrefix;
+    std::vector<std::vector<std::byte>> sub_metadata;
+    for (std::size_t i = 0; i < sizeof...(Snapshots); i++) {
+      std::size_t size = meta_data_size[i];
+      if (data.size() < offset + size) {
+        return absl::InvalidArgumentError(
+            "Invalid metadata encoding, insufficient bytes for sub-metadata.");
+      }
+      auto current = std::span(data).subspan(offset, size);
+      sub_metadata.push_back(
+          std::vector<std::byte>(current.begin(), current.end()));
+      offset += size;
+    }
+
+    // Create snapshot data for sub-snapshots.
+    // TODO: keep sub-sources alive.
+    auto sub_sources = std::make_unique<std::vector<SubSnapshotDataSource>>();
+    sub_sources->reserve(sizeof...(Snapshots));
+
+    offset = 0;
+    std::tuple<absl::StatusOr<Snapshots>...> sub_snapshots;
+    internal::for_each(
+        sub_snapshots, [&]<std::size_t i, typename S>(S& snapshot) {
+          sub_sources->push_back(SubSnapshotDataSource(
+              std::move(sub_metadata[i]), offset, source));
+          snapshot = S::value_type::FromSource(sub_sources->back());
+          if (snapshot.ok()) {
+            offset += snapshot->GetSize();
+          }
+        });
+
+    // Create union snapshot from sub-snapshots.
+    return std::apply(
+        [&](auto... snapshots) {
+          return Create(std::move(sub_sources), std::move(snapshots)...);
+        },
+        std::move(sub_snapshots));
+  }
+
+  const SnapshotDataSource& GetDataSource() const { return *raw_source_; }
 
   std::size_t GetSize() const {
     return std::apply(
         [](const auto&... snapshot) { return (0 + ... + snapshot.GetSize()); },
-        snapshots_);
+        *snapshots_);
   }
 
   absl::StatusOr<Part> GetPart(std::size_t part_number) const {
@@ -251,14 +320,14 @@ class UnionSnapshot {
         [](const auto&... snapshot) {
           return Proof::Create(snapshot.GetProof()...);
         },
-        snapshots_);
+        *snapshots_);
     if (want != proof_) {
       return absl::InternalError("Invalid proof for root of union snapshot.");
     }
 
     // Check the individual proof trees of the sub-snapshots.
     absl::Status result = absl::OkStatus();
-    internal::for_each(snapshots_, [&](std::size_t, auto& cur) {
+    internal::for_each(*snapshots_, [&]<std::size_t>(auto& cur) {
       if (result.ok()) {
         result = cur.VerifyProofs();
       }
@@ -266,15 +335,113 @@ class UnionSnapshot {
     return result;
   }
 
-  const std::tuple<Snapshots...>& GetSnapshots() const { return snapshots_; }
+  const std::tuple<Snapshots...>& GetSnapshots() const { return *snapshots_; }
 
  private:
-  UnionSnapshot(Snapshots... snapshots)
+  class RawSource : public SnapshotDataSource {
+   public:
+    RawSource(Proof proof, const std::tuple<Snapshots...>& snapshots)
+        : proof_(proof), snapshots_(snapshots) {}
+
+    absl::StatusOr<std::vector<std::byte>> GetMetaData() const override {
+      // Collect the meta-data of the sub-snapshots.
+      std::vector<std::vector<std::byte>> metadata;
+      std::optional<absl::Status> error;
+      internal::for_each(snapshots_, [&]<std::size_t>(const auto& snapshot) {
+        if (error.has_value()) return;
+        auto data = snapshot.GetDataSource().GetMetaData();
+        if (!data.ok()) {
+          error = data.status();
+        } else {
+          metadata.push_back(*data);
+        }
+      });
+      if (error.has_value()) {
+        return *error;
+      }
+
+      std::vector<std::byte> res;
+
+      // Write the length of each meta data entry.
+      auto offset = res.size();
+      res.resize(res.size() + sizeof...(Snapshots) * sizeof(std::size_t));
+      std::size_t* sizes = reinterpret_cast<std::size_t*>(res.data() + offset);
+      for (std::size_t i = 0; i < metadata.size(); i++) {
+        sizes[i] = metadata[i].size();
+      }
+
+      // Append the meta data.
+      for (const auto& cur : metadata) {
+        res.insert(res.end(), cur.begin(), cur.end());
+      }
+
+      return res;
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetProofData(
+        std::size_t part_number) const override {
+      return Extract<std::vector<std::byte>>(
+          snapshots_, part_number,
+          [&](const auto& snapshot,
+              std::size_t offset) -> absl::StatusOr<std::vector<std::byte>> {
+            ASSIGN_OR_RETURN(auto proof, snapshot.GetProof(offset));
+            return proof.ToBytes();
+          });
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetPartData(
+        std::size_t part_number) const override {
+      return Extract<std::vector<std::byte>>(
+          snapshots_, part_number,
+          [&](const auto& snapshot,
+              std::size_t offset) -> absl::StatusOr<std::vector<std::byte>> {
+            ASSIGN_OR_RETURN(auto part, snapshot.GetPart(offset));
+            return part.ToBytes();
+          });
+    }
+
+   private:
+    const Proof proof_;
+    const std::tuple<Snapshots...>& snapshots_;
+  };
+
+  class SubSnapshotDataSource : public SnapshotDataSource {
+   public:
+    SubSnapshotDataSource(std::vector<std::byte> metadata, std::size_t offset,
+                          const SnapshotDataSource& original)
+        : metadata_(std::move(metadata)), offset_(offset), source_(original) {}
+
+    absl::StatusOr<std::vector<std::byte>> GetMetaData() const override {
+      return metadata_;
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetProofData(
+        std::size_t part_number) const override {
+      return source_.GetProofData(offset_ + part_number);
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetPartData(
+        std::size_t part_number) const override {
+      return source_.GetPartData(offset_ + part_number);
+    }
+
+   private:
+    std::vector<std::byte> metadata_;
+    const std::size_t offset_;
+    const SnapshotDataSource& source_;
+  };
+
+  UnionSnapshot(std::unique_ptr<std::vector<SubSnapshotDataSource>> sub_sources,
+                Snapshots... snapshots)
       : proof_(Proof::Create(snapshots.GetProof()...)),
-        snapshots_(std::move(snapshots)...) {}
+        snapshots_(std::make_unique<std::tuple<Snapshots...>>(
+            std::move(snapshots)...)),
+        raw_source_(std::make_unique<RawSource>(proof_, *snapshots_)),
+        sub_sources_(std::move(sub_sources)) {}
 
   template <typename T, typename Op>
-  absl::StatusOr<T> Extract(std::size_t part_number, const Op& op) const {
+  static absl::StatusOr<T> Extract(const std::tuple<Snapshots...>& snapshots,
+                                   std::size_t part_number, const Op& op) {
     return std::apply(
         [&](const auto&... snapshot) {
           absl::StatusOr<T> res = absl::InvalidArgumentError("no such part");
@@ -292,11 +459,21 @@ class UnionSnapshot {
           (get(snapshot), ...);
           return res;
         },
-        snapshots_);
+        snapshots);
+  }
+
+  template <typename T, typename Op>
+  absl::StatusOr<T> Extract(std::size_t part_number, const Op& op) const {
+    return Extract<T>(*snapshots_, part_number, op);
   }
 
   Proof proof_;
-  std::tuple<Snapshots...> snapshots_;
+
+  std::unique_ptr<std::tuple<Snapshots...>> snapshots_;
+
+  std::unique_ptr<RawSource> raw_source_;
+
+  std::unique_ptr<std::vector<SubSnapshotDataSource>> sub_sources_;
 };
 
 }  // namespace carmen::backend

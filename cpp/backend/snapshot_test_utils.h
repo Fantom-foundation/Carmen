@@ -97,45 +97,67 @@ class TestSnapshot {
   using Part = TestPart;
 
   TestSnapshot(Proof proof, std::span<const std::byte> data)
-      : proof_(proof), data_(data.begin(), data.end()) {
+      : proof_(proof),
+        proofs_(std::make_unique<std::vector<Proof>>()),
+        data_(
+            std::make_unique<std::vector<std::byte>>(data.begin(), data.end())),
+        raw_source_(
+            std::make_unique<ToRawDataSource>(proof, *proofs_, *data_)) {
     // Some extra padding to make the internal snapshot data size a multiple of
     // the data size.
-    auto extra = data_.size() % part_size;
+    auto extra = data_->size() % part_size;
     if (extra > 0) {
-      data_.resize(data_.size() + (part_size - extra));
+      data_->resize(data_->size() + (part_size - extra));
     }
-    assert(data_.size() >= data.size());
-    assert(data_.size() < data.size() + part_size);
-    assert(data_.size() % part_size == 0);
+    assert(data_->size() >= data.size());
+    assert(data_->size() < data.size() + part_size);
+    assert(data_->size() % part_size == 0);
 
     // In a real setup, those part hashes would come from another source.
     for (std::size_t i = 0; i < GetSize(); i++) {
-      proofs_.push_back(
-          GetSha256Hash(std::span(data_).subspan(i * part_size, part_size)));
+      proofs_->push_back(
+          GetSha256Hash(std::span(*data_).subspan(i * part_size, part_size)));
     }
   }
 
+  static absl::StatusOr<TestSnapshot> FromSource(
+      const SnapshotDataSource& source) {
+    // For the test snapshot, everything is stored in the metadata.
+    ASSIGN_OR_RETURN(auto metadata, source.GetMetaData());
+    if (metadata.size() < sizeof(Proof)) {
+      return absl::InvalidArgumentError(
+          "Invalid length of index snapshot metadata");
+    }
+    // TODO: build parsing and encoding utilities.
+    Hash hash;
+    hash.SetBytes(std::span(metadata).subspan(0, sizeof(Proof)));
+    return TestSnapshot(hash, std::span(metadata).subspan(sizeof(Proof)));
+  }
+
+  const SnapshotDataSource& GetDataSource() const { return *raw_source_; }
+
   std::size_t GetSize() const {
-    return data_.size() / part_size + (data_.size() % part_size > 0);
+    return data_->size() / part_size + (data_->size() % part_size > 0);
   }
 
   absl::StatusOr<Part> GetPart(std::size_t i) const {
     if (i >= GetSize()) {
       return absl::NotFoundError("no such part");
     }
-    auto data = std::span(data_).subspan(i * part_size, part_size);
-    return Part(GetSha256Hash(data), data);
+    ASSIGN_OR_RETURN(auto proof, GetProof(i));
+    auto data = std::span(*data_).subspan(i * part_size, part_size);
+    return Part(proof, data);
   }
 
   Proof GetProof() const { return proof_; }
 
   absl::StatusOr<Proof> GetProof(std::size_t i) const {
-    return i < proofs_.size() ? proofs_[i] : Proof(Hash{});
+    return i < proofs_->size() ? (*proofs_)[i] : Proof(Hash{});
   }
 
   absl::Status VerifyProofs() const {
     Sha256Hasher hasher;
-    for (const auto& proof : proofs_) {
+    for (const auto& proof : *proofs_) {
       hasher.Ingest(proof.ToBytes());
     }
     Proof should = hasher.GetHash();
@@ -146,15 +168,51 @@ class TestSnapshot {
   }
 
  private:
+  class ToRawDataSource : public SnapshotDataSource {
+   public:
+    ToRawDataSource(const Proof& proof, const std::vector<Proof>& proofs,
+                    const std::vector<std::byte>& data)
+        : proofs_(proofs), data_(data) {
+      // For the TestSnapshot, everything is encoded in the meta data for
+      // simplicity.
+      std::span<const std::byte> proof_span = proof.GetHash();
+      metadata_.insert(metadata_.end(), proof_span.begin(), proof_span.end());
+      metadata_.insert(metadata_.end(), data.begin(), data.end());
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetMetaData() const override {
+      return metadata_;
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetProofData(
+        std::size_t part_number) const override {
+      return proofs_[part_number].ToBytes();
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetPartData(
+        std::size_t part_number) const override {
+      auto data = std::span(data_).subspan(part_number * part_size, part_size);
+      return Part(proofs_[part_number], data).ToBytes();
+    }
+
+   private:
+    std::vector<std::byte> metadata_;
+    // Owned by the snapshot.
+    const std::vector<Proof>& proofs_;
+    const std::vector<std::byte>& data_;
+  };
+
   // The full proof of the snapshot.
   Proof proof_;
 
   // The proofs of the individual parts.
-  std::vector<Proof> proofs_;
+  std::unique_ptr<std::vector<Proof>> proofs_;
 
   // The raw data of the snapshot, padded with 0s have a size that is a multiple
   // of the part_size.
-  std::vector<std::byte> data_;
+  std::unique_ptr<std::vector<std::byte>> data_;
+
+  std::unique_ptr<ToRawDataSource> raw_source_;
 };
 
 static_assert(Snapshot<TestSnapshot>);

@@ -128,5 +128,19 @@ TEST(TestComposedData, CanRestoreData) {
   EXPECT_EQ(restored.second.GetData(), "text");
 }
 
+TEST(TestComposedData, CanSerializeAndRestoreData) {
+  using Snapshot = typename TestComposedData::Snapshot;
+  TestComposedData data("original", "text");
+  ASSERT_OK_AND_ASSIGN(auto snapshot, data.CreateSnapshot());
+  EXPECT_OK(snapshot.VerifyProofs());
+
+  ASSERT_OK_AND_ASSIGN(auto remote,
+                       Snapshot::FromSource(snapshot.GetDataSource()));
+
+  ASSERT_OK_AND_ASSIGN(auto restored, TestComposedData::Restore(remote));
+  EXPECT_EQ(restored.first.GetData(), "original");
+  EXPECT_EQ(restored.second.GetData(), "text");
+}
+
 }  // namespace
 }  // namespace carmen::backend

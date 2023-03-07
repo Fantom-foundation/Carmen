@@ -42,15 +42,8 @@ INSTANTIATE_TYPED_TEST_SUITE_P(Schema_3, StateTest, StateConfigurations);
 
 // -------------------------- Snapshot Tests ----------------------------------
 
-TEST(StateTest, CanCreateEmptySnapshot) {
-  InMemoryState<State, TestArchive> state;
-  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
-  EXPECT_EQ(snapshot.GetSize(), 0);
-  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
-}
-
-TEST(StateTest, CanCreateAndRestoreNonEmptySnapshot) {
-  InMemoryState<State, TestArchive> state;
+template <typename State>
+void FillWithTestData(State& state) {
   for (std::uint8_t i = 0; i < 100; i++) {
     Address addr{i};
     EXPECT_OK(state.CreateAccount(addr));
@@ -61,43 +54,26 @@ TEST(StateTest, CanCreateAndRestoreNonEmptySnapshot) {
       EXPECT_OK(state.SetStorageValue(addr, Key{j}, Value{j, 0x90}));
     }
   }
-  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
-  EXPECT_GT(snapshot.GetSize(), 0);
-  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
-
-  InMemoryState<State, TestArchive> restored;
-  EXPECT_OK(restored.SyncTo(snapshot));
-
-  for (std::uint8_t i = 0; i < 100; i++) {
-    Address addr{i};
-    EXPECT_THAT(restored.GetAccountState(addr), AccountState::kExists);
-    EXPECT_THAT(restored.GetBalance(addr), (Balance{i, 0xAB}));
-    EXPECT_THAT(restored.GetNonce(addr), (Nonce{i, 0xCD}));
-    EXPECT_THAT(restored.GetCode(addr), (Code{i, 0xEF}));
-    for (std::uint8_t j = 0; j < 50; j++) {
-      EXPECT_THAT(restored.GetStorageValue(addr, Key{j}), (Value{j, 0x90}));
-    }
-  }
-  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
 }
 
-TEST(StateTest, SnaphshotCanBeVerified) {
-  InMemoryState<State, TestArchive> state;
+template <typename State>
+void VerifyTestData(const State& state) {
   for (std::uint8_t i = 0; i < 100; i++) {
     Address addr{i};
-    EXPECT_OK(state.CreateAccount(addr));
-    EXPECT_OK(state.SetBalance(addr, Balance{i, 0xAB}));
-    EXPECT_OK(state.SetNonce(addr, Nonce{i, 0xCD}));
-    EXPECT_OK(state.SetCode(addr, Code{i, 0xEF}));
+    EXPECT_THAT(state.GetAccountState(addr), AccountState::kExists);
+    EXPECT_THAT(state.GetBalance(addr), (Balance{i, 0xAB}));
+    EXPECT_THAT(state.GetNonce(addr), (Nonce{i, 0xCD}));
+    EXPECT_THAT(state.GetCode(addr), (Code{i, 0xEF}));
     for (std::uint8_t j = 0; j < 50; j++) {
-      EXPECT_OK(state.SetStorageValue(addr, Key{j}, Value{j, 0x90}));
+      EXPECT_THAT(state.GetStorageValue(addr, Key{j}), (Value{j, 0x90}));
     }
   }
-  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
-  EXPECT_GT(snapshot.GetSize(), 0);
+}
 
+template <typename Proof, typename Snapshot>
+void VerifySnapshot(Proof expected, const Snapshot& snapshot) {
   // Verify the proof tree.
-  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+  EXPECT_THAT(snapshot.GetProof(), expected);
   EXPECT_OK(snapshot.VerifyProofs());
 
   // Verify each individual part.
@@ -108,6 +84,70 @@ TEST(StateTest, SnaphshotCanBeVerified) {
     EXPECT_EQ(part.GetProof(), proof);
     EXPECT_TRUE(part.Verify());
   }
+}
+
+TEST(StateTest, CanCreateEmptySnapshot) {
+  InMemoryState<State, TestArchive> state;
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_EQ(snapshot.GetSize(), 0);
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+}
+
+TEST(StateTest, CanCreateAndRestoreNonEmptySnapshot) {
+  InMemoryState<State, TestArchive> state;
+  FillWithTestData(state);
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_GT(snapshot.GetSize(), 0);
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+
+  InMemoryState<State, TestArchive> restored;
+  EXPECT_OK(restored.SyncTo(snapshot));
+  VerifyTestData(restored);
+
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+}
+
+TEST(StateTest, SnaphshotCanBeSerializedAndRestored) {
+  using Snapshot = typename InMemoryState<State, TestArchive>::Snapshot;
+  InMemoryState<State, TestArchive> state;
+  FillWithTestData(state);
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_GT(snapshot.GetSize(), 0);
+
+  // Pass snapshot data through serialization process.
+  ASSERT_OK_AND_ASSIGN(auto remote,
+                       Snapshot::FromSource(snapshot.GetDataSource()));
+
+  InMemoryState<State, TestArchive> restored;
+  EXPECT_OK(restored.SyncTo(remote));
+  VerifyTestData(restored);
+
+  EXPECT_THAT(state.GetProof(), snapshot.GetProof());
+}
+
+TEST(StateTest, SnaphshotCanBeVerified) {
+  InMemoryState<State, TestArchive> state;
+  FillWithTestData(state);
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_GT(snapshot.GetSize(), 0);
+
+  ASSERT_OK_AND_ASSIGN(auto proof, state.GetProof());
+  VerifySnapshot(proof, snapshot);
+}
+
+TEST(StateTest, SnaphshotCanBeSerializedAndVerified) {
+  using Snapshot = typename InMemoryState<State, TestArchive>::Snapshot;
+  InMemoryState<State, TestArchive> state;
+  FillWithTestData(state);
+  ASSERT_OK_AND_ASSIGN(auto snapshot, state.CreateSnapshot());
+  EXPECT_GT(snapshot.GetSize(), 0);
+
+  // Pass snapshot data through serialization process.
+  ASSERT_OK_AND_ASSIGN(auto remote,
+                       Snapshot::FromSource(snapshot.GetDataSource()));
+
+  ASSERT_OK_AND_ASSIGN(auto proof, state.GetProof());
+  VerifySnapshot(proof, remote);
 }
 
 // ------------------------ Error Handling Tests ------------------------------

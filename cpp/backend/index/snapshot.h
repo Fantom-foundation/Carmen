@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "backend/snapshot.h"
 #include "common/status_util.h"
 #include "common/type.h"
 
@@ -73,8 +74,38 @@ class IndexPart {
   std::vector<K> keys_;
 };
 
+// An interface to be implemented by concrete Index implementations.
 template <Trivial K>
-class IndexSnapshotDataSource;
+class IndexSnapshotDataSource {
+ public:
+  // The targeted size of a part in bytes.
+  static constexpr std::size_t kPartSizeInBytes = 4096;  // = 4 KB
+  static constexpr std::size_t kKeysPerPart = kPartSizeInBytes / sizeof(K);
+
+  IndexSnapshotDataSource(std::size_t num_keys) : num_keys_(num_keys) {}
+
+  virtual ~IndexSnapshotDataSource(){};
+
+  // Retrieves the total number of parts in the covered snapshot.
+  std::size_t GetSize() const {
+    return num_keys_ / kKeysPerPart + (num_keys_ % kKeysPerPart > 0);
+  }
+
+  // Retrieves the total number of keys in this snapshot.
+  std::size_t GetNumKeys() const { return num_keys_; }
+
+  // Retrieves the proof expected for a given part.
+  virtual absl::StatusOr<IndexProof> GetProof(
+      std::size_t part_number) const = 0;
+
+  // Retrieves the data of an individual part of this snapshot.
+  virtual absl::StatusOr<IndexPart<K>> GetPart(
+      std::size_t part_number) const = 0;
+
+ private:
+  // The number of keys the index snapshot comprises.
+  const std::size_t num_keys_;
+};
 
 // A snapshot of the state of an index providing access to the contained data
 // frozen at it creation time.
@@ -99,7 +130,26 @@ class IndexSnapshot {
 
   IndexSnapshot(const Hash& hash,
                 std::unique_ptr<IndexSnapshotDataSource<K>> source)
-      : proof_(hash), source_(std::move(source)) {}
+      : proof_(hash),
+        source_(std::move(source)),
+        raw_source_(std::make_unique<ToRawDataSource>(hash, source_.get())) {}
+
+  static absl::StatusOr<IndexSnapshot> FromSource(
+      const SnapshotDataSource& source) {
+    ASSIGN_OR_RETURN(auto metadata, source.GetMetaData());
+    if (metadata.size() != 8 + sizeof(Hash)) {
+      return absl::InvalidArgumentError(
+          "Invalid length of index snapshot metadata");
+    }
+    // TODO: build parsing and encoding utilities.
+    std::size_t num_keys = *reinterpret_cast<std::size_t*>(metadata.data());
+    Hash hash;
+    hash.SetBytes(std::span(metadata).subspan(8));
+    return IndexSnapshot(hash,
+                         std::make_unique<FromRawDataSource>(num_keys, source));
+  }
+
+  const SnapshotDataSource& GetDataSource() const { return *raw_source_; }
 
   // Obtains the number of parts stored in the snapshot.
   std::size_t GetSize() const { return source_->GetSize(); }
@@ -123,41 +173,69 @@ class IndexSnapshot {
   absl::Status VerifyProofs() const;
 
  private:
+  class FromRawDataSource : public IndexSnapshotDataSource<K> {
+   public:
+    FromRawDataSource(std::size_t num_keys, const SnapshotDataSource& source)
+        : IndexSnapshotDataSource<K>(num_keys), source_(source) {}
+
+    absl::StatusOr<IndexProof> GetProof(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto data, source_.GetProofData(part_number));
+      return IndexProof::FromBytes(data);
+    }
+
+    absl::StatusOr<IndexPart<K>> GetPart(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto data, source_.GetPartData(part_number));
+      return IndexPart<K>::FromBytes(data);
+    }
+
+   private:
+    const SnapshotDataSource& source_;
+  };
+
+  class ToRawDataSource : public SnapshotDataSource {
+   public:
+    ToRawDataSource(const Hash& hash, IndexSnapshotDataSource<K>* source)
+        : source_(source) {
+      static_assert(sizeof(std::size_t) == 8);
+      metadata_.reserve(8 + sizeof(hash));
+      metadata_.resize(8);
+      *reinterpret_cast<std::size_t*>(metadata_.data()) = source->GetNumKeys();
+      std::span<const std::byte> hash_span = hash;
+      metadata_.insert(metadata_.end(), hash_span.begin(), hash_span.end());
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetMetaData() const override {
+      return metadata_;
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetProofData(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto proof, source_->GetProof(part_number));
+      return proof.ToBytes();
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetPartData(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto part, source_->GetPart(part_number));
+      return part.ToBytes();
+    }
+
+   private:
+    std::vector<std::byte> metadata_;
+    // Owned by the snapshot.
+    IndexSnapshotDataSource<K>* source_;
+  };
+
   // The full-index proof of this snapshot.
-  const Proof proof_;
+  Proof proof_;
 
   // The data source for index data.
   std::unique_ptr<IndexSnapshotDataSource<K>> source_;
-};
 
-// An interface to be implemented by concrete Index implementations or index
-// synchronization sources to provide index synchronization data.
-template <Trivial K>
-class IndexSnapshotDataSource {
- public:
-  // The targeted size of a part in bytes.
-  static constexpr std::size_t kPartSizeInBytes = 4096;  // = 4 KB
-  static constexpr std::size_t kKeysPerPart = kPartSizeInBytes / sizeof(K);
-
-  IndexSnapshotDataSource(std::size_t num_keys)
-      : num_parts_(num_keys / kKeysPerPart + (num_keys % kKeysPerPart > 0)) {}
-
-  virtual ~IndexSnapshotDataSource(){};
-
-  // Retrieves the total number of parts in a snapshot.
-  std::size_t GetSize() const { return num_parts_; }
-
-  // Retrieves the proof expected for a given part.
-  virtual absl::StatusOr<IndexProof> GetProof(
-      std::size_t part_number) const = 0;
-
-  // Retrieves the data of an individual part of this snapshot.
-  virtual absl::StatusOr<IndexPart<K>> GetPart(
-      std::size_t part_number) const = 0;
-
- private:
-  // The number of parts the index snapshot comprises.
-  const std::size_t num_parts_;
+  // The raw data source this snapshot provides to external consumers.
+  std::unique_ptr<ToRawDataSource> raw_source_;
 };
 
 // ----------------------------- Definitions ----------------------------------

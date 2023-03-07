@@ -60,6 +60,20 @@ concept Part =
   { p.Verify() } -> std::convertible_to<bool>;
 };
 
+// A base interface for accessing the raw data in a snapshot.
+class SnapshotDataSource {
+ public:
+  virtual ~SnapshotDataSource() = default;
+
+  virtual absl::StatusOr<std::vector<std::byte>> GetMetaData() const = 0;
+
+  virtual absl::StatusOr<std::vector<std::byte>> GetProofData(
+      std::size_t part_number) const = 0;
+
+  virtual absl::StatusOr<std::vector<std::byte>> GetPartData(
+      std::size_t part_number) const = 0;
+};
+
 template <typename S>
 concept Snapshot =
     // A snapshot must define a proof type.
@@ -68,11 +82,19 @@ concept Snapshot =
     // A snapshot must define a part type.
     Part<typename S::Part> &&
 
-    // A snapshost can be move-constructed, to support moving it in and out of a
-    // absl::StatusOr instance.
-    std::is_move_constructible_v<S> &&
+    // A snapshost has to be move-constructible and assignable, to support
+    // moving it in and out of a absl::StatusOr instance.
+    std::is_move_constructible_v<S> && std::is_move_assignable_v<S> &&
 
     requires(const S s) {
+  // A snapshot can be created from a data source.
+  {
+    S::FromSource(std::declval<const SnapshotDataSource&>())
+    } -> std::same_as<absl::StatusOr<S>>;
+
+  // A snapshot can provide a data source.
+  { s.GetDataSource() } -> std::convertible_to<const SnapshotDataSource&>;
+
   // --- Part Inspection ---
 
   // A snapshot must provide the total number of parts.

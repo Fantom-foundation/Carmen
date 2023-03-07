@@ -228,6 +228,38 @@ TYPED_TEST_P(IndexTest, LargeSnapshotRecoveryWorks) {
   EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
 }
 
+TYPED_TEST_P(IndexTest, LargeSnapshotSerializationAndRecoveryWorks) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(index.GetOrAdd(i + 10), IsOkAndHolds(Pair(i, true)));
+  }
+  ASSERT_OK_AND_ASSIGN(auto hash, index.GetHash());
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // Create a second snapshot, based on a raw data source, provided by the first
+  // snapshot.
+  ASSERT_OK_AND_ASSIGN(
+      auto remote, IndexSnapshot<int>::FromSource(snapshot.GetDataSource()));
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper2, IndexHandler<TypeParam>::Create());
+  auto& restored = wrapper2.GetIndex();
+  EXPECT_OK(restored.SyncTo(remote));
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(restored.Get(i + 10), IsOkAndHolds(i));
+  }
+  EXPECT_THAT(restored.GetHash(), IsOkAndHolds(hash));
+}
+
 TYPED_TEST_P(IndexTest, SnapshotsCanBeVerified) {
   constexpr const int kNumElements = 100000;
 
@@ -257,6 +289,40 @@ TYPED_TEST_P(IndexTest, SnapshotsCanBeVerified) {
   }
 }
 
+TYPED_TEST_P(IndexTest, SnapshotsCanBeSerializedAndVerified) {
+  constexpr const int kNumElements = 100000;
+
+  ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
+  auto& index = wrapper.GetIndex();
+
+  // Skip if snapshots are not implemented.
+  if (!SupportsSnapshots(index)) {
+    GTEST_SKIP();
+  }
+
+  for (int i = 0; i < kNumElements; i++) {
+    EXPECT_THAT(index.GetOrAdd(i + 10), IsOkAndHolds(Pair(i, true)));
+  }
+  ASSERT_OK_AND_ASSIGN(auto snapshot, index.CreateSnapshot());
+  EXPECT_LT(50, snapshot.GetSize());
+
+  // Create a second snapshot, based on a raw data source, provided by the first
+  // snapshot.
+  ASSERT_OK_AND_ASSIGN(
+      auto remote, IndexSnapshot<int>::FromSource(snapshot.GetDataSource()));
+
+  // This step verifies that the proofs are consistent.
+  EXPECT_OK(remote.VerifyProofs());
+
+  // Verify that the content of parts is consistent with the proofs.
+  for (std::size_t i = 0; i < remote.GetSize(); i++) {
+    ASSERT_OK_AND_ASSIGN(auto proof, remote.GetProof(i));
+    ASSERT_OK_AND_ASSIGN(auto part, remote.GetPart(i));
+    EXPECT_THAT(part.GetProof(), proof);
+    EXPECT_TRUE(part.Verify());
+  }
+}
+
 TYPED_TEST_P(IndexTest, AnEmptySnapshotCanBeVerified) {
   ASSERT_OK_AND_ASSIGN(auto wrapper, IndexHandler<TypeParam>::Create());
   auto& index = wrapper.GetIndex();
@@ -277,8 +343,9 @@ REGISTER_TYPED_TEST_SUITE_P(
     GetRetrievesPresentKeys, EmptyIndexHasHashEqualsZero,
     IndexHashIsEqualToInsertionOrder, CanProduceMemoryFootprint,
     HashesMatchReferenceImplementation, SnapshotHasSameProofAsIndex,
-    LargeSnapshotRecoveryWorks, SnapshotRecoveryHasSameHash,
-    SnapshotShieldsMutations, SnapshotsCanBeVerified,
+    LargeSnapshotRecoveryWorks, LargeSnapshotSerializationAndRecoveryWorks,
+    SnapshotRecoveryHasSameHash, SnapshotShieldsMutations,
+    SnapshotsCanBeVerified, SnapshotsCanBeSerializedAndVerified,
     AnEmptySnapshotCanBeVerified);
 
 }  // namespace carmen::backend::index

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "absl/status/statusor.h"
+#include "backend/snapshot.h"
 #include "common/hash.h"
 #include "common/status_util.h"
 #include "common/type.h"
@@ -67,8 +68,30 @@ class StorePart {
   std::vector<V> values_;
 };
 
-template <Trivial K>
-class StoreSnapshotDataSource;
+// An interface to be implemented by concrete Store implementations or store
+// synchronization sources to provide store synchronization data.
+template <Trivial V>
+class StoreSnapshotDataSource {
+ public:
+  StoreSnapshotDataSource(std::size_t num_pages) : num_parts_(num_pages) {}
+
+  virtual ~StoreSnapshotDataSource(){};
+
+  // Retrieves the total number of parts in a snapshot.
+  std::size_t GetSize() const { return num_parts_; }
+
+  // Retrieves the proof expected for a given part.
+  virtual absl::StatusOr<StoreProof> GetProof(
+      std::size_t part_number) const = 0;
+
+  // Retrieves the data of an individual part of this snapshot.
+  virtual absl::StatusOr<StorePart<V>> GetPart(
+      std::size_t part_number) const = 0;
+
+ private:
+  // The number of parts the store snapshot comprises.
+  const std::size_t num_parts_;
+};
 
 // A snapshot of the state of a store providing access to the contained data
 // frozen at it creation time.
@@ -95,7 +118,30 @@ class StoreSnapshot {
                 std::unique_ptr<StoreSnapshotDataSource<V>> source)
       : branching_factor_(branching_factor),
         proof_(hash),
-        source_(std::move(source)) {}
+        source_(std::move(source)),
+        raw_source_(std::make_unique<ToRawDataSource>(branching_factor, hash,
+                                                      source_.get())) {}
+
+  static absl::StatusOr<StoreSnapshot> FromSource(
+      const SnapshotDataSource& source) {
+    ASSIGN_OR_RETURN(auto metadata, source.GetMetaData());
+    // TODO: build parsing and encoding utilities.
+    static_assert(sizeof(std::size_t) == 8);
+    if (metadata.size() != 8 + 8 + sizeof(Hash)) {
+      return absl::InvalidArgumentError(
+          "Invalid length of store snapshot metadata");
+    }
+    auto size_ptr = reinterpret_cast<std::size_t*>(metadata.data());
+    std::size_t branching_factor = size_ptr[0];
+    std::size_t num_pages = size_ptr[1];
+    Hash hash;
+    hash.SetBytes(std::span(metadata).subspan(16));
+    return StoreSnapshot(
+        branching_factor, hash,
+        std::make_unique<FromRawDataSource>(num_pages, source));
+  }
+
+  const SnapshotDataSource& GetDataSource() const { return *raw_source_; }
 
   // Obtains the number of parts stored in the snapshot.
   std::size_t GetSize() const { return source_->GetSize(); }
@@ -119,39 +165,75 @@ class StoreSnapshot {
   absl::Status VerifyProofs() const;
 
  private:
+  class FromRawDataSource : public StoreSnapshotDataSource<V> {
+   public:
+    FromRawDataSource(std::size_t num_pages, const SnapshotDataSource& source)
+        : StoreSnapshotDataSource<V>(num_pages), source_(source) {}
+
+    absl::StatusOr<StoreProof> GetProof(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto data, source_.GetProofData(part_number));
+      return StoreProof::FromBytes(data);
+    }
+
+    absl::StatusOr<StorePart<V>> GetPart(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto data, source_.GetPartData(part_number));
+      return StorePart<V>::FromBytes(data);
+    }
+
+   private:
+    const SnapshotDataSource& source_;
+  };
+
+  class ToRawDataSource : public SnapshotDataSource {
+   public:
+    ToRawDataSource(std::size_t branching_factor, const Hash& hash,
+                    StoreSnapshotDataSource<V>* source)
+        : source_(source) {
+      static_assert(sizeof(std::size_t) == 8);
+      metadata_.reserve(8 + 8 + sizeof(hash));
+      metadata_.resize(16);
+      auto size_ptr = reinterpret_cast<std::size_t*>(metadata_.data());
+      size_ptr[0] = branching_factor;
+      size_ptr[1] = source->GetSize();
+      std::span<const std::byte> hash_span = hash;
+      metadata_.insert(metadata_.end(), hash_span.begin(), hash_span.end());
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetMetaData() const override {
+      return metadata_;
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetProofData(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto proof, source_->GetProof(part_number));
+      return proof.ToBytes();
+    }
+
+    absl::StatusOr<std::vector<std::byte>> GetPartData(
+        std::size_t part_number) const override {
+      ASSIGN_OR_RETURN(auto part, source_->GetPart(part_number));
+      return part.ToBytes();
+    }
+
+   private:
+    std::vector<std::byte> metadata_;
+    // Owned by the snapshot.
+    StoreSnapshotDataSource<V>* source_;
+  };
+
   // The branching factor used in the reduction tree for computing hashes.
-  const std::size_t branching_factor_;
+  std::size_t branching_factor_;
 
   // The full-store proof of this snapshot.
-  const Proof proof_;
+  Proof proof_;
 
   // The data source for store data.
   std::unique_ptr<StoreSnapshotDataSource<V>> source_;
-};
 
-// An interface to be implemented by concrete Store implementations or store
-// synchronization sources to provide store synchronization data.
-template <Trivial V>
-class StoreSnapshotDataSource {
- public:
-  StoreSnapshotDataSource(std::size_t num_pages) : num_parts_(num_pages) {}
-
-  virtual ~StoreSnapshotDataSource(){};
-
-  // Retrieves the total number of parts in a snapshot.
-  std::size_t GetSize() const { return num_parts_; }
-
-  // Retrieves the proof expected for a given part.
-  virtual absl::StatusOr<StoreProof> GetProof(
-      std::size_t part_number) const = 0;
-
-  // Retrieves the data of an individual part of this snapshot.
-  virtual absl::StatusOr<StorePart<V>> GetPart(
-      std::size_t part_number) const = 0;
-
- private:
-  // The number of parts the store snapshot comprises.
-  const std::size_t num_parts_;
+  // The raw data source this snapshot provides to external consumers.
+  std::unique_ptr<ToRawDataSource> raw_source_;
 };
 
 // ----------------------------- Definitions ----------------------------------
