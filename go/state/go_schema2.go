@@ -14,6 +14,12 @@ import (
 
 // GoSchema2 implementation of a state utilizes a schema where Addresses are indexed,
 // but slot keys are not.
+//
+// It uses addressIndex to map an address to an id
+// and the couple (addressId, slotKey) is mapped by slotIndex to the id into the valuesStore,
+// where are slots values stored.
+//
+// It uses a MultiMap to keep track of slots, which must be reset, when a contract is self-destructed.
 type GoSchema2 struct {
 	addressIndex    index.Index[common.Address, uint32]
 	slotIndex       index.Index[common.SlotIdxKey[uint32], uint32]
