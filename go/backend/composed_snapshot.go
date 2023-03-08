@@ -243,8 +243,8 @@ func GetComposedProof(proofs []Proof) *composedSnapshotProof {
 }
 
 func (p *composedSnapshotProof) Equal(other Proof) bool {
-	ref := other.(*composedSnapshotProof)
-	return ref != nil && ref.hash == p.hash
+	ref, ok := other.(*composedSnapshotProof)
+	return ok && ref.hash == p.hash
 }
 
 func (p *composedSnapshotProof) ToBytes() []byte {
