@@ -181,7 +181,7 @@ func (cs *CppState) Close() error {
 
 func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 	if cs.state == nil {
-		return nil
+		return common.NewMemoryFootprint(unsafe.Sizeof(*cs))
 	}
 
 	// Fetch footprint data from C++.
