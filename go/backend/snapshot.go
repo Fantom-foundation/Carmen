@@ -25,17 +25,18 @@ package backend
 // proofs of its parts. The algorithm used for aggregating those proofs is
 // data structure dependent.
 type Snapshot interface {
-	// GetSize retrieves the number of parts in this snapshot.
-	GetSize() int
 	// GetRootProof retrieves the aggregated proof for this snapshot.
 	GetRootProof() Proof
+	// GetNumParts retrieves the number of parts in this snapshot.
+	GetNumParts() int
 	// GetProof retrieves the proof for a part, without loading the part.
 	GetProof(part_number int) (Proof, error)
 	// GetPart retrieves a part of the snapshot.
 	GetPart(part_number int) (Part, error)
+
 	// VerifyProofs verifies that the proofs of the parts are consistent with
 	// snapshot's root proof. Note: it does not verify individual parts.
-	VerifyProofs() error
+	VerifyRootProof() error
 
 	// GetData provides a type-erased view on this snapshot to be used for
 	// syncing data structures, potentially over the network.
@@ -55,7 +56,7 @@ type Part interface {
 	ToBytes() []byte
 }
 
-// Proof is a peace of information that can be used to certify the content of
+// Proof is a piece of information that can be used to certify the content of
 // a Part or an entire snapshot.
 type Proof interface {
 	// Tests whether this proof is equal to the given proof.
@@ -88,9 +89,9 @@ type Snapshotable interface {
 	// structure. The snapshot should be shielded from subsequent modifications
 	// and be accessible until released.
 	CreateSnapshot() (Snapshot, error)
-	// SyncTo synchronizes the data structure to the given snapshot data. This
+	// Restore restores the data structure to the given snapshot state. This
 	// may invalidate any former snapshots created on the data structure. In
 	// particular, it is not required to be able to synchronize to a former
 	// snapshot derived from the targeted data structure.
-	SyncTo(data SnapshotData) error
+	Restore(data SnapshotData) error
 }
