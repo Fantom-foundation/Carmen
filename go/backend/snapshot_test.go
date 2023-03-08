@@ -66,12 +66,12 @@ type mySnapshot struct {
 	source mySnapshotDataSource
 }
 
-func (e *mySnapshot) GetSize() int {
-	return e.size
-}
-
 func (e *mySnapshot) GetRootProof() backend.Proof {
 	return e.proof
+}
+
+func (e *mySnapshot) GetNumParts() int {
+	return e.size
 }
 
 func (e *mySnapshot) GetProof(part_number int) (backend.Proof, error) {
@@ -93,9 +93,9 @@ func (e *mySnapshot) GetPart(part_number int) (backend.Part, error) {
 	return &myPart{proof: proof.(*myProof), data: data}, nil
 }
 
-func (e *mySnapshot) VerifyProofs() error {
+func (e *mySnapshot) VerifyRootProof() error {
 	h := sha256.New()
-	for i := 0; i < e.GetSize(); i++ {
+	for i := 0; i < e.GetNumParts(); i++ {
 		proof, err := e.GetProof(i)
 		if err != nil {
 			return err
@@ -111,7 +111,30 @@ func (e *mySnapshot) VerifyProofs() error {
 }
 
 func (e *mySnapshot) GetData() backend.SnapshotData {
-	return &mySnapshotData{e}
+	return e
+}
+
+func (e *mySnapshot) GetMetaData() ([]byte, error) {
+	res := []byte{}
+	res = append(res, byte(e.GetNumParts()))
+	res = append(res, e.proof.hash[:]...)
+	return res, nil
+}
+
+func (e *mySnapshot) GetProofData(part_number int) ([]byte, error) {
+	proof, err := e.GetProof(part_number)
+	if err != nil {
+		return nil, err
+	}
+	return proof.ToBytes(), nil
+}
+
+func (e *mySnapshot) GetPartData(part_number int) ([]byte, error) {
+	part, err := e.GetPart(part_number)
+	if err != nil {
+		return nil, err
+	}
+	return part.ToBytes(), nil
 }
 
 func (e *mySnapshot) Release() error {
@@ -130,33 +153,6 @@ func createMySnapshotFromData(data backend.SnapshotData) (*mySnapshot, error) {
 	var hash common.Hash
 	copy(hash[:], metadata[1:])
 	return &mySnapshot{&myProof{hash}, size, &SnapshotDataSource{data}}, nil
-}
-
-type mySnapshotData struct {
-	snapshot *mySnapshot
-}
-
-func (e *mySnapshotData) GetMetaData() ([]byte, error) {
-	res := []byte{}
-	res = append(res, byte(e.snapshot.GetSize()))
-	res = append(res, e.snapshot.proof.hash[:]...)
-	return res, nil
-}
-
-func (e *mySnapshotData) GetProofData(part_number int) ([]byte, error) {
-	proof, err := e.snapshot.GetProof(part_number)
-	if err != nil {
-		return nil, err
-	}
-	return proof.ToBytes(), nil
-}
-
-func (e *mySnapshotData) GetPartData(part_number int) ([]byte, error) {
-	part, err := e.snapshot.GetPart(part_number)
-	if err != nil {
-		return nil, err
-	}
-	return part.ToBytes(), nil
 }
 
 type mySnapshotDataSource interface {
@@ -242,15 +238,15 @@ func (d *myDataStructure) CreateSnapshot() (backend.Snapshot, error) {
 	return &mySnapshot{proof.(*myProof), len(data), &myDataStructureCopy{proofs, data}}, nil
 }
 
-func (d *myDataStructure) SyncTo(data backend.SnapshotData) error {
+func (d *myDataStructure) Restore(data backend.SnapshotData) error {
 	snapshot, err := createMySnapshotFromData(data)
 	if err != nil {
 		return err
 	}
 
-	d.data = make([][]byte, snapshot.GetSize())
+	d.data = make([][]byte, snapshot.GetNumParts())
 
-	for i := 0; i < snapshot.GetSize(); i++ {
+	for i := 0; i < snapshot.GetNumParts(); i++ {
 		part, err := snapshot.GetPart(i)
 		if err != nil {
 			return err
@@ -310,7 +306,7 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 	original.data = [][]byte{}
 
 	recovered := &myDataStructure{}
-	if err := recovered.SyncTo(snapshot.GetData()); err != nil {
+	if err := recovered.Restore(snapshot.GetData()); err != nil {
 		t.Errorf("failed to sync to snapshot: %v", err)
 		return
 	}
@@ -359,12 +355,12 @@ func TestSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			t.Errorf("root proof of snapshot does not match proof of data structure")
 		}
 
-		if err := cur.VerifyProofs(); err != nil {
+		if err := cur.VerifyRootProof(); err != nil {
 			t.Errorf("snapshot invalid, inconsistent proofs")
 		}
 
 		// Verify all pages
-		for i := 0; i < cur.GetSize(); i++ {
+		for i := 0; i < cur.GetNumParts(); i++ {
 			want, err := cur.GetProof(i)
 			if err != nil {
 				t.Errorf("failed to fetch proof of part %d", i)
