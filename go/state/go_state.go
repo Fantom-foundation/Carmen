@@ -117,7 +117,7 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 			isFull = true // could not write - the channel was full
 			s.archiveWriter <- archiveUpdate{block, &update}
 		}
-		nanos := now.UnixNano()
+		nanos := time.Since(now).Nanoseconds()
 
 		if isFull {
 			numFull += 1
