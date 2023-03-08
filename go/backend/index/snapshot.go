@@ -1,0 +1,333 @@
+package index
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"fmt"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
+
+// ---------------------------------- Proof -----------------------------------
+
+type IndexProof struct {
+	before, after common.Hash
+}
+
+func createIndexProofFromData(data []byte) (*IndexProof, error) {
+	if len(data) != common.HashSize*2 {
+		return nil, fmt.Errorf("invalid encoding of index proof, invalid number of bytes")
+	}
+	var before, after common.Hash
+	copy(before[:], data[0:])
+	copy(after[:], data[common.HashSize:])
+	return &IndexProof{before, after}, nil
+}
+
+func (p *IndexProof) Equal(proof backend.Proof) bool {
+	other, ok := proof.(*IndexProof)
+	return ok && other.before == p.before && other.after == p.after
+}
+
+func (p *IndexProof) ToBytes() []byte {
+	res := make([]byte, 0, common.HashSize*2)
+	res = append(res, p.before.ToBytes()...)
+	res = append(res, p.after.ToBytes()...)
+	return res
+}
+
+// ----------------------------------- Part -----------------------------------
+
+type IndexPart[K comparable] struct {
+	serializer common.Serializer[K]
+	proof      *IndexProof
+	keys       []K
+}
+
+func createIndexPartFromData[K comparable](serializer common.Serializer[K], data []byte) (*IndexPart[K], error) {
+	if len(data) < common.HashSize*2 {
+		return nil, fmt.Errorf("invalid encoding of index part, invalid number of bytes")
+	}
+
+	proof, err := createIndexProofFromData(data[0 : common.HashSize*2])
+	if err != nil {
+		return nil, err
+	}
+	data = data[common.HashSize*2:]
+	if len(data)%serializer.Size() != 0 {
+		return nil, fmt.Errorf("invalid encoding of index part, invalid encoding of keys")
+	}
+
+	keys := []K{}
+	for len(data) > 0 {
+		keys = append(keys, serializer.FromBytes(data[0:serializer.Size()]))
+		data = data[serializer.Size():]
+	}
+
+	return &IndexPart[K]{serializer, proof, keys}, nil
+}
+
+func (p *IndexPart[K]) GetProof() backend.Proof {
+	return p.proof
+}
+
+func (p *IndexPart[K]) Verify() bool {
+	h := sha256.New()
+	cur := p.proof.before
+	for _, key := range p.keys {
+		h.Reset()
+		h.Write(cur[:])
+		h.Write(p.serializer.ToBytes(key))
+		h.Sum(cur[:])
+	}
+	return cur == p.proof.after
+}
+
+func (p *IndexPart[K]) ToBytes() []byte {
+	res := p.proof.ToBytes()
+	for _, key := range p.keys {
+		res = append(res, p.serializer.ToBytes(key)...)
+	}
+	return res
+}
+
+func (p *IndexPart[K]) GetKeys() []K {
+	return p.keys
+}
+
+// --------------------------------- Snapshot ---------------------------------
+
+// IndexSnapshotSource is the interface to be implemented by Index implementations
+// to provide snapshot data. It is a reduced version of the full Snapshot
+// interface, freeing implementations from common Index Snapshot requirements.
+type IndexSnapshotSource[K comparable] interface {
+	GetHash(key_height int) (common.Hash, error)
+	GetKeys(from, to int) ([]K, error)
+	Release() error
+}
+
+// maxBytesPerPart the approximate size aimed for per part.
+const maxBytesPerPart = 4096
+
+// GetKeysPerPart computes the number of keys to be stored per part.
+func GetKeysPerPart[K any](serializer common.Serializer[K]) int {
+	return maxBytesPerPart / serializer.Size()
+}
+
+// IndexSnapshot is the snapshot format used by all index implementations. Each
+// part of the snapshot contains a fixed-length range of keys to improve the
+// efficiency of the snapshot processing -- in terms of computation, memory,
+// network, and storage costs.
+type IndexSnapshot[K comparable] struct {
+	serializer common.Serializer[K]
+	proof      *IndexProof            // The root proof of the snapshot.
+	numKeys    int                    // The number of keys contained in the index during snapshot creation.
+	source     IndexSnapshotSource[K] // Abstract access to the index type to support alternative SnapshotData sources.
+}
+
+// CreateIndexSnapshotFromIndex creates a new index snapshot utilizing the provided
+// source. This factory is intended to be used by Index implementations when creating
+// a new snapshot.
+func CreateIndexSnapshotFromIndex[K comparable](serializer common.Serializer[K], hash common.Hash, num_keys int, source IndexSnapshotSource[K]) *IndexSnapshot[K] {
+	return &IndexSnapshot[K]{serializer, &IndexProof{common.Hash{}, hash}, num_keys, source}
+}
+
+// CreateIndexSnapshotFromData creates a new index snapshot utilizing the provided
+// snapshot data. This factory is intended to be used by Index implementations to wrap
+// snapshot data into a IndexSnapshot to facilitate data Restoration.
+func CreateIndexSnapshotFromData[K comparable](serializer common.Serializer[K], data backend.SnapshotData) (*IndexSnapshot[K], error) {
+	metadata, err := data.GetMetaData()
+	if err != nil {
+		return nil, err
+	}
+
+	// Metadata contains a after-hash of root proof and 8 bytes for the number of keys.
+	if len(metadata) != common.HashSize+8 {
+		return nil, fmt.Errorf("invalid index snapshot metadata encoding, invalid number of bytes")
+	}
+
+	var after common.Hash
+	copy(after[:], metadata[0:common.HashSize])
+	numKeys := int(binary.LittleEndian.Uint64(metadata[common.HashSize:]))
+
+	return &IndexSnapshot[K]{serializer, &IndexProof{common.Hash{}, after}, numKeys, &indexSourceFromData[K]{serializer, numKeys, after, data}}, nil
+}
+
+func (s *IndexSnapshot[K]) GetRootProof() backend.Proof {
+	return s.proof
+}
+
+func (s *IndexSnapshot[K]) GetNumParts() int {
+	keysPerPart := GetKeysPerPart[K](s.serializer)
+	res := s.numKeys / keysPerPart
+	if s.numKeys%keysPerPart > 0 {
+		res += 1
+	}
+	return res
+}
+
+func (s *IndexSnapshot[K]) GetProof(part_number int) (backend.Proof, error) {
+	keysPerPart := maxBytesPerPart / s.serializer.Size()
+	if part_number*keysPerPart > s.numKeys {
+		return nil, fmt.Errorf("no such part")
+	}
+
+	before, err := s.source.GetHash(part_number * keysPerPart)
+	if err != nil {
+		return nil, err
+	}
+	end := (part_number + 1) * keysPerPart
+	if end > s.numKeys {
+		end = s.numKeys
+	}
+	after, err := s.source.GetHash(end)
+	if err != nil {
+		return nil, err
+	}
+	return &IndexProof{before, after}, nil
+}
+
+func (s *IndexSnapshot[K]) GetPart(part_number int) (backend.Part, error) {
+	proof, err := s.GetProof(part_number)
+	if err != nil {
+		return nil, err
+	}
+
+	keysPerPart := maxBytesPerPart / s.serializer.Size()
+	from := keysPerPart * part_number
+	to := keysPerPart * (part_number + 1)
+	if to > s.numKeys {
+		to = s.numKeys
+	}
+
+	keys, err := s.source.GetKeys(from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	return &IndexPart[K]{s.serializer, proof.(*IndexProof), keys}, nil
+}
+
+func (s *IndexSnapshot[K]) VerifyRootProof() error {
+	// Check that proofs are properly chained.
+	cur := common.Hash{}
+	for i := 0; i < s.GetNumParts(); i++ {
+		proof, err := s.GetProof(i)
+		if err != nil {
+			return err
+		}
+		indexProof := proof.(*IndexProof)
+		if indexProof.before != cur {
+			return fmt.Errorf("brocken proof chain link encountered")
+		}
+		cur = indexProof.after
+	}
+	if cur != s.proof.after {
+		return fmt.Errorf("brocken proof chain end encountered")
+	}
+	return nil
+}
+
+func (s *IndexSnapshot[K]) GetData() backend.SnapshotData {
+	return s
+}
+
+func (s *IndexSnapshot[K]) Release() error {
+	return s.source.Release()
+}
+
+func (s *IndexSnapshot[K]) GetMetaData() ([]byte, error) {
+	res := []byte{}
+	res = append(res, s.proof.after[:]...)
+	res = binary.LittleEndian.AppendUint64(res, uint64(s.numKeys))
+	return res, nil
+}
+
+func (s *IndexSnapshot[K]) GetProofData(part_number int) ([]byte, error) {
+	proof, err := s.GetProof(part_number)
+	if err != nil {
+		return nil, err
+	}
+	return proof.ToBytes(), nil
+}
+
+func (s *IndexSnapshot[K]) GetPartData(part_number int) ([]byte, error) {
+	proof, err := s.GetPart(part_number)
+	if err != nil {
+		return nil, err
+	}
+	return proof.ToBytes(), nil
+}
+
+// indexSourceFromData is an implementation of the IndexSnapshotSource adapting
+// a SnapshotDataSource to the interface required by the IndexSnapshot implementation.
+type indexSourceFromData[K comparable] struct {
+	serializer common.Serializer[K]
+	numKeys    int
+	endHash    common.Hash
+	source     backend.SnapshotData
+}
+
+func (s *indexSourceFromData[K]) GetHash(key_height int) (common.Hash, error) {
+	if key_height == 0 {
+		return common.Hash{}, nil
+	}
+
+	if key_height == s.numKeys {
+		return s.endHash, nil
+	}
+
+	if key_height > s.numKeys {
+		return common.Hash{}, fmt.Errorf("invalid key height %d, larger than source height %d", key_height, s.numKeys)
+	}
+
+	keysPerPart := maxBytesPerPart / s.serializer.Size()
+	if key_height%keysPerPart != 0 {
+		return common.Hash{}, fmt.Errorf("invalid key height %d, can only reproduce hash at part boundary", key_height)
+	}
+
+	part := key_height / keysPerPart
+	data, err := s.source.GetProofData(part)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	proof, err := createIndexProofFromData(data)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return proof.after, nil
+}
+
+func (s *indexSourceFromData[K]) GetKeys(from, to int) ([]K, error) {
+	keysPerPart := maxBytesPerPart / s.serializer.Size()
+	if from%keysPerPart != 0 {
+		return nil, fmt.Errorf("invalid key range, can only start at part boundary")
+	}
+	if to < from {
+		return nil, fmt.Errorf("invalid key range, to smaller than from")
+	}
+	if to-from > keysPerPart {
+		return nil, fmt.Errorf("invalid key range, must fit in a single part")
+	}
+
+	partNumber := from / keysPerPart
+	data, err := s.source.GetPartData(partNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	part, err := createIndexPartFromData(s.serializer, data)
+	if err != nil {
+		return nil, err
+	}
+	if len(part.keys) < to-from {
+		return nil, fmt.Errorf("invalid key range, not enough keys in part")
+	}
+	return part.keys[0 : to-from], nil
+}
+
+func (s *indexSourceFromData[K]) Release() error {
+	return nil
+}

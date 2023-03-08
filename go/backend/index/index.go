@@ -31,6 +31,10 @@ type Index[K comparable, I common.Identifier] interface {
 
 	// Also, indexes need to be flush and closable.
 	common.FlushAndCloser
+
+	// Also, indexes need to be snapshotable.
+	// TODO: enable this once ready
+	// backend.Snapshotable
 }
 
 var (
