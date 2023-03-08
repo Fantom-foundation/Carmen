@@ -20,8 +20,8 @@ type myProof struct {
 }
 
 func (p *myProof) Equal(other backend.Proof) bool {
-	trg := other.(*myProof)
-	return trg != nil && trg.hash == p.hash
+	trg, ok := other.(*myProof)
+	return ok && trg.hash == p.hash
 }
 
 func (p *myProof) ToBytes() []byte {
