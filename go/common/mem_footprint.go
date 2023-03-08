@@ -49,6 +49,9 @@ func (mf *MemoryFootprint) Total() uintptr {
 }
 
 func includeObjectIntoTotal(mf *MemoryFootprint, includedObjects map[*MemoryFootprint]bool) (total uintptr) {
+	if mf == nil {
+		return 0
+	}
 	if _, exists := includedObjects[mf]; exists {
 		return 0
 	}
