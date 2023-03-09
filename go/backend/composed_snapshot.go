@@ -26,7 +26,7 @@ type ComposedSnapshot struct {
 // The resulting snapshot takes ownership of the provided snapshots and will
 // release them in case the resulting snapshot is released.
 func NewComposedSnapshot(snapshots []Snapshot) *ComposedSnapshot {
-	proofs := []Proof{}
+	proofs := make([]Proof, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		proofs = append(proofs, snapshot.GetRootProof())
 	}
@@ -130,17 +130,19 @@ func (d *ComposedSnapshot) GetMetaData() ([]byte, error) {
 	//   - 8-byte * num sub-snapshots ... the size of the sub-snapshots
 
 	// Collect the meta-data of the sub-snapshots.
-	metadata := [][]byte{}
+	metadata := make([][]byte, 0, len(d.snapshots))
+	metadataSize := 0
 	for _, snapshot := range d.snapshots {
 		cur, err := snapshot.GetData().GetMetaData()
 		if err != nil {
 			return nil, err
 		}
 		metadata = append(metadata, cur)
+		metadataSize += len(cur)
 	}
 
 	// Perform the encoding of the various bits of information.
-	res := []byte{}
+	res := make([]byte, 0, 1+len(d.snapshots)*12+metadataSize)
 	res = append(res, byte(len(d.snapshots)))
 	for _, cur := range metadata {
 		res = binary.LittleEndian.AppendUint32(res, uint32(len(cur)))
