@@ -11,6 +11,11 @@ import (
 
 // ---------------------------------- Proof -----------------------------------
 
+// IndexProof is the type of proof used by index snapshots. Each part of an
+// index snapshot covers a range of keys in insertion order. The proof contains
+// the hash of the index before the first of those keys and after the last of
+// those keys has been added. The full snapshot proof is the hash before the
+// first key (by definition Hash = 0) and the hash after the last added key.
 type IndexProof struct {
 	before, after common.Hash
 }
@@ -39,6 +44,19 @@ func (p *IndexProof) ToBytes() []byte {
 
 // ----------------------------------- Part -----------------------------------
 
+// maxBytesPerPart the approximate size aimed for per part.
+const maxBytesPerPart = 4096
+
+// GetKeysPerPart computes the number of keys to be stored per part.
+func GetKeysPerPart[K any](serializer common.Serializer[K]) int {
+	return maxBytesPerPart / serializer.Size()
+}
+
+// IndexPart is a part of an index snapshot covering a consecutive range of
+// keys in an index, in their insertion order. The keys stored in a part should
+// total up to approximately maxBytesPerPart for efficiency reasons. Proofs
+// are composed by the hash of the index before the first key and after the
+// last key of the range of keys of a part.
 type IndexPart[K comparable] struct {
 	serializer common.Serializer[K]
 	proof      *IndexProof
@@ -105,14 +123,6 @@ type IndexSnapshotSource[K comparable] interface {
 	GetHash(key_height int) (common.Hash, error)
 	GetKeys(from, to int) ([]K, error)
 	Release() error
-}
-
-// maxBytesPerPart the approximate size aimed for per part.
-const maxBytesPerPart = 4096
-
-// GetKeysPerPart computes the number of keys to be stored per part.
-func GetKeysPerPart[K any](serializer common.Serializer[K]) int {
-	return maxBytesPerPart / serializer.Size()
 }
 
 // IndexSnapshot is the snapshot format used by all index implementations. Each
