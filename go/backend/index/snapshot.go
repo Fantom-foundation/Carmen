@@ -152,7 +152,7 @@ func CreateIndexSnapshotFromData[K comparable](serializer common.Serializer[K], 
 		return nil, err
 	}
 
-	// Metadata contains a after-hash of root proof and 8 bytes for the number of keys.
+	// Metadata contains an after-hash of root proof and 8 bytes for the number of keys.
 	if len(metadata) != common.HashSize+8 {
 		return nil, fmt.Errorf("invalid index snapshot metadata encoding, invalid number of bytes")
 	}
@@ -224,7 +224,7 @@ func (s *IndexSnapshot[K]) VerifyRootProof() error {
 	// Check that proofs are properly chained.
 	cur := common.Hash{}
 	if cur != s.proof.before {
-		return fmt.Errorf("brocken proof chain start encountered, wanted %v, got %v", cur, s.proof.after)
+		return fmt.Errorf("broken proof chain start encountered, wanted %v, got %v", cur, s.proof.after)
 	}
 	for i := 0; i < s.GetNumParts(); i++ {
 		proof, err := s.GetProof(i)
@@ -233,12 +233,12 @@ func (s *IndexSnapshot[K]) VerifyRootProof() error {
 		}
 		indexProof := proof.(*IndexProof)
 		if indexProof.before != cur {
-			return fmt.Errorf("brocken proof chain link encountered at step %d, wanted %v, got %v", i, cur, indexProof.before)
+			return fmt.Errorf("broken proof chain link encountered at step %d, wanted %v, got %v", i, cur, indexProof.before)
 		}
 		cur = indexProof.after
 	}
 	if cur != s.proof.after {
-		return fmt.Errorf("brocken proof chain end encountered, wanted %v, got %v", cur, s.proof.after)
+		return fmt.Errorf("broken proof chain end encountered, wanted %v, got %v", cur, s.proof.after)
 	}
 	return nil
 }
