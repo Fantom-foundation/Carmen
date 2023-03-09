@@ -44,14 +44,14 @@ func (i *myIndex) GetOrAdd(value common.Address) int {
 
 	i.list = append(i.list, value)
 
-	h := sha256.New()
-	h.Write(i.hash[:])
-	h.Write(value[:])
-	h.Sum(i.hash[:])
-
 	if res%GetKeysPerPart[common.Address](common.AddressSerializer{}) == 0 {
 		i.hashs = append(i.hashs, i.hash)
 	}
+
+	h := sha256.New()
+	h.Write(i.hash[:])
+	h.Write(value[:])
+	h.Sum(i.hash[0:0])
 
 	return res
 }
@@ -276,7 +276,7 @@ func TestIndexSnapshot_MyIndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			}
 
 			if err := cur.VerifyRootProof(); err != nil {
-				t.Errorf("snapshot invalid, inconsistent proofs")
+				t.Errorf("snapshot invalid, inconsistent proofs: %v", err)
 			}
 
 			// Verify all pages
