@@ -79,7 +79,7 @@ func (p *IndexPart[K]) Verify() bool {
 		h.Reset()
 		h.Write(cur[:])
 		h.Write(p.serializer.ToBytes(key))
-		h.Sum(cur[:])
+		h.Sum(cur[0:0])
 	}
 	return cur == p.proof.after
 }
@@ -159,7 +159,7 @@ func (s *IndexSnapshot[K]) GetRootProof() backend.Proof {
 }
 
 func (s *IndexSnapshot[K]) GetNumParts() int {
-	keysPerPart := GetKeysPerPart[K](s.serializer)
+	keysPerPart := GetKeysPerPart(s.serializer)
 	res := s.numKeys / keysPerPart
 	if s.numKeys%keysPerPart > 0 {
 		res += 1
@@ -185,6 +185,7 @@ func (s *IndexSnapshot[K]) GetProof(part_number int) (backend.Proof, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &IndexProof{before, after}, nil
 }
 
@@ -212,6 +213,9 @@ func (s *IndexSnapshot[K]) GetPart(part_number int) (backend.Part, error) {
 func (s *IndexSnapshot[K]) VerifyRootProof() error {
 	// Check that proofs are properly chained.
 	cur := common.Hash{}
+	if cur != s.proof.before {
+		return fmt.Errorf("brocken proof chain start encountered, wanted %v, got %v", cur, s.proof.after)
+	}
 	for i := 0; i < s.GetNumParts(); i++ {
 		proof, err := s.GetProof(i)
 		if err != nil {
@@ -219,12 +223,12 @@ func (s *IndexSnapshot[K]) VerifyRootProof() error {
 		}
 		indexProof := proof.(*IndexProof)
 		if indexProof.before != cur {
-			return fmt.Errorf("brocken proof chain link encountered")
+			return fmt.Errorf("brocken proof chain link encountered at step %d, wanted %v, got %v", i, cur, indexProof.before)
 		}
 		cur = indexProof.after
 	}
 	if cur != s.proof.after {
-		return fmt.Errorf("brocken proof chain end encountered")
+		return fmt.Errorf("brocken proof chain end encountered, wanted %v, got %v", cur, s.proof.after)
 	}
 	return nil
 }
@@ -282,7 +286,7 @@ func (s *indexSourceFromData[K]) GetHash(key_height int) (common.Hash, error) {
 		return common.Hash{}, fmt.Errorf("invalid key height %d, larger than source height %d", key_height, s.numKeys)
 	}
 
-	keysPerPart := maxBytesPerPart / s.serializer.Size()
+	keysPerPart := GetKeysPerPart(s.serializer)
 	if key_height%keysPerPart != 0 {
 		return common.Hash{}, fmt.Errorf("invalid key height %d, can only reproduce hash at part boundary", key_height)
 	}
@@ -297,7 +301,7 @@ func (s *indexSourceFromData[K]) GetHash(key_height int) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return proof.after, nil
+	return proof.before, nil
 }
 
 func (s *indexSourceFromData[K]) GetKeys(from, to int) ([]K, error) {
