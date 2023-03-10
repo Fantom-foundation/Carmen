@@ -70,6 +70,11 @@ func (hi *IndexHash[K]) Commit() (common.Hash, error) {
 	return hi.hash, nil
 }
 
+func (hi *IndexHash[K]) Clear() {
+	hi.hash = common.Hash{}
+	hi.keys = hi.keys[0:0]
+}
+
 // GetMemoryFootprint provides the size of the structure in memory in bytes
 func (hi *IndexHash[K]) GetMemoryFootprint() *common.MemoryFootprint {
 	var k K

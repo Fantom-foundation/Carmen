@@ -47,3 +47,31 @@ func TestCommit(t *testing.T) {
 	}
 
 }
+
+func TestClear(t *testing.T) {
+	hashIndex := NewIndexHash[common.Address](common.AddressSerializer{})
+
+	// add a key and compute the hash
+	h0, _ := hashIndex.Commit()
+	if (h0 != common.Hash{}) {
+		t.Errorf("the hash does not match the default one")
+	}
+
+	// the hash must change when adding a new item
+	hashIndex.AddKey(A)
+	ha1, _ := hashIndex.Commit()
+
+	if h0 == ha1 {
+		t.Errorf("the hash has not changed")
+	}
+
+	hashIndex.Clear()
+	hnew, _ := hashIndex.Commit()
+	if (hnew != common.Hash{}) {
+		t.Errorf("the hash does not match the default one")
+	}
+
+	if len(hashIndex.keys) != 0 {
+		t.Errorf("key list is not empty")
+	}
+}
