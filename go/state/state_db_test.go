@@ -94,6 +94,49 @@ func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	}
 }
 
+func TestCarmenStateCreateAccountSetsStorageToZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	db.CreateAccount(address1)
+
+	if got := db.GetState(address1, key1); got != (common.Value{}) {
+		t.Errorf("state not initialized with zero")
+	}
+}
+
+func TestCarmenStateRecreateingAnAccountSetsStorageToZero(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().createAccount(address1).Return(nil)
+	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
+
+	db.CreateAccount(address1)
+	db.SetState(address1, key1, val1)
+
+	if got := db.GetState(address1, key1); got != val1 {
+		t.Errorf("state not set to specified value")
+	}
+
+	// re-creating an account in the same transaction is clearing the state
+	db.CreateAccount(address1)
+	if got := db.GetState(address1, key1); got != (common.Value{}) {
+		t.Errorf("state not set to specified value")
+	}
+
+	db.EndBlock(1)
+}
+
 func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
@@ -295,10 +338,8 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
-	// During the processing the account is re-created.
-	mock.EXPECT().createAccount(address1).Return(nil)
-	// During the processing the account is re-created.
-	mock.EXPECT().createAccount(address1).Return(nil)
+	// During the processing the account is deleted.
+	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
