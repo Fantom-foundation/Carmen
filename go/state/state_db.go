@@ -359,9 +359,9 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-func (s *stateDB) createAccountIfNotExists(addr common.Address) {
+func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
 	if s.Exist(addr) {
-		return
+		return false
 	}
 	s.setAccountState(addr, true)
 
@@ -371,6 +371,8 @@ func (s *stateDB) createAccountIfNotExists(addr common.Address) {
 	// are restored will have an empty balance. However, for accounts that
 	// already existed before this create call the balance is preserved.
 	s.resetBalance(addr)
+
+	return true
 }
 
 // Suicide marks the given account as suicided.
@@ -516,9 +518,8 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 }
 
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
-	s.createAccountIfNotExists(addr)
 	s.setNonceInternal(addr, nonce)
-	if nonce == 0 {
+	if s.createAccountIfNotExists(addr) && nonce == 0 {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
 	}
 }
@@ -605,6 +606,10 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 }
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
+	if s.createAccountIfNotExists(addr) {
+		// The account was implicitly created and may have to be removed at the end of the block.
+		s.emptyCandidates = append(s.emptyCandidates, addr)
+	}
 	sid := slotId{addr, key}
 	if entry, exists := s.data.Get(sid); exists {
 		if entry.current != value {
@@ -822,6 +827,7 @@ func (s *stateDB) EndTransaction() {
 	for _, addr := range s.emptyCandidates {
 		if s.Empty(addr) {
 			s.accountsToDelete = append(s.accountsToDelete, addr)
+			s.setAccountState(addr, false)
 		}
 	}
 
