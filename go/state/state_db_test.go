@@ -295,8 +295,8 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
-	// During the processing the account is deleted.
-	mock.EXPECT().deleteAccount(address1).Return(nil)
+	// During the processing the account is re-created.
+	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
