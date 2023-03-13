@@ -260,4 +260,14 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 	if freeIdsOverflow == nil {
 		t.Errorf("Mem footprint wrong")
 	}
+
+	reverse := footPrint.GetChild("keys")
+	if size := reverse.Value(); size == 0 {
+		t.Errorf("Mem footprint wrong: %d", size)
+	}
+
+	hashes := footPrint.GetChild("hashes")
+	if size := hashes.Value(); size == 0 {
+		t.Errorf("Mem footprint wrong: %d", size)
+	}
 }
