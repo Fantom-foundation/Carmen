@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -148,7 +149,7 @@ func CreateStoreSnapshotFromData[V any](serializer common.Serializer[V], data ba
 	metadata = metadata[2:]
 	numPages := int(binary.LittleEndian.Uint64(metadata[:]))
 
-	return &StoreSnapshot[V]{serializer, branching, &StoreProof{hash}, numPages, &storeSourceFromData[V]{serializer, numPages, hash, data}}, nil
+	return &StoreSnapshot[V]{serializer, branching, &StoreProof{hash}, numPages, &storeSourceFromData[V]{serializer, numPages, data}}, nil
 }
 
 func (s *StoreSnapshot[V]) GetRootProof() backend.Proof {
@@ -192,55 +193,16 @@ func (s *StoreSnapshot[V]) VerifyRootProof() error {
 }
 
 func (s *StoreSnapshot[V]) computeRootHash() (common.Hash, error) {
-	// Note: This should not reuse the hash tree infrastructure, since this
+	// Note: This should not use the lazy hash tree infrastructure, since this
 	// would require to fetch all the data from the pages. Instead, it should
 	// only verify that the proofs of the pages are consistent with the root.
-
-	// If there are no pages, the procedure is simple.
-	if s.numPages == 0 {
-		return common.Hash{}, nil
-	}
-
-	if s.numPages == 1 {
-		proof, err := s.GetProof(0)
+	return hashtree.ReduceHashes(s.branchingFactor, s.numPages, func(page int) (common.Hash, error) {
+		proof, err := s.GetProof(page)
 		if err != nil {
 			return common.Hash{}, err
 		}
 		return proof.(*StoreProof).hash, nil
-	}
-
-	paddedSize := s.numPages
-	if paddedSize%s.branchingFactor != 0 {
-		paddedSize = paddedSize + s.branchingFactor - (paddedSize % s.branchingFactor)
-	}
-
-	// Collect all hashes from the individual parts.
-	hashes := make([]common.Hash, paddedSize)
-	for i := 0; i < s.numPages; i++ {
-		proof, err := s.GetProof(i)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		hashes[i] = proof.(*StoreProof).hash
-	}
-
-	// Perform the hash reduction.
-	h := sha256.New()
-	for len(hashes) > 1 {
-		for i := 0; i < len(hashes); i += s.branchingFactor {
-			h.Reset()
-			for j := 0; j < s.branchingFactor; j++ {
-				h.Write(hashes[i+j][:])
-			}
-			h.Sum(hashes[i/s.branchingFactor][0:0])
-		}
-		hashes = hashes[0 : len(hashes)/s.branchingFactor]
-		for len(hashes) > 1 && len(hashes)%s.branchingFactor != 0 {
-			hashes = append(hashes, common.Hash{})
-		}
-	}
-
-	return hashes[0], nil
+	})
 }
 
 func (s *StoreSnapshot[V]) GetData() backend.SnapshotData {
@@ -280,7 +242,6 @@ func (s *StoreSnapshot[V]) GetPartData(partNumber int) ([]byte, error) {
 type storeSourceFromData[V any] struct {
 	serializer common.Serializer[V]
 	numPages   int
-	storeHash  common.Hash
 	source     backend.SnapshotData
 }
 
