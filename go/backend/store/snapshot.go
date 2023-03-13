@@ -252,7 +252,7 @@ func (s *StoreSnapshot[V]) Release() error {
 }
 
 func (s *StoreSnapshot[V]) GetMetaData() ([]byte, error) {
-	res := []byte{}
+	res := make([]byte, 0, 32+2+8)
 	res = append(res, s.proof.hash[:]...)
 	res = binary.LittleEndian.AppendUint16(res, uint16(s.branchingFactor))
 	res = binary.LittleEndian.AppendUint64(res, uint64(s.numPages))
