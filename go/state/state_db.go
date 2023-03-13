@@ -312,10 +312,6 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	s.setCodeInternal(addr, []byte{})
 
 	exists := s.Exist(addr)
-	suicided := s.HasSuicided(addr)
-	if exists && !suicided {
-		return
-	}
 	s.setAccountState(addr, true)
 
 	// Created because touched - will be deleted at the end of the transaction if it stays empty
@@ -330,33 +326,31 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 		s.resetBalance(addr)
 	}
 
-	// Reset storage in case this account was destroyed in this transaction.
-	if suicided {
-		// TODO: this full-map iteration may be slow; if so, some index may be required.
-		s.data.ForEach(func(slot slotId, value *slotValue) {
-			if slot.addr == addr {
-				// Support rollback of account creation.
-				backup := slotValue(*value)
-				s.undo = append(s.undo, func() {
-					*value = backup
-				})
+	// Reset storage of the account, to purge any potential former values.
+	// TODO: this full-map iteration may be slow; if so, use the account's reincarnation number in the slotId
+	s.data.ForEach(func(slot slotId, value *slotValue) {
+		if slot.addr == addr {
+			// Support rollback of account creation.
+			backup := slotValue(*value)
+			s.undo = append(s.undo, func() {
+				*value = backup
+			})
 
-				// Clear cached values.
-				value.stored = common.Value{}
-				value.storedKnown = true
-				value.committed = common.Value{}
-				value.committedKnown = true
-				value.current = common.Value{}
-			}
-		})
+			// Clear cached values.
+			value.stored = common.Value{}
+			value.storedKnown = true
+			value.committed = common.Value{}
+			value.committedKnown = true
+			value.current = common.Value{}
+		}
+	})
 
-		// Mark account to be treated like if was already committed.
-		oldState := s.clearedAccounts[addr]
-		s.clearedAccounts[addr] = cleared
-		s.undo = append(s.undo, func() {
-			s.clearedAccounts[addr] = oldState
-		})
-	}
+	// Mark account to be treated like if was already committed.
+	oldState := s.clearedAccounts[addr]
+	s.clearedAccounts[addr] = cleared
+	s.undo = append(s.undo, func() {
+		s.clearedAccounts[addr] = oldState
+	})
 }
 
 func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
