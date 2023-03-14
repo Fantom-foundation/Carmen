@@ -2,6 +2,7 @@ package htmemory
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"hash"
@@ -139,8 +140,25 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 	if len(ht.tree[lastLayer]) == 0 {
 		return common.Hash{}, nil
 	}
-	copy(out[:], ht.tree[lastLayer][0])
-	return
+	return *(*common.Hash)(ht.tree[lastLayer][0]), nil
+}
+
+func (ht *HashTree) GetPageHash(page int) (common.Hash, error) {
+	if ht.dirtyNodes[0][page] {
+		err := ht.commit()
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
+	if len(ht.tree[0]) <= page {
+		return common.Hash{}, fmt.Errorf("unable to get hash of not-existing page from hashtree")
+	}
+	return *(*common.Hash)(ht.tree[0][page]), nil
+}
+
+// GetBranchingFactor provides the tree branching factor
+func (ht *HashTree) GetBranchingFactor() int {
+	return ht.factor
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes

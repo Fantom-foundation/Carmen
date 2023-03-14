@@ -204,12 +204,41 @@ func (ht *HashTree) updateNode(layerFile *os.File, node int, nodeHash []byte) er
 
 // HashRoot provides the hash in the root of the hashing tree
 func (ht *HashTree) HashRoot() (out common.Hash, err error) {
-	hash, err := ht.commit()
+	hashBytes, err := ht.commit()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	copy(out[:], hash)
+	copy(out[:], hashBytes)
 	return
+}
+
+// GetPageHash provides a hash of the tree node.
+func (ht *HashTree) GetPageHash(page int) (out common.Hash, err error) {
+	if ht.dirtyPages[page] {
+		_, err := ht.commit()
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
+
+	// TODO keep file open?
+	nodesLayer, err := os.OpenFile(ht.layerFile(0), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to open nodes layer file; %s", err)
+	}
+	defer nodesLayer.Close()
+
+	hashBytes, err := ht.readLayer(nodesLayer, int64(page)*HashLength, HashLength)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to read nodes layer file; %s", err)
+	}
+	copy(out[:], hashBytes)
+	return out, nil
+}
+
+// GetBranchingFactor provides the tree branching factor
+func (ht *HashTree) GetBranchingFactor() int {
+	return ht.factor
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes

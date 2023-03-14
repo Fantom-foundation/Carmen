@@ -27,6 +27,16 @@ func (ht *NoHash) HashRoot() (out common.Hash, err error) {
 	return common.Hash{}, nil
 }
 
+// GetPageHash provides a hash of the tree node.
+func (ht *NoHash) GetPageHash(page int) (hash common.Hash, err error) {
+	return common.Hash{}, nil
+}
+
+// GetBranchingFactor provides the tree branching factor
+func (ht *NoHash) GetBranchingFactor() int {
+	return 0
+}
+
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
 func (ht *NoHash) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(0)

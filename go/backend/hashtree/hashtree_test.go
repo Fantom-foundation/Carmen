@@ -294,6 +294,11 @@ func TestHashingByComparison(t *testing.T) {
 			t.Errorf("hashTrees hashes does not match after inserting item %d: %s", i, err)
 		}
 	}
+	for i := 0; i < 10; i++ {
+		if err := comparePageHashes(hashTrees, i); err != nil {
+			t.Errorf("hashTrees page %d hashes does not match after inserting item %d: %s", i, i, err)
+		}
+	}
 }
 
 func compareHashes(hashTrees map[string]closingHashtreeWrapper) error {
@@ -301,6 +306,24 @@ func compareHashes(hashTrees map[string]closingHashtreeWrapper) error {
 	var firstLabel string
 	for label, d := range hashTrees {
 		hash, err := d.HashRoot()
+		if err != nil {
+			return err
+		}
+		if firstHash == zeroHash {
+			firstHash = hash
+			firstLabel = label
+		} else if firstHash != hash {
+			return fmt.Errorf("different hashes: %s(%x) != %s(%x)", firstLabel, firstHash, label, hash)
+		}
+	}
+	return nil
+}
+
+func comparePageHashes(hashTrees map[string]closingHashtreeWrapper, page int) error {
+	var firstHash common.Hash
+	var firstLabel string
+	for label, d := range hashTrees {
+		hash, err := d.GetPageHash(page)
 		if err != nil {
 			return err
 		}
