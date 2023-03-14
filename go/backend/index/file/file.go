@@ -253,6 +253,10 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	}
 
 	// Reset and re-initialize the index.
+	if err := m.table.Clear(); err != nil {
+		return err
+	}
+
 	m.hashIndex.Clear()
 	m.maxIndex = 0
 
