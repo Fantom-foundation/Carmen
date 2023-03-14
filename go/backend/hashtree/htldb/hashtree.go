@@ -64,22 +64,30 @@ func (ht *HashTree) MarkUpdated(page int) {
 
 // HashRoot provides the hash in the root of the hashing tree
 func (ht *HashTree) HashRoot() (out common.Hash, err error) {
-	h, err := ht.commit()
+	hashBytes, err := ht.commit()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	copy(out[:], h)
+	copy(out[:], hashBytes)
 	return
 }
 
 // GetPageHash provides a hash of the tree node.
-func (ht *HashTree) GetPageHash(page int) (hash common.Hash, err error) {
+func (ht *HashTree) GetPageHash(page int) (out common.Hash, err error) {
+	if ht.dirtyPages[page] {
+		_, err := ht.commit()
+		if err != nil {
+			return common.Hash{}, err
+		}
+	}
+
 	dbKey := ht.convertKey(0, page).ToBytes()
 	hashBytes, err := ht.db.Get(dbKey, nil)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to get page hash; %s", err)
 	}
-	return *(*common.Hash)(hashBytes), nil
+	copy(out[:], hashBytes)
+	return out, nil
 }
 
 // GetBranchingFactor provides the tree branching factor

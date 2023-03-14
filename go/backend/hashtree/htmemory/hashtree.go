@@ -145,7 +145,10 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 
 func (ht *HashTree) GetPageHash(page int) (common.Hash, error) {
 	if ht.dirtyNodes[0][page] {
-		return common.Hash{}, fmt.Errorf("hash of the node is not prepared") // TODO commit?
+		err := ht.commit()
+		if err != nil {
+			return common.Hash{}, err
+		}
 	}
 	if len(ht.tree[0]) <= page {
 		return common.Hash{}, fmt.Errorf("unable to get hash of not-existing page from hashtree")

@@ -204,18 +204,21 @@ func (ht *HashTree) updateNode(layerFile *os.File, node int, nodeHash []byte) er
 
 // HashRoot provides the hash in the root of the hashing tree
 func (ht *HashTree) HashRoot() (out common.Hash, err error) {
-	hash, err := ht.commit()
+	hashBytes, err := ht.commit()
 	if err != nil {
 		return common.Hash{}, err
 	}
-	copy(out[:], hash)
+	copy(out[:], hashBytes)
 	return
 }
 
 // GetPageHash provides a hash of the tree node.
-func (ht *HashTree) GetPageHash(page int) (hash common.Hash, err error) {
+func (ht *HashTree) GetPageHash(page int) (out common.Hash, err error) {
 	if ht.dirtyPages[page] {
-		return common.Hash{}, fmt.Errorf("hash of the node is not prepared") // TODO commit?
+		_, err := ht.commit()
+		if err != nil {
+			return common.Hash{}, err
+		}
 	}
 
 	// TODO keep file open?
@@ -229,7 +232,8 @@ func (ht *HashTree) GetPageHash(page int) (hash common.Hash, err error) {
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to read nodes layer file; %s", err)
 	}
-	return *(*common.Hash)(hashBytes), nil
+	copy(out[:], hashBytes)
+	return out, nil
 }
 
 // GetBranchingFactor provides the tree branching factor

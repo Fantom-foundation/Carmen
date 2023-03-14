@@ -29,12 +29,12 @@ func (ht *NoHash) HashRoot() (out common.Hash, err error) {
 
 // GetPageHash provides a hash of the tree node.
 func (ht *NoHash) GetPageHash(page int) (hash common.Hash, err error) {
-	panic("obtaining page hash from NoHash HashTree not supported")
+	return common.Hash{}, nil
 }
 
 // GetBranchingFactor provides the tree branching factor
 func (ht *NoHash) GetBranchingFactor() int {
-	panic("obtaining branching factor from NoHash HashTree not supported")
+	return 0
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
