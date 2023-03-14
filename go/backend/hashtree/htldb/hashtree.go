@@ -72,6 +72,21 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 	return
 }
 
+// GetPageHash provides a hash of the tree node.
+func (ht *HashTree) GetPageHash(page int) (hash common.Hash, err error) {
+	dbKey := ht.convertKey(0, page).ToBytes()
+	hashBytes, err := ht.db.Get(dbKey, nil)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to get page hash; %s", err)
+	}
+	return *(*common.Hash)(hashBytes), nil
+}
+
+// GetBranchingFactor provides the tree branching factor
+func (ht *HashTree) GetBranchingFactor() int {
+	return ht.factor
+}
+
 // childrenOfNode provides a concatenation of all children of given node
 func (ht *HashTree) childrenOfNode(layer, node int) (data []byte, err error) {
 	// use iterator to read nodes for the current branching factor

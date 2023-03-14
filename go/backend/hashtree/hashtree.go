@@ -11,6 +11,12 @@ type HashTree interface {
 	// HashRoot computes the hash root of the (merkle) tree.
 	HashRoot() (out common.Hash, err error)
 
+	// GetPageHash provides a hash of the tree node.
+	GetPageHash(page int) (hash common.Hash, err error)
+
+	// GetBranchingFactor provides the tree branching factor
+	GetBranchingFactor() int
+
 	// provides the size of the hash-tree in memory in bytes
 	common.MemoryFootprintProvider
 }

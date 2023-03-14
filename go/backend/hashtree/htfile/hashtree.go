@@ -212,6 +212,31 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 	return
 }
 
+// GetPageHash provides a hash of the tree node.
+func (ht *HashTree) GetPageHash(page int) (hash common.Hash, err error) {
+	if ht.dirtyPages[page] {
+		return common.Hash{}, fmt.Errorf("hash of the node is not prepared") // TODO commit?
+	}
+
+	// TODO keep file open?
+	nodesLayer, err := os.OpenFile(ht.layerFile(0), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to open nodes layer file; %s", err)
+	}
+	defer nodesLayer.Close()
+
+	hashBytes, err := ht.readLayer(nodesLayer, int64(page)*HashLength, HashLength)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to read nodes layer file; %s", err)
+	}
+	return *(*common.Hash)(hashBytes), nil
+}
+
+// GetBranchingFactor provides the tree branching factor
+func (ht *HashTree) GetBranchingFactor() int {
+	return ht.factor
+}
+
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
 func (ht *HashTree) GetMemoryFootprint() *common.MemoryFootprint {
 	dirtyItemSize := unsafe.Sizeof(struct {
