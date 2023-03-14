@@ -2,7 +2,6 @@ package index
 
 import (
 	"errors"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -32,9 +31,9 @@ type Index[K comparable, I common.Identifier] interface {
 	// Also, indexes need to be flush and closable.
 	common.FlushAndCloser
 
-	// Also, indexes need to be snapshotable.
-	// TODO: enable this once ready
-	// backend.Snapshotable
+	// Snapshotable indexes.
+	// TODO: snapshot is not implemented by all indexes
+	//backend.Snapshotable
 }
 
 var (

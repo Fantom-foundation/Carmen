@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -18,6 +17,10 @@ import (
 // first key (by definition Hash = 0) and the hash after the last added key.
 type IndexProof struct {
 	before, after common.Hash
+}
+
+func NewIndexProof(before, after common.Hash) *IndexProof {
+	return &IndexProof{before, after}
 }
 
 func createIndexProofFromData(data []byte) (*IndexProof, error) {
