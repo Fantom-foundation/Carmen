@@ -279,6 +279,10 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
+func (m *Index[K, I]) GetSnapshotVerifier([]byte) (backend.SnapshotVerifier, error) {
+	return index.CreateIndexSnapshotVerifier[K](m.keySerializer), nil
+}
+
 type indexSnapshotSource[K comparable, I common.Identifier] struct {
 	index   *Index[K, I] // The index this snapshot is based on.
 	numKeys int          // The number of keys at the time the snapshot was created.

@@ -170,6 +170,10 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndRestored(t *testing.T) {
 				}
 
 				snapshot, err := original.CreateSnapshot()
+				if err == index.ErrNotSnapshotable {
+					t.Skip(fmt.Sprintf("%v", err))
+				}
+
 				if err != nil {
 					t.Errorf("failed to create snapshot: %v", err)
 					return
@@ -227,6 +231,10 @@ func TestIndexSnapshot_IndexCrosscheckSnapshotCanBeCreatedAndRestored(t *testing
 				}
 
 				snapshot, err := original.CreateSnapshot()
+				if err == index.ErrNotSnapshotable {
+					t.Skip(fmt.Sprintf("%v", err))
+				}
+
 				if err != nil {
 					t.Errorf("failed to create snapshot: %v", err)
 					return
@@ -248,6 +256,10 @@ func TestIndexSnapshot_IndexCrosscheckSnapshotCanBeCreatedAndRestored(t *testing
 					}
 
 					if err := recovered.Restore(snapshot.GetData()); err != nil {
+						if err == index.ErrNotSnapshotable {
+							t.Skip(fmt.Sprintf("%v", err))
+						}
+
 						t.Errorf("failed to sync to %s snapshot: %v", recoveredName, err)
 						return
 					}
@@ -289,6 +301,10 @@ func TestIndexSnapshot_IndexSnapshotIsShieldedFromMutations(t *testing.T) {
 			}
 
 			snapshot, err := original.CreateSnapshot()
+			if err == index.ErrNotSnapshotable {
+				t.Skip(fmt.Sprintf("%v", err))
+			}
+
 			if err != nil {
 				t.Errorf("failed to create snapshot: %v", err)
 				return
@@ -339,7 +355,7 @@ func TestIndexSnapshot_IndexSnapshotRestoreClearsPreviousVersion(t *testing.T) {
 			fillIndex(t, originalIndex, 20)
 
 			snapshot, err := original.CreateSnapshot()
-			if fmt.Sprintf("%v", err) == "wrapped index is not snapshotable" {
+			if err == index.ErrNotSnapshotable {
 				t.Skip(fmt.Sprintf("%v", err))
 			}
 
@@ -389,6 +405,10 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				fillIndex(t, originalIndex, size)
 
 				snapshot, err := original.CreateSnapshot()
+				if err == index.ErrNotSnapshotable {
+					t.Skip(fmt.Sprintf("%v", err))
+				}
+
 				if err != nil {
 					t.Errorf("failed to create snapshot: %v", err)
 					return

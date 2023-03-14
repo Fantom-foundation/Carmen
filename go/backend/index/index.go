@@ -37,5 +37,6 @@ type Index[K comparable, I common.Identifier] interface {
 }
 
 var (
-	ErrNotFound = errors.New("index: key not found")
+	ErrNotFound        = errors.New("index: key not found")
+	ErrNotSnapshotable = errors.New("index: not snapshotable")
 )
