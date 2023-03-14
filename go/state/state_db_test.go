@@ -343,7 +343,9 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
-	mock.EXPECT().setStorage(address1, key2, val2).Return(nil)
+
+	// The second value fetched in the last block must also be retrieved from the store.
+	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
 
 	// In the first transaction key1 is fetched, ending up in the store data cache.
 	db.BeginTransaction()
@@ -366,6 +368,8 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	db.EndTransaction()
 	db.EndBlock(2) // < here the stored data cache is reset to forget the old state; also, key2/val2 is stored in DB
 
+	// At this point address1 should be all empty -- in the store and the caches.
+
 	// In this block we try to read the value again. This time it is not cached
 	// in the snapshot state nor is the account marked as being cleared. The value
 	// is retrieved from the store data cache.
@@ -375,7 +379,7 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	if got := db.GetState(address1, key1); got != zero {
 		t.Errorf("unexpected value, wanted %v, got %v", zero, got)
 	}
-	// The value for key2 is also retrieved from the value store (no expected GetStorage call for this).
+	// The value for key2 is also retrieved from the value store.
 	if got := db.GetState(address1, key2); got != val2 {
 		t.Errorf("unexpected value, wanted %v, got %v", val2, got)
 	}
@@ -1611,6 +1615,40 @@ func TestCarmenStateImplicitAccountCreatedBySetStateIsDroppedSinceEmptyIfNothing
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
 	db.EndBlock(1)
+}
+
+func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
+	// This issue was discovered using Aida Stochastic fuzzing. State information
+	// was not properly cleaned at the end of consecutive transactions writing
+	// storage values into empty accounts.
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+
+	db.BeginTransaction()
+	db.SetState(address1, key1, val1)
+	if db.GetState(address1, key1) != val1 {
+		t.Errorf("failed to set state to non-existing account")
+	}
+	db.EndTransaction() // < should delete the account and its state
+
+	db.BeginTransaction()
+	if db.GetState(address1, key1) != (common.Value{}) {
+		t.Errorf("storage of empty account was not cleaned at end of the first transaction")
+	}
+	db.SetState(address1, key1, val1)
+	db.EndTransaction() // < should be again deleted
+
+	db.BeginTransaction()
+	if db.GetState(address1, key1) != (common.Value{}) {
+		t.Errorf("storage of empty account was not cleaned at end of the second transaction")
+	}
+	db.SetState(address1, key1, val1)
+	db.EndTransaction()
 }
 
 func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
