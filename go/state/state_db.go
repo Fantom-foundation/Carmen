@@ -548,10 +548,10 @@ func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.
 		return val.committed
 	}
 	// If the value is not present, fetch it from the store.
-	return s.LoadStoredState(sid, val)
+	return s.loadStoredState(sid, val)
 }
 
-func (s *stateDB) LoadStoredState(sid slotId, val *slotValue) common.Value {
+func (s *stateDB) loadStoredState(sid slotId, val *slotValue) common.Value {
 	if clearingState, found := s.clearedAccounts[sid.addr]; found && (clearingState == cleared || clearingState == clearedAndTainted) {
 		// If the account has been cleared in a committed transaction within the current block,
 		// the effects are not yet updated in the data base. So it must not be read from the DB
@@ -598,7 +598,7 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 		return val.current
 	}
 	// Fetch missing slot values (will also populate the cache).
-	return s.LoadStoredState(sid, nil)
+	return s.loadStoredState(sid, nil)
 }
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
@@ -823,32 +823,13 @@ func (s *stateDB) EndTransaction() {
 		value.committed, value.committedKnown = value.current, true
 	}
 
-	clearValueStore := func(addr common.Address) {
-		// Clear cached value states for the targeted account.
-		// TODO: this full-map iteration may be slow; if so, some index may be required.
-		s.data.ForEach(func(slot slotId, value *slotValue) {
-			if slot.addr == addr {
-				// Clear cached values.
-				value.stored = common.Value{}
-				value.storedKnown = true
-				value.committed = common.Value{}
-				value.committedKnown = true
-				value.current = common.Value{}
-			}
-		})
-	}
-
 	// EIP-161: At the end of the transaction, any account touched by the execution of that transaction
 	// which is now empty SHALL instead become non-existent (i.e. deleted).
 	for _, addr := range s.emptyCandidates {
 		if s.Empty(addr) {
 			s.accountsToDelete = append(s.accountsToDelete, addr)
-			s.setAccountState(addr, false)
-
-			// If the account to be deleted has some state values, clear them.
-			if state, found := s.clearedAccounts[addr]; found && state == clearedAndTainted {
-				clearValueStore(addr)
-			}
+			// Mark the account storage state to be cleaned below.
+			s.clearedAccounts[addr] = pendingClearing
 		}
 	}
 
@@ -868,7 +849,18 @@ func (s *stateDB) EndTransaction() {
 			s.setCodeInternal(addr, []byte{})
 
 			// Clear cached value states for the targeted account.
-			clearValueStore(addr)
+			// Clear cached value states for the targeted account.
+			// TODO: this full-map iteration may be slow; if so, some index may be required.
+			s.data.ForEach(func(slot slotId, value *slotValue) {
+				if slot.addr == addr {
+					// Clear cached values.
+					value.stored = common.Value{}
+					value.storedKnown = true
+					value.committed = common.Value{}
+					value.committedKnown = true
+					value.current = common.Value{}
+				}
+			})
 
 			// Signal to future fetches in this block that this account should be considered cleared.
 			s.clearedAccounts[addr] = cleared
