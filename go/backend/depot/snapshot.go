@@ -44,21 +44,10 @@ func (p *DepotProof) ToBytes() []byte {
 // A proof of a part is the hash of the page content, which can be effectively
 // obtained from depot implementations.
 type DepotPart struct {
-	proof  *DepotProof
 	values [][]byte
 }
 
 func createDepotPartFromData(data []byte) (*DepotPart, error) {
-	if len(data) < common.HashSize {
-		return nil, fmt.Errorf("invalid encoding of depot part, invalid number of bytes")
-	}
-
-	proof, err := createDepotProofFromData(data[0:common.HashSize])
-	if err != nil {
-		return nil, err
-	}
-	data = data[common.HashSize:]
-
 	if len(data) < 2 {
 		return nil, fmt.Errorf("invalid encoding of depot part, not enough bytes for page size")
 	}
@@ -87,14 +76,14 @@ func createDepotPartFromData(data []byte) (*DepotPart, error) {
 		data = data[lengths[i]:]
 	}
 
-	return &DepotPart{proof, values}, nil
+	return &DepotPart{values}, nil
 }
 
-func (p *DepotPart) GetProof() backend.Proof {
-	return p.proof
-}
-
-func (p *DepotPart) Verify() bool {
+func (p *DepotPart) Verify(proof backend.Proof) bool {
+	depotProof, ok := proof.(*DepotProof)
+	if !ok {
+		return false
+	}
 	h := sha256.New()
 	for _, value := range p.values {
 		buffer := [4]byte{}
@@ -106,11 +95,15 @@ func (p *DepotPart) Verify() bool {
 	}
 	var hash common.Hash
 	h.Sum(hash[0:0])
-	return hash == p.proof.hash
+	return hash == depotProof.hash
 }
 
 func (p *DepotPart) ToBytes() []byte {
-	res := p.proof.ToBytes()
+	size := 0
+	for _, value := range p.values {
+		size += 2 + len(value)
+	}
+	res := make([]byte, 0, size)
 	res = binary.LittleEndian.AppendUint16(res, uint16(len(p.values)))
 	for _, value := range p.values {
 		res = binary.LittleEndian.AppendUint32(res, uint32(len(value)))
@@ -195,16 +188,11 @@ func (s *DepotSnapshot) GetProof(partNumber int) (backend.Proof, error) {
 }
 
 func (s *DepotSnapshot) GetPart(partNumber int) (backend.Part, error) {
-	proof, err := s.GetProof(partNumber)
-	if err != nil {
-		return nil, err
-	}
-
 	values, err := s.source.GetValues(partNumber)
 	if err != nil {
 		return nil, err
 	}
-	return &DepotPart{proof.(*DepotProof), values}, nil
+	return &DepotPart{values}, nil
 }
 
 func (s *DepotSnapshot) VerifyRootProof() error {

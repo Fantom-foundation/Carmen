@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -62,20 +63,10 @@ func GetKeysPerPart[K any](serializer common.Serializer[K]) int {
 // last key of the range of keys of a part.
 type IndexPart[K comparable] struct {
 	serializer common.Serializer[K]
-	proof      *IndexProof
 	keys       []K
 }
 
 func createIndexPartFromData[K comparable](serializer common.Serializer[K], data []byte) (*IndexPart[K], error) {
-	if len(data) < common.HashSize*2 {
-		return nil, fmt.Errorf("invalid encoding of index part, invalid number of bytes")
-	}
-
-	proof, err := createIndexProofFromData(data[0 : common.HashSize*2])
-	if err != nil {
-		return nil, err
-	}
-	data = data[common.HashSize*2:]
 	if len(data)%serializer.Size() != 0 {
 		return nil, fmt.Errorf("invalid encoding of index part, invalid encoding of keys")
 	}
@@ -86,27 +77,27 @@ func createIndexPartFromData[K comparable](serializer common.Serializer[K], data
 		data = data[serializer.Size():]
 	}
 
-	return &IndexPart[K]{serializer, proof, keys}, nil
+	return &IndexPart[K]{serializer, keys}, nil
 }
 
-func (p *IndexPart[K]) GetProof() backend.Proof {
-	return p.proof
-}
-
-func (p *IndexPart[K]) Verify() bool {
+func (p *IndexPart[K]) Verify(proof backend.Proof) bool {
+	indexProof, ok := proof.(*IndexProof)
+	if !ok {
+		return false
+	}
 	h := sha256.New()
-	cur := p.proof.before
+	cur := indexProof.before
 	for _, key := range p.keys {
 		h.Reset()
 		h.Write(cur[:])
 		h.Write(p.serializer.ToBytes(key))
 		h.Sum(cur[0:0])
 	}
-	return cur == p.proof.after
+	return cur == indexProof.after
 }
 
 func (p *IndexPart[K]) ToBytes() []byte {
-	res := p.proof.ToBytes()
+	res := make([]byte, 0, len(p.keys)*p.serializer.Size())
 	for _, key := range p.keys {
 		res = append(res, p.serializer.ToBytes(key)...)
 	}
@@ -203,11 +194,6 @@ func (s *IndexSnapshot[K]) GetProof(part_number int) (backend.Proof, error) {
 }
 
 func (s *IndexSnapshot[K]) GetPart(part_number int) (backend.Part, error) {
-	proof, err := s.GetProof(part_number)
-	if err != nil {
-		return nil, err
-	}
-
 	keysPerPart := maxBytesPerPart / s.serializer.Size()
 	from := keysPerPart * part_number
 	to := keysPerPart * (part_number + 1)
@@ -220,7 +206,7 @@ func (s *IndexSnapshot[K]) GetPart(part_number int) (backend.Part, error) {
 		return nil, err
 	}
 
-	return &IndexPart[K]{s.serializer, proof.(*IndexProof), keys}, nil
+	return &IndexPart[K]{s.serializer, keys}, nil
 }
 
 func (s *IndexSnapshot[K]) VerifyRootProof() error {

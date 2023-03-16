@@ -2,6 +2,8 @@ package index_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/cache"
@@ -9,7 +11,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, uint32] {
@@ -290,13 +291,10 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 							t.Errorf("failed to fetch proof of part %d", i)
 						}
 						part, err := cur.GetPart(i)
-						if err != nil {
+						if err != nil || part == nil {
 							t.Errorf("failed to fetch part %d", i)
 						}
-						if !want.Equal(part.GetProof()) {
-							t.Errorf("proof of part does not equal proof provided by snapshot")
-						}
-						if !part.Verify() {
+						if part != nil && !part.Verify(want) {
 							t.Errorf("failed to verify content of part %d", i)
 						}
 					}

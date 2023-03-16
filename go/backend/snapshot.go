@@ -48,10 +48,8 @@ type Snapshot interface {
 
 // Part is a chunk of data of a data structure's snapshot.
 type Part interface {
-	// GetProof returns the proof certifying the content of this part.
-	GetProof() Proof
-	// Verify tests that the owned proof is valid for the contained data.
-	Verify() bool
+	// Verify tests that the given proof is valid for the contained data.
+	Verify(proof Proof) bool
 	// ToBytes serializes this part such that it can be transfered through IO.
 	ToBytes() []byte
 }

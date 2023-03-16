@@ -39,22 +39,17 @@ func getProofFor(data []byte) myProof {
 // ----------------------------------- Part -----------------------------------
 
 type myPart struct {
-	proof *myProof
-	data  []byte
+	data []byte
 }
 
-func (p *myPart) GetProof() backend.Proof {
-	return p.proof
-}
-
-func (p *myPart) Verify() bool {
+func (p *myPart) Verify(proof backend.Proof) bool {
 	have := getProofFor(p.data)
-	return p.GetProof().Equal(&have)
+	return have.Equal(proof)
 }
 
 func (p *myPart) ToBytes() []byte {
-	res := p.proof.ToBytes()
-	res = append(res, p.data...)
+	res := make([]byte, len(p.data))
+	copy(res, p.data)
 	return res
 }
 
@@ -82,15 +77,11 @@ func (e *mySnapshot) GetProof(part_number int) (backend.Proof, error) {
 }
 
 func (e *mySnapshot) GetPart(part_number int) (backend.Part, error) {
-	proof, err := e.GetProof(part_number)
-	if err != nil {
-		return nil, err
-	}
 	data, err := e.source.GetData(part_number)
 	if err != nil {
 		return nil, err
 	}
-	return &myPart{proof: proof.(*myProof), data: data}, nil
+	return &myPart{data: data}, nil
 }
 
 func (e *mySnapshot) VerifyRootProof() error {
@@ -182,10 +173,7 @@ func (s *SnapshotDataSource) GetData(part_number int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(data) < common.HashSize {
-		return nil, fmt.Errorf("invalid length of example part")
-	}
-	return data[common.HashSize:], nil
+	return data, nil
 }
 
 // ------------------------------- DataStructure ------------------------------
@@ -366,13 +354,10 @@ func TestSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				t.Errorf("failed to fetch proof of part %d", i)
 			}
 			part, err := cur.GetPart(i)
-			if err != nil {
+			if err != nil || part == nil {
 				t.Errorf("failed to fetch part %d", i)
 			}
-			if !want.Equal(part.GetProof()) {
-				t.Errorf("proof of part does not equal proof provided by snapshot")
-			}
-			if !part.Verify() {
+			if part != nil && !part.Verify(want) {
 				t.Errorf("failed to verify content of part %d", i)
 			}
 		}
