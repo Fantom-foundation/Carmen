@@ -56,4 +56,6 @@ func (f *LogFilter) Match(log *Log) bool {
 type LogArchive interface {
 	Add(block uint64, logs []*Log) error
 	Get(filter *LogFilter) ([]*Log, error)
+	GetHash(block uint64) common.Hash
+	Verify(block uint64) bool
 }

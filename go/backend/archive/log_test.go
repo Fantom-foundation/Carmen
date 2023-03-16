@@ -2,6 +2,7 @@ package archive
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"sort"
@@ -54,6 +55,13 @@ func (m *mySortedMap[K, V]) Get(key K) *V {
 	return nil
 }
 
+func (m *mySortedMap[K, V]) LowerBound(key K) mySortedMapIterator[K, V] {
+	pos := sort.Search(len(m.data), func(i int) bool {
+		return !m.less(m.data[i].key, key)
+	})
+	return mySortedMapIterator[K, V]{m.less, m.data, pos, len(m.data)}
+}
+
 func (m *mySortedMap[K, V]) VisitAll(visitor func(K, V) bool) {
 	for _, cur := range m.data {
 		if !visitor(cur.key, cur.value) {
@@ -88,7 +96,7 @@ type mySortedMapIterator[K comparable, V any] struct {
 }
 
 func (i *mySortedMapIterator[K, V]) Done() bool {
-	return i.cur >= i.end
+	return i.cur >= i.end || i.cur < 0
 }
 
 func (i *mySortedMapIterator[K, V]) Key() K {
@@ -101,6 +109,11 @@ func (i *mySortedMapIterator[K, V]) Value() V {
 
 func (i *mySortedMapIterator[K, V]) Next() bool {
 	i.cur++
+	return !i.Done()
+}
+
+func (i *mySortedMapIterator[K, V]) Priv() bool {
+	i.cur--
 	return !i.Done()
 }
 
@@ -174,6 +187,9 @@ type myLogArchive struct {
 
 	// indexes for topics at the 5 possible positions
 	topicIndex [5]mySortedMap[myTopicKey, empty]
+
+	// the archive's hashes at various block heights
+	hashes mySortedMap[uint64, common.Hash]
 }
 
 func newMyLogArchive() *myLogArchive {
@@ -187,6 +203,7 @@ func newMyLogArchive() *myLogArchive {
 			newMySortedMap[myTopicKey, empty](func(a, b myTopicKey) bool { return a.Less(&b) }),
 			newMySortedMap[myTopicKey, empty](func(a, b myTopicKey) bool { return a.Less(&b) }),
 		},
+		hashes: newMySortedMap[uint64, common.Hash](func(a, b uint64) bool { return a < b }),
 	}
 }
 
@@ -252,6 +269,11 @@ func (k *myTopicKey) Less(other *myTopicKey) bool {
 type empty struct{}
 
 func (a *myLogArchive) Add(block uint64, logs []*Log) error {
+	h := sha256.New()
+	predecessorHash := a.GetHash(block)
+	h.Write(predecessorHash[:])
+
+	// Add and index the log entries.
 	count := 0
 	for _, log := range logs {
 		// Add log to main table.
@@ -268,7 +290,20 @@ func (a *myLogArchive) Add(block uint64, logs []*Log) error {
 				a.topicIndex[i].Insert(myTopicKey{log.Topics[i], id}, empty{})
 			}
 		}
+
+		// Add logs to block hash.
+		h.Write(log.Address[:])
+		for i := range log.Topics {
+			h.Write(log.Topics[i][:])
+		}
+		h.Write(log.Data)
 	}
+
+	// Log hash of log archive.
+	var hash common.Hash
+	h.Sum(hash[0:0])
+	a.hashes.Insert(block, hash)
+
 	return nil
 }
 
@@ -449,6 +484,28 @@ func enumerateTopicPatternsInternal(filter [][]Topic, partial []*Topic, consumer
 		partial = partial[0 : len(partial)-1]
 	}
 	return true
+}
+
+func (a *myLogArchive) GetHash(block uint64) common.Hash {
+	iter := a.hashes.LowerBound(block)
+	if iter.Done() {
+		iter.Priv()
+	}
+	if iter.Done() {
+		return common.Hash{}
+	}
+	if iter.Key() <= block {
+		return iter.Value()
+	}
+	iter.Priv()
+	if iter.Done() {
+		return common.Hash{}
+	}
+	return iter.Value()
+}
+
+func (a *myLogArchive) Verify(block uint64) bool {
+	panic("not implemented")
 }
 
 func TestLogCartessionProductOfTopics(t *testing.T) {
@@ -677,5 +734,74 @@ func TestMyLogArchive_FilterReturnMatchingElements(t *testing.T) {
 				t.Errorf("invalid match, filter %v, log %v", test.filter, log)
 			}
 		}
+	}
+}
+
+func TestMyLogArchive_LogArchiveHashesBasics(t *testing.T) {
+	zero := common.Hash{}
+	archive := newMyLogArchive()
+
+	if archive.GetHash(0) != zero {
+		t.Errorf("initial hash is not zero")
+	}
+
+	archive.Add(1, []*Log{
+		{Address: addr1, Topics: [5]Topic{topic1, topic2}, Data: []byte{0}},
+		{Address: addr2, Topics: [5]Topic{topic2, topic3}, Data: []byte{0, 1}},
+		{Address: addr3, Topics: [5]Topic{topic1, topic2, topic3}, Data: []byte{0, 1, 2}},
+	})
+
+	hash1 := archive.GetHash(1)
+	if hash1 == zero {
+		t.Errorf("hash of block 0 is still 0 after insert")
+	}
+
+	archive.Add(4, []*Log{
+		{Address: addr1, Topics: [5]Topic{topic3, topic2, topic1}, Data: []byte{0}},
+		{Address: addr2, Topics: [5]Topic{topic2}, Data: []byte{0, 1}},
+	})
+
+	hash4 := archive.GetHash(4)
+	if hash4 == zero {
+		t.Errorf("hash of block 4 is still 0 after insert")
+	}
+
+	if hash1 == hash4 {
+		t.Errorf("hash of block 1 and 4 must not be equal")
+	}
+
+	for i := 0; i < 10; i++ {
+		want := zero
+		if i >= 1 {
+			want = hash1
+		}
+		if i >= 4 {
+			want = hash4
+		}
+
+		if got := archive.GetHash(uint64(i)); want != got {
+			t.Errorf("invalid hash of block %d, want %v, have %v", i, want, got)
+		}
+	}
+
+}
+
+func TestMyLogArchive_LogsForBlockZeroCanBeSet(t *testing.T) {
+	zero := common.Hash{}
+	archive := newMyLogArchive()
+
+	if archive.GetHash(0) != zero {
+		t.Errorf("initial hash is not zero")
+	}
+
+	archive.Add(0, []*Log{
+		{Address: addr1, Topics: [5]Topic{topic1, topic2}, Data: []byte{0}},
+		{Address: addr2, Topics: [5]Topic{topic2, topic3}, Data: []byte{0, 1}},
+		{Address: addr3, Topics: [5]Topic{topic1, topic2, topic3}, Data: []byte{0, 1, 2}},
+	})
+
+	hash0 := archive.GetHash(0)
+	if hash0 == zero {
+		t.Errorf("hash of block 0 is still 0 after insert")
 	}
 }
