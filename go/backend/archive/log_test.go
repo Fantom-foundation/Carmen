@@ -504,8 +504,68 @@ func (a *myLogArchive) GetHash(block uint64) common.Hash {
 	return iter.Value()
 }
 
-func (a *myLogArchive) Verify(block uint64) bool {
-	panic("not implemented")
+func (a *myLogArchive) Verify(block uint64) error {
+	logIter := a.logs.GetRange(newLogId(0, 0), newLogId(block+1, 0))
+	hashIter := a.hashes.GetRange(0, block+1)
+
+	if logIter.Done() {
+		if hashIter.Done() {
+			return nil
+		}
+		return fmt.Errorf("no data for block %d", hashIter.Key())
+	}
+
+	hash := common.Hash{}
+	h := sha256.New()
+	h.Write(hash[:])
+	currentBlock := logIter.Key().GetBlock()
+	for ; !logIter.Done() && !hashIter.Done(); logIter.Next() {
+		value := logIter.Value()
+		log := toLog(logIter.Key(), &value)
+		if log.Block != currentBlock {
+			var hash common.Hash
+			h.Sum(hash[0:0])
+			if hashIter.Key() < currentBlock {
+				return fmt.Errorf("no data for block %d", hashIter.Key())
+			}
+			if hashIter.Key() > currentBlock {
+				return fmt.Errorf("no hash for block %d", currentBlock)
+			}
+			if hashIter.Value() != hash {
+				return fmt.Errorf("inconsistent hash for block %d", currentBlock)
+			}
+			if !hashIter.Next() {
+				return fmt.Errorf("no hash for block %d", log.Block)
+			}
+			h.Reset()
+			h.Write(hash[:])
+			currentBlock = log.Block
+		}
+
+		h.Write(log.Address[:])
+		for _, topic := range log.Topics {
+			h.Write(topic[:])
+		}
+		h.Write(log.Data)
+	}
+
+	h.Sum(hash[0:0])
+	if hashIter.Key() < currentBlock {
+		return fmt.Errorf("no data for block %d", hashIter.Key())
+	}
+	if hashIter.Key() > currentBlock {
+		return fmt.Errorf("no hash for block %d", currentBlock)
+	}
+	if hashIter.Value() != hash {
+		return fmt.Errorf("inconsistent hash for block %d", currentBlock)
+	}
+	if hashIter.Next() {
+		return fmt.Errorf("no data for block %d", hashIter.Key())
+	}
+
+	// TODO: needs verification of the indexes.
+
+	return nil
 }
 
 func TestLogCartessionProductOfTopics(t *testing.T) {
@@ -803,5 +863,41 @@ func TestMyLogArchive_LogsForBlockZeroCanBeSet(t *testing.T) {
 	hash0 := archive.GetHash(0)
 	if hash0 == zero {
 		t.Errorf("hash of block 0 is still 0 after insert")
+	}
+}
+
+func TestMyLogArchive_EmptyLogArchiveCanBeVerified(t *testing.T) {
+	archive := newMyLogArchive()
+
+	for i := 0; i < 10; i++ {
+		if err := archive.Verify(uint64(i)); err != nil {
+			t.Errorf("failed to verify block height %v, error: %v", i, err)
+		}
+	}
+}
+
+func TestMyLogArchive_NonEmptyLogArchiveCanBeVerified(t *testing.T) {
+	archive := newMyLogArchive()
+
+	archive.Add(1, []*Log{
+		{Address: addr1, Topics: [5]Topic{topic1, topic2}, Data: []byte{0}},
+		{Address: addr2, Topics: [5]Topic{topic2, topic3}, Data: []byte{0, 1}},
+		{Address: addr3, Topics: [5]Topic{topic1, topic2, topic3}, Data: []byte{0, 1, 2}},
+	})
+
+	archive.Add(4, []*Log{
+		{Address: addr1, Topics: [5]Topic{topic3, topic2, topic1}, Data: []byte{0}},
+		{Address: addr2, Topics: [5]Topic{topic2}, Data: []byte{0, 1}},
+	})
+
+	archive.Add(5, []*Log{
+		{Address: addr3, Topics: [5]Topic{topic2, topic1}, Data: []byte{0}},
+		{Address: addr1, Topics: [5]Topic{topic1}, Data: []byte{0, 1, 4}},
+	})
+
+	for i := 0; i < 10; i++ {
+		if err := archive.Verify(uint64(i)); err != nil {
+			t.Errorf("failed to verify block height %v, error: %v", i, err)
+		}
 	}
 }
