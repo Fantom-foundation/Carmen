@@ -167,13 +167,10 @@ func TestMyComposedDataStructureSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				t.Errorf("failed to fetch proof of part %d", i)
 			}
 			part, err := cur.GetPart(i)
-			if err != nil {
+			if err != nil || part == nil {
 				t.Errorf("failed to fetch part %d", i)
 			}
-			if !want.Equal(part.GetProof()) {
-				t.Errorf("proof of part does not equal proof provided by snapshot")
-			}
-			if !part.Verify() {
+			if part != nil && !part.Verify(want) {
 				t.Errorf("failed to verify content of part %d", i)
 			}
 		}

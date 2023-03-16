@@ -45,20 +45,10 @@ func (p *StoreProof) ToBytes() []byte {
 // obtained from store implementations.
 type StorePart[V any] struct {
 	serializer common.Serializer[V]
-	proof      *StoreProof
 	values     []V
 }
 
 func createStorePartFromData[V any](serializer common.Serializer[V], data []byte) (*StorePart[V], error) {
-	if len(data) < common.HashSize {
-		return nil, fmt.Errorf("invalid encoding of store part, invalid number of bytes")
-	}
-
-	proof, err := createStoreProofFromData(data[0:common.HashSize])
-	if err != nil {
-		return nil, err
-	}
-	data = data[common.HashSize:]
 	if len(data)%serializer.Size() != 0 {
 		return nil, fmt.Errorf("invalid encoding of store part, invalid encoding of values")
 	}
@@ -69,25 +59,25 @@ func createStorePartFromData[V any](serializer common.Serializer[V], data []byte
 		data = data[serializer.Size():]
 	}
 
-	return &StorePart[V]{serializer, proof, values}, nil
+	return &StorePart[V]{serializer, values}, nil
 }
 
-func (p *StorePart[K]) GetProof() backend.Proof {
-	return p.proof
-}
-
-func (p *StorePart[K]) Verify() bool {
+func (p *StorePart[K]) Verify(proof backend.Proof) bool {
+	storeProof, ok := proof.(*StoreProof)
+	if !ok {
+		return false
+	}
 	h := sha256.New()
 	for _, value := range p.values {
 		h.Write(p.serializer.ToBytes(value))
 	}
 	var hash common.Hash
 	h.Sum(hash[0:0])
-	return hash == p.proof.hash
+	return hash == storeProof.hash
 }
 
 func (p *StorePart[V]) ToBytes() []byte {
-	res := p.proof.ToBytes()
+	res := make([]byte, 0, len(p.values)*p.serializer.Size())
 	for _, value := range p.values {
 		res = append(res, p.serializer.ToBytes(value)...)
 	}
@@ -169,16 +159,11 @@ func (s *StoreSnapshot[V]) GetProof(partNumber int) (backend.Proof, error) {
 }
 
 func (s *StoreSnapshot[V]) GetPart(partNumber int) (backend.Part, error) {
-	proof, err := s.GetProof(partNumber)
-	if err != nil {
-		return nil, err
-	}
-
 	values, err := s.source.GetValues(partNumber)
 	if err != nil {
 		return nil, err
 	}
-	return &StorePart[V]{s.serializer, proof.(*StoreProof), values}, nil
+	return &StorePart[V]{s.serializer, values}, nil
 }
 
 func (s *StoreSnapshot[V]) VerifyRootProof() error {
