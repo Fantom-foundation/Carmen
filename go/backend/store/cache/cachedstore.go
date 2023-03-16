@@ -47,7 +47,10 @@ func (m *Store[I, V]) Flush() error {
 }
 
 func (m *Store[I, V]) Close() error {
-	return m.Flush()
+	if err := m.Flush(); err != nil {
+		return err
+	}
+	return m.store.Close()
 }
 
 // GetMemoryFootprint provides the size of the store in memory in bytes

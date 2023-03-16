@@ -16,7 +16,7 @@ const (
 
 var emptyAddress common.Address
 
-func getArrayFactories[I common.Identifier, V any](valSerializer common.Serializer[V], pageSize int64, poolSize int) map[string]func(t *testing.T) array.Array[I, V] {
+func getArrayFactories[I common.Identifier, V any](valSerializer common.Serializer[V], pageSize int, poolSize int) map[string]func(t *testing.T) array.Array[I, V] {
 	return map[string]func(t *testing.T) array.Array[I, V]{
 		"pagedArray": func(t *testing.T) array.Array[I, V] {
 			arr, err := pagedarray.NewArray[I, V](t.TempDir(), valSerializer, pageSize, poolSize)

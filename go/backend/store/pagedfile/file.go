@@ -17,7 +17,7 @@ type Store[I common.Identifier, V any] struct {
 
 // NewStore constructs a new instance of FileStore.
 // It needs a serializer of data items and the default value for a not-set item.
-func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], pageSize int64, hashtreeFactory hashtree.Factory, poolSize int) (*Store[I, V], error) {
+func NewStore[I common.Identifier, V any](path string, serializer common.Serializer[V], pageSize int, hashtreeFactory hashtree.Factory, poolSize int) (*Store[I, V], error) {
 	// create directory structure
 	err := os.MkdirAll(path+"/hashes", 0700)
 	if err != nil {
@@ -50,10 +50,6 @@ func (m *Store[I, V]) Get(id I) (value V, err error) {
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
 func (m *Store[I, V]) GetStateHash() (hash common.Hash, err error) {
-	// flush propagates dirty pages from the pagepool
-	if err := m.array.Flush(); err != nil {
-		return hash, err
-	}
 	// update the hashTree and get the hash
 	return m.hashTree.HashRoot()
 }
