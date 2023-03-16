@@ -217,6 +217,10 @@ func (c *IndexPage[K, V]) IsDirty() bool {
 	return c.isDirty
 }
 
+func (c *IndexPage[K, V]) SetDirty(dirty bool) {
+	c.isDirty = dirty
+}
+
 func (c *IndexPage[K, V]) Clear() {
 	c.next = 0
 	c.hasNext = false
