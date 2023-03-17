@@ -101,6 +101,10 @@ func (mi *myIndex) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
+func (i *myIndex) GetSnapshotVerifier(backend.SnapshotData) (backend.SnapshotVerifier, error) {
+	return CreateIndexSnapshotVerifier[common.Address](common.AddressSerializer{}), nil
+}
+
 type myIndexSnapshotSource struct {
 	// The index this snapshot is based on.
 	index *myIndex
@@ -275,7 +279,12 @@ func TestIndexSnapshot_MyIndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				t.Errorf("root proof of snapshot does not match proof of data structure")
 			}
 
-			if err := cur.VerifyRootProof(); err != nil {
+			verifier, err := original.GetSnapshotVerifier(cur.GetData())
+			if err != nil {
+				t.Fatalf("failed to obtain snapshot verifier")
+			}
+
+			if proof, err := verifier.VerifyRootProof(cur.GetData()); err != nil || !proof.Equal(want) {
 				t.Errorf("snapshot invalid, inconsistent proofs: %v", err)
 			}
 
@@ -289,7 +298,7 @@ func TestIndexSnapshot_MyIndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				if err != nil || part == nil {
 					t.Errorf("failed to fetch part %d", i)
 				}
-				if part != nil && !part.Verify(want) {
+				if part != nil && verifier.VerifyPart(i, want.ToBytes(), part.ToBytes()) != nil {
 					t.Errorf("failed to verify content of part %d", i)
 				}
 			}

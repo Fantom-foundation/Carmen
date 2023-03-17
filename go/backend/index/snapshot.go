@@ -80,22 +80,6 @@ func createIndexPartFromData[K comparable](serializer common.Serializer[K], data
 	return &IndexPart[K]{serializer, keys}, nil
 }
 
-func (p *IndexPart[K]) Verify(proof backend.Proof) bool {
-	indexProof, ok := proof.(*IndexProof)
-	if !ok {
-		return false
-	}
-	h := sha256.New()
-	cur := indexProof.before
-	for _, key := range p.keys {
-		h.Reset()
-		h.Write(cur[:])
-		h.Write(p.serializer.ToBytes(key))
-		h.Sum(cur[0:0])
-	}
-	return cur == indexProof.after
-}
-
 func (p *IndexPart[K]) ToBytes() []byte {
 	res := make([]byte, 0, len(p.keys)*p.serializer.Size())
 	for _, key := range p.keys {
@@ -209,29 +193,6 @@ func (s *IndexSnapshot[K]) GetPart(part_number int) (backend.Part, error) {
 	return &IndexPart[K]{s.serializer, keys}, nil
 }
 
-func (s *IndexSnapshot[K]) VerifyRootProof() error {
-	// Check that proofs are properly chained.
-	cur := common.Hash{}
-	if cur != s.proof.before {
-		return fmt.Errorf("broken proof chain start encountered, wanted %v, got %v", cur, s.proof.after)
-	}
-	for i := 0; i < s.GetNumParts(); i++ {
-		proof, err := s.GetProof(i)
-		if err != nil {
-			return err
-		}
-		indexProof := proof.(*IndexProof)
-		if indexProof.before != cur {
-			return fmt.Errorf("broken proof chain link encountered at step %d, wanted %v, got %v", i, cur, indexProof.before)
-		}
-		cur = indexProof.after
-	}
-	if cur != s.proof.after {
-		return fmt.Errorf("broken proof chain end encountered, wanted %v, got %v", cur, s.proof.after)
-	}
-	return nil
-}
-
 func (s *IndexSnapshot[K]) GetData() backend.SnapshotData {
 	return s
 }
@@ -332,5 +293,67 @@ func (s *indexSourceFromData[K]) GetKeys(from, to int) ([]K, error) {
 }
 
 func (s *indexSourceFromData[K]) Release() error {
+	return nil
+}
+
+// ----------------------------- SnapshotVerifier -----------------------------
+
+type indexSnapshotVerifier[K comparable] struct {
+	serializer common.Serializer[K]
+}
+
+func CreateIndexSnapshotVerifier[K comparable](serializer common.Serializer[K]) *indexSnapshotVerifier[K] {
+	return &indexSnapshotVerifier[K]{serializer}
+}
+
+func (i *indexSnapshotVerifier[K]) VerifyRootProof(data backend.SnapshotData) (backend.Proof, error) {
+	snapshot, err := CreateIndexSnapshotFromData(i.serializer, data)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check that proofs are properly chained.
+	cur := common.Hash{}
+	if cur != snapshot.proof.before {
+		return nil, fmt.Errorf("broken proof chain start encountered, wanted %v, got %v", cur, snapshot.proof.after)
+	}
+	for i := 0; i < snapshot.GetNumParts(); i++ {
+		proof, err := snapshot.GetProof(i)
+		if err != nil {
+			return nil, err
+		}
+		indexProof := proof.(*IndexProof)
+		if indexProof.before != cur {
+			return nil, fmt.Errorf("broken proof chain link encountered at step %d, wanted %v, got %v", i, cur, indexProof.before)
+		}
+		cur = indexProof.after
+	}
+	if cur != snapshot.proof.after {
+		return nil, fmt.Errorf("broken proof chain end encountered, wanted %v, got %v", cur, snapshot.proof.after)
+	}
+	return snapshot.proof, nil
+}
+
+func (i *indexSnapshotVerifier[K]) VerifyPart(_ int, proof, part []byte) error {
+	indexProof, err := createIndexProofFromData(proof)
+	if err != nil {
+		return err
+	}
+	indexPart, err := createIndexPartFromData(i.serializer, part)
+	if err != nil {
+		return err
+	}
+
+	h := sha256.New()
+	cur := indexProof.before
+	for _, key := range indexPart.keys {
+		h.Reset()
+		h.Write(cur[:])
+		h.Write(i.serializer.ToBytes(key))
+		h.Sum(cur[0:0])
+	}
+	if cur != indexProof.after {
+		return fmt.Errorf("proof does not certify part content")
+	}
 	return nil
 }

@@ -65,25 +65,6 @@ func (s *ComposedSnapshot) GetPart(part_number int) (Part, error) {
 	return nil, fmt.Errorf("no such part")
 }
 
-func (s *ComposedSnapshot) VerifyRootProof() error {
-	// Verify the root proof.
-	proofs := make([]Proof, 0, len(s.snapshots))
-	for _, snapshot := range s.snapshots {
-		proofs = append(proofs, snapshot.GetRootProof())
-	}
-	if !s.proof.Equal(GetComposedProof(proofs)) {
-		return fmt.Errorf("invalid root hash")
-	}
-
-	// Verify proofs of individual snapshots.
-	for _, snapshot := range s.snapshots {
-		if err := snapshot.VerifyRootProof(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *ComposedSnapshot) GetData() SnapshotData {
 	return s
 }
@@ -158,20 +139,20 @@ func (d *ComposedSnapshot) GetMetaData() ([]byte, error) {
 }
 
 // SplitCompositeData divides the provided view of snapshot data in a list of views of
-// the sub-snapshots contained in a composed snapshot.
-func SplitCompositeData(data SnapshotData) ([]SnapshotData, error) {
+// the sub-snapshots contained in a composed snapshot and their respective part counts.
+func SplitCompositeData(data SnapshotData) ([]SnapshotData, []int, error) {
 	// This is the inverse operation to the GetMetaData() encoding above.
 	metadata, err := data.GetMetaData()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(metadata) < 1 {
-		return nil, fmt.Errorf("invalid metadata encoding, not enough bytes")
+		return nil, nil, fmt.Errorf("invalid metadata encoding, not enough bytes")
 	}
 	numEntries := metadata[0]
 	metadata = metadata[1:]
 	if len(metadata) < 4*int(numEntries) {
-		return nil, fmt.Errorf("invalid metadata encoding, invalid metadata length")
+		return nil, nil, fmt.Errorf("invalid metadata encoding, invalid metadata length")
 	}
 
 	lengths := []uint32{}
@@ -183,7 +164,7 @@ func SplitCompositeData(data SnapshotData) ([]SnapshotData, error) {
 	splitMetadata := [][]byte{}
 	for _, length := range lengths {
 		if len(metadata) < int(length) {
-			return nil, fmt.Errorf("invalid metadata encoding, data truncated")
+			return nil, nil, fmt.Errorf("invalid metadata encoding, data truncated")
 		}
 		splitMetadata = append(splitMetadata, metadata[0:length])
 		metadata = metadata[length:]
@@ -191,7 +172,7 @@ func SplitCompositeData(data SnapshotData) ([]SnapshotData, error) {
 
 	sizes := []int{}
 	if len(metadata) < int(numEntries)*8 {
-		return nil, fmt.Errorf("invalid metadata encoding, snapshot sizes truncated")
+		return nil, nil, fmt.Errorf("invalid metadata encoding, snapshot sizes truncated")
 	}
 	for i := byte(0); i < numEntries; i++ {
 		sizes = append(sizes, int(binary.LittleEndian.Uint64(metadata)))
@@ -205,7 +186,7 @@ func SplitCompositeData(data SnapshotData) ([]SnapshotData, error) {
 		offset += sizes[i]
 	}
 
-	return res, nil
+	return res, sizes, nil
 }
 
 // offsettedSnapshotData is a utility type to produce sub-snapshot views of
@@ -251,4 +232,50 @@ func (p *composedSnapshotProof) Equal(other Proof) bool {
 
 func (p *composedSnapshotProof) ToBytes() []byte {
 	return p.hash[:]
+}
+
+type composedSnapshotVerifier struct {
+	numParts []int
+	verifier []SnapshotVerifier
+}
+
+func NewComposedSnapshotVerifier(verifier []SnapshotVerifier, numParts []int) SnapshotVerifier {
+	if len(verifier) != len(numParts) {
+		panic("must provide same number of verifiers and part counts")
+	}
+	return &composedSnapshotVerifier{numParts, verifier}
+}
+
+func (v *composedSnapshotVerifier) VerifyRootProof(data SnapshotData) (Proof, error) {
+	subData, _, err := SplitCompositeData(data)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(subData) != len(v.verifier) {
+		return nil, fmt.Errorf("invalid snapshot data format")
+	}
+
+	// Verify proofs of individual snapshots and collect their root proofs.
+	proofs := make([]Proof, 0, len(subData))
+	for i, verifier := range v.verifier {
+		if proof, err := verifier.VerifyRootProof(subData[i]); err != nil {
+			return nil, err
+		} else {
+			proofs = append(proofs, proof)
+		}
+	}
+
+	// Compute the root proof of the composit.
+	return GetComposedProof(proofs), nil
+}
+
+func (v *composedSnapshotVerifier) VerifyPart(number int, proof, part []byte) error {
+	for i := 0; i < len(v.verifier); i++ {
+		if number < v.numParts[i] {
+			return v.verifier[i].VerifyPart(number, proof, part)
+		}
+		number -= v.numParts[i]
+	}
+	return fmt.Errorf("no part with number %d", number)
 }

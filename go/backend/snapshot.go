@@ -14,8 +14,7 @@ package backend
 // even from multiple sources.
 //
 // Each part has a Proof associated, capable of certifying its content. Those
-// proofs are, like Parts, data structure dependent. However, Parts provide can
-// by verified through ther `Verify` method.
+// proofs are, like Parts, data structure dependent.
 //
 // Furthermore, snapshots provide access to Proofs of Parts without retrieving
 // the full Part and its associated data, for faster cross-validation.
@@ -30,13 +29,9 @@ type Snapshot interface {
 	// GetNumParts retrieves the number of parts in this snapshot.
 	GetNumParts() int
 	// GetProof retrieves the proof for a part, without loading the part.
-	GetProof(part_number int) (Proof, error)
+	GetProof(partNumber int) (Proof, error)
 	// GetPart retrieves a part of the snapshot.
-	GetPart(part_number int) (Part, error)
-
-	// VerifyProofs verifies that the proofs of the parts are consistent with
-	// snapshot's root proof. Note: it does not verify individual parts.
-	VerifyRootProof() error
+	GetPart(partNumber int) (Part, error)
 
 	// GetData provides a type-erased view on this snapshot to be used for
 	// syncing data structures, potentially over the network.
@@ -48,8 +43,6 @@ type Snapshot interface {
 
 // Part is a chunk of data of a data structure's snapshot.
 type Part interface {
-	// Verify tests that the given proof is valid for the contained data.
-	Verify(proof Proof) bool
 	// ToBytes serializes this part such that it can be transfered through IO.
 	ToBytes() []byte
 }
@@ -72,9 +65,21 @@ type SnapshotData interface {
 	// structure specific.
 	GetMetaData() ([]byte, error)
 	// GetProofData retrieves a serialized form of the proof of a requested part.
-	GetProofData(part_number int) ([]byte, error)
+	GetProofData(partNumber int) ([]byte, error)
 	// GetPartData retrieves a serialized form of a requested part.
-	GetPartData(part_number int) ([]byte, error)
+	GetPartData(partNumber int) ([]byte, error)
+}
+
+// SnapshotVerifier provides abstract means for verifying individual parts of a
+// snapshot. It is to be provided by a snapshotable data structure to enable
+// the verification of snapshot data during synchronization.
+type SnapshotVerifier interface {
+	// VerifyRootProof verifies that the proofs of the parts provided by the
+	// given SnapshotData are consistent with the snapshot's root proof, which
+	// is returned for cross-referencing with other sources.
+	VerifyRootProof(data SnapshotData) (Proof, error)
+	// VerifyPart tests that the given proof is valid for the provided part.
+	VerifyPart(number int, proof, part []byte) error
 }
 
 // Snapshotable is an interface to be implemented by data structure to support
@@ -92,4 +97,7 @@ type Snapshotable interface {
 	// particular, it is not required to be able to synchronize to a former
 	// snapshot derived from the targeted data structure.
 	Restore(data SnapshotData) error
+	// GetSnapshotVerifier produces a verifyer for snapshot data accepted by
+	// this Snapshotable data structure.
+	GetSnapshotVerifier(data SnapshotData) (SnapshotVerifier, error)
 }
