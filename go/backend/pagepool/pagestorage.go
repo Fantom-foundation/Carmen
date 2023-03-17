@@ -76,6 +76,7 @@ func (c *FilePageStorage) Load(pageId int, page Page) error {
 	}
 
 	page.FromBytes(c.buffer)
+	page.SetDirty(false)
 	return nil
 }
 
@@ -90,6 +91,7 @@ func (c *FilePageStorage) Store(pageId int, page Page) (err error) {
 	}
 
 	c.updateUse(pageId)
+	page.SetDirty(false)
 	return
 }
 

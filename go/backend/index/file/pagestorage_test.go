@@ -18,6 +18,9 @@ func TestPageStorageTwoFilesStoreLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
 
 	loadPageA := NewIndexPage[common.Address, uint32](common.PageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
 	idA := NewPageId(5, 0)
@@ -79,6 +82,9 @@ func TestPageStorageTwoFilesRemovePage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
 
 	err = s.Store(NewPageId(2, 0), initPageA())
 	if err != nil {
@@ -126,6 +132,9 @@ func TestPageStorageTwoFilesDataPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
 
 	loadPageA := NewIndexPage[common.Address, uint32](common.PageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
 	idA := NewPageId(5, 0)
@@ -202,6 +211,81 @@ func testPageContent(t *testing.T, start, expectedSize int, page *IndexPage[comm
 		if item, exists := page.get(key); !exists || item != uint32(i) {
 			t.Errorf("Missing value: key %v -> %d != %d ", key, item, uint32(i))
 		}
+	}
+}
+
+func TestPageDirtyFlag(t *testing.T) {
+	tempDir := t.TempDir()
+	s, err := NewTwoFilesPageStorage(tempDir, common.PageSize)
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
+
+	idA := NewPageId(5, 0)
+	page := initPageA()
+
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("new page should be dirty")
+	}
+
+	_ = s.Store(idA, page)
+
+	if dirty := page.IsDirty(); dirty {
+		t.Errorf("persisted page should not be dirty")
+	}
+
+	page.Clear()
+
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("cleared page should be dirty")
+	}
+
+	_ = s.Load(idA, page)
+	if dirty := page.IsDirty(); dirty {
+		t.Errorf("freshly loaded page should not be dirty")
+	}
+
+	// test each modification
+	page.put(common.Address{10}, 10)
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
+	}
+
+	_ = s.Load(idA, page) // make non-dirty
+	page.remove(common.Address{1})
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
+	}
+
+	_ = s.Load(idA, page) // make non-dirty
+	page.removeNext()
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
+	}
+
+	_ = s.Load(idA, page) // make non-dirty
+	page.setNext(999)
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
+	}
+
+	_ = s.Load(idA, page) // make non-dirty
+	page.setNumKeys(5)
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
+	}
+
+	_ = s.Load(idA, page) // make non-dirty
+	dump := make([]byte, common.PageSize)
+	page.ToBytes(dump)
+
+	restoredPage := NewIndexPage[common.Address, uint32](common.PageSize, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressComparator{})
+	restoredPage.FromBytes(dump)
+	if dirty := restoredPage.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
 	}
 }
 

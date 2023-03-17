@@ -44,13 +44,16 @@ func TestPageOverflows(t *testing.T) {
 	evictedPage := NewRawPage(common.PageSize)
 	evictedPage.FromBytes(data[:]) // to track a non-empty page
 
-	page := NewRawPage(common.PageSize)
+	page1 := NewRawPage(common.PageSize)
+	page2 := NewRawPage(common.PageSize)
+	page3 := NewRawPage(common.PageSize)
+
 	// 3 pages with 4 items each
 	_ = pagePool.put(pageA, evictedPage)
-	_ = pagePool.put(pageB, page)
-	_ = pagePool.put(pageC, page)
+	_ = pagePool.put(pageB, page1)
+	_ = pagePool.put(pageC, page2)
 
-	_ = pagePool.put(pageD, page)
+	_ = pagePool.put(pageD, page3)
 
 	// Here a page is loaded from the persistent storage.
 	// If the page exists there, it verifies the page was evicted from the page pool

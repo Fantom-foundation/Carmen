@@ -20,4 +20,7 @@ type Page interface {
 
 	// IsDirty should return true if the was modified after it has been last saved
 	IsDirty() bool
+
+	// SetDirty sets the dirty flag of this page
+	SetDirty(dirty bool)
 }

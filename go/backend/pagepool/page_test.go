@@ -14,7 +14,8 @@ type RawPage struct {
 // NewRawPage creates a new page with the size given in bytes
 func NewRawPage(byteSize int) *RawPage {
 	return &RawPage{
-		data: make([]byte, 0, byteSize),
+		data:  make([]byte, 0, byteSize),
+		dirty: true,
 	}
 }
 
@@ -29,6 +30,7 @@ func (p *RawPage) FromBytes(pageData []byte) {
 
 func (p *RawPage) Clear() {
 	p.data = p.data[0:0]
+	p.dirty = true
 }
 
 func (p *RawPage) Size() int {
@@ -37,6 +39,10 @@ func (p *RawPage) Size() int {
 
 func (p *RawPage) IsDirty() bool {
 	return p.dirty
+}
+
+func (p *RawPage) SetDirty(dirty bool) {
+	p.dirty = dirty
 }
 
 func (p *RawPage) GetMemoryFootprint() *common.MemoryFootprint {

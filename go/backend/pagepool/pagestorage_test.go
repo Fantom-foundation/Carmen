@@ -17,6 +17,9 @@ func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
 
 	loadPageA := NewRawPage(common.PageSize)
 	if err := s.Load(5, loadPageA); loadPageA.Size() != 0 || err != nil {
@@ -43,6 +46,9 @@ func TestPageStorageSingleFilesDataPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
 
 	loadPageA := NewRawPage(common.PageSize)
 	if err := s.Load(5, loadPageA); loadPageA.Size() != 0 || err != nil {
@@ -94,6 +100,9 @@ func TestPageStorageSingleFileRemovePage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error: %s", err)
 	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
 
 	err = s.Store(5, initPageA())
 	if err != nil {
@@ -124,6 +133,50 @@ func TestPageStorageSingleFileRemovePage(t *testing.T) {
 	loadPageA := NewRawPage(common.PageSize)
 	if err := s.Load(5, loadPageA); loadPageA.Size() > 0 || err != nil {
 		t.Errorf("Page should not exist")
+	}
+}
+
+func TestPageDirtyFlag(t *testing.T) {
+	tempDir := t.TempDir() + "/file.dat"
+	s, err := NewFilePageStorage(tempDir, common.PageSize)
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
+
+	page := initPageA()
+
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("new page should be dirty")
+	}
+
+	_ = s.Store(1, page)
+
+	if dirty := page.IsDirty(); dirty {
+		t.Errorf("persisted page should not be dirty")
+	}
+
+	page.Clear()
+
+	if dirty := page.IsDirty(); !dirty {
+		t.Errorf("cleared page should be dirty")
+	}
+
+	_ = s.Load(1, page)
+
+	if dirty := page.IsDirty(); dirty {
+		t.Errorf("freshly loaded page should not be dirty")
+	}
+
+	dump := make([]byte, page.Size())
+	page.ToBytes(dump)
+
+	restoredPage := NewRawPage(common.PageSize)
+	restoredPage.FromBytes(dump)
+	if dirty := restoredPage.IsDirty(); !dirty {
+		t.Errorf("page should be dirty")
 	}
 }
 
