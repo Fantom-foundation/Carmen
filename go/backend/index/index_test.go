@@ -280,8 +280,13 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 						t.Errorf("root proof of snapshot does not match proof of data structure")
 					}
 
-					if err := cur.VerifyRootProof(); err != nil {
-						t.Errorf("snapshot invalid, inconsistent proofs: %v", err)
+					verifier, err := original.GetSnapshotVerifier(cur.GetData())
+					if err != nil {
+						t.Fatalf("failed to obtain snapshot verifier")
+					}
+
+					if proof, err := verifier.VerifyRootProof(cur.GetData()); err != nil || !proof.Equal(want) {
+						t.Errorf("snapshot invalid, inconsistent proofs: %v, want %v, got %v", err, want, proof)
 					}
 
 					// Verify all pages
@@ -294,7 +299,7 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 						if err != nil || part == nil {
 							t.Errorf("failed to fetch part %d", i)
 						}
-						if part != nil && !part.Verify(want) {
+						if part != nil && verifier.VerifyPart(i, want.ToBytes(), part.ToBytes()) != nil {
 							t.Errorf("failed to verify content of part %d", i)
 						}
 					}

@@ -55,8 +55,24 @@ func (s *myComposedDataStructure) Restore(data backend.SnapshotData) error {
 	return s.b.Restore(snapshots[1].GetData())
 }
 
+func (s *myComposedDataStructure) GetSnapshotVerifier(data backend.SnapshotData) (backend.SnapshotVerifier, error) {
+	subData, partCounts, err := backend.SplitCompositeData(data)
+	if err != nil {
+		return nil, err
+	}
+	verifierA, err := s.a.GetSnapshotVerifier(subData[0])
+	if err != nil {
+		return nil, err
+	}
+	verifierB, err := s.a.GetSnapshotVerifier(subData[1])
+	if err != nil {
+		return nil, err
+	}
+	return backend.NewComposedSnapshotVerifier([]backend.SnapshotVerifier{verifierA, verifierB}, partCounts), nil
+}
+
 func createCompositeDataSnapshotFromData(data backend.SnapshotData) (*backend.ComposedSnapshot, error) {
-	split, err := backend.SplitCompositeData(data)
+	split, _, err := backend.SplitCompositeData(data)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +172,13 @@ func TestMyComposedDataStructureSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			t.Errorf("root proof of snapshot does not match proof of data structure: %v vs %v", want, have)
 		}
 
-		if err := cur.VerifyRootProof(); err != nil {
-			t.Errorf("snapshot invalid, inconsistent proofs")
+		verifier, err := structure.GetSnapshotVerifier(cur.GetData())
+		if err != nil {
+			t.Fatalf("failed to obtain snapshot verifier")
+		}
+
+		if proof, err := verifier.VerifyRootProof(cur.GetData()); err != nil || !proof.Equal(want) {
+			t.Errorf("snapshot invalid, inconsistent proofs: %v, want %v, got %v", err, want, proof)
 		}
 
 		// Verify all pages
@@ -170,7 +191,7 @@ func TestMyComposedDataStructureSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			if err != nil || part == nil {
 				t.Errorf("failed to fetch part %d", i)
 			}
-			if part != nil && !part.Verify(want) {
+			if part != nil && verifier.VerifyPart(i, want.ToBytes(), part.ToBytes()) != nil {
 				t.Errorf("failed to verify content of part %d", i)
 			}
 		}

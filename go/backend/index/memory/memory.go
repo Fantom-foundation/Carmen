@@ -2,11 +2,12 @@ package memory
 
 import (
 	"fmt"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"unsafe"
 )
 
 const initCapacity = 10_000
@@ -137,6 +138,10 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	}
 
 	return nil
+}
+
+func (m *Index[K, I]) GetSnapshotVerifier(backend.SnapshotData) (backend.SnapshotVerifier, error) {
+	return index.CreateIndexSnapshotVerifier(m.keySerializer), nil
 }
 
 type indexSnapshotSource[K comparable, I common.Identifier] struct {

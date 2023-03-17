@@ -28,6 +28,15 @@ func (p *myProof) ToBytes() []byte {
 	return p.hash[:]
 }
 
+func myProofFromBytes(data []byte) (*myProof, error) {
+	if len(data) != common.HashSize {
+		return nil, fmt.Errorf("invalid proof format")
+	}
+	res := &myProof{}
+	copy(res.hash[:], data)
+	return res, nil
+}
+
 func getProofFor(data []byte) myProof {
 	hash := sha256.New()
 	hash.Write(data)
@@ -40,11 +49,6 @@ func getProofFor(data []byte) myProof {
 
 type myPart struct {
 	data []byte
-}
-
-func (p *myPart) Verify(proof backend.Proof) bool {
-	have := getProofFor(p.data)
-	return have.Equal(proof)
 }
 
 func (p *myPart) ToBytes() []byte {
@@ -82,23 +86,6 @@ func (e *mySnapshot) GetPart(part_number int) (backend.Part, error) {
 		return nil, err
 	}
 	return &myPart{data: data}, nil
-}
-
-func (e *mySnapshot) VerifyRootProof() error {
-	h := sha256.New()
-	for i := 0; i < e.GetNumParts(); i++ {
-		proof, err := e.GetProof(i)
-		if err != nil {
-			return err
-		}
-		h.Write(proof.(*myProof).ToBytes())
-	}
-	var hash common.Hash
-	h.Sum(hash[:])
-	if hash != e.proof.hash {
-		return fmt.Errorf("proof validation failed")
-	}
-	return nil
 }
 
 func (e *mySnapshot) GetData() backend.SnapshotData {
@@ -246,6 +233,10 @@ func (d *myDataStructure) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
+func (d *myDataStructure) GetSnapshotVerifier(data backend.SnapshotData) (backend.SnapshotVerifier, error) {
+	return mySnapshotVerifier{}, nil
+}
+
 type myDataStructureCopy struct {
 	proofs []myProof
 	data   [][]byte
@@ -263,6 +254,43 @@ func (s *myDataStructureCopy) GetData(part_number int) ([]byte, error) {
 		return nil, fmt.Errorf("no such part")
 	}
 	return s.data[part_number], nil
+}
+
+type mySnapshotVerifier struct{}
+
+func (mySnapshotVerifier) VerifyRootProof(data backend.SnapshotData) (backend.Proof, error) {
+	snapshot, err := createMySnapshotFromData(data)
+	if err != nil {
+		return nil, err
+	}
+
+	h := sha256.New()
+	for i := 0; i < snapshot.GetNumParts(); i++ {
+		proof, err := snapshot.GetProof(i)
+		if err != nil {
+			return nil, err
+		}
+		h.Write(proof.(*myProof).ToBytes())
+	}
+	var hash common.Hash
+	h.Sum(hash[:])
+	rootProof := snapshot.GetRootProof()
+	if hash != rootProof.(*myProof).hash {
+		return nil, fmt.Errorf("proof validation failed")
+	}
+	return rootProof, nil
+}
+
+func (mySnapshotVerifier) VerifyPart(_ int, proofData, part []byte) error {
+	proof, err := myProofFromBytes(proofData)
+	if err != nil {
+		return err
+	}
+	have := getProofFor(part)
+	if !have.Equal(proof) {
+		return fmt.Errorf("invalid proof for my part")
+	}
+	return nil
 }
 
 // ----------------------------------- Tests ----------------------------------
@@ -343,8 +371,13 @@ func TestSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			t.Errorf("root proof of snapshot does not match proof of data structure")
 		}
 
-		if err := cur.VerifyRootProof(); err != nil {
-			t.Errorf("snapshot invalid, inconsistent proofs")
+		verifier, err := structure.GetSnapshotVerifier(cur.GetData())
+		if err != nil {
+			t.Fatalf("failed to obtain snapshot verifier")
+		}
+
+		if proof, err := verifier.VerifyRootProof(cur.GetData()); err != nil || !proof.Equal(want) {
+			t.Errorf("snapshot invalid, inconsistent proofs: %v, want %v, got %v", err, want, proof)
 		}
 
 		// Verify all pages
@@ -357,7 +390,7 @@ func TestSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			if err != nil || part == nil {
 				t.Errorf("failed to fetch part %d", i)
 			}
-			if part != nil && !part.Verify(want) {
+			if part != nil && verifier.VerifyPart(i, want.ToBytes(), part.ToBytes()) != nil {
 				t.Errorf("failed to verify content of part %d", i)
 			}
 		}

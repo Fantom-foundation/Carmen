@@ -79,25 +79,6 @@ func createDepotPartFromData(data []byte) (*DepotPart, error) {
 	return &DepotPart{values}, nil
 }
 
-func (p *DepotPart) Verify(proof backend.Proof) bool {
-	depotProof, ok := proof.(*DepotProof)
-	if !ok {
-		return false
-	}
-	h := sha256.New()
-	for _, value := range p.values {
-		buffer := [4]byte{}
-		binary.LittleEndian.AppendUint32(buffer[0:0], uint32(len(value)))
-		h.Write(buffer[:])
-	}
-	for _, value := range p.values {
-		h.Write(value)
-	}
-	var hash common.Hash
-	h.Sum(hash[0:0])
-	return hash == depotProof.hash
-}
-
 func (p *DepotPart) ToBytes() []byte {
 	size := 0
 	for _, value := range p.values {
@@ -195,17 +176,6 @@ func (s *DepotSnapshot) GetPart(partNumber int) (backend.Part, error) {
 	return &DepotPart{values}, nil
 }
 
-func (s *DepotSnapshot) VerifyRootProof() error {
-	hash, err := s.computeRootHash()
-	if err != nil {
-		return err
-	}
-	if s.proof.hash != hash {
-		return fmt.Errorf("inconsistent root proof encountered")
-	}
-	return nil
-}
-
 func (s *DepotSnapshot) computeRootHash() (common.Hash, error) {
 	// Note: This should not use the lazy hash tree infrastructure, since this
 	// would require to fetch all the data from the pages. Instead, it should
@@ -283,5 +253,57 @@ func (s *depotSourceFromData) GetValues(pageNumber int) ([][]byte, error) {
 }
 
 func (s *depotSourceFromData) Release() error {
+	return nil
+}
+
+// ----------------------------- SnapshotVerifier -----------------------------
+
+type depotSnapshotVerifier struct {
+}
+
+func CreateDepotSnapshotVerifier() *depotSnapshotVerifier {
+	return &depotSnapshotVerifier{}
+}
+
+func (i *depotSnapshotVerifier) VerifyRootProof(data backend.SnapshotData) (backend.Proof, error) {
+	snapshot, err := CreateDepotSnapshotFromData(data)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := snapshot.computeRootHash()
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.proof.hash != hash {
+		return nil, fmt.Errorf("inconsistent root proof encountered")
+	}
+	return snapshot.proof, nil
+}
+
+func (i *depotSnapshotVerifier) VerifyPart(_ int, proof, part []byte) error {
+	depotProof, err := createDepotProofFromData(proof)
+	if err != nil {
+		return err
+	}
+	depotPart, err := createDepotPartFromData(part)
+	if err != nil {
+		return err
+	}
+
+	h := sha256.New()
+	for _, value := range depotPart.values {
+		buffer := [4]byte{}
+		binary.LittleEndian.AppendUint32(buffer[0:0], uint32(len(value)))
+		h.Write(buffer[:])
+	}
+	for _, value := range depotPart.values {
+		h.Write(value)
+	}
+	var hash common.Hash
+	h.Sum(hash[0:0])
+	if hash != depotProof.hash {
+		return fmt.Errorf("invalid proof for depot part content")
+	}
 	return nil
 }

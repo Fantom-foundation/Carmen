@@ -62,20 +62,6 @@ func createStorePartFromData[V any](serializer common.Serializer[V], data []byte
 	return &StorePart[V]{serializer, values}, nil
 }
 
-func (p *StorePart[K]) Verify(proof backend.Proof) bool {
-	storeProof, ok := proof.(*StoreProof)
-	if !ok {
-		return false
-	}
-	h := sha256.New()
-	for _, value := range p.values {
-		h.Write(p.serializer.ToBytes(value))
-	}
-	var hash common.Hash
-	h.Sum(hash[0:0])
-	return hash == storeProof.hash
-}
-
 func (p *StorePart[V]) ToBytes() []byte {
 	res := make([]byte, 0, len(p.values)*p.serializer.Size())
 	for _, value := range p.values {
@@ -166,17 +152,6 @@ func (s *StoreSnapshot[V]) GetPart(partNumber int) (backend.Part, error) {
 	return &StorePart[V]{s.serializer, values}, nil
 }
 
-func (s *StoreSnapshot[V]) VerifyRootProof() error {
-	hash, err := s.computeRootHash()
-	if err != nil {
-		return err
-	}
-	if s.proof.hash != hash {
-		return fmt.Errorf("inconsistent root proof encountered")
-	}
-	return nil
-}
-
 func (s *StoreSnapshot[V]) computeRootHash() (common.Hash, error) {
 	// Note: This should not use the lazy hash tree infrastructure, since this
 	// would require to fetch all the data from the pages. Instead, it should
@@ -255,5 +230,53 @@ func (s *storeSourceFromData[V]) GetValues(pageNumber int) ([]V, error) {
 }
 
 func (s *storeSourceFromData[V]) Release() error {
+	return nil
+}
+
+// ----------------------------- SnapshotVerifier -----------------------------
+
+type storeSnapshotVerifier[V any] struct {
+	serializer common.Serializer[V]
+}
+
+func CreateStoreSnapshotVerifier[V any](serializer common.Serializer[V]) *storeSnapshotVerifier[V] {
+	return &storeSnapshotVerifier[V]{serializer}
+}
+
+func (i *storeSnapshotVerifier[V]) VerifyRootProof(data backend.SnapshotData) (backend.Proof, error) {
+	snapshot, err := CreateStoreSnapshotFromData(i.serializer, data)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := snapshot.computeRootHash()
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.proof.hash != hash {
+		return nil, fmt.Errorf("inconsistent root proof encountered")
+	}
+	return snapshot.proof, nil
+}
+
+func (i *storeSnapshotVerifier[K]) VerifyPart(_ int, proof, part []byte) error {
+	storeProof, err := createStoreProofFromData(proof)
+	if err != nil {
+		return err
+	}
+	storePart, err := createStorePartFromData(i.serializer, part)
+	if err != nil {
+		return err
+	}
+
+	h := sha256.New()
+	for _, value := range storePart.values {
+		h.Write(i.serializer.ToBytes(value))
+	}
+	var hash common.Hash
+	h.Sum(hash[0:0])
+	if hash != storeProof.hash {
+		return fmt.Errorf("invalid proof for store part content")
+	}
 	return nil
 }

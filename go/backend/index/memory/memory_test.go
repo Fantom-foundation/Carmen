@@ -1,10 +1,12 @@
 package memory
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/backend/index"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/backend/index"
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 var (
@@ -17,6 +19,7 @@ func TestMemoryIndexImplements(t *testing.T) {
 	var memory Index[common.Address, uint32]
 	var _ index.Index[common.Address, uint32] = &memory
 	var _ io.Closer = &memory
+	var _ backend.Snapshotable = &memory
 }
 
 func TestStoringIntoMemoryIndex(t *testing.T) {

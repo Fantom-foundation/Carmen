@@ -126,6 +126,10 @@ func (s *myDepot) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
+func (s *myDepot) GetSnapshotVerifier(backend.SnapshotData) (backend.SnapshotVerifier, error) {
+	return CreateDepotSnapshotVerifier(), nil
+}
+
 type myDepotSnapshotSource struct {
 	// The hash at the time the snapshot was created.
 	hash common.Hash
@@ -302,7 +306,12 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				t.Errorf("root proof of snapshot does not match proof of data structure")
 			}
 
-			if err := cur.VerifyRootProof(); err != nil {
+			verifier, err := original.GetSnapshotVerifier(cur.GetData())
+			if err != nil {
+				t.Fatalf("failed to obtain snapshot verifier")
+			}
+
+			if proof, err := verifier.VerifyRootProof(cur.GetData()); err != nil || !proof.Equal(want) {
 				t.Errorf("snapshot invalid, inconsistent proofs")
 			}
 
@@ -316,7 +325,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				if err != nil || part == nil {
 					t.Errorf("failed to fetch part %d", i)
 				}
-				if part != nil && !part.Verify(want) {
+				if part != nil && verifier.VerifyPart(i, want.ToBytes(), part.ToBytes()) != nil {
 					t.Errorf("failed to verify content of part %d", i)
 				}
 			}
