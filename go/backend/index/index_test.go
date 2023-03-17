@@ -280,7 +280,12 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 						t.Errorf("root proof of snapshot does not match proof of data structure")
 					}
 
-					verifier, err := original.GetSnapshotVerifier(cur.GetData())
+					metadata, err := cur.GetData().GetMetaData()
+					if err != nil {
+						t.Fatalf("failed to obtain metadata from snapshot")
+					}
+
+					verifier, err := original.GetSnapshotVerifier(metadata)
 					if err != nil {
 						t.Fatalf("failed to obtain snapshot verifier")
 					}

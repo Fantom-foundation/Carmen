@@ -97,7 +97,8 @@ type Snapshotable interface {
 	// particular, it is not required to be able to synchronize to a former
 	// snapshot derived from the targeted data structure.
 	Restore(data SnapshotData) error
-	// GetSnapshotVerifier produces a verifyer for snapshot data accepted by
-	// this Snapshotable data structure.
-	GetSnapshotVerifier(data SnapshotData) (SnapshotVerifier, error)
+	// GetSnapshotVerifier produces a verifier for snapshot data accepted by
+	// this Snapshotable data structure. This fails if the given metadata does
+	// not describing a snapshot format compatible with this data structure.
+	GetSnapshotVerifier(metadata []byte) (SnapshotVerifier, error)
 }

@@ -233,7 +233,7 @@ func (d *myDataStructure) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
-func (d *myDataStructure) GetSnapshotVerifier(data backend.SnapshotData) (backend.SnapshotVerifier, error) {
+func (d *myDataStructure) GetSnapshotVerifier(_ []byte) (backend.SnapshotVerifier, error) {
 	return mySnapshotVerifier{}, nil
 }
 
@@ -371,7 +371,12 @@ func TestSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			t.Errorf("root proof of snapshot does not match proof of data structure")
 		}
 
-		verifier, err := structure.GetSnapshotVerifier(cur.GetData())
+		metadata, err := cur.GetData().GetMetaData()
+		if err != nil {
+			t.Fatalf("failed to obtain metadata from snapshot")
+		}
+
+		verifier, err := structure.GetSnapshotVerifier(metadata)
 		if err != nil {
 			t.Fatalf("failed to obtain snapshot verifier")
 		}
