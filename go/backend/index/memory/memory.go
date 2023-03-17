@@ -140,7 +140,7 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
-func (m *Index[K, I]) GetSnapshotVerifier(backend.SnapshotData) (backend.SnapshotVerifier, error) {
+func (m *Index[K, I]) GetSnapshotVerifier([]byte) (backend.SnapshotVerifier, error) {
 	return index.CreateIndexSnapshotVerifier(m.keySerializer), nil
 }
 

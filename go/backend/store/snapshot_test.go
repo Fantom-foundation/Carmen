@@ -116,7 +116,7 @@ func (s *myStore) Restore(data backend.SnapshotData) error {
 	return nil
 }
 
-func (s *myStore) GetSnapshotVerifier(backend.SnapshotData) (backend.SnapshotVerifier, error) {
+func (s *myStore) GetSnapshotVerifier([]byte) (backend.SnapshotVerifier, error) {
 	return CreateStoreSnapshotVerifier[common.Value](common.ValueSerializer{}), nil
 }
 
@@ -294,7 +294,12 @@ func TestStoreSnapshot_MyStoreSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				t.Errorf("root proof of snapshot does not match proof of data structure")
 			}
 
-			verifier, err := original.GetSnapshotVerifier(cur.GetData())
+			metadata, err := cur.GetData().GetMetaData()
+			if err != nil {
+				t.Fatalf("failed to obtain metadata from snapshot")
+			}
+
+			verifier, err := original.GetSnapshotVerifier(metadata)
 			if err != nil {
 				t.Fatalf("failed to obtain snapshot verifier")
 			}

@@ -138,14 +138,9 @@ func (d *ComposedSnapshot) GetMetaData() ([]byte, error) {
 	return res, nil
 }
 
-// SplitCompositeData divides the provided view of snapshot data in a list of views of
-// the sub-snapshots contained in a composed snapshot and their respective part counts.
-func SplitCompositeData(data SnapshotData) ([]SnapshotData, []int, error) {
+// SplitCompositeMetaData divides the provided meta data in a list of meta data for sub-snapshots.
+func SplitCompositeMetaData(metadata []byte) ([][]byte, []int, error) {
 	// This is the inverse operation to the GetMetaData() encoding above.
-	metadata, err := data.GetMetaData()
-	if err != nil {
-		return nil, nil, err
-	}
 	if len(metadata) < 1 {
 		return nil, nil, fmt.Errorf("invalid metadata encoding, not enough bytes")
 	}
@@ -179,9 +174,25 @@ func SplitCompositeData(data SnapshotData) ([]SnapshotData, []int, error) {
 		metadata = metadata[8:]
 	}
 
+	return splitMetadata, sizes, nil
+}
+
+// SplitCompositeData divides the provided view of snapshot data in a list of views of
+// the sub-snapshots contained in a composed snapshot and their respective part counts.
+func SplitCompositeData(data SnapshotData) ([]SnapshotData, []int, error) {
+	metadata, err := data.GetMetaData()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	splitMetadata, sizes, err := SplitCompositeMetaData(metadata)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	offset := int(0)
 	res := []SnapshotData{}
-	for i := byte(0); i < numEntries; i++ {
+	for i := 0; i < len(splitMetadata); i++ {
 		res = append(res, &offsettedSnapshotData{splitMetadata[i], offset, data})
 		offset += sizes[i]
 	}
