@@ -14,7 +14,7 @@ type RemoteSnapshotData struct {
 	net          Network
 	metaData     []byte         // cached version of the meta data, for local reuse during verifications
 	proofCache   map[int][]byte // cached version of the proof data, for local reuse during verifications
-	partVerifier PartVerifier   // a functio to verify the correctness of parts, may be nil
+	partVerifier PartVerifier   // a function to verify the correctness of parts, may be nil
 }
 
 func newRemoteSnapshotData(network Network) *RemoteSnapshotData {
