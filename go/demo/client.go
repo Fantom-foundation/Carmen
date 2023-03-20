@@ -104,7 +104,7 @@ func (c *DemoClient) Join(net Network) (err error) {
 func (c *DemoClient) GetStateProof() backend.Proof {
 	proof, err := c.state.GetProof()
 	if err != nil {
-		panic(fmt.Sprintf("proof should alway be available in demo client, but got error %v", err))
+		panic(fmt.Sprintf("proof should always be available in demo client, but got error %v", err))
 	}
 	return proof
 }
