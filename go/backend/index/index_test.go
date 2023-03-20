@@ -129,7 +129,7 @@ func TestIndexesHashesAgainstReferenceOutput(t *testing.T) {
 
 func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndRestored(t *testing.T) {
 	for name, idx := range initIndexesMap() {
-		for _, size := range []int{0, 1, 5, 1000} {
+		for _, size := range []int{0, 1, 5, 1000, 12345} {
 			t.Run(fmt.Sprintf("index %s size %d", name, size), func(t *testing.T) {
 
 				originalIndex := idx(t)
@@ -175,6 +175,69 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndRestored(t *testing.T) {
 				}
 
 				checkIndexContent(t, recoveredIndex, size)
+
+				if err := snapshot.Release(); err != nil {
+					t.Errorf("failed to release snapshot: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestIndexSnapshot_IndexCrosscheckSnapshotCanBeCreatedAndRestored(t *testing.T) {
+	for name, idx := range initIndexesMap() {
+		for _, size := range []int{0, 1, 5, 1000, 12345} {
+			t.Run(fmt.Sprintf("index %s size %d", name, size), func(t *testing.T) {
+
+				originalIndex := idx(t)
+				original, ok := originalIndex.(backend.Snapshotable)
+				if !ok {
+					t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+				}
+
+				fillIndex(t, originalIndex, size)
+				originalProof, err := original.GetProof()
+				if err != nil {
+					t.Errorf("failed to produce a proof for the original state")
+				}
+
+				snapshot, err := original.CreateSnapshot()
+				if err != nil {
+					t.Errorf("failed to create snapshot: %v", err)
+					return
+				}
+				if snapshot == nil {
+					t.Errorf("failed to create snapshot")
+					return
+				}
+
+				if !originalProof.Equal(snapshot.GetRootProof()) {
+					t.Errorf("snapshot proof does not match data structure proof")
+				}
+
+				for recoveredName, idx := range initIndexesMap() {
+					recoveredIndex := idx(t)
+					recovered, ok := recoveredIndex.(backend.Snapshotable)
+					if !ok {
+						continue // this index is not Snapshotable
+					}
+
+					if err := recovered.Restore(snapshot.GetData()); err != nil {
+						t.Errorf("failed to sync to %s snapshot: %v", recoveredName, err)
+						return
+					}
+
+					recoveredProof, err := recovered.GetProof()
+					if err != nil {
+						t.Errorf("failed to produce a proof for the recovered state")
+					}
+
+					if !recoveredProof.Equal(snapshot.GetRootProof()) {
+						t.Errorf("snapshot proof does not match recovered proof")
+					}
+
+					checkIndexContent(t, recoveredIndex, size)
+				}
 
 				if err := snapshot.Release(); err != nil {
 					t.Errorf("failed to release snapshot: %v", err)
@@ -351,7 +414,8 @@ func compareIds(ids []uint32) error {
 
 func fillIndex(t *testing.T, index index.Index[common.Address, uint32], size int) {
 	for i := 0; i < size; i++ {
-		if idx, err := index.GetOrAdd(common.Address{byte(i), byte(i >> 8), byte(i >> 16)}); idx != uint32(i) || err != nil {
+		addr := common.AddressFromNumber(i)
+		if idx, err := index.GetOrAdd(addr); idx != uint32(i) || err != nil {
 			t.Errorf("failed to add address %d", i)
 		}
 	}
@@ -359,7 +423,8 @@ func fillIndex(t *testing.T, index index.Index[common.Address, uint32], size int
 
 func checkIndexContent(t *testing.T, index index.Index[common.Address, uint32], size int) {
 	for i := 0; i < size; i++ {
-		if idx, err := index.GetOrAdd(common.Address{byte(i), byte(i >> 8), byte(i >> 16)}); idx != uint32(i) || err != nil {
+		addr := common.AddressFromNumber(i)
+		if idx, err := index.GetOrAdd(addr); idx != uint32(i) || err != nil {
 			t.Errorf("failed to locate address %d", i)
 		}
 	}
