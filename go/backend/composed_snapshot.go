@@ -246,13 +246,13 @@ func (p *composedSnapshotProof) ToBytes() []byte {
 }
 
 type composedSnapshotVerifier struct {
-	numParts []int
-	verifier []SnapshotVerifier
+	numParts []int              // the number of parts of the individual snapshots merged into the composed snapshot
+	verifier []SnapshotVerifier // the verifiers for the individual snapshots
 }
 
 func NewComposedSnapshotVerifier(verifier []SnapshotVerifier, numParts []int) SnapshotVerifier {
 	if len(verifier) != len(numParts) {
-		panic("must provide same number of verifiers and part counts")
+		panic("must provide the same number of verifiers and part counts")
 	}
 	return &composedSnapshotVerifier{numParts, verifier}
 }
