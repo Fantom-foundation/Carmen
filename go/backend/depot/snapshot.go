@@ -44,10 +44,31 @@ func (p *DepotProof) ToBytes() []byte {
 // A proof of a part is the hash of the page content, which can be effectively
 // obtained from depot implementations.
 type DepotPart struct {
-	values [][]byte
+	encoded []byte
+	values  [][]byte
 }
 
-func createDepotPartFromData(data []byte) (*DepotPart, error) {
+func createDepotPartFromValues(values [][]byte) *DepotPart {
+	size := 2
+	for _, value := range values {
+		size += 4 + len(value)
+	}
+	encoded := make([]byte, 0, size)
+	end := encoded
+	end = binary.LittleEndian.AppendUint16(end, uint16(len(values)))
+	for _, value := range values {
+		end = binary.LittleEndian.AppendUint32(end, uint32(len(value)))
+	}
+	encoded = end
+	for i, value := range values {
+		encoded = append(encoded, value...)
+		values[i] = encoded[len(encoded)-len(value):]
+	}
+	return &DepotPart{encoded, values}
+}
+
+func createDepotPartFromData(encoded []byte) (*DepotPart, error) {
+	data := encoded
 	if len(data) < 2 {
 		return nil, fmt.Errorf("invalid encoding of depot part, not enough bytes for page size")
 	}
@@ -76,23 +97,11 @@ func createDepotPartFromData(data []byte) (*DepotPart, error) {
 		data = data[lengths[i]:]
 	}
 
-	return &DepotPart{values}, nil
+	return &DepotPart{encoded, values}, nil
 }
 
 func (p *DepotPart) ToBytes() []byte {
-	size := 0
-	for _, value := range p.values {
-		size += 2 + len(value)
-	}
-	res := make([]byte, 0, size)
-	res = binary.LittleEndian.AppendUint16(res, uint16(len(p.values)))
-	for _, value := range p.values {
-		res = binary.LittleEndian.AppendUint32(res, uint32(len(value)))
-	}
-	for _, value := range p.values {
-		res = append(res, value...)
-	}
-	return res
+	return p.encoded
 }
 
 func (p *DepotPart) GetValues() [][]byte {
@@ -173,7 +182,7 @@ func (s *DepotSnapshot) GetPart(partNumber int) (backend.Part, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DepotPart{values}, nil
+	return createDepotPartFromValues(values), nil
 }
 
 func (s *DepotSnapshot) computeRootHash() (common.Hash, error) {
