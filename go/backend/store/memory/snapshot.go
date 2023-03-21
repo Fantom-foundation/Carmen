@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"unsafe"
 )
@@ -49,6 +50,10 @@ func (s *SnapshotSource[I, V]) GetHash(pageNum int) (common.Hash, error) {
 }
 
 func (s *SnapshotSource[I, V]) AddIntoSnapshot(pageNum int, page SnapshotPart) error {
+	_, contains := s.pages[pageNum]
+	if contains {
+		return fmt.Errorf("unable to add page into store snapshot - already present")
+	}
 	s.pages[pageNum] = page
 	return nil
 }

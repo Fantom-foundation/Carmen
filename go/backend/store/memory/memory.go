@@ -141,18 +141,27 @@ func (m *Store[I, V]) CreateSnapshot() (backend.Snapshot, error) {
 // may invalidate any former snapshots created on the data structure. In
 // particular, it is not required to be able to synchronize to a former
 // snapshot derived from the targeted data structure.
-func (m *Store[I, V]) Restore(data backend.SnapshotData) error {
-	snapshot, err := store.CreateStoreSnapshotFromData[V](m.serializer, data)
+func (m *Store[I, V]) Restore(snapshotData backend.SnapshotData) error {
+	snapshot, err := store.CreateStoreSnapshotFromData[V](m.serializer, snapshotData)
 	if err != nil {
 		return err
 	}
+	if snapshot.GetBranchingFactor() != m.hashTree.GetBranchingFactor() {
+		return fmt.Errorf("unable to restore snapshot - unexpected branching factor")
+	}
+
 	partsNum := snapshot.GetNumParts()
 	m.data = make([][]byte, partsNum)
 	for i := 0; i < partsNum; i++ {
-		m.data[i], err = snapshot.GetPartData(i)
+		data, err := snapshot.GetPartData(i)
 		if err != nil {
 			return err
 		}
+		if len(data) != m.hashedPageSize {
+			return fmt.Errorf("unable to restore snapshot - unexpected length of store part")
+		}
+		m.data[i] = make([]byte, m.pageSize)
+		copy(m.data[i], data)
 		m.hashTree.MarkUpdated(i)
 	}
 	return nil

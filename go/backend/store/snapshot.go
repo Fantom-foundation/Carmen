@@ -128,6 +128,10 @@ func (s *StoreSnapshot[V]) GetNumParts() int {
 	return s.numPages
 }
 
+func (s *StoreSnapshot[V]) GetBranchingFactor() int {
+	return s.branchingFactor
+}
+
 func (s *StoreSnapshot[V]) GetProof(partNumber int) (backend.Proof, error) {
 	hash, err := s.source.GetHash(partNumber)
 	if err != nil {
