@@ -12,9 +12,10 @@ type Array[I common.Identifier, V any] struct {
 	pagePool     *pagepool.PagePool[int, *Page]
 	pageStore    *pagepool.FilePageStorage
 	serializer   common.Serializer[V]
-	pageSize     int // the maximum size of a page in bytes
-	itemSize     int // the amount of bytes per one value
-	itemsPerPage int
+	pageSize     int              // the maximum size of a page in bytes
+	itemSize     int              // the amount of bytes per one value
+	itemsPerPage int              // the amount of values in one page
+	pagesCount   int              // the amount of array pages
 	onPageDirty  func(pageId int) // callback called on page set dirty
 }
 
@@ -32,6 +33,10 @@ func NewArray[I common.Identifier, V any](path string, serializer common.Seriali
 	pagePool := pagepool.NewPagePool[int, *Page](poolSize, pageStore, func() *Page {
 		return NewPage(pageSize)
 	})
+	pagesCount, err := pageStore.GetPagesCount()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Array[I, V]{
 		pagePool:     pagePool,
@@ -40,6 +45,7 @@ func NewArray[I common.Identifier, V any](path string, serializer common.Seriali
 		pageSize:     pageSize,
 		itemSize:     itemSize,
 		itemsPerPage: pageSize / itemSize,
+		pagesCount:   pagesCount,
 		onPageDirty:  func(pageId int) {},
 	}, nil
 }
@@ -55,6 +61,9 @@ func (m *Array[I, V]) Set(id I, value V) error {
 	page, err := m.pagePool.Get(pageId)
 	if err != nil {
 		return fmt.Errorf("failed to load store page %d; %s", pageId, err)
+	}
+	if pageId >= m.pagesCount {
+		m.pagesCount = pageId + 1
 	}
 	m.onPageDirty(pageId)
 	page.Set(itemPosition, m.serializer.ToBytes(value))
@@ -80,6 +89,23 @@ func (m *Array[I, V]) GetPage(pageId int) ([]byte, error) {
 	}
 
 	return page.GetContent()[0 : m.pageSize/m.itemSize*m.itemSize], nil
+}
+
+// SetPage allows to import a page from snapshot
+func (m *Array[I, V]) SetPage(pageId int, data []byte) error {
+	page, err := m.pagePool.Get(pageId)
+	if err != nil {
+		return fmt.Errorf("failed to load store page %d; %s", pageId, err)
+	}
+	if pageId >= m.pagesCount {
+		m.pagesCount = pageId + 1
+	}
+	page.FromBytes(data)
+	return nil
+}
+
+func (m *Array[I, V]) GetPagesCount() int {
+	return m.pagesCount
 }
 
 // Flush all changes to the disk
@@ -109,7 +135,7 @@ func (m *Array[I, V]) Close() (err error) {
 func (m *Array[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*m))
 	mf.AddChild("pagePool", m.pagePool.GetMemoryFootprint())
-	mf.AddChild("pageStore", m.pageStore.GetMemoryFootprint())
+	// pageStore included in pagePool footprint
 	return mf
 }
 

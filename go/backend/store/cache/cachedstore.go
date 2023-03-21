@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"unsafe"
@@ -33,6 +34,23 @@ func (m *Store[I, V]) Get(id I) (v V, err error) {
 	}
 
 	return
+}
+
+func (m *Store[I, V]) GetProof() (backend.Proof, error) {
+	return m.store.GetProof()
+}
+
+func (m *Store[I, V]) CreateSnapshot() (backend.Snapshot, error) {
+	return m.store.CreateSnapshot()
+}
+
+func (m *Store[I, V]) Restore(data backend.SnapshotData) error {
+	m.cache.Clear()
+	return m.store.Restore(data)
+}
+
+func (m *Store[I, V]) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	return m.store.GetSnapshotVerifier(metadata)
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data

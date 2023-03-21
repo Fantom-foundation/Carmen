@@ -1,6 +1,7 @@
 package store
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -24,4 +25,6 @@ type Store[I common.Identifier, V any] interface {
 
 	// Also, stores need to be flush and closable.
 	common.FlushAndCloser
+
+	backend.Snapshotable
 }

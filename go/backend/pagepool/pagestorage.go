@@ -111,6 +111,11 @@ func (c *FilePageStorage) NextId() int {
 	return id
 }
 
+// GetPagesCount returns the amount of allocated pages (including the removed ones)
+func (c *FilePageStorage) GetPagesCount() (int, error) {
+	return c.lastID, nil
+}
+
 // shouldLoad returns true it the page under pageId should be loaded.
 // It happens when the page is not deleted and the pageId does not exceed actual size of the file.
 func (c *FilePageStorage) shouldLoad(pageId int) bool {

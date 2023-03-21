@@ -44,6 +44,10 @@ func (c *MemoryPageStore[T]) NextId() T {
 	return c.nextId()
 }
 
+func (c *MemoryPageStore[T]) GetPagesCount() (int, error) {
+	return len(c.table), nil
+}
+
 func (c *MemoryPageStore[T]) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*c)
 	memfootprint := common.NewMemoryFootprint(selfSize)

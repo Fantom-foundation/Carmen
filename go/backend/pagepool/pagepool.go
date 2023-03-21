@@ -5,10 +5,6 @@ import (
 	"unsafe"
 )
 
-const (
-	releasedIdsCap = 1000
-)
-
 // PagePool maintains memory pages and handles their evictions, persistence and loadings.
 // It uses an LRU cache to determine if the page has been recently used or not. The least used page
 // is evicted when the capacity exceeds, and stored using PageStorage. When the pool is asked for
@@ -35,6 +31,9 @@ type PageStorage[ID any] interface {
 
 	// Remove deletes the page for the input ID from the storage
 	Remove(pageId ID) error
+
+	// GetPagesCount provides the total amount of pages in the storage
+	GetPagesCount() (int, error)
 
 	// NextId returns next free ID
 	NextId() ID

@@ -21,6 +21,10 @@ func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 		_ = s.Close()
 	})
 
+	if count, err := s.GetPagesCount(); err != nil || count != 0 {
+		t.Errorf("Unexpected pages count for empty file: %d, %s", count, err)
+	}
+
 	loadPageA := NewRawPage(common.PageSize)
 	if err := s.Load(5, loadPageA); loadPageA.Size() != 0 || err != nil {
 		t.Errorf("Page should not exist")
@@ -34,6 +38,10 @@ func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 	}
 
 	testPageContent(t, loadPageA, []byte{0xAA})
+
+	if count, err := s.GetPagesCount(); err != nil || count != 6 {
+		t.Errorf("Unexpected pages count for file with last item id 5: %d, %s", count, err)
+	}
 
 	if lastId := s.NextId(); lastId != 6 {
 		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
