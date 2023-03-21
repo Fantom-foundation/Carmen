@@ -17,6 +17,9 @@ type HashTree interface {
 	// GetBranchingFactor provides the tree branching factor
 	GetBranchingFactor() int
 
+	// Reset removes the HashTree content
+	Reset() error
+
 	// provides the size of the hash-tree in memory in bytes
 	common.MemoryFootprintProvider
 }

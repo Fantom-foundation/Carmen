@@ -49,6 +49,21 @@ func NewHashTree(path string, branchingFactor int, pageProvider hashtree.PagePro
 	}
 }
 
+// Reset removes the hashtree content
+func (ht *HashTree) Reset() error {
+	files, err := os.ReadDir(ht.path)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		err = os.Remove(fmt.Sprintf("%s/%s", ht.path, file.Name()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // parentOf provides an index of a parent node, by the child index
 func (ht *HashTree) parentOf(childIdx int) int {
 	return childIdx / ht.factor

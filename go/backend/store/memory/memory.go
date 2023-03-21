@@ -144,12 +144,16 @@ func (m *Store[I, V]) CreateSnapshot() (backend.Snapshot, error) {
 func (m *Store[I, V]) Restore(snapshotData backend.SnapshotData) error {
 	snapshot, err := store.CreateStoreSnapshotFromData[V](m.serializer, snapshotData)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to restore snapshot; %s", err)
 	}
 	if snapshot.GetBranchingFactor() != m.hashTree.GetBranchingFactor() {
 		return fmt.Errorf("unable to restore snapshot - unexpected branching factor")
 	}
 
+	err = m.hashTree.Reset()
+	if err != nil {
+		return fmt.Errorf("unable to restore snapshot - failed to remove old hashTree; %s", err)
+	}
 	partsNum := snapshot.GetNumParts()
 	m.data = make([][]byte, partsNum)
 	for i := 0; i < partsNum; i++ {

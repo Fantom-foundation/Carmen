@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"hash"
 	"unsafe"
@@ -13,6 +14,8 @@ import (
 
 const (
 	HashLength = 32
+	MaxLayer   = 0xFF
+	MaxNode    = 0xFFFFFFFF
 )
 
 // HashTree is a structure allowing to make a hash of the whole database state.
@@ -52,6 +55,26 @@ func NewHashTree(db common.LevelDB, table common.TableSpace, branchingFactor int
 		dirtyPages:   map[int]bool{},
 		pageProvider: pageProvider,
 	}
+}
+
+// Reset removes the hashtree content
+func (ht *HashTree) Reset() error {
+	dbStartKey := ht.convertKey(0, 0).ToBytes()
+	dbEndKey := ht.convertKey(MaxLayer, MaxNode).ToBytes()
+	r := util.Range{Start: dbStartKey, Limit: dbEndKey}
+	iter := ht.db.NewIterator(&r, nil)
+	defer iter.Release()
+
+	var batch leveldb.Batch
+	for iter.Next() {
+		batch.Delete(iter.Key())
+	}
+	if err := iter.Error(); err != nil {
+		return err
+	}
+	err := ht.db.Write(&batch, nil)
+	ht.dirtyPages = map[int]bool{}
+	return err
 }
 
 // MarkUpdated marks a page as changed - to be included into the hash recalculation on commit

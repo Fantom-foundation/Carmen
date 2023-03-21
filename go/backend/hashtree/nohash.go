@@ -1,6 +1,8 @@
 package hashtree
 
-import "github.com/Fantom-foundation/Carmen/go/common"
+import (
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
 
 // NoHash is a trivial HashTree interface implementation, which does not do any hashing.
 // It returns zero hash for any store/depot content.
@@ -35,6 +37,11 @@ func (ht *NoHash) GetPageHash(page int) (hash common.Hash, err error) {
 // GetBranchingFactor provides the tree branching factor
 func (ht *NoHash) GetBranchingFactor() int {
 	return 0
+}
+
+// Reset removes the hashtree content
+func (ht *NoHash) Reset() error {
+	return nil
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes

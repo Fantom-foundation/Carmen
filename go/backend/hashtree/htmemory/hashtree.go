@@ -43,6 +43,13 @@ func NewHashTree(branchingFactor int, pageProvider hashtree.PageProvider) *HashT
 	}
 }
 
+// Reset removes the hashtree content
+func (ht *HashTree) Reset() error {
+	ht.tree = [][][]byte{{}}
+	ht.dirtyNodes = []map[int]bool{{}}
+	return nil
+}
+
 // parentOf provides an index of a parent node, by the child index
 func (ht *HashTree) parentOf(childIdx int) int {
 	return childIdx / ht.factor
