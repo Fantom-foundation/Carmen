@@ -221,7 +221,7 @@ func TestInMemoryStoreSnapshotRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to set; %s", err)
 	}
-	err = memory.Set(10, B)
+	err = memory.Set(3, B)
 	if err != nil {
 		t.Fatalf("failed to set; %s", err)
 	}
@@ -247,18 +247,18 @@ func TestInMemoryStoreSnapshotRecovery(t *testing.T) {
 		t.Fatalf("failed to recover snapshot; %s", err)
 	}
 
-	val, err := memory.Get(1)
+	val, err := memory2.Get(1)
 	if err != nil {
 		t.Fatalf("failed get from new memory; %s", err)
 	}
 	if val != A {
 		t.Errorf("value loaded from recovered store does not match")
 	}
-	stateHash2, err := memory.GetStateHash()
+	stateHash2, err := memory2.GetStateHash()
 	if err != nil {
 		t.Fatalf("failed to get state hash; %s", err)
 	}
 	if stateHash1 != stateHash2 {
-		t.Errorf("recovered store hash does not match")
+		t.Errorf("recovered store hash does not match; %x != %x", stateHash1, stateHash2)
 	}
 }
