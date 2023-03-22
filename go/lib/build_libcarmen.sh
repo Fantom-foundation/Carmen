@@ -5,13 +5,29 @@
 # To refresh the libraries, you may either run the script directly or run 
 # `go generate ./state`.
 #
-# Note that in either case you have to set up your C++ build environment (not
-# the IDE) according to ./cpp/README. In particular, the `bazel` command must
-# be in on of our $PATH directories.
+# Note that you have to set up your Docker or C++ build environment.
+# Setup C++ build environment (not the IDE) according to ./cpp/README,
+# the `bazel` command must be in one of our $PATH directories.
 #
 set -e
-cd ../../cpp
-bazel build -c opt //state:libcarmen.so
-mkdir -p ../go/lib
-rm -f ../go/lib/libcarmen.so
-cp ./bazel-bin/state/libcarmen.so ../go/lib
+
+cd $(dirname $0)/../..
+
+if bazel version
+then
+    echo "- C++ build environment:"
+    cd ./cpp
+    bazel build -c opt //state:libcarmen.so
+    mkdir -p ../go/lib
+    rm -f ../go/lib/libcarmen.so
+    cp ./bazel-bin/state/libcarmen.so ../go/lib/
+else
+    echo "- Docker build environment:"
+    docker run \
+        --rm \
+        -v $(pwd):/src \
+        -w /src/go/lib \
+        --entrypoint=/bin/bash \
+        golang:1.19 \
+        -c "go install github.com/bazelbuild/bazelisk@v1.15.0 && ln -s /go/bin/bazelisk /go/bin/bazel && apt update && apt install -y clang && ./build_libcarmen.sh"
+fi
