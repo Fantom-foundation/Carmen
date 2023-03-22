@@ -58,6 +58,10 @@ func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 		t.Errorf("Destroyed account is still considered alive")
 	}
 
+	if !db.Exist(address1) {
+		t.Errorf("Destroyed account should still be considered to exist until the end of the transaction")
+	}
+
 	// The account should stop existing at the end of the transaction
 	db.EndTransaction()
 	db.BeginTransaction()
@@ -274,6 +278,34 @@ func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.
 
 	db.EndTransaction()
 	db.EndBlock(123)
+}
+
+func TestCarmenStateDestroyingRecreatedAccountIsNotResettingClearingState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Initially the account exists with some state.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+
+	db.Suicide(address1)
+	if db.clearedAccounts[address1] != pendingClearing {
+		t.Errorf("destroyed account is not marked for clearing")
+	}
+
+	db.CreateAccount(address1)
+	if db.clearedAccounts[address1] != cleared {
+		t.Errorf("recreated account was not cleared")
+	}
+
+	db.GetState(address1, key1) // should not reach the store (no expectation stated above)
+
+	db.Suicide(address1)
+	if db.clearedAccounts[address1] != cleared {
+		t.Errorf("destroyed recreated account is no longer considered cleared")
+	}
+
+	db.GetState(address1, key1) // should not reach the store (no expectation stated above)
 }
 
 func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransaction(t *testing.T) {
@@ -628,10 +660,6 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 		t.Errorf("suicide indicates that re-created account does not exist")
 	}
 
-	// Adding balance to already suicided account should be ignored.
-	db.AddBalance(address1, big.NewInt(123))
-	db.SetState(address1, key3, val3)
-
 	// The account start to be considered deleted at the end of a transaction.
 	db.EndTransaction()
 	db.BeginTransaction()
@@ -875,10 +903,6 @@ func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T)
 
 	// The new account is deleted at the end of the transaction.
 	mock.EXPECT().Exists(address1).Return(false, nil)
-	mock.EXPECT().deleteAccount(address1).Return(nil)
-	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
-	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
-	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 
 	code := []byte{1, 2, 3}
 	db.CreateAccount(address1)
@@ -926,10 +950,6 @@ func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *tes
 
 	// The new account is deleted at the end of the transaction.
 	mock.EXPECT().Exists(address1).Return(false, nil)
-	mock.EXPECT().deleteAccount(address1).Return(nil)
-	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
-	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
-	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 
 	db.CreateAccount(address1)
 	db.Suicide(address1)
@@ -1003,6 +1023,43 @@ func TestCarmenStateSettingTheBalanceCreatesAccount(t *testing.T) {
 	if !db.Exist(address1) {
 		t.Errorf("Account does not exist after adding balance")
 	}
+	db.EndTransaction()
+	db.EndBlock(1)
+}
+
+func TestCarmenStateAddingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Initially, the account does not exist, and it is not created, since it remains empty.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+
+	db.AddBalance(address1, big.NewInt(0))
+	if !db.Exist(address1) {
+		t.Errorf("Account does not exist after adding balance")
+	}
+	db.EndTransaction()
+	db.EndBlock(1)
+}
+
+func TestCarmenStateSubtractingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Initially, the account does not exist, and it is not created, since it remains empty.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+
+	db.SubBalance(address1, big.NewInt(0))
+	if !db.Exist(address1) {
+		t.Errorf("Account does not exist after subtracting balance")
+	}
+
 	db.EndTransaction()
 	db.EndBlock(1)
 }
@@ -1608,9 +1665,6 @@ func TestCarmenStateImplicitAccountCreatedBySetStateIsDroppedSinceEmptyIfNothing
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
-	mock.EXPECT().deleteAccount(address1).Return(nil)
-	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
-	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
 
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
@@ -2567,6 +2621,7 @@ func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
 	}
 
 	// Initially the account exists, its balance is non-zero
+	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
@@ -2613,19 +2668,6 @@ func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	db.SetCode(address3, []byte{})
 	db.EndTransaction()
 
-	// nonce of account 1 is reset when creating the account
-	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
-
-	// empty accounts are set as common.Deleted at the end of the block
-	mock.EXPECT().deleteAccount(address1).Return(nil)
-	mock.EXPECT().deleteAccount(address2).Return(nil)
-	mock.EXPECT().deleteAccount(address3).Return(nil)
-	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
-	mock.EXPECT().setBalance(address2, common.Balance{}).Return(nil)
-	mock.EXPECT().setBalance(address3, common.Balance{}).Return(nil)
-	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
-	mock.EXPECT().setCode(address2, []byte{}).Return(nil)
-	mock.EXPECT().setCode(address3, []byte{}).Return(nil)
 	db.EndBlock(1)
 }
 
