@@ -4,7 +4,9 @@ This directory contains a C++ implementation of the Carmen storage system.
 # Needed Tools
 To build the C++ implementation you need the following tools:
  - a C++ compiler supporting C++20 (recommended clang 14+)
+ - a matching C++ standard library (e.g., on Ubuntu `libc++-14-dev` and `libstdc++-12-dev`)
  - the bazel build tool
+ 
 
 ## Installing bazel
 We recommend the usage of `Bazelisk` which can be installed as a Go tool using
