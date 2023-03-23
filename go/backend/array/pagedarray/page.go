@@ -1,10 +1,8 @@
 package pagedarray
 
 import (
-	"errors"
-	"fmt"
-	"io"
-	"os"
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"unsafe"
 )
 
 // Page is the in-memory version of a page of the file store.
@@ -15,17 +13,27 @@ type Page struct {
 	dirty bool
 }
 
-func (p *Page) Load(file *os.File, pageId int) error {
-	n, err := file.ReadAt(p.data, int64(pageId)*int64(len(p.data)))
-	if err != nil && !errors.Is(err, io.EOF) { // EOF = the page does not exist in the data file yet
-		return err
+func NewPage(byteSize int) *Page {
+	return &Page{
+		data:  make([]byte, byteSize),
+		dirty: true,
 	}
+}
 
-	for ; n < len(p.data); n++ {
-		p.data[n] = 0x00
+func (p *Page) FromBytes(pageData []byte) {
+	copy(p.data, pageData)
+	p.dirty = true
+}
+
+func (p *Page) ToBytes(pageData []byte) {
+	copy(pageData, p.data)
+}
+
+func (p *Page) Clear() {
+	for i := 0; i < len(p.data); i++ {
+		p.data[i] = 0x00
 	}
-	p.dirty = false
-	return nil
+	p.dirty = true
 }
 
 func (p *Page) IsDirty() bool {
@@ -41,19 +49,20 @@ func (p *Page) Set(position int64, bytes []byte) {
 	p.dirty = true
 }
 
-func (p *Page) SetDirty() {
-	p.dirty = true
+func (p *Page) SetDirty(dirty bool) {
+	p.dirty = dirty
 }
 
-func (p *Page) Get(position int64, size int64) []byte {
-	return p.data[position : position+size]
+func (p *Page) Size() int {
+	return len(p.data)
 }
 
-func (p *Page) Store(file *os.File, pageId int) error {
-	_, err := file.WriteAt(p.data, int64(pageId)*int64(len(p.data)))
-	if err != nil {
-		return fmt.Errorf("failed to write the page into file; %s", err)
-	}
-	p.dirty = false
-	return nil
+func (p *Page) Get(position int64, size int) []byte {
+	return p.data[position : position+int64(size)]
+}
+
+func (p *Page) GetMemoryFootprint() *common.MemoryFootprint {
+	var b byte
+	pageSize := unsafe.Sizeof(*p) + unsafe.Sizeof(b)*uintptr(len(p.data))
+	return common.NewMemoryFootprint(pageSize)
 }

@@ -57,7 +57,7 @@ func getStoresFactories[V any](tb testing.TB, serializer common.Serializer[V], b
 			label: "PagedFile",
 			getStore: func(tempDir string) store.Store[uint32, V] {
 				hashTreeFac := htfile.CreateHashTreeFactory(tempDir, branchingFactor)
-				str, err := pagedfile.NewStore[uint32, V](tempDir, serializer, int64(pageSize), hashTreeFac, poolSize)
+				str, err := pagedfile.NewStore[uint32, V](tempDir, serializer, pageSize, hashTreeFac, poolSize)
 				if err != nil {
 					tb.Fatalf("failed to init pagedfile store; %s", err)
 				}
