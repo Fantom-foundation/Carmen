@@ -23,32 +23,31 @@ func TestStoreSnapshot_IsSnapshot(t *testing.T) {
 }
 
 const myBranchingFactor = 16
+const myPageItems = 32
+const myPageSize = myPageItems * common.ValueSize
 
 // myStore implements a simple store to test and demonstrate the snapshotting on stores.
 type myStore struct {
-	pages [][32]common.Value
+	pages [][myPageSize]byte
 }
 
 func (s *myStore) Get(pos int) common.Value {
-	pageId := pos / 32
+	pageId := pos / myPageItems
 	if pos < 0 || pageId >= len(s.pages) {
 		return common.Value{}
 	}
-	return s.pages[pageId][pos%32]
+	return *(*common.Value)(s.pages[pageId][pos%myPageItems*common.ValueSize : pos%myPageItems*common.ValueSize+common.ValueSize])
 }
 
 func (s *myStore) Set(pos int, value common.Value) {
 	if pos < 0 {
 		return
 	}
-	if s.pages == nil {
-		s.pages = [][32]common.Value{}
-	}
-	pageId := pos / 32
+	pageId := pos / myPageItems
 	for len(s.pages) <= pageId {
-		s.pages = append(s.pages, [32]common.Value{})
+		s.pages = append(s.pages, [myPageSize]byte{})
 	}
-	s.pages[pageId][pos%32] = value
+	common.ValueSerializer{}.CopyBytes(value, s.pages[pageId][pos%myPageItems*common.ValueSize:(pos%myPageItems+1)*common.ValueSize])
 }
 
 func (s *myStore) getHash() common.Hash {
@@ -64,12 +63,7 @@ func (s *myStore) getHash() common.Hash {
 }
 
 func (s *myStore) GetPage(page int) ([]byte, error) {
-	serializer := common.ValueSerializer{}
-	res := []byte{}
-	for _, value := range s.pages[page] {
-		res = append(res, serializer.ToBytes(value)...)
-	}
-	return res, nil
+	return s.pages[page][:], nil
 }
 
 func (s *myStore) GetProof() (backend.Proof, error) {
@@ -80,7 +74,7 @@ func (s *myStore) CreateSnapshot() (backend.Snapshot, error) {
 	hash := s.getHash()
 
 	// Note: a production ready implementation would not use a deep copy here
-	copyOfPages := make([][32]common.Value, len(s.pages))
+	copyOfPages := make([][myPageSize]byte, len(s.pages))
 	copy(copyOfPages, s.pages)
 
 	return CreateStoreSnapshotFromStore[common.Value](
@@ -109,9 +103,9 @@ func (s *myStore) Restore(data backend.SnapshotData) error {
 		if !ok {
 			return fmt.Errorf("invalid part format encountered")
 		}
-		for j, value := range storePart.GetValues() {
-			s.Set(i*32+j, value)
-		}
+		var partData [myPageSize]byte
+		copy(partData[:], storePart.ToBytes())
+		s.pages = append(s.pages, partData)
 	}
 	return nil
 }
@@ -126,7 +120,7 @@ type myStoreSnapshotSource struct {
 	// A deep copy of the store data at snapshot creation. Note, a real store
 	// implementation should attemt a smarter solution using some copy-on-write
 	// approch or similar.
-	pages [][32]common.Value
+	pages [][myPageSize]byte
 }
 
 func (s *myStoreSnapshotSource) GetHash(page int) (common.Hash, error) {
@@ -134,17 +128,14 @@ func (s *myStoreSnapshotSource) GetHash(page int) (common.Hash, error) {
 		return common.Hash{}, fmt.Errorf("invalid page number, not covered by snapshot")
 	}
 
-	serializer := common.ValueSerializer{}
 	h := sha256.New()
-	for _, value := range s.pages[page] {
-		h.Write(serializer.ToBytes(value))
-	}
+	h.Write(s.pages[page][:])
 	var hash common.Hash
 	h.Sum(hash[0:0])
 	return hash, nil
 }
 
-func (s *myStoreSnapshotSource) GetValues(page int) ([]common.Value, error) {
+func (s *myStoreSnapshotSource) GetPage(page int) ([]byte, error) {
 	if page < 0 || page >= len(s.pages) {
 		return nil, fmt.Errorf("invalid page number, not covered by snapshot")
 	}

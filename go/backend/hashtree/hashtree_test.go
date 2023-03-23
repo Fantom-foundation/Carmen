@@ -160,6 +160,48 @@ func TestHashTreeChangedState(t *testing.T) {
 	}
 }
 
+// Test that the tree can be retested into the initial state
+func TestHashTreeReset(t *testing.T) {
+	for _, factory := range getHashTreeFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			pages := make([][]byte, 10)
+			tree := factory.getHashtree(t.TempDir(), pages)
+			defer tree.Close()
+
+			initialHash, err := tree.HashRoot()
+			if err != nil {
+				t.Fatalf("failed to get initial hash; %s", err)
+			}
+
+			for i := 0; i < 10; i++ {
+				pages[i] = []byte{byte(i)}
+				tree.MarkUpdated(i)
+			}
+
+			changedHash, err := tree.HashRoot()
+			if err != nil {
+				t.Fatalf("failed to hash; %s", err)
+			}
+			if changedHash == initialHash {
+				t.Errorf("hash after change does not changed; %x == %x", changedHash, initialHash)
+			}
+
+			err = tree.Reset()
+			if err != nil {
+				t.Fatalf("failed to reset; %s", err)
+			}
+
+			resetHash, err := tree.HashRoot()
+			if err != nil {
+				t.Fatalf("failed to hash; %s", err)
+			}
+			if resetHash != initialHash {
+				t.Errorf("hash after reset does not match the initial hash; %x != %x", resetHash, initialHash)
+			}
+		})
+	}
+}
+
 // Test that two ways of building the same state leads to the same hash
 func TestTwoTreesWithSameStateProvidesSameHash(t *testing.T) {
 	for _, factory := range getHashTreeFactories(t) {

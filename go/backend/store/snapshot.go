@@ -20,6 +20,12 @@ type StoreProof struct {
 	hash common.Hash
 }
 
+func NewProof(hash common.Hash) *StoreProof {
+	return &StoreProof{
+		hash: hash,
+	}
+}
+
 func createStoreProofFromData(data []byte) (*StoreProof, error) {
 	if len(data) != common.HashSize {
 		return nil, fmt.Errorf("invalid encoding of store proof, invalid number of bytes")
@@ -45,7 +51,7 @@ func (p *StoreProof) ToBytes() []byte {
 // obtained from store implementations.
 type StorePart[V any] struct {
 	serializer common.Serializer[V]
-	values     []V
+	data       []byte
 }
 
 func createStorePartFromData[V any](serializer common.Serializer[V], data []byte) (*StorePart[V], error) {
@@ -53,25 +59,11 @@ func createStorePartFromData[V any](serializer common.Serializer[V], data []byte
 		return nil, fmt.Errorf("invalid encoding of store part, invalid encoding of values")
 	}
 
-	values := make([]V, 0, len(data)/serializer.Size())
-	for len(data) > 0 {
-		values = append(values, serializer.FromBytes(data[0:serializer.Size()]))
-		data = data[serializer.Size():]
-	}
-
-	return &StorePart[V]{serializer, values}, nil
+	return &StorePart[V]{serializer, data}, nil
 }
 
 func (p *StorePart[V]) ToBytes() []byte {
-	res := make([]byte, 0, len(p.values)*p.serializer.Size())
-	for _, value := range p.values {
-		res = append(res, p.serializer.ToBytes(value)...)
-	}
-	return res
-}
-
-func (p *StorePart[V]) GetValues() []V {
-	return p.values
+	return p.data
 }
 
 // --------------------------------- Snapshot ---------------------------------
@@ -81,7 +73,7 @@ func (p *StorePart[V]) GetValues() []V {
 // interface, freeing implementations from common Store Snapshot requirements.
 type StoreSnapshotSource[V any] interface {
 	GetHash(page int) (common.Hash, error)
-	GetValues(page int) ([]V, error)
+	GetPage(page int) ([]byte, error)
 	Release() error
 }
 
@@ -136,6 +128,10 @@ func (s *StoreSnapshot[V]) GetNumParts() int {
 	return s.numPages
 }
 
+func (s *StoreSnapshot[V]) GetBranchingFactor() int {
+	return s.branchingFactor
+}
+
 func (s *StoreSnapshot[V]) GetProof(partNumber int) (backend.Proof, error) {
 	hash, err := s.source.GetHash(partNumber)
 	if err != nil {
@@ -145,11 +141,11 @@ func (s *StoreSnapshot[V]) GetProof(partNumber int) (backend.Proof, error) {
 }
 
 func (s *StoreSnapshot[V]) GetPart(partNumber int) (backend.Part, error) {
-	values, err := s.source.GetValues(partNumber)
+	partData, err := s.source.GetPage(partNumber)
 	if err != nil {
 		return nil, err
 	}
-	return &StorePart[V]{s.serializer, values}, nil
+	return &StorePart[V]{s.serializer, partData}, nil
 }
 
 func (s *StoreSnapshot[V]) computeRootHash() (common.Hash, error) {
@@ -190,11 +186,11 @@ func (s *StoreSnapshot[V]) GetProofData(partNumber int) ([]byte, error) {
 }
 
 func (s *StoreSnapshot[V]) GetPartData(partNumber int) ([]byte, error) {
-	proof, err := s.GetPart(partNumber)
+	partData, err := s.GetPart(partNumber)
 	if err != nil {
 		return nil, err
 	}
-	return proof.ToBytes(), nil
+	return partData.ToBytes(), nil
 }
 
 // storeSourceFromData is an implementation of the StoreSnapshotSource adapting
@@ -217,7 +213,7 @@ func (s *storeSourceFromData[V]) GetHash(pageNumber int) (common.Hash, error) {
 	return proof.hash, nil
 }
 
-func (s *storeSourceFromData[V]) GetValues(pageNumber int) ([]V, error) {
+func (s *storeSourceFromData[V]) GetPage(pageNumber int) ([]byte, error) {
 	data, err := s.source.GetPartData(pageNumber)
 	if err != nil {
 		return nil, err
@@ -226,7 +222,7 @@ func (s *storeSourceFromData[V]) GetValues(pageNumber int) ([]V, error) {
 	if err != nil {
 		return nil, err
 	}
-	return part.GetValues(), nil
+	return part.ToBytes(), nil
 }
 
 func (s *storeSourceFromData[V]) Release() error {
@@ -270,9 +266,7 @@ func (i *storeSnapshotVerifier[K]) VerifyPart(_ int, proof, part []byte) error {
 	}
 
 	h := sha256.New()
-	for _, value := range storePart.values {
-		h.Write(i.serializer.ToBytes(value))
-	}
+	h.Write(storePart.ToBytes())
 	var hash common.Hash
 	h.Sum(hash[0:0])
 	if hash != storeProof.hash {
