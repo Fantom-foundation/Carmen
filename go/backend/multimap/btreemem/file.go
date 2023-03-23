@@ -59,7 +59,7 @@ func (m *MultiMap[K, V]) GetAll(key K) ([]V, error) {
 	it := m.btree.NewIterator(newDbKeyMinVal[K, V](key), newDbKeyMaxVal[K, V](key))
 	values := make([]V, 0, 100)
 	for it.HasNext() {
-		values = append(values, it.Next().v)
+		values = append(values, it.Next().value)
 	}
 	return values, nil
 }
