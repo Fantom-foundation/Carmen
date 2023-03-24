@@ -13,7 +13,7 @@ set -e
 
 cd $(dirname $0)/../..
 
-if bazel version
+if bazel version &> /dev/null
 then
     echo "- C++ build environment:"
     cd ./cpp
