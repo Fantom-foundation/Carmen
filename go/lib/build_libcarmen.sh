@@ -11,18 +11,18 @@
 #
 set -e
 
-cd $(dirname $0)/../..
+cd "$(dirname $0)/../../cpp"
 
 if bazel version &> /dev/null
 then
     echo "- C++ build environment:"
-    cd ./cpp
     bazel build -c opt //state:libcarmen.so
     mkdir -p ../go/lib
     rm -f ../go/lib/libcarmen.so
     cp ./bazel-bin/state/libcarmen.so ../go/lib/
 else
     echo "- Docker build environment:"
+    cd ..
     docker run \
         --rm \
         -v $(pwd):/src \
