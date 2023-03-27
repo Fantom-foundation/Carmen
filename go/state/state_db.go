@@ -143,6 +143,14 @@ type stateDB struct {
 
 	// A list of addresses, which have possibly become empty in the transaction
 	emptyCandidates []common.Address
+
+	// The accounts accessed in a transaction, needed to distinguish accounts that are created in a transaction
+	// or recreated. This is needed to mirror geth's behaviour in implicitly deleting accounts, which does not
+	// trigger if a pre-accessed account is recreated and left empty.
+	// The relevant code in geth is here:
+	// https://github.com/ethereum/go-ethereum/blob/fb8a3aaf1e084f6190c72f039571f3c7da565b4a/core/state/statedb.go#L634-L638
+	// The map is used as a set, the boolean value is ignored.
+	accessedAccounts map[common.Address]bool
 }
 
 type accountLifeCycleState int
@@ -325,19 +333,23 @@ func createStateDBWith(state State, storedDataCacheCapacity int) *stateDB {
 		undo:              make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
 		emptyCandidates:   make([]common.Address, 0, 100),
+		accessedAccounts:  make(map[common.Address]bool, 100),
 	}
 }
 
-func (s *stateDB) setAccountState(addr common.Address, state accountLifeCycleState) {
+func (s *stateDB) setAccountState(addr common.Address, state accountLifeCycleState) accountLifeCycleState {
+	//fmt.Printf("Setting account state of %v to %v\n", addr, state)
 	if val, exists := s.accounts[addr]; exists {
 		if val.current == state {
-			return
+			return val.current
 		}
 		oldState := val.current
 		val.current = state
 		s.undo = append(s.undo, func() {
 			val.current = oldState
+			//fmt.Printf("Resetting account state of %v to %v\n", addr, oldState)
 		})
+		return oldState
 	} else {
 		val = &accountState{
 			original: kUnknown,
@@ -347,10 +359,13 @@ func (s *stateDB) setAccountState(addr common.Address, state accountLifeCycleSta
 		s.undo = append(s.undo, func() {
 			if val.original != kUnknown {
 				val.current = val.original
+				//fmt.Printf("Resetting account state of %v to %v\n", addr, val.current)
 			} else {
 				delete(s.accounts, addr)
+				//fmt.Printf("Resetting account state of %v to nil\n", addr)
 			}
 		})
+		return kUnknown
 	}
 }
 
@@ -366,6 +381,7 @@ func (s *stateDB) Exist(addr common.Address) bool {
 	if exists {
 		state = kExists
 	}
+	//fmt.Printf("Fetched account state for %v: %v\n", addr, state)
 	s.accounts[addr] = &accountState{
 		original: state,
 		current:  state,
@@ -381,7 +397,14 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	s.setAccountState(addr, kExists)
 
 	// Created because touched - will be deleted at the end of the transaction if it stays empty
-	s.emptyCandidates = append(s.emptyCandidates, addr)
+	if _, found := s.accessedAccounts[addr]; !found {
+		s.accessedAccounts[addr] = true
+		s.undo = append(s.undo, func() { delete(s.accessedAccounts, addr) })
+		//fmt.Printf("CreateAccount: Added %v to empty candidates\n", addr)
+		// TODO next: this should be triggered in current case, but it does not;
+		// command: make -j 8 aida-stochastic && ./build/aida-stochastic replay --db-impl carmen --db-variant go-memory --db-shadow-impl geth --random-seed 43467477 --db-logging --trace-debug 1 simulation_ci.json &> log.out
+		s.addEmptyAccountCandidate(addr)
+	}
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -390,6 +413,9 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	// already existed before this create call the balance is preserved.
 	if !exists {
 		s.resetBalance(addr)
+	} else if s.GetBalance(addr).Sign() != 0 {
+		//fmt.Printf("CreateAccount: Added %v to empty candidates because balance is set\n", addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 
 	// Reset storage of the account, to purge any potential former values.
@@ -420,8 +446,17 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 }
 
 func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
-	if s.Exist(addr) && !s.HasSuicided(addr) {
+	if s.Exist(addr) {
 		return false
+	}
+
+	// if this creates a new object, it is considered dirty; if an existing object is reset, it is considered non-dirty!
+	// see: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/statedb.go#L631-L635
+	if _, found := s.accessedAccounts[addr]; !found {
+		s.accessedAccounts[addr] = true
+		s.undo = append(s.undo, func() { delete(s.accessedAccounts, addr) })
+		//fmt.Printf("Added %v to empty candidates\n", addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 	s.setAccountState(addr, kExists)
 
@@ -468,6 +503,10 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 func (s *stateDB) HasSuicided(addr common.Address) bool {
 	state := s.accounts[addr]
 	return state != nil && state.current == kSuicided
+	/*
+		state, exist := s.accounts[addr]
+		return exist && state.current == kSuicided
+	*/
 }
 
 func (s *stateDB) Empty(addr common.Address) bool {
@@ -503,7 +542,8 @@ func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
 	s.createAccountIfNotExists(addr)
 
 	if diff == nil || diff.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		//fmt.Printf("Added %v to empty candidates\n", addr)
+		s.addEmptyAccountCandidate(addr)
 		return
 	}
 	if diff.Sign() < 0 {
@@ -524,7 +564,8 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	s.createAccountIfNotExists(addr)
 
 	if diff == nil || diff.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		//fmt.Printf("Added %v to empty candidates\n", addr)
+		s.addEmptyAccountCandidate(addr)
 		return
 	}
 	if diff.Sign() < 0 {
@@ -536,7 +577,8 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	newValue := new(big.Int).Sub(oldValue, diff)
 
 	if newValue.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		//fmt.Printf("Added %v to empty candidates\n", addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 
 	s.balances[addr].current = *newValue
@@ -544,7 +586,8 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 		s.balances[addr].current = *oldValue
 	})
 	if newValue.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		//fmt.Printf("Added %v to empty candidates\n", addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 }
 
@@ -589,9 +632,10 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
 	s.setNonceInternal(addr, nonce)
-	if s.createAccountIfNotExists(addr) && nonce == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
-	}
+	s.createAccountIfNotExists(addr)
+	/*&& nonce == 0*/ // TODO: understand why this makes a difference! Theory: nonce is set to > 0, account is re-created without being scheduled for empty check, and nonce is set to zero;
+	//fmt.Printf("Added %v to empty candidates\n", addr)
+	s.addEmptyAccountCandidate(addr)
 }
 
 func (s *stateDB) setNonceInternal(addr common.Address, nonce uint64) {
@@ -676,10 +720,25 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 }
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
+	////fmt.Printf("updating %v, %v from %v to %v\n", addr, key, s.GetState(addr, key), value)
+	/*
+		// If state is known to be deleted and update is matching current value, then it is not a candidate for empty accounts.
+		// This seems to be a bug in Geth;
+		state, found := s.accounts[addr]
+		knownToBeDeleted := found && (state.current == kNonExisting || state.current == kSuicided)
+	*/
 	if s.createAccountIfNotExists(addr) {
 		// The account was implicitly created and may have to be removed at the end of the block.
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		//		if !knownToBeDeleted || value != s.GetState(addr, key) {
+		//s.emptyCandidates = append(s.emptyCandidates, addr)
+		//		}
 	}
+	if value == s.GetState(addr, key) {
+		return
+	}
+	//fmt.Printf("SetState: Added %v to empty candidates\n", addr)
+	s.addEmptyAccountCandidate(addr)
+
 	sid := slotId{addr, key}
 	if entry, exists := s.data.Get(sid); exists {
 		if entry.current != value {
@@ -731,9 +790,10 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 func (s *stateDB) SetCode(addr common.Address, code []byte) {
 	s.createAccountIfNotExists(addr)
 	s.setCodeInternal(addr, code)
-	if len(code) == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
-	}
+	//if len(code) == 0 { // TODO: check why this makes a difference ..
+	//fmt.Printf("Added %v to empty candidates\n", addr)
+	s.addEmptyAccountCandidate(addr)
+	//}
 }
 
 func (s *stateDB) setCodeInternal(addr common.Address, code []byte) {
@@ -901,17 +961,22 @@ func (s *stateDB) EndTransaction() {
 	// which is now empty SHALL instead become non-existent (i.e. deleted).
 	for _, addr := range s.emptyCandidates {
 		if s.Empty(addr) {
+			//fmt.Printf("Account %v found to be empty, removed!\n", addr)
 			s.accountsToDelete = append(s.accountsToDelete, addr)
 			// Mark the account storage state to be cleaned below.
 			s.clearedAccounts[addr] = pendingClearing
+		} else {
+			//fmt.Printf("Account %v found not to be empty, retained!\n", addr)
 		}
 	}
 
 	// Delete accounts scheduled for deletion.
 	if len(s.accountsToDelete) > 0 {
 		for _, addr := range s.accountsToDelete {
+			//fmt.Printf("Processing account to delete: %v\n", addr)
 			// Transition accounts marked for suicide to deleted.
-			if s.HasSuicided(addr) {
+			if s.Empty(addr) || s.HasSuicided(addr) {
+				//fmt.Printf("deleting suicided account %v\n", addr)
 				s.setAccountState(addr, kNonExisting)
 				s.setCodeInternal(addr, []byte{})
 				s.clearedAccounts[addr] = pendingClearing
@@ -925,6 +990,7 @@ func (s *stateDB) EndTransaction() {
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
 			// of the block processing.
+			s.resetBalance(addr) // < resets balance if balance is set after suicide
 			s.setAccountState(addr, kNonExisting)
 			s.setNonceInternal(addr, 0)
 			s.setCodeInternal(addr, []byte{})
@@ -1154,6 +1220,12 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
 	return createLiteStateDBUsing(archiveState), nil
 }
 
+func (s *stateDB) addEmptyAccountCandidate(addr common.Address) {
+	len := len(s.emptyCandidates)
+	s.emptyCandidates = append(s.emptyCandidates, addr)
+	s.undo = append(s.undo, func() { s.emptyCandidates = s.emptyCandidates[0:len] })
+}
+
 func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
@@ -1162,6 +1234,7 @@ func (s *stateDB) resetTransactionContext() {
 }
 
 func (s *stateDB) reset() {
+	//s.accessedAccounts = make(map[common.Address]bool, 100)
 	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
@@ -1248,3 +1321,15 @@ func (l *bulkLoad) Close() error {
 	_, err := l.state.GetHash()
 	return err
 }
+
+/*
+Debugging:
+make -j 8 aida-stochastic && ./build/aida-stochastic replay --db-impl carmen --db-variant go-memory --db-shadow-impl geth --random-seed 43467477 --db-logging --trace-debug 10 simulation_ci.json &> log.out
+make -j 8 aida-stochastic && ./build/aida-stochastic replay --db-impl carmen --db-variant go-memory --db-shadow-impl geth --random-seed 43467477 10 simulation_ci.json
+cat log.out | grep -i "\(EndTransaction\)\|\(Snapshot\)\|\(0000000000000000000000000000000000000000\)"
+
+Seeds to check (in order):
+ - 43467477
+ - 4285120902
+ - 2071862168
+*/
