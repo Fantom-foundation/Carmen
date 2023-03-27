@@ -420,7 +420,7 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 }
 
 func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
-	if s.Exist(addr) && !s.HasSuicided(addr) {
+	if s.Exist(addr) {
 		return false
 	}
 	s.setAccountState(addr, kExists)
