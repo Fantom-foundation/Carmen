@@ -2671,6 +2671,67 @@ func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	db.EndBlock(1)
 }
 
+func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate a existing account.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	// The account will be deleted.
+	mock.EXPECT().deleteAccount(address1).Return(nil)
+	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
+
+	// The account is suicided
+	db.Suicide(address1)
+	// Writes into suicided account should be lost, account should not be created
+	db.AddBalance(address1, big.NewInt(12))
+	db.SetNonce(address1, 4321)
+	db.SetCode(address1, []byte{0x12, 0x34})
+	db.SetState(address1, key1, val1)
+
+	// The account must stay marked for removing
+	if !db.HasSuicided(address1) {
+		t.Errorf("address is no longer suicided")
+	}
+	// Until the end of transaction, account needs to behave as usual
+	if big.NewInt(12).Cmp(db.GetBalance(address1)) != 0 {
+		t.Errorf("changed balance lost")
+	}
+	if db.GetNonce(address1) != 4321 {
+		t.Errorf("changed nonce lost")
+	}
+	if !bytes.Equal(db.GetCode(address1), []byte{0x12, 0x34}) {
+		t.Errorf("changed code lost")
+	}
+	if db.GetState(address1, key1) != val1 {
+		t.Errorf("changed storage lost")
+	}
+
+	db.EndTransaction()
+
+	// After the end of transaction, the account should be deleted
+	if db.HasSuicided(address1) {
+		t.Errorf("address is suicided even after deleting")
+	}
+	if big.NewInt(0).Cmp(db.GetBalance(address1)) != 0 {
+		t.Errorf("balance not deleted")
+	}
+	if db.GetNonce(address1) != 0 {
+		t.Errorf("nonce not deleted")
+	}
+	if len(db.GetCode(address1)) != 0 {
+		t.Errorf("code not deleted")
+	}
+	if db.GetState(address1, key1) != (common.Value{}) {
+		t.Errorf("storage not deleted")
+	}
+
+	db.EndBlock(1)
+}
+
 func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
