@@ -921,15 +921,14 @@ func (s *stateDB) EndTransaction() {
 			if state, found := s.clearedAccounts[addr]; found && (state == cleared || state == clearedAndTainted) {
 				continue
 			}
-			// Note: balance was already set to zero during suicide call.
 			// Note: storage state is handled through the clearedAccount map
 			// the clearing of the data and storedDataCache at various phases
 			// of the block processing.
 			s.setAccountState(addr, kNonExisting)
+			s.resetBalance(addr) // reset balance if balance is set after suicide
 			s.setNonceInternal(addr, 0)
 			s.setCodeInternal(addr, []byte{})
 
-			// Clear cached value states for the targeted account.
 			// Clear cached value states for the targeted account.
 			// TODO: this full-map iteration may be slow; if so, some index may be required.
 			s.data.ForEach(func(slot slotId, value *slotValue) {
