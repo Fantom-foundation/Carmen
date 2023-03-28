@@ -2692,11 +2692,43 @@ func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	db.SetCode(address1, []byte{0x12, 0x34})
 	db.SetState(address1, key1, val1)
 
+	// The account must stay marked for removing
 	if !db.HasSuicided(address1) {
 		t.Errorf("address is no longer suicided")
 	}
+	// Until the end of transaction, account needs to behave as usual
+	if big.NewInt(12).Cmp(db.GetBalance(address1)) != 0 {
+		t.Errorf("changed balance lost")
+	}
+	if db.GetNonce(address1) != 4321 {
+		t.Errorf("changed nonce lost")
+	}
+	if !bytes.Equal(db.GetCode(address1), []byte{0x12, 0x34}) {
+		t.Errorf("changed code lost")
+	}
+	if db.GetState(address1, key1) != val1 {
+		t.Errorf("changed storage lost")
+	}
 
 	db.EndTransaction()
+
+	// After the end of transaction, the account should be deleted
+	if db.HasSuicided(address1) {
+		t.Errorf("address is suicided even after deleting")
+	}
+	if big.NewInt(0).Cmp(db.GetBalance(address1)) != 0 {
+		t.Errorf("balance not deleted")
+	}
+	if db.GetNonce(address1) != 0 {
+		t.Errorf("nonce not deleted")
+	}
+	if len(db.GetCode(address1)) != 0 {
+		t.Errorf("code not deleted")
+	}
+	if db.GetState(address1, key1) != (common.Value{}) {
+		t.Errorf("storage not deleted")
+	}
+
 	db.EndBlock(1)
 }
 
