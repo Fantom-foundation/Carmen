@@ -185,6 +185,59 @@ func TestBasicHashing(t *testing.T) {
 	}
 }
 
+func TestInMemoryStoreSnapshotRecovery(t *testing.T) {
+	tmpDir1 := t.TempDir()
+	db1 := openStoreDb(t, tmpDir1)
+	s1 := createNewStore(t, db1)
+
+	err := s1.Set(1, A)
+	if err != nil {
+		t.Fatalf("failed to set; %s", err)
+	}
+	err = s1.Set(3, B)
+	if err != nil {
+		t.Fatalf("failed to set; %s", err)
+	}
+	stateHash1, err := s1.GetStateHash()
+	if err != nil {
+		t.Fatalf("failed to get state hash; %s", err)
+	}
+
+	snapshot1, err := s1.CreateSnapshot()
+	if err != nil {
+		t.Fatalf("failed to create snapshot; %s", err)
+	}
+	err = s1.Set(3, A) // should not be included in the snapshot
+	if err != nil {
+		t.Fatalf("failed to set; %s", err)
+	}
+	snapshot1data := snapshot1.GetData()
+
+	tmpDir2 := t.TempDir()
+	db2 := openStoreDb(t, tmpDir2)
+	s2 := createNewStore(t, db2)
+
+	err = s2.Restore(snapshot1data)
+	if err != nil {
+		t.Fatalf("failed to recover snapshot; %s", err)
+	}
+
+	val, err := s2.Get(1)
+	if err != nil {
+		t.Fatalf("failed get from new memory; %s", err)
+	}
+	if val != A {
+		t.Errorf("value loaded from recovered store does not match")
+	}
+	stateHash2, err := s2.GetStateHash()
+	if err != nil {
+		t.Fatalf("failed to get state hash; %s", err)
+	}
+	if stateHash1 != stateHash2 {
+		t.Errorf("recovered store hash does not match; %x != %x", stateHash1, stateHash2)
+	}
+}
+
 func openStoreDb(t *testing.T, path string) *common.LevelDbMemoryFootprintWrapper {
 	db, err := common.OpenLevelDb(path, nil)
 	if err != nil {

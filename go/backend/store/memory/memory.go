@@ -102,7 +102,7 @@ func (m *Store[I, V]) GetStateHash() (common.Hash, error) {
 	return m.hashTree.HashRoot()
 }
 
-// GetProof returns a proof a snapshot would exhibit if it would be created
+// GetProof returns a proof the snapshot exhibits if it is created
 // for the current state of the data structure.
 func (m *Store[I, V]) GetProof() (backend.Proof, error) {
 	hash, err := m.GetStateHash()

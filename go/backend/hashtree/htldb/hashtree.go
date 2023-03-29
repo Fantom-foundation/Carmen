@@ -59,8 +59,8 @@ func NewHashTree(db common.LevelDB, table common.TableSpace, branchingFactor int
 
 // Reset removes the hashtree content
 func (ht *HashTree) Reset() error {
-	dbStartKey := ht.convertKey(0, 0).ToBytes()
-	dbEndKey := ht.convertKey(MaxLayer, MaxNode).ToBytes()
+	dbStartKey := getNodeDbKey(ht.table, 0, 0).ToBytes()
+	dbEndKey := getNodeDbKey(ht.table, MaxLayer, MaxNode).ToBytes()
 	r := util.Range{Start: dbStartKey, Limit: dbEndKey}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -95,22 +95,25 @@ func (ht *HashTree) HashRoot() (out common.Hash, err error) {
 	return
 }
 
-// GetPageHash provides a hash of the tree node.
-func (ht *HashTree) GetPageHash(page int) (out common.Hash, err error) {
+// GetPageHash provides a hash of the tree leaf node.
+func (ht *HashTree) GetPageHash(page int) (common.Hash, error) {
 	if ht.dirtyPages[page] {
 		_, err := ht.commit()
 		if err != nil {
 			return common.Hash{}, err
 		}
 	}
+	return GetPageHashFromLdb(ht.table, page, ht.db)
+}
 
-	dbKey := ht.convertKey(0, page).ToBytes()
-	hashBytes, err := ht.db.Get(dbKey, nil)
+// GetPageHashFromLdb provides a hash of the tree leaf node from given LevelDB snapshot
+func GetPageHashFromLdb(table common.TableSpace, page int, db common.LevelDBReader) (common.Hash, error) {
+	dbKey := getNodeDbKey(table, 0, page).ToBytes()
+	hashBytes, err := db.Get(dbKey, nil)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to get page hash; %s", err)
 	}
-	copy(out[:], hashBytes)
-	return out, nil
+	return *(*common.Hash)(hashBytes), nil
 }
 
 // GetBranchingFactor provides the tree branching factor
@@ -123,8 +126,8 @@ func (ht *HashTree) childrenOfNode(layer, node int) (data []byte, err error) {
 	// use iterator to read nodes for the current branching factor
 	firstNode := ht.firstChildOf(node)
 	lastNode := firstNode + ht.factor
-	dbStartKey := ht.convertKey(layer-1, firstNode).ToBytes()
-	dbEndKey := ht.convertKey(layer-1, lastNode).ToBytes()
+	dbStartKey := getNodeDbKey(ht.table, layer-1, firstNode).ToBytes()
+	dbEndKey := getNodeDbKey(ht.table, layer-1, lastNode).ToBytes()
 	r := util.Range{Start: dbStartKey, Limit: dbEndKey}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -147,8 +150,8 @@ func (ht *HashTree) childrenOfNode(layer, node int) (data []byte, err error) {
 // layerLength returns index of last nodes in this layer, which is the length of this layer
 func (ht *HashTree) layerLength(layer int) (length int, err error) {
 	// set the range for full layer
-	firstNode := ht.convertKey(layer, 0).ToBytes()
-	lastNode := ht.convertKey(layer, 0xFFFFFFFF).ToBytes()
+	firstNode := getNodeDbKey(ht.table, layer, 0).ToBytes()
+	lastNode := getNodeDbKey(ht.table, layer, 0xFFFFFFFF).ToBytes()
 	r := util.Range{Start: firstNode, Limit: lastNode}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -164,8 +167,8 @@ func (ht *HashTree) layerLength(layer int) (length int, err error) {
 // getRootHash reads the root hash from the database
 func (ht *HashTree) getRootHash() (hash []byte, err error) {
 	// set the range for full layers
-	firstNode := ht.convertKey(0, 0).ToBytes()
-	lastNode := ht.convertKey(0xFF, 0).ToBytes()
+	firstNode := getNodeDbKey(ht.table, 0, 0).ToBytes()
+	lastNode := getNodeDbKey(ht.table, 0xFF, 0).ToBytes()
 	r := util.Range{Start: firstNode, Limit: lastNode}
 	iter := ht.db.NewIterator(&r, nil)
 	defer iter.Release()
@@ -179,7 +182,7 @@ func (ht *HashTree) getRootHash() (hash []byte, err error) {
 
 // updateNode updates the hash-node value to the given value
 func (ht *HashTree) updateNode(layer, node int, nodeHash []byte) error {
-	dbKey := ht.convertKey(layer, node).ToBytes()
+	dbKey := getNodeDbKey(ht.table, layer, node).ToBytes()
 	return ht.db.Put(dbKey, nodeHash, nil)
 }
 
@@ -270,11 +273,12 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 	return
 }
 
-func (ht *HashTree) convertKey(layer, node int) common.DbKey {
+// getNodeDbKey provides the leveldb key, where can be the hash of given node found
+func getNodeDbKey(table common.TableSpace, layer, node int) common.DbKey {
 	//  the key is: [tableSpace]H[layer][node]
 	// layer is 8bit (256 layers Max)
 	// node is 32bit
-	return ht.table.DBToDBKey(
+	return table.DBToDBKey(
 		common.HashKey.ToDBKey(
 			binary.BigEndian.AppendUint32([]byte{uint8(layer)}, uint32(node))))
 }
