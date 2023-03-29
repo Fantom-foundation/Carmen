@@ -1649,6 +1649,7 @@ func TestCarmenStateSettingValuesCreatesAccountsImplicitly(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
 
 	db.SetState(address1, key1, val1)
 	if !db.Exist(address1) {
@@ -1665,9 +1666,59 @@ func TestCarmenStateImplicitAccountCreatedBySetStateIsDroppedSinceEmptyIfNothing
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
 
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
+	db.EndBlock(1)
+}
+
+func TestCarmenState_GethAlignment_ImplicitAccountCreatedBySetStateIsNotDroppedDueToEmptinessIfTheSetIsNotChangingTheValueOfTheSlot(t *testing.T) {
+	// This behaviour was discovered in geth, which is implicitly creating an account when
+	// setting a value, however, not registering it for an empty check at the end of a block
+	// if the assigned value is not different than the previous value.
+	// The account is implicitly created here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/statedb.go#L437
+	// The value would be set here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L296
+	// And the registry for an empty yet would happen with an addition to the journal here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L291-L295
+	// But the condition here prevents the registration: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L285-L289
+
+	// This problem should not occure on the chain, since any account for which a value is set is non-empty.
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially does not exit.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+
+	// The targeted account is created, although it is empty
+	mock.EXPECT().createAccount(address1).Return(nil)
+	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
+
+	// The account is implicitly created by setting a storage location to zero (which is the value it had before).
+	value := db.GetState(address1, key1)
+	db.SetState(address1, key1, value)
+
+	if !db.Exist(address1) {
+		t.Errorf("account was not implicitly created")
+	}
+
+	// At this point the account is empty ...
+	if !db.Empty(address1) {
+		t.Errorf("account is not considered empty")
+	}
+
+	// ... and one would expect it to be deleted by the end of the transaction ...
+	db.EndTransaction()
+
+	// ... but due to the issue in geth, this should not happen. The account must survive.
+	if !db.Exist(address1) {
+		t.Errorf("account did not survive")
+	}
+
 	db.EndBlock(1)
 }
 
@@ -1680,6 +1731,7 @@ func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
@@ -1729,6 +1781,7 @@ func TestCarmenStateWrittenValuesCanBeRead(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
 
 	db.SetState(address1, key1, val1)
 	if got := db.GetState(address1, key1); got != val1 {
@@ -1742,6 +1795,7 @@ func TestCarmenStateWrittenValuesCanBeUpdated(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
 
 	db.SetState(address1, key1, val1)
 	if got := db.GetState(address1, key1); got != val1 {
@@ -1805,7 +1859,11 @@ func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
+	// The account exists and is non-empty.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
+	mock.EXPECT().GetStorage(address1, key2).Return(common.Value{}, nil)
+
 	mock.EXPECT().setStorage(address1, key1, val1)
 	mock.EXPECT().setStorage(address1, key2, val2)
 
@@ -1821,6 +1879,8 @@ func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
+	mock.EXPECT().GetStorage(address1, key2).Return(val0, nil)
 	mock.EXPECT().setStorage(address1, key1, val1)
 
 	db.SetState(address1, key1, val1)
@@ -1838,6 +1898,8 @@ func TestCarmenStateNothingIsCommitedOnTransactionAbort(t *testing.T) {
 
 	// Should test whether the account exists, nothing else.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
+	mock.EXPECT().GetStorage(address1, key2).Return(val0, nil)
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
@@ -1851,6 +1913,7 @@ func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	mock.EXPECT().setStorage(address1, key1, val3)
 
 	db.SetState(address1, key1, val1)
@@ -1921,6 +1984,7 @@ func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Times(3).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	mock.EXPECT().setStorage(address1, key1, val1)
 	mock.EXPECT().setStorage(address1, key1, val2)
 	mock.EXPECT().setStorage(address1, key1, val3)
@@ -2678,6 +2742,7 @@ func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 
 	// Simulate a existing account.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	// The account will be deleted.
 	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)

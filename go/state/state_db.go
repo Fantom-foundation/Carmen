@@ -676,10 +676,14 @@ func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
 }
 
 func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Value) {
-	if s.createAccountIfNotExists(addr) {
-		// The account was implicitly created and may have to be removed at the end of the block.
+	isImplicitlyCreated := s.createAccountIfNotExists(addr)
+	if value == s.GetState(addr, key) {
+		return
+	}
+	if isImplicitlyCreated {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
 	}
+
 	sid := slotId{addr, key}
 	if entry, exists := s.data.Get(sid); exists {
 		if entry.current != value {
