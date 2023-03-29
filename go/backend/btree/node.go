@@ -88,5 +88,5 @@ type nodeChecker[K any] interface {
 // isMinSize returns true if the size of the input node is at minimal capacity.
 // Minimal capacity is half of the full capacity rounded up.
 func isMinSize[K any](m node[K], capacity int) bool {
-	return m.size() <= capacity/2
+	return m.size() <= (capacity-1)/2
 }

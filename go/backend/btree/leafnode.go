@@ -27,7 +27,7 @@ func (m *LeafNode[K]) insert(key K) (right node[K], middle K, split bool) {
 		m.insertAt(index, key, nil, nil)
 
 		// split when overflow
-		if len(m.keys) == m.capacity+1 {
+		if len(m.keys) >= m.capacity+1 {
 			right, middle = m.split()
 			split = true
 		}
@@ -182,8 +182,13 @@ func (m LeafNode[K]) checkProperties(treeDepth *int, currentLevel int) error {
 	}
 
 	// check capacity (for non-root leaf)
-	if currentLevel > 0 && m.size() < m.capacity/2 {
+	if currentLevel > 0 && m.size() < (m.capacity-1)/2 {
 		return fmt.Errorf("size below minimal capacity: %d < %d", m.size(), m.capacity/2)
+	}
+
+	// check capacity is not exceeded
+	if m.size() > m.capacity {
+		return fmt.Errorf("size above the maximal capacity: %d > %d", m.size(), m.capacity)
 	}
 
 	return nil

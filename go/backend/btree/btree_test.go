@@ -240,7 +240,7 @@ func TestBTreeThreeLevelsRemove(t *testing.T) {
 		t.Errorf("tree structure does not match: %v", str)
 	}
 
-	n.Remove(15) // merge 16, 15, 21
+	n.Remove(15) // merge 13, 15, 21
 
 	if str := n.String(); str != "[[7], 9, [13, 21], 27, [29, 51]]" {
 		t.Errorf("tree structure does not match: %v", str)
@@ -275,8 +275,71 @@ func TestBTreeThreeLevelsRemove(t *testing.T) {
 	}
 }
 
+func TestBTreeRemoveNonExisting(t *testing.T) {
+	n := NewBTree[uint32](4, common.Uint32Comparator{})
+
+	// fill-in leafs at min capacity
+	n.Insert(1)
+	n.Insert(2)
+	n.Insert(3)
+	n.Insert(4)
+	n.Insert(5)
+
+	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5}, getKeys(n))
+
+	// removal of non-existing cannot break properties
+	n.Remove(999)
+	if err := n.checkProperties(); err != nil {
+		t.Errorf("%e", err)
+	}
+
+	n.Insert(6)
+	if err := n.checkProperties(); err != nil {
+		t.Errorf("%e", err)
+	}
+
+	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6}, getKeys(n))
+}
+
+func TestBTreeInsertRemoveOrdered(t *testing.T) {
+	widths := []int{3, 1 << 3, 1 << 5, 1 << 7}
+
+	for _, width := range widths {
+		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
+			n := NewBTree[uint32](width, common.Uint32Comparator{})
+
+			data := make([]uint32, 0, numKeys)
+			for i := 0; i < numKeys; i++ {
+				key := uint32(i)
+				data = append(data, key)
+				n.Insert(key)
+			}
+
+			if err := n.checkProperties(); err != nil {
+				t.Errorf("tree properties check do not pass: %e", err)
+			}
+
+			// check all data inserted and sorted
+			common.AssertArraySorted[uint32](t, getKeys(n), comparator)
+			for _, key := range data {
+				if !n.Contains(key) {
+					t.Errorf("key %d should be present", key)
+				}
+
+				// remove and check properties
+				n.Remove(key)
+				if err := n.checkProperties(); err != nil {
+					t.Errorf("tree properties check do not pass: %e", err)
+				}
+
+			}
+
+		})
+	}
+}
+
 func TestBTreeGetRangeManyElements(t *testing.T) {
-	widths := []int{2, 3, 2 << 3, 2 << 5, 2 << 7}
+	widths := []int{2, 3, 1 << 3, 1 << 5, 1 << 7}
 
 	for _, width := range widths {
 		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
@@ -297,7 +360,7 @@ func TestBTreeGetRangeManyElements(t *testing.T) {
 }
 
 func TestBTreeLoadTest(t *testing.T) {
-	widths := []int{2, 3, 2 << 3, 2 << 5, 2 << 7}
+	widths := []int{2, 3, 1 << 3, 1 << 5, 1 << 7}
 
 	for _, width := range widths {
 		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
@@ -318,7 +381,7 @@ func TestBTreeLoadTest(t *testing.T) {
 }
 
 func TestBTreeRemove(t *testing.T) {
-	widths := []int{2, 3, 2 << 3, 2 << 5, 2 << 7}
+	widths := []int{3, 1 << 3, 1 << 5, 1 << 7}
 
 	for _, width := range widths {
 		t.Run(fmt.Sprintf("btree, capacity %d, items %d", width, numKeys), func(t *testing.T) {
