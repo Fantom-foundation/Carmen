@@ -500,6 +500,7 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 	}
 
 	s.setAccountState(addr, kSuicided)
+	s.addEmptyAccountCandidate(addr) // < the account may be reserected and still be empty
 
 	s.resetBalance(addr)
 	deleteListLength := len(s.accountsToDelete)

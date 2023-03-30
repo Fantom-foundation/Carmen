@@ -316,6 +316,7 @@ func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransacti
 
 	// Initially the account existis with some values inside.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{12}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(val2, nil)
 
@@ -367,7 +368,8 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	zero := common.Value{}
 
 	// Initially the account exists and has a slot value set.
-	mock.EXPECT().Exists(address1).Return(true, nil).Times(3) // once in each block
+	mock.EXPECT().Exists(address1).Return(true, nil).Times(2)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{12}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	// During the processing the account is deleted.
@@ -586,6 +588,7 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 
 	// Simulate an existing account.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{12}, nil)
 
 	// An existing account is indicated as being deleted.
 	if exists := db.Suicide(address1); !exists {
@@ -641,6 +644,7 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 
 	// Simulate an existing account.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{12}, nil)
 
 	// An existing account is indicated as being deleted.
 	if exists := db.Suicide(address1); !exists {
@@ -887,6 +891,7 @@ func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 
 	// The new account is deleted at the end of the transaction.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{12}, nil)
 	mock.EXPECT().deleteAccount(address1).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(0)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
@@ -1965,6 +1970,37 @@ func TestCarmenState_GethAlignment_ReadOperationsOnExistingAccountIsAnAccess(t *
 				t.Errorf("account should have survived")
 			}
 		})
+	}
+}
+
+func TestCarmenState_GethAlignment_SuicideRegistersAccountAsEmptyAccountCandidate(t *testing.T) {
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially does not exit.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	// Initially, an account is created and it survives the transaction since it is not empty.
+	db.CreateAccount(address1)
+	db.SetCode(address1, []byte{1, 2, 3})
+	db.EndTransaction()
+
+	// In the next transaction, the account is destroyed and re-created.
+	db.Suicide(address1)
+	db.CreateAccount(address1)
+
+	// At this point the account exists and is empty.
+	if !db.Exist(address1) || !db.Empty(address1) || db.HasSuicided(address1) {
+		t.Errorf("account is in unexpected state")
+	}
+
+	// At the end of the transaction it should be cleared, since Suicide put it on the empty-account candidate list.
+	db.EndTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("account was not deleted")
 	}
 }
 
