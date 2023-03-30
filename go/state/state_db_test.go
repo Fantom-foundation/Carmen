@@ -1690,13 +1690,20 @@ func TestCarmenState_GethAlignment_ImplicitAccountCreatedBySetStateIsNotDroppedD
 
 	// The targeted account initially does not exit.
 	mock.EXPECT().Exists(address1).Return(false, nil)
-	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
-	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
-	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
 	// The targeted account is created, although it is empty
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
+
+	// In an earlier transaction, the account is created and dropped because it is empty.
+	// As a side effect, it is remembered as being accessed, setting the stage for the test below.
+	db.CreateAccount(address1)
+	db.EndTransaction()
+	if _, found := db.accessedAccounts[address1]; !found {
+		t.Fatalf("failed to set preconditions for test")
+	}
 
 	// The account is implicitly created by setting a storage location to zero (which is the value it had before).
 	value := db.GetState(address1, key1)
@@ -1755,6 +1762,135 @@ func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
 	}
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
+}
+
+func TestCarmenState_GethAlignment_RecreatedAccountsPreviouslySeenAreNotMarkedForEmptyChecks(t *testing.T) {
+	// This behaviour was discovered in geth, and is likely a bug in Geth's state implementation.
+	// When recreating an account, geth differentiates between accounts that have been
+	// loaded before (as part of the same block), and accounts that have been unseen.
+	// If the account has not been seen before, a `createObjectChange` event is logged, which marks
+	// the created account as a potential empty account to be checked at the end of the transaction.
+	// However, if the account has been seen before, a `resetObjectChange` event is registered,
+	// which does not mark the new account as a potential empty account. By failing to do so, an
+	// empty, re-created account survives the end of the transaction.
+	//
+	// The function creating account information (stateObjects) is here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/statedb.go#L620
+	// This is the code causing the issue: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/statedb.go#L631-L635
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially exists, and is not empty.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+
+	// The account is re-created in the first transaction, and not implicitly deleted.
+	mock.EXPECT().createAccount(address1).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
+
+	// Initially, the account is not accessed.
+	if _, accessed := db.accessedAccounts[address1]; accessed {
+		t.Errorf("the account should not have been accessed already")
+	}
+
+	// First transaction: the account is re-created the first time.
+	db.CreateAccount(address1)
+
+	// The account exists now, and is remembered as being accessed.
+	if _, accessed := db.accessedAccounts[address1]; !db.Exist(address1) || !accessed {
+		t.Errorf("account in invalid state")
+	}
+
+	// At this point, the account should get removed.
+	db.EndTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("account in invalid state")
+	}
+
+	// In the second transaction, the account is re-created.
+	db.CreateAccount(address1)
+
+	// At this point the account exists, and is empty.
+	if !(db.Exist(address1) && db.Empty(address1)) {
+		t.Errorf("the account does not exist or is not empty")
+	}
+
+	// At this point, the account is empty and was touched, so it should
+	// be deleted at the end of the transaction. However, since the account
+	// was only re-created in the current transaction, geth does not consider
+	// it dirty, and thus does not check whether it is empty. Consequently,
+	// the account survives (likely accidentialy).
+	db.EndTransaction()
+
+	// To match geth, we expect the account to exist, although it most likely
+	// should be deleted since it is empty.
+	if !db.Exist(address1) {
+		t.Errorf("the empty account should have survived")
+	}
+
+	db.EndBlock(1)
+}
+
+func TestCarmenState_GethAlignment_ImplicitlyRecreatedAccountsPreviouslySeenAreNotMarkedForEmptyChecks(t *testing.T) {
+	// This is the same as above, but for implicitly recreated accounts.
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially exists, and is not empty.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+
+	// The account is re-created in the first transaction, and not implicitly deleted.
+	mock.EXPECT().createAccount(address1).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
+
+	// Initially, the account is not accessed.
+	if _, accessed := db.accessedAccounts[address1]; accessed {
+		t.Errorf("the account should not have been accessed already")
+	}
+
+	// First transaction: the account is re-created the first time.
+	db.CreateAccount(address1)
+
+	// The account exists now, and is remembered as being accessed.
+	if _, accessed := db.accessedAccounts[address1]; !db.Exist(address1) || !accessed {
+		t.Errorf("account in invalid state")
+	}
+
+	// At this point, the account should get removed.
+	db.EndTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("account in invalid state")
+	}
+
+	// In the second transaction, the account is implicitly re-created.
+	db.SetState(address1, key1, val0) // val0 is used to not triger the inclusion in the emptyCandidates list due to the changed value
+
+	// At this point the account exists, and is empty.
+	if !(db.Exist(address1) && db.Empty(address1)) {
+		t.Errorf("the account does not exist or is not empty")
+	}
+
+	// At this point, the account is empty and was touched, so it should
+	// be deleted at the end of the transaction. However, since the account
+	// was only re-created in the current transaction, geth does not consider
+	// it dirty, and thus does not check whether it is empty. Consequently,
+	// the account survives (likely accidentialy).
+	db.EndTransaction()
+
+	// To match geth, we expect the account to exist, although it most likely
+	// should be deleted since it is empty.
+	if !db.Exist(address1) {
+		t.Errorf("the empty account should have survived")
+	}
+
+	db.EndBlock(1)
 }
 
 func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
@@ -2116,6 +2252,16 @@ func TestCarmenStateSettingCodesCreatesAccountsImplicitly(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+
+	// In an earlier transaction, the account is created and dropped because it is empty.
+	// As a side effect, it is remembered as being accessed, setting the stage for the test below.
+	// Otherwise, the implicit creation of the account would schedule it for deletion at the end of the transaction.
+	db.CreateAccount(address1)
+	db.EndTransaction()
+	if _, found := db.accessedAccounts[address1]; !found {
+		t.Fatalf("failed to set preconditions for test")
+	}
 
 	want := []byte{0xAC, 0xDC}
 	mock.EXPECT().setCode(address1, want).Return(nil)
@@ -2795,6 +2941,110 @@ func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	}
 
 	db.EndBlock(1)
+}
+
+func TestCarmenState_AccessedAccountsAreCoveredBySnapshotReverts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().Exists(address2).Return(false, nil)
+
+	want := 0
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	snapshot1 := db.Snapshot()
+
+	db.CreateAccount(address1)
+
+	want++
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	snapshot2 := db.Snapshot()
+
+	db.SetNonce(address2, 12)
+
+	want++
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot2)
+
+	want--
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot1)
+
+	want--
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+}
+
+func TestCarmenState_AccessedAccountsAreClearedAtEndOfBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	mock.EXPECT().Exists(address2).Return(false, nil)
+	mock.EXPECT().Exists(address3).Return(false, nil)
+
+	// Only account 2 is created since the rest remains empty.
+	mock.EXPECT().createAccount(address2).Return(nil)
+	mock.EXPECT().setBalance(address2, common.Balance{}).Return(nil)
+	mock.EXPECT().setNonce(address2, common.ToNonce(12)).Return(nil)
+
+	want := 0
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	db.CreateAccount(address1)
+
+	want++
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	db.SetNonce(address2, 12)
+
+	want++
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	// The end of a transaction does not clear the accessed accounts.
+	db.EndTransaction()
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	// Accessed accounts accumulate over blocks.
+	db.CreateAccount(address3)
+
+	want++
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
+
+	db.EndTransaction()
+
+	// The end of a block does.
+	db.EndBlock(1)
+
+	want = 0
+	if got := len(db.accessedAccounts); want != got {
+		t.Errorf("unexpected number of accessed accounts, wanted %v, got %v", want, got)
+	}
 }
 
 func TestCarmenStateBulkLoadReachesState(t *testing.T) {

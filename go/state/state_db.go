@@ -143,6 +143,14 @@ type stateDB struct {
 
 	// A list of addresses, which have possibly become empty in the transaction
 	emptyCandidates []common.Address
+
+	// The accounts accessed in a block, needed to distinguish accounts that are created in a block
+	// or recreated. This is needed to mirror geth's behaviour in implicitly deleting accounts, which does not
+	// trigger if a pre-accessed account is recreated and left empty.
+	// The relevant code in geth is here:
+	// https://github.com/ethereum/go-ethereum/blob/fb8a3aaf1e084f6190c72f039571f3c7da565b4a/core/state/statedb.go#L634-L638
+	// The map is used as a set, the boolean value is ignored.
+	accessedAccounts map[common.Address]bool
 }
 
 type accountLifeCycleState int
@@ -325,6 +333,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int) *stateDB {
 		undo:              make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
 		emptyCandidates:   make([]common.Address, 0, 100),
+		accessedAccounts:  make(map[common.Address]bool, 100),
 	}
 }
 
@@ -373,15 +382,26 @@ func (s *stateDB) Exist(addr common.Address) bool {
 	return exists
 }
 
+// touchCreatedAccount may register a freshly created account as a empty-account candidate.
+func (s *stateDB) touchCreatedAccount(addr common.Address) {
+	// If the account has never been accessed before, it is registered as a potential
+	// empty account candidate to be deleted at the end of the transaction.
+	// Note: previously seen accounts are excluded in geth here:
+	// https://github.com/ethereum/go-ethereum/blob/fb8a3aaf1e084f6190c72f039571f3c7da565b4a/core/state/statedb.go#L634-L638
+	if _, found := s.accessedAccounts[addr]; !found {
+		s.accessedAccounts[addr] = true
+		s.undo = append(s.undo, func() { delete(s.accessedAccounts, addr) })
+		s.emptyCandidates = append(s.emptyCandidates, addr)
+	}
+}
+
 func (s *stateDB) CreateAccount(addr common.Address) {
 	s.setNonceInternal(addr, 0)
 	s.setCodeInternal(addr, []byte{})
 
 	exists := s.Exist(addr)
 	s.setAccountState(addr, kExists)
-
-	// Created because touched - will be deleted at the end of the transaction if it stays empty
-	s.emptyCandidates = append(s.emptyCandidates, addr)
+	s.touchCreatedAccount(addr)
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -424,6 +444,7 @@ func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
 		return false
 	}
 	s.setAccountState(addr, kExists)
+	s.touchCreatedAccount(addr)
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -1171,6 +1192,7 @@ func (s *stateDB) reset() {
 	s.data.Clear()
 	s.clearedAccounts = make(map[common.Address]accountClearingState)
 	s.codes = make(map[common.Address]*codeValue)
+	s.accessedAccounts = make(map[common.Address]bool, 100)
 	s.resetTransactionContext()
 }
 
