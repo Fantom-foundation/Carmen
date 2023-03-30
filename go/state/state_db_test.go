@@ -1729,6 +1729,55 @@ func TestCarmenState_GethAlignment_ImplicitAccountCreatedBySetStateIsNotDroppedD
 	db.EndBlock(1)
 }
 
+func TestCarmenState_GethAlignment_SetStateAddsAccountToListOfAccountsToBeTestedForEmptinessIndependentOfTheImplicitAccountCreation(t *testing.T) {
+	// In geth, any state mutation is adding the associated account to the list of
+	// candidates to be cleared. In Carmen, this used to be limited for accounts
+	// that got implicitly created by the SetState call. This can lead to diffs, as
+	// show-cases by this test (before the fix).
+	//
+	// This issue should not arise in actual block processing, since SetState calls
+	// should only occure for non-empty accounts.
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially does not exit.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	// In an earlier transaction, the account is created and dropped because it is empty.
+	// As a side effect, it is remembered as being accessed, setting the stage for the test below.
+	db.CreateAccount(address1)
+	db.EndTransaction()
+
+	// At this point the account got removed, but it is remembered as being accessed.
+	if db.Exist(address1) {
+		t.Errorf("account was not implicitly deleted")
+	}
+
+	// The account is implicitly created by changing the value of a storage location (it is zero so far).
+	db.SetState(address1, key1, val1)
+
+	// At this point the account has been re-created ..
+	if !db.Exist(address1) {
+		t.Errorf("account was not implicitly created")
+	}
+
+	// .. and empty ..
+	if !db.Empty(address1) {
+		t.Errorf("account is not considered empty")
+	}
+
+	// ... and on the empty candidates list. So it should be removed at the end of the transaction.
+	db.EndTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("account should have been removed")
+	}
+
+	db.EndBlock(1)
+}
+
 func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
 	// This issue was discovered using Aida Stochastic fuzzing. State information
 	// was not properly cleaned at the end of consecutive transactions writing
@@ -1997,6 +2046,7 @@ func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 
 	// The account exists and is non-empty.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(common.Value{}, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(common.Value{}, nil)
 
@@ -2015,6 +2065,7 @@ func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	mock.EXPECT().GetStorage(address1, key2).Return(val0, nil)
 	mock.EXPECT().setStorage(address1, key1, val1)
@@ -2049,6 +2100,7 @@ func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	mock.EXPECT().setStorage(address1, key1, val3)
 
@@ -2067,6 +2119,7 @@ func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
 
 	// Only expect a read but no update.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	val := db.GetState(address1, key1)
@@ -2084,6 +2137,7 @@ func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
 
 	// Only expect a read but no update.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 	mock.EXPECT().GetStorage(address1, key1).Return(val1, nil)
 
 	if got := db.GetState(address1, key1); got != val1 {
@@ -2120,6 +2174,7 @@ func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Times(3).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil).Times(3)
 	mock.EXPECT().GetStorage(address1, key1).Return(val0, nil)
 	mock.EXPECT().setStorage(address1, key1, val1)
 	mock.EXPECT().setStorage(address1, key1, val2)
