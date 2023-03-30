@@ -25,7 +25,7 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 		"memLinearHashIndex": func(t *testing.T) index.Index[common.Address, uint32] {
 			return memory.NewLinearHashIndex[common.Address, uint32](keySerializer, idSerializer, common.AddressHasher{}, common.AddressComparator{})
 		},
-		"cachedindex": func(t *testing.T) index.Index[common.Address, uint32] {
+		"cachedMemoryIndex": func(t *testing.T) index.Index[common.Address, uint32] {
 			return cache.NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](keySerializer), 10)
 		},
 		"ldbindex": func(t *testing.T) index.Index[common.Address, uint32] {
@@ -52,6 +52,31 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 				_ = fileIndex.Close()
 			})
 			return fileIndex
+		},
+		"cachedFileIndex": func(t *testing.T) index.Index[common.Address, uint32] {
+			fileIndex, err := file.NewIndex[common.Address, uint32](t.TempDir(), keySerializer, idSerializer, common.AddressHasher{}, common.AddressComparator{})
+			if err != nil {
+				t.Fatalf("failed to init leveldb; %s", err)
+			}
+			t.Cleanup(func() {
+				_ = fileIndex.Close()
+			})
+			return cache.NewIndex[common.Address, uint32](fileIndex, 10)
+		},
+		"cachedLdbIndex": func(t *testing.T) index.Index[common.Address, uint32] {
+			db, err := common.OpenLevelDb(t.TempDir(), nil)
+			if err != nil {
+				t.Fatalf("failed to init leveldb; %s", err)
+			}
+			ldbindex, err := ldb.NewIndex[common.Address, uint32](db, common.BalanceStoreKey, keySerializer, idSerializer)
+			if err != nil {
+				t.Fatalf("failed to init leveldb; %s", err)
+			}
+			t.Cleanup(func() {
+				_ = ldbindex.Close()
+				_ = db.Close()
+			})
+			return cache.NewIndex[common.Address, uint32](ldbindex, 10)
 		},
 	}
 }
@@ -292,6 +317,55 @@ func TestIndexSnapshot_IndexSnapshotIsShieldedFromMutations(t *testing.T) {
 
 			if recoveredIndex.Contains(common.Address{0xaa}) {
 				t.Errorf("recovered state should not include elements added after snapshot creation")
+			}
+
+			if err := snapshot.Release(); err != nil {
+				t.Errorf("failed to release snapshot: %v", err)
+			}
+		})
+	}
+}
+
+func TestIndexSnapshot_IndexSnapshotRestoreClearsPreviousVersion(t *testing.T) {
+	for name, idx := range initIndexesMap() {
+		t.Run(fmt.Sprintf("index %s", name), func(t *testing.T) {
+
+			originalIndex := idx(t)
+			original, ok := originalIndex.(backend.Snapshotable)
+			if !ok {
+				t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+			}
+
+			fillIndex(t, originalIndex, 20)
+
+			snapshot, err := original.CreateSnapshot()
+			if fmt.Sprintf("%v", err) == "wrapped index is not snapshotable" {
+				t.Skip(fmt.Sprintf("%v", err))
+			}
+
+			if err != nil {
+				t.Errorf("failed to create snapshot: %v", err)
+				return
+			}
+			if snapshot == nil {
+				t.Errorf("failed to create snapshot")
+				return
+			}
+
+			recoveredIndex := idx(t)
+			// an extra value
+			if _, err := recoveredIndex.GetOrAdd(common.AddressFromNumber(999999)); err != nil {
+				t.Errorf("error to get or add value: %e", err)
+			}
+
+			recovered, _ := recoveredIndex.(backend.Snapshotable)
+			if err := recovered.Restore(snapshot.GetData()); err != nil {
+				t.Errorf("failed to sync to snapshot: %v", err)
+				return
+			}
+
+			if recoveredIndex.Contains(common.AddressFromNumber(999999)) {
+				t.Errorf("recovered state should not include elements that it contained before")
 			}
 
 			if err := snapshot.Release(); err != nil {
