@@ -85,7 +85,7 @@ type SnapshotVerifier interface {
 // Snapshotable is an interface to be implemented by data structure to support
 // integration into the snapshotting infrastructure.
 type Snapshotable interface {
-	// GetProof returns a proof a snapshot would exhibit if it would be created
+	// GetProof returns a proof the snapshot exhibits if it is created
 	// for the current state of the data structure.
 	GetProof() (Proof, error)
 	// CreateSnapshot creates a snapshot of the current state of the data
