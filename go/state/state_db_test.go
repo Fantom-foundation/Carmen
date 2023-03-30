@@ -1833,6 +1833,51 @@ func TestCarmenState_GethAlignment_SetNonceAlwaysRegistersAnAccountForAFinalEmpt
 	}
 }
 
+func TestCarmenState_GethAlignment_SetCodeAlwaysRegistersAnAccountForAFinalEmptyCheck(t *testing.T) {
+	// Due to Geth's complex behaviour of registering cleared accounts it is necessary
+	// to always register accounts targeted by GetCode(...) to be checked at the end of
+	// a transaction -- like it is done by Geth itself.
+	//
+	// Geth's SetCode function is here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/statedb.go#L422-L427
+	// The update happens here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L535-L543
+	// The journal entry always reports the targeted account as dirty: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/journal.go#L204-L206
+	//
+	// This problem may occur in actual block processing.
+	//
+	// This test case re-creates an event sequence where the lack of registering the account
+	// as an account to be cleared leads to a wrong account-deletion decision.
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially does not exit.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	// In an earlier transaction, the account is created and dropped because it is empty.
+	// As a side effect, it is remembered as being accessed, setting the stage for the test below.
+	db.CreateAccount(address1)
+	db.EndTransaction()
+
+	// An a later transaction, the code is set, implicitly creating the account.
+	// The account is not empty yet, and if SetCode is not registering it as potentially
+	// empty, it is not registred as such.
+	db.SetCode(address1, []byte{1, 2, 3})
+
+	// In the same transaction, the account is re-created, resetting the code to empty.
+	// After this, the account is empty, but CreateAccount is not registering it
+	// as a empty candidate either; So ...
+	db.CreateAccount(address1)
+
+	// At the end of the transaction, the account is not deleted. But it should, also
+	// in Geth, since the SetCode operation, although overridden, was not reset.
+	db.EndTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("the account should have been deleted")
+	}
+}
+
 func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
 	// This issue was discovered using Aida Stochastic fuzzing. State information
 	// was not properly cleaned at the end of consecutive transactions writing
@@ -2322,8 +2367,9 @@ func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	// SetCode creates the account if it does not exist
+	// The account initially exists and is not empty.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 
 	want := []byte{0xAC, 0xDC}
 	mock.EXPECT().setCode(address1, want).Return(nil)
@@ -2338,8 +2384,9 @@ func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	// SetCode creates the account if it does not exist
+	// The account initially exists and is not empty.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 
 	want := []byte{0xAC, 0xDC}
 	mock.EXPECT().setCode(address1, want).Return(nil)
@@ -2430,6 +2477,7 @@ func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *test
 
 	// Simulate an existing account.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{12}, nil)
 
 	db.SetCode(address1, []byte{1, 2, 3})
 	db.Suicide(address1)

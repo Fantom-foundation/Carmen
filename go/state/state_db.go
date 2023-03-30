@@ -753,9 +753,7 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 func (s *stateDB) SetCode(addr common.Address, code []byte) {
 	s.createAccountIfNotExists(addr)
 	s.setCodeInternal(addr, code)
-	if len(code) == 0 {
-		s.addEmptyAccountCandidate(addr)
-	}
+	s.addEmptyAccountCandidate(addr)
 }
 
 func (s *stateDB) setCodeInternal(addr common.Address, code []byte) {
