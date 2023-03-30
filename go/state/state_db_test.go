@@ -1797,10 +1797,10 @@ func TestCarmenState_GethAlignment_SetNonceAlwaysRegistersAnAccountForAFinalEmpt
 	// The update happens here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L551-L557
 	// The journal entry always reports the targeted account as dirty: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/journal.go#L196-L198
 	//
-	// This problem may occur in actual block processing.
+	// This problem may occure in actual block processing.
 	//
-	// This test case re-creates an event sequence where the lack of registering the
-	// account as an account to be cleared leads to a wrong account-deletion decision.
+	// This test case re-creates an event sequence where the lack of registering the account
+	// as an account to be cleared leads to a wrong account-deletion decsison.
 
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
