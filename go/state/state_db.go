@@ -364,6 +364,7 @@ func (s *stateDB) setAccountState(addr common.Address, state accountLifeCycleSta
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
+	s.registerAccess(addr)
 	if val, exists := s.accounts[addr]; exists {
 		return val.current == kExists || val.current == kSuicided // Suicided accounts still exist till the end of the transaction.
 	}
@@ -395,13 +396,47 @@ func (s *stateDB) touchCreatedAccount(addr common.Address) {
 	}
 }
 
+// registerAccess registers an existing account in the DB to be accessed. Accounts that do not
+// exist in the database can never be considered accessed.
+func (s *stateDB) registerAccess(addr common.Address) {
+	if _, found := s.accessedAccounts[addr]; found {
+		return
+	}
+	// To determine whether the account exists in the DB the state cache is used.
+	// Note: Exist() can not be used since it reflects the current transactions view,
+	// which may include accounts that only have been created as part of the transaction.
+	val, found := s.accounts[addr]
+	if !found {
+		// If the existence has not yet been queried from the DB, the values
+		// need to be fetched. These values are snapshot-invariant, thus there
+		// is no noded for roll-back support.
+		exists, err := s.state.Exists(addr)
+		if err != nil {
+			panic(fmt.Sprintf("error fetching account state: %v", err))
+		}
+		state := kNonExisting
+		if exists {
+			state = kExists
+		}
+		val = &accountState{
+			original: state,
+			current:  state,
+		}
+		s.accounts[addr] = val
+	}
+	if val.original == kExists {
+		s.accessedAccounts[addr] = true
+	}
+}
+
 func (s *stateDB) CreateAccount(addr common.Address) {
+	s.touchCreatedAccount(addr)
+
 	s.setNonceInternal(addr, 0)
 	s.setCodeInternal(addr, []byte{})
 
 	exists := s.Exist(addr)
 	s.setAccountState(addr, kExists)
-	s.touchCreatedAccount(addr)
 
 	// Initialize the balance with 0, unless the account existed before.
 	// Thus, accounts previously marked as unknown (default) or deleted
@@ -487,6 +522,7 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
+	s.registerAccess(addr)
 	state := s.accounts[addr]
 	return state != nil && state.current == kSuicided
 }
@@ -503,6 +539,7 @@ func clone(val *big.Int) *big.Int {
 }
 
 func (s *stateDB) GetBalance(addr common.Address) *big.Int {
+	s.registerAccess(addr)
 	// Check cache first.
 	if val, exists := s.balances[addr]; exists {
 		return clone(&val.current) // Do not hand out a pointer to the internal copy!
@@ -590,6 +627,7 @@ func (s *stateDB) resetBalance(addr common.Address) {
 }
 
 func (s *stateDB) GetNonce(addr common.Address) uint64 {
+	s.registerAccess(addr)
 	// Check cache first.
 	if val, exists := s.nonces[addr]; exists {
 		return val.current
@@ -635,6 +673,7 @@ func (s *stateDB) setNonceInternal(addr common.Address, nonce uint64) {
 }
 
 func (s *stateDB) GetCommittedState(addr common.Address, key common.Key) common.Value {
+	s.registerAccess(addr)
 	// Check cache first.
 	sid := slotId{addr, key}
 	val, exists := s.data.Get(sid)
@@ -686,6 +725,7 @@ func (s *stateDB) loadStoredState(sid slotId, val *slotValue) common.Value {
 }
 
 func (s *stateDB) GetState(addr common.Address, key common.Key) common.Value {
+	s.registerAccess(addr)
 	// Check whether the slot is already cached/modified.
 	sid := slotId{addr, key}
 	if val, exists := s.data.Get(sid); exists {
@@ -734,6 +774,7 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 }
 
 func (s *stateDB) GetCode(addr common.Address) []byte {
+	s.registerAccess(addr)
 	val, exists := s.codes[addr]
 	if !exists {
 		val = &codeValue{}
@@ -779,6 +820,7 @@ func (s *stateDB) setCodeInternal(addr common.Address, code []byte) {
 }
 
 func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
+	s.registerAccess(addr)
 	// The hash of the code of a non-existing account is always zero.
 	if !s.Exist(addr) {
 		return common.Hash{}
@@ -805,6 +847,7 @@ func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
 }
 
 func (s *stateDB) GetCodeSize(addr common.Address) int {
+	s.registerAccess(addr)
 	val, exists := s.codes[addr]
 	if !exists {
 		val = &codeValue{}
