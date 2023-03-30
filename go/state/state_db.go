@@ -610,9 +610,8 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
 	s.setNonceInternal(addr, nonce)
-	if s.createAccountIfNotExists(addr) && nonce == 0 {
-		s.addEmptyAccountCandidate(addr)
-	}
+	s.createAccountIfNotExists(addr)
+	s.addEmptyAccountCandidate(addr)
 }
 
 func (s *stateDB) setNonceInternal(addr common.Address, nonce uint64) {

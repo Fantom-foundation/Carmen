@@ -814,6 +814,7 @@ func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
 
 	// the nonce and code will be set at the end of the block since suicide is canceled.
 	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(5)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{1, 2, 3}).Return(nil)
 
@@ -1526,6 +1527,9 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
+	// The account is expected to be tested for emptiness, and it shall not be empty.
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
+
 	// The updated value is expected to be written to the state.
 	mock.EXPECT().setNonce(address1, common.ToNonce(10)).Return(nil)
 	// SetNonce create the account if it does not exist
@@ -1545,6 +1549,9 @@ func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
+	// The account is expected to be tested for emptiness, and it shall not be empty.
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
+
 	// Only the last value is to be written to the state.
 	mock.EXPECT().setNonce(address1, common.ToNonce(12)).Return(nil)
 	// SetNonce create the account if it does not exist
@@ -1562,6 +1569,9 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
+
+	// The account is expected to be tested for emptiness, and it shall not be empty.
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{1}, nil)
 
 	// Nonce is only read, never written.
 	mock.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
@@ -1682,7 +1692,7 @@ func TestCarmenState_GethAlignment_ImplicitAccountCreatedBySetStateIsNotDroppedD
 	// And the registry for an empty yet would happen with an addition to the journal here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L291-L295
 	// But the condition here prevents the registration: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L285-L289
 
-	// This problem should not occure on the chain, since any account for which a value is set is non-empty.
+	// This problem should not occur on the chain, since any account for which a value is set is non-empty.
 
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
@@ -1736,7 +1746,7 @@ func TestCarmenState_GethAlignment_SetStateAddsAccountToListOfAccountsToBeTested
 	// show-cases by this test (before the fix).
 	//
 	// This issue should not arise in actual block processing, since SetState calls
-	// should only occure for non-empty accounts.
+	// should only occur for non-empty accounts.
 
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
@@ -1776,6 +1786,51 @@ func TestCarmenState_GethAlignment_SetStateAddsAccountToListOfAccountsToBeTested
 	}
 
 	db.EndBlock(1)
+}
+
+func TestCarmenState_GethAlignment_SetNonceAlwaysRegistersAnAccountForAFinalEmptyCheck(t *testing.T) {
+	// Due to Geth's complex behaviour of registering cleared accounts it is necessary
+	// to always register accounts targeted by GetNonce(...) to be checked at the end of
+	// a transaction -- like it is done by Geth itself.
+	//
+	// Geth's SetNonce function is here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/statedb.go#L415-L420
+	// The update happens here: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/state_object.go#L551-L557
+	// The journal entry always reports the targeted account as dirty: https://github.com/Fantom-foundation/go-ethereum-substate/blob/main/core/state/journal.go#L196-L198
+	//
+	// This problem may occur in actual block processing.
+	//
+	// This test case re-creates an event sequence where the lack of registering the
+	// account as an account to be cleared leads to a wrong account-deletion decision.
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// The targeted account initially does not exit.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	// In an earlier transaction, the account is created and dropped because it is empty.
+	// As a side effect, it is remembered as being accessed, setting the stage for the test below.
+	db.CreateAccount(address1)
+	db.EndTransaction()
+
+	// An a later transaction, the nonce is set, implicitly creating the account.
+	// The account is not empty yet, and if SetNonce it is not registering it as potentially
+	// empty, it is not registred as such.
+	db.SetNonce(address1, 12)
+
+	// In the same transaction, the account is re-created, resetting the nonce to 0.
+	// After this, the account is empty, but CreateAccount is not registering it
+	// as a empty candidate either; So ...
+	db.CreateAccount(address1)
+
+	// At the end of the transaction, the account is not deleted. But it should, also
+	// in Geth, since the SetNonce operation, although overridden, was not reset.
+	db.EndTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("the account should have been deleted")
+	}
 }
 
 func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
