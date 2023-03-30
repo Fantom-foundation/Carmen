@@ -391,7 +391,7 @@ func (s *stateDB) touchCreatedAccount(addr common.Address) {
 	if _, found := s.accessedAccounts[addr]; !found {
 		s.accessedAccounts[addr] = true
 		s.undo = append(s.undo, func() { delete(s.accessedAccounts, addr) })
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 }
 
@@ -524,7 +524,7 @@ func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
 	s.createAccountIfNotExists(addr)
 
 	if diff == nil || diff.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 		return
 	}
 	if diff.Sign() < 0 {
@@ -545,7 +545,7 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	s.createAccountIfNotExists(addr)
 
 	if diff == nil || diff.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 		return
 	}
 	if diff.Sign() < 0 {
@@ -557,7 +557,7 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	newValue := new(big.Int).Sub(oldValue, diff)
 
 	if newValue.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 
 	s.balances[addr].current = *newValue
@@ -565,7 +565,7 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 		s.balances[addr].current = *oldValue
 	})
 	if newValue.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 }
 
@@ -611,7 +611,7 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 func (s *stateDB) SetNonce(addr common.Address, nonce uint64) {
 	s.setNonceInternal(addr, nonce)
 	if s.createAccountIfNotExists(addr) && nonce == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 }
 
@@ -702,7 +702,7 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		return
 	}
 	if isImplicitlyCreated {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 
 	sid := slotId{addr, key}
@@ -757,7 +757,7 @@ func (s *stateDB) SetCode(addr common.Address, code []byte) {
 	s.createAccountIfNotExists(addr)
 	s.setCodeInternal(addr, code)
 	if len(code) == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
+		s.addEmptyAccountCandidate(addr)
 	}
 }
 
@@ -1176,6 +1176,12 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
 		return nil, err
 	}
 	return createLiteStateDBUsing(archiveState), nil
+}
+
+func (s *stateDB) addEmptyAccountCandidate(addr common.Address) {
+	len := len(s.emptyCandidates)
+	s.emptyCandidates = append(s.emptyCandidates, addr)
+	s.undo = append(s.undo, func() { s.emptyCandidates = s.emptyCandidates[0:len] })
 }
 
 func (s *stateDB) resetTransactionContext() {

@@ -2881,6 +2881,50 @@ func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	db.EndBlock(1)
 }
 
+func TestCarmenState_EmptyAccountCandidatesAreCoveredBySnapshotReverts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	// The sequence below demonstrates that accounts may get removed again from the
+	// list of empty candidates, an thus may be (accidentially) created.
+	mock.EXPECT().createAccount(address1).Return(nil)
+	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
+	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
+	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
+
+	// Create an account which remains empty an gets deleted after the transaction.
+	// However: the account remains remembered as accessed.
+	db.CreateAccount(address1)
+	db.EndTransaction()
+
+	// Create the same account again. This time the account is not registered as a
+	// empty account candidate, since it has been seen before.
+	db.CreateAccount(address1)
+	if got := len(db.emptyCandidates); got != 0 {
+		t.Errorf("created account was registered as potential empty account")
+	}
+
+	snapshot := db.Snapshot()
+
+	// This step causes the account to be on the empty-candidates list.
+	db.SetCode(address1, []byte{})
+	if got := len(db.emptyCandidates); got != 1 {
+		t.Errorf("set code to empty did not add the account to the empty account candidate list")
+	}
+
+	db.RevertToSnapshot(snapshot)
+
+	if got := len(db.emptyCandidates); got != 0 {
+		t.Errorf("revert did not remove the candidate again")
+	}
+
+	db.EndTransaction()
+	db.EndBlock(1)
+}
+
 func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := prepareMockState(ctrl)
