@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -80,7 +79,7 @@ func (m *Index[K, I]) GetProof() (backend.Proof, error) {
 func (m *Index[K, I]) CreateSnapshot() (backend.Snapshot, error) {
 	snapshotable, ok := m.wrapped.(backend.Snapshotable)
 	if !ok {
-		return nil, fmt.Errorf("wrapped index is not snapshotable")
+		return nil, index.ErrNotSnapshotable
 	}
 
 	return snapshotable.CreateSnapshot()
@@ -89,11 +88,20 @@ func (m *Index[K, I]) CreateSnapshot() (backend.Snapshot, error) {
 func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	snapshotable, ok := m.wrapped.(backend.Snapshotable)
 	if !ok {
-		return fmt.Errorf("wrapped index is not snapshotable")
+		return index.ErrNotSnapshotable
 	}
 
 	m.cache.Clear()
 	return snapshotable.Restore(data)
+}
+
+func (m *Index[K, I]) GetSnapshotVerifier(data []byte) (backend.SnapshotVerifier, error) {
+	snapshotable, ok := m.wrapped.(backend.Snapshotable)
+	if !ok {
+		return nil, index.ErrNotSnapshotable
+	}
+
+	return snapshotable.GetSnapshotVerifier(data)
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
