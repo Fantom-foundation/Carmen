@@ -21,6 +21,10 @@ func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 		_ = s.Close()
 	})
 
+	if lastId := s.GetLastId(); lastId != -1 {
+		t.Errorf("Unexpected lastId for empty file: %d, %s", lastId, err)
+	}
+
 	loadPageA := NewRawPage(common.PageSize)
 	if err := s.Load(5, loadPageA); loadPageA.Size() != 0 || err != nil {
 		t.Errorf("Page should not exist")
@@ -35,8 +39,12 @@ func TestPageStorageSingleFileStoreLoad(t *testing.T) {
 
 	testPageContent(t, loadPageA, []byte{0xAA})
 
-	if lastId := s.NextId(); lastId != 6 {
-		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
+	if lastId := s.GetLastId(); lastId != 5 {
+		t.Errorf("Unexpected lastId for file with last item id 5: %d, %s", lastId, err)
+	}
+
+	if nextId := s.GenerateNextId(); nextId != 6 {
+		t.Errorf("Next ID does not match: %d != %d", nextId, 6)
 	}
 }
 
@@ -109,7 +117,7 @@ func TestPageStorageSingleFileRemovePage(t *testing.T) {
 		t.Fatalf("Error: %s", err)
 	}
 
-	if lastId := s.NextId(); lastId != 6 {
+	if lastId := s.GenerateNextId(); lastId != 6 {
 		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
 	}
 
@@ -120,7 +128,7 @@ func TestPageStorageSingleFileRemovePage(t *testing.T) {
 	}
 
 	// last IDs have not changed
-	if lastId := s.NextId(); lastId != 5 {
+	if lastId := s.GenerateNextId(); lastId != 5 {
 		t.Errorf("Last ID does not match: %d != %d", lastId, 5)
 	}
 

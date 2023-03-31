@@ -75,8 +75,8 @@ func (c *TwoFilesPageStorage) Remove(pageId PageId) error {
 	}
 }
 
-func (c *TwoFilesPageStorage) NextId() PageId {
-	return NewPageId(0, c.overflowFile.NextId()+1)
+func (c *TwoFilesPageStorage) GenerateNextId() PageId {
+	return NewPageId(0, c.overflowFile.GenerateNextId()+1)
 }
 
 // Flush all changes to the disk

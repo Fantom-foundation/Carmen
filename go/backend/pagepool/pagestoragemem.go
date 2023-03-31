@@ -40,7 +40,7 @@ func (c *MemoryPageStore[T]) Load(pageId T, page Page) error {
 	return nil
 }
 
-func (c *MemoryPageStore[T]) NextId() T {
+func (c *MemoryPageStore[T]) GenerateNextId() T {
 	return c.nextId()
 }
 

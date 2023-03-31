@@ -4,24 +4,23 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/memsnap"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-const InitialSnapshotPagesMapSize = 1024
-
 // Store is an in-memory store.Store implementation - it maps IDs to values
 type Store[I common.Identifier, V any] struct {
-	data           [][]byte // data of pages [page][byte of page]
-	hashTree       hashtree.HashTree
-	serializer     common.Serializer[V]
-	pageSize       int // the amount of bytes of one page
-	pageItems      int // the amount of items stored in one page
-	hashedPageSize int // the amount of the page bytes to be passed into the hashing function - rounded to whole items
-	itemSize       int // the amount of bytes per one value
-	lastSnapshot   *SnapshotSource[I, V]
+	data         [][]byte // data of pages [page][byte of page]
+	hashTree     hashtree.HashTree
+	serializer   common.Serializer[V]
+	pageSize     int // the amount of bytes of one page
+	pageItems    int // the amount of items stored in one page
+	pageDataSize int // the amount of bytes in one page used by data items (without padding)
+	itemSize     int // the amount of bytes per one value
+	lastSnapshot *memsnap.SnapshotSource[I, V]
 }
 
 // NewStore constructs a new instance of Store.
@@ -33,12 +32,12 @@ func NewStore[I common.Identifier, V any](serializer common.Serializer[V], pageS
 
 	itemSize := serializer.Size()
 	memory := &Store[I, V]{
-		data:           [][]byte{},
-		serializer:     serializer,
-		pageSize:       pageSize,
-		pageItems:      pageSize / itemSize,
-		hashedPageSize: pageSize / itemSize * itemSize,
-		itemSize:       itemSize,
+		data:         [][]byte{},
+		serializer:   serializer,
+		pageSize:     pageSize,
+		pageItems:    pageSize / itemSize,
+		pageDataSize: pageSize / itemSize * itemSize,
+		itemSize:     itemSize,
 	}
 	memory.hashTree = hashtreeFactory.Create(memory)
 	return memory, nil
@@ -52,7 +51,7 @@ func (m *Store[I, V]) itemPosition(id I) (page int, position int64) {
 
 // GetPage provides the hashing page data
 func (m *Store[I, V]) GetPage(pageNum int) ([]byte, error) {
-	return m.data[pageNum][0:m.hashedPageSize], nil
+	return m.data[pageNum][0:m.pageDataSize], nil
 }
 
 // GetHash provides a hash of the page (in the latest state)
@@ -67,15 +66,12 @@ func (m *Store[I, V]) Set(id I, value V) error {
 		m.data = append(m.data, make([]byte, m.pageSize))
 	}
 	if m.lastSnapshot != nil && !m.lastSnapshot.Contains(pageNum) { // copy-on-write for snapshotting
-		oldPage := m.data[pageNum]
+		oldPage := m.data[pageNum][0:m.pageDataSize]
 		oldHash, err := m.hashTree.GetPageHash(pageNum)
 		if err != nil {
 			return err
 		}
-		err = m.lastSnapshot.AddIntoSnapshot(pageNum, SnapshotPart{
-			data: oldPage,
-			hash: oldHash,
-		})
+		err = m.lastSnapshot.AddIntoSnapshot(pageNum, oldPage, oldHash)
 		if err != nil {
 			return err
 		}
@@ -123,13 +119,9 @@ func (m *Store[I, V]) CreateSnapshot() (backend.Snapshot, error) {
 		return nil, err
 	}
 
-	newSnap := &SnapshotSource[I, V]{
-		pages:      make(map[int]SnapshotPart, InitialSnapshotPagesMapSize),
-		nextSource: m, // the Store itself is the last source of data
-		prevSource: m.lastSnapshot,
-	}
+	newSnap := memsnap.NewSnapshotSource[I, V](m, m.lastSnapshot) // insert between the last snapshot and the store
 	if m.lastSnapshot != nil {
-		m.lastSnapshot.nextSource = newSnap // new snapshot now follows after the former last one
+		m.lastSnapshot.SetNextSource(newSnap) // new snapshot now follows after the former last one
 	}
 	m.lastSnapshot = newSnap
 
@@ -149,19 +141,21 @@ func (m *Store[I, V]) Restore(snapshotData backend.SnapshotData) error {
 	if snapshot.GetBranchingFactor() != m.hashTree.GetBranchingFactor() {
 		return fmt.Errorf("unable to restore snapshot - unexpected branching factor")
 	}
+	partsNum := snapshot.GetNumParts()
 
+	m.data = make([][]byte, partsNum)
+	m.lastSnapshot = nil
 	err = m.hashTree.Reset()
 	if err != nil {
 		return fmt.Errorf("unable to restore snapshot - failed to remove old hashTree; %s", err)
 	}
-	partsNum := snapshot.GetNumParts()
-	m.data = make([][]byte, partsNum)
+
 	for i := 0; i < partsNum; i++ {
 		data, err := snapshot.GetPartData(i)
 		if err != nil {
 			return err
 		}
-		if len(data) != m.hashedPageSize {
+		if len(data) != m.pageDataSize {
 			return fmt.Errorf("unable to restore snapshot - unexpected length of store part")
 		}
 		m.data[i] = make([]byte, m.pageSize)
@@ -169,6 +163,10 @@ func (m *Store[I, V]) Restore(snapshotData backend.SnapshotData) error {
 		m.hashTree.MarkUpdated(i)
 	}
 	return nil
+}
+
+func (m *Store[I, V]) GetSnapshotVerifier([]byte) (backend.SnapshotVerifier, error) {
+	return store.CreateStoreSnapshotVerifier[V](m.serializer), nil
 }
 
 // Flush the store

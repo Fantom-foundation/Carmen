@@ -5,10 +5,6 @@ import (
 	"unsafe"
 )
 
-const (
-	releasedIdsCap = 1000
-)
-
 // PagePool maintains memory pages and handles their evictions, persistence and loadings.
 // It uses an LRU cache to determine if the page has been recently used or not. The least used page
 // is evicted when the capacity exceeds, and stored using PageStorage. When the pool is asked for
@@ -36,8 +32,8 @@ type PageStorage[ID any] interface {
 	// Remove deletes the page for the input ID from the storage
 	Remove(pageId ID) error
 
-	// NextId returns next free ID
-	NextId() ID
+	// GenerateNextId returns next free ID
+	GenerateNextId() ID
 }
 
 // NewPagePool creates a new instance. It sets the capacity, i.e. the number of pages hold in-memory by this pool.
@@ -53,7 +49,7 @@ func NewPagePool[ID comparable, T Page](capacity int, pageStore PageStorage[ID],
 
 // GenerateNextId generates next unique ID.
 func (p *PagePool[ID, T]) GenerateNextId() (id ID) {
-	return p.pageStore.NextId()
+	return p.pageStore.GenerateNextId()
 }
 
 // Get returns a Page from the pool, or load it from the storage if the page is not in the pool.

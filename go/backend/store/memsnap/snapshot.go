@@ -1,10 +1,12 @@
-package memory
+package memsnap
 
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"unsafe"
 )
+
+const InitialSnapshotPagesMapSize = 1024
 
 // SnapshotSource is backend.StoreSnapshotSource implementation for in-memory store.
 type SnapshotSource[I common.Identifier, V any] struct {
@@ -29,6 +31,18 @@ type PartsSource interface {
 	GetMemoryFootprint() *common.MemoryFootprint
 }
 
+func NewSnapshotSource[I common.Identifier, V any](nextSource PartsSource, prevSource *SnapshotSource[I, V]) *SnapshotSource[I, V] {
+	return &SnapshotSource[I, V]{
+		pages:      make(map[int]SnapshotPart, InitialSnapshotPagesMapSize),
+		nextSource: nextSource,
+		prevSource: prevSource,
+	}
+}
+
+func (s *SnapshotSource[I, V]) SetNextSource(nextSource PartsSource) {
+	s.nextSource = nextSource
+}
+
 // GetPage provides the content of a snapshot part
 func (s *SnapshotSource[I, V]) GetPage(pageNum int) (data []byte, err error) {
 	part, exists := s.pages[pageNum]
@@ -49,12 +63,15 @@ func (s *SnapshotSource[I, V]) GetHash(pageNum int) (common.Hash, error) {
 	}
 }
 
-func (s *SnapshotSource[I, V]) AddIntoSnapshot(pageNum int, page SnapshotPart) error {
+func (s *SnapshotSource[I, V]) AddIntoSnapshot(pageNum int, data []byte, hash common.Hash) error {
 	_, contains := s.pages[pageNum]
 	if contains {
 		return fmt.Errorf("unable to add page into store snapshot - already present")
 	}
-	s.pages[pageNum] = page
+	s.pages[pageNum] = SnapshotPart{
+		data: data,
+		hash: hash,
+	}
 	return nil
 }
 

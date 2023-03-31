@@ -253,3 +253,111 @@ func TestStoresPaddedPages(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreSnapshotRecovery(t *testing.T) {
+	serializer := common.SlotReincValueSerializer{}
+	pageSize := serializer.Size()*2 + 4 // page for two values + 4 bytes of padding
+	for _, factory := range getStoresFactories[common.SlotReincValue](t, serializer, BranchingFactor, pageSize, PoolSize) {
+		t.Run(factory.label, func(t *testing.T) {
+			store1 := factory.getStore(t.TempDir())
+			defer store1.Close()
+
+			for i := 0; i < PoolSize*3; i++ {
+				if err := store1.Set(uint32(i), common.SlotReincValue{Reincarnation: 1, Value: common.Value{byte(i)}}); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+			}
+			stateHash1, err := store1.GetStateHash()
+			if err != nil {
+				t.Fatalf("failed to get state hash; %s", err)
+			}
+
+			snapshot1, err := store1.CreateSnapshot()
+			if err != nil {
+				t.Fatalf("failed to create snapshot; %s", err)
+			}
+			snapshot1data := snapshot1.GetData()
+
+			store2 := factory.getStore(t.TempDir())
+			defer store2.Close()
+
+			err = store2.Restore(snapshot1data)
+			if err != nil {
+				t.Fatalf("failed to recover snapshot; %s", err)
+			}
+
+			for i := 0; i < PoolSize*3; i++ {
+				if value, err := store2.Get(uint32(i)); err != nil || value.Value != (common.Value{byte(i)}) {
+					t.Errorf("incorrect Get result for recovered store, key %d; %x, %s", i, value.Value, err)
+				}
+			}
+			stateHash2, err := store2.GetStateHash()
+			if err != nil {
+				t.Fatalf("failed to get recovered store hash; %s", err)
+			}
+			if stateHash1 != stateHash2 {
+				t.Errorf("recovered store hash does not match")
+			}
+		})
+	}
+}
+
+func TestStoreSnapshotRecoveryOverriding(t *testing.T) {
+	serializer := common.SlotReincValueSerializer{}
+	pageSize := serializer.Size()*2 + 4 // page for two values + 4 bytes of padding
+	for _, factory := range getStoresFactories[common.SlotReincValue](t, serializer, BranchingFactor, pageSize, PoolSize) {
+		t.Run(factory.label, func(t *testing.T) {
+			store1 := factory.getStore(t.TempDir())
+			defer store1.Close()
+
+			for i := 0; i < PoolSize*2; i++ {
+				if err := store1.Set(uint32(i), common.SlotReincValue{Reincarnation: 1, Value: common.Value{byte(i)}}); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+			}
+			stateHash1, err := store1.GetStateHash()
+			if err != nil {
+				t.Fatalf("failed to get state hash; %s", err)
+			}
+
+			snapshot1, err := store1.CreateSnapshot()
+			if err != nil {
+				t.Fatalf("failed to create snapshot; %s", err)
+			}
+			snapshot1data := snapshot1.GetData()
+
+			// ensure the snapshot is used - change something in the store after the snapshot is created
+			if err := store1.Set(uint32(2), common.SlotReincValue{Reincarnation: 1, Value: common.Value{byte(55)}}); err != nil {
+				t.Fatalf("failed to set store item %d; %s", 2, err)
+			}
+
+			store2 := factory.getStore(t.TempDir())
+			defer store2.Close()
+
+			// the store2 will be filled with data before the restore - these should be removed during restore
+			for i := 0; i < PoolSize*2+5; i++ {
+				if err := store2.Set(uint32(i), common.SlotReincValue{Reincarnation: 2, Value: common.Value{byte(i + 5)}}); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+			}
+
+			err = store2.Restore(snapshot1data)
+			if err != nil {
+				t.Fatalf("failed to recover snapshot; %s", err)
+			}
+
+			for i := 0; i < PoolSize*2; i++ {
+				if value, err := store2.Get(uint32(i)); err != nil || value.Value != (common.Value{byte(i)}) {
+					t.Errorf("incorrect Get result for recovered store, key %d; %x, %s", i, value.Value, err)
+				}
+			}
+			stateHash2, err := store2.GetStateHash()
+			if err != nil {
+				t.Fatalf("failed to get recovered store hash; %s", err)
+			}
+			if stateHash1 != stateHash2 {
+				t.Errorf("recovered store hash does not match")
+			}
+		})
+	}
+}
