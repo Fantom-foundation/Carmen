@@ -32,11 +32,8 @@ type PageStorage[ID any] interface {
 	// Remove deletes the page for the input ID from the storage
 	Remove(pageId ID) error
 
-	// GetPagesCount provides the total amount of pages in the storage
-	GetPagesCount() (int, error)
-
-	// NextId returns next free ID
-	NextId() ID
+	// GenerateNextId returns next free ID
+	GenerateNextId() ID
 }
 
 // NewPagePool creates a new instance. It sets the capacity, i.e. the number of pages hold in-memory by this pool.
@@ -52,7 +49,7 @@ func NewPagePool[ID comparable, T Page](capacity int, pageStore PageStorage[ID],
 
 // GenerateNextId generates next unique ID.
 func (p *PagePool[ID, T]) GenerateNextId() (id ID) {
-	return p.pageStore.NextId()
+	return p.pageStore.GenerateNextId()
 }
 
 // Get returns a Page from the pool, or load it from the storage if the page is not in the pool.

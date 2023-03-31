@@ -74,7 +74,7 @@ func (m *Store[I, V]) Get(id I) (value V, err error) {
 	return m.array.Get(id)
 }
 
-// GetPage provides a page bytes for needs of the hash obtaining
+// GetPage provides a page bytes for needs of the hash obtaining (required by PartsSource interface)
 func (m *Store[I, V]) GetPage(pageId int) ([]byte, error) {
 	return m.array.GetPage(pageId)
 }

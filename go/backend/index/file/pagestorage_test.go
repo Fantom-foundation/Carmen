@@ -71,7 +71,7 @@ func TestPageStorageTwoFilesStoreLoad(t *testing.T) {
 
 	testPageContent(t, 5, 2, loadPageC)
 
-	if lastId := s.NextId(); lastId.Overflow() != 8 {
+	if lastId := s.GenerateNextId(); lastId.Overflow() != 8 {
 		t.Errorf("Last ID does not match: %d != %d", lastId, 8)
 	}
 }
@@ -96,7 +96,7 @@ func TestPageStorageTwoFilesRemovePage(t *testing.T) {
 		t.Fatalf("Error: %s", err)
 	}
 
-	if lastId := s.NextId(); lastId.Overflow() != 5 {
+	if lastId := s.GenerateNextId(); lastId.Overflow() != 5 {
 		t.Errorf("Last ID does not match: %d != %d", lastId.Overflow(), 5)
 	}
 
@@ -112,7 +112,7 @@ func TestPageStorageTwoFilesRemovePage(t *testing.T) {
 	}
 
 	// Last ID is the last removed one (three minus one)
-	if lastId := s.NextId(); lastId.Overflow() != 3 {
+	if lastId := s.GenerateNextId(); lastId.Overflow() != 3 {
 		t.Errorf("Last ID does not match: %d != %d", lastId.Overflow(), 3)
 	}
 

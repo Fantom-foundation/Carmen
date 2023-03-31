@@ -75,20 +75,8 @@ func (c *TwoFilesPageStorage) Remove(pageId PageId) error {
 	}
 }
 
-func (c *TwoFilesPageStorage) NextId() PageId {
-	return NewPageId(0, c.overflowFile.NextId()+1)
-}
-
-func (c *TwoFilesPageStorage) GetPagesCount() (int, error) {
-	primaryPages, err := c.primaryFile.GetPagesCount()
-	if err != nil {
-		return 0, err
-	}
-	overflowPages, err := c.overflowFile.GetPagesCount()
-	if err != nil {
-		return 0, err
-	}
-	return primaryPages + overflowPages, nil
+func (c *TwoFilesPageStorage) GenerateNextId() PageId {
+	return NewPageId(0, c.overflowFile.GenerateNextId()+1)
 }
 
 // Flush all changes to the disk

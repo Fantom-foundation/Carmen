@@ -33,10 +33,6 @@ func NewArray[I common.Identifier, V any](path string, serializer common.Seriali
 	pagePool := pagepool.NewPagePool[int, *Page](poolSize, pageStore, func() *Page {
 		return NewPage(pageSize)
 	})
-	pagesCount, err := pageStore.GetPagesCount()
-	if err != nil {
-		return nil, err
-	}
 
 	return &Array[I, V]{
 		pagePool:     pagePool,
@@ -45,7 +41,7 @@ func NewArray[I common.Identifier, V any](path string, serializer common.Seriali
 		pageSize:     pageSize,
 		itemSize:     itemSize,
 		itemsPerPage: pageSize / itemSize,
-		pagesCount:   pagesCount,
+		pagesCount:   pageStore.GetLastId() + 1,
 		onPageDirty:  func(pageId int) {},
 	}, nil
 }
@@ -91,7 +87,7 @@ func (m *Array[I, V]) GetPage(pageId int) ([]byte, error) {
 	return page.GetContent()[0 : m.pageSize/m.itemSize*m.itemSize], nil
 }
 
-// SetPage allows to import a page from snapshot
+// SetPage allows the callsite to import a page from a snapshot
 func (m *Array[I, V]) SetPage(pageId int, data []byte) error {
 	page, err := m.pagePool.Get(pageId)
 	if err != nil {

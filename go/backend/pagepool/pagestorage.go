@@ -22,7 +22,7 @@ type FilePageStorage struct {
 	freeIdsMap map[int]bool // free page IDs tracks deleted pages so that requests for loading them
 	// do not necessarily query I/O and also Pages do not have to be actually deleted from file
 	freeIds  []int // list of free IDs that are re-used for new pages
-	lastID   int   // hold last item not to touch above the file size
+	nextID   int   // hold last item not to touch above the file size
 	pageSize int
 
 	buffer []byte // a page binary data shared between Load and Store operations not to allocate memory every time.
@@ -51,7 +51,7 @@ func NewFilePageStorage(filePath string, pageSize int) (storage *FilePageStorage
 		freeIdsMap: removedIDs,
 		freeIds:    freeIds,
 		pageSize:   pageSize,
-		lastID:     lastID,
+		nextID:     lastID,
 		buffer:     make([]byte, pageSize),
 	}
 
@@ -95,14 +95,14 @@ func (c *FilePageStorage) Store(pageId int, page Page) (err error) {
 	return
 }
 
-func (c *FilePageStorage) NextId() int {
+func (c *FilePageStorage) GenerateNextId() int {
 	var id int
 	if len(c.freeIds) > 0 {
 		id = c.freeIds[len(c.freeIds)-1]
 		c.freeIds = c.freeIds[0 : len(c.freeIds)-1]
 	} else {
-		id = c.lastID
-		c.lastID += 1
+		id = c.nextID
+		c.nextID += 1
 	}
 
 	// treat as free at first to prevent tangling IDs when actually not used
@@ -111,9 +111,9 @@ func (c *FilePageStorage) NextId() int {
 	return id
 }
 
-// GetPagesCount returns the amount of allocated pages (including the removed ones)
-func (c *FilePageStorage) GetPagesCount() (int, error) {
-	return c.lastID, nil
+// GetLastId returns the id of the last page in the storage
+func (c *FilePageStorage) GetLastId() int {
+	return c.nextID - 1
 }
 
 // shouldLoad returns true it the page under pageId should be loaded.
@@ -121,7 +121,7 @@ func (c *FilePageStorage) GetPagesCount() (int, error) {
 func (c *FilePageStorage) shouldLoad(pageId int) bool {
 	// do not necessarily query I/O if the page does not exist,
 	// and it allows also for not actually deleting data, it only tracks non-existing items.
-	if pageId >= c.lastID {
+	if pageId >= c.nextID {
 		return false
 	}
 	if removed, exists := c.freeIdsMap[pageId]; exists && removed {
@@ -137,8 +137,8 @@ func (c *FilePageStorage) updateUse(pageId int) {
 	if removed, exists := c.freeIdsMap[pageId]; exists && removed {
 		c.freeIdsMap[pageId] = false
 	}
-	if pageId >= c.lastID {
-		c.lastID = pageId + 1
+	if pageId >= c.nextID {
+		c.nextID = pageId + 1
 	}
 }
 
@@ -240,9 +240,9 @@ func (c *FilePageStorage) writeMetadata() error {
 			metadata = binary.LittleEndian.AppendUint32(metadata, uint32(id))
 		}
 	}
-	metadata = binary.LittleEndian.AppendUint32(metadata, uint32(c.lastID))
+	metadata = binary.LittleEndian.AppendUint32(metadata, uint32(c.nextID))
 	// append at the end, after data
-	fileOffset := int64((c.lastID) * c.pageSize)
+	fileOffset := int64((c.nextID) * c.pageSize)
 	_, err := c.file.WriteAt(metadata, fileOffset)
 	return err
 }
