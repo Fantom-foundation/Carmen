@@ -41,25 +41,21 @@ func NewStore[I common.Identifier, V any](path string, serializer common.Seriali
 		hashTree:   hashTree,
 	}
 
-	arr.SetOnDirtyPageCallback(func(pageId int) {
+	arr.SetOnDirtyPageCallback(func(pageId int, pageBytes []byte) error {
 		if m.lastSnapshot != nil && !m.lastSnapshot.Contains(pageId) { // backup into snapshot if first write into page
-			pageBytes, err := arr.GetPage(pageId)
-			if err != nil {
-				panic(fmt.Errorf("failed to get array page; %s", err))
-			}
-
 			oldPage := make([]byte, len(pageBytes))
 			copy(oldPage, pageBytes)
 			oldHash, err := m.hashTree.GetPageHash(pageId)
 			if err != nil {
-				panic(fmt.Errorf("failed to get page hash; %s", err))
+				return fmt.Errorf("failed to get page hash; %s", err)
 			}
 			err = m.lastSnapshot.AddIntoSnapshot(pageId, oldPage, oldHash)
 			if err != nil {
-				panic(fmt.Errorf("failed to add into snapshot; %s", err))
+				return fmt.Errorf("failed to add into snapshot; %s", err)
 			}
 		}
 		hashTree.MarkUpdated(pageId)
+		return nil
 	})
 	return m, nil
 }

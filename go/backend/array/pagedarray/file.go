@@ -12,11 +12,11 @@ type Array[I common.Identifier, V any] struct {
 	pagePool     *pagepool.PagePool[int, *Page]
 	pageStore    *pagepool.FilePageStorage
 	serializer   common.Serializer[V]
-	pageSize     int              // the maximum size of a page in bytes
-	itemSize     int              // the amount of bytes per one value
-	itemsPerPage int              // the amount of values in one page
-	pagesCount   int              // the amount of array pages
-	onPageDirty  func(pageId int) // callback called on page set dirty
+	pageSize     int                                      // the maximum size of a page in bytes
+	itemSize     int                                      // the amount of bytes per one value
+	itemsPerPage int                                      // the amount of values in one page
+	pagesCount   int                                      // the amount of array pages
+	onPageDirty  func(pageId int, pageBytes []byte) error // callback called on page set dirty
 }
 
 // NewArray constructs a new instance of paged file backed array.
@@ -42,7 +42,7 @@ func NewArray[I common.Identifier, V any](path string, serializer common.Seriali
 		itemSize:     itemSize,
 		itemsPerPage: pageSize / itemSize,
 		pagesCount:   pageStore.GetLastId() + 1,
-		onPageDirty:  func(pageId int) {},
+		onPageDirty:  func(pageId int, pageBytes []byte) error { return nil },
 	}, nil
 }
 
@@ -61,7 +61,10 @@ func (m *Array[I, V]) Set(id I, value V) error {
 	if pageId >= m.pagesCount {
 		m.pagesCount = pageId + 1
 	}
-	m.onPageDirty(pageId)
+	err = m.onPageDirty(pageId, page.GetContent()[0:m.pageSize/m.itemSize*m.itemSize])
+	if err != nil {
+		return err
+	}
 	page.Set(itemPosition, m.serializer.ToBytes(value))
 	return nil
 }
@@ -135,6 +138,6 @@ func (m *Array[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	return mf
 }
 
-func (m *Array[I, V]) SetOnDirtyPageCallback(onPageDirty func(pageId int)) {
+func (m *Array[I, V]) SetOnDirtyPageCallback(onPageDirty func(pageId int, pageBytes []byte) error) {
 	m.onPageDirty = onPageDirty
 }
