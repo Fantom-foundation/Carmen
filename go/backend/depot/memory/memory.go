@@ -3,6 +3,7 @@ package memory
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/memsnap"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
@@ -16,6 +17,7 @@ type Depot[I common.Identifier] struct {
 	data      [][]byte // data of pages [item][byte of item]
 	hashTree  hashtree.HashTree
 	hashItems int // the amount of items in one hashing group
+	lastSnapshot *memsnap.SnapshotSource
 }
 
 // NewDepot constructs a new instance of Depot.
