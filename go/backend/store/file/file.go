@@ -24,7 +24,7 @@ type Store[I common.Identifier, V any] struct {
 	hashedPageSize int // the amount of the page bytes to be passed into the hashing function - rounded to whole items
 	itemSize       int // the amount of bytes per one value
 	pagesCount     int // the amount of store pages
-	lastSnapshot *memsnap.SnapshotSource
+	lastSnapshot   *memsnap.SnapshotSource
 }
 
 // NewStore constructs a new instance of FileStore.
