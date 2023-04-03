@@ -40,12 +40,16 @@ func initGoStates() []namedStateConfig {
 		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
 		{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
+		{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
 		{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
 		{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
+		{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
 		{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
 		{"LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+		{"LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
 		{"LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
 		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
 		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
 	}
 }
