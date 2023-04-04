@@ -20,6 +20,12 @@ type DepotProof struct {
 	hash common.Hash
 }
 
+func NewProof(hash common.Hash) *DepotProof {
+	return &DepotProof{
+		hash: hash,
+	}
+}
+
 func createDepotProofFromData(data []byte) (*DepotProof, error) {
 	if len(data) != common.HashSize {
 		return nil, fmt.Errorf("invalid encoding of depot proof, invalid number of bytes")
@@ -44,68 +50,15 @@ func (p *DepotProof) ToBytes() []byte {
 // A proof of a part is the hash of the page content, which can be effectively
 // obtained from depot implementations.
 type DepotPart struct {
-	encoded []byte
-	values  [][]byte
-}
-
-func createDepotPartFromValues(values [][]byte) *DepotPart {
-	size := 2
-	for _, value := range values {
-		size += 4 + len(value)
-	}
-	encoded := make([]byte, 0, size)
-	end := encoded
-	end = binary.LittleEndian.AppendUint16(end, uint16(len(values)))
-	for _, value := range values {
-		end = binary.LittleEndian.AppendUint32(end, uint32(len(value)))
-	}
-	encoded = end
-	for i, value := range values {
-		encoded = append(encoded, value...)
-		values[i] = encoded[len(encoded)-len(value):]
-	}
-	return &DepotPart{encoded, values}
+	data []byte
 }
 
 func createDepotPartFromData(encoded []byte) (*DepotPart, error) {
-	data := encoded
-	if len(data) < 2 {
-		return nil, fmt.Errorf("invalid encoding of depot part, not enough bytes for page size")
-	}
-	pageSize := int(binary.LittleEndian.Uint16(data))
-	data = data[2:]
-
-	if len(data) < pageSize*4 {
-		return nil, fmt.Errorf("invalid encoding of depot part, not enough bytes for data lengths")
-	}
-
-	lengths := make([]int, pageSize)
-	lengthsSum := 0
-	for i := 0; i < pageSize; i++ {
-		lengths[i] = int(binary.LittleEndian.Uint32(data))
-		data = data[4:]
-		lengthsSum += lengths[i]
-	}
-
-	if len(data) != lengthsSum {
-		return nil, fmt.Errorf("invalid encoding of depot part, invalid length of data section, wanted %d, got %d", lengthsSum, len(data))
-	}
-
-	values := make([][]byte, pageSize)
-	for i := 0; i < pageSize; i++ {
-		values[i] = data[0:lengths[i]]
-		data = data[lengths[i]:]
-	}
-
-	return &DepotPart{encoded, values}, nil
+	return &DepotPart{encoded}, nil
 }
 
 func (p *DepotPart) ToBytes() []byte {
-	return p.encoded
-}
-
-func (p *DepotPart) GetValues() [][]byte {
-	return p.values
+	return p.data
 }
 
 // --------------------------------- Snapshot ---------------------------------
@@ -115,7 +68,7 @@ func (p *DepotPart) GetValues() [][]byte {
 // interface, freeing implementations from common Depot Snapshot requirements.
 type DepotSnapshotSource interface {
 	GetHash(page int) (common.Hash, error)
-	GetValues(page int) ([][]byte, error)
+	GetPage(page int) ([]byte, error)
 	Release() error
 }
 
@@ -169,6 +122,10 @@ func (s *DepotSnapshot) GetNumParts() int {
 	return s.numPages
 }
 
+func (s *DepotSnapshot) GetBranchingFactor() int {
+	return s.branchingFactor
+}
+
 func (s *DepotSnapshot) GetProof(partNumber int) (backend.Proof, error) {
 	hash, err := s.source.GetHash(partNumber)
 	if err != nil {
@@ -178,11 +135,11 @@ func (s *DepotSnapshot) GetProof(partNumber int) (backend.Proof, error) {
 }
 
 func (s *DepotSnapshot) GetPart(partNumber int) (backend.Part, error) {
-	values, err := s.source.GetValues(partNumber)
+	data, err := s.source.GetPage(partNumber)
 	if err != nil {
 		return nil, err
 	}
-	return createDepotPartFromValues(values), nil
+	return createDepotPartFromData(data)
 }
 
 func (s *DepotSnapshot) computeRootHash() (common.Hash, error) {
@@ -249,16 +206,12 @@ func (s *depotSourceFromData) GetHash(pageNumber int) (common.Hash, error) {
 	return proof.hash, nil
 }
 
-func (s *depotSourceFromData) GetValues(pageNumber int) ([][]byte, error) {
+func (s *depotSourceFromData) GetPage(pageNumber int) ([]byte, error) {
 	data, err := s.source.GetPartData(pageNumber)
 	if err != nil {
 		return nil, err
 	}
-	part, err := createDepotPartFromData(data)
-	if err != nil {
-		return nil, err
-	}
-	return part.GetValues(), nil
+	return data, nil
 }
 
 func (s *depotSourceFromData) Release() error {
@@ -295,20 +248,9 @@ func (i *depotSnapshotVerifier) VerifyPart(_ int, proof, part []byte) error {
 	if err != nil {
 		return err
 	}
-	depotPart, err := createDepotPartFromData(part)
-	if err != nil {
-		return err
-	}
 
 	h := sha256.New()
-	for _, value := range depotPart.values {
-		buffer := [4]byte{}
-		binary.LittleEndian.AppendUint32(buffer[0:0], uint32(len(value)))
-		h.Write(buffer[:])
-	}
-	for _, value := range depotPart.values {
-		h.Write(value)
-	}
+	h.Write(part)
 	var hash common.Hash
 	h.Sum(hash[0:0])
 	if hash != depotProof.hash {

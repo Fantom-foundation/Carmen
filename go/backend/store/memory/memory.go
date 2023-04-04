@@ -3,8 +3,8 @@ package memory
 import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/backend/memsnap"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/memsnap"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
@@ -20,7 +20,7 @@ type Store[I common.Identifier, V any] struct {
 	pageItems    int // the amount of items stored in one page
 	pageDataSize int // the amount of bytes in one page used by data items (without padding)
 	itemSize     int // the amount of bytes per one value
-	lastSnapshot *memsnap.SnapshotSource[I, V]
+	lastSnapshot *memsnap.SnapshotSource
 }
 
 // NewStore constructs a new instance of Store.
@@ -119,7 +119,7 @@ func (m *Store[I, V]) CreateSnapshot() (backend.Snapshot, error) {
 		return nil, err
 	}
 
-	newSnap := memsnap.NewSnapshotSource[I, V](m, m.lastSnapshot) // insert between the last snapshot and the store
+	newSnap := memsnap.NewSnapshotSource(m, m.lastSnapshot) // insert between the last snapshot and the store
 	if m.lastSnapshot != nil {
 		m.lastSnapshot.SetNextSource(newSnap) // new snapshot now follows after the former last one
 	}

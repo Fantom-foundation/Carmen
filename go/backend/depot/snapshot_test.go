@@ -1,30 +1,32 @@
-package depot
+package depot_test
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/depot"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
-	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 func TestDepotProof_IsProof(t *testing.T) {
-	var _ backend.Proof = &DepotProof{}
+	var _ backend.Proof = &depot.DepotProof{}
 }
 
 func TestDepotPart_IsPart(t *testing.T) {
-	var _ backend.Part = &DepotPart{}
+	var _ backend.Part = &depot.DepotPart{}
 }
 
 func TestDepotSnapshot_IsSnapshot(t *testing.T) {
-	var _ backend.Snapshot = &DepotSnapshot{}
+	var _ backend.Snapshot = &depot.DepotSnapshot{}
 }
 
 const myBranchingFactor = 16
+const lengthSize = 4
 
 // myDepot implements a simple depot to test and demonstrate the snapshotting on depots.
 type myDepot struct {
@@ -84,7 +86,7 @@ func (s *myDepot) GetPage(page int) ([]byte, error) {
 }
 
 func (s *myDepot) GetProof() (backend.Proof, error) {
-	return &DepotProof{s.getHash()}, nil
+	return depot.NewProof(s.getHash()), nil
 }
 
 func (s *myDepot) CreateSnapshot() (backend.Snapshot, error) {
@@ -94,7 +96,7 @@ func (s *myDepot) CreateSnapshot() (backend.Snapshot, error) {
 	copyOfPages := make([][32][]byte, len(s.pages))
 	copy(copyOfPages, s.pages)
 
-	return CreateDepotSnapshotFromDepot(
+	return depot.CreateDepotSnapshotFromDepot(
 		myBranchingFactor,
 		hash,
 		len(s.pages),
@@ -102,7 +104,7 @@ func (s *myDepot) CreateSnapshot() (backend.Snapshot, error) {
 }
 
 func (s *myDepot) Restore(data backend.SnapshotData) error {
-	snapshot, err := CreateDepotSnapshotFromData(data)
+	snapshot, err := depot.CreateDepotSnapshotFromData(data)
 	if err != nil {
 		return err
 	}
@@ -110,24 +112,30 @@ func (s *myDepot) Restore(data backend.SnapshotData) error {
 	// Reset the depot.
 	s.pages = s.pages[0:0]
 
-	for i := 0; i < snapshot.GetNumParts(); i++ {
-		part, err := snapshot.GetPart(i)
+	for pageId := 0; pageId < snapshot.GetNumParts(); pageId++ {
+		part, err := snapshot.GetPart(pageId)
 		if err != nil {
 			return err
 		}
-		depotPart, ok := part.(*DepotPart)
+		depotPart, ok := part.(*depot.DepotPart)
 		if !ok {
 			return fmt.Errorf("invalid part format encountered")
 		}
-		for j, value := range depotPart.GetValues() {
-			s.Set(i*32+j, value)
+		buffer := depotPart.ToBytes()
+		lengths := buffer[:lengthSize*32]
+		buffer = buffer[lengthSize*32:]
+		for i := 0; i < 32; i++ {
+			length := binary.LittleEndian.Uint32(lengths)
+			s.Set(pageId*32+i, buffer[:length])
+			lengths = lengths[lengthSize:]
+			buffer = buffer[length:]
 		}
 	}
 	return nil
 }
 
 func (s *myDepot) GetSnapshotVerifier([]byte) (backend.SnapshotVerifier, error) {
-	return CreateDepotSnapshotVerifier(), nil
+	return depot.CreateDepotSnapshotVerifier(), nil
 }
 
 type myDepotSnapshotSource struct {
@@ -144,9 +152,7 @@ func (s *myDepotSnapshotSource) GetHash(page int) (common.Hash, error) {
 
 	h := sha256.New()
 	for _, value := range s.pages[page] {
-		buffer := [4]byte{}
-		binary.LittleEndian.AppendUint32(buffer[0:0], uint32(len(value)))
-		h.Write(buffer[:])
+		h.Write(binary.LittleEndian.AppendUint32(nil, uint32(len(value))))
 	}
 	for _, value := range s.pages[page] {
 		h.Write(value)
@@ -156,11 +162,18 @@ func (s *myDepotSnapshotSource) GetHash(page int) (common.Hash, error) {
 	return hash, nil
 }
 
-func (s *myDepotSnapshotSource) GetValues(page int) ([][]byte, error) {
+func (s *myDepotSnapshotSource) GetPage(page int) ([]byte, error) {
 	if page < 0 || page >= len(s.pages) {
 		return nil, fmt.Errorf("invalid page number, not covered by snapshot")
 	}
-	return s.pages[page][:], nil
+	var buffer []byte
+	for _, value := range s.pages[page] {
+		buffer = binary.LittleEndian.AppendUint32(buffer, uint32(len(value)))
+	}
+	for _, value := range s.pages[page] {
+		buffer = append(buffer, value...)
+	}
+	return buffer, nil
 }
 
 func (i *myDepotSnapshotSource) Release() error {
@@ -287,7 +300,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			return
 		}
 
-		remote, err := CreateDepotSnapshotFromData(snapshot.GetData())
+		remote, err := depot.CreateDepotSnapshotFromData(snapshot.GetData())
 		if err != nil {
 			t.Fatalf("failed to create snapshot from snapshot data: %v", err)
 		}
