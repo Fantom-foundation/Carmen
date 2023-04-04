@@ -2,10 +2,12 @@ package depot_test
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
-	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -23,42 +25,183 @@ func TestDepotSnapshot_IsSnapshot(t *testing.T) {
 	var _ backend.Snapshot = &depot.DepotSnapshot{}
 }
 
-func TestDepotSnapshot_MyDepotIsSnapshotable(t *testing.T) {
-	myDepot, err := memory.NewDepot[uint32](32, hashtree.GetNoHashFactory())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var _ backend.Snapshotable = myDepot
+const myBranchingFactor = 16
+const lengthSize = 4
+
+// myDepot implements a simple depot to test and demonstrate the snapshotting on depots.
+type myDepot struct {
+	pages [][32][]byte
 }
 
-func fillDepot(t *testing.T, depot depot.Depot[uint32], size int) {
-	for i := 0; i < size; i++ {
-		err := depot.Set(uint32(i), []byte{byte(i), byte(i >> 8), byte(i >> 16)})
+func (s *myDepot) Get(pos int) []byte {
+	pageId := pos / 32
+	if pos < 0 || pageId >= len(s.pages) {
+		return []byte{}
+	}
+	// Return a copy of the data to avoid mutation.
+	data := s.pages[pageId][pos%32]
+	res := make([]byte, len(data))
+	copy(res, data)
+	return res
+}
+
+func (s *myDepot) Set(pos int, value []byte) {
+	if pos < 0 {
+		return
+	}
+	if s.pages == nil {
+		s.pages = [][32][]byte{}
+	}
+	pageId := pos / 32
+	for len(s.pages) <= pageId {
+		s.pages = append(s.pages, [32][]byte{})
+	}
+	// Store a copy of the value, to avoid mutation.
+	trg := make([]byte, len(value))
+	copy(trg, value)
+	s.pages[pageId][pos%32] = trg
+}
+
+func (s *myDepot) getHash() common.Hash {
+	hashTree := htmemory.CreateHashTreeFactory(myBranchingFactor).Create(s)
+	for i := 0; i < len(s.pages); i++ {
+		hashTree.MarkUpdated(i)
+	}
+	hash, err := hashTree.HashRoot()
+	if err != nil {
+		panic(fmt.Sprintf("failed to compute hash of pages: %v", err))
+	}
+	return hash
+}
+
+func (s *myDepot) GetPage(page int) ([]byte, error) {
+	res := []byte{}
+	for _, value := range s.pages[page] {
+		res = binary.LittleEndian.AppendUint32(res, uint32(len(value)))
+	}
+	for _, value := range s.pages[page] {
+		res = append(res, value...)
+	}
+	return res, nil
+}
+
+func (s *myDepot) GetProof() (backend.Proof, error) {
+	return depot.NewProof(s.getHash()), nil
+}
+
+func (s *myDepot) CreateSnapshot() (backend.Snapshot, error) {
+	hash := s.getHash()
+
+	// Note: this is a shallow copy, exploiting the immutable nature of data.
+	copyOfPages := make([][32][]byte, len(s.pages))
+	copy(copyOfPages, s.pages)
+
+	return depot.CreateDepotSnapshotFromDepot(
+		myBranchingFactor,
+		hash,
+		len(s.pages),
+		&myDepotSnapshotSource{hash, copyOfPages}), nil
+}
+
+func (s *myDepot) Restore(data backend.SnapshotData) error {
+	snapshot, err := depot.CreateDepotSnapshotFromData(data)
+	if err != nil {
+		return err
+	}
+
+	// Reset the depot.
+	s.pages = s.pages[0:0]
+
+	for pageId := 0; pageId < snapshot.GetNumParts(); pageId++ {
+		part, err := snapshot.GetPart(pageId)
 		if err != nil {
-			t.Fatal(err)
+			return err
+		}
+		depotPart, ok := part.(*depot.DepotPart)
+		if !ok {
+			return fmt.Errorf("invalid part format encountered")
+		}
+		buffer := depotPart.ToBytes()
+		lengths := buffer[:lengthSize*32]
+		buffer = buffer[lengthSize*32:]
+		for i := 0; i < 32; i++ {
+			length := binary.LittleEndian.Uint32(lengths)
+			s.Set(pageId*32+i, buffer[:length])
+			lengths = lengths[lengthSize:]
+			buffer = buffer[length:]
 		}
 	}
+	return nil
 }
 
-func checkDepotContent(t *testing.T, depot depot.Depot[uint32], size int) {
+func (s *myDepot) GetSnapshotVerifier([]byte) (backend.SnapshotVerifier, error) {
+	return depot.CreateDepotSnapshotVerifier(), nil
+}
+
+type myDepotSnapshotSource struct {
+	// The hash at the time the snapshot was created.
+	hash common.Hash
+	// A shallow copy of the depot data at snapshot creation.
+	pages [][32][]byte
+}
+
+func (s *myDepotSnapshotSource) GetHash(page int) (common.Hash, error) {
+	if page < 0 || page >= len(s.pages) {
+		return common.Hash{}, fmt.Errorf("invalid page number, not covered by snapshot")
+	}
+
+	h := sha256.New()
+	for _, value := range s.pages[page] {
+		h.Write(binary.LittleEndian.AppendUint32(nil, uint32(len(value))))
+	}
+	for _, value := range s.pages[page] {
+		h.Write(value)
+	}
+	var hash common.Hash
+	h.Sum(hash[0:0])
+	return hash, nil
+}
+
+func (s *myDepotSnapshotSource) GetPage(page int) ([]byte, error) {
+	if page < 0 || page >= len(s.pages) {
+		return nil, fmt.Errorf("invalid page number, not covered by snapshot")
+	}
+	var buffer []byte
+	for _, value := range s.pages[page] {
+		buffer = binary.LittleEndian.AppendUint32(buffer, uint32(len(value)))
+	}
+	for _, value := range s.pages[page] {
+		buffer = append(buffer, value...)
+	}
+	return buffer, nil
+}
+
+func (i *myDepotSnapshotSource) Release() error {
+	// nothing to do
+	return nil
+}
+
+func TestDepotSnapshot_MyDepotIsSnapshotable(t *testing.T) {
+	var _ backend.Snapshotable = &myDepot{}
+}
+
+func fillDepot(t *testing.T, depot *myDepot, size int) {
 	for i := 0; i < size; i++ {
-		if val, err := depot.Get(uint32(i)); err != nil || !bytes.Equal(val, []byte{byte(i), byte(i >> 8), byte(i >> 16)}) {
+		depot.Set(i, []byte{byte(i), byte(i >> 8), byte(i >> 16)})
+	}
+}
+
+func checkDepotContent(t *testing.T, depot *myDepot, size int) {
+	for i := 0; i < size; i++ {
+		if !bytes.Equal(depot.Get(i), []byte{byte(i), byte(i >> 8), byte(i >> 16)}) {
 			t.Errorf("invalid value at position %d", i)
 		}
 	}
 }
 
 func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndRestored(t *testing.T) {
-	const branchingFactor = 3
-	const hashItems = 2
 	for _, size := range []int{0, 1, 5, 1000} {
-
-		hashTree := htmemory.CreateHashTreeFactory(branchingFactor)
-		original, err := memory.NewDepot[uint32](hashItems, hashTree)
-		if err != nil {
-			t.Fatal(err)
-		}
-
+		original := &myDepot{}
 		fillDepot(t, original, size)
 		originalProof, err := original.GetProof()
 		if err != nil {
@@ -79,12 +222,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndRestored(t *testing.T) {
 			t.Errorf("snapshot proof does not match data structure proof")
 		}
 
-		hashTreeRec := htmemory.CreateHashTreeFactory(branchingFactor)
-		recovered, err := memory.NewDepot[uint32](hashItems, hashTreeRec)
-		if err != nil {
-			t.Fatal(err)
-		}
-
+		recovered := &myDepot{}
 		if err := recovered.Restore(snapshot.GetData()); err != nil {
 			t.Errorf("failed to sync to snapshot: %v", err)
 			return
@@ -108,13 +246,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndRestored(t *testing.T) {
 }
 
 func TestDepotSnapshot_MyDepotSnapshotIsShieldedFromMutations(t *testing.T) {
-	const branchingFactor = 3
-	const hashItems = 2
-	hashTree := htmemory.CreateHashTreeFactory(branchingFactor)
-	original, err := memory.NewDepot[uint32](hashItems, hashTree)
-	if err != nil {
-		t.Fatal(err)
-	}
+	original := &myDepot{}
 	fillDepot(t, original, 20)
 	originalProof, err := original.GetProof()
 	if err != nil {
@@ -138,17 +270,13 @@ func TestDepotSnapshot_MyDepotSnapshotIsShieldedFromMutations(t *testing.T) {
 		t.Errorf("snapshot proof does not match data structure proof")
 	}
 
-	hashTreeRec := htmemory.CreateHashTreeFactory(branchingFactor)
-	recovered, err := memory.NewDepot[uint32](hashItems, hashTreeRec)
-	if err != nil {
-		t.Fatal(err)
-	}
+	recovered := &myDepot{}
 	if err := recovered.Restore(snapshot.GetData()); err != nil {
 		t.Errorf("failed to sync to snapshot: %v", err)
 		return
 	}
 
-	if val, err := recovered.Get(15); err != nil || !bytes.Equal(val, []byte{15, 0, 0}) {
+	if !bytes.Equal(recovered.Get(15), []byte{15, 0, 0}) {
 		t.Errorf("recovered state should not include elements added after snapshot creation")
 	}
 
@@ -158,14 +286,8 @@ func TestDepotSnapshot_MyDepotSnapshotIsShieldedFromMutations(t *testing.T) {
 }
 
 func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndValidated(t *testing.T) {
-	const branchingFactor = 3
-	const hashItems = 2
 	for _, size := range []int{0, 1, 5, 1000, 100000} {
-		hashTree := htmemory.CreateHashTreeFactory(branchingFactor)
-		original, err := memory.NewDepot[uint32](hashItems, hashTree)
-		if err != nil {
-			t.Fatal(err)
-		}
+		original := &myDepot{}
 		fillDepot(t, original, size)
 
 		snapshot, err := original.CreateSnapshot()
@@ -215,7 +337,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndValidated(t *testing.T) {
 			for i := 0; i < cur.GetNumParts(); i++ {
 				want, err := cur.GetProof(i)
 				if err != nil {
-					t.Errorf("failed to fetch proof of part %d; %s", i, err)
+					t.Errorf("failed to fetch proof of part %d", i)
 				}
 				part, err := cur.GetPart(i)
 				if err != nil || part == nil {
