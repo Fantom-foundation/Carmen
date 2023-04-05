@@ -796,42 +796,49 @@ class Archive {
   // Prepared statemetns for logging new data to the archive.
   absl::Mutex mutation_lock_;
 
-  std::unique_ptr<SqlStatement> add_block_stmt_ GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> add_block_stmt_ ABSL_GUARDED_BY(mutation_lock_);
 
   absl::Mutex get_block_hash_lock_;
   std::unique_ptr<SqlStatement> get_block_hash_stmt_
-      GUARDED_BY(get_block_hash_lock_);
+      ABSL_GUARDED_BY(get_block_hash_lock_);
 
   absl::Mutex get_block_height_lock_;
   std::unique_ptr<SqlStatement> get_block_height_stmt_
-      GUARDED_BY(get_block_height_lock_);
+      ABSL_GUARDED_BY(get_block_height_lock_);
 
   absl::Mutex get_account_hash_lock_;
   std::unique_ptr<SqlStatement> add_account_hash_stmt_
-      GUARDED_BY(mutation_lock_);
+      ABSL_GUARDED_BY(mutation_lock_);
   std::unique_ptr<SqlStatement> get_account_hash_stmt_
-      GUARDED_BY(get_account_hash_lock_);
+      ABSL_GUARDED_BY(get_account_hash_lock_);
 
   absl::Mutex get_status_lock_;
-  std::unique_ptr<SqlStatement> create_account_stmt_ GUARDED_BY(mutation_lock_);
-  std::unique_ptr<SqlStatement> delete_account_stmt_ GUARDED_BY(mutation_lock_);
-  std::unique_ptr<SqlStatement> get_status_stmt_ GUARDED_BY(get_status_lock_);
+  std::unique_ptr<SqlStatement> create_account_stmt_
+      ABSL_GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> delete_account_stmt_
+      ABSL_GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_status_stmt_
+      ABSL_GUARDED_BY(get_status_lock_);
 
   absl::Mutex get_balance_lock_;
-  std::unique_ptr<SqlStatement> add_balance_stmt_ GUARDED_BY(mutation_lock_);
-  std::unique_ptr<SqlStatement> get_balance_stmt_ GUARDED_BY(get_balance_lock_);
+  std::unique_ptr<SqlStatement> add_balance_stmt_
+      ABSL_GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_balance_stmt_
+      ABSL_GUARDED_BY(get_balance_lock_);
 
   absl::Mutex get_code_lock_;
-  std::unique_ptr<SqlStatement> add_code_stmt_ GUARDED_BY(mutation_lock_);
-  std::unique_ptr<SqlStatement> get_code_stmt_ GUARDED_BY(get_code_lock_);
+  std::unique_ptr<SqlStatement> add_code_stmt_ ABSL_GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_code_stmt_ ABSL_GUARDED_BY(get_code_lock_);
 
   absl::Mutex get_nonce_lock_;
-  std::unique_ptr<SqlStatement> add_nonce_stmt_ GUARDED_BY(mutation_lock_);
-  std::unique_ptr<SqlStatement> get_nonce_stmt_ GUARDED_BY(get_nonce_lock_);
+  std::unique_ptr<SqlStatement> add_nonce_stmt_ ABSL_GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_nonce_stmt_
+      ABSL_GUARDED_BY(get_nonce_lock_);
 
   absl::Mutex get_value_lock_;
-  std::unique_ptr<SqlStatement> add_value_stmt_ GUARDED_BY(mutation_lock_);
-  std::unique_ptr<SqlStatement> get_value_stmt_ GUARDED_BY(get_value_lock_);
+  std::unique_ptr<SqlStatement> add_value_stmt_ ABSL_GUARDED_BY(mutation_lock_);
+  std::unique_ptr<SqlStatement> get_value_stmt_
+      ABSL_GUARDED_BY(get_value_lock_);
 };
 
 }  // namespace internal
