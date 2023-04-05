@@ -12,6 +12,10 @@ on:
       - '.github/workflows/cpp-tests.yml'
       - 'cpp/**'
 
+env:
+  CC: clang
+  CXX: clang++
+
 jobs:
   tests-check:
     name: Tests Check

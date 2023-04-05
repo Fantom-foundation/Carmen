@@ -46,7 +46,7 @@ class StableHashState {
 
   // The fall-back support for types implementing the Absl hashing interface.
   template <typename T>
-  static std::size_t hash(const T& value) {
+  requires(!std::is_integral_v<T>) static std::size_t hash(const T& value) {
     return AbslHashValue(internal::StableHashState(), value).state_;
   }
 

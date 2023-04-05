@@ -12,6 +12,10 @@ on:
       - '.github/workflows/cpp-osx.yml'
       - 'cpp/**'
 
+env:
+  CC: clang
+  CXX: clang++
+
 jobs:
 
   build:

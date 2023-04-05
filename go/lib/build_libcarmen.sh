@@ -13,6 +13,10 @@ set -e
 
 cd "$(dirname $0)/../../cpp"
 
+# Use clang compiler unless overruled.
+export CC=${CC:-clang}
+export CXX=${CXX:-clang++}
+
 if bazel version &> /dev/null
 then
     echo "- C++ build environment:"
