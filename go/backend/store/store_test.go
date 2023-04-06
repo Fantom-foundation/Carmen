@@ -20,8 +20,9 @@ import (
 // test stores parameters (different from benchmark stores parameters)
 const (
 	BranchingFactor = 3
-	PageSize        = 2 * 32
-	PoolSize        = 10
+	ItemsPerPage    = 2
+	PageSize        = ItemsPerPage * 32
+	PoolSize        = 5
 )
 
 type storeFactory[V any] struct {
@@ -302,6 +303,38 @@ func TestStoreSnapshotRecovery(t *testing.T) {
 	}
 }
 
+func TestStoreSnapshotPartsNum(t *testing.T) {
+	serializer := common.SlotReincValueSerializer{}
+	pageSize := serializer.Size()*2 + 4 // page for two values + 4 bytes of padding
+	for _, factory := range getStoresFactories[common.SlotReincValue](t, serializer, BranchingFactor, pageSize, PoolSize) {
+		t.Run(factory.label, func(t *testing.T) {
+			store1 := factory.getStore(t.TempDir())
+			defer store1.Close()
+
+			for i := 0; i < 255; i++ {
+				if err := store1.Set(uint32(i), common.SlotReincValue{Reincarnation: 1, Value: common.Value{byte(i)}}); err != nil {
+					t.Fatalf("failed to set store item %d; %s", i, err)
+				}
+
+				snapshot, err := store1.CreateSnapshot()
+				if err != nil {
+					t.Fatalf("failed to create snapshot; %s", err)
+				}
+
+				expectedPagesCount := (i + 1) / ItemsPerPage
+				if (i+1)%ItemsPerPage != 0 {
+					expectedPagesCount++
+				}
+				if snapshot.GetNumParts() != expectedPagesCount {
+					t.Errorf("unexpected amount of snapshot parts: %d (expected %d) i=%d", snapshot.GetNumParts(), expectedPagesCount, i)
+				}
+
+				_ = snapshot.Release()
+			}
+		})
+	}
+}
+
 func TestStoreSnapshotRecoveryOverriding(t *testing.T) {
 	serializer := common.SlotReincValueSerializer{}
 	pageSize := serializer.Size()*2 + 4 // page for two values + 4 bytes of padding
@@ -358,6 +391,51 @@ func TestStoreSnapshotRecoveryOverriding(t *testing.T) {
 			if stateHash1 != stateHash2 {
 				t.Errorf("recovered store hash does not match")
 			}
+		})
+	}
+}
+
+func TestStorePersistence(t *testing.T) {
+	serializer := common.KeySerializer{}
+	pageSize := serializer.Size()*2 + 4 // page for two values + 4 bytes of padding
+	for _, factory := range getStoresFactories[common.Key](t, serializer, BranchingFactor, pageSize, PoolSize) {
+		if factory.label == "Memory" {
+			continue
+		}
+		t.Run(factory.label, func(t *testing.T) {
+			dir := t.TempDir()
+
+			d1 := factory.getStore(dir)
+			err := d1.Set(1, common.Key{0x11, 0x22, 0x33})
+			if err != nil {
+				t.Fatalf("failed to set into a depot; %s", err)
+			}
+			snap1, err := d1.CreateSnapshot()
+			if err != nil {
+				t.Fatalf("failed to create snapshot; %s", err)
+			}
+			parts1 := snap1.GetNumParts()
+			_ = snap1.Release()
+			_ = d1.Close()
+
+			d2 := factory.getStore(dir)
+			value, err := d2.Get(1)
+			if err != nil {
+				t.Fatalf("failed to get from a store; %s", err)
+			}
+			if value != (common.Key{0x11, 0x22, 0x33}) {
+				t.Errorf("value stored into a store not persisted")
+			}
+			snap2, err := d2.CreateSnapshot()
+			if err != nil {
+				t.Fatalf("failed to create snapshot; %s", err)
+			}
+			parts2 := snap2.GetNumParts()
+			if parts1 != parts2 {
+				t.Errorf("num of parts persisted in the store does not match: %d != %d", parts1, parts2)
+			}
+			_ = snap2.Release()
+			_ = d2.Close()
 		})
 	}
 }
