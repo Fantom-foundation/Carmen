@@ -14,6 +14,9 @@ import (
 // be hashed and compared. The type I is the type used for the
 // ordinal numbers.
 type Index[K comparable, I common.Identifier] interface {
+	// Get the number of elements in this index, which corresponds to the
+	// identifier that will be assigned to the next key to be registered.
+	Size() I
 
 	// GetOrAdd returns an index mapping for the key, or creates the new index
 	GetOrAdd(key K) (I, error)

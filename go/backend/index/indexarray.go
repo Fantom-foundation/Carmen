@@ -25,6 +25,14 @@ func (m *Array[K, I]) Add(index Index[K, I]) {
 	m.indexes = append(m.indexes, index)
 }
 
+// Size returns the number of registered keys.
+func (m *Array[K, I]) Size() I {
+	if len(m.indexes) == 0 {
+		return I(0)
+	}
+	return m.indexes[0].Size()
+}
+
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *Array[K, I]) GetOrAdd(key K) (I, error) {
 	var res I

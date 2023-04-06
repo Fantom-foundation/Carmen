@@ -69,6 +69,11 @@ func NewIndex[K comparable, I common.Identifier](
 	return p, nil
 }
 
+// Size returns the number of registered keys.
+func (m *Index[K, I]) Size() I {
+	return m.lastIndex
+}
+
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	var val []byte
