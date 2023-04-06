@@ -1,6 +1,9 @@
 package depot
 
-import "github.com/Fantom-foundation/Carmen/go/common"
+import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
 
 // Depot is a mutable key/value store for values of variable length.
 // It provides mutation/lookup support, as well as global state hashing support
@@ -25,4 +28,6 @@ type Depot[I common.Identifier] interface {
 
 	// Also, depots need to be flush and closable.
 	common.FlushAndCloser
+
+	backend.Snapshotable
 }
