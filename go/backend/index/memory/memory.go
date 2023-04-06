@@ -33,6 +33,11 @@ func NewIndex[K comparable, I common.Identifier](serializer common.Serializer[K]
 	return &memory
 }
 
+// Size returns the number of registered keys.
+func (m *Index[K, I]) Size() I {
+	return I(len(m.data))
+}
+
 // GetOrAdd returns an index mapping for the key, or creates the new index.
 func (m *Index[K, I]) GetOrAdd(key K) (I, error) {
 	idx, exists := m.data[key]

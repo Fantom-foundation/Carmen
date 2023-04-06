@@ -19,6 +19,11 @@ func NewIndex[K comparable, I common.Identifier](wrapped index.Index[K, I], cach
 	return &Index[K, I]{wrapped, common.NewCache[K, I](cacheCapacity)}
 }
 
+// Size returns the number of registered keys.
+func (m *Index[K, I]) Size() I {
+	return m.wrapped.Size()
+}
+
 // GetOrAdd returns an index mapping for the key, or creates the new index
 func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	idx, exists := m.cache.Get(key)

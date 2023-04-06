@@ -3,6 +3,10 @@ package file
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
+	"os"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/array"
 	"github.com/Fantom-foundation/Carmen/go/backend/array/pagedarray"
@@ -10,9 +14,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"io"
-	"os"
-	"unsafe"
 )
 
 const (
@@ -120,6 +121,11 @@ func NewParamIndex[K comparable, I common.Identifier](
 	}
 
 	return
+}
+
+// Size returns the number of registered keys.
+func (m *Index[K, I]) Size() I {
+	return m.maxIndex
 }
 
 // GetOrAdd returns an index mapping for the key, or creates the new index.

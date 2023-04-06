@@ -81,6 +81,46 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 	}
 }
 
+func TestIndex_SizeIsAccuratelyReported(t *testing.T) {
+	for name, idx := range initIndexesMap() {
+		for _, size := range []int{0, 1, 5, 1000, 12345} {
+			t.Run(fmt.Sprintf("index %s size %d", name, size), func(t *testing.T) {
+
+				index := idx(t)
+				if got, want := index.Size(), uint32(0); got != want {
+					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+				}
+
+				if id, err := index.GetOrAdd(common.Address{1}); err != nil || id != 0 {
+					t.Errorf("failed to register new key: %v / %v", id, err)
+				}
+
+				if got, want := index.Size(), uint32(1); got != want {
+					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+				}
+
+				// Registering the same does not change the size.
+				if id, err := index.GetOrAdd(common.Address{1}); err != nil || id != 0 {
+					t.Errorf("failed to register new key: %v / %v", id, err)
+				}
+
+				if got, want := index.Size(), uint32(1); got != want {
+					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+				}
+
+				// Registering a new key does.
+				if id, err := index.GetOrAdd(common.Address{2}); err != nil || id != 1 {
+					t.Errorf("failed to register new key: %v / %v", id, err)
+				}
+
+				if got, want := index.Size(), uint32(2); got != want {
+					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+				}
+			})
+		}
+	}
+}
+
 func TestIndexesInitialHash(t *testing.T) {
 	indexes := initIndexesMap()
 

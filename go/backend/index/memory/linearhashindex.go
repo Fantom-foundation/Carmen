@@ -17,7 +17,7 @@ type LinearHashIndex[K comparable, I common.Identifier] struct {
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
 
-	maxIndex I // max index to fast compute nex item
+	maxIndex I // max index to fast compute next item
 }
 
 // NewLinearHashIndex constructs a new Index instance.
@@ -35,6 +35,11 @@ func NewLinearHashParamsIndex[K comparable, I common.Identifier](numBuckets int,
 		hashIndex:     indexhash.NewIndexHash[K](keySerializer),
 	}
 	return &memory
+}
+
+// Size returns the number of registered keys.
+func (m *LinearHashIndex[K, I]) Size() I {
+	return m.maxIndex
 }
 
 // GetOrAdd returns an index mapping for the key, or creates the new index.
