@@ -118,7 +118,7 @@ func (m *Store[I, V]) Get(id I) (v V, err error) {
 
 // getPagesCountDbKey provides a database key, where should be the amount of pages in the depot stored
 func getPagesCountDbKey(table common.TableSpace) []byte {
-	return []byte{byte(table), 0xC0}
+	return []byte{byte(table)} // suppose the key serializer will never produce empty slice
 }
 
 // loadPagesCount loads the amount of pages in the depot into the pagesCount field
