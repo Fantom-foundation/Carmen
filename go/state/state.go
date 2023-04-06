@@ -3,6 +3,7 @@ package state
 //go:generate mockgen -source state.go -destination mock_state.go -package state
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -46,6 +47,9 @@ type State interface {
 
 	// GetArchiveState provides a historical State view for given block.
 	GetArchiveState(block uint64) (State, error)
+
+	// States can be snapshotted.
+	backend.Snapshotable
 }
 
 // directUpdateState is an extended version of the State interface adding support for

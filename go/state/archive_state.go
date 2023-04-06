@@ -1,10 +1,12 @@
 package state
 
 import (
+	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
-	"unsafe"
 )
 
 // ArchiveState represents a historical State. Loads data from the Archive.
@@ -71,6 +73,22 @@ func (s *ArchiveState) Flush() error {
 func (s *ArchiveState) Close() error {
 	// no-op in ArchiveState
 	return nil
+}
+
+func (s *ArchiveState) GetProof() (backend.Proof, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *ArchiveState) CreateSnapshot() (backend.Snapshot, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *ArchiveState) Restore(data backend.SnapshotData) error {
+	return backend.ErrSnapshotNotSupported
+}
+
+func (s *ArchiveState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	return nil, backend.ErrSnapshotNotSupported
 }
 
 func (s *ArchiveState) GetArchiveState(block uint64) (State, error) {
