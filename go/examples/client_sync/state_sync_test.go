@@ -13,14 +13,23 @@ type blockGenerator struct {
 func (g *blockGenerator) GetNextBlockUpdateMessage() Message {
 	blockNumber := g.nextBlock
 	g.nextBlock++
+
 	a := byte(g.nextBlock)
 	b := byte(g.nextBlock >> 8)
 	c := byte(g.nextBlock >> 16)
 	d := byte(g.nextBlock >> 24)
+
+	update := common.Update{}
+	update.AppendCreateAccount(common.Address{a, b, c, d})
+	update.AppendBalanceUpdate(common.Address{a, b, c, d}, common.Balance{12})
+	update.AppendNonceUpdate(common.Address{a, b, c, d}, common.Nonce{14})
+	update.AppendCodeUpdate(common.Address{a, b, c, d}, []byte{a, b, c})
+	update.AppendSlotUpdate(common.Address{a, b, c, d}, common.Key{a, b}, common.Value{c, d})
+	update.AppendSlotUpdate(common.Address{a, b, c, d}, common.Key{a, b + 1}, common.Value{c, d})
+
 	return BlockUpdateBroadcast{
-		block:        blockNumber,
-		newAddresses: []common.Address{{a, b, c, d}},
-		newKeys:      []common.Key{{a, b, c, d}, {d, c, b, a}},
+		block:  blockNumber,
+		update: update,
 	}
 }
 
@@ -34,7 +43,7 @@ func TestStateSynchronization(t *testing.T) {
 
 	// Let's have our first client join the network.
 	client1 := DemoClient{}
-	if err := client1.Join(net); err != nil {
+	if err := client1.Join(t, net); err != nil {
 		t.Errorf("client 1 failed to join: %v", err)
 	}
 
@@ -46,7 +55,7 @@ func TestStateSynchronization(t *testing.T) {
 
 	// Now have another client join the network.
 	client2 := DemoClient{}
-	if err := client2.Join(net); err != nil {
+	if err := client2.Join(t, net); err != nil {
 		t.Errorf("client 2 failed to join: %v", err)
 	}
 
@@ -62,7 +71,7 @@ func TestStateSynchronization(t *testing.T) {
 	net.Broadcast(EndOfEpochBroadcast{})
 
 	client3 := DemoClient{}
-	if err := client3.Join(net); err != nil {
+	if err := client3.Join(t, net); err != nil {
 		t.Errorf("client 3 failed to join: %v", err)
 	}
 

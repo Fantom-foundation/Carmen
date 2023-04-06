@@ -41,9 +41,8 @@ type GetStateProofResponse struct {
 // - Broadcast for state updates -
 
 type BlockUpdateBroadcast struct {
-	block        uint64
-	newAddresses []common.Address
-	newKeys      []common.Key
+	block  uint64
+	update common.Update
 }
 
 // ----------------------------------------------------------------------------

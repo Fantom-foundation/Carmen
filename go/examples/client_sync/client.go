@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
 // Client is a (very) simplified implementation of a client
@@ -20,7 +22,7 @@ type Client interface {
 type DemoClient struct {
 	// Block chain state.
 	blockHeight uint64           // the current block height
-	state       *DemoState       // the current state, expected to be synced among all nodes
+	state       state.State      // the current state, expected to be synced among all nodes
 	snapshot    backend.Snapshot // the latest snapshot, if any has been created
 
 	// Network information.
@@ -28,7 +30,7 @@ type DemoClient struct {
 	myAddress Address
 }
 
-func (c *DemoClient) Join(net Network) (err error) {
+func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 	// Register this client in the network.
 	c.network = net
 	defer func() {
@@ -37,13 +39,22 @@ func (c *DemoClient) Join(net Network) (err error) {
 		}
 	}()
 
+	// Initialize this client's State DB.
+	state, err := state.NewGoFileState(state.Parameters{
+		Directory: t.TempDir(),
+		Schema:    3,
+		Archive:   state.NoArchive,
+	})
+	if err != nil {
+		return err
+	}
+	c.state = state
+
 	// Sync with network state.
 	addresses := net.GetAllAddresses()
 	if len(addresses) == 0 {
 		// This is the first client, initializing the network.
 		c.blockHeight = 0
-		c.state = newDemoState()
-		var err error
 		c.snapshot, err = c.state.CreateSnapshot()
 		return err
 	}
@@ -53,7 +64,6 @@ func (c *DemoClient) Join(net Network) (err error) {
 	c.blockHeight = net.Call(peer, GetBlockHeightRequest{}).(GetBlockHeightResponse).BlockHeight
 
 	// Sync to last snapshot in the network.
-	c.state = newDemoState()
 	remoteSnapshotData := newRemoteSnapshotData(net)
 
 	metadata, err := remoteSnapshotData.GetMetaData()
@@ -158,16 +168,11 @@ func (c *DemoClient) Call(request Message) Message {
 func (c *DemoClient) Observe(message Message) {
 	switch msg := message.(type) {
 	case BlockUpdateBroadcast:
-		if c.blockHeight >= msg.block {
+		if c.blockHeight+1 != msg.block {
 			return
 		}
 		c.blockHeight = msg.block
-		for _, address := range msg.newAddresses {
-			c.state.AddAddress(address)
-		}
-		for _, key := range msg.newKeys {
-			c.state.AddKey(key)
-		}
+		c.state.Apply(msg.block, msg.update)
 	case EndOfEpochBroadcast:
 		var err error
 		c.snapshot, err = c.state.CreateSnapshot()
