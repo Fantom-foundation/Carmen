@@ -308,6 +308,10 @@ func (s *GoSchema2) getSnapshotableComponents() []backend.Snapshotable {
 	return nil // = snapshotting not supported
 }
 
+func (s *GoSchema2) runPostRestoreTasks() error {
+	return backend.ErrSnapshotNotSupported
+}
+
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
 func (s *GoSchema2) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(0)

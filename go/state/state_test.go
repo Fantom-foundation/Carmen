@@ -12,6 +12,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"golang.org/x/crypto/sha3"
 )
 
 type namedStateConfig struct {
@@ -543,7 +544,7 @@ func TestPersistentState(t *testing.T) {
 func fillStateForSnapshotting(state directUpdateState) {
 	state.setBalance(address1, common.Balance{12})
 	state.setNonce(address2, common.Nonce{14})
-	//state.setCode(address3, []byte{0, 8, 15})   // TODO: enable once depots are supported
+	state.setCode(address3, []byte{0, 8, 15})
 	state.setStorage(address1, key1, val1)
 }
 
@@ -594,7 +595,6 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 				}
 			}
 
-			/* TODO: enable once depot snapshotting is supported
 			code := []byte{0, 8, 15}
 			if got, err := recovered.GetCode(address3); err != nil || !bytes.Equal(got, code) {
 				if err != nil {
@@ -603,7 +603,15 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 					t.Errorf("failed to recover code for account %v - wanted %v, got %v", address1, code, got)
 				}
 			}
-			*/
+
+			codeHash := common.GetHash(sha3.NewLegacyKeccak256(), code)
+			if got, err := recovered.GetCodeHash(address3); err != nil || got != codeHash {
+				if err != nil {
+					t.Errorf("failed to fetch code hash for account %v: %v", address1, err)
+				} else {
+					t.Errorf("failed to recover code hash for account %v - wanted %v, got %v", address1, codeHash, got)
+				}
+			}
 
 			if got, err := recovered.GetStorage(address1, key1); err != nil || got != val1 {
 				if err != nil {
