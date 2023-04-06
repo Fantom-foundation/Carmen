@@ -2,12 +2,14 @@ package ldb
 
 import (
 	"fmt"
+	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
-	"unsafe"
 )
 
 const (
@@ -140,6 +142,22 @@ func (m *Index[K, I]) Flush() error {
 
 func (m *Index[K, I]) Close() error {
 	return m.Flush()
+}
+
+func (s *Index[K, I]) GetProof() (backend.Proof, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *Index[K, I]) CreateSnapshot() (backend.Snapshot, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *Index[K, I]) Restore(data backend.SnapshotData) error {
+	return backend.ErrSnapshotNotSupported
+}
+
+func (s *Index[K, I]) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	return nil, backend.ErrSnapshotNotSupported
 }
 
 // convertKey translates the Index representation of the key into a database key.

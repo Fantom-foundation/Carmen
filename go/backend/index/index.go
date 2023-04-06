@@ -2,6 +2,8 @@ package index
 
 import (
 	"errors"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -32,11 +34,9 @@ type Index[K comparable, I common.Identifier] interface {
 	common.FlushAndCloser
 
 	// Snapshotable indexes.
-	// TODO: snapshot is not implemented by all indexes
-	//backend.Snapshotable
+	backend.Snapshotable
 }
 
 var (
-	ErrNotFound        = errors.New("index: key not found")
-	ErrNotSnapshotable = errors.New("index: not snapshotable")
+	ErrNotFound = errors.New("index: key not found")
 )

@@ -1,10 +1,11 @@
 package cache
 
 import (
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"unsafe"
 )
 
 // Index wraps another index and a cache
@@ -77,31 +78,16 @@ func (m *Index[K, I]) GetProof() (backend.Proof, error) {
 }
 
 func (m *Index[K, I]) CreateSnapshot() (backend.Snapshot, error) {
-	snapshotable, ok := m.wrapped.(backend.Snapshotable)
-	if !ok {
-		return nil, index.ErrNotSnapshotable
-	}
-
-	return snapshotable.CreateSnapshot()
+	return m.wrapped.CreateSnapshot()
 }
 
 func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
-	snapshotable, ok := m.wrapped.(backend.Snapshotable)
-	if !ok {
-		return index.ErrNotSnapshotable
-	}
-
 	m.cache.Clear()
-	return snapshotable.Restore(data)
+	return m.wrapped.Restore(data)
 }
 
 func (m *Index[K, I]) GetSnapshotVerifier(data []byte) (backend.SnapshotVerifier, error) {
-	snapshotable, ok := m.wrapped.(backend.Snapshotable)
-	if !ok {
-		return nil, index.ErrNotSnapshotable
-	}
-
-	return snapshotable.GetSnapshotVerifier(data)
+	return m.wrapped.GetSnapshotVerifier(data)
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes

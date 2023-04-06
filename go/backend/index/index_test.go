@@ -157,21 +157,22 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndRestored(t *testing.T) {
 		for _, size := range []int{0, 1, 5, 1000, 12345} {
 			t.Run(fmt.Sprintf("index %s size %d", name, size), func(t *testing.T) {
 
-				originalIndex := idx(t)
-				original, ok := originalIndex.(backend.Snapshotable)
-				if !ok {
-					t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+				original := idx(t)
+				if _, err := original.CreateSnapshot(); err == backend.ErrSnapshotNotSupported {
+					t.Skipf("index: %s is not Snapshotable", name)
+				} else if err != nil {
+					t.Fatalf("failed to produce snapshot: %v", err)
 				}
 
-				fillIndex(t, originalIndex, size)
+				fillIndex(t, original, size)
 				originalProof, err := original.GetProof()
 				if err != nil {
 					t.Errorf("failed to produce a proof for the original state")
 				}
 
 				snapshot, err := original.CreateSnapshot()
-				if err == index.ErrNotSnapshotable {
-					t.Skip(fmt.Sprintf("%v", err))
+				if err == backend.ErrSnapshotNotSupported {
+					t.Skipf("%v", err)
 				}
 
 				if err != nil {
@@ -218,21 +219,22 @@ func TestIndexSnapshot_IndexCrosscheckSnapshotCanBeCreatedAndRestored(t *testing
 		for _, size := range []int{0, 1, 5, 1000, 12345} {
 			t.Run(fmt.Sprintf("index %s size %d", name, size), func(t *testing.T) {
 
-				originalIndex := idx(t)
-				original, ok := originalIndex.(backend.Snapshotable)
-				if !ok {
-					t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+				original := idx(t)
+				if _, err := original.CreateSnapshot(); err == backend.ErrSnapshotNotSupported {
+					t.Skipf("index: %s is not Snapshotable", name)
+				} else if err != nil {
+					t.Fatalf("failed to create snapshot: %v", err)
 				}
 
-				fillIndex(t, originalIndex, size)
+				fillIndex(t, original, size)
 				originalProof, err := original.GetProof()
 				if err != nil {
 					t.Errorf("failed to produce a proof for the original state")
 				}
 
 				snapshot, err := original.CreateSnapshot()
-				if err == index.ErrNotSnapshotable {
-					t.Skip(fmt.Sprintf("%v", err))
+				if err == backend.ErrSnapshotNotSupported {
+					t.Skipf("%v", err)
 				}
 
 				if err != nil {
@@ -256,8 +258,8 @@ func TestIndexSnapshot_IndexCrosscheckSnapshotCanBeCreatedAndRestored(t *testing
 					}
 
 					if err := recovered.Restore(snapshot.GetData()); err != nil {
-						if err == index.ErrNotSnapshotable {
-							t.Skip(fmt.Sprintf("%v", err))
+						if err == backend.ErrSnapshotNotSupported {
+							t.Skipf("%v", err)
 						}
 
 						t.Errorf("failed to sync to %s snapshot: %v", recoveredName, err)
@@ -288,21 +290,22 @@ func TestIndexSnapshot_IndexSnapshotIsShieldedFromMutations(t *testing.T) {
 	for name, idx := range initIndexesMap() {
 		t.Run(fmt.Sprintf("index %s", name), func(t *testing.T) {
 
-			originalIndex := idx(t)
-			original, ok := originalIndex.(backend.Snapshotable)
-			if !ok {
-				t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+			original := idx(t)
+			if _, err := original.CreateSnapshot(); err == backend.ErrSnapshotNotSupported {
+				t.Skipf("index: %s is not Snapshotable", name)
+			} else if err != nil {
+				t.Fatalf("failed to create snapshot: %v", err)
 			}
 
-			fillIndex(t, originalIndex, 20)
+			fillIndex(t, original, 20)
 			originalProof, err := original.GetProof()
 			if err != nil {
 				t.Errorf("failed to produce a proof for the original state")
 			}
 
 			snapshot, err := original.CreateSnapshot()
-			if err == index.ErrNotSnapshotable {
-				t.Skip(fmt.Sprintf("%v", err))
+			if err == backend.ErrSnapshotNotSupported {
+				t.Skipf("%v", err)
 			}
 
 			if err != nil {
@@ -315,7 +318,7 @@ func TestIndexSnapshot_IndexSnapshotIsShieldedFromMutations(t *testing.T) {
 			}
 
 			// Additional mutations of the original should not be affected.
-			if _, err := originalIndex.GetOrAdd(common.Address{0xaa}); err != nil {
+			if _, err := original.GetOrAdd(common.Address{0xaa}); err != nil {
 				t.Errorf("failed to add key: %v", err)
 			}
 
@@ -355,7 +358,7 @@ func TestIndexSnapshot_IndexSnapshotRestoreClearsPreviousVersion(t *testing.T) {
 			fillIndex(t, originalIndex, 20)
 
 			snapshot, err := original.CreateSnapshot()
-			if err == index.ErrNotSnapshotable {
+			if err == backend.ErrSnapshotNotSupported {
 				t.Skip(fmt.Sprintf("%v", err))
 			}
 
@@ -399,14 +402,14 @@ func TestIndexSnapshot_IndexSnapshotCanBeCreatedAndValidated(t *testing.T) {
 				originalIndex := idx(t)
 				original, ok := originalIndex.(backend.Snapshotable)
 				if !ok {
-					t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+					t.Skipf("index: %s is not Snapshotable", name)
 				}
 
 				fillIndex(t, originalIndex, size)
 
 				snapshot, err := original.CreateSnapshot()
-				if err == index.ErrNotSnapshotable {
-					t.Skip(fmt.Sprintf("%v", err))
+				if err == backend.ErrSnapshotNotSupported {
+					t.Skipf("%v", err)
 				}
 
 				if err != nil {
