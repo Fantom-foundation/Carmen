@@ -539,6 +539,12 @@ func TestDepotSnapshotRecoveryOverriding(t *testing.T) {
 					t.Errorf("incorrect Get result for recovered store, key %d; %x != %x, %s", i, value, expected, err)
 				}
 			}
+			for i := numEntries; i < numEntries+8; i++ {
+				if value, err := depot2.Get(uint32(i)); err != nil || value != nil {
+					t.Errorf("incorrect Get result for recovered store, key %d; %x != nil, %s", i, value, err)
+				}
+			}
+
 			stateHash2, err := depot2.GetStateHash()
 			if err != nil {
 				t.Fatalf("failed to get recovered store hash; %s", err)
