@@ -46,3 +46,16 @@ func TestKnownHashes(t *testing.T) {
 		hashes = append(hashes, getSha256Hash([]byte{byte(i<<4 | i)}))
 	}
 }
+
+func TestInvalidBranchingFactor(t *testing.T) {
+	source := func(i int) (common.Hash, error) {
+		return common.Hash{}, nil
+	}
+	if _, err := ReduceHashes(0, 10, source); err == nil {
+		t.Errorf("branching factor of 0 should fail")
+	}
+
+	if _, err := ReduceHashes(-1, 10, source); err == nil {
+		t.Errorf("branching factor of -1 should fail")
+	}
+}
