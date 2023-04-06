@@ -1,6 +1,7 @@
 package ldb
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
@@ -45,8 +46,7 @@ func NewStore[I common.Identifier, V any](
 		itemSize:        serializer.Size(),
 		table:           table,
 	}
-	store.pagesCount, err = store.getPagesCount()
-	if err != nil {
+	if err = store.loadPagesCount(); err != nil {
 		return nil, err
 	}
 	store.hashTree = hashTreeFactory.Create(store)
@@ -89,6 +89,11 @@ func (m *Store[I, V]) Set(id I, value V) (err error) {
 	dbKey := m.convertKey(id).ToBytes()
 	if err = m.db.Put(dbKey, m.valueSerializer.ToBytes(value), nil); err == nil {
 		page, _ := m.itemPosition(id)
+		if page >= m.pagesCount {
+			if err := m.setPagesCount(page + 1); err != nil {
+				return err
+			}
+		}
 		m.hashTree.MarkUpdated(page)
 		if page >= m.pagesCount {
 			m.pagesCount = page + 1
@@ -111,17 +116,30 @@ func (m *Store[I, V]) Get(id I) (v V, err error) {
 	return
 }
 
-func (m *Store[I, V]) getPagesCount() (count int, err error) {
-	r := util.Range{Start: []byte{byte(m.table)}, Limit: []byte{byte(m.table) + 1}}
-	iter := m.db.NewIterator(&r, nil)
-	defer iter.Release()
+// getPagesCountDbKey provides a database key, where should be the amount of pages in the depot stored
+func getPagesCountDbKey(table common.TableSpace) []byte {
+	return []byte{byte(table), 0xC0}
+}
 
-	if iter.Last() {
-		key := m.indexSerializer.FromBytes(iter.Key()[1:]) // strip first byte (table space) and get the idx only
-		maxPage, _ := m.itemPosition(key)
-		return maxPage + 1, nil
+// loadPagesCount loads the amount of pages in the depot into the pagesCount field
+func (m *Store[I, V]) loadPagesCount() error {
+	val, err := m.db.Get(getPagesCountDbKey(m.table), nil)
+	if err == leveldb.ErrNotFound {
+		m.pagesCount = 0
+		return nil
 	}
-	return 0, iter.Error()
+	if err != nil {
+		return err
+	}
+	m.pagesCount = int(binary.LittleEndian.Uint32(val))
+	return nil
+}
+
+// setPagesCount allows to set pages count - to be called when a new page is created
+func (m *Store[I, V]) setPagesCount(count int) error {
+	m.pagesCount = count
+	val := binary.LittleEndian.AppendUint32(nil, uint32(count))
+	return m.db.Put(getPagesCountDbKey(m.table), val, nil)
 }
 
 // GetStateHash computes and returns a cryptographical hash of the stored data
