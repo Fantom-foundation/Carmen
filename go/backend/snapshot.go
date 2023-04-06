@@ -1,5 +1,7 @@
 package backend
 
+import "errors"
+
 // Snapshots capture a state of a single or a set of data structures at a
 // moment in time for future reference.
 //
@@ -102,3 +104,6 @@ type Snapshotable interface {
 	// not describing a snapshot format compatible with this data structure.
 	GetSnapshotVerifier(metadata []byte) (SnapshotVerifier, error)
 }
+
+// An error that implementations may return if snapshots are not supported.
+var ErrSnapshotNotSupported = errors.New("this implementation does not support snapshots")

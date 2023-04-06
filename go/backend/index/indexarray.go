@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -107,6 +108,22 @@ func (m *Array[K, I]) Close() error {
 	}
 
 	return resErr
+}
+
+func (s *Array[K, I]) GetProof() (backend.Proof, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *Array[K, I]) CreateSnapshot() (backend.Snapshot, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *Array[K, I]) Restore(data backend.SnapshotData) error {
+	return backend.ErrSnapshotNotSupported
+}
+
+func (s *Array[K, I]) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	return nil, backend.ErrSnapshotNotSupported
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes

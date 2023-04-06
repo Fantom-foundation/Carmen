@@ -1,10 +1,12 @@
 package memory
 
 import (
+	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/indexhash"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"unsafe"
 )
 
 // LinearHashIndex is an in-memory implementation of index.Index.
@@ -74,6 +76,22 @@ func (m *LinearHashIndex[K, I]) Flush() error {
 // Close closes the storage and clean-ups all possible dirty values.
 func (m *LinearHashIndex[K, I]) Close() error {
 	return nil
+}
+
+func (s *LinearHashIndex[K, I]) GetProof() (backend.Proof, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *LinearHashIndex[K, I]) CreateSnapshot() (backend.Snapshot, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *LinearHashIndex[K, I]) Restore(data backend.SnapshotData) error {
+	return backend.ErrSnapshotNotSupported
+}
+
+func (s *LinearHashIndex[K, I]) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	return nil, backend.ErrSnapshotNotSupported
 }
 
 func (m *LinearHashIndex[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
