@@ -69,7 +69,7 @@ func (m *Depot[I]) GetPage(hashGroup int) (out []byte, err error) {
 	return
 }
 
-// setPage sets data from the page exported using GetPage method into the store
+// setPage sets data from the page exported using GetPage method into the depot
 func (m *Depot[I]) setPage(hashGroup int, data []byte) (err error) {
 	lengths := make([]int, m.groupSize)
 	totalLength := 0
@@ -243,5 +243,8 @@ func (m *Depot[I]) GetMemoryFootprint() *common.MemoryFootprint {
 	}
 	mf := common.NewMemoryFootprint(size)
 	mf.AddChild("hashTree", m.hashTree.GetMemoryFootprint())
+	if m.lastSnapshot != nil {
+		mf.AddChild("lastSnapshot", m.lastSnapshot.GetMemoryFootprint())
+	}
 	return mf
 }
