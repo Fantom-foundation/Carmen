@@ -7,6 +7,7 @@ package state
 import (
 	reflect "reflect"
 
+	backend "github.com/Fantom-foundation/Carmen/go/backend"
 	common "github.com/Fantom-foundation/Carmen/go/common"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -60,6 +61,21 @@ func (m *MockState) Close() error {
 func (mr *MockStateMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockState)(nil).Close))
+}
+
+// CreateSnapshot mocks base method.
+func (m *MockState) CreateSnapshot() (backend.Snapshot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSnapshot")
+	ret0, _ := ret[0].(backend.Snapshot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSnapshot indicates an expected call of CreateSnapshot.
+func (mr *MockStateMockRecorder) CreateSnapshot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockState)(nil).CreateSnapshot))
 }
 
 // Exists mocks base method.
@@ -210,6 +226,36 @@ func (mr *MockStateMockRecorder) GetNonce(address interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockState)(nil).GetNonce), address)
 }
 
+// GetProof mocks base method.
+func (m *MockState) GetProof() (backend.Proof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProof")
+	ret0, _ := ret[0].(backend.Proof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProof indicates an expected call of GetProof.
+func (mr *MockStateMockRecorder) GetProof() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockState)(nil).GetProof))
+}
+
+// GetSnapshotVerifier mocks base method.
+func (m *MockState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSnapshotVerifier", metadata)
+	ret0, _ := ret[0].(backend.SnapshotVerifier)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSnapshotVerifier indicates an expected call of GetSnapshotVerifier.
+func (mr *MockStateMockRecorder) GetSnapshotVerifier(metadata interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshotVerifier", reflect.TypeOf((*MockState)(nil).GetSnapshotVerifier), metadata)
+}
+
 // GetStorage mocks base method.
 func (m *MockState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
 	m.ctrl.T.Helper()
@@ -223,6 +269,20 @@ func (m *MockState) GetStorage(address common.Address, key common.Key) (common.V
 func (mr *MockStateMockRecorder) GetStorage(address, key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockState)(nil).GetStorage), address, key)
+}
+
+// Restore mocks base method.
+func (m *MockState) Restore(data backend.SnapshotData) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Restore", data)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Restore indicates an expected call of Restore.
+func (mr *MockStateMockRecorder) Restore(data interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockState)(nil).Restore), data)
 }
 
 // MockdirectUpdateState is a mock of directUpdateState interface.
@@ -274,6 +334,21 @@ func (m *MockdirectUpdateState) Close() error {
 func (mr *MockdirectUpdateStateMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockdirectUpdateState)(nil).Close))
+}
+
+// CreateSnapshot mocks base method.
+func (m *MockdirectUpdateState) CreateSnapshot() (backend.Snapshot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSnapshot")
+	ret0, _ := ret[0].(backend.Snapshot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSnapshot indicates an expected call of CreateSnapshot.
+func (mr *MockdirectUpdateStateMockRecorder) CreateSnapshot() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockdirectUpdateState)(nil).CreateSnapshot))
 }
 
 // Exists mocks base method.
@@ -424,6 +499,36 @@ func (mr *MockdirectUpdateStateMockRecorder) GetNonce(address interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockdirectUpdateState)(nil).GetNonce), address)
 }
 
+// GetProof mocks base method.
+func (m *MockdirectUpdateState) GetProof() (backend.Proof, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProof")
+	ret0, _ := ret[0].(backend.Proof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProof indicates an expected call of GetProof.
+func (mr *MockdirectUpdateStateMockRecorder) GetProof() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProof", reflect.TypeOf((*MockdirectUpdateState)(nil).GetProof))
+}
+
+// GetSnapshotVerifier mocks base method.
+func (m *MockdirectUpdateState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSnapshotVerifier", metadata)
+	ret0, _ := ret[0].(backend.SnapshotVerifier)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSnapshotVerifier indicates an expected call of GetSnapshotVerifier.
+func (mr *MockdirectUpdateStateMockRecorder) GetSnapshotVerifier(metadata interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSnapshotVerifier", reflect.TypeOf((*MockdirectUpdateState)(nil).GetSnapshotVerifier), metadata)
+}
+
 // GetStorage mocks base method.
 func (m *MockdirectUpdateState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
 	m.ctrl.T.Helper()
@@ -437,6 +542,20 @@ func (m *MockdirectUpdateState) GetStorage(address common.Address, key common.Ke
 func (mr *MockdirectUpdateStateMockRecorder) GetStorage(address, key interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockdirectUpdateState)(nil).GetStorage), address, key)
+}
+
+// Restore mocks base method.
+func (m *MockdirectUpdateState) Restore(data backend.SnapshotData) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Restore", data)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Restore indicates an expected call of Restore.
+func (mr *MockdirectUpdateStateMockRecorder) Restore(data interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockdirectUpdateState)(nil).Restore), data)
 }
 
 // createAccount mocks base method.

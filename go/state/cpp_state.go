@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -177,6 +178,22 @@ func (cs *CppState) Close() error {
 		cs.state = nil
 	}
 	return nil
+}
+
+func (s *CppState) GetProof() (backend.Proof, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *CppState) CreateSnapshot() (backend.Snapshot, error) {
+	return nil, backend.ErrSnapshotNotSupported
+}
+
+func (s *CppState) Restore(data backend.SnapshotData) error {
+	return backend.ErrSnapshotNotSupported
+}
+
+func (s *CppState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
+	return nil, backend.ErrSnapshotNotSupported
 }
 
 func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {

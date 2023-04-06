@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -536,6 +537,167 @@ func TestPersistentState(t *testing.T) {
 				execSubProcessTest(t, dir, config.name, archiveType, "TestStateRead")
 			})
 		}
+	}
+}
+
+func fillStateForSnapshotting(state directUpdateState) {
+	state.setBalance(address1, common.Balance{12})
+	state.setNonce(address2, common.Nonce{14})
+	//state.setCode(address3, []byte{0, 8, 15})   // TODO: enable once depots are supported
+	state.setStorage(address1, key1, val1)
+}
+
+func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+			original, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer original.Close()
+
+			fillStateForSnapshotting(original)
+
+			snapshot, err := original.CreateSnapshot()
+			if err == backend.ErrSnapshotNotSupported {
+				t.Skipf("configuration '%v' skipped since snapshotting is not supported", config.name)
+			}
+			if err != nil {
+				t.Errorf("failed to create snapshot: %v", err)
+				return
+			}
+
+			recovered, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer recovered.Close()
+
+			if err := recovered.(backend.Snapshotable).Restore(snapshot.GetData()); err != nil {
+				t.Errorf("failed to sync to snapshot: %v", err)
+				return
+			}
+
+			if got, err := recovered.GetBalance(address1); err != nil || got != (common.Balance{12}) {
+				if err != nil {
+					t.Errorf("failed to fetch balance for account %v: %v", address1, err)
+				} else {
+					t.Errorf("failed to recover balance for account %v - wanted %v, got %v", address1, (common.Balance{12}), got)
+				}
+			}
+
+			if got, err := recovered.GetNonce(address2); err != nil || got != (common.Nonce{14}) {
+				if err != nil {
+					t.Errorf("failed to fetch nonce for account %v: %v", address1, err)
+				} else {
+					t.Errorf("failed to recover nonce for account %v - wanted %v, got %v", address1, (common.Nonce{14}), got)
+				}
+			}
+
+			/* TODO: enable once depot snapshotting is supported
+			code := []byte{0, 8, 15}
+			if got, err := recovered.GetCode(address3); err != nil || !bytes.Equal(got, code) {
+				if err != nil {
+					t.Errorf("failed to fetch code for account %v: %v", address1, err)
+				} else {
+					t.Errorf("failed to recover code for account %v - wanted %v, got %v", address1, code, got)
+				}
+			}
+			*/
+
+			if got, err := recovered.GetStorage(address1, key1); err != nil || got != val1 {
+				if err != nil {
+					t.Errorf("failed to fetch storage for account %v: %v", address1, err)
+				} else {
+					t.Errorf("failed to recover storage for account %v - wanted %v, got %v", address1, val1, got)
+				}
+			}
+
+			want, err := original.GetHash()
+			if err != nil {
+				t.Errorf("failed to fetch hash for state: %v", err)
+			}
+
+			got, err := recovered.GetHash()
+			if err != nil {
+				t.Errorf("failed to fetch hash for state: %v", err)
+			}
+
+			if want != got {
+				t.Errorf("hash of recovered state does not match source hash: %v vs %v", got, want)
+			}
+
+			if err := snapshot.Release(); err != nil {
+				t.Errorf("failed to release snapshot: %v", err)
+			}
+		})
+	}
+}
+
+func TestSnapshotCanBeCreatedAndVerified(t *testing.T) {
+	for _, config := range initStates() {
+		t.Run(config.name, func(t *testing.T) {
+			original, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer original.Close()
+
+			fillStateForSnapshotting(original)
+
+			snapshot, err := original.CreateSnapshot()
+			if err == backend.ErrSnapshotNotSupported {
+				t.Skipf("configuration '%v' skipped since snapshotting is not supported", config.name)
+			}
+			if err != nil {
+				t.Errorf("failed to create snapshot: %v", err)
+				return
+			}
+
+			// The root proof should be equivalent.
+			want, err := original.GetProof()
+			if err != nil {
+				t.Errorf("failed to get root proof from data structure")
+			}
+
+			have := snapshot.GetRootProof()
+			if !want.Equal(have) {
+				t.Errorf("root proof of snapshot does not match proof of data structure")
+			}
+
+			metadata, err := snapshot.GetData().GetMetaData()
+			if err != nil {
+				t.Fatalf("failed to obtain metadata from snapshot")
+			}
+
+			verifier, err := original.GetSnapshotVerifier(metadata)
+			if err != nil {
+				t.Fatalf("failed to obtain snapshot verifier")
+			}
+
+			if proof, err := verifier.VerifyRootProof(snapshot.GetData()); err != nil || !proof.Equal(want) {
+				t.Errorf("snapshot invalid, inconsistent proofs: %v, want %v, got %v", err, want, proof)
+			}
+
+			// Verify all pages
+			for i := 0; i < snapshot.GetNumParts(); i++ {
+				want, err := snapshot.GetProof(i)
+				if err != nil {
+					t.Errorf("failed to fetch proof of part %d", i)
+				}
+				part, err := snapshot.GetPart(i)
+				if err != nil || part == nil {
+					t.Errorf("failed to fetch part %d", i)
+				}
+				if part != nil && verifier.VerifyPart(i, want.ToBytes(), part.ToBytes()) != nil {
+					t.Errorf("failed to verify content of part %d", i)
+				}
+			}
+
+			if err := snapshot.Release(); err != nil {
+				t.Errorf("failed to release snapshot: %v", err)
+			}
+		})
 	}
 }
 

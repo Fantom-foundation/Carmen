@@ -2,13 +2,15 @@ package state
 
 import (
 	"crypto/sha256"
+	"hash"
+	"io"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
-	"hash"
-	"io"
 )
 
 // GoSchema3 implementation of a state utilizes a schema where Addresses are indexed,
@@ -304,6 +306,20 @@ func (s *GoSchema3) Close() (lastErr error) {
 	}
 
 	return lastErr
+}
+
+func (s *GoSchema3) getSnapshotableComponents() []backend.Snapshotable {
+	return []backend.Snapshotable{
+		s.addressIndex,
+		s.slotIndex,
+		s.accountsStore,
+		s.noncesStore,
+		s.reincarnationsStore,
+		s.balancesStore,
+		s.valuesStore,
+		// s.codesDepot, < TODO: enable once supported
+		s.codeHashesStore,
+	}
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
