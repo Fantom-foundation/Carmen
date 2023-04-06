@@ -2,6 +2,7 @@ package hashtree
 
 import (
 	"crypto/sha256"
+	"fmt"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -10,6 +11,9 @@ import (
 // and numPages hashes on the leaf level. Hashes for leaves are fetched on
 // demand through the source function.
 func ReduceHashes(branchingFactor int, numPages int, source func(int) (common.Hash, error)) (common.Hash, error) {
+	if branchingFactor <= 0 {
+		return common.Hash{}, fmt.Errorf("invalid branching factor: %v", branchingFactor)
+	}
 
 	// If there are no pages, the procedure is simple.
 	if numPages <= 0 {
