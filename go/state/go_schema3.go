@@ -7,8 +7,10 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
 )
@@ -317,9 +319,46 @@ func (s *GoSchema3) getSnapshotableComponents() []backend.Snapshotable {
 		s.reincarnationsStore,
 		s.balancesStore,
 		s.valuesStore,
-		// s.codesDepot, < TODO: enable once supported
-		s.codeHashesStore,
+		s.codesDepot,
 	}
+}
+
+func (s *GoSchema3) runPostRestoreTasks() error {
+	// To complete the syncing, the hashes of codes need to be updated.
+	if s.hasher == nil {
+		s.hasher = sha3.NewLegacyKeccak256()
+	}
+	numAccounts := s.addressIndex.Size()
+
+	// We create a in-memory store with all the hashes and sync this one into
+	// the actual code hash store. This way, a full reset can be realized in
+	// case the depot is not empty.
+	store, err := memory.NewStore[uint32, common.Hash](common.HashSerializer{}, common.PageSize, hashtree.GetNoHashFactory())
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	for i := uint32(0); i < numAccounts; i++ {
+		code, err := s.codesDepot.Get(i)
+		if err != nil {
+			return err
+		}
+		var hash common.Hash
+		if len(code) != 0 {
+			hash = common.GetHash(s.hasher, code)
+		}
+		if err := store.Set(i, hash); err != nil {
+			return err
+		}
+	}
+
+	snapshot, err := store.CreateSnapshot()
+	if err != nil {
+		return err
+	}
+
+	return s.codeHashesStore.Restore(snapshot.GetData())
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory

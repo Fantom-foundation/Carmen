@@ -48,6 +48,10 @@ type GoSchema interface {
 	// getSnapshotableComponents lists all components required to back-up or restore
 	// for snapshotting this schema. Returns nil if snapshotting is not supported.
 	getSnapshotableComponents() []backend.Snapshotable
+
+	// Called after synching to a new state, requisting the schema to update cached
+	// values or tables not covered by the snapshot synchronization.
+	runPostRestoreTasks() error
 }
 
 func NewGoState(schema GoSchema, archive archive.Archive, cleanup []func()) *GoState {
@@ -253,7 +257,7 @@ func (s *GoState) Restore(data backend.SnapshotData) error {
 			return err
 		}
 	}
-	return nil
+	return s.GoSchema.runPostRestoreTasks()
 }
 
 func (s *GoState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
