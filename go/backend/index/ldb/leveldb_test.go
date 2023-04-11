@@ -94,6 +94,40 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 	}
 }
 
+func TestLongKeysIndex(t *testing.T) {
+	db, _ := openIndexTempDb(t)
+	idx, err := NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+	if err != nil {
+		t.Fatalf("Cannot open Index, err: %s", err)
+	}
+	t.Cleanup(func() { _ = idx.Close() })
+
+	keyA := common.SlotIdxKey[uint32]{
+		AddressIdx: 123456,
+		Key:        common.Key{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01},
+	}
+	keyB := common.SlotIdxKey[uint32]{
+		AddressIdx: 123456,
+		Key:        common.Key{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02},
+	}
+
+	indexA, err := idx.GetOrAdd(keyA)
+	if err != nil {
+		t.Fatalf("failed adding of long key A; %s", err)
+	}
+	indexB, err := idx.GetOrAdd(keyB)
+	if err != nil {
+		t.Fatalf("failed adding of long key B; %s", err)
+	}
+	if indexA == indexB {
+		t.Errorf("assigned one index for two different long keys")
+	}
+	indexA2, err := idx.GetOrAdd(keyA)
+	if err != nil || indexA != indexA2 {
+		t.Errorf("assigned two different indexes for the same long key or err: %x != %x, %s", indexA, indexA2, err)
+	}
+}
+
 func TestDataPersisted(t *testing.T) {
 	db, path := openIndexTempDb(t)
 	idx1 := createIndex(t, db)
