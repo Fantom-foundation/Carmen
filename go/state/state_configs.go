@@ -321,7 +321,7 @@ func NewGoFileState(params Parameters) (State, error) {
 		if err != nil {
 			return nil, err
 		}
-		reincStorePath := indexPath + string(filepath.Separator) + "reinc"
+		reincStorePath := storePath + string(filepath.Separator) + "reincarnation"
 		if err = os.MkdirAll(reincStorePath, 0700); err != nil {
 			return nil, err
 		}
@@ -487,7 +487,7 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 		if err != nil {
 			return nil, err
 		}
-		reincStorePath := indexPath + string(filepath.Separator) + "reinc"
+		reincStorePath := storePath + string(filepath.Separator) + "reincarnation"
 		if err = os.MkdirAll(reincStorePath, 0700); err != nil {
 			return nil, err
 		}
