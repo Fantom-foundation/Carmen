@@ -16,6 +16,7 @@
 #include "state/s1/state.h"
 #include "state/s2/state.h"
 #include "state/s3/state.h"
+#include "state/s4/state.h"
 #include "state/state.h"
 #include "state/update.h"
 
@@ -216,6 +217,8 @@ WorldState* Open(const std::filesystem::path& directory, std::uint8_t schema,
       return Open<Config, s2::State>(directory, archive);
     case 3:
       return Open<Config, s3::State>(directory, archive);
+    case 4:
+      return Open<Config, s4::State>(directory, archive);
   }
   return nullptr;
 }

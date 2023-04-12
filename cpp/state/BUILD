@@ -114,6 +114,7 @@ cc_library(
         "//state/s1:state",
         "//state/s2:state",
         "//state/s3:state",
+        "//state/s4:state",
         "@com_google_absl//absl/status",
     ],
     alwayslink = True,

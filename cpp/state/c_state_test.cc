@@ -548,7 +548,9 @@ INSTANTIATE_TEST_SUITE_P(
 
                     Config{3, kState_Memory, kArchive_Sqlite},
                     Config{1, kState_File, kArchive_Sqlite},
-                    Config{2, kState_LevelDb, kArchive_Sqlite}),
+                    Config{2, kState_LevelDb, kArchive_Sqlite},
+
+                    Config{4, kState_Memory, kArchive_None}),
     [](const testing::TestParamInfo<CStateTest::ParamType>& info) {
       return "schema_" + std::to_string(info.param.schema) + "_impl_" +
              ToString(info.param.state) + "_archive_" +
