@@ -2,12 +2,12 @@ name: cpp-tests
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
     paths:
       - '.github/workflows/cpp-tests.yml'
       - 'cpp/**'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
     paths:
       - '.github/workflows/cpp-tests.yml'
       - 'cpp/**'

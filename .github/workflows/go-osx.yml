@@ -2,13 +2,13 @@ name: Go-OSX
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
     paths:
       - '.github/workflows/go-osx.yml'
       - 'cpp/**'
       - 'go/**'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
     paths:
       - '.github/workflows/go-osx.yml'
       - 'cpp/**'
