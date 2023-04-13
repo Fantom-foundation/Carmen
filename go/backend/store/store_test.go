@@ -277,6 +277,7 @@ func TestStoreSnapshotRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create snapshot; %s", err)
 			}
+			defer snapshot1.Release()
 			snapshot1data := snapshot1.GetData()
 
 			store2 := factory.getStore(t.TempDir())
@@ -329,7 +330,9 @@ func TestStoreSnapshotPartsNum(t *testing.T) {
 					t.Errorf("unexpected amount of snapshot parts: %d (expected %d) i=%d", snapshot.GetNumParts(), expectedPagesCount, i)
 				}
 
-				_ = snapshot.Release()
+				if err := snapshot.Release(); err != nil {
+					t.Fatalf("failed to release snapshot; %s", err)
+				}
 			}
 		})
 	}
@@ -377,6 +380,10 @@ func TestStoreSnapshotRecoveryOverriding(t *testing.T) {
 			err = store2.Restore(snapshot1data)
 			if err != nil {
 				t.Fatalf("failed to recover snapshot; %s", err)
+			}
+
+			if err := snapshot1.Release(); err != nil {
+				t.Errorf("failed to release a snapshot; %s", err)
 			}
 
 			for i := 0; i < PoolSize*2; i++ {

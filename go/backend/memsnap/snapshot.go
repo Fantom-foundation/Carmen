@@ -86,6 +86,9 @@ func (s *SnapshotSource) ReleasePreviousSnapshot() {
 
 // Release the snapshot data
 func (s *SnapshotSource) Release() error {
+	if s.prevSource != nil {
+		return fmt.Errorf("unable to release snapshot - older snapshot must be released first")
+	}
 	s.nextSource.ReleasePreviousSnapshot()
 	return nil
 }
