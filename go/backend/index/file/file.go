@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -25,6 +26,8 @@ const (
 	pagePoolSize      = 1 << 17
 
 	uint32ByteSize = 4
+
+	bulkInsertKeysNum = 1 << 25 // the number of keys that are accumulated while snapshot restoration before they are actually inserted. Approx 1GB, depends on key size.
 )
 
 // Index is a file implementation of index.Index. It uses common.LinearHashMap to store key-identifier pairs.
@@ -135,29 +138,76 @@ func (m *Index[K, I]) GetOrAdd(key K) (val I, err error) {
 		return
 	}
 	if !exists {
-		val = m.maxIndex
-		m.maxIndex += 1 // increment to next index
-
-		// commit hash for the snapshot block height window
-		keysPerPart := I(index.GetKeysPerPart(m.keySerializer))
-		if val%keysPerPart == 0 {
-			hash, err := m.GetStateHash()
-			if err != nil {
-				return val, err
-			}
-			if err := m.hashes.Set(val/keysPerPart, hash); err != nil {
-				return val, err
-			}
-		}
-
-		if err := m.keys.Set(val, key); err != nil {
+		if err := m.add(key); err != nil {
 			return val, err
 		}
-
-		m.hashIndex.AddKey(key)
 	}
 
 	return val, nil
+}
+
+// keyTuple is a helper structure that contains the key, its bucket and the index where the key belongs to.
+// It is used for sorting the keys before doing their bulk insert
+type keyTuple[K comparable, I common.Identifier] struct {
+	key    K
+	bucket uint
+	index  I
+}
+
+// bulkInsert inserts many keys. It sorts the keys by their hash bucked ID first, and add them in the index next.
+// It should reduce page misses when adding keys into the backend linear hash map.
+// This method does not check existence of the input keys, it expects they do not exist
+func (m *Index[K, I]) bulkInsert(keys []K) error {
+	tuples := make([]keyTuple[K, I], 0, len(keys))
+	for idx, key := range keys {
+		tuples = append(tuples, keyTuple[K, I]{key, m.table.GetBucketId(&key), m.maxIndex + I(idx)})
+	}
+
+	// store values for snapshot using the original order
+	for _, key := range keys {
+		if err := m.add(key); err != nil {
+			return err
+		}
+	}
+
+	// sort by bucketIds before inserting into LinearHash for better performance
+	sort.Slice(tuples, func(i, j int) bool {
+		return tuples[i].bucket < tuples[j].bucket
+	})
+
+	// insert keys sorted by bucketIds
+	for _, tuple := range tuples {
+		if err := m.table.Put(tuple.key, tuple.index); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Index[K, I]) add(key K) error {
+	val := m.maxIndex
+	m.maxIndex += 1 // increment to next index
+
+	// commit hash for the snapshot block height window
+	keysPerPart := I(index.GetKeysPerPart(m.keySerializer))
+	if val%keysPerPart == 0 {
+		hash, err := m.GetStateHash()
+		if err != nil {
+			return err
+		}
+		if err := m.hashes.Set(val/keysPerPart, hash); err != nil {
+			return err
+		}
+	}
+
+	if err := m.keys.Set(val, key); err != nil {
+		return err
+	}
+
+	m.hashIndex.AddKey(key)
+
+	return nil
 }
 
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists.
@@ -266,6 +316,7 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	m.hashIndex.Clear()
 	m.maxIndex = 0
 
+	keysBuffer := make([]K, 0, bulkInsertKeysNum)
 	for j := 0; j < snapshot.GetNumParts(); j++ {
 		part, err := snapshot.GetPart(j)
 		if err != nil {
@@ -276,9 +327,21 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 			return fmt.Errorf("invalid part format encountered")
 		}
 		for _, key := range indexPart.GetKeys() {
-			if _, err := m.GetOrAdd(key); err != nil {
-				return err
+			keysBuffer = append(keysBuffer, key)
+			// flush when needed
+			if len(keysBuffer) == bulkInsertKeysNum {
+				if err := m.bulkInsert(keysBuffer); err != nil {
+					return err
+				}
+				keysBuffer = keysBuffer[0:0]
 			}
+		}
+	}
+
+	// flush remaining keys
+	if len(keysBuffer) > 0 {
+		if err := m.bulkInsert(keysBuffer); err != nil {
+			return err
 		}
 	}
 

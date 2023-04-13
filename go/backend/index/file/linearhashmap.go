@@ -38,7 +38,7 @@ func NewLinearHashMap[K comparable, V comparable](pageCapacity, numBuckets, size
 
 // Put assigns the value to the input key.
 func (h *LinearHashMap[K, V]) Put(key K, value V) error {
-	bucketId := h.GetBucketId(key)
+	bucketId := h.GetBucketId(&key)
 	bucket := h.pageList(bucketId)
 	beforeSize := bucket.Size()
 
@@ -56,7 +56,7 @@ func (h *LinearHashMap[K, V]) Put(key K, value V) error {
 
 // Get returns value associated to the input key.
 func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
-	bucketId := h.GetBucketId(key)
+	bucketId := h.GetBucketId(&key)
 	bucket := h.pageList(bucketId)
 	value, exists, err = bucket.Get(key)
 	return
@@ -66,7 +66,7 @@ func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool, err error) {
 // when the key is not stored yet.
 // It returns true if the key was present, or false otherwise.
 func (h *LinearHashMap[K, V]) GetOrAdd(key K, val V) (value V, exists bool, err error) {
-	bucketId := h.GetBucketId(key)
+	bucketId := h.GetBucketId(&key)
 	bucket := h.pageList(bucketId)
 	value, exists, err = bucket.GetOrAdd(key, val)
 	if err != nil {
@@ -93,7 +93,7 @@ func (h *LinearHashMap[K, V]) ForEach(callback func(K, V)) error {
 
 // Remove deletes the key from the map and returns whether an element was removed.
 func (h *LinearHashMap[K, V]) Remove(key K) (bool, error) {
-	bucketId := h.GetBucketId(key)
+	bucketId := h.GetBucketId(&key)
 	bucket := h.pageList(bucketId)
 	exists, err := bucket.Remove(key)
 	if err != nil {

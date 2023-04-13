@@ -18,17 +18,21 @@ func TestLinearHashBitMask(t *testing.T) {
 func TestLinearHashGetBucketId(t *testing.T) {
 	h := NewLinearHashBase[uint32, uint32](3, directHash{}, Uint32Comparator{})
 
-	if bucket := h.GetBucketId(uint32(0)); bucket != 0 {
+	key0 := uint32(0)
+	if bucket := h.GetBucketId(&key0); bucket != 0 {
 		t.Errorf("wrong bucket: %d", bucket)
 	}
-	if bucket := h.GetBucketId(uint32(1)); bucket != 1 {
+	key1 := uint32(1)
+	if bucket := h.GetBucketId(&key1); bucket != 1 {
 		t.Errorf("wrong bucket: %d", bucket)
 	}
-	if bucket := h.GetBucketId(uint32(2)); bucket != 2 {
+	key2 := uint32(2)
+	if bucket := h.GetBucketId(&key2); bucket != 2 {
 		t.Errorf("wrong bucket: %d", bucket)
 	}
 	// 3 = (bin) 11, unset top bit -> 01
-	if bucket := h.GetBucketId(uint32(3)); bucket != 1 {
+	key3 := uint32(3)
+	if bucket := h.GetBucketId(&key3); bucket != 1 {
 		t.Errorf("wrong bucket: %d", bucket)
 	}
 }
