@@ -12,18 +12,11 @@
 #include "backend/store/file/store.h"
 #include "backend/store/leveldb/store.h"
 #include "backend/store/memory/store.h"
+#include "state/configuration.h"
 
 namespace carmen {
 
 constexpr const std::size_t kPageSize = 1 << 12;  // 4 KiB
-
-#define Schema                                                    \
-  template <template <typename K, typename V> class IndexType,    \
-            template <typename K, typename V> class StoreType,    \
-            template <typename K> class DepotType,                \
-            template <typename K, typename V> class MultiMapType, \
-            typename ArchiveType>                                 \
-  class
 
 // ----------------------------------------------------------------------------
 //                         In-Memory Configuration
@@ -41,9 +34,9 @@ using InMemoryDepot = backend::depot::InMemoryDepot<K>;
 template <typename K, typename V>
 using InMemoryMultiMap = backend::multimap::InMemoryMultiMap<K, V>;
 
-template <Schema State, Archive Archive>
-using InMemoryState = State<InMemoryIndex, InMemoryStore, InMemoryDepot,
-                            InMemoryMultiMap, Archive>;
+template <Archive Archive>
+using InMemoryConfig = Configuration<InMemoryIndex, InMemoryStore,
+                                     InMemoryDepot, InMemoryMultiMap, Archive>;
 
 // ----------------------------------------------------------------------------
 //                         File-Based Configuration
@@ -60,9 +53,10 @@ using FileBasedStore =
 template <typename K>
 using FileBasedDepot = backend::depot::FileDepot<K>;
 
-template <Schema State, Archive Archive>
-using FileBasedState = State<FileBasedIndex, FileBasedStore, FileBasedDepot,
-                             InMemoryMultiMap, Archive>;
+template <Archive Archive>
+using FileBasedConfig =
+    Configuration<FileBasedIndex, FileBasedStore, FileBasedDepot,
+                  InMemoryMultiMap, Archive>;
 
 // ----------------------------------------------------------------------------
 //                         LevelDB-Based Configuration
@@ -78,10 +72,9 @@ using LevelDbBasedStore = backend::store::LevelDbStore<K, V, kPageSize>;
 template <typename K>
 using LevelDbBasedDepot = backend::depot::LevelDbDepot<K>;
 
-template <Schema State, Archive Archive>
-using LevelDbBasedState = State<LevelDbBasedIndex, LevelDbBasedStore,
-                                LevelDbBasedDepot, InMemoryMultiMap, Archive>;
-
-#undef Schema
+template <Archive Archive>
+using LevelDbBasedConfig =
+    Configuration<LevelDbBasedIndex, LevelDbBasedStore, LevelDbBasedDepot,
+                  InMemoryMultiMap, Archive>;
 
 }  // namespace carmen
