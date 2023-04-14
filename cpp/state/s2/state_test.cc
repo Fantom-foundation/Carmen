@@ -34,9 +34,9 @@ using ::testing::StatusIs;
 using TestArchive = archive::leveldb::LevelDbArchive;
 
 using StateConfigurations =
-    ::testing::Types<InMemoryState<State, TestArchive>,
-                     FileBasedState<State, TestArchive>,
-                     LevelDbBasedState<State, TestArchive>>;
+    ::testing::Types<State<InMemoryConfig<TestArchive>>,
+                     State<FileBasedConfig<TestArchive>>,
+                     State<LevelDbBasedConfig<TestArchive>>>;
 
 INSTANTIATE_TYPED_TEST_SUITE_P(Schema_2, StateTest, StateConfigurations);
 
@@ -54,8 +54,10 @@ using MockDepot = backend::depot::MockDepot<K>;
 template <typename K, typename V>
 using MockMultiMap = backend::multimap::MockMultiMap<K, V>;
 
-using MockState =
-    State<MockIndex, MockStore, MockDepot, MockMultiMap, MockArchive>;
+using MockConfig =
+    Configuration<MockIndex, MockStore, MockDepot, MockMultiMap, MockArchive>;
+
+using MockState = State<MockConfig>;
 
 // A test fixture for the State class. It provides a State instance with
 // mocked dependencies. The dependencies are exposed through getters.

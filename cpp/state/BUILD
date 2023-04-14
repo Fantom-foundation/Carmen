@@ -68,12 +68,24 @@ cc_test(
 )
 
 cc_library(
+    name = "configuration",
+    hdrs = ["configuration.h"],
+    visibility = [
+        "//state:__subpackages__",
+    ],
+    deps = [
+        "//common:type",
+    ],
+)
+
+cc_library(
     name = "configurations",
     hdrs = ["configurations.h"],
     visibility = [
         "//state:__subpackages__",
     ],
     deps = [
+        ":configuration",
         "//archive",
         "//backend/depot/file:depot",
         "//backend/depot/leveldb:depot",

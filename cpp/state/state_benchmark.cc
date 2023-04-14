@@ -19,17 +19,17 @@ using Archive = archive::leveldb::LevelDbArchive;
 //    bazel run -c opt //state:state_benchmark
 
 // Defines the list of configurations to be benchmarked.
-BENCHMARK_TYPE_LIST(StateConfigList, (InMemoryState<s1::State, Archive>),
-                    (FileBasedState<s1::State, Archive>),
-                    (LevelDbBasedState<s1::State, Archive>),
+BENCHMARK_TYPE_LIST(StateConfigList, (s1::State<InMemoryConfig<Archive>>),
+                    (s1::State<FileBasedConfig<Archive>>),
+                    (s1::State<LevelDbBasedConfig<Archive>>),
 
-                    (InMemoryState<s2::State, Archive>),
-                    (FileBasedState<s2::State, Archive>),
-                    (LevelDbBasedState<s2::State, Archive>),
+                    (s2::State<InMemoryConfig<Archive>>),
+                    (s2::State<FileBasedConfig<Archive>>),
+                    (s2::State<LevelDbBasedConfig<Archive>>),
 
-                    (InMemoryState<s3::State, Archive>),
-                    (FileBasedState<s3::State, Archive>),
-                    (LevelDbBasedState<s3::State, Archive>));
+                    (s3::State<InMemoryConfig<Archive>>),
+                    (s3::State<FileBasedConfig<Archive>>),
+                    (s3::State<LevelDbBasedConfig<Archive>>));
 
 // Benchmarks the time it takes to open and close a state DB.
 template <typename State>

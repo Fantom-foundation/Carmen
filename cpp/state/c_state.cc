@@ -187,50 +187,25 @@ WorldState* OpenState(const std::filesystem::path& directory,
   return new WorldStateWrapper<State>(*std::move(state));
 }
 
-template <template <class Archive> class State>
+template <template <class A> class Config, template <typename C> class State>
 WorldState* Open(const std::filesystem::path& directory, ArchiveImpl archive) {
   switch (archive) {
     case kArchive_None:
       // We have no none-archive implementation, so we take the LevelDB one and
       // disable it.
-      return OpenState<State<archive::leveldb::LevelDbArchive>>(directory,
-                                                                false);
+      return OpenState<State<Config<archive::leveldb::LevelDbArchive>>>(
+          directory, false);
     case kArchive_LevelDb:
-      return OpenState<State<archive::leveldb::LevelDbArchive>>(directory,
-                                                                true);
+      return OpenState<State<Config<archive::leveldb::LevelDbArchive>>>(
+          directory, true);
     case kArchive_Sqlite:
-      return OpenState<State<archive::sqlite::SqliteArchive>>(directory, true);
+      return OpenState<State<Config<archive::sqlite::SqliteArchive>>>(directory,
+                                                                      true);
   }
   return nullptr;
 }
 
-#define Schema                                                    \
-  template <template <typename K, typename V> class IndexType,    \
-            template <typename K, typename V> class StoreType,    \
-            template <typename K> class DepotType,                \
-            template <typename K, typename V> class MultiMapType, \
-            typename ArchiveType>                                 \
-  class
-
-template <template <Schema S, class A> class State, Schema S>
-WorldState* Open(const std::filesystem::path& directory, ArchiveImpl archive) {
-  switch (archive) {
-    case kArchive_None:
-      // We have no none-archive implementation, so we take the LevelDB one and
-      // disable it.
-      return OpenState<State<S, archive::leveldb::LevelDbArchive>>(directory,
-                                                                   false);
-    case kArchive_LevelDb:
-      return OpenState<State<S, archive::leveldb::LevelDbArchive>>(directory,
-                                                                   true);
-    case kArchive_Sqlite:
-      return OpenState<State<S, archive::sqlite::SqliteArchive>>(directory,
-                                                                 true);
-  }
-  return nullptr;
-}
-
-template <template <Schema S, class A> class Config>
+template <template <class A> class Config>
 WorldState* Open(const std::filesystem::path& directory, std::uint8_t schema,
                  ArchiveImpl archive) {
   switch (schema) {
@@ -245,8 +220,6 @@ WorldState* Open(const std::filesystem::path& directory, std::uint8_t schema,
   return nullptr;
 }
 
-#undef Schema
-
 }  // namespace
 }  // namespace carmen
 
@@ -257,11 +230,11 @@ C_State Carmen_OpenState(C_Schema schema, StateImpl state, ArchiveImpl archive,
   std::string_view dir(directory, length);
   switch (state) {
     case kState_Memory:
-      return carmen::Open<carmen::InMemoryState>(dir, schema, archive);
+      return carmen::Open<carmen::InMemoryConfig>(dir, schema, archive);
     case kState_File:
-      return carmen::Open<carmen::FileBasedState>(dir, schema, archive);
+      return carmen::Open<carmen::FileBasedConfig>(dir, schema, archive);
     case kState_LevelDb:
-      return carmen::Open<carmen::LevelDbBasedState>(dir, schema, archive);
+      return carmen::Open<carmen::LevelDbBasedConfig>(dir, schema, archive);
   }
   return nullptr;
 }
