@@ -7,7 +7,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-// ReduceHashes computes the hash of a tee with the given branching factor
+// ReduceHashes computes the hash of a tree with the given branching factor
 // and numPages hashes on the leaf level. Hashes for leaves are fetched on
 // demand through the source function.
 func ReduceHashes(branchingFactor int, numPages int, source func(int) (common.Hash, error)) (common.Hash, error) {
