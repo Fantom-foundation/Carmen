@@ -1,5 +1,6 @@
 #include "common/hash.h"
 
+#include <bit>
 #include <sstream>
 #include <type_traits>
 
@@ -31,6 +32,10 @@ absl::flat_hash_map<std::string, std::string> GetKnownHashes() {
   res["abc"] =
       "0xba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
   return res;
+}
+
+TEST(BitCast, Test) {
+  EXPECT_EQ(std::bit_cast<std::uint16_t>(std::int16_t(12)), 12);
 }
 
 TEST(Sha256HashTest, TypeTraits) {
