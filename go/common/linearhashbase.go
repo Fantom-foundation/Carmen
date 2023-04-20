@@ -19,9 +19,9 @@ func NewLinearHashBase[K comparable, V any](numBuckets int, hasher Hasher[K], co
 }
 
 // GetBucketId compute collision bucket index for the input key and current number of buckets
-func (h *LinearHashBase[K, V]) GetBucketId(key K) uint {
+func (h *LinearHashBase[K, V]) GetBucketId(key *K) uint {
 	// get last bits of hash
-	hashedKey := h.hasher.Hash(&key)
+	hashedKey := h.hasher.Hash(key)
 	m := uint(hashedKey & ((1 << h.bits) - 1))
 	if m < h.numBuckets {
 		return m
@@ -53,7 +53,7 @@ func (h *LinearHashBase[K, V]) SplitEntries(bucketId uint, oldEntries []MapEntry
 	}
 
 	for _, entry := range oldEntries {
-		if h.GetBucketId(entry.Key) == bucketId {
+		if h.GetBucketId(&entry.Key) == bucketId {
 			entriesA = append(entriesA, entry)
 		} else {
 			entriesB = append(entriesB, entry)

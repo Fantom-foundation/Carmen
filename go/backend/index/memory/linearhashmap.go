@@ -41,7 +41,7 @@ func NewLinearHashMap[K comparable, V comparable](blockItems, numBuckets int, ha
 
 // Put assigns the value to the input key.
 func (h *LinearHashMap[K, V]) Put(key K, value V) {
-	bucketId := h.GetBucketId(key)
+	bucketId := h.GetBucketId(&key)
 	bucket := h.list[bucketId]
 	beforeSize := bucket.Size()
 
@@ -57,7 +57,7 @@ func (h *LinearHashMap[K, V]) Put(key K, value V) {
 
 // Get returns value associated to the input key.
 func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool) {
-	bucket := h.GetBucketId(key)
+	bucket := h.GetBucketId(&key)
 	value, exists = h.list[bucket].Get(key)
 	return
 }
@@ -66,7 +66,7 @@ func (h *LinearHashMap[K, V]) Get(key K) (value V, exists bool) {
 // when the key is not stored yet.
 // It returns true if the key was present, or false otherwise.
 func (h *LinearHashMap[K, V]) GetOrAdd(key K, val V) (value V, exists bool) {
-	bucket := h.GetBucketId(key)
+	bucket := h.GetBucketId(&key)
 	value, exists = h.list[bucket].GetOrAdd(key, val)
 	if !exists {
 		h.records += 1
@@ -84,7 +84,7 @@ func (h *LinearHashMap[K, V]) ForEach(callback func(K, V)) {
 
 // Remove deletes the key from the map and returns whether an element was removed.
 func (h *LinearHashMap[K, V]) Remove(key K) bool {
-	bucket := h.GetBucketId(key)
+	bucket := h.GetBucketId(&key)
 	exists := h.list[bucket].Remove(key)
 	if exists {
 		h.records -= 1
