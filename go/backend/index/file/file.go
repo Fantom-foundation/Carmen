@@ -138,9 +138,26 @@ func (m *Index[K, I]) GetOrAdd(key K) (val I, err error) {
 		return
 	}
 	if !exists {
-		if err := m.add(key); err != nil {
+		val = m.maxIndex
+		m.maxIndex += 1 // increment to next index
+
+		// commit hash for the snapshot block height window
+		keysPerPart := I(index.GetKeysPerPart(m.keySerializer))
+		if val%keysPerPart == 0 {
+			hash, err := m.GetStateHash()
+			if err != nil {
+				return val, err
+			}
+			if err := m.hashes.Set(val/keysPerPart, hash); err != nil {
+				return val, err
+			}
+		}
+
+		if err := m.keys.Set(val, key); err != nil {
 			return val, err
 		}
+
+		m.hashIndex.AddKey(key)
 	}
 
 	return val, nil
@@ -165,9 +182,10 @@ func (m *Index[K, I]) bulkInsert(keys []K) error {
 
 	// store values for snapshot using the original order
 	for _, key := range keys {
-		if err := m.add(key); err != nil {
+		if err := m.keys.Set(m.maxIndex, key); err != nil {
 			return err
 		}
+		m.maxIndex += 1 // increment to next index
 	}
 
 	// sort by bucketIds before inserting into LinearHash for better performance
@@ -181,31 +199,6 @@ func (m *Index[K, I]) bulkInsert(keys []K) error {
 			return err
 		}
 	}
-
-	return nil
-}
-
-func (m *Index[K, I]) add(key K) error {
-	val := m.maxIndex
-	m.maxIndex += 1 // increment to next index
-
-	// commit hash for the snapshot block height window
-	keysPerPart := I(index.GetKeysPerPart(m.keySerializer))
-	if val%keysPerPart == 0 {
-		hash, err := m.GetStateHash()
-		if err != nil {
-			return err
-		}
-		if err := m.hashes.Set(val/keysPerPart, hash); err != nil {
-			return err
-		}
-	}
-
-	if err := m.keys.Set(val, key); err != nil {
-		return err
-	}
-
-	m.hashIndex.AddKey(key)
 
 	return nil
 }
@@ -317,6 +310,7 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 	m.maxIndex = 0
 
 	keysBuffer := make([]K, 0, bulkInsertKeysNum)
+	var lastHash common.Hash
 	for j := 0; j < snapshot.GetNumParts(); j++ {
 		part, err := snapshot.GetPart(j)
 		if err != nil {
@@ -336,6 +330,21 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 				keysBuffer = keysBuffer[0:0]
 			}
 		}
+
+		// import proofs
+		proof, err := snapshot.GetProof(j)
+		if err != nil {
+			return err
+		}
+		indexProof, ok := proof.(*index.IndexProof)
+		if !ok {
+			return fmt.Errorf("invalid proof format encountered")
+		}
+		if err := m.hashes.Set(I(j), indexProof.GetBeforeHash()); err != nil {
+			return err
+		}
+
+		lastHash = indexProof.GetAfterHash()
 	}
 
 	// flush remaining keys
@@ -344,6 +353,16 @@ func (m *Index[K, I]) Restore(data backend.SnapshotData) error {
 			return err
 		}
 	}
+
+	// import the last hash only if the last part is full
+	keysPerPart := index.GetKeysPerPart(m.keySerializer)
+	if m.table.Size()%keysPerPart == 0 {
+		if err := m.hashes.Set(I(snapshot.GetNumParts()), lastHash); err != nil {
+			return err
+		}
+	}
+
+	m.hashIndex = indexhash.InitIndexHash[K](lastHash, m.keySerializer)
 
 	return nil
 }

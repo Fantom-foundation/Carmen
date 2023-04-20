@@ -46,6 +46,14 @@ func (p *IndexProof) ToBytes() []byte {
 	return res
 }
 
+func (p *IndexProof) GetBeforeHash() common.Hash {
+	return p.before
+}
+
+func (p *IndexProof) GetAfterHash() common.Hash {
+	return p.after
+}
+
 // ----------------------------------- Part -----------------------------------
 
 // maxBytesPerPart the approximate size aimed for per part.
