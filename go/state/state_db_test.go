@@ -2748,7 +2748,7 @@ func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	mock.EXPECT().Flush().Return(nil)
 	mock.EXPECT().GetHash().Return(common.Hash{}, nil)
 
-	load := db.StartBulkLoad()
+	load := db.StartBulkLoad(0)
 	load.CreateAccount(address1)
 	load.SetBalance(address1, big.NewInt(12))
 	load.SetNonce(address1, 14)
@@ -2756,6 +2756,89 @@ func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	load.SetCode(address1, code)
 
 	load.Close()
+}
+
+func TestCarmenThereCanBeMultipleBulkLoadPhases(t *testing.T) {
+	const N = 10
+
+	ctrl := gomock.NewController(t)
+	mock := prepareMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().createAccount(address1).Times(N).Return(nil)
+	mock.EXPECT().setNonce(address1, gomock.Any()).Times(N).Return(nil)
+	mock.EXPECT().Flush().Times(N).Return(nil)
+	mock.EXPECT().GetHash().Times(N).Return(common.Hash{}, nil)
+
+	for i := 0; i < N; i++ {
+		load := db.StartBulkLoad(uint64(i))
+		load.CreateAccount(address1)
+		load.SetNonce(address1, uint64(i))
+		if err := load.Close(); err != nil {
+			t.Errorf("bulk-insert failed: %v", err)
+		}
+	}
+}
+
+func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				dir := t.TempDir()
+				state, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				db := CreateStateDBUsing(state)
+				defer db.Close()
+
+				for i := 0; i < 10; i++ {
+					load := db.StartBulkLoad(uint64(i))
+					load.CreateAccount(address1)
+					load.SetNonce(address1, uint64(i))
+					if err := load.Close(); err != nil {
+						t.Errorf("bulk-insert failed: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				dir := t.TempDir()
+				state, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				db := CreateStateDBUsing(state)
+				defer db.Close()
+
+				for i := 0; i < 5; i++ {
+					// Run a bulk-load update (creates one block)
+					load := db.StartBulkLoad(uint64(i * 2))
+					load.CreateAccount(address1)
+					load.SetNonce(address1, uint64(i))
+					if err := load.Close(); err != nil {
+						t.Errorf("bulk-insert failed: %v", err)
+					}
+
+					// Run a regular block.
+					db.BeginBlock()
+					db.BeginTransaction()
+					if !db.Exist(address1) {
+						t.Errorf("account 1 should exist")
+					}
+					db.Suicide(address1)
+					db.EndTransaction()
+					db.EndBlock(uint64(i*2 + 1))
+				}
+			})
+		}
+	}
 }
 
 func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
@@ -3094,7 +3177,7 @@ func TestStateDBArchive(t *testing.T) {
 
 				stateDb.AddBalance(address2, big.NewInt(22))
 
-				bl := stateDb.StartBulkLoad()
+				bl := stateDb.StartBulkLoad(0)
 				bl.CreateAccount(address1)
 				bl.SetBalance(address1, big.NewInt(12))
 				if err := bl.Close(); err != nil {

@@ -73,8 +73,10 @@ type StateDB interface {
 
 	// StartBulkLoad initiates a bulk load operation by-passing internal caching and
 	// snapshot, transaction, block, or epoch handling to support faster initialization
-	// of StateDB instances. BulkLoads must not run while there open blocks.
-	StartBulkLoad() BulkLoad
+	// of StateDB instances. All updates of a bulk-load call are committed to the DB
+	// as a single block with the given block number. Bulk-loads may only be started
+	// outside the scope of any block.
+	StartBulkLoad(block uint64) BulkLoad
 
 	// GetArchiveStateDB provides a historical State view for given block.
 	GetArchiveStateDB(block uint64) (StateDB, error)
@@ -1103,10 +1105,9 @@ func (s *stateDB) Close() error {
 	return s.state.Close()
 }
 
-func (s *stateDB) StartBulkLoad() BulkLoad {
-	s.EndBlock(0)
+func (s *stateDB) StartBulkLoad(block uint64) BulkLoad {
 	s.storedDataCache.Clear()
-	return &bulkLoad{s.state, common.Update{}, 1, nil}
+	return &bulkLoad{s.state, common.Update{}, block, nil}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -1173,17 +1174,12 @@ func (s *stateDB) reset() {
 type bulkLoad struct {
 	state  State
 	update common.Update
-	blocks uint64
+	block  uint64
 	errs   []error
 }
 
-const maxBulkSize = 100_000 // 212 bulks for priming block 10M
-
 func (l *bulkLoad) CreateAccount(addr common.Address) {
 	l.update.AppendCreateAccount(addr)
-	if len(l.update.CreatedAccounts) >= maxBulkSize {
-		l.apply()
-	}
 }
 
 func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
@@ -1192,30 +1188,18 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
 	}
 	l.update.AppendBalanceUpdate(addr, newBalance)
-	if len(l.update.Balances) >= maxBulkSize {
-		l.apply()
-	}
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
 	l.update.AppendNonceUpdate(addr, common.ToNonce(value))
-	if len(l.update.Nonces) >= maxBulkSize {
-		l.apply()
-	}
 }
 
 func (l *bulkLoad) SetState(addr common.Address, key common.Key, value common.Value) {
 	l.update.AppendSlotUpdate(addr, key, value)
-	if len(l.update.Slots) >= maxBulkSize {
-		l.apply()
-	}
 }
 
 func (l *bulkLoad) SetCode(addr common.Address, code []byte) {
 	l.update.AppendCodeUpdate(addr, code)
-	if len(l.update.Codes) >= maxBulkSize {
-		l.apply()
-	}
 }
 
 func (l *bulkLoad) apply() {
@@ -1224,9 +1208,8 @@ func (l *bulkLoad) apply() {
 		l.errs = append(l.errs, err)
 		return
 	}
-	err := l.state.Apply(l.blocks, l.update)
+	err := l.state.Apply(l.block, l.update)
 	l.update = common.Update{}
-	l.blocks++
 	if err != nil {
 		l.errs = append(l.errs, err)
 	}
