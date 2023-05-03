@@ -3,12 +3,13 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
+	"sync"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"sync"
-	"unsafe"
 )
 
 type Archive struct {
@@ -200,9 +201,12 @@ func (a *Archive) getLastBlockSlow() (number uint64, hash common.Hash, err error
 	return 0, common.Hash{}, err
 }
 
-func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
+func (a *Archive) GetBlockHeight() (block uint64, empty bool, err error) {
 	block, _, err = a.getLastBlock()
-	return block, err
+	if err == leveldb.ErrNotFound {
+		return 0, true, nil
+	}
+	return block, false, err
 }
 
 func (a *Archive) getStatus(block uint64, account common.Address) (exists bool, reincarnation int, err error) {

@@ -6,8 +6,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -367,9 +368,12 @@ func (a *Archive) getStatus(tx *sql.Tx, block uint64, account common.Address) (e
 	return false, 0, rows.Err()
 }
 
-func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
+func (a *Archive) GetBlockHeight() (block uint64, empty bool, err error) {
 	block, _, err = a.getLastBlock(nil)
-	return block, err
+	if err == ErrNoLastBlock {
+		return 0, true, nil
+	}
+	return block, false, err
 }
 
 func (a *Archive) getLastBlock(tx *sql.Tx) (number uint64, hash common.Hash, err error) {

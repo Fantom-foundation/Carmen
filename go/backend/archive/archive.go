@@ -1,8 +1,9 @@
 package archive
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // An Archive retains a history of state mutations in a blockchain on a
@@ -16,8 +17,8 @@ type Archive interface {
 	// Add adds the changes of the given block to this archive.
 	Add(block uint64, update common.Update) error
 
-	// GetLastBlockHeight gets the maximum block height inserted so far, returns 0 if there is none.
-	GetLastBlockHeight() (block uint64, err error)
+	// GetBlockHeight gets the maximum block height inserted so far, returns 0 if empty.
+	GetBlockHeight() (block uint64, empty bool, err error)
 
 	// Exists allows to fetch a historic existence status of a given account.
 	Exists(block uint64, account common.Address) (exists bool, err error)

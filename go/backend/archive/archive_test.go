@@ -3,12 +3,13 @@ package archive_test
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"io"
-	"testing"
 )
 
 type archiveFactory struct {
@@ -62,6 +63,50 @@ func (w *ldbArchiveWrapper) Close() error {
 var (
 	addr1 = common.Address{0x01}
 )
+
+func TestEmptyArchiveReportsZeroAsBlockHeight(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+			if got, empty, err := a.GetBlockHeight(); got != 0 || !empty || err != nil {
+				t.Errorf("expected block height of 0 for empty archive, got %d (empty: %v, error: %v)", got, empty, err)
+			}
+		})
+	}
+}
+
+func TestNextBlockNumbersAreUpdated(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			want := uint64(0)
+			if got, empty, err := a.GetBlockHeight(); got != want || !empty || err != nil {
+				t.Errorf("invalid block height, wanted %d, got %d (empty: %v, error: %v)", want, got, empty, err)
+			}
+
+			a.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+			})
+
+			want = 0
+			if got, empty, err := a.GetBlockHeight(); got != want || empty || err != nil {
+				t.Errorf("invalid block height, wanted %d, got %d (empty: %v, error: %v)", want, got, empty, err)
+			}
+
+			a.Add(5, common.Update{
+				DeletedAccounts: []common.Address{addr1},
+			})
+
+			want = 5
+			if got, empty, err := a.GetBlockHeight(); got != want || empty || err != nil {
+				t.Errorf("invalid block height, wanted %d, got %d (empty: %v, error: %v)", want, got, empty, err)
+			}
+		})
+	}
+}
 
 func TestAddGet(t *testing.T) {
 	for _, factory := range getArchiveFactories(t) {
@@ -134,8 +179,8 @@ func TestAddGet(t *testing.T) {
 				t.Errorf("unexpected value at block 6: %x; %s", value, err)
 			}
 
-			if lastBlock, err := a.GetLastBlockHeight(); err != nil || lastBlock != 5 {
-				t.Errorf("unexpected last block height: %d; %s", lastBlock, err)
+			if lastBlock, empty, err := a.GetBlockHeight(); err != nil || lastBlock != 5 || empty {
+				t.Errorf("unexpected last block height: %d; empty: %v; err: %s", lastBlock, empty, err)
 			}
 			if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "9834327080d1ead8544edff892ae26c6fe0640dc13ded9c15338721081490b04" {
 				t.Errorf("unexpected hash of block 1: %x; %s", hash, err)
