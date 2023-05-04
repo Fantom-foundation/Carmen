@@ -291,10 +291,9 @@ class PathIterator {
 template <typename K, typename V>
 class MerklePatriciaTrieForrest {
  public:
-  void Set(NodeId& root, const K& key, const V& value) {
+  bool Set(NodeId& root, const K& key, const V& value) {
     if (value == V{}) {
-      Remove(root, key);
-      return;
+      return Remove(root, key);
     }
 
     PathIterator iter(ToBitset(key));
@@ -305,15 +304,18 @@ class MerklePatriciaTrieForrest {
         *cur = NodeId::Leaf(newId);
         leaf.get().path = iter.GetRemaining();
         leaf.get().value = value;
-        return;
+        return true;
       } else if (cur->IsLeaf()) {
         // If the leaf is the value to be updated, do so.
         const NodeId leafId = *cur;
         auto& leaf = leafs_.Get(cur->GetIndex());
         auto remaining = iter.GetRemaining();
         if (leaf.path == remaining) {
-          leaf.value = value;
-          return;
+          if (leaf.value != value) {
+            leaf.value = value;
+            return true;
+          }
+          return false;
         }
 
         // Check whether an extension node can be inserted.
@@ -456,33 +458,35 @@ class MerklePatriciaTrieForrest {
     return {count, nullptr};
   }
 
-  void Remove(NodeId& root, const K& key) {
+  bool Remove(NodeId& root, const K& key) {
     PathIterator iter(ToBitset(key));
-    Remove(root, iter);
+    return Remove(&root, iter);
   }
 
-  void Remove(NodeId& cur, PathIterator<sizeof(K) * 8>& iter) {
-    if (cur.IsEmpty()) {
+  bool Remove(NodeId* cur, PathIterator<sizeof(K) * 8>& iter) {
+    if (cur->IsEmpty()) {
       // nothing to do
-    } else if (cur.IsLeaf()) {
+      return false;
+    } else if (cur->IsLeaf()) {
       // If the leaf is the value to be updated, do so.
-      auto& leaf = leafs_.Get(cur.GetIndex());
+      auto& leaf = leafs_.Get(cur->GetIndex());
       auto remaining = iter.GetRemaining();
       if (leaf.path != remaining) {
-        return;  // Not the target, nothing to do.
+        return false;  // Not the target, nothing to do.
       }
 
       // This leaf needs to be removed from the tree.
-      leafs_.ReleaseNode(cur.GetIndex());
-      cur = NodeId::Empty();
+      leafs_.ReleaseNode(cur->GetIndex());
+      *cur = NodeId::Empty();
+      return true;
 
-    } else if (cur.IsBranch()) {
-      Branch& branch = branches_.Get(cur.GetIndex());
+    } else if (cur->IsBranch()) {
+      Branch& branch = branches_.Get(cur->GetIndex());
       NodeId& next = branch.children[iter.Next().ToUint()];
-      Remove(next, iter);
+      bool changed = Remove(&next, iter);
 
-      if (!next.IsEmpty()) {
-        return;
+      if (!changed || !next.IsEmpty()) {
+        return changed;
       }
 
       // Check whether there are at least 2 remaining non-empty children.
@@ -490,13 +494,13 @@ class MerklePatriciaTrieForrest {
       for (std::size_t i = 0; i < branch.children.size(); i++) {
         if (!branch.children[i].IsEmpty()) {
           if (childPosition.has_value()) {
-            return;
+            return true;
           }
           childPosition = i;
         }
       }
 
-      auto branchId = cur;
+      auto branchId = *cur;
 
       // If the child node is a leaf, replace the branch node with an extended
       // leaf node.
@@ -504,58 +508,60 @@ class MerklePatriciaTrieForrest {
       if (childId.IsLeaf()) {
         auto& leaf = leafs_.Get(childId.GetIndex());
         leaf.path.Prepend(*childPosition);
-        cur = childId;
+        *cur = childId;
 
       } else if (childId.IsExtension()) {
         auto& extension = extensions_.Get(childId.GetIndex());
         extension.path.Prepend(*childPosition);
-        cur = childId;
+        *cur = childId;
 
       } else {
         // Replace the branch node by a new extension node.
         auto [newId, extension] = extensions_.NewNode();
-        cur = NodeId::Extension(newId);
+        *cur = NodeId::Extension(newId);
         extension.get().next = branch.children[*childPosition];
         extension.get().path = PathSegment<sizeof(K) * 8>(*childPosition);
       }
 
       branches_.ReleaseNode(branchId.GetIndex());
+      return true;
 
-    } else if (cur.IsExtension()) {
-      auto& extension = extensions_.Get(cur.GetIndex());
+    } else if (cur->IsExtension()) {
+      auto& extension = extensions_.Get(cur->GetIndex());
       auto remaining = iter.GetRemaining();
       if (!extension.path.IsPrefixOf(remaining)) {
-        return;
+        return false;
       }
 
       iter.Skip(extension.path.GetLength());
 
       NodeId& next = extension.next;
-      Remove(next, iter);
+      bool changed = Remove(&next, iter);
 
       if (next.IsBranch()) {
-        return;
+        return changed;
       }
-      auto extensionId = cur;
+      auto extensionId = *cur;
       if (next.IsLeaf()) {
         auto& leaf = leafs_.Get(next.GetIndex());
         leaf.path.Prepend(extension.path);
-        cur = next;
+        *cur = next;
 
       } else if (next.IsExtension()) {
         auto& child = extensions_.Get(next.GetIndex());
         child.path.Prepend(extension.path);
-        cur = next;
+        *cur = next;
 
       } else {
         assert(false &&
                "Unexpected next node of extension node after element deletion");
       }
       extensions_.ReleaseNode(extensionId.GetIndex());
-
+      return true;
     } else {
       assert(false && "Unsupported node type");
     }
+    return false;
   }
 
   void Dump(NodeId cur, std::string prefix) const {
@@ -664,7 +670,7 @@ class MerklePatriciaTrieForrest {
 template <typename K, typename V>
 class MerklePatriciaTrie {
  public:
-  void Set(const K& key, const V& value) { forrest_.Set(root_, key, value); }
+  bool Set(const K& key, const V& value) { return forrest_.Set(root_, key, value); }
 
   V Get(const K& key) const { return forrest_.Get(root_, key); }
 

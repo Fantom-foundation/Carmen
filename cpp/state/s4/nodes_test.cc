@@ -216,32 +216,43 @@ TEST(PathIterator, EnumeratesNibblesInOrder) {
 TEST(MerklePatriciaTrie, SetAndRetrieve) {
   MerklePatriciaTrie<std::uint64_t, int> trie;
   EXPECT_THAT(trie.Get(12), Eq(0));
-  trie.Set(12, 14);
+  EXPECT_TRUE(trie.Set(12, 14));
   EXPECT_THAT(trie.Get(12), Eq(14));
 }
 
 TEST(MerklePatriciaTrie, ValuesCanBeUpdated) {
   MerklePatriciaTrie<std::uint64_t, int> trie;
   EXPECT_THAT(trie.Get(12), Eq(0));
-  trie.Set(12, 14);
+  EXPECT_TRUE(trie.Set(12, 14));
   EXPECT_THAT(trie.Get(12), Eq(14));
-  trie.Set(12, 16);
+  EXPECT_TRUE(trie.Set(12, 16));
   EXPECT_THAT(trie.Get(12), Eq(16));
 
-  trie.Set(10, 10);
+  EXPECT_TRUE(trie.Set(10, 10));
   EXPECT_THAT(trie.Get(12), Eq(16));
 
-  trie.Set(12, 18);
+  EXPECT_TRUE(trie.Set(12, 18));
   EXPECT_THAT(trie.Get(12), Eq(18));
+}
+
+TEST(MerklePatriciaTrie, SetReturnsWhetherTrieWasAltered) {
+  MerklePatriciaTrie<std::uint64_t, int> trie;
+  EXPECT_TRUE(trie.Set(12, 14));
+  EXPECT_FALSE(trie.Set(12, 14));
+  EXPECT_TRUE(trie.Set(10, 16));
+  EXPECT_FALSE(trie.Set(10, 16));
+  EXPECT_FALSE(trie.Set(8, 0));
+  EXPECT_TRUE(trie.Set(8, 10));
+  EXPECT_TRUE(trie.Set(8, 0));
 }
 
 TEST(MerklePatriciaTrie, SetAndRetrieveMultipleElements) {
   MerklePatriciaTrie<std::uint64_t, int> trie;
   EXPECT_THAT(trie.Get(12), Eq(0));
   EXPECT_THAT(trie.Get(14), Eq(0));
-  trie.Set(12, 14);
-  trie.Set(1 << 20, 20);
-  trie.Set(14, 16);
+  EXPECT_TRUE(trie.Set(12, 14));
+  EXPECT_TRUE(trie.Set(1 << 20, 20));
+  EXPECT_TRUE(trie.Set(14, 16));
   EXPECT_THAT(trie.Get(12), Eq(14));
   EXPECT_THAT(trie.Get(14), Eq(16));
   EXPECT_THAT(trie.Get(1 << 20), Eq(20));
@@ -249,7 +260,7 @@ TEST(MerklePatriciaTrie, SetAndRetrieveMultipleElements) {
 
 TEST(MerklePatriciaTrie, RandomInsertAndFind) {
   std::vector<int> data(100);
-  std::iota(data.begin(), data.end(), 0);
+  std::iota(data.begin(), data.end(), 1);
 
   std::random_device rd;
   std::mt19937 g(rd());
@@ -259,7 +270,7 @@ TEST(MerklePatriciaTrie, RandomInsertAndFind) {
   EXPECT_OK(trie.Check());
   for (std::size_t i = 0; i < data.size(); i++) {
     int cur = data[i];
-    trie.Set(cur * 101, cur);
+    EXPECT_TRUE(trie.Set(cur * 101, cur));
     EXPECT_OK(trie.Check());
     for (std::size_t j = 0; j <= i; j++) {
       EXPECT_THAT(trie.Get(data[j] * 101), Eq(data[j]));
@@ -373,11 +384,11 @@ TEST(MerklePatriciaTrie, ExpansionNodesAreUsed) {
 TEST(MerklePatriciaTrie, DefaultValuesAreNotStored) {
   MerklePatriciaTrie<std::uint64_t, int> trie;
   EXPECT_THAT(trie.GetDepth(12), Eq(0));
-  trie.Set(12, 14);
+  EXPECT_TRUE(trie.Set(12, 14));
   EXPECT_OK(trie.Check());
   // trie.Dump();
   EXPECT_THAT(trie.GetDepth(12), Eq(1));
-  trie.Set(12, 0);
+  EXPECT_TRUE(trie.Set(12, 0));
   EXPECT_OK(trie.Check());
   // trie.Dump();
   EXPECT_THAT(trie.GetDepth(12), Eq(0));
@@ -387,13 +398,13 @@ TEST(MerklePatriciaTrie, DefaultValuesCollapseBranches) {
   MerklePatriciaTrie<std::uint64_t, int> trie;
   EXPECT_THAT(trie.GetDepth(12), Eq(0));
   EXPECT_THAT(trie.GetDepth(1 << 20), Eq(0));
-  trie.Set(12, 14);
-  trie.Set(1 << 20, 20);
+  EXPECT_TRUE(trie.Set(12, 14));
+  EXPECT_TRUE(trie.Set(1 << 20, 20));
   EXPECT_OK(trie.Check());
   // trie.Dump();
   EXPECT_THAT(trie.GetDepth(12), Eq(3));
   EXPECT_THAT(trie.GetDepth(1 << 20), Eq(3));
-  trie.Set(12, 0);
+  EXPECT_TRUE(trie.Set(12, 0));
   EXPECT_OK(trie.Check());
   // trie.Dump();
   EXPECT_THAT(trie.GetDepth(12), Eq(1));
@@ -402,7 +413,7 @@ TEST(MerklePatriciaTrie, DefaultValuesCollapseBranches) {
 
 TEST(MerklePatriciaTrie, RandomDelete) {
   std::vector<int> data(100);
-  std::iota(data.begin(), data.end(), 0);
+  std::iota(data.begin(), data.end(), 1);
 
   std::random_device rd;
   std::mt19937 g(rd());
@@ -410,7 +421,7 @@ TEST(MerklePatriciaTrie, RandomDelete) {
 
   MerklePatriciaTrie<std::uint64_t, int> trie;
   for (auto cur : data) {
-    trie.Set(cur * 101, cur);
+    EXPECT_TRUE(trie.Set(cur * 101, cur));
   }
   EXPECT_OK(trie.Check());
 
@@ -418,7 +429,7 @@ TEST(MerklePatriciaTrie, RandomDelete) {
     int cur = data[i];
     // Delete it twice, once present, once absend.
     for (int k = 0; k < 2; k++) {
-      trie.Set(cur * 101, 0);
+      EXPECT_THAT(trie.Set(cur * 101, 0), k==0);
       EXPECT_OK(trie.Check());
       for (std::size_t j = 0; j <= i; j++) {
         EXPECT_THAT(trie.Get(data[j] * 101), Eq(0));
