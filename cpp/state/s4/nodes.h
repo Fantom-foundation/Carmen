@@ -11,9 +11,11 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "absl/container/flat_hash_set.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
+#include "common/hash.h"
 
 namespace carmen::s4 {
 
@@ -133,6 +135,14 @@ class PathSegment {
       return false;
     }
     return other.path_ >> (other.length_ - length_) == path_;
+  }
+
+  template<typename Hasher>
+  void AppendTo(Hasher& hasher) const {
+    hasher.Ingest(length_);
+    for (int i = 0; i < length_; i++) {
+      hasher.Ingest(GetNibble(i));
+    }
   }
 
   bool operator==(const PathSegment&) const = default;
@@ -288,9 +298,22 @@ class PathIterator {
   std::uint16_t pos_;
 };
 
-template <typename K, typename V>
+template<Trivial T>
+struct TrivialValueHasher {
+  template<typename Hasher>
+  void operator()(Hasher& hasher, const T& value) const {
+    hasher.Ingest(value);
+  }
+};
+
+
+template <typename K, typename V, typename ValueHasher = TrivialValueHasher<V>>
 class MerklePatriciaTrieForrest {
  public:
+
+  MerklePatriciaTrieForrest(ValueHasher hasher = ValueHasher{}) 
+    : value_hasher_(std::move(hasher)) {}
+
   bool Set(NodeId& root, const K& key, const V& value) {
     if (value == V{}) {
       return Remove(root, key);
@@ -385,6 +408,10 @@ class MerklePatriciaTrieForrest {
   V Get(NodeId root, const K& key) const {
     auto [_, ptr] = GetInternal(root, key);
     return ptr == nullptr ? V{} : *ptr;
+  }
+
+  Hash GetHash(NodeId root) {
+    return GetHashInternal(root);
   }
 
   int GetDepth(NodeId root, const K& key) const {
@@ -564,6 +591,36 @@ class MerklePatriciaTrieForrest {
     return false;
   }
 
+  Hash GetHashInternal(NodeId cur) {
+    if (cur.IsEmpty()) {
+      return Hash{};
+    }
+    if (cur.IsLeaf()) {
+      const auto& leaf = leafs_.Get(cur.GetIndex());
+      Sha256Hasher hasher;
+      leaf.path.AppendTo(hasher);
+      value_hasher_(hasher, leaf.value);
+      return hasher.GetHash();
+    }
+    if (cur.IsBranch()) {
+      const auto& branch = branches_.Get(cur.GetIndex());
+      Sha256Hasher hasher;
+      for (int i=0; i<16; i++) {
+        hasher.Ingest(GetHashInternal(branch.children[i]));
+      }
+      return hasher.GetHash();
+    }
+    if (cur.IsExtension()) {
+      const auto& extension = extensions_.Get(cur.GetIndex());
+      Sha256Hasher hasher;
+      extension.path.AppendTo(hasher);
+      hasher.Ingest(GetHashInternal(extension.next));
+      return hasher.GetHash();
+    }
+    assert(false && "Unsupported node type");
+    return Hash{};
+  }
+
   void Dump(NodeId cur, std::string prefix) const {
     if (cur.IsEmpty()) {
       std::cout << prefix << "-empty-\n";
@@ -665,14 +722,19 @@ class MerklePatriciaTrieForrest {
   NodeContainer<Branch> branches_;
   NodeContainer<Extension<sizeof(K) * 8>> extensions_;
   NodeContainer<Leaf<sizeof(K) * 8, V>> leafs_;
+  ValueHasher value_hasher_;
 };
 
-template <typename K, typename V>
+template <typename K, typename V, typename ValueHasher = TrivialValueHasher<V>>
 class MerklePatriciaTrie {
  public:
+  MerklePatriciaTrie(ValueHasher hasher = {}) : forrest_(std::move(hasher)) {}
+
   bool Set(const K& key, const V& value) { return forrest_.Set(root_, key, value); }
 
   V Get(const K& key) const { return forrest_.Get(root_, key); }
+
+  Hash GetHash() { return forrest_.GetHash(root_); }
 
   int GetDepth(const K& key) const { return forrest_.GetDepth(root_, key); }
 
@@ -687,7 +749,7 @@ class MerklePatriciaTrie {
   }
 
  private:
-  MerklePatriciaTrieForrest<K, V> forrest_;
+  MerklePatriciaTrieForrest<K, V, ValueHasher> forrest_;
   NodeId root_ = NodeId::Empty();
 };
 

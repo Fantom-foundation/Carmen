@@ -6,6 +6,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/container/flat_hash_set.h"
 #include "archive/archive.h"
 #include "backend/structure.h"
 #include "common/account_state.h"
@@ -114,6 +115,10 @@ class State {
     Hash code_hash{};
     NodeId state = NodeId::Empty();
 
+    // TODO: this is a copy of the information stored in the values_ forrest.
+    // Consider removing it to safe a bit of disk space.
+    Hash state_hash{};
+
     bool operator==(const Account&) const = default;
 
     friend std::ostream& operator<<(std::ostream& out, const Account& account) {
@@ -122,15 +127,28 @@ class State {
     }
   };
 
+  struct AccountHasher {
+    template<typename Hasher>
+    void operator()(Hasher& hasher, const Account& account) const {
+      hasher.template Ingest<std::uint8_t>(account.exists ? 1 : 0);
+      hasher.Ingest(account.nonce);
+      hasher.Ingest(account.balance);
+      hasher.Ingest(account.code_hash);
+      // account.state deliberately skipped!
+      hasher.Ingest(account.state_hash);
+    }
+  };
+
+
   // Make the state constructor protected to prevent direct instantiation. The
   // state should be created by calling the static Open method. This allows
   // the state to be mocked in tests.
-  State(MerklePatriciaTrie<Address, Account> accounts,
+  State(MerklePatriciaTrie<Address, Account, AccountHasher> accounts,
         MerklePatriciaTrieForrest<Key, Value> values,
         std::unique_ptr<Archive> archive);
 
   // A single trie storing all accounts.
-  MerklePatriciaTrie<Address, Account> accounts_;
+  MerklePatriciaTrie<Address, Account, AccountHasher> accounts_;
 
   // A forrest of tries storing account values.
   MerklePatriciaTrieForrest<Key, Value> values_;
@@ -140,6 +158,9 @@ class State {
 
   // A pointer to the optionally included archive.
   std::unique_ptr<Archive> archive_;
+
+  // A set of accounts that need to be re-hashed.
+  absl::flat_hash_set<Address> dirty_accounts_;
 };
 
 // ----------------------------- Definitions ----------------------------------
@@ -152,7 +173,7 @@ absl::StatusOr<State<Config>> State<Config>::Open(
     const std::filesystem::path& dir, bool with_archive) {
   backend::Context context;
 
-  MerklePatriciaTrie<Address, Account> accounts;
+  MerklePatriciaTrie<Address, Account, AccountHasher> accounts;
   MerklePatriciaTrieForrest<Key, Value> values;
 
   std::unique_ptr<Archive> archive;
@@ -165,7 +186,7 @@ absl::StatusOr<State<Config>> State<Config>::Open(
 }
 
 template <typename Config>
-State<Config>::State(MerklePatriciaTrie<Address, Account> accounts,
+State<Config>::State(MerklePatriciaTrie<Address, Account, AccountHasher> accounts,
                      MerklePatriciaTrieForrest<Key, Value> values,
                      std::unique_ptr<Archive> archive)
     : accounts_(std::move(accounts)),
@@ -178,7 +199,9 @@ absl::Status State<Config>::CreateAccount(const Address& address) {
   RETURN_IF_ERROR(DeleteAccount(address));
   Account account;
   account.exists = true;
-  accounts_.Set(address, account);
+  if (accounts_.Set(address, account)) {
+    dirty_accounts_.insert(address);
+  }
   return absl::OkStatus();
 }
 
@@ -202,6 +225,7 @@ absl::Status State<Config>::DeleteAccount(const Address& address) {
   values_.RemoveTree(account.state);
   // TODO: remove code?
   accounts_.Set(address, Account{});
+  dirty_accounts_.erase(address);
   return absl::OkStatus();
 }
 
@@ -215,7 +239,9 @@ template <typename Config>
 absl::Status State<Config>::SetBalance(const Address& address, Balance value) {
   Account account = accounts_.Get(address);
   account.balance = value;
-  accounts_.Set(address, account);
+  if (accounts_.Set(address, account)) {
+    dirty_accounts_.insert(address);
+  }
   return absl::OkStatus();
 }
 
@@ -228,7 +254,9 @@ template <typename Config>
 absl::Status State<Config>::SetNonce(const Address& address, Nonce value) {
   Account account = accounts_.Get(address);
   account.nonce = value;
-  accounts_.Set(address, account);
+  if (accounts_.Set(address, account)) {
+    dirty_accounts_.insert(address);
+  }
   return absl::OkStatus();
 }
 
@@ -236,15 +264,6 @@ template <typename Config>
 absl::StatusOr<Value> State<Config>::GetStorageValue(const Address& address,
                                                      const Key& key) const {
   NodeId root = accounts_.Get(address).state;
-  /*
-    std::stringstream buffer;
-    buffer << key;
-    if (buffer.str() ==
-    "0xc65a7bb8d6351c1cf70c95a316cc6a92839c986682d98bc35f958f4883fa2d0d") {
-      values_.Dump(root);
-      std::cout << values_.Check(root) << std::endl;
-    }
-  */
   return values_.Get(root, key);
 }
 
@@ -254,7 +273,9 @@ absl::Status State<Config>::SetStorageValue(const Address& address,
                                             const Value& value) {
   Account account = accounts_.Get(address);
   NodeId root = account.state;
-  values_.Set(root, key, value);
+  if (values_.Set(root, key, value)) {
+    dirty_accounts_.insert(address);
+  }
   if (root != account.state) {
     account.state = root;
     accounts_.Set(address, account);
@@ -286,7 +307,9 @@ absl::Status State<Config>::SetCode(const Address& address,
   codes_[code_hash] = code;
   account.exists = true;
   account.code_hash = code_hash;
-  accounts_.Set(address, account);
+  if (accounts_.Set(address, account)) {
+    dirty_accounts_.insert(address);
+  }
   return absl::OkStatus();
 }
 
@@ -348,7 +371,15 @@ absl::Status State<Config>::ApplyToState(const Update& update) {
 
 template <typename Config>
 absl::StatusOr<Hash> State<Config>::GetHash() {
-  return absl::UnimplementedError("hashes are not supported yet");
+  // Update state trie hash of all dirty accounts.
+  for (const auto& addr : dirty_accounts_) {
+    auto account = accounts_.Get(addr);
+    account.state_hash = values_.GetHash(account.state);
+  }
+  dirty_accounts_.clear();
+
+  // Compute hash of account trie.
+  return accounts_.GetHash();
 }
 
 template <typename Config>

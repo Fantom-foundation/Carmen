@@ -13,6 +13,8 @@ cc_library(
         "//state:update",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
 
@@ -31,6 +33,7 @@ cc_library(
     name = "nodes",
     hdrs = ["nodes.h"],
     deps = [
+        "//common:hash",
         "//common:memory_usage",
         "//common:status_util",
         "//common:type",
