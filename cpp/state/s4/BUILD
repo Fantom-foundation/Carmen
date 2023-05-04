@@ -48,3 +48,15 @@ cc_test(
         "@com_google_googletest//:gtest_main",
     ],
 )
+
+cc_binary(
+    name = "nodes_benchmark",
+    testonly = True,
+    srcs = ["nodes_benchmark.cc"],
+    deps = [
+        ":nodes",
+        "//common:status_test_util",
+        "//third_party/gperftools:profiler",
+        "@com_github_google_benchmark//:benchmark_main",
+    ],
+)
