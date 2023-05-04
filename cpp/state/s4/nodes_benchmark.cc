@@ -1,5 +1,5 @@
-#include "state/s4/nodes.h"
 #include "benchmark/benchmark.h"
+#include "state/s4/nodes.h"
 
 namespace carmen::s4 {
 namespace {
@@ -13,11 +13,11 @@ void BM_InsertionSpeed(benchmark::State& state) {
   MerklePatriciaTrie<std::uint64_t, int> trie;
   int next = 0;
   for (auto _ : state) {
-    trie.Set((next % num_elements)<<10, next);
+    trie.Set((next % num_elements) << 10, next);
   }
 }
 
 BENCHMARK(BM_InsertionSpeed)->Range(1, 1 << 21);
 
 }  // namespace
-}  // namespace carmen::backend::index
+}  // namespace carmen::s4

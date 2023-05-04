@@ -9,13 +9,13 @@
 #include <iostream>
 #include <optional>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
-#include "absl/container/flat_hash_set.h"
+#include "common/hash.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "common/type.h"
-#include "common/hash.h"
 
 namespace carmen::s4 {
 
@@ -137,7 +137,7 @@ class PathSegment {
     return other.path_ >> (other.length_ - length_) == path_;
   }
 
-  template<typename Hasher>
+  template <typename Hasher>
   void AppendTo(Hasher& hasher) const {
     hasher.Ingest(length_);
     for (int i = 0; i < length_; i++) {
@@ -221,11 +221,13 @@ class NodeContainer {
       std::uint32_t res = nodes_.size();
       nodes_.push_back(Node{});
       hashes_.push_back(Hash{});
+      hash_dirty_.push_back(true);
       return {res, nodes_[res]};
     }
     std::uint32_t res = free_ids_.back();
     free_ids_.pop_back();
     nodes_[res] = Node{};
+    hash_dirty_[res] = true;
     return {res, nodes_[res]};
   }
 
@@ -252,11 +254,26 @@ class NodeContainer {
     return hashes_[pos];
   }
 
-  void SetHash(std::uint32_t pos, const Hash& hash) {
+  const Hash& SetHash(std::uint32_t pos, const Hash& hash) {
     if (hashes_.size() <= pos) {
-      return;
+      assert(false && "invalid index");
+      return hash;
     }
     hashes_[pos] = hash;
+    hash_dirty_[pos] = false;
+    return hash;
+  }
+
+  bool IsDirty(std::uint32_t pos) const {
+    assert(pos < hash_dirty_.size() && "invalid index");
+    return hash_dirty_[pos];
+  }
+
+  void MarkDirty(std::uint32_t pos) {
+    if (hash_dirty_.size() <= pos) {
+      return;
+    }
+    hash_dirty_[pos] = true;
   }
 
   MemoryFootprint GetMemoryFootprint() const {
@@ -264,6 +281,7 @@ class NodeContainer {
     res.Add("nodes", SizeOf(nodes_));
     res.Add("hashes", SizeOf(hashes_));
     res.Add("free_ids", SizeOf(free_ids_));
+    res.Add("hash_dirty", SizeOf(hash_dirty_));
     return res;
   }
 
@@ -272,6 +290,7 @@ class NodeContainer {
   std::deque<Node> nodes_;
   std::deque<Hash> hashes_;
   std::deque<std::uint32_t> free_ids_;
+  std::deque<bool> hash_dirty_;
 };
 
 template <std::size_t path_length>
@@ -298,36 +317,59 @@ class PathIterator {
   std::uint16_t pos_;
 };
 
-template<Trivial T>
+template <Trivial T>
 struct TrivialValueHasher {
-  template<typename Hasher>
+  template <typename Hasher>
   void operator()(Hasher& hasher, const T& value) const {
     hasher.Ingest(value);
   }
 };
 
-
 template <typename K, typename V, typename ValueHasher = TrivialValueHasher<V>>
 class MerklePatriciaTrieForrest {
  public:
-
-  MerklePatriciaTrieForrest(ValueHasher hasher = ValueHasher{}) 
-    : value_hasher_(std::move(hasher)) {}
+  MerklePatriciaTrieForrest(ValueHasher hasher = ValueHasher{})
+      : value_hasher_(std::move(hasher)) {}
 
   bool Set(NodeId& root, const K& key, const V& value) {
     if (value == V{}) {
       return Remove(root, key);
     }
 
+    // Track the path used during the insertion.
+    std::array<NodeId, sizeof(K) * 8 / 4 + 1> path;
+    NodeId* begin = &path[0];
+    NodeId* end = Set(root, key, value, begin);
+    if (end == nullptr) {
+      return false;
+    }
+
+    // Mark all nodes along the path as dirty.
+    for (int i = 0; i < std::distance(begin, end); i++) {
+      NodeId cur = path[i];
+      if (cur.IsLeaf()) {
+        leafs_.MarkDirty(cur.GetIndex());
+      } else if (cur.IsBranch()) {
+        branches_.MarkDirty(cur.GetIndex());
+      } else if (cur.IsExtension()) {
+        extensions_.MarkDirty(cur.GetIndex());
+      }
+    }
+    return true;
+  }
+
+  NodeId* Set(NodeId& root, const K& key, const V& value, NodeId* path) {
     PathIterator iter(ToBitset(key));
     NodeId* cur = &root;
     for (;;) {
+      *path = *cur;
+      path++;
       if (cur->IsEmpty()) {
         auto [newId, leaf] = leafs_.NewNode();
         *cur = NodeId::Leaf(newId);
         leaf.get().path = iter.GetRemaining();
         leaf.get().value = value;
-        return true;
+        return path;
       } else if (cur->IsLeaf()) {
         // If the leaf is the value to be updated, do so.
         const NodeId leafId = *cur;
@@ -336,9 +378,9 @@ class MerklePatriciaTrieForrest {
         if (leaf.path == remaining) {
           if (leaf.value != value) {
             leaf.value = value;
-            return true;
+            return path;
           }
-          return false;
+          return nullptr;
         }
 
         // Check whether an extension node can be inserted.
@@ -410,9 +452,7 @@ class MerklePatriciaTrieForrest {
     return ptr == nullptr ? V{} : *ptr;
   }
 
-  Hash GetHash(NodeId root) {
-    return GetHashInternal(root);
-  }
+  Hash GetHash(NodeId root) { return GetHashInternal(root); }
 
   int GetDepth(NodeId root, const K& key) const {
     auto [count, _] = GetInternal(root, key);
@@ -487,33 +527,56 @@ class MerklePatriciaTrieForrest {
 
   bool Remove(NodeId& root, const K& key) {
     PathIterator iter(ToBitset(key));
-    return Remove(&root, iter);
+
+    // Track the path used during the deletion.
+    std::array<NodeId, (sizeof(K) * 8 / 4 + 1) * 2> touched;
+    NodeId* begin = &touched[0];
+    NodeId* end = Remove(&root, iter, begin);
+    if (end == nullptr) {
+      return false;
+    }
+
+    // Mark all nodes along the path as dirty.
+    for (int i = 0; i < std::distance(begin, end); i++) {
+      NodeId cur = touched[i];
+      if (cur.IsLeaf()) {
+        leafs_.MarkDirty(cur.GetIndex());
+      } else if (cur.IsBranch()) {
+        branches_.MarkDirty(cur.GetIndex());
+      } else if (cur.IsExtension()) {
+        extensions_.MarkDirty(cur.GetIndex());
+      }
+    }
+    return true;
   }
 
-  bool Remove(NodeId* cur, PathIterator<sizeof(K) * 8>& iter) {
+  NodeId* Remove(NodeId* cur, PathIterator<sizeof(K) * 8>& iter,
+                 NodeId* touched) {
+    *touched = *cur;
+    touched++;
     if (cur->IsEmpty()) {
       // nothing to do
-      return false;
+      return nullptr;
     } else if (cur->IsLeaf()) {
-      // If the leaf is the value to be updated, do so.
+      // If the leaf is the value to be removed, do so.
       auto& leaf = leafs_.Get(cur->GetIndex());
       auto remaining = iter.GetRemaining();
       if (leaf.path != remaining) {
-        return false;  // Not the target, nothing to do.
+        return nullptr;  // Not the target, nothing to do.
       }
 
       // This leaf needs to be removed from the tree.
       leafs_.ReleaseNode(cur->GetIndex());
       *cur = NodeId::Empty();
-      return true;
+      return touched - 1;
 
     } else if (cur->IsBranch()) {
       Branch& branch = branches_.Get(cur->GetIndex());
       NodeId& next = branch.children[iter.Next().ToUint()];
-      bool changed = Remove(&next, iter);
+      NodeId* result = Remove(&next, iter, touched);
 
-      if (!changed || !next.IsEmpty()) {
-        return changed;
+      if (result == nullptr || !next.IsEmpty()) {
+        return result;
       }
 
       // Check whether there are at least 2 remaining non-empty children.
@@ -521,7 +584,7 @@ class MerklePatriciaTrieForrest {
       for (std::size_t i = 0; i < branch.children.size(); i++) {
         if (!branch.children[i].IsEmpty()) {
           if (childPosition.has_value()) {
-            return true;
+            return result;
           }
           childPosition = i;
         }
@@ -536,11 +599,15 @@ class MerklePatriciaTrieForrest {
         auto& leaf = leafs_.Get(childId.GetIndex());
         leaf.path.Prepend(*childPosition);
         *cur = childId;
+        *result = childId;
+        result++;
 
       } else if (childId.IsExtension()) {
         auto& extension = extensions_.Get(childId.GetIndex());
         extension.path.Prepend(*childPosition);
         *cur = childId;
+        *result = childId;
+        result++;
 
       } else {
         // Replace the branch node by a new extension node.
@@ -551,22 +618,22 @@ class MerklePatriciaTrieForrest {
       }
 
       branches_.ReleaseNode(branchId.GetIndex());
-      return true;
+      return result;
 
     } else if (cur->IsExtension()) {
       auto& extension = extensions_.Get(cur->GetIndex());
       auto remaining = iter.GetRemaining();
       if (!extension.path.IsPrefixOf(remaining)) {
-        return false;
+        return nullptr;
       }
 
       iter.Skip(extension.path.GetLength());
 
       NodeId& next = extension.next;
-      bool changed = Remove(&next, iter);
+      NodeId* result = Remove(&next, iter, touched);
 
       if (next.IsBranch()) {
-        return changed;
+        return result;
       }
       auto extensionId = *cur;
       if (next.IsLeaf()) {
@@ -584,11 +651,11 @@ class MerklePatriciaTrieForrest {
                "Unexpected next node of extension node after element deletion");
       }
       extensions_.ReleaseNode(extensionId.GetIndex());
-      return true;
+      return result;
     } else {
       assert(false && "Unsupported node type");
     }
-    return false;
+    return nullptr;
   }
 
   Hash GetHashInternal(NodeId cur) {
@@ -596,26 +663,38 @@ class MerklePatriciaTrieForrest {
       return Hash{};
     }
     if (cur.IsLeaf()) {
-      const auto& leaf = leafs_.Get(cur.GetIndex());
+      std::uint32_t pos = cur.GetIndex();
+      if (!leafs_.IsDirty(pos)) {
+        return leafs_.GetHash(pos);
+      }
+      const auto& leaf = leafs_.Get(pos);
       Sha256Hasher hasher;
       leaf.path.AppendTo(hasher);
       value_hasher_(hasher, leaf.value);
-      return hasher.GetHash();
+      return leafs_.SetHash(pos, hasher.GetHash());
     }
     if (cur.IsBranch()) {
-      const auto& branch = branches_.Get(cur.GetIndex());
+      std::uint32_t pos = cur.GetIndex();
+      if (!branches_.IsDirty(pos)) {
+        return branches_.GetHash(pos);
+      }
+      const auto& branch = branches_.Get(pos);
       Sha256Hasher hasher;
-      for (int i=0; i<16; i++) {
+      for (int i = 0; i < 16; i++) {
         hasher.Ingest(GetHashInternal(branch.children[i]));
       }
-      return hasher.GetHash();
+      return branches_.SetHash(pos, hasher.GetHash());
     }
     if (cur.IsExtension()) {
-      const auto& extension = extensions_.Get(cur.GetIndex());
+      std::uint32_t pos = cur.GetIndex();
+      if (!extensions_.IsDirty(pos)) {
+        return extensions_.GetHash(pos);
+      }
+      const auto& extension = extensions_.Get(pos);
       Sha256Hasher hasher;
       extension.path.AppendTo(hasher);
       hasher.Ingest(GetHashInternal(extension.next));
-      return hasher.GetHash();
+      return extensions_.SetHash(pos, hasher.GetHash());
     }
     assert(false && "Unsupported node type");
     return Hash{};
@@ -730,7 +809,9 @@ class MerklePatriciaTrie {
  public:
   MerklePatriciaTrie(ValueHasher hasher = {}) : forrest_(std::move(hasher)) {}
 
-  bool Set(const K& key, const V& value) { return forrest_.Set(root_, key, value); }
+  bool Set(const K& key, const V& value) {
+    return forrest_.Set(root_, key, value);
+  }
 
   V Get(const K& key) const { return forrest_.Get(root_, key); }
 

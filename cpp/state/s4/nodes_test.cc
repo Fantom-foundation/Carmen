@@ -430,7 +430,7 @@ TEST(MerklePatriciaTrie, RandomDelete) {
     int cur = data[i];
     // Delete it twice, once present, once absend.
     for (int k = 0; k < 2; k++) {
-      EXPECT_THAT(trie.Set(cur * 101, 0), k==0);
+      EXPECT_THAT(trie.Set(cur * 101, 0), k == 0);
       EXPECT_OK(trie.Check());
       for (std::size_t j = 0; j <= i; j++) {
         EXPECT_THAT(trie.Get(data[j] * 101), Eq(0));
@@ -446,11 +446,11 @@ TEST(MerklePatriciaTrie, HashingIsAffectedByContent) {
   MerklePatriciaTrie<std::uint64_t, int> a;
 
   auto hash_a = a.GetHash();
-  a.Set(1,1);
+  EXPECT_TRUE(a.Set(1, 1));
   auto hash_b = a.GetHash();
-  a.Set(2,2);
+  EXPECT_TRUE(a.Set(2, 2));
   auto hash_c = a.GetHash();
-  a.Set(2,0);
+  EXPECT_TRUE(a.Set(2, 0));
   auto hash_d = a.GetHash();
 
   EXPECT_THAT(hash_a, Not(Eq(hash_b)));
@@ -468,11 +468,11 @@ TEST(MerklePatriciaTrie, HashingIsConfluent) {
   MerklePatriciaTrie<std::uint64_t, int> b;
 
   EXPECT_THAT(a.GetHash(), Eq(b.GetHash()));
-  for (int i =0; i<10; i++) {
-    a.Set(i,i);
+  for (int i = 0; i < 10; i++) {
+    a.Set(i, i);
   }
-  for (int i=9; i >= 0; i--) {
-    b.Set(i,i);
+  for (int i = 9; i >= 0; i--) {
+    b.Set(i, i);
   }
   EXPECT_THAT(a.GetHash(), Eq(b.GetHash()));
 }

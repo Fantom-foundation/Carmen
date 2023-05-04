@@ -4,9 +4,9 @@
 #include <filesystem>
 #include <utility>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/container/flat_hash_set.h"
 #include "archive/archive.h"
 #include "backend/structure.h"
 #include "common/account_state.h"
@@ -128,7 +128,7 @@ class State {
   };
 
   struct AccountHasher {
-    template<typename Hasher>
+    template <typename Hasher>
     void operator()(Hasher& hasher, const Account& account) const {
       hasher.template Ingest<std::uint8_t>(account.exists ? 1 : 0);
       hasher.Ingest(account.nonce);
@@ -138,7 +138,6 @@ class State {
       hasher.Ingest(account.state_hash);
     }
   };
-
 
   // Make the state constructor protected to prevent direct instantiation. The
   // state should be created by calling the static Open method. This allows
@@ -186,9 +185,10 @@ absl::StatusOr<State<Config>> State<Config>::Open(
 }
 
 template <typename Config>
-State<Config>::State(MerklePatriciaTrie<Address, Account, AccountHasher> accounts,
-                     MerklePatriciaTrieForrest<Key, Value> values,
-                     std::unique_ptr<Archive> archive)
+State<Config>::State(
+    MerklePatriciaTrie<Address, Account, AccountHasher> accounts,
+    MerklePatriciaTrieForrest<Key, Value> values,
+    std::unique_ptr<Archive> archive)
     : accounts_(std::move(accounts)),
       values_(std::move(values)),
       archive_(std::move(archive)) {}
@@ -405,7 +405,7 @@ MemoryFootprint State<Config>::GetMemoryFootprint() const {
   res.Add("values", values_.GetMemoryFootprint());
 
   Memory code_size = SizeOf(codes_);
-  for (auto& [_,code] : codes_) {
+  for (auto& [_, code] : codes_) {
     code_size += Memory(code.Size());
   }
   res.Add("codes", code_size);
