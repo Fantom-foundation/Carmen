@@ -43,6 +43,10 @@ type StateDB interface {
 	SubRefund(uint64)
 	GetRefund() uint64
 
+	// Log management.
+	AddLog(*common.Log)
+	GetLogs(common.Hash, common.Hash) []*common.Log
+
 	// Access list tracking.
 	ClearAccessList()
 	AddAddressToAccessList(common.Address)
@@ -126,6 +130,9 @@ type stateDB struct {
 
 	// The refund accumulated in the current transaction.
 	refund uint64
+
+	// The list of log messages recorded for the current block.
+	logs []*common.Log
 
 	// A set of accessed addresses in the current transaction.
 	accessedAddresses map[common.Address]bool
@@ -824,6 +831,24 @@ func (s *stateDB) GetRefund() uint64 {
 	return s.refund
 }
 
+func (s *stateDB) AddLog(log *common.Log) {
+	size := len(s.logs)
+	s.logs = append(s.logs, log)
+	s.undo = append(s.undo, func() {
+		s.logs = s.logs[0:size]
+	})
+}
+
+func (s *stateDB) GetLogs(txHash common.Hash, _ common.Hash) []*common.Log {
+	res := []*common.Log{}
+	for _, log := range s.logs {
+		if log.TxHash == txHash {
+			res = append(res, log)
+		}
+	}
+	return res
+}
+
 func (s *stateDB) ClearAccessList() {
 	if len(s.accessedAddresses) > 0 {
 		s.accessedAddresses = make(map[common.Address]bool)
@@ -1161,6 +1186,7 @@ func (s *stateDB) reset() {
 	s.data.Clear()
 	s.clearedAccounts = make(map[common.Address]accountClearingState)
 	s.codes = make(map[common.Address]*codeValue)
+	s.logs = s.logs[0:0]
 	s.resetTransactionContext()
 }
 
