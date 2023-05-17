@@ -277,7 +277,7 @@ func TestFailingStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goSchema := state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema := state.(*syncedState).state.(*GoState).GoSchema.(*GoSchema1)
 	goSchema.balancesStore = failingStore[uint32, common.Balance]{goSchema.balancesStore}
 	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
 	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
@@ -307,7 +307,7 @@ func TestFailingIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goSchema := state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema := state.(*syncedState).state.(*GoState).GoSchema.(*GoSchema1)
 	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
 	_, err = state.GetBalance(address1)
@@ -335,7 +335,7 @@ func TestGetMemoryFootprint(t *testing.T) {
 			}
 			defer state.Close()
 
-			memoryFootprint := state.(*GoState).GetMemoryFootprint()
+			memoryFootprint := state.GetMemoryFootprint()
 			str, err := memoryFootprint.ToString("state")
 			if err != nil {
 				t.Fatalf("failed to get state memory footprint; %s", err)
