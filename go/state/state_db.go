@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"log"
 	"math/big"
 	"unsafe"
 
@@ -152,6 +153,9 @@ type stateDB struct {
 
 	// A list of addresses, which have possibly become empty in the transaction
 	emptyCandidates []common.Address
+
+	// True, if this state DB is allowed to apply changes to the underlying state, false otherwise.
+	canApplyChanges bool
 }
 
 type accountLifeCycleState int
@@ -308,15 +312,27 @@ type storedDataCacheValue struct {
 	reincarnation uint64       // < the reincarnation the cached value blongs to
 }
 
-func CreateStateDBUsing(state State) *stateDB {
-	return createStateDBWith(state, StoredDataCacheSize)
+// CreateStateDBUsing creates a StateDB instance wrapping the given state supporting
+// all operations including end-of-block operations mutating theunderlying state.
+// Note: any StateDB instanced becomes invalid if the underlying state is
+// modified by any other StateDB instance or through any other direct modification.
+func CreateStateDBUsing(state State) StateDB {
+	return createStateDBWith(state, StoredDataCacheSize, true)
 }
 
-func createLiteStateDBUsing(state State) *stateDB {
-	return createStateDBWith(state, 1000)
+// CreateNonCommittableStateDBUsing creates a read-only StateDB instance wrapping
+// the given state supporting all operations except the EndBlock() step. Attempts
+// to call EndBlock() are ignored.
+// Note: any StateDB instanced becomes invalid if the underlying state is
+// modified by any other StateDB instance or through any other direct modification.
+func CreateNonCommittableStateDBUsing(state State) StateDB {
+	// We use a smaller stored-data cache size to support faster initialization
+	// and discarding of instances. NonCommittable instances are expected to live
+	// only for the duration of a few transactions.
+	return createStateDBWith(state, 1000, false)
 }
 
-func createStateDBWith(state State, storedDataCacheCapacity int) *stateDB {
+func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges bool) *stateDB {
 	return &stateDB{
 		state:             state,
 		accounts:          map[common.Address]*accountState{},
@@ -334,6 +350,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int) *stateDB {
 		undo:              make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
 		emptyCandidates:   make([]common.Address, 0, 100),
+		canApplyChanges:   canApplyChanges,
 	}
 }
 
@@ -985,6 +1002,11 @@ func (s *stateDB) BeginBlock() {
 }
 
 func (s *stateDB) EndBlock(block uint64) {
+	if !s.canApplyChanges {
+		// TODO: report an error instead once errors are supported
+		log.Printf("warning: ignored EndBlock call on StateDB not allowed to update the underlying state")
+		return
+	}
 	update := common.Update{}
 
 	// Clear all accounts that have been deleted at some point during this block.
@@ -1169,7 +1191,7 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return createLiteStateDBUsing(archiveState), nil
+	return CreateNonCommittableStateDBUsing(archiveState), nil
 }
 
 func (s *stateDB) resetTransactionContext() {

@@ -291,19 +291,19 @@ func TestCarmenStateDestroyingRecreatedAccountIsNotResettingClearingState(t *tes
 	mock.EXPECT().Exists(address1).Return(true, nil)
 
 	db.Suicide(address1)
-	if db.clearedAccounts[address1] != pendingClearing {
+	if db.(*stateDB).clearedAccounts[address1] != pendingClearing {
 		t.Errorf("destroyed account is not marked for clearing")
 	}
 
 	db.CreateAccount(address1)
-	if db.clearedAccounts[address1] != cleared {
+	if db.(*stateDB).clearedAccounts[address1] != cleared {
 		t.Errorf("recreated account was not cleared")
 	}
 
 	db.GetState(address1, key1) // should not reach the store (no expectation stated above)
 
 	db.Suicide(address1)
-	if db.clearedAccounts[address1] != cleared {
+	if db.(*stateDB).clearedAccounts[address1] != cleared {
 		t.Errorf("destroyed recreated account is no longer considered cleared")
 	}
 
@@ -3402,7 +3402,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 								stateDb.EndBlock(uint64(block))
 								block++
 							} else {
-								stateDb.reset()
+								stateDb.(*stateDB).reset()
 							}
 						}
 					}()
