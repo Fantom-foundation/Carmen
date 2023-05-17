@@ -54,8 +54,8 @@ type GoSchema interface {
 	runPostRestoreTasks() error
 }
 
-func NewGoState(schema GoSchema, archive archive.Archive, cleanup []func()) *GoState {
-	return &GoState{
+func NewGoState(schema GoSchema, archive archive.Archive, cleanup []func()) State {
+	return wrapIntoSyncedState(&GoState{
 		schema,
 		cleanup,
 		archive,
@@ -63,7 +63,7 @@ func NewGoState(schema GoSchema, archive archive.Archive, cleanup []func()) *GoS
 		nil,
 		nil,
 		nil,
-	}
+	})
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})

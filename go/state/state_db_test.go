@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -3213,6 +3214,64 @@ func TestStateDBArchive(t *testing.T) {
 				}
 				if balance := state2.GetBalance(address1); balance.Cmp(big.NewInt(34)) != 0 {
 					t.Errorf("invalid balance at block 2: %s", balance)
+				}
+			})
+		}
+	}
+}
+
+func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
+	const N = 10  // number of concurrent goroutines
+	const M = 100 // number of updates per goroutine
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{NoArchive /*LevelDbArchive, SqliteArchive*/} {
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				dir := t.TempDir()
+				state, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				defer state.Close()
+
+				// Have multiple goroutines access the state concurrently.
+				ready := sync.WaitGroup{}
+				ready.Add(N)
+				done := sync.WaitGroup{}
+				done.Add(N)
+				for i := 0; i < N; i++ {
+					isPrimary := i == 0
+					go func() {
+						defer done.Done()
+						// Create a state and wait for other go-routines to be ready.
+						stateDb := CreateStateDBUsing(state)
+						ready.Done()
+						ready.Wait()
+
+						// Perform concurrent accesses.
+						block := 0
+						for j := 0; j < M; j++ {
+							stateDb.BeginBlock()
+							stateDb.BeginTransaction()
+							// Perform a read + update operation.
+							stateDb.AddBalance(address1, big.NewInt(1))
+							stateDb.EndTransaction()
+							if isPrimary {
+								stateDb.EndBlock(uint64(block))
+								block++
+							} else {
+								stateDb.reset()
+							}
+						}
+					}()
+				}
+				done.Wait()
+
+				balance, err := state.GetBalance(address1)
+				if err != nil {
+					t.Fatalf("reading the final balance failed")
+				}
+				if got, want := balance.ToBigInt().Int64(), int64(M); got != want {
+					t.Fatalf("invalid final balance, wanted %d, got %d", want, got)
 				}
 			})
 		}

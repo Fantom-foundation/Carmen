@@ -33,10 +33,10 @@ type CppState struct {
 func newCppState(impl C.enum_StateImpl, params Parameters) (State, error) {
 	dir := C.CString(params.Directory)
 	defer C.free(unsafe.Pointer(dir))
-	return &CppState{
+	return wrapIntoSyncedState(&CppState{
 		state:     C.Carmen_OpenState(C.C_Schema(params.Schema), impl, C.enum_StateImpl(params.Archive), dir, C.int(len(params.Directory))),
 		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
-	}, nil
+	}), nil
 }
 
 func NewCppInMemoryState(params Parameters) (State, error) {
