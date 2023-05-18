@@ -2739,67 +2739,30 @@ func TestCarmenStateLogsCanBeAddedAndRetrieved(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	txHash := common.Hash{}
-	blockHash := common.Hash{1}
+	log1 := &common.Log{Address: address1}
+	log2 := &common.Log{Address: address2}
+	log3 := &common.Log{Address: address3}
 
-	log1 := &common.Log{}
-	log2 := &common.Log{}
-	log3 := &common.Log{}
-
-	want := []*common.Log{}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	var want []*common.Log
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.AddLog(log1)
 	want = append(want, log1)
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.AddLog(log2)
 	want = append(want, log2)
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.AddLog(log3)
 	want = append(want, log3)
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
-		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
-	}
-}
-
-func TestCarmenStateLogsCanBeFilteredByTxHash(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mock := prepareMockState(ctrl)
-	db := CreateStateDBUsing(mock)
-
-	txHash1 := common.Hash{1}
-	txHash2 := common.Hash{2}
-	txHash3 := common.Hash{3}
-	blockHash := common.Hash{0xF}
-
-	log1 := &common.Log{TxHash: txHash1}
-	log2 := &common.Log{TxHash: txHash2}
-	log3 := &common.Log{TxHash: txHash1}
-
-	db.AddLog(log1)
-	db.AddLog(log2)
-	db.AddLog(log3)
-
-	want := []*common.Log{log1, log3}
-	if got := db.GetLogs(txHash1, blockHash); !reflect.DeepEqual(got, want) {
-		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
-	}
-
-	want = []*common.Log{log2}
-	if got := db.GetLogs(txHash2, blockHash); !reflect.DeepEqual(got, want) {
-		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
-	}
-
-	want = []*common.Log{}
-	if got := db.GetLogs(txHash3, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 }
@@ -2809,26 +2772,23 @@ func TestCarmenStateLogsAreResettedAtEndOfBlock(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	txHash := common.Hash{}
-	blockHash := common.Hash{1}
-
-	log1 := &common.Log{}
-	log2 := &common.Log{}
-	log3 := &common.Log{}
+	log1 := &common.Log{Address: address1}
+	log2 := &common.Log{Address: address2}
+	log3 := &common.Log{Address: address3}
 
 	db.AddLog(log1)
 	db.AddLog(log2)
 	db.AddLog(log3)
 
 	want := []*common.Log{log1, log2, log3}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.EndBlock(0)
 
 	want = []*common.Log{}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 }
@@ -2838,12 +2798,9 @@ func TestCarmenStateLogsAreCoveredByRollbacks(t *testing.T) {
 	mock := prepareMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	txHash := common.Hash{}
-	blockHash := common.Hash{1}
-
-	log1 := &common.Log{}
-	log2 := &common.Log{}
-	log3 := &common.Log{}
+	log1 := &common.Log{Address: address1}
+	log2 := &common.Log{Address: address2}
+	log3 := &common.Log{Address: address3}
 
 	s1 := db.Snapshot()
 	db.AddLog(log1)
@@ -2853,25 +2810,25 @@ func TestCarmenStateLogsAreCoveredByRollbacks(t *testing.T) {
 	db.AddLog(log3)
 
 	want := []*common.Log{log1, log2, log3}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.RevertToSnapshot(s3)
 	want = []*common.Log{log1, log2}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.RevertToSnapshot(s2)
 	want = []*common.Log{log1}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 
 	db.RevertToSnapshot(s1)
 	want = []*common.Log{}
-	if got := db.GetLogs(txHash, blockHash); !reflect.DeepEqual(got, want) {
+	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
 	}
 }

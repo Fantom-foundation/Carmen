@@ -12,6 +12,6 @@ type Log struct {
 	Data []byte
 
 	// -- metadata --
-	// The hash of the transaction producing this log message.
-	TxHash Hash
+	// Index of the log in the block.
+	Index uint
 }
