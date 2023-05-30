@@ -63,6 +63,8 @@ type StateDB interface {
 
 	BeginTransaction()
 	EndTransaction()
+
+	// Deprecated: not necessary, to be removed
 	AbortTransaction()
 
 	BeginBlock()
@@ -993,6 +995,7 @@ func (s *stateDB) EndTransaction() {
 	s.resetTransactionContext()
 }
 
+// Deprecated: not necessary, to be removed
 func (s *stateDB) AbortTransaction() {
 	// Revert all effects and reset transaction context.
 	s.RevertToSnapshot(0)
