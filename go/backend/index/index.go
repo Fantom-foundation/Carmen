@@ -21,6 +21,10 @@ type Index[K comparable, I common.Identifier] interface {
 	// GetOrAdd returns an index mapping for the key, or creates the new index
 	GetOrAdd(key K) (I, error)
 
+	// GetOrAddMany is a bulk-version of the function above. The resulting
+	// identifiers are in the same order as the given keys.
+	GetOrAddMany(keys []K) ([]I, error)
+
 	// Get returns an index mapping for the key, returns ErrNotFound if not exists
 	Get(key K) (I, error)
 

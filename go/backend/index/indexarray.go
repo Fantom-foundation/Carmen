@@ -49,6 +49,19 @@ func (m *Array[K, I]) GetOrAdd(key K) (I, error) {
 	return res, nil
 }
 
+// GetOrAddMany is the same as GetOrAdd but for a list of elements.
+func (m *Array[K, I]) GetOrAddMany(keys []K) ([]I, error) {
+	res := make([]I, 0, len(keys))
+	for _, key := range keys {
+		i, err := m.GetOrAdd(key)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, i)
+	}
+	return res, nil
+}
+
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists
 func (m *Array[K, I]) Get(key K) (I, error) {
 	var res I

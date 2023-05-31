@@ -34,6 +34,47 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	return
 }
 
+// GetOrAddMany is the same as GetOrAdd but for a list of elements.
+func (m *Index[K, I]) GetOrAddMany(keys []K) ([]I, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	if len(keys) == 1 {
+		i, err := m.GetOrAdd(keys[0])
+		return []I{i}, err
+	}
+
+	// Merge results from the cache and the underlying implementation.
+	res := make([]I, len(keys))
+
+	// Collect cached elements.
+	missing := make([]K, 0, len(keys))
+	positions := make([]int, 0, len(keys))
+	for i, key := range keys {
+		idx, exists := m.cache.Get(key)
+		if exists {
+			res[i] = idx
+		} else {
+			missing = append(missing, key)
+			positions = append(positions, i)
+		}
+	}
+
+	// Resolve missing elements.
+	if len(missing) > 0 {
+		idxs, err := m.wrapped.GetOrAddMany(missing)
+		if err != nil {
+			return nil, err
+		}
+		for i, idx := range idxs {
+			res[positions[i]] = idx
+			m.cache.Set(missing[i], idx)
+		}
+	}
+
+	return res, nil
+}
+
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists
 func (m *Index[K, I]) Get(key K) (idx I, err error) {
 	idx, exists := m.cache.Get(key)

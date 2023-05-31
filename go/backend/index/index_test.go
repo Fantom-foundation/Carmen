@@ -2,6 +2,7 @@ package index_test
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -81,43 +82,121 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 	}
 }
 
+func TestIndex_GetOrAddProducesOrdinalNumbers(t *testing.T) {
+	for name, indexFactory := range initIndexesMap() {
+		t.Run(name, func(t *testing.T) {
+			index := indexFactory(t)
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+
+			// GetOrAdd on never seen key gets a new ID.
+			if id, err := index.GetOrAdd(addr1); err != nil || id != 0 {
+				t.Errorf("failed to register new key: %v / %v", id, err)
+			}
+
+			// GetOrAdd with different key produces the next ordinal number.
+			if id, err := index.GetOrAdd(addr2); err != nil || id != 1 {
+				t.Errorf("failed to register new key: %v / %v", id, err)
+			}
+
+			// GetOrAdd with a previously registerd key reproduces the correct ID.
+			if id, err := index.GetOrAdd(addr1); err != nil || id != 0 {
+				t.Errorf("failed to resolve known key: %v / %v", id, err)
+			}
+
+			if id, err := index.GetOrAdd(addr2); err != nil || id != 1 {
+				t.Errorf("failed to resolve known key: %v / %v", id, err)
+			}
+		})
+	}
+}
+
+func TestIndex_GetOrAddManyProducesOrdinalNumbers(t *testing.T) {
+	for name, indexFactory := range initIndexesMap() {
+		t.Run(name, func(t *testing.T) {
+			index := indexFactory(t)
+
+			// GetOrAddMany of unknown keys produces new IDs.
+			keys := []common.Address{{1}, {2}}
+			want := []uint32{0, 1}
+			if ids, err := index.GetOrAddMany(keys); err != nil || !reflect.DeepEqual(ids, want) {
+				t.Errorf("failed to register new keys, err: %v, got: %v, wanted: %v", err, ids, want)
+			}
+
+			// GetOrAddMany of known keys produces known IDs.
+			keys = []common.Address{{2}, {1}}
+			want = []uint32{1, 0}
+			if ids, err := index.GetOrAddMany(keys); err != nil || !reflect.DeepEqual(ids, want) {
+				t.Errorf("key lookup failed, err: %v, got: %v, wanted: %v", err, ids, want)
+			}
+
+			// GetOrAddMany of partialy known keys produces mix of known and new keys.
+			keys = []common.Address{{2}, {3}, {1}}
+			want = []uint32{1, 2, 0}
+			if ids, err := index.GetOrAddMany(keys); err != nil || !reflect.DeepEqual(ids, want) {
+				t.Errorf("mixed key lookup failed, err: %v, got: %v, wanted: %v", err, ids, want)
+			}
+		})
+	}
+}
+
+func TestIndex_GetOrAddManyCanHandleDuplicates(t *testing.T) {
+	for name, indexFactory := range initIndexesMap() {
+		t.Run(name, func(t *testing.T) {
+			index := indexFactory(t)
+			keys := []common.Address{{1}, {2}, {1}, {1}, {2}}
+			want := []uint32{0, 1, 0, 0, 1}
+			if ids, err := index.GetOrAddMany(keys); err != nil || !reflect.DeepEqual(ids, want) {
+				t.Errorf("failed to register new keys, err: %v, got: %v, wanted: %v", err, ids, want)
+			}
+		})
+	}
+}
+
 func TestIndex_SizeIsAccuratelyReported(t *testing.T) {
-	for name, idx := range initIndexesMap() {
-		for _, size := range []int{0, 1, 5, 1000, 12345} {
-			t.Run(fmt.Sprintf("index %s size %d", name, size), func(t *testing.T) {
+	for name, indexFactory := range initIndexesMap() {
+		t.Run(name, func(t *testing.T) {
 
-				index := idx(t)
-				if got, want := index.Size(), uint32(0); got != want {
-					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
-				}
+			index := indexFactory(t)
+			if got, want := index.Size(), uint32(0); got != want {
+				t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+			}
 
-				if id, err := index.GetOrAdd(common.Address{1}); err != nil || id != 0 {
-					t.Errorf("failed to register new key: %v / %v", id, err)
-				}
+			if id, err := index.GetOrAdd(common.Address{1}); err != nil || id != 0 {
+				t.Errorf("failed to register new key: %v / %v", id, err)
+			}
 
-				if got, want := index.Size(), uint32(1); got != want {
-					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
-				}
+			if got, want := index.Size(), uint32(1); got != want {
+				t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+			}
 
-				// Registering the same does not change the size.
-				if id, err := index.GetOrAdd(common.Address{1}); err != nil || id != 0 {
-					t.Errorf("failed to register new key: %v / %v", id, err)
-				}
+			// Registering the same does not change the size.
+			if id, err := index.GetOrAdd(common.Address{1}); err != nil || id != 0 {
+				t.Errorf("failed to register new key: %v / %v", id, err)
+			}
 
-				if got, want := index.Size(), uint32(1); got != want {
-					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
-				}
+			if got, want := index.Size(), uint32(1); got != want {
+				t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+			}
 
-				// Registering a new key does.
-				if id, err := index.GetOrAdd(common.Address{2}); err != nil || id != 1 {
-					t.Errorf("failed to register new key: %v / %v", id, err)
-				}
+			// Registering a new key does.
+			if id, err := index.GetOrAdd(common.Address{2}); err != nil || id != 1 {
+				t.Errorf("failed to register new key: %v / %v", id, err)
+			}
 
-				if got, want := index.Size(), uint32(2); got != want {
-					t.Errorf("wrong size of index, wanted %v, got %v", want, got)
-				}
-			})
-		}
+			if got, want := index.Size(), uint32(2); got != want {
+				t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+			}
+
+			// Resolving a mix of old and new key is properly handled.
+			if _, err := index.GetOrAddMany([]common.Address{{1}, {4}, {3}, {2}}); err != nil {
+				t.Errorf("failed to resolve keys: %v", err)
+			}
+
+			if got, want := index.Size(), uint32(4); got != want {
+				t.Errorf("wrong size of index, wanted %v, got %v", want, got)
+			}
+		})
 	}
 }
 

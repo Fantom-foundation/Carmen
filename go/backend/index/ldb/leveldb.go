@@ -107,6 +107,21 @@ func (m *Index[K, I]) GetOrAdd(key K) (idx I, err error) {
 	return idx, nil
 }
 
+// GetOrAddMany is the same as GetOrAdd but for a list of elements.
+func (m *Index[K, I]) GetOrAddMany(keys []K) ([]I, error) {
+	// Elements are obtained one-by-one as there is no adavantage
+	// in grouping or re-ordering the lookups.
+	res := make([]I, 0, len(keys))
+	for _, key := range keys {
+		i, err := m.GetOrAdd(key)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, i)
+	}
+	return res, nil
+}
+
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists
 func (m *Index[K, I]) Get(key K) (idx I, err error) {
 	var val []byte

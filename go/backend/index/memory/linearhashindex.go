@@ -53,6 +53,20 @@ func (m *LinearHashIndex[K, I]) GetOrAdd(key K) (val I, err error) {
 	return
 }
 
+// GetOrAddMany is the same as GetOrAdd but for a list of elements.
+func (m *LinearHashIndex[K, I]) GetOrAddMany(keys []K) ([]I, error) {
+	// TODO: group keys by bucket ID for lookups.
+	res := make([]I, 0, len(keys))
+	for _, key := range keys {
+		i, err := m.GetOrAdd(key)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, i)
+	}
+	return res, nil
+}
+
 // Get returns an index mapping for the key, returns index.ErrNotFound if not exists.
 func (m *LinearHashIndex[K, I]) Get(key K) (val I, err error) {
 	val, exists := m.table.Get(key)
