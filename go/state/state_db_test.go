@@ -240,7 +240,7 @@ func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.
 	mock.EXPECT().setBalance(address1, common.Balance{}).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(12)).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
-	mock.EXPECT().setStorage(address1, key1, val2).Return(nil)
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val2}}).Return(nil)
 
 	if got := db.GetState(address1, key1); got != val1 {
 		t.Errorf("Wrong initial state, wanted %v, got %v", val1, got)
@@ -676,7 +676,7 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 	mock.EXPECT().setBalance(address1, newBalance).Return(nil)
 	mock.EXPECT().setNonce(address1, common.Nonce{}).Return(nil)
 	mock.EXPECT().setCode(address1, []byte{}).Return(nil)
-	mock.EXPECT().setStorage(address1, key2, val2)
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key2, Value: val2}}).Return(nil)
 
 	// The changes are applied to the state at the end of the block.
 	db.EndTransaction()
@@ -1808,8 +1808,10 @@ func TestCarmenStateUpdatedValuesAreCommitedToStateAtEndBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().setStorage(address1, key1, val1)
-	mock.EXPECT().setStorage(address1, key2, val2)
+	mock.EXPECT().setStorage([]common.SlotUpdate{
+		{Account: address1, Key: key1, Value: val1},
+		{Account: address1, Key: key2, Value: val2},
+	}).Return(nil)
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
@@ -1823,7 +1825,7 @@ func TestCarmenStateRollbackedValuesAreNotCommited(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().setStorage(address1, key1, val1)
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val1}})
 
 	db.SetState(address1, key1, val1)
 	snapshot := db.Snapshot()
@@ -1853,7 +1855,7 @@ func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().setStorage(address1, key1, val3)
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val3}})
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key1, val2)
@@ -1923,9 +1925,9 @@ func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Times(3).Return(true, nil)
-	mock.EXPECT().setStorage(address1, key1, val1)
-	mock.EXPECT().setStorage(address1, key1, val2)
-	mock.EXPECT().setStorage(address1, key1, val3)
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val1}})
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val2}})
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val3}})
 
 	db.SetState(address1, key1, val1)
 	db.EndTransaction()
@@ -2844,7 +2846,7 @@ func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	mock.EXPECT().createAccount(address1).Return(nil)
 	mock.EXPECT().setBalance(address1, balance).Return(nil)
 	mock.EXPECT().setNonce(address1, common.ToNonce(14)).Return(nil)
-	mock.EXPECT().setStorage(address1, key1, val1).Return(nil)
+	mock.EXPECT().setStorage([]common.SlotUpdate{{Account: address1, Key: key1, Value: val1}})
 	mock.EXPECT().setCode(address1, code).Return(nil)
 	mock.EXPECT().Flush().Return(nil)
 	mock.EXPECT().GetHash().Return(common.Hash{}, nil)

@@ -151,23 +151,44 @@ func (s *GoSchema3) GetStorage(address common.Address, key common.Key) (value co
 	return val.Value, nil
 }
 
-func (s *GoSchema3) setStorage(address common.Address, key common.Key, value common.Value) error {
-	addressIdx, err := s.addressIndex.GetOrAdd(address)
+func (s *GoSchema3) setStorage(updates []common.SlotUpdate) error {
+
+	// Perform index lookups through bulk lookups.
+	accounts := make([]common.Address, len(updates))
+	for i, update := range updates {
+		accounts[i] = update.Account
+	}
+	addressIdxs, err := s.addressIndex.GetOrAddMany(accounts)
 	if err != nil {
 		return err
 	}
-	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdxKey[uint32]{addressIdx, key})
+
+	slotIdxKeys := make([]common.SlotIdxKey[uint32], len(updates))
+	for i, update := range updates {
+		slotIdxKeys[i] = common.SlotIdxKey[uint32]{
+			AddressIdx: addressIdxs[i],
+			Key:        update.Key,
+		}
+	}
+	slotIdxs, err := s.slotIndex.GetOrAddMany(slotIdxKeys)
 	if err != nil {
 		return err
 	}
-	reincarnation, err := s.reincarnationsStore.Get(addressIdx)
-	if err != nil {
-		return err
+
+	for i, change := range updates {
+		reincarnation, err := s.reincarnationsStore.Get(addressIdxs[i])
+		if err != nil {
+			return err
+		}
+		err = s.valuesStore.Set(slotIdxs[i], common.SlotReincValue{
+			Reincarnation: reincarnation,
+			Value:         change.Value,
+		})
+		if err != nil {
+			return err
+		}
 	}
-	return s.valuesStore.Set(slotIdx, common.SlotReincValue{
-		Reincarnation: reincarnation,
-		Value:         value,
-	})
+	return nil
 }
 
 func (s *GoSchema3) GetCode(address common.Address) (value []byte, err error) {

@@ -152,29 +152,34 @@ func (s *GoSchema1) GetStorage(address common.Address, key common.Key) (value co
 	return s.valuesStore.Get(slotIdx)
 }
 
-func (s *GoSchema1) setStorage(address common.Address, key common.Key, value common.Value) error {
-	addressIdx, err := s.addressIndex.GetOrAdd(address)
-	if err != nil {
-		return err
+func (s *GoSchema1) setStorage(updates []common.SlotUpdate) error {
+	for _, change := range updates {
+		addressIdx, err := s.addressIndex.GetOrAdd(change.Account)
+		if err != nil {
+			return err
+		}
+		keyIdx, err := s.keyIndex.GetOrAdd(change.Key)
+		if err != nil {
+			return err
+		}
+		slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
+		if err != nil {
+			return err
+		}
+		err = s.valuesStore.Set(slotIdx, change.Value)
+		if err != nil {
+			return err
+		}
+		if change.Value == (common.Value{}) {
+			err = s.addressToSlots.Remove(addressIdx, slotIdx)
+		} else {
+			err = s.addressToSlots.Add(addressIdx, slotIdx)
+		}
+		if err != nil {
+			return err
+		}
 	}
-	keyIdx, err := s.keyIndex.GetOrAdd(key)
-	if err != nil {
-		return err
-	}
-	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
-	if err != nil {
-		return err
-	}
-	err = s.valuesStore.Set(slotIdx, value)
-	if err != nil {
-		return err
-	}
-	if value == (common.Value{}) {
-		err = s.addressToSlots.Remove(addressIdx, slotIdx)
-	} else {
-		err = s.addressToSlots.Add(addressIdx, slotIdx)
-	}
-	return err
+	return nil
 }
 
 func (s *GoSchema1) GetCode(address common.Address) (value []byte, err error) {

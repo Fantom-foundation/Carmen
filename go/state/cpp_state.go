@@ -99,9 +99,9 @@ func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.V
 	return value, nil
 }
 
-func (cs *CppState) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (cs *CppState) setStorage(updates []common.SlotUpdate) error {
 	update := common.Update{}
-	update.AppendSlotUpdate(address, key, value)
+	update.Slots = updates
 	return cs.Apply(0, update)
 }
 

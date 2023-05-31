@@ -151,10 +151,10 @@ func (s *syncedState) setNonce(address common.Address, nonce common.Nonce) error
 	return s.state.setNonce(address, nonce)
 }
 
-func (s *syncedState) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (s *syncedState) setStorage(updates []common.SlotUpdate) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.setStorage(address, key, value)
+	return s.state.setStorage(updates)
 }
 
 func (s *syncedState) setCode(address common.Address, code []byte) error {

@@ -629,15 +629,15 @@ func (mr *MockdirectUpdateStateMockRecorder) setNonce(address, nonce interface{}
 }
 
 // setStorage mocks base method.
-func (m *MockdirectUpdateState) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (m *MockdirectUpdateState) setStorage(updates []common.SlotUpdate) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "setStorage", address, key, value)
+	ret := m.ctrl.Call(m, "setStorage", updates)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // setStorage indicates an expected call of setStorage.
-func (mr *MockdirectUpdateStateMockRecorder) setStorage(address, key, value interface{}) *gomock.Call {
+func (mr *MockdirectUpdateStateMockRecorder) setStorage(updates interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setStorage", reflect.TypeOf((*MockdirectUpdateState)(nil).setStorage), address, key, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setStorage", reflect.TypeOf((*MockdirectUpdateState)(nil).setStorage), updates)
 }

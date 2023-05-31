@@ -35,7 +35,7 @@ type GoSchema interface {
 	GetNonce(address common.Address) (nonce common.Nonce, err error)
 	setNonce(address common.Address, nonce common.Nonce) (err error)
 	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
-	setStorage(address common.Address, key common.Key, value common.Value) error
+	setStorage(updates []common.SlotUpdate) error
 	GetCode(address common.Address) (value []byte, err error)
 	GetCodeSize(address common.Address) (size int, err error)
 	setCode(address common.Address, code []byte) (err error)

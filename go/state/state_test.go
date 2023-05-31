@@ -123,15 +123,17 @@ func TestDeletedAddressHashes(t *testing.T) {
 
 func TestStorageHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setStorage(address1, key2, val3)
+		s.setStorage([]common.SlotUpdate{{address1, key2, val3}})
 	})
 }
 
 func TestMultipleStorageHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setStorage(address1, key2, val3)
-		s.setStorage(address2, key3, val1)
-		s.setStorage(address3, key1, val2)
+		s.setStorage([]common.SlotUpdate{
+			{Account: address1, Key: key2, Value: val3},
+			{Account: address2, Key: key3, Value: val1},
+			{Account: address3, Key: key1, Value: val2},
+		})
 	})
 }
 
@@ -184,7 +186,7 @@ func TestLargeStateHashes(t *testing.T) {
 			s.createAccount(address)
 			for j := 0; j < 100; j++ {
 				key := common.Key{byte(j)}
-				s.setStorage(address, key, common.Value{byte(i), 0, 0, byte(j)})
+				s.setStorage([]common.SlotUpdate{{address, key, common.Value{byte(i), 0, 0, byte(j)}}})
 			}
 			if i%21 == 0 {
 				s.deleteAccount(address)
@@ -341,7 +343,7 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 			t.Errorf("storage slot are initially not zero")
 		}
 
-		if err = s.setStorage(address1, key1, val1); err != nil {
+		if err = s.setStorage([]common.SlotUpdate{{address1, key1, val1}}); err != nil {
 			t.Errorf("failed to update storage slot: %v", err)
 		}
 
@@ -371,7 +373,7 @@ func TestDeleteAccountClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
 
-		if err := s.setStorage(address1, key1, val1); err != nil {
+		if err := s.setStorage([]common.SlotUpdate{{address1, key1, val1}}); err != nil {
 			t.Errorf("failed to update storage slot: %v", err)
 		}
 
@@ -545,7 +547,7 @@ func fillStateForSnapshotting(state directUpdateState) {
 	state.setBalance(address1, common.Balance{12})
 	state.setNonce(address2, common.Nonce{14})
 	state.setCode(address3, []byte{0, 8, 15})
-	state.setStorage(address1, key1, val1)
+	state.setStorage([]common.SlotUpdate{{address1, key1, val1}})
 }
 
 func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {

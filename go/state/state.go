@@ -70,8 +70,8 @@ type directUpdateState interface {
 	// setNonce updates nonce of the account for the  input account address.
 	setNonce(address common.Address, nonce common.Nonce) error
 
-	// setStorage updates the memory slot for the account address (i.e. the contract) and the memory location key.
-	setStorage(address common.Address, key common.Key, value common.Value) error
+	// setStorage updates all storage slots as enumerated in the given list.
+	setStorage(updates []common.SlotUpdate) error
 
 	// setCode updates code of the contract for the input contract address.
 	setCode(address common.Address, code []byte) error
@@ -106,8 +106,8 @@ func applyUpdate(s directUpdateState, update common.Update) error {
 			return err
 		}
 	}
-	for _, change := range update.Slots {
-		if err := s.setStorage(change.Account, change.Key, change.Value); err != nil {
+	if len(update.Slots) > 0 {
+		if err := s.setStorage(update.Slots); err != nil {
 			return err
 		}
 	}

@@ -110,7 +110,7 @@ func TestBasicOperations(t *testing.T) {
 			if err := state.setBalance(address2, common.Balance{45}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setStorage(address3, key1, common.Value{67}); err != nil {
+			if err := state.setStorage([]common.SlotUpdate{{address3, key1, common.Value{67}}}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
@@ -163,26 +163,28 @@ func TestMoreInserts(t *testing.T) {
 			defer state.Close()
 
 			// insert more combinations, so we do not have only zero-indexes everywhere
-			_ = state.setStorage(address1, key1, val1)
-			_ = state.setStorage(address1, key2, val2)
-			_ = state.setStorage(address1, key3, val3)
+			_ = state.setStorage([]common.SlotUpdate{
+				{Account: address1, Key: key1, Value: val1},
+				{Account: address1, Key: key2, Value: val2},
+				{Account: address1, Key: key3, Value: val3},
 
-			_ = state.setStorage(address2, key1, val1)
-			_ = state.setStorage(address2, key2, val2)
-			_ = state.setStorage(address2, key3, val3)
+				{Account: address2, Key: key1, Value: val1},
+				{Account: address2, Key: key2, Value: val2},
+				{Account: address2, Key: key3, Value: val3},
 
-			_ = state.setStorage(address3, key1, val1)
-			_ = state.setStorage(address3, key2, val2)
-			_ = state.setStorage(address3, key3, val3)
+				{Account: address3, Key: key1, Value: val1},
+				{Account: address3, Key: key2, Value: val2},
+				{Account: address3, Key: key3, Value: val3},
+			})
 
 			if val, err := state.GetStorage(address1, key3); err != nil || val != val3 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address2, key1); err != nil || val != val1 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address3, key2); err != nil || val != val2 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 		})
 	}
@@ -203,7 +205,7 @@ func TestHashing(t *testing.T) {
 				t.Fatalf("unable to get state hash; %s", err)
 			}
 
-			_ = state.setStorage(address1, key1, val1)
+			_ = state.setStorage([]common.SlotUpdate{{address1, key1, val1}})
 			hash1, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %s", err)
@@ -284,7 +286,7 @@ func TestFailingStore(t *testing.T) {
 
 	_ = goSchema.setBalance(address1, common.Balance{})
 	_ = goSchema.setNonce(address1, common.Nonce{})
-	_ = goSchema.setStorage(address1, key1, common.Value{})
+	_ = goSchema.setStorage([]common.SlotUpdate{{address1, key1, common.Value{}}})
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {

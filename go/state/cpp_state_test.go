@@ -178,7 +178,7 @@ func TestWriteAndReadSlot(t *testing.T) {
 			}
 			defer state.Close()
 
-			err = state.setStorage(address1, key1, val1)
+			err = state.setStorage([]common.SlotUpdate{{address1, key1, val1}})
 			if err != nil {
 				t.Fatalf("Error updating storage: %v", err)
 			}
