@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"math/big"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -765,8 +766,12 @@ func TestStateRead(t *testing.T) {
 }
 
 func execSubProcessTest(t *testing.T, dir string, stateImpl string, archiveImpl ArchiveType, execTestName string) {
-	cmd := exec.Command("go", "test", "-v", "-run", execTestName, "-args", "-statedir="+dir, "-stateimpl="+stateImpl, "-archiveimpl="+strconv.FormatInt(int64(archiveImpl), 10))
+	path, err := os.Executable()
+	if err != nil {
+		t.Fatalf("failed to resolve path to test binary: %v", err)
+	}
 
+	cmd := exec.Command(path, "-test.run", execTestName, "-statedir="+dir, "-stateimpl="+stateImpl, "-archiveimpl="+strconv.FormatInt(int64(archiveImpl), 10))
 	errBuf := new(bytes.Buffer)
 	cmd.Stderr = errBuf
 	stdBuf := new(bytes.Buffer)
