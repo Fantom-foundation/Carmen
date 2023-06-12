@@ -2884,7 +2884,10 @@ func TestCarmenThereCanBeMultipleBulkLoadPhases(t *testing.T) {
 func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
@@ -2909,7 +2912,10 @@ func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
@@ -2971,7 +2977,9 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	}
 	for i := 0; i < 3; i++ {
 		for _, config := range initStates() {
+			config := config
 			t.Run(fmt.Sprintf("%v/run=%d", config.name, i), func(t *testing.T) {
+				t.Parallel()
 				state, err := config.createState(t.TempDir())
 				if err != nil {
 					t.Fatalf("failed to initialize state %s", config.name)
@@ -3087,7 +3095,10 @@ func TestPersistentStateDB(t *testing.T) {
 			continue
 		}
 		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
@@ -3267,7 +3278,10 @@ func toKey(key uint64) common.Key {
 func TestStateDBArchive(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
@@ -3325,7 +3339,10 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 	const M = 100 // number of updates per goroutine
 	for _, config := range initStates() {
 		for _, archiveType := range []ArchiveType{NoArchive /*LevelDbArchive, SqliteArchive*/} {
+			config := config
+			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {

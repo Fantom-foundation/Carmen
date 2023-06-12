@@ -53,7 +53,9 @@ func initStates() []namedStateConfig {
 
 func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedStateConfig, s directUpdateState)) {
 	for _, config := range initStates() {
+		config := config
 		t.Run(config.name, func(t *testing.T) {
+			t.Parallel()
 			state, err := config.createState(t.TempDir())
 			if err != nil {
 				t.Fatalf("failed to initialize state %s", config.name)
@@ -402,7 +404,10 @@ func TestDeleteAccountClearsStorage(t *testing.T) {
 func TestArchive(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
@@ -513,7 +518,10 @@ func TestPersistentState(t *testing.T) {
 			continue
 		}
 		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			archiveType := archiveType
+			config := config
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
 
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
