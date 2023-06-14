@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -44,8 +43,17 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		return nil, err
 	}
 
+	// Check meta-data format information.
 	if meta.Version != dataFormatVersion {
 		return nil, fmt.Errorf("invalid file format version, got %d, wanted %d", meta.Version, dataFormatVersion)
+	}
+	indexSize := int(unsafe.Sizeof(I(0)))
+	if meta.IndexTypeSize != indexSize {
+		return nil, fmt.Errorf("invalid index type encoding, expected %d byte, found %d", indexSize, meta.IndexTypeSize)
+	}
+	valueSize := encoder.GetEncodedSize()
+	if meta.ValueTypeSize != valueSize {
+		return nil, fmt.Errorf("invalid value type encoding, expected %d byte, found %d", valueSize, meta.ValueTypeSize)
 	}
 
 	// Load list of values.
@@ -55,7 +63,6 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		if err != nil {
 			return nil, err
 		}
-		valueSize := encoder.GetEncodedSize()
 		if got, want := stats.Size(), int64(meta.ValueListLength*valueSize); got != want {
 			return nil, fmt.Errorf("invalid value file size, got %d, wanted %d", got, want)
 		}
@@ -85,8 +92,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		if err != nil {
 			return nil, err
 		}
-		indexSize := int64(unsafe.Sizeof(I(0)))
-		if got, want := stats.Size(), int64(meta.FreeListLength)*indexSize; got != want {
+		if got, want := stats.Size(), int64(meta.FreeListLength*indexSize); got != want {
 			return nil, fmt.Errorf("invalid free-list file size, got %d, wanted %d", got, want)
 		}
 		res.freeList = make([]I, meta.FreeListLength)
@@ -101,7 +107,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 			if err != nil {
 				return nil, err
 			}
-			res.freeList[i] = decodeIndex[I](buffer)
+			res.freeList[i] = stock.DecodeIndex[I](buffer)
 		}
 	}
 
@@ -153,7 +159,7 @@ func (s *inMemoryStock[I, V]) Flush() error {
 	metadata, err := json.Marshal(metadata{
 		Version:         dataFormatVersion,
 		IndexTypeSize:   indexSize,
-		ValueTypeSize:   0, // TODO: fill in
+		ValueTypeSize:   s.encoder.GetEncodedSize(),
 		ValueListLength: len(s.values),
 		FreeListLength:  len(s.freeList),
 	})
@@ -192,7 +198,7 @@ func (s *inMemoryStock[I, V]) Flush() error {
 
 		buffer := make([]byte, indexSize)
 		for _, i := range s.freeList {
-			encodeIndex(i, buffer)
+			stock.EncodeIndex(i, buffer)
 			if _, err := f.Write(buffer); err != nil {
 				return err
 			}
@@ -219,35 +225,4 @@ type metadata struct {
 	ValueTypeSize   int
 	ValueListLength int
 	FreeListLength  int
-}
-
-func encodeIndex[I stock.Index](index I, trg []byte) {
-	switch unsafe.Sizeof(index) {
-	case 1:
-		trg[0] = byte(index)
-	case 2:
-		binary.BigEndian.PutUint16(trg, uint16(index))
-	case 4:
-		binary.BigEndian.PutUint32(trg, uint32(index))
-	case 8:
-		binary.BigEndian.PutUint64(trg, uint64(index))
-	default:
-		panic("unsupported index type encountered")
-	}
-}
-
-func decodeIndex[I stock.Index](src []byte) I {
-	var index I
-	switch unsafe.Sizeof(index) {
-	case 1:
-		return I(src[0])
-	case 2:
-		return I(binary.BigEndian.Uint16(src))
-	case 4:
-		return I(binary.BigEndian.Uint32(src))
-	case 8:
-		return I(binary.BigEndian.Uint64(src))
-	default:
-		panic("unsupported index type encountered")
-	}
 }

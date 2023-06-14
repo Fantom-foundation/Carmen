@@ -106,11 +106,20 @@ func testLookUpsRetrieveTheSameValue(t *testing.T, factory NamedStockFactory) {
 	}
 	*value2 = 2
 
-	if got, err := stock.Get(index1); err != nil || got == nil || *got != 1 {
-		t.Errorf("failed to obtain value for index %d: wanted 1, got %p, with err %v", index1, got, err)
+	got, err := stock.Get(index1)
+	if err != nil || got == nil {
+		t.Errorf("failed to obtain value for index %d: got %p, with err %v", index1, got, err)
 	}
-	if got, err := stock.Get(index2); err != nil || got == nil || *got != 2 {
-		t.Errorf("failed to obtain value for index %d: wanted 1, got %p, with err %v", index1, got, err)
+	if got != nil && *got != 1 {
+		t.Errorf("failed to obtain value for index %d: got %d, wanted %d", index1, *got, 1)
+	}
+
+	got, err = stock.Get(index2)
+	if err != nil || got == nil {
+		t.Errorf("failed to obtain value for index %d: got %p, with err %v", index2, got, err)
+	}
+	if got != nil && *got != 2 {
+		t.Errorf("failed to obtain value for index %d: got %d, wanted %d", index2, *got, 2)
 	}
 }
 

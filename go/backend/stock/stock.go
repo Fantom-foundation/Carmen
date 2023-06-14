@@ -1,6 +1,9 @@
 package stock
 
 import (
+	"encoding/binary"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/exp/constraints"
 )
@@ -21,7 +24,6 @@ import (
 //
 // TODO:
 // - support pinning of objects for concurrent access support
-// - add serialization support for data
 type Stock[I Index, V any] interface {
 	// New creates a new value, assigns it an index, and returns the index and
 	// a pointer to the value.
@@ -37,6 +39,9 @@ type Stock[I Index, V any] interface {
 	// Note: the obtained pointer is only valid until the next operation been
 	// performed on the Stock. Any operation may invalidate pointers!
 	Get(I) (*V, error)
+
+	// TODO: integrate a setter
+	Set(I, V) error
 
 	// Delete removes the value assocaited to the given index. The index may be
 	// reused as the result of future New() calls.
@@ -58,6 +63,39 @@ type Stock[I Index, V any] interface {
 // Index defines the type constraints on Stock index types.
 type Index interface {
 	constraints.Integer
+}
+
+// EncodeIndex encodes an index into a binary form to be persisted.
+func EncodeIndex[I Index](index I, trg []byte) {
+	switch unsafe.Sizeof(index) {
+	case 1:
+		trg[0] = byte(index)
+	case 2:
+		binary.BigEndian.PutUint16(trg, uint16(index))
+	case 4:
+		binary.BigEndian.PutUint32(trg, uint32(index))
+	case 8:
+		binary.BigEndian.PutUint64(trg, uint64(index))
+	default:
+		panic("unsupported index type encountered")
+	}
+}
+
+// DecodeIndex decodes an index value from its persistent binary form.
+func DecodeIndex[I Index](src []byte) I {
+	var index I
+	switch unsafe.Sizeof(index) {
+	case 1:
+		return I(src[0])
+	case 2:
+		return I(binary.BigEndian.Uint16(src))
+	case 4:
+		return I(binary.BigEndian.Uint32(src))
+	case 8:
+		return I(binary.BigEndian.Uint64(src))
+	default:
+		panic("unsupported index type encountered")
+	}
 }
 
 // ValueEncoder is a utility interface for handling the marshaling of values
