@@ -140,11 +140,11 @@ func (s *fileStock[I, V]) Get(index I) (*V, error) {
 		return nil, err
 	}
 
-	res, err := s.encoder.Load(buffer)
-	if err != nil {
+	res := new(V)
+	if err := s.encoder.Load(buffer, res); err != nil {
 		return nil, err
 	}
-	return &res, nil
+	return res, nil
 }
 
 func (s *fileStock[I, V]) Set(index I, value *V) error {

@@ -11,8 +11,9 @@ func (IntEncoder) GetEncodedSize() int {
 	return 4
 }
 
-func (IntEncoder) Load(src []byte) (int, error) {
-	return int(binary.BigEndian.Uint32(src)), nil
+func (IntEncoder) Load(src []byte, value *int) error {
+	*value = int(binary.BigEndian.Uint32(src))
+	return nil
 }
 
 func (IntEncoder) Store(trg []byte, value *int) error {

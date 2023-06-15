@@ -113,5 +113,5 @@ type ValueEncoder[V any] interface {
 	// Store encodes the given value into the given byte slice.
 	Store([]byte, *V) error
 	// Load restores the value encoded in the given byte slice.
-	Load([]byte) (V, error)
+	Load([]byte, *V) error
 }

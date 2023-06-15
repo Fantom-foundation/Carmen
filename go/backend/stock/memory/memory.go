@@ -78,8 +78,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 			if err != nil {
 				return nil, err
 			}
-			res.values[i], err = encoder.Load(buffer)
-			if err != nil {
+			if err = encoder.Load(buffer, &res.values[i]); err != nil {
 				return nil, err
 			}
 		}
