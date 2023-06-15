@@ -36,7 +36,6 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 			test(t, factory)
 		}
 	}
-
 	t.Run("NewCreatesFreshIndexValues", wrap(testNewCreatesFreshIndexValues))
 	t.Run("NewCreatesDistinctValues", wrap(testNewCreatesDistinctValues))
 	t.Run("LookUpsRetrieveTheSameValue", wrap(testLookUpsRetrieveTheSameValue))
@@ -99,12 +98,18 @@ func testLookUpsRetrieveTheSameValue(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to create new element: %v", err)
 	}
 	*value1 = 1
+	if err := stock.Set(index1, value1); err != nil {
+		t.Fatalf("failed to update value for index 1: %v", err)
+	}
 
 	index2, value2, err := stock.New()
 	if err != nil {
 		t.Fatalf("failed to create new element: %v", err)
 	}
 	*value2 = 2
+	if err := stock.Set(index2, value2); err != nil {
+		t.Fatalf("failed to update value for index 2: %v", err)
+	}
 
 	got, err := stock.Get(index1)
 	if err != nil || got == nil {
@@ -162,6 +167,9 @@ func testLargeNumberOfElements(t *testing.T, factory NamedStockFactory) {
 		}
 		indexes[i] = index
 		*ptr = i
+		if err := stock.Set(i, ptr); err != nil {
+			t.Fatalf("failed to update value of element with index %d: %v", index, err)
+		}
 	}
 
 	for i := 0; i < N; i++ {
@@ -234,15 +242,29 @@ func testCanBeClosedAndReopened(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to create empty stock: %v", err)
 	}
 	defer stock.Close()
+
+	// The first element shall be a deleted element.
 	key1, _, err := stock.New()
 	if err != nil {
 		t.Fatalf("failed to insert single element into empty stock: %v", err)
 	}
+
+	// The second element is an element with a value.
 	key2, value, err := stock.New()
 	if err != nil {
-		t.Fatalf("failed to insert single element into empty stock: %v", err)
+		t.Fatalf("failed to create new element in stock: %v", err)
 	}
 	*value = 123
+	if err := stock.Set(key2, value); err != nil {
+		t.Fatalf("failed to update value: %v", err)
+	}
+
+	// The third element is a default-value.
+	key3, _, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create new element in stock: %v", err)
+	}
+
 	if err := stock.Delete(key1); err != nil {
 		t.Fatalf("failed to delete key from stock: %v", err)
 	}
@@ -251,10 +273,12 @@ func testCanBeClosedAndReopened(t *testing.T, factory NamedStockFactory) {
 	}
 	stock = nil
 
+	// After re-opening the stock all the information should be present.
 	stock, err = factory.Open(t, dir)
 	if err != nil {
 		t.Fatalf("failed to reopen stock: %v", err)
 	}
+
 	value, err = stock.Get(key2)
 	if err != nil {
 		t.Fatalf("failed to read value from reopend stock: %v", err)
@@ -265,6 +289,18 @@ func testCanBeClosedAndReopened(t *testing.T, factory NamedStockFactory) {
 	if *value != 123 {
 		t.Fatalf("invalid value read from reopend stock: got %v, wanted 123", *value)
 	}
+
+	value, err = stock.Get(key3)
+	if err != nil {
+		t.Fatalf("failed to read value from reopend stock: %v", err)
+	}
+	if value == nil {
+		t.Fatalf("invalid nil value read from reopend stock")
+	}
+	if *value != 0 {
+		t.Fatalf("invalid value read from reopend stock: got %v, wanted 0", *value)
+	}
+
 	keyX, _, err := stock.New()
 	if err != nil {
 		t.Fatalf("failed to create new entry in re-opend stock: %v", err)

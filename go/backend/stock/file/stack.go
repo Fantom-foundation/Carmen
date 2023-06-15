@@ -33,7 +33,7 @@ func openFileBasedStack[I stock.Index](filename string) (*fileBasedStack[I], err
 		size = int(fileSize) / valueSize
 	}
 
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,6 @@ func openFileBasedStack[I stock.Index](filename string) (*fileBasedStack[I], err
 	offset := 0
 	if size > 0 {
 		toLoad := size % stackBufferSize
-		fmt.Printf("loading %d initial elements\n", toLoad)
 		offset = size - toLoad
 
 		if _, err := file.Seek(int64(valueSize*offset), 0); err != nil {

@@ -36,12 +36,18 @@ type Stock[I Index, V any] interface {
 	// their former values, however, accessing those is considered invalid.
 	// Stock implementations are not required to retain information on valid
 	// and deleted indexes to distinguish valid from invalid accesses.
+	// Note: modifications to the referenced value are not guranteed to
+	// automatically synced with the underlying storage system. Use the Set()
+	// method below to perform updates.
 	// Note: the obtained pointer is only valid until the next operation been
 	// performed on the Stock. Any operation may invalidate pointers!
 	Get(I) (*V, error)
 
-	// TODO: integrate a setter
-	Set(I, V) error
+	// Updates the value associated ot the given index. The provided pointer
+	// must not be nil, and the index must be alive, created through a New call
+	// and not released. The implementation may keep a copy of the pointer,
+	// so future external modifications should be avoided.
+	Set(I, *V) error
 
 	// Delete removes the value assocaited to the given index. The index may be
 	// reused as the result of future New() calls.

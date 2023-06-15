@@ -12,9 +12,10 @@ import (
 )
 
 type fileStock[I stock.Index, V any] struct {
+	directory     string
+	encoder       stock.ValueEncoder[V]
 	values        *os.File
 	freelist      *fileBasedStack[I]
-	encoder       stock.ValueEncoder[V]
 	numValueSlots I
 }
 
@@ -74,7 +75,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		numValueSlots = I(meta.ValueListLength)
 	}
 
-	values, err := os.OpenFile(valuefile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
+	values, err := os.OpenFile(valuefile, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -86,9 +87,10 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Create new files
 	return &fileStock[I, V]{
+		encoder:       encoder,
+		directory:     directory,
 		values:        values,
 		freelist:      freelist,
-		encoder:       encoder,
 		numValueSlots: numValueSlots,
 	}, nil
 }
@@ -105,6 +107,16 @@ func (s *fileStock[I, V]) New() (I, *V, error) {
 		index = free
 	} else {
 		s.numValueSlots++
+
+		// Add zero bytes to the end of the file.
+		if _, err := s.values.Seek(0, 2); err != nil {
+			return 0, nil, err
+		}
+
+		zeros := make([]byte, s.encoder.GetEncodedSize())
+		if _, err := s.values.Write(zeros); err != nil {
+			return 0, nil, err
+		}
 	}
 
 	var value V
@@ -115,9 +127,52 @@ func (s *fileStock[I, V]) Get(index I) (*V, error) {
 	if index >= s.numValueSlots || index < 0 {
 		return nil, nil
 	}
-	// TODO: fetch the value from disk
-	// TODO: figure out how to trigger disk write-back
-	return nil, nil
+	// Load value from the file.
+	valueSize := s.encoder.GetEncodedSize()
+	offset := int64(valueSize) * int64(index)
+	if _, err := s.values.Seek(offset, 0); err != nil {
+		return nil, err
+	}
+
+	buffer := make([]byte, valueSize)
+	_, err := s.values.Read(buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.encoder.Load(buffer)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (s *fileStock[I, V]) Set(index I, value *V) error {
+	if index >= s.numValueSlots || index < 0 {
+		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, s.numValueSlots)
+	}
+
+	// Write a serialized form of the value to disk.
+	valueSize := s.encoder.GetEncodedSize()
+	offset := int64(valueSize) * int64(index)
+	pos, err := s.values.Seek(offset, 0)
+	if err != nil {
+		return err
+	}
+	if pos != offset {
+		return fmt.Errorf("failed to seek to required position, wanted %d, got %d", offset, pos)
+	}
+
+	buffer := make([]byte, valueSize)
+	s.encoder.Store(buffer, value)
+	n, err := s.values.Write(buffer)
+	if err != nil {
+		return err
+	}
+	if n != valueSize {
+		return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", valueSize, n)
+	}
+	return nil
 }
 
 func (s *fileStock[I, V]) Delete(index I) error {
@@ -131,66 +186,28 @@ func (s *fileStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *fileStock[I, V]) Flush() error {
-	return fmt.Errorf("not implemented")
-	/*
-		// Write metadata.
-		var index I
-		indexSize := int(unsafe.Sizeof(index))
-		metadata, err := json.Marshal(metadata{
-			Version:         dataFormatVersion,
-			IndexTypeSize:   indexSize,
-			ValueTypeSize:   0, // TODO: fill in
-			ValueListLength: len(s.values),
-			FreeListLength:  len(s.freeList),
-		})
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
-			return nil
-		}
-
-		// Write list of values.
-		if f, err := os.Create(s.directory + "/values.dat"); err != nil {
-			return err
-		} else {
-			defer f.Close()
-
-			buffer := make([]byte, s.encoder.GetEncodedSize())
-			for _, v := range s.values {
-				s.encoder.Store(buffer, &v)
-				_, err := f.Write(buffer)
-				if err != nil {
-					return err
-				}
-			}
-
-			if err := f.Close(); err != nil {
-				return err
-			}
-		}
-
-		// Write free list.
-		if f, err := os.Create(s.directory + "/freelist.dat"); err != nil {
-			return err
-		} else {
-			defer f.Close()
-
-			buffer := make([]byte, indexSize)
-			for _, i := range s.freeList {
-				stock.EncodeIndex(i, buffer)
-				if _, err := f.Write(buffer); err != nil {
-					return err
-				}
-			}
-
-			if err := f.Close(); err != nil {
-				return err
-			}
-		}
-
+	// Write metadata.
+	var index I
+	indexSize := int(unsafe.Sizeof(index))
+	metadata, err := json.Marshal(metadata{
+		Version:         dataFormatVersion,
+		IndexTypeSize:   indexSize,
+		ValueTypeSize:   s.encoder.GetEncodedSize(),
+		ValueListLength: int(s.numValueSlots),
+		FreeListLength:  s.freelist.Size(),
+	})
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
 		return nil
-	*/
+	}
+
+	// Flush freelist and value file.
+	return errors.Join(
+		s.freelist.Flush(),
+		s.values.Sync(),
+	)
 }
 
 func (s *fileStock[I, V]) Close() error {

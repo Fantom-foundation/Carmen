@@ -138,6 +138,17 @@ func (s *inMemoryStock[I, V]) Get(index I) (*V, error) {
 	return &s.values[index], nil
 }
 
+func (s *inMemoryStock[I, V]) Set(index I, value *V) error {
+	if index >= I(len(s.values)) || index < 0 {
+		return fmt.Errorf("invalid index")
+	}
+	trg := &s.values[index]
+	if value != trg {
+		*trg = *value
+	}
+	return nil
+}
+
 func (s *inMemoryStock[I, V]) Delete(index I) error {
 	s.freeList = append(s.freeList, index)
 	return nil
