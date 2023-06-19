@@ -36,5 +36,6 @@ Todos:
 	- make structures thread-safe
 	- use writers and readers in encoders, instead of buffers
 	- shard data among multiple files for concurrent file reads
+	- lazy-initialize files in Stock data structure
 
 */

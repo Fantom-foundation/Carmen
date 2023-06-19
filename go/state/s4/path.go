@@ -43,15 +43,14 @@ func (p *Path) Get(pos int) Nibble {
 	return Nibble(twin & 0xF)
 }
 
-// TODO: test or remove
 func (p *Path) Set(pos int, val Nibble) {
 	if pos < 0 || pos >= int(p.length) {
 		return
 	}
 	if pos%2 == 0 {
-		p.path[pos/2] = (p.path[pos/2] & 0xF) | byte(val << 4)
+		p.path[pos/2] = (p.path[pos/2] & 0xF) | byte(val<<4)
 	} else {
-		p.path[pos/2] = (p.path[pos/2] & 0xF0) | byte(val & 0xF)
+		p.path[pos/2] = (p.path[pos/2] & 0xF0) | byte(val&0xF)
 	}
 }
 
@@ -83,23 +82,32 @@ func (p *Path) Append(n Nibble) *Path {
 	return p
 }
 
+func (p *Path) Prepend(n Nibble) *Path {
+	p.length++
+	for i := int(p.length - 2); i >= 0; i-- {
+		p.Set(i+1, p.Get(i))
+	}
+	p.Set(0, n)
+	return p
+}
+
 // TODO: test
 func (p *Path) ShiftLeft(steps int) *Path {
-	if (steps >= p.Length()) {
+	if steps >= p.Length() {
 		*p = Path{}
 		return p
 	}
-	if steps % 2 == 0 {
+	if steps%2 == 0 {
 		// Which way: we can shift full bytes.
 		copy(p.path[:], p.path[steps/2:])
 	} else {
 		// Slower: we need to shift half-bytes.
 		j := 0
-		for i := 0; i < int(p.length) - steps; i++ {
+		for i := 0; i < int(p.length)-steps; i++ {
 			p.Set(j, p.Get(i+steps))
 			j++
 		}
-		for i := 0; i<steps; i++ {
+		for i := 0; i < steps; i++ {
 			p.Set(j, 0)
 			j++
 		}

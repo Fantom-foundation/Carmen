@@ -20,41 +20,78 @@ func TestEmptyNode_GetAccount(t *testing.T) {
 
 	empty := EmptyNode{}
 	path := addressToNibbles(&addr)
-	if leaf, err := empty.GetAccount(mgr, &addr, path[:]); leaf != nil || err != nil {
-		t.Fatalf("lookup should return nil pointer, got %v, err %v", leaf, err)
+	if info, err := empty.GetAccount(mgr, &addr, path[:]); !info.IsEmpty() || err != nil {
+		t.Fatalf("lookup should return empty info, got %v, err %v", info, err)
 	}
 }
 
-func TestEmptyNode_GetOrCreateAccount(t *testing.T) {
+func TestEmptyNode_SetAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mgr := NewMockNodeManager(ctrl)
-
-	// The node to be created.
-	accountNodeId := AccountId(123)
-	accountNode := &AccountNode{}
-	mgr.EXPECT().createAccount().Return(accountNodeId, accountNode, nil)
+	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{1}
+	info := AccountInfo{Nonce: common.Nonce{1}}
 
-	empty := EmptyNode{}
+	// The state before the insert.
+	id, node := ctxt.Build(Empty{})
+
+	// The state after the insert.
+	resId, after := ctxt.Build(&Account{addr, info})
+
+	// The operation is creating one account node.
+	ctxt.EXPECT().createAccount().Return(resId, after, nil)
+	ctxt.EXPECT().update(resId, after).Return(nil)
+
 	path := addressToNibbles(&addr)
-	newRoot, leaf, err := empty.GetOrCreateAccount(mgr, EmptyId(), &addr, path[:])
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
 	if err != nil {
 		t.Fatalf("failed to create account: %v", err)
 	}
-	if newRoot != accountNodeId || leaf != accountNode {
-		t.Errorf("produced wrong results, wanted (%v,%v), got (%v,%v)", accountNodeId, accountNode, newRoot, leaf)
+	if !changed {
+		t.Errorf("added account information not indicated as a change")
 	}
-	if got, want := accountNode.address, addr; got != want {
-		t.Errorf("invalid path in account node, wanted %v, got %v", want, got)
+	if newRoot != resId {
+		t.Errorf("failed to return new root node ID, wanted %v, got %v", resId, newRoot)
 	}
+
+	got, _ := ctxt.getNode(resId)
+	ctxt.ExpectEqual(t, after, got)
+}
+
+func TestEmptyNode_SetAccount_ToEmptyInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{1}
+	info := AccountInfo{}
+
+	// The state before the insert.
+	id, node := ctxt.Build(Empty{})
+
+	// The state after the insert should remain unchanged.
+	resId, after := id, node
+
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+	if changed {
+		t.Errorf("adding empty account information should have not changed the trie")
+	}
+	if newRoot != resId {
+		t.Errorf("failed to return new root node ID, wanted %v, got %v", resId, newRoot)
+	}
+
+	got, _ := ctxt.getNode(resId)
+	ctxt.ExpectEqual(t, after, got)
 }
 
 // ----------------------------------------------------------------------------
 //                               Branch Node
 // ----------------------------------------------------------------------------
 
-func TestBranchNode_GetAccount2(t *testing.T) {
+func TestBranchNode_GetAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -62,28 +99,27 @@ func TestBranchNode_GetAccount2(t *testing.T) {
 	_, node := ctxt.Build(
 		&Branch{
 			4: &Account{common.Address{0x40}, info},
-			8: &Tag{"A", &Account{common.Address{0x81}, info}},
+			8: &Account{common.Address{0x81}, info},
 		},
 	)
 	ctxt.Check(t, node)
 
-	// Case 1: the trie does not contain the requested value.
+	// Case 1: the trie does not contain the requested account.
 	trg := common.Address{}
 	path := addressToNibbles(&trg)
-	if leaf, err := node.GetAccount(ctxt, &trg, path[:]); leaf != nil || err != nil {
-		t.Fatalf("lookup should return nil pointer, got %v, err %v", leaf, err)
+	if info, err := node.GetAccount(ctxt, &trg, path[:]); !info.IsEmpty() || err != nil {
+		t.Fatalf("lookup should return empty info, got %v, err %v", info, err)
 	}
 
-	// Case 2: the trie contains the requested value.
+	// Case 2: the trie contains the requested account.
 	trg = common.Address{0x81}
 	path = addressToNibbles(&trg)
-	leaf := ctxt.Get("A")
-	if res, err := node.GetAccount(ctxt, &trg, path[:]); res != leaf || err != nil {
-		t.Fatalf("lookup should return %p, got %v, err %v", leaf, res, err)
+	if res, err := node.GetAccount(ctxt, &trg, path[:]); res != info || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", info, res, err)
 	}
 }
 
-func TestBranchNode_GetOrCreateAccount_WithExistingAccount(t *testing.T) {
+func TestBranchNode_SetAccount_WithExistingAccount_NoChange(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -91,96 +127,231 @@ func TestBranchNode_GetOrCreateAccount_WithExistingAccount(t *testing.T) {
 	id, node := ctxt.Build(
 		&Branch{
 			4: &Account{common.Address{0x40}, info},
-			8: &Tag{"A", &Account{common.Address{0x81}, info}},
+			8: &Account{common.Address{0x81}, info},
 		},
 	)
 	ctxt.Check(t, node)
 
-	// Trie creating an already existing account.
 	addr := common.Address{0x81}
 	path := addressToNibbles(&addr)
-	leaf := ctxt.Get("A")
-	if newRoot, res, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != id || res != leaf || err != nil {
-		t.Fatalf("lookup should return (%v, %p), got (%v, %p), err %v", id, leaf, newRoot, res, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, false, newRoot, changed, err)
 	}
 }
 
-func TestBranchNode_GetOrCreateAccount_InExistingBranch(t *testing.T) {
+func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info1},
+			8: &Account{common.Address{0x81}, info1},
+		},
+	)
+	ctxt.Check(t, node)
+
+	// The account node that is targeted should marked to be upated.
+	branch := node.(*BranchNode)
+	account, _ := ctxt.getNode(branch.children[8])
+	ctxt.EXPECT().update(branch.children[8], account)
+
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+	addr := common.Address{0x81}
+	path := addressToNibbles(&addr)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
+	}
+}
+
+func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	id, node := ctxt.Build(
 		&Branch{
-			3: &Account{common.Address{0x3a}, info},
+			4: &Account{common.Address{0x40}, info},
 			8: &Account{common.Address{0x81}, info},
 		},
 	)
+	ctxt.Check(t, node)
 
 	_, after := ctxt.Build(
 		&Branch{
-			3: &Branch{
-				0xa: &Account{common.Address{0x3a}, info},
-				0xb: &Account{common.Address{0x3b}, info},
+			2: &Tag{"A", &Account{common.Address{0x21}, info}},
+			4: &Account{common.Address{0x40}, info},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, after)
+
+	accountId, account := ctxt.Get("A")
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	ctxt.EXPECT().update(id, node).Return(nil)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
+	}
+
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, node)
+
+	_, after := ctxt.Build(
+		&Branch{
+			4: &Branch{
+				0: &Account{common.Address{0x40}, info},
+				1: &Account{common.Address{0x41}, info},
 			},
 			8: &Account{common.Address{0x81}, info},
 		},
 	)
-
-	ctxt.Check(t, node)
 	ctxt.Check(t, after)
 
-	// Expect a number of new nodes to be created.
-	siblingId, sibling := ctxt.Build(&Account{info: info})
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
 	branchId, branch := ctxt.Build(&Branch{})
-	ctxt.EXPECT().createAccount().Return(siblingId, sibling, nil)
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	ctxt.EXPECT().update(id, node).Return(nil)
 
-	// Request the creation of a new account leaf in an existing branch.
-	addr := common.Address{0x3b}
+	addr := common.Address{0x41}
 	path := addressToNibbles(&addr)
-	if newRoot, res, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != id || res != sibling || err != nil {
-		t.Fatalf("lookup should return (%v, %p), got (%v, %p), err %v", id, sibling, newRoot, res, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
 
-	ctxt.ExpectEqual(t, node, after)
+	ctxt.ExpectEqual(t, after, node)
 }
 
-func TestBranchNode_GetOrCreateAccount_InNewBranch(t *testing.T) {
+func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	id, node := ctxt.Build(
 		&Branch{
-			3: &Account{common.Address{0x3a}, info},
-			8: &Account{common.Address{0x81}, info},
+			2: &Account{common.Address{0x20}, info},
+			4: &Tag{"A", &Account{common.Address{0x41}, info}},
+			8: &Account{common.Address{0x82}, info},
 		},
 	)
+	ctxt.Check(t, node)
 
 	_, after := ctxt.Build(
 		&Branch{
-			3: &Account{common.Address{0x3a}, info},
-			5: &Account{common.Address{0x51}, info},
-			8: &Account{common.Address{0x81}, info},
+			2: &Account{common.Address{0x20}, info},
+			8: &Account{common.Address{0x82}, info},
 		},
 	)
-
-	ctxt.Check(t, node)
 	ctxt.Check(t, after)
 
-	// In this case, only a single account node should be created.
-	siblingId, sibling := ctxt.Build(&Account{info: info})
-	ctxt.EXPECT().createAccount().Return(siblingId, sibling, nil)
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	ctxt.EXPECT().update(id, node).Return(nil)
 
-	// Request the creation of a new account leaf in an existing branch.
-	addr := common.Address{0x51}
+	empty := AccountInfo{}
+	addr := common.Address{0x41}
 	path := addressToNibbles(&addr)
-	if newRoot, res, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != id || res != sibling || err != nil {
-		t.Fatalf("lookup should return (%v, %p), got (%v, %p), err %v", id, sibling, newRoot, res, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
+	ctxt.ExpectEqual(t, after, node)
+}
 
-	ctxt.ExpectEqual(t, node, after)
+func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x41}, info},
+			8: &Tag{"A", &Account{common.Address{0x82}, info}},
+		},
+	)
+	ctxt.Check(t, node)
+
+	_, after := ctxt.Build(&Account{common.Address{0x41}, info})
+	ctxt.Check(t, after)
+
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	ctxt.EXPECT().release(id).Return(nil)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x82}
+	path := addressToNibbles(&addr)
+	wantId := node.(*BranchNode).children[4]
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty); newRoot != wantId || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
+	}
+	node, _ = ctxt.getNode(wantId)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtension(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Tag{"E", &Extension{
+				[]Nibble{1, 2, 3},
+				&Branch{
+					1: &Account{common.Address{0x41, 0x23, 0x10}, info},
+					2: &Account{common.Address{0x41, 0x23, 0x20}, info},
+				},
+			}},
+			8: &Tag{"A", &Account{common.Address{0x82}, info}},
+		},
+	)
+	ctxt.Check(t, node)
+
+	_, after := ctxt.Build(&Extension{
+		[]Nibble{4, 1, 2, 3},
+		&Branch{
+			1: &Account{common.Address{0x41, 0x23, 0x10}, info},
+			2: &Account{common.Address{0x41, 0x23, 0x20}, info},
+		},
+	})
+	ctxt.Check(t, after)
+
+	extensionId, extension := ctxt.Get("E")
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	ctxt.EXPECT().release(id).Return(nil)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x82}
+	path := addressToNibbles(&addr)
+	wantId := node.(*BranchNode).children[4]
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty); newRoot != wantId || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
+	}
+	node, _ = ctxt.getNode(wantId)
+	ctxt.ExpectEqual(t, after, node)
 }
 
 // ----------------------------------------------------------------------------
@@ -196,7 +367,7 @@ func TestExtensionNode_GetAccount(t *testing.T) {
 		&Extension{
 			[]Nibble{1, 2, 3},
 			&Branch{
-				5: &Tag{"A", &Account{common.Address{0x12, 0x35}, info}},
+				5: &Account{common.Address{0x12, 0x35}, info},
 				8: &Account{common.Address{0x12, 0x38}, info},
 			},
 		},
@@ -206,27 +377,26 @@ func TestExtensionNode_GetAccount(t *testing.T) {
 	// Case 1: try to locate a non-existing address
 	trg := common.Address{}
 	path := addressToNibbles(&trg)
-	if leaf, err := node.GetAccount(ctxt, &trg, path[:]); leaf != nil || err != nil {
-		t.Fatalf("lookup should return nil pointer, got %v, err %v", leaf, err)
+	if res, err := node.GetAccount(ctxt, &trg, path[:]); !res.IsEmpty() || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", AccountInfo{}, res, err)
 	}
 
 	// Case 2: locate an existing address
-	leaf := ctxt.Get("A").(*AccountNode)
-	trg = leaf.address
+	trg = common.Address{0x12, 0x35}
 	path = addressToNibbles(&trg)
-	if res, err := node.GetAccount(ctxt, &trg, path[:]); res != leaf || err != nil {
-		t.Fatalf("lookup should return %p, got %v, err %v", leaf, res, err)
+	if res, err := node.GetAccount(ctxt, &trg, path[:]); res != info || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", info, res, err)
 	}
 
 	// Case 3: locate an address with a partial extension path overlap only
-	trg = common.Address{1, 2, 4, 8}
+	trg = common.Address{0x12, 0x4F}
 	path = addressToNibbles(&trg)
-	if leaf, err := node.GetAccount(ctxt, &trg, path[:]); leaf != nil || err != nil {
-		t.Fatalf("lookup should return nil pointer, got %v, err %v", leaf, err)
+	if res, err := node.GetAccount(ctxt, &trg, path[:]); !res.IsEmpty() || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", AccountInfo{}, res, err)
 	}
 }
 
-func TestExtensionNode_GetOrAddAccount_ExistingLeaf(t *testing.T) {
+func TestExtensionNode_SetAccount_ExistingLeaf_UnchangedInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -235,7 +405,7 @@ func TestExtensionNode_GetOrAddAccount_ExistingLeaf(t *testing.T) {
 		&Extension{
 			[]Nibble{1, 2, 3},
 			&Branch{
-				5: &Tag{"A", &Account{common.Address{0x12, 0x35}, info}},
+				5: &Account{common.Address{0x12, 0x35}, info},
 				8: &Account{common.Address{0x12, 0x38}, info},
 			},
 		},
@@ -243,18 +413,58 @@ func TestExtensionNode_GetOrAddAccount_ExistingLeaf(t *testing.T) {
 	ctxt.Check(t, node)
 
 	// Attempt to create an existing account.
-	leaf := ctxt.Get("A").(*AccountNode)
-	trg := leaf.address
+	trg := common.Address{0x12, 0x35}
 	path := addressToNibbles(&trg)
-	if newRoot, res, err := node.GetOrCreateAccount(ctxt, id, &trg, path[:]); newRoot != id || res != leaf || err != nil {
-		t.Fatalf("lookup should return (%v,%v), got (%v,%v), err %v", id, leaf, newRoot, res, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &trg, path[:], &info); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, false, newRoot, changed, err)
 	}
 
 	// Make sure the tree fragment was not corrupted.
 	ctxt.Check(t, node)
 }
 
-func TestExtensionNode_GetOrAddAccount_PartialExtensionCovered(t *testing.T) {
+func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Branch{
+				5: &Tag{"A", &Account{common.Address{0x12, 0x35}, info1}},
+				8: &Account{common.Address{0x12, 0x38}, info2},
+			},
+		},
+	)
+	ctxt.Check(t, node)
+
+	_, after := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Branch{
+				5: &Account{common.Address{0x12, 0x35}, info2},
+				8: &Account{common.Address{0x12, 0x38}, info2},
+			},
+		},
+	)
+	ctxt.Check(t, after)
+
+	accountId, account := ctxt.Get("A")
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+
+	// Attempt to create an existing account.
+	trg := common.Address{0x12, 0x35}
+	path := addressToNibbles(&trg)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &trg, path[:], &info2); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, true, newRoot, changed, err)
+	}
+
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -291,23 +501,28 @@ func TestExtensionNode_GetOrAddAccount_PartialExtensionCovered(t *testing.T) {
 	// In this case, one new branch, extension and account is created.
 	accountId, account := ctxt.Build(&Account{info: info})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
 	branchId, branch := ctxt.Build(&Branch{})
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
 	extensionId, extension := ctxt.Build(&Extension{})
 	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	ctxt.EXPECT().update(id, node).Return(nil)
 
 	// Attempt to create a new account that is partially covered by the extension.
 	addr := common.Address{0x12, 0x40}
 	path := addressToNibbles(&addr)
-	if newRoot, leaf, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != extensionId || leaf != account || err != nil {
-		t.Fatalf("lookup should return (%v,%v), got (%v,%v), err %v", extensionId, account, newRoot, leaf, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != extensionId || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", extensionId, true, newRoot, changed, err)
 	}
 	node, _ = ctxt.getNode(extensionId)
 
-	ctxt.ExpectEqual(t, node, after)
+	ctxt.ExpectEqual(t, after, node)
 }
 
-func TestExtensionNode_GetOrAddAccount_NoCommonPrefix(t *testing.T) {
+func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -331,31 +546,34 @@ func TestExtensionNode_GetOrAddAccount_NoCommonPrefix(t *testing.T) {
 					0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
 				},
 			},
-			8: &Account{common.Address{0x82}, info},
+			4: &Account{common.Address{0x40}, info},
 		},
 	)
 
 	ctxt.Check(t, node)
 	ctxt.Check(t, after)
 
-	// In this case, one new branch and an account is created.
+	// In this case, one new branch and account is created.
 	accountId, account := ctxt.Build(&Account{info: info})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
 	branchId, branch := ctxt.Build(&Branch{})
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
-	// Attempt to create a new account that is partially covered by the extension.
-	addr := common.Address{0x82}
+	ctxt.EXPECT().update(id, node).Return(nil)
+
+	addr := common.Address{0x40}
 	path := addressToNibbles(&addr)
-	if newRoot, leaf, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != branchId || leaf != account || err != nil {
-		t.Fatalf("lookup should return (%v,%v), got (%v,%v), err %v", branchId, account, newRoot, leaf, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != branchId || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
 	node, _ = ctxt.getNode(branchId)
 
-	ctxt.ExpectEqual(t, node, after)
+	ctxt.ExpectEqual(t, after, node)
 }
 
-func TestExtensionNode_GetOrAddAccount_NoRemainingSuffix(t *testing.T) {
+func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -389,20 +607,23 @@ func TestExtensionNode_GetOrAddAccount_NoRemainingSuffix(t *testing.T) {
 	// In this case, one new branch and account is created.
 	accountId, account := ctxt.Build(&Account{info: info})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
 	branchId, branch := ctxt.Build(&Branch{})
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
-	// Attempt to create a new account that is partially covered by the extension.
+	ctxt.EXPECT().update(id, node).Return(nil)
+
 	addr := common.Address{0x12, 0x38}
 	path := addressToNibbles(&addr)
-	if newRoot, leaf, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != id || leaf != account || err != nil {
-		t.Fatalf("lookup should return (%v,%v), got (%v,%v), err %v", id, account, newRoot, leaf, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, true, newRoot, changed, err)
 	}
 
-	ctxt.ExpectEqual(t, node, after)
+	ctxt.ExpectEqual(t, after, node)
 }
 
-func TestExtensionNode_GetOrAddAccount_ExtensionIsEliminated(t *testing.T) {
+func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
@@ -423,29 +644,31 @@ func TestExtensionNode_GetOrAddAccount_ExtensionIsEliminated(t *testing.T) {
 				0xA: &Account{common.Address{0x1A}, info},
 				0xE: &Account{common.Address{0x1E}, info},
 			},
-			8: &Account{common.Address{0x83}, info},
+			2: &Account{common.Address{0x20}, info},
 		},
 	)
 
 	ctxt.Check(t, node)
 	ctxt.Check(t, after)
 
-	// In this case, a new branch and account is created and the extension is removed.
+	// In this case a banch and account is created and an extension released.
 	accountId, account := ctxt.Build(&Account{info: info})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
 	branchId, branch := ctxt.Build(&Branch{})
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
-	ctxt.EXPECT().release(id)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
-	// Attempt to create a new account that is partially covered by the extension.
-	addr := common.Address{0x83}
+	ctxt.EXPECT().release(id).Return(nil)
+
+	addr := common.Address{0x20}
 	path := addressToNibbles(&addr)
-	if newRoot, leaf, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:]); newRoot != branchId || leaf != account || err != nil {
-		t.Fatalf("lookup should return (%v,%v), got (%v,%v), err %v", branchId, account, newRoot, leaf, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != branchId || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
 
-	result, _ := ctxt.getNode(branchId)
-	ctxt.ExpectEqual(t, result, after)
+	node, _ = ctxt.getNode(branchId)
+	ctxt.ExpectEqual(t, after, node)
 }
 
 // ----------------------------------------------------------------------------
@@ -455,131 +678,452 @@ func TestExtensionNode_GetOrAddAccount_ExtensionIsEliminated(t *testing.T) {
 func TestAccountNode_GetAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mgr := NewMockNodeManager(ctrl)
-
-	addr := common.Address{1}
-	node := &AccountNode{}
-
-	// Case 1: the node does not contain the requested value.
-	path := addressToNibbles(&addr)
-	if leaf, err := node.GetAccount(mgr, &addr, path[:]); leaf != nil || err != nil {
-		t.Fatalf("lookup should return nil pointer, got %v, err %v", leaf, err)
-	}
-
-	// Case 2: the node contains the value with the full path in the node.
-	node.address = addr
-	if leaf, err := node.GetAccount(mgr, &addr, path[:]); leaf != node || err != nil {
-		t.Fatalf("lookup should return %p, got %v, err %v", node, leaf, err)
-	}
-}
-
-func TestAccountNode_GetOrCreateAccount_WithExistingAccount(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mgr := NewMockNodeManager(ctrl)
-
-	addr := common.Address{1}
-	path := addressToNibbles(&addr)
-
-	node := &AccountNode{}
-	node.address = addr
-
-	nodeId := AccountId(123)
-	newRoot, leaf, err := node.GetOrCreateAccount(mgr, nodeId, &addr, path[:])
-	if err != nil {
-		t.Fatalf("failed to fetch account: %v", err)
-	}
-	if newRoot != nodeId || leaf != node {
-		t.Errorf("produced wrong results, wanted (%v,%v), got (%v,%v)", nodeId, node, newRoot, leaf)
-	}
-}
-
-func TestAccountNode_GetOrCreateAccount_WithMissingAccount(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	ctxt := newNodeContext(ctrl)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
-	id, node := ctxt.Build(
-		&Account{common.Address{0x00, 0x02}, info},
-	)
+	addr := common.Address{1}
+	node := &AccountNode{info: info}
 
-	_, after := ctxt.Build(
-		&Extension{
-			[]Nibble{0, 0, 0},
-			&Branch{
-				2: &Account{common.Address{0x00, 0x02}, info},
-				4: &Account{common.Address{0x00, 0x04}, info},
-			},
-		},
-	)
+	// Case 1: the node does not contain the requested info.
+	path := addressToNibbles(&addr)
+	if res, err := node.GetAccount(mgr, &addr, path[:]); !res.IsEmpty() || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", AccountInfo{}, res, err)
+	}
 
-	ctxt.Check(t, node)
-	ctxt.Check(t, after)
+	// Case 2: the node contains the requested info.
+	node.address = addr
+	if res, err := node.GetAccount(mgr, &addr, path[:]); info != res || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", info, res, err)
+	}
+}
 
-	// In this case, one new branch, extension and account is created.
-	accountId, account := ctxt.Build(&Account{info: info})
+func TestAccountNode_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(&Account{addr, info})
+
+	// Update the account information with the same information.
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, false, newRoot, changed, err)
+	}
+	ctxt.ExpectEqual(t, node, node)
+}
+
+func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	id, node := ctxt.Build(&Account{addr, info1})
+	_, after := ctxt.Build(&Account{addr, info2})
+
+	ctxt.EXPECT().update(id, node).Return(nil)
+
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	}
+
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{}
+
+	id, node := ctxt.Build(&Account{addr, info1})
+	_, after := ctxt.Build(Empty{})
+
+	ctxt.EXPECT().release(id).Return(nil)
+
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2); !newRoot.IsEmpty() || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), true, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(EmptyId())
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x21}
+	addr2 := common.Address{0x34}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	id, node := ctxt.Build(&Account{addr1, info1})
+
+	res, after := ctxt.Build(&Branch{
+		2: &Account{addr1, info1},
+		3: &Account{addr2, info2},
+	})
+
+	// This operation creates one new account node and a branch.
+	accountId, account := ctxt.Build(&Account{})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
-	branchId, branch := ctxt.Build(&Branch{})
-	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
-	extensionId, extension := ctxt.Build(&Extension{})
-	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().createBranch().Return(res, after, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	ctxt.EXPECT().update(res, after).Return(nil)
 
-	// Run the creation of the new node.
-	addr := common.Address{0x00, 0x04}
-	path := addressToNibbles(&addr)
-	newRoot, leaf, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:])
-	if err != nil {
-		t.Fatalf("failed to add new account: %v", err)
-	}
-	if newRoot != extensionId || leaf != account {
-		t.Errorf("produced wrong results, wanted (%v,%v), got (%v,%v)", extensionId, account, newRoot, leaf)
+	path := addressToNibbles(&addr2)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
 	}
 
-	result, _ := ctxt.getNode(newRoot)
-	ctxt.ExpectEqual(t, result, after)
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
 }
 
-func TestAccountNode_GetOrCreateAccount_WithMissingAccountAndNoCommonPrefix(t *testing.T) {
+func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
-	info := AccountInfo{Nonce: common.Nonce{1}}
 
-	id, node := ctxt.Build(
-		&Account{common.Address{0x22}, info},
-	)
+	addr1 := common.Address{0x12, 0x3A}
+	addr2 := common.Address{0x12, 0x3B}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
-	_, after := ctxt.Build(
+	id, node := ctxt.Build(&Account{addr1, info1})
+
+	res, after := ctxt.Build(&Extension{
+		[]Nibble{1, 2, 3},
 		&Branch{
-			2: &Account{common.Address{0x22}, info},
-			4: &Account{common.Address{0x41}, info},
+			0xA: &Account{addr1, info1},
+			0xB: &Account{addr2, info2},
 		},
-	)
+	})
 
-	ctxt.Check(t, node)
-	ctxt.Check(t, after)
-
-	// In this case, one new branch and account is created.
-	accountId, account := ctxt.Build(&Account{info: info})
+	// This operation creates one new account, branch, and extension node.
+	accountId, account := ctxt.Build(&Account{})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
 	branchId, branch := ctxt.Build(&Branch{})
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().createExtension().Return(res, after, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	ctxt.EXPECT().update(res, after).Return(nil)
 
-	// Run the creation of the new node.
-	addr := common.Address{0x41}
-	path := addressToNibbles(&addr)
-	newRoot, leaf, err := node.GetOrCreateAccount(ctxt, id, &addr, path[:])
-	if err != nil {
-		t.Fatalf("failed to add new account: %v", err)
-	}
-	if newRoot != branchId || leaf != account {
-		t.Errorf("produced wrong results, wanted (%v,%v), got (%v,%v)", branchId, account, newRoot, leaf)
+	path := addressToNibbles(&addr2)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
 	}
 
-	result, _ := ctxt.getNode(newRoot)
-	ctxt.ExpectEqual(t, result, after)
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x21}
+	addr2 := common.Address{0x34}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{}
+
+	id, node := ctxt.Build(&Account{addr1, info1})
+	res, after := id, node
+
+	path := addressToNibbles(&addr2)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x12, 0x3A}
+	addr2 := common.Address{0x12, 0x3B}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{}
+
+	id, node := ctxt.Build(&Account{addr1, info1})
+
+	res, after := id, node
+
+	path := addressToNibbles(&addr2)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_GetValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	node := &AccountNode{}
+
+	key := common.Key{}
+	path := keyToNibbles(&key)
+	if _, err := node.GetValue(ctxt, &key, path[:]); err == nil {
+		t.Fatalf("GetValue call should always return an error")
+	}
+}
+
+func TestAccountNode_SetValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value := common.Value{1}
+
+	id := AccountId(12)
+	node := &AccountNode{}
+
+	if _, _, err := node.SetValue(ctxt, id, &key, path[:], &value); err == nil {
+		t.Fatalf("SetValue call should always return an error")
+	}
 }
 
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
+
+func TestValueNode_GetAccount(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	node := &ValueNode{}
+
+	addr := common.Address{}
+	path := addressToNibbles(&addr)
+	if _, err := node.GetAccount(ctxt, &addr, path[:]); err == nil {
+		t.Fatalf("GetAccount call should always return an error")
+	}
+}
+
+func TestValueNode_SetAccount(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id := ValueId(12)
+	node := &ValueNode{}
+
+	if _, _, err := node.SetAccount(ctxt, id, &addr, path[:], &info); err == nil {
+		t.Fatalf("SetAccount call should always return an error")
+	}
+}
+
+func TestValueNode_GetValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mgr := NewMockNodeManager(ctrl)
+	value := common.Value{1}
+
+	key := common.Key{1}
+	node := &ValueNode{value: value}
+
+	// Case 1: the node does not contain the requested info.
+	path := keyToNibbles(&key)
+	if res, err := node.GetValue(mgr, &key, path[:]); res != (common.Value{}) || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", common.Value{}, res, err)
+	}
+
+	// Case 2: the node contains the requested info.
+	node.key = key
+	if res, err := node.GetValue(mgr, &key, path[:]); value != res || err != nil {
+		t.Fatalf("lookup should return %v, got %v, err %v", value, res, err)
+	}
+}
+
+func TestValueNode_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value := common.Value{1}
+
+	id, node := ctxt.Build(&Value{key, value})
+
+	// Update the value with the same value.
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key, path[:], &value); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, false, newRoot, changed, err)
+	}
+	ctxt.ExpectEqual(t, node, node)
+}
+
+func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	id, node := ctxt.Build(&Value{key, value1})
+	_, after := ctxt.Build(&Value{key, value2})
+
+	ctxt.EXPECT().update(id, node).Return(nil)
+
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key, path[:], &value2); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	}
+
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value1 := common.Value{1}
+	value2 := common.Value{}
+
+	id, node := ctxt.Build(&Value{key, value1})
+	_, after := ctxt.Build(Empty{})
+
+	ctxt.EXPECT().release(id).Return(nil)
+
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key, path[:], &value2); !newRoot.IsEmpty() || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), true, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(EmptyId())
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x21}
+	key2 := common.Key{0x34}
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	id, node := ctxt.Build(&Value{key1, value1})
+
+	res, after := ctxt.Build(&Branch{
+		2: &Value{key1, value1},
+		3: &Value{key2, value2},
+	})
+
+	// This operation creates one new value node and a branch.
+	valueId, value := ctxt.Build(&Value{})
+	ctxt.EXPECT().createValue().Return(valueId, value, nil)
+	ctxt.EXPECT().createBranch().Return(res, after, nil)
+	ctxt.EXPECT().update(valueId, value).Return(nil)
+	ctxt.EXPECT().update(res, after).Return(nil)
+
+	path := keyToNibbles(&key2)
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x12, 0x3A}
+	key2 := common.Key{0x12, 0x3B}
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	id, node := ctxt.Build(&Value{key1, value1})
+
+	res, after := ctxt.Build(&Extension{
+		[]Nibble{1, 2, 3},
+		&Branch{
+			0xA: &Value{key1, value1},
+			0xB: &Value{key2, value2},
+		},
+	})
+
+	// This operation creates one new value, branch, and extension node.
+	valueId, value := ctxt.Build(&Value{})
+	ctxt.EXPECT().createValue().Return(valueId, value, nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().createExtension().Return(res, after, nil)
+	ctxt.EXPECT().update(valueId, value).Return(nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	ctxt.EXPECT().update(res, after).Return(nil)
+
+	path := keyToNibbles(&key2)
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x21}
+	key2 := common.Key{0x34}
+	value1 := common.Value{1}
+	value2 := common.Value{}
+
+	id, node := ctxt.Build(&Value{key1, value1})
+	res, after := id, node
+
+	path := keyToNibbles(&key2)
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x12, 0x3A}
+	key2 := common.Key{0x12, 0x3B}
+	value1 := common.Value{1}
+	value2 := common.Value{}
+
+	id, node := ctxt.Build(&Value{key1, value1})
+
+	res, after := id, node
+
+	path := keyToNibbles(&key2)
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
+	}
+
+	node, _ = ctxt.getNode(res)
+	ctxt.ExpectEqual(t, after, node)
+}
 
 // ----------------------------------------------------------------------------
 //                               Utilities
@@ -603,7 +1147,7 @@ type Account struct {
 func (a *Account) Build(ctx *nodeContext) (NodeId, Node) {
 	return AccountId(ctx.nextIndex()), &AccountNode{
 		address: a.address,
-		account: a.info,
+		info:    a.info,
 	}
 }
 
@@ -643,6 +1187,18 @@ func (t *Tag) Build(ctx *nodeContext) (NodeId, Node) {
 	return id, res
 }
 
+type Value struct {
+	key   common.Key
+	value common.Value
+}
+
+func (v *Value) Build(ctx *nodeContext) (NodeId, Node) {
+	return ValueId(ctx.nextIndex()), &ValueNode{
+		key:   v.key,
+		value: v.value,
+	}
+}
+
 type entry struct {
 	id   NodeId
 	node Node
@@ -679,12 +1235,12 @@ func (c *nodeContext) Build(desc NodeDesc) (NodeId, Node) {
 	return id, node
 }
 
-func (c *nodeContext) Get(label string) Node {
+func (c *nodeContext) Get(label string) (NodeId, Node) {
 	e, exists := c.tags[label]
 	if !exists {
 		panic("requested non-existing element")
 	}
-	return e.node
+	return e.id, e.node
 }
 
 func (c *nodeContext) nextIndex() uint32 {
@@ -699,12 +1255,12 @@ func (c *nodeContext) Check(t *testing.T, a Node) {
 	}
 }
 
-func (c *nodeContext) ExpectEqual(t *testing.T, a, b Node) {
-	if !c.equal(a, b) {
+func (c *nodeContext) ExpectEqual(t *testing.T, want, got Node) {
+	if !c.equal(want, got) {
 		fmt.Printf("Want:\n")
-		b.Dump(c, "")
+		want.Dump(c, "")
 		fmt.Printf("Have:\n")
-		a.Dump(c, "")
+		got.Dump(c, "")
 		t.Errorf("unexpected resulting node structure")
 	}
 }
@@ -717,7 +1273,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 
 	if a, ok := a.(*AccountNode); ok {
 		if b, ok := b.(*AccountNode); ok {
-			return a.address == b.address && a.account == b.account && c.equalTries(a.state, b.state)
+			return a.address == b.address && a.info == b.info && c.equalTries(a.state, b.state)
 		}
 		return false
 	}

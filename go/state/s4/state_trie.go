@@ -46,31 +46,30 @@ func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 }
 
 func (s *StateTrie) GetAccountInfo(addr common.Address) (AccountInfo, error) {
-	node, err := s.getAccountNode(addr)
-	if err != nil || node == nil {
+	root, err := s.getNode(s.root)
+	if err != nil {
 		return AccountInfo{}, err
 	}
-	return node.account, nil
+	path := addressToNibbles(&addr)
+	return root.GetAccount(s, &addr, path[:])
 }
 
 func (s *StateTrie) SetAccountInfo(addr common.Address, info AccountInfo) error {
-	node, err := s.getOrCreateAccountNode(addr)
+	root, err := s.getNode(s.root)
 	if err != nil {
 		return err
 	}
-	node.account = info
-	// TODO: call stock.Set(node) to commit changes
+	path := addressToNibbles(&addr)
+	newRoot, _, err := root.SetAccount(s, s.root, &addr, path[:], &info)
+	if err != nil {
+		return err
+	}
+	s.root = newRoot
 	return nil
 }
 
 func (s *StateTrie) GetValue(addr common.Address, key common.Key) (common.Value, error) {
 	// Step 1: navigate to account level.
-	account, err := s.getAccountNode(addr)
-	if err != nil || account == nil || account.state.IsEmpty() {
-		return common.Value{}, err
-	}
-
-	// Step 2: navigate within account state trie.
 	panic("not implemented")
 }
 
@@ -118,34 +117,10 @@ func (s *StateTrie) Check() error {
 	return root.Check(s, make([]Nibble, 0, common.AddressSize*2))
 }
 
-func (s *StateTrie) getAccountNode(addr common.Address) (*AccountNode, error) {
-	root, err := s.getNode(s.root)
-	if err != nil {
-		return nil, err
-	}
-
-	path := addressToNibbles(&addr)
-	return root.GetAccount(s, &addr, path[:])
-}
-
-func (s *StateTrie) getOrCreateAccountNode(addr common.Address) (*AccountNode, error) {
-	root, err := s.getNode(s.root)
-	if err != nil {
-		return nil, err
-	}
-
-	path := addressToNibbles(&addr)
-	newRoot, res, err := root.GetOrCreateAccount(s, s.root, &addr, path[:])
-	if err != nil {
-		return nil, err
-	}
-	s.root = newRoot
-	return res, nil
-}
-
 // -- NodeManager interface --
 
 func (s *StateTrie) getNode(id NodeId) (Node, error) {
+	// TODO: add a node cache!
 	var node Node
 	var err error
 	if id.IsValue() {
@@ -168,6 +143,23 @@ func (s *StateTrie) getNode(id NodeId) (Node, error) {
 		return nil, fmt.Errorf("no node with ID %d in storage", id)
 	}
 	return node, nil
+}
+
+func (s *StateTrie) update(id NodeId, node Node) error {
+	// TODO: add a node cache!
+	if id.IsValue() {
+		return s.values.Set(id.Index(), node.(*ValueNode))
+	} else if id.IsAccount() {
+		return s.accounts.Set(id.Index(), node.(*AccountNode))
+	} else if id.IsBranch() {
+		return s.branches.Set(id.Index(), node.(*BranchNode))
+	} else if id.IsExtension() {
+		return s.extensions.Set(id.Index(), node.(*ExtensionNode))
+	} else if id.IsEmpty() {
+		return nil
+	} else {
+		return fmt.Errorf("unknown node ID: %v", id)
+	}
 }
 
 func (s *StateTrie) createAccount() (NodeId, *AccountNode, error) {
