@@ -365,6 +365,50 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtension(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Branch{
+				1: &Account{common.Address{0x41, 0x20}, info},
+				2: &Account{common.Address{0x42, 0x84}, info},
+			},
+			8: &Tag{"A", &Account{common.Address{0x82}, info}},
+		},
+	)
+	ctxt.Check(t, node)
+
+	_, after := ctxt.Build(&Extension{
+		[]Nibble{4},
+		&Branch{
+			1: &Account{common.Address{0x41, 0x20}, info},
+			2: &Account{common.Address{0x42, 0x84}, info},
+		},
+	})
+	ctxt.Check(t, after)
+
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	ctxt.EXPECT().release(id).Return(nil)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x82}
+	path := addressToNibbles(&addr)
+	wantId := extensionId
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty); newRoot != wantId || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
+	}
+	node, _ = ctxt.getNode(wantId)
+	ctxt.ExpectEqual(t, after, node)
+}
+
 func TestBranchNode_Release(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -703,6 +747,104 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 
 	node, _ = ctxt.getNode(branchId)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1},
+			&Tag{"B", &Branch{
+				1: &Branch{
+					1: &Account{common.Address{0x11, 0x10}, info},
+					2: &Account{common.Address{0x11, 0x20}, info},
+				},
+				2: &Tag{"A", &Account{common.Address{0x12}, info}},
+			}},
+		},
+	)
+
+	_, after := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 1},
+			&Branch{
+				1: &Account{common.Address{0x11, 0x10}, info},
+				2: &Account{common.Address{0x11, 0x20}, info},
+			},
+		},
+	)
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, after)
+
+	// This case elminates an account and a branch. Also, it introduces
+	// a temporary extension that is removed again.
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId)
+
+	branchId, _ := ctxt.Get("B")
+	ctxt.EXPECT().release(branchId)
+
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+	ctxt.EXPECT().release(extensionId).Return(nil)
+
+	ctxt.EXPECT().update(id, node).Return(nil)
+
+	addr := common.Address{0x12}
+	path := addressToNibbles(&addr)
+	empty := AccountInfo{}
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, true, newRoot, changed, err)
+	}
+
+	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1},
+			&Tag{"B", &Branch{
+				1: &Tag{"R", &Account{common.Address{0x11, 0x10}, info}},
+				2: &Tag{"A", &Account{common.Address{0x12}, info}},
+			}},
+		},
+	)
+
+	_, after := ctxt.Build(&Account{common.Address{0x11, 0x10}, info})
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, after)
+
+	// This case elminates an account and a branch. Also, it introduces
+	// a temporary extension that is removed again.
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId)
+
+	branchId, _ := ctxt.Get("B")
+	ctxt.EXPECT().release(branchId)
+
+	ctxt.EXPECT().release(id).Return(nil)
+
+	resultId, result := ctxt.Get("R")
+
+	addr := common.Address{0x12}
+	path := addressToNibbles(&addr)
+	empty := AccountInfo{}
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty); newRoot != resultId || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", resultId, true, newRoot, changed, err)
+	}
+
+	ctxt.ExpectEqual(t, after, result)
 }
 
 func TestExtensionNode_Release(t *testing.T) {

@@ -82,6 +82,13 @@ func (p *Path) Append(n Nibble) *Path {
 	return p
 }
 
+func (p *Path) AppendAll(other *Path) *Path {
+	for i := 0; i < other.Length(); i++ {
+		p.Append(other.Get(i))
+	}
+	return p
+}
+
 func (p *Path) Prepend(n Nibble) *Path {
 	p.length++
 	for i := int(p.length - 2); i >= 0; i-- {

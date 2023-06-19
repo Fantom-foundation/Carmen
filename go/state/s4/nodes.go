@@ -198,8 +198,10 @@ func (n *BranchNode) setNextNode(
 			}
 		}
 		if count < 2 {
+			newRoot := remaining
 			// This branch became obsolete and needs to be removed.
 			if remaining.IsExtension() {
+				// The present extension can be extended.
 				extension, err := manager.getNode(remaining)
 				if err != nil {
 					return 0, false, err
@@ -207,9 +209,19 @@ func (n *BranchNode) setNextNode(
 				extensionNode := extension.(*ExtensionNode)
 				extensionNode.path.Prepend(remainingPos)
 				manager.update(remaining, extension)
+			} else if remaining.IsBranch() {
+				// An extension needs to replace this branch.
+				extensionId, extension, err := manager.createExtension()
+				if err != nil {
+					return 0, false, err
+				}
+				extension.path = SingleStepPath(remainingPos)
+				extension.next = remaining
+				manager.update(extensionId, extension)
+				newRoot = extensionId
 			}
 			manager.release(thisId)
-			return remaining, true, nil
+			return newRoot, true, nil
 		}
 	}
 
@@ -371,8 +383,25 @@ func (n *ExtensionNode) setNextNode(
 		}
 
 		if newRoot != n.next {
-			n.next = newRoot
-			manager.update(thisId, n)
+			if newRoot.IsExtension() {
+				// If the new next is an extension, merge it into this extension.
+				node, err := manager.getNode(newRoot)
+				if err != nil {
+					return 0, false, err
+				}
+				extension := node.(*ExtensionNode)
+				n.path.AppendAll(&extension.path)
+				n.next = extension.next
+				manager.update(thisId, n)
+				manager.release(newRoot)
+			} else if newRoot.IsBranch() {
+				n.next = newRoot
+				manager.update(thisId, n)
+			} else {
+				// If the next node is anything but a branch or extension, remove this extension.
+				manager.release(thisId)
+				return newRoot, true, nil
+			}
 		}
 		return thisId, changed, err
 	}
