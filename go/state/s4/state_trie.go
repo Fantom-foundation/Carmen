@@ -69,12 +69,26 @@ func (s *StateTrie) SetAccountInfo(addr common.Address, info AccountInfo) error 
 }
 
 func (s *StateTrie) GetValue(addr common.Address, key common.Key) (common.Value, error) {
-	// Step 1: navigate to account level.
-	panic("not implemented")
+	root, err := s.getNode(s.root)
+	if err != nil {
+		return common.Value{}, err
+	}
+	path := addressToNibbles(&addr)
+	return root.GetSlot(s, &addr, path[:], &key)
 }
 
 func (s *StateTrie) SetValue(addr common.Address, key common.Key, value common.Value) error {
-	panic("not implemented")
+	root, err := s.getNode(s.root)
+	if err != nil {
+		return err
+	}
+	path := addressToNibbles(&addr)
+	newRoot, _, err := root.SetSlot(s, s.root, &addr, path[:], &key, &value)
+	if err != nil {
+		return err
+	}
+	s.root = newRoot
+	return nil
 }
 
 func (s *StateTrie) Flush() error {

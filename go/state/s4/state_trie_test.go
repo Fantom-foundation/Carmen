@@ -111,3 +111,27 @@ func TestStateTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 		t.Errorf("trie corrupted after insert: %v", err)
 	}
 }
+
+func TestStateTrie_NonExistingValueHasZeroValue(t *testing.T) {
+	trie, err := OpenInMemoryTrie(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	defer trie.Close()
+
+	addr := common.Address{1}
+	key := common.Key{1}
+
+	// If the account does not exist, the result should be empty.
+	if value, err := trie.GetValue(addr, key); value != (common.Value{}) || err != nil {
+		t.Errorf("expected value of non-existing account to be empty, got %v, err: %v", value, err)
+	}
+
+	// Also, if the account exists, the result should be empty.
+	if err := trie.SetAccountInfo(addr, AccountInfo{Nonce: common.Nonce{1}}); err != nil {
+		t.Fatalf("failed to create an account")
+	}
+	if value, err := trie.GetValue(addr, key); value != (common.Value{}) || err != nil {
+		t.Errorf("expected value of uninitialized slot to be empty, got %v, err: %v", value, err)
+	}
+}

@@ -87,6 +87,17 @@ func TestEmptyNode_SetAccount_ToEmptyInfo(t *testing.T) {
 	ctxt.ExpectEqual(t, after, got)
 }
 
+func TestEmptyNode_Release(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	id, node := ctxt.Build(Empty{})
+
+	if err := node.Release(ctxt, id); err != nil {
+		t.Errorf("failed to release node: %v", err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Branch Node
 // ----------------------------------------------------------------------------
@@ -352,6 +363,29 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 	}
 	node, _ = ctxt.getNode(wantId)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestBranchNode_Release(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	id, node := ctxt.Build(&Branch{
+		1: &Tag{"A", &Account{}},
+		4: &Tag{"B", &Account{}},
+		8: &Tag{"C", &Account{}},
+	})
+
+	ctxt.EXPECT().release(id).Return(nil)
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	accountId, _ = ctxt.Get("B")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	accountId, _ = ctxt.Get("C")
+	ctxt.EXPECT().release(accountId).Return(nil)
+
+	if err := node.Release(ctxt, id); err != nil {
+		t.Errorf("failed to release node: %v", err)
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -671,6 +705,32 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestExtensionNode_Release(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Tag{"C", &Branch{
+				1: &Tag{"A", &Account{}},
+				4: &Tag{"B", &Account{}},
+			}},
+		})
+
+	ctxt.EXPECT().release(id).Return(nil)
+	accountId, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	accountId, _ = ctxt.Get("B")
+	ctxt.EXPECT().release(accountId).Return(nil)
+	branchId, _ := ctxt.Get("C")
+	ctxt.EXPECT().release(branchId).Return(nil)
+
+	if err := node.Release(ctxt, id); err != nil {
+		t.Errorf("failed to release node: %v", err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Account Node
 // ----------------------------------------------------------------------------
@@ -895,6 +955,34 @@ func TestAccountNode_SetValue(t *testing.T) {
 
 	if _, _, err := node.SetValue(ctxt, id, &key, path[:], &value); err == nil {
 		t.Fatalf("SetValue call should always return an error")
+	}
+}
+
+func TestAccountNode_Release(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	id, node := ctxt.Build(&Account{})
+
+	ctxt.EXPECT().release(id).Return(nil)
+	if err := node.Release(ctxt, id); err != nil {
+		t.Errorf("failed to release node: %v", err)
+	}
+}
+
+func TestAccountNode_ReleaseStateTrie(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	state, _ := ctxt.Build(&Value{})
+	id, node := ctxt.Build(&Account{})
+	node.(*AccountNode).state = state
+
+	ctxt.EXPECT().release(id).Return(nil)
+	ctxt.EXPECT().release(state).Return(nil)
+
+	if err := node.Release(ctxt, id); err != nil {
+		t.Errorf("failed to release node: %v", err)
 	}
 }
 
@@ -1123,6 +1211,18 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testi
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_Release(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	id, node := ctxt.Build(&Value{})
+
+	ctxt.EXPECT().release(id).Return(nil)
+	if err := node.Release(ctxt, id); err != nil {
+		t.Errorf("failed to release node: %v", err)
+	}
 }
 
 // ----------------------------------------------------------------------------

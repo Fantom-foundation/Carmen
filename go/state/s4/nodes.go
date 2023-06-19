@@ -19,6 +19,8 @@ type Node interface {
 	GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, error)
 	SetSlot(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, key *common.Key, value *common.Value) (newRoot NodeId, changed bool, err error)
 
+	Release(manager NodeManager, thisId NodeId) error
+
 	Check(source NodeSource, path []Nibble) error
 	Dump(source NodeSource, indent string)
 }
@@ -96,6 +98,10 @@ func (e EmptyNode) SetSlot(manager NodeManager, thisId NodeId, address *common.A
 	// Note: this function can only be reached while looking for the account.
 	// Once the account is reached, the SetValue(..) function is used.
 	return thisId, false, nil
+}
+
+func (e EmptyNode) Release(NodeManager, NodeId) error {
+	return nil
 }
 
 func (EmptyNode) Check(NodeSource, []Nibble) error {
@@ -233,6 +239,22 @@ func (n *BranchNode) SetSlot(manager NodeManager, thisId NodeId, address *common
 			return node.SetSlot(manager, next, address, path, key, value)
 		},
 	)
+}
+
+func (n *BranchNode) Release(manager NodeManager, thisId NodeId) error {
+	for _, cur := range n.children {
+		if !cur.IsEmpty() {
+			node, err := manager.getNode(cur)
+			if err != nil {
+				return err
+			}
+			err = node.Release(manager, cur)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return manager.release(thisId)
 }
 
 func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
@@ -444,6 +466,18 @@ func (n *ExtensionNode) SetSlot(manager NodeManager, thisId NodeId, address *com
 	)
 }
 
+func (n *ExtensionNode) Release(manager NodeManager, thisId NodeId) error {
+	node, err := manager.getNode(n.next)
+	if err != nil {
+		return err
+	}
+	err = node.Release(manager, n.next)
+	if err != nil {
+		return err
+	}
+	return manager.release(thisId)
+}
+
 func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 	// Checked invariants:
 	//  - extension path have a lenght > 0
@@ -519,6 +553,17 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address *co
 			return thisId, false, nil
 		}
 		if info.IsEmpty() {
+			// Recursively release the entire state DB.
+			// TODO: consider performing this asynchroniously.
+			root, err := manager.getNode(n.state)
+			if err != nil {
+				return 0, false, err
+			}
+			err = root.Release(manager, n.state)
+			if err != nil {
+				return 0, false, err
+			}
+			// Release this account node and remove it from the trie.
 			manager.release(thisId)
 			return EmptyId(), true, nil
 		}
@@ -616,6 +661,15 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address *commo
 		manager.update(thisId, n)
 	}
 	return thisId, changed, nil
+}
+
+func (n *AccountNode) Release(manager NodeManager, thisId NodeId) error {
+	if !n.state.IsEmpty() {
+		if err := manager.release(n.state); err != nil {
+			return err
+		}
+	}
+	return manager.release(thisId)
 }
 
 func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
@@ -721,6 +775,10 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key
 
 func (n *ValueNode) SetSlot(NodeManager, NodeId, *common.Address, []Nibble, *common.Key, *common.Value) (NodeId, bool, error) {
 	return 0, false, fmt.Errorf("invalid request: slot update should not reach values")
+}
+
+func (n *ValueNode) Release(manager NodeManager, thisId NodeId) error {
+	return manager.release(thisId)
 }
 
 func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
