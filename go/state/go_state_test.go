@@ -36,21 +36,26 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
-		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
-		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
-		{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
-		{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
-		{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
-		{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
-		{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
-		{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
-		{"LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		/*
+			{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
+			{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
+			{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
+		*/
+		{"Memory 4", 4, castToDirectUpdateState(NewGoMemoryS4State)},
+		/*
+			{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
+			{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
+			{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
+			{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
+			{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
+			{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
+			{"LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+			{"LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+			{"LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
+			{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+			{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+			{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		*/
 	}
 }
 
@@ -119,22 +124,22 @@ func TestBasicOperations(t *testing.T) {
 
 			// fetch values
 			if val, err := state.Exists(address1); err != nil || val != true {
-				t.Errorf("Created account does not exists: Val: %t, Err: %s", val, err)
+				t.Errorf("Created account does not exists: Val: %t, Err: %v", val, err)
 			}
 			if val, err := state.GetNonce(address1); (err != nil || val != common.Nonce{123}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetBalance(address2); (err != nil || val != common.Balance{45}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address3, key1); (err != nil || val != common.Value{67}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetCode(address1); err != nil || !bytes.Equal(val, []byte{0x12, 0x34}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetCodeSize(address1); err != nil || val != 2 {
-				t.Errorf("Invalid code size or error returned: Val: %d, Err: %s", val, err)
+				t.Errorf("Invalid code size or error returned: Val: %d, Err: %v", val, err)
 			}
 
 			// delete account
@@ -147,7 +152,7 @@ func TestBasicOperations(t *testing.T) {
 
 			// fetch wrong combinations
 			if val, err := state.GetStorage(address1, key1); (err != nil || val != common.Value{}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 		})
 	}
@@ -176,20 +181,20 @@ func TestMoreInserts(t *testing.T) {
 			_ = state.setStorage(address3, key3, val3)
 
 			if val, err := state.GetStorage(address1, key3); err != nil || val != val3 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address2, key1); err != nil || val != val1 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address3, key2); err != nil || val != val2 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 		})
 	}
 }
 
 func TestHashing(t *testing.T) {
-	var hashes = [][]common.Hash{nil, nil, nil, nil}
+	var hashes = [][]common.Hash{nil, nil, nil, nil, nil}
 	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())

@@ -3,6 +3,7 @@ package s4
 import (
 	"errors"
 	"fmt"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
@@ -107,6 +108,16 @@ func (s *StateTrie) Close() error {
 		s.extensions.Close(),
 		s.values.Close(),
 	)
+}
+
+// GetMemoryFootprint provides sizes of individual components of the state in the memory
+func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
+	mf.AddChild("accounts", s.accounts.GetMemoryFootprint())
+	mf.AddChild("branches", s.branches.GetMemoryFootprint())
+	mf.AddChild("extensions", s.extensions.GetMemoryFootprint())
+	mf.AddChild("values", s.values.GetMemoryFootprint())
+	return mf
 }
 
 // dump prints the content of the Trie to the console. Mainly intended for debugging.
