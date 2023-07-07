@@ -22,7 +22,7 @@ type Node interface {
 	Release(manager NodeManager, thisId NodeId) error
 
 	Check(source NodeSource, path []Nibble) error
-	Dump(source NodeSource, indent string)
+	Dump(source NodeSource, thisId NodeId, indent string)
 }
 
 type NodeSource interface {
@@ -109,8 +109,8 @@ func (EmptyNode) Check(NodeSource, []Nibble) error {
 	return nil
 }
 
-func (EmptyNode) Dump(source NodeSource, indent string) {
-	fmt.Printf("%s-empty-\n", indent)
+func (EmptyNode) Dump(source NodeSource, thisId NodeId, indent string) {
+	fmt.Printf("%s-empty- (ID: %v)\n", indent, thisId)
 }
 
 // ----------------------------------------------------------------------------
@@ -295,15 +295,15 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 	return errors.Join(errs...)
 }
 
-func (n *BranchNode) Dump(source NodeSource, indent string) {
-	fmt.Printf("%sBranch:\n", indent)
+func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
+	fmt.Printf("%sBranch (ID: %v):\n", indent, thisId)
 	for i, child := range n.children {
 		if child.IsEmpty() {
 			continue
 		}
 
 		if node, err := source.getNode(child); err == nil {
-			node.Dump(source, fmt.Sprintf("%s  %v ", indent, Nibble(i)))
+			node.Dump(source, child, fmt.Sprintf("%s  %v ", indent, Nibble(i)))
 		} else {
 			fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, child, err)
 		}
@@ -533,10 +533,10 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 	return errors.Join(errs...)
 }
 
-func (n *ExtensionNode) Dump(source NodeSource, indent string) {
-	fmt.Printf("%sExtension: %v\n", indent, &n.path)
+func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
+	fmt.Printf("%sExtension (ID: %v): %v\n", indent, thisId, &n.path)
 	if node, err := source.getNode(n.next); err == nil {
-		node.Dump(source, indent+"  ")
+		node.Dump(source, n.next, indent+"  ")
 	} else {
 		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.next, err)
 	}
@@ -730,13 +730,13 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 	return errors.Join(errs...)
 }
 
-func (n *AccountNode) Dump(source NodeSource, indent string) {
-	fmt.Printf("%sAccount: %v - %v\n", indent, n.address, n.info)
+func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
+	fmt.Printf("%sAccount (ID: %v): %v - %v\n", indent, thisId, n.address, n.info)
 	if n.state.IsEmpty() {
 		return
 	}
 	if node, err := source.getNode(n.state); err == nil {
-		node.Dump(source, indent+"  ")
+		node.Dump(source, n.state, indent+"  ")
 	} else {
 		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.state, err)
 	}
@@ -828,8 +828,8 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 	return errors.Join(errs...)
 }
 
-func (n *ValueNode) Dump(source NodeSource, indent string) {
-	fmt.Printf("%sValue: %v - %v\n", indent, n.key, n.value)
+func (n *ValueNode) Dump(source NodeSource, thisId NodeId, indent string) {
+	fmt.Printf("%sValue (ID: %v): %v - %v\n", indent, thisId, n.key, n.value)
 }
 
 // ----------------------------------------------------------------------------

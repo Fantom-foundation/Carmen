@@ -126,7 +126,7 @@ func (s *StateTrie) dump() {
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
 	} else {
-		root.Dump(s, "")
+		root.Dump(s, s.root, "")
 	}
 }
 
