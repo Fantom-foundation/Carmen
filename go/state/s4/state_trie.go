@@ -27,7 +27,7 @@ type StateTrie struct {
 }
 
 // The number of elements to retain in the node cache.
-const cacheCapacity = 100_000_000
+const cacheCapacity = 500_000_000
 
 func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
