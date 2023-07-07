@@ -25,6 +25,11 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 	freelistfile := directory + "/freelist.dat"
 	numValueSlots := I(0)
 
+	// Create the direcory if needed.
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
+
 	// If there is a meta-file in the directory, check its content.
 	if _, err := os.Stat(metafile); err == nil {
 		data, err := os.ReadFile(metafile)

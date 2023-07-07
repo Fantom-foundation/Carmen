@@ -2,6 +2,7 @@ package stock
 
 import (
 	"encoding/binary"
+	"os"
 	"testing"
 )
 
@@ -44,6 +45,7 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("ReusedElementsAreCleared", wrap(testReusedElementsAreCleared))
 	t.Run("LargeNumberOfElements", wrap(testLargeNumberOfElements))
 	t.Run("ProvidesMemoryFootprint", wrap(testProvidesMemoryFootprint))
+	t.Run("CreatsMissingDirectories", wrap(testCreatsMissingDirectories))
 	t.Run("CanBeFlushed", wrap(testCanBeFlushed))
 	t.Run("CanBeClosed", wrap(testCanBeClosed))
 	t.Run("CanBeClosedAndReopened", wrap(testCanBeClosedAndReopened))
@@ -234,6 +236,18 @@ func testProvidesMemoryFootprint(t *testing.T, factory NamedStockFactory) {
 	}
 	if footprint.Total() <= 0 {
 		t.Fatalf("implementations claims zero memory footprint")
+	}
+}
+
+func testCreatsMissingDirectories(t *testing.T, factory NamedStockFactory) {
+	directory := t.TempDir() + "/some/missing/directory"
+	stock, err := factory.Open(t, directory)
+	if err != nil {
+		t.Fatalf("failed to create empty stock: %v", err)
+	}
+	defer stock.Close()
+	if _, err := os.Stat(directory); err != nil {
+		t.Errorf("failed to create output directory: %v", err)
 	}
 }
 

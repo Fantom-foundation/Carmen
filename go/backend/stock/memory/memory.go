@@ -26,6 +26,11 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		encoder:   encoder,
 	}
 
+	// Create the direcory if needed.
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
+
 	// Test whether a meta file exists in this directory.
 	metafile := directory + "/meta.json"
 	if _, err := os.Stat(metafile); err != nil {
