@@ -41,6 +41,7 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("NewCreatesDistinctValues", wrap(testNewCreatesDistinctValues))
 	t.Run("LookUpsRetrieveTheSameValue", wrap(testLookUpsRetrieveTheSameValue))
 	t.Run("DeletedElementsAreReused", wrap(testDeletedElementsAreReused))
+	t.Run("ReusedElementsAreCleared", wrap(testReusedElementsAreCleared))
 	t.Run("LargeNumberOfElements", wrap(testLargeNumberOfElements))
 	t.Run("ProvidesMemoryFootprint", wrap(testProvidesMemoryFootprint))
 	t.Run("CanBeFlushed", wrap(testCanBeFlushed))
@@ -141,6 +142,37 @@ func testDeletedElementsAreReused(t *testing.T, factory NamedStockFactory) {
 		index, _, err := stock.New()
 		if err != nil {
 			t.Fatalf("failed to create new element: %v", err)
+		}
+		if _, exists := seen[index]; exists {
+			return
+		}
+		seen[index] = true
+		if err := stock.Delete(index); err != nil {
+			t.Fatalf("failed to delete element with key %v: %v", index, err)
+		}
+	}
+	t.Errorf("stock failed to reuse released index key")
+}
+
+func testReusedElementsAreCleared(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create empty stock: %v", err)
+	}
+	defer stock.Close()
+
+	seen := map[int]bool{}
+	for i := 0; i < 1_000_000; i++ {
+		index, value, err := stock.New()
+		if err != nil {
+			t.Fatalf("failed to create new element: %v", err)
+		}
+		if *value != 0 {
+			t.Fatalf("new element is not zero, got %v", value)
+		}
+		updated := 52
+		if err := stock.Set(index, &updated); err != nil {
+			t.Fatalf("failed to udpate value for index %d: %v", index, err)
 		}
 		if _, exists := seen[index]; exists {
 			return
