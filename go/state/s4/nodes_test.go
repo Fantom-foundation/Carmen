@@ -2,6 +2,7 @@ package s4
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -1368,6 +1369,76 @@ func TestValueNode_Release(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
+//                               Encoders
+// ----------------------------------------------------------------------------
+
+func TestAccountNodeEncoder(t *testing.T) {
+	node := AccountNode{
+		info: AccountInfo{
+			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
+			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
+		state: NodeId(12),
+	}
+	encoder := AccountNodeEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := AccountNode{}
+	encoder.Load(buffer, &recovered)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestBranchNodeEncoder(t *testing.T) {
+	node := BranchNode{
+		children: [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+	}
+	encoder := BranchNodeEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := BranchNode{}
+	encoder.Load(buffer, &recovered)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestExtensionNodeEncoder(t *testing.T) {
+	node := ExtensionNode{
+		path: Path{
+			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length: 7,
+		},
+		next: NodeId(12),
+	}
+	encoder := ExtensionNodeEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ExtensionNode{}
+	encoder.Load(buffer, &recovered)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestValueNodeEncoder(t *testing.T) {
+	node := ValueNode{
+		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+	}
+	encoder := ValueNodeEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ValueNode{}
+	encoder.Load(buffer, &recovered)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+// ----------------------------------------------------------------------------
 //                               Utilities
 // ----------------------------------------------------------------------------
 
@@ -1492,7 +1563,7 @@ func (c *nodeContext) nextIndex() uint32 {
 
 func (c *nodeContext) Check(t *testing.T, a Node) {
 	if err := a.Check(c, nil); err != nil {
-		a.Dump(c, "")
+		a.Dump(c, NodeId(0), "")
 		t.Fatalf("inconsistent node structure encountered:\n%v", err)
 	}
 }
@@ -1500,9 +1571,9 @@ func (c *nodeContext) Check(t *testing.T, a Node) {
 func (c *nodeContext) ExpectEqual(t *testing.T, want, got Node) {
 	if !c.equal(want, got) {
 		fmt.Printf("Want:\n")
-		want.Dump(c, "")
+		want.Dump(c, NodeId(0), "")
 		fmt.Printf("Have:\n")
-		got.Dump(c, "")
+		got.Dump(c, NodeId(0), "")
 		t.Errorf("unexpected resulting node structure")
 	}
 }

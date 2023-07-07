@@ -39,13 +39,16 @@ func initGoStates() []namedStateConfig {
 		/*
 			{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
 			{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
-			{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
 		*/
+		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 4", 4, castToDirectUpdateState(NewGoMemoryS4State)},
 		/*
 			{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
 			{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
 			{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
+		*/
+		{"File 4", 4, castToDirectUpdateState(NewGoFileS4State)},
+		/*
 			{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
 			{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
 			{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
@@ -115,7 +118,7 @@ func TestBasicOperations(t *testing.T) {
 			if err := state.setBalance(address2, common.Balance{45}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setStorage(address3, key1, common.Value{67}); err != nil {
+			if err := state.setStorage(address1, key1, common.Value{67}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
@@ -132,7 +135,7 @@ func TestBasicOperations(t *testing.T) {
 			if val, err := state.GetBalance(address2); (err != nil || val != common.Balance{45}) {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
-			if val, err := state.GetStorage(address3, key1); (err != nil || val != common.Value{67}) {
+			if val, err := state.GetStorage(address1, key1); (err != nil || val != common.Value{67}) {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetCode(address1); err != nil || !bytes.Equal(val, []byte{0x12, 0x34}) {
@@ -167,6 +170,11 @@ func TestMoreInserts(t *testing.T) {
 			}
 			defer state.Close()
 
+			// create accounts since setting values to non-existing accounts may be ignored
+			state.setNonce(address1, common.ToNonce(12))
+			state.setNonce(address2, common.ToNonce(12))
+			state.setNonce(address3, common.ToNonce(12))
+
 			// insert more combinations, so we do not have only zero-indexes everywhere
 			_ = state.setStorage(address1, key1, val1)
 			_ = state.setStorage(address1, key2, val2)
@@ -199,49 +207,49 @@ func TestHashing(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %v", config.name, err)
 			}
 			defer state.Close()
 
 			initialHash, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 
 			_ = state.setStorage(address1, key1, val1)
 			hash1, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 			if initialHash == hash1 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Errorf("hash of changed state not changed")
 			}
 
 			_ = state.setBalance(address1, balance1)
 			hash2, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 			if initialHash == hash2 || hash1 == hash2 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Errorf("hash of changed state not changed")
 			}
 
 			_ = state.createAccount(address1)
 			hash3, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 			if initialHash == hash3 || hash1 == hash3 || hash2 == hash3 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Errorf("hash of changed state not changed")
 			}
 
 			_ = state.setCode(address1, []byte{0x12, 0x34, 0x56, 0x78})
 			hash4, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 			if initialHash == hash4 || hash3 == hash4 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Errorf("hash of changed state not changed")
 			}
 			hashes[int(config.schema)] = append(hashes[int(config.schema)], hash4) // store the last hash
 		})

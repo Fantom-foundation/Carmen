@@ -3,9 +3,11 @@ package s4
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -19,7 +21,13 @@ type StateTrie struct {
 	extensions stock.Stock[uint32, ExtensionNode]
 	accounts   stock.Stock[uint32, AccountNode]
 	values     stock.Stock[uint32, ValueNode]
+
+	// A unified cache for all node types.
+	nodeCache *common.Cache[NodeId, Node]
 }
+
+// The number of elements to retain in the node cache.
+const cacheCapacity = 100_000_000
 
 func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
@@ -43,6 +51,33 @@ func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 		extensions: extensions,
 		accounts:   accounts,
 		values:     values,
+		nodeCache:  common.NewCache[NodeId, Node](cacheCapacity),
+	}, nil
+}
+
+func OpenFileTrie(directory string) (*StateTrie, error) {
+	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	if err != nil {
+		return nil, err
+	}
+	extensions, err := file.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	if err != nil {
+		return nil, err
+	}
+	accounts, err := file.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	if err != nil {
+		return nil, err
+	}
+	values, err := file.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	if err != nil {
+		return nil, err
+	}
+	return &StateTrie{
+		branches:   branches,
+		extensions: extensions,
+		accounts:   accounts,
+		values:     values,
+		nodeCache:  common.NewCache[NodeId, Node](cacheCapacity),
 	}, nil
 }
 
@@ -93,7 +128,16 @@ func (s *StateTrie) SetValue(addr common.Address, key common.Key, value common.V
 }
 
 func (s *StateTrie) Flush() error {
+	// Flush entire cache content.
+	var errs = []error{}
+	s.nodeCache.Iterate(func(id NodeId, node Node) bool {
+		if err := s.update(id, node); err != nil {
+			errs = append(errs, err)
+		}
+		return true
+	})
 	return errors.Join(
+		errors.Join(errs...),
 		s.accounts.Flush(),
 		s.branches.Flush(),
 		s.extensions.Flush(),
@@ -117,11 +161,29 @@ func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("branches", s.branches.GetMemoryFootprint())
 	mf.AddChild("extensions", s.extensions.GetMemoryFootprint())
 	mf.AddChild("values", s.values.GetMemoryFootprint())
+	mf.AddChild("cache", s.nodeCache.GetDynamicMemoryFootprint(func(node Node) uintptr {
+		if _, ok := node.(*AccountNode); ok {
+			return unsafe.Sizeof(AccountNode{})
+		}
+		if _, ok := node.(*BranchNode); ok {
+			return unsafe.Sizeof(BranchNode{})
+		}
+		if _, ok := node.(*EmptyNode); ok {
+			return unsafe.Sizeof(EmptyNode{})
+		}
+		if _, ok := node.(*ExtensionNode); ok {
+			return unsafe.Sizeof(ExtensionNode{})
+		}
+		if _, ok := node.(*ValueNode); ok {
+			return unsafe.Sizeof(ValueNode{})
+		}
+		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
+	}))
 	return mf
 }
 
-// dump prints the content of the Trie to the console. Mainly intended for debugging.
-func (s *StateTrie) dump() {
+// Dump prints the content of the Trie to the console. Mainly intended for debugging.
+func (s *StateTrie) Dump() {
 	root, err := s.getNode(s.root)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
@@ -145,7 +207,13 @@ func (s *StateTrie) Check() error {
 // -- NodeManager interface --
 
 func (s *StateTrie) getNode(id NodeId) (Node, error) {
-	// TODO: add a node cache!
+	// Start by checking the node cache.
+	res, found := s.nodeCache.Get(id)
+	if found {
+		return res, nil
+	}
+
+	// Load the node from peristent storage.
 	var node Node
 	var err error
 	if id.IsValue() {
@@ -167,11 +235,24 @@ func (s *StateTrie) getNode(id NodeId) (Node, error) {
 	if node == nil {
 		return nil, fmt.Errorf("no node with ID %d in storage", id)
 	}
+
+	if err := s.addToCache(id, node); err != nil {
+		return nil, err
+	}
 	return node, nil
 }
 
+func (s *StateTrie) addToCache(id NodeId, node Node) error {
+	if evictedId, evictedNode, evicted := s.nodeCache.Set(id, node); evicted {
+		// TODO: perform update asynchroniously.
+		if err := s.update(evictedId, evictedNode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *StateTrie) update(id NodeId, node Node) error {
-	// TODO: add a node cache!
 	if id.IsValue() {
 		return s.values.Set(id.Index(), node.(*ValueNode))
 	} else if id.IsAccount() {
@@ -189,25 +270,54 @@ func (s *StateTrie) update(id NodeId, node Node) error {
 
 func (s *StateTrie) createAccount() (NodeId, *AccountNode, error) {
 	i, node, err := s.accounts.New()
-	return AccountId(i), node, err
+	if err != nil {
+		return 0, nil, err
+	}
+	id := AccountId(i)
+	if err := s.addToCache(id, node); err != nil {
+		return 0, nil, err
+	}
+	return id, node, err
 }
 
 func (s *StateTrie) createBranch() (NodeId, *BranchNode, error) {
 	i, node, err := s.branches.New()
-	return BranchId(i), node, err
+	if err != nil {
+		return 0, nil, err
+	}
+	id := BranchId(i)
+	if err := s.addToCache(id, node); err != nil {
+		return 0, nil, err
+	}
+	return id, node, err
 }
 
 func (s *StateTrie) createExtension() (NodeId, *ExtensionNode, error) {
 	i, node, err := s.extensions.New()
-	return ExtensionId(i), node, err
+	if err != nil {
+		return 0, nil, err
+	}
+	id := ExtensionId(i)
+	if err := s.addToCache(id, node); err != nil {
+		return 0, nil, err
+	}
+	return id, node, err
 }
 
 func (s *StateTrie) createValue() (NodeId, *ValueNode, error) {
 	i, node, err := s.values.New()
-	return ValueId(i), node, err
+	if err != nil {
+		return 0, nil, err
+	}
+	id := ValueId(i)
+	if err := s.addToCache(id, node); err != nil {
+		return 0, nil, err
+	}
+	return id, node, err
 }
 
 func (s *StateTrie) release(id NodeId) error {
+	s.nodeCache.Remove(id)
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}

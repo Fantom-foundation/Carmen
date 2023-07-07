@@ -87,6 +87,10 @@ func NewGoMemoryState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
+	if params.Schema == 4 {
+		return NewGoMemoryS4State(params)
+	}
+
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
@@ -194,6 +198,10 @@ func NewGoFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
+	if params.Schema == 4 {
+		return NewGoFileS4State(params)
+	}
+
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
@@ -364,6 +372,10 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
+	if params.Schema == 4 {
+		return NewGoFileS4State(params)
+	}
+
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err

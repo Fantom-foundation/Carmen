@@ -3202,7 +3202,7 @@ func TestStateDBRead(t *testing.T) {
 		val := toVal(uint64(i))
 		key := toKey(uint64(i))
 		if storage := stateDb.GetState(address1, key); storage != val {
-			t.Errorf("Unexpected value, val: %v != %v", storage, val)
+			t.Fatalf("Unexpected value, val: %v != %v", storage, val)
 		}
 	}
 

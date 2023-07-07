@@ -857,9 +857,8 @@ func (BranchNodeEncoder) Store(dst []byte, node *BranchNode) error {
 func (BranchNodeEncoder) Load(src []byte, node *BranchNode) error {
 	encoder := NodeIdEncoder{}
 	step := encoder.GetEncodedSize()
-	res := BranchNode{}
 	for i := 0; i < 16; i++ {
-		if err := encoder.Load(src[i*step:], &res.children[i]); err != nil {
+		if err := encoder.Load(src[i*step:], &node.children[i]); err != nil {
 			return err
 		}
 	}

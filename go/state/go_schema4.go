@@ -19,11 +19,7 @@ type GoSchema4 struct {
 	hasher hash.Hash
 }
 
-func NewGoMemoryS4State(params Parameters) (State, error) {
-	trie, err := s4.OpenInMemoryTrie(params.Directory)
-	if err != nil {
-		return nil, err
-	}
+func newS4State(params Parameters, trie *s4.StateTrie) (State, error) {
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
@@ -32,6 +28,22 @@ func NewGoMemoryS4State(params Parameters) (State, error) {
 		trie: trie,
 		code: map[common.Hash][]byte{},
 	}, arch, []func(){archiveCleanup}), nil
+}
+
+func NewGoMemoryS4State(params Parameters) (State, error) {
+	trie, err := s4.OpenInMemoryTrie(params.Directory)
+	if err != nil {
+		return nil, err
+	}
+	return newS4State(params, trie)
+}
+
+func NewGoFileS4State(params Parameters) (State, error) {
+	trie, err := s4.OpenFileTrie(params.Directory)
+	if err != nil {
+		return nil, err
+	}
+	return newS4State(params, trie)
 }
 
 func (s *GoSchema4) createAccount(address common.Address) (err error) {

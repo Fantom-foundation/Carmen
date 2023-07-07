@@ -59,7 +59,7 @@ func TestStateTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 	}
 
 	if err := trie.Check(); err != nil {
-		trie.dump()
+		trie.Dump()
 		t.Errorf("trie corrupted after insert: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestStateTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 	}
 
 	if err := trie.Check(); err != nil {
-		trie.dump()
+		trie.Dump()
 		t.Errorf("trie corrupted after read: %v", err)
 	}
 }
@@ -92,7 +92,7 @@ func TestStateTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 		t.Errorf("failed to set info of account: %v", err)
 	}
 	if err := trie.Check(); err != nil {
-		trie.dump()
+		trie.Dump()
 		t.Errorf("trie corrupted after insert: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestStateTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 		t.Errorf("failed to set info of account: %v", err)
 	}
 	if err := trie.Check(); err != nil {
-		trie.dump()
+		trie.Dump()
 		t.Errorf("trie corrupted after insert: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestStateTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 		t.Errorf("failed to set info of account: %v", err)
 	}
 	if err := trie.Check(); err != nil {
-		trie.dump()
+		trie.Dump()
 		t.Errorf("trie corrupted after insert: %v", err)
 	}
 }
@@ -187,7 +187,7 @@ func TestStateTrie_InsertLotsOfData(t *testing.T) {
 			t.Fatalf("failed to insert account: %v", err)
 		}
 		if err := trie.Check(); err != nil {
-			trie.dump()
+			trie.Dump()
 			t.Fatalf("trie inconsistent after account insert:\n%v", err)
 		}
 
@@ -196,7 +196,7 @@ func TestStateTrie_InsertLotsOfData(t *testing.T) {
 				t.Fatalf("failed to insert value: %v", err)
 			}
 			if err := trie.Check(); err != nil {
-				trie.dump()
+				trie.Dump()
 				t.Fatalf("trie inconsistent after value insert:\n%v", err)
 			}
 		}
@@ -220,7 +220,7 @@ func TestStateTrie_InsertLotsOfData(t *testing.T) {
 			t.Fatalf("failed to delete account: %v", err)
 		}
 		if err := trie.Check(); err != nil {
-			trie.dump()
+			trie.Dump()
 			t.Fatalf("trie inconsistent after account deletion:\n%v\nDeleted account: %v", err, addr)
 		}
 	}
@@ -244,7 +244,7 @@ func TestStateTrie_InsertLotsOfValues(t *testing.T) {
 		t.Fatalf("failed to insert account: %v", err)
 	}
 	if err := trie.Check(); err != nil {
-		trie.dump()
+		trie.Dump()
 		t.Fatalf("trie inconsistent after account insert:\n%v", err)
 	}
 
@@ -253,7 +253,7 @@ func TestStateTrie_InsertLotsOfValues(t *testing.T) {
 			t.Fatalf("failed to insert value: %v", err)
 		}
 		if err := trie.Check(); err != nil {
-			trie.dump()
+			trie.Dump()
 			t.Fatalf("trie inconsistent after value insert:\n%v", err)
 		}
 	}
@@ -271,7 +271,7 @@ func TestStateTrie_InsertLotsOfValues(t *testing.T) {
 			t.Fatalf("failed to delete value: %v", err)
 		}
 		if err := trie.Check(); err != nil {
-			trie.dump()
+			trie.Dump()
 			t.Fatalf("trie inconsistent after value deletion:\n%v\nDeleted value: %v", err, key)
 		}
 	}
