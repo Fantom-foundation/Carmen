@@ -168,7 +168,7 @@ func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
 		if _, ok := node.(*BranchNode); ok {
 			return unsafe.Sizeof(BranchNode{})
 		}
-		if _, ok := node.(*EmptyNode); ok {
+		if _, ok := node.(EmptyNode); ok {
 			return unsafe.Sizeof(EmptyNode{})
 		}
 		if _, ok := node.(*ExtensionNode); ok {
