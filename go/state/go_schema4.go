@@ -47,8 +47,11 @@ func NewGoFileS4State(params Parameters) (State, error) {
 }
 
 func (s *GoSchema4) createAccount(address common.Address) (err error) {
+	return s.trie.SetAccountInfo(address, s4.AccountInfo{
+		CodeHash: emptyCodeHash,
+	})
 	// Nothing to do
-	return nil
+	//return nil
 }
 
 func (s *GoSchema4) Exists(address common.Address) (bool, error) {
@@ -80,6 +83,12 @@ func (s *GoSchema4) setBalance(address common.Address, balance common.Balance) (
 		return nil
 	}
 	info.Balance = balance
+	/*
+		if (info.CodeHash == common.Hash{}) {
+			// TODO: find better way to identify implicit creation
+			info.CodeHash = emptyCodeHash
+		}
+	*/
 	return s.trie.SetAccountInfo(address, info)
 }
 
@@ -100,6 +109,12 @@ func (s *GoSchema4) setNonce(address common.Address, nonce common.Nonce) (err er
 		return nil
 	}
 	info.Nonce = nonce
+	/*
+		if (info.CodeHash == common.Hash{}) {
+			// TODO: find better way to identify implicit creation
+			info.CodeHash = emptyCodeHash
+		}
+	*/
 	return s.trie.SetAccountInfo(address, info)
 }
 
