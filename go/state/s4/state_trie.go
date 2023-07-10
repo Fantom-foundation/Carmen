@@ -27,7 +27,7 @@ type StateTrie struct {
 }
 
 // The number of elements to retain in the node cache.
-const cacheCapacity = 500_000_000
+const cacheCapacity = 100_000_000
 
 func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
@@ -126,6 +126,15 @@ func (s *StateTrie) SetValue(addr common.Address, key common.Key, value common.V
 	}
 	s.root = newRoot
 	return nil
+}
+
+func (s *StateTrie) ClearStorage(addr common.Address) error {
+	root, err := s.getNode(s.root)
+	if err != nil {
+		return err
+	}
+	path := addressToNibbles(&addr)
+	return root.ClearStorage(s, &addr, path[:])
 }
 
 func (s *StateTrie) Flush() error {

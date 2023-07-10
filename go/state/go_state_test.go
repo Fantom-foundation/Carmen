@@ -36,10 +36,8 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		/*
-			{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
-			{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
-		*/
+		{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
+		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 4", 4, castToDirectUpdateState(NewGoMemoryS4State)},
 		/*
@@ -197,6 +195,67 @@ func TestMoreInserts(t *testing.T) {
 			if val, err := state.GetStorage(address3, key2); err != nil || val != val2 {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
+		})
+	}
+}
+
+func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
+	for _, config := range initGoStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer state.Close()
+
+			code1 := []byte{1, 2, 3}
+
+			// create an account and set some of its properties
+			state.createAccount(address1)
+			state.setBalance(address1, balance1)
+			state.setNonce(address1, nonce1)
+			state.setCode(address1, code1)
+			state.setStorage(address1, key1, val1)
+
+			if exists, err := state.Exists(address1); !exists || err != nil {
+				t.Errorf("account does not exist, err %v", err)
+			}
+
+			if got, err := state.GetBalance(address1); got != balance1 || err != nil {
+				t.Errorf("unexpected balance, wanted %v, got %v, err %v", balance1, got, err)
+			}
+
+			if got, err := state.GetNonce(address1); got != nonce1 || err != nil {
+				t.Errorf("unexpected nonce, wanted %v, got %v, err %v", nonce1, got, err)
+			}
+
+			if got, err := state.GetCode(address1); !bytes.Equal(got, code1) || err != nil {
+				t.Errorf("unexpected code, wanted %v, got %v, err %v", code1, got, err)
+			}
+
+			if got, err := state.GetStorage(address1, key1); got != val1 || err != nil {
+				t.Errorf("unexpected storage, wanted %v, got %v, err %v", val1, got, err)
+			}
+
+			// re-creating the account preserves everything but the state.
+			state.createAccount(address1)
+
+			if exists, err := state.Exists(address1); !exists || err != nil {
+				t.Errorf("account should still exist, err %v", err)
+			}
+			if got, err := state.GetBalance(address1); got != balance1 || err != nil {
+				t.Errorf("unexpected balance, wanted %v, got %v, err %v", balance1, got, err)
+			}
+			if got, err := state.GetNonce(address1); got != nonce1 || err != nil {
+				t.Errorf("unexpected nonce, wanted %v, got %v, err %v", nonce1, got, err)
+			}
+			if got, err := state.GetCode(address1); !bytes.Equal(got, code1) || err != nil {
+				t.Errorf("unexpected code, wanted %v, got %v, err %v", code1, got, err)
+			}
+			if got, err := state.GetStorage(address1, key1); got != val0 || err != nil {
+				t.Errorf("failed to clear the storage, wanted %v, got %v, err %v", val0, got, err)
+			}
+
 		})
 	}
 }

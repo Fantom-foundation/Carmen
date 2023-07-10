@@ -47,11 +47,18 @@ func NewGoFileS4State(params Parameters) (State, error) {
 }
 
 func (s *GoSchema4) createAccount(address common.Address) (err error) {
+	_, exists, err := s.trie.GetAccountInfo(address)
+	if err != nil {
+		return err
+	}
+	if exists {
+		// For existing accounts, only clear the storage, preserve the rest.
+		return s.trie.ClearStorage(address)
+	}
+	// Create account with hash of empty code.
 	return s.trie.SetAccountInfo(address, s4.AccountInfo{
 		CodeHash: emptyCodeHash,
 	})
-	// Nothing to do
-	//return nil
 }
 
 func (s *GoSchema4) Exists(address common.Address) (bool, error) {
