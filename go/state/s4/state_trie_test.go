@@ -31,8 +31,8 @@ func TestStateTrie_NonExistingAccountsHaveEmptyInfo(t *testing.T) {
 	}
 
 	addr1 := common.Address{1}
-	if info, err := trie.GetAccountInfo(addr1); err != nil || info != (AccountInfo{}) {
-		t.Errorf("failed to get default account infor from empty state, got %v, err: %v", info, err)
+	if info, exists, err := trie.GetAccountInfo(addr1); err != nil || exists || info != (AccountInfo{}) {
+		t.Errorf("failed to get default account infor from empty state, got %v, exists %v, err: %v", info, exists, err)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestStateTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 		t.Errorf("trie corrupted after insert: %v", err)
 	}
 
-	if recovered, err := trie.GetAccountInfo(addr); err != nil || recovered != info {
-		t.Errorf("failed to recover account information, wanted %v, got %v, err %v", info, recovered, err)
+	if recovered, exists, err := trie.GetAccountInfo(addr); err != nil || !exists || recovered != info {
+		t.Errorf("failed to recover account information, wanted %v, got %v, exists %v, err %v", info, recovered, exists, err)
 	}
 
 	if err := trie.Check(); err != nil {
@@ -204,7 +204,7 @@ func TestStateTrie_InsertLotsOfData(t *testing.T) {
 
 	// Check its content.
 	for i, addr := range address {
-		if info, err := trie.GetAccountInfo(addr); int(info.Nonce.ToUint64()) != i+1 || err != nil {
+		if info, _, err := trie.GetAccountInfo(addr); int(info.Nonce.ToUint64()) != i+1 || err != nil {
 			t.Fatalf("wrong value, wanted %v, got %v, err %v", i+1, int(info.Nonce.ToUint64()), err)
 		}
 		for i, key := range keys {

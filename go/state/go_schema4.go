@@ -55,11 +55,11 @@ func (s *GoSchema4) createAccount(address common.Address) (err error) {
 }
 
 func (s *GoSchema4) Exists(address common.Address) (bool, error) {
-	info, err := s.trie.GetAccountInfo(address)
+	_, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return false, err
 	}
-	return !info.IsEmpty(), nil
+	return exists, nil
 }
 
 func (s *GoSchema4) deleteAccount(address common.Address) error {
@@ -67,15 +67,15 @@ func (s *GoSchema4) deleteAccount(address common.Address) error {
 }
 
 func (s *GoSchema4) GetBalance(address common.Address) (balance common.Balance, err error) {
-	info, err := s.trie.GetAccountInfo(address)
-	if err != nil {
+	info, exists, err := s.trie.GetAccountInfo(address)
+	if !exists || err != nil {
 		return common.Balance{}, err
 	}
 	return info.Balance, nil
 }
 
 func (s *GoSchema4) setBalance(address common.Address, balance common.Balance) (err error) {
-	info, err := s.trie.GetAccountInfo(address)
+	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
 	}
@@ -83,17 +83,14 @@ func (s *GoSchema4) setBalance(address common.Address, balance common.Balance) (
 		return nil
 	}
 	info.Balance = balance
-	/*
-		if (info.CodeHash == common.Hash{}) {
-			// TODO: find better way to identify implicit creation
-			info.CodeHash = emptyCodeHash
-		}
-	*/
+	if !exists {
+		info.CodeHash = emptyCodeHash
+	}
 	return s.trie.SetAccountInfo(address, info)
 }
 
 func (s *GoSchema4) GetNonce(address common.Address) (nonce common.Nonce, err error) {
-	info, err := s.trie.GetAccountInfo(address)
+	info, _, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return common.Nonce{}, err
 	}
@@ -101,7 +98,7 @@ func (s *GoSchema4) GetNonce(address common.Address) (nonce common.Nonce, err er
 }
 
 func (s *GoSchema4) setNonce(address common.Address, nonce common.Nonce) (err error) {
-	info, err := s.trie.GetAccountInfo(address)
+	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
 	}
@@ -109,12 +106,9 @@ func (s *GoSchema4) setNonce(address common.Address, nonce common.Nonce) (err er
 		return nil
 	}
 	info.Nonce = nonce
-	/*
-		if (info.CodeHash == common.Hash{}) {
-			// TODO: find better way to identify implicit creation
-			info.CodeHash = emptyCodeHash
-		}
-	*/
+	if !exists {
+		info.CodeHash = emptyCodeHash
+	}
 	return s.trie.SetAccountInfo(address, info)
 }
 
@@ -127,9 +121,12 @@ func (s *GoSchema4) setStorage(address common.Address, key common.Key, value com
 }
 
 func (s *GoSchema4) GetCode(address common.Address) (value []byte, err error) {
-	info, err := s.trie.GetAccountInfo(address)
+	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return nil, err
+	}
+	if !exists {
+		return nil, nil
 	}
 	return s.code[info.CodeHash], nil
 }
@@ -144,14 +141,12 @@ func (s *GoSchema4) GetCodeSize(address common.Address) (size int, err error) {
 
 func (s *GoSchema4) setCode(address common.Address, code []byte) (err error) {
 	var codeHash common.Hash
-	if code != nil { // codeHash is zero for empty code
-		if s.hasher == nil {
-			s.hasher = sha3.NewLegacyKeccak256()
-		}
-		codeHash = common.GetHash(s.hasher, code)
+	if s.hasher == nil {
+		s.hasher = sha3.NewLegacyKeccak256()
 	}
+	codeHash = common.GetHash(s.hasher, code)
 
-	info, err := s.trie.GetAccountInfo(address)
+	info, _, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
 	}
@@ -164,9 +159,9 @@ func (s *GoSchema4) setCode(address common.Address, code []byte) (err error) {
 }
 
 func (s *GoSchema4) GetCodeHash(address common.Address) (hash common.Hash, err error) {
-	info, err := s.trie.GetAccountInfo(address)
-	if err != nil {
-		return common.Hash{}, err
+	info, exists, err := s.trie.GetAccountInfo(address)
+	if !exists || err != nil {
+		return emptyCodeHash, err
 	}
 	return info.CodeHash, nil
 }

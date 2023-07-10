@@ -21,8 +21,8 @@ func TestEmptyNode_GetAccount(t *testing.T) {
 
 	empty := EmptyNode{}
 	path := addressToNibbles(&addr)
-	if info, err := empty.GetAccount(mgr, &addr, path[:]); !info.IsEmpty() || err != nil {
-		t.Fatalf("lookup should return empty info, got %v, err %v", info, err)
+	if info, exists, err := empty.GetAccount(mgr, &addr, path[:]); !info.IsEmpty() || exists || err != nil {
+		t.Fatalf("lookup should return empty info, got %v, exists %v, err %v", info, exists, err)
 	}
 }
 
@@ -119,15 +119,15 @@ func TestBranchNode_GetAccount(t *testing.T) {
 	// Case 1: the trie does not contain the requested account.
 	trg := common.Address{}
 	path := addressToNibbles(&trg)
-	if info, err := node.GetAccount(ctxt, &trg, path[:]); !info.IsEmpty() || err != nil {
-		t.Fatalf("lookup should return empty info, got %v, err %v", info, err)
+	if info, exists, err := node.GetAccount(ctxt, &trg, path[:]); !info.IsEmpty() || exists || err != nil {
+		t.Fatalf("lookup should return empty info, got %v, exists %v, err %v", info, exists, err)
 	}
 
 	// Case 2: the trie contains the requested account.
 	trg = common.Address{0x81}
 	path = addressToNibbles(&trg)
-	if res, err := node.GetAccount(ctxt, &trg, path[:]); res != info || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", info, res, err)
+	if res, exists, err := node.GetAccount(ctxt, &trg, path[:]); res != info || !exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", info, res, exists, err)
 	}
 }
 
@@ -456,22 +456,22 @@ func TestExtensionNode_GetAccount(t *testing.T) {
 	// Case 1: try to locate a non-existing address
 	trg := common.Address{}
 	path := addressToNibbles(&trg)
-	if res, err := node.GetAccount(ctxt, &trg, path[:]); !res.IsEmpty() || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", AccountInfo{}, res, err)
+	if res, exists, err := node.GetAccount(ctxt, &trg, path[:]); !res.IsEmpty() || exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", AccountInfo{}, res, exists, err)
 	}
 
 	// Case 2: locate an existing address
 	trg = common.Address{0x12, 0x35}
 	path = addressToNibbles(&trg)
-	if res, err := node.GetAccount(ctxt, &trg, path[:]); res != info || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", info, res, err)
+	if res, exists, err := node.GetAccount(ctxt, &trg, path[:]); res != info || !exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", info, res, exists, err)
 	}
 
 	// Case 3: locate an address with a partial extension path overlap only
 	trg = common.Address{0x12, 0x4F}
 	path = addressToNibbles(&trg)
-	if res, err := node.GetAccount(ctxt, &trg, path[:]); !res.IsEmpty() || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", AccountInfo{}, res, err)
+	if res, exists, err := node.GetAccount(ctxt, &trg, path[:]); !res.IsEmpty() || exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", AccountInfo{}, res, exists, err)
 	}
 }
 
@@ -888,14 +888,14 @@ func TestAccountNode_GetAccount(t *testing.T) {
 
 	// Case 1: the node does not contain the requested info.
 	path := addressToNibbles(&addr)
-	if res, err := node.GetAccount(mgr, &addr, path[:]); !res.IsEmpty() || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", AccountInfo{}, res, err)
+	if res, exists, err := node.GetAccount(mgr, &addr, path[:]); !res.IsEmpty() || exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", AccountInfo{}, res, exists, err)
 	}
 
 	// Case 2: the node contains the requested info.
 	node.address = addr
-	if res, err := node.GetAccount(mgr, &addr, path[:]); info != res || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", info, res, err)
+	if res, exists, err := node.GetAccount(mgr, &addr, path[:]); info != res || !exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", info, res, exists, err)
 	}
 }
 
@@ -1080,7 +1080,7 @@ func TestAccountNode_GetValue(t *testing.T) {
 
 	key := common.Key{}
 	path := keyToNibbles(&key)
-	if _, err := node.GetValue(ctxt, &key, path[:]); err == nil {
+	if _, _, err := node.GetValue(ctxt, &key, path[:]); err == nil {
 		t.Fatalf("GetValue call should always return an error")
 	}
 }
@@ -1141,7 +1141,7 @@ func TestValueNode_GetAccount(t *testing.T) {
 
 	addr := common.Address{}
 	path := addressToNibbles(&addr)
-	if _, err := node.GetAccount(ctxt, &addr, path[:]); err == nil {
+	if _, _, err := node.GetAccount(ctxt, &addr, path[:]); err == nil {
 		t.Fatalf("GetAccount call should always return an error")
 	}
 }
@@ -1172,14 +1172,14 @@ func TestValueNode_GetValue(t *testing.T) {
 
 	// Case 1: the node does not contain the requested info.
 	path := keyToNibbles(&key)
-	if res, err := node.GetValue(mgr, &key, path[:]); res != (common.Value{}) || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", common.Value{}, res, err)
+	if res, exists, err := node.GetValue(mgr, &key, path[:]); res != (common.Value{}) || exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", common.Value{}, res, exists, err)
 	}
 
 	// Case 2: the node contains the requested info.
 	node.key = key
-	if res, err := node.GetValue(mgr, &key, path[:]); value != res || err != nil {
-		t.Fatalf("lookup should return %v, got %v, err %v", value, res, err)
+	if res, exists, err := node.GetValue(mgr, &key, path[:]); value != res || !exists || err != nil {
+		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", value, res, exists, err)
 	}
 }
 

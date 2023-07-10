@@ -81,10 +81,10 @@ func OpenFileTrie(directory string) (*StateTrie, error) {
 	}, nil
 }
 
-func (s *StateTrie) GetAccountInfo(addr common.Address) (AccountInfo, error) {
+func (s *StateTrie) GetAccountInfo(addr common.Address) (AccountInfo, bool, error) {
 	root, err := s.getNode(s.root)
 	if err != nil {
-		return AccountInfo{}, err
+		return AccountInfo{}, false, err
 	}
 	path := addressToNibbles(&addr)
 	return root.GetAccount(s, &addr, path[:])
@@ -110,7 +110,8 @@ func (s *StateTrie) GetValue(addr common.Address, key common.Key) (common.Value,
 		return common.Value{}, err
 	}
 	path := addressToNibbles(&addr)
-	return root.GetSlot(s, &addr, path[:], &key)
+	value, _, err := root.GetSlot(s, &addr, path[:], &key)
+	return value, err
 }
 
 func (s *StateTrie) SetValue(addr common.Address, key common.Key, value common.Value) error {

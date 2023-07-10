@@ -10,13 +10,13 @@ import (
 )
 
 type Node interface {
-	GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, error)
+	GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error)
 	SetAccount(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, info *AccountInfo) (newRoot NodeId, changed bool, err error)
 
-	GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, error)
+	GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, bool, error)
 	SetValue(manager NodeManager, thisId NodeId, key *common.Key, path []Nibble, value *common.Value) (newRoot NodeId, changed bool, err error)
 
-	GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, error)
+	GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, bool, error)
 	SetSlot(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, key *common.Key, value *common.Value) (newRoot NodeId, changed bool, err error)
 
 	Release(manager NodeManager, thisId NodeId) error
@@ -48,16 +48,16 @@ type NodeManager interface {
 
 type EmptyNode struct{}
 
-func (EmptyNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, error) {
-	return AccountInfo{}, nil
+func (EmptyNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error) {
+	return AccountInfo{}, false, nil
 }
 
-func (EmptyNode) GetValue(NodeSource, *common.Key, []Nibble) (common.Value, error) {
-	return common.Value{}, nil
+func (EmptyNode) GetValue(NodeSource, *common.Key, []Nibble) (common.Value, bool, error) {
+	return common.Value{}, false, nil
 }
 
-func (EmptyNode) GetSlot(NodeSource, *common.Address, []Nibble, *common.Key) (common.Value, error) {
-	return common.Value{}, nil
+func (EmptyNode) GetSlot(NodeSource, *common.Address, []Nibble, *common.Key) (common.Value, bool, error) {
+	return common.Value{}, false, nil
 }
 
 func (e EmptyNode) SetAccount(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, info *AccountInfo) (NodeId, bool, error) {
@@ -125,35 +125,35 @@ func getNextNodeInBranch[V any](
 	n *BranchNode,
 	source NodeSource,
 	path []Nibble,
-	consume func(Node, []Nibble) (V, error),
-) (V, error) {
+	consume func(Node, []Nibble) (V, bool, error),
+) (V, bool, error) {
 	next := n.children[path[0]]
 	node, err := source.getNode(next)
 	if err != nil {
-		return *new(V), err
+		return *new(V), false, err
 	}
 	return consume(node, path[1:])
 }
 
-func (n *BranchNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, error) {
+func (n *BranchNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error) {
 	return getNextNodeInBranch[AccountInfo](n, source, path,
-		func(node Node, path []Nibble) (AccountInfo, error) {
+		func(node Node, path []Nibble) (AccountInfo, bool, error) {
 			return node.GetAccount(source, address, path)
 		},
 	)
 }
 
-func (n *BranchNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, error) {
+func (n *BranchNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, bool, error) {
 	return getNextNodeInBranch[common.Value](n, source, path,
-		func(node Node, path []Nibble) (common.Value, error) {
+		func(node Node, path []Nibble) (common.Value, bool, error) {
 			return node.GetValue(source, key, path)
 		},
 	)
 }
 
-func (n *BranchNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, error) {
+func (n *BranchNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, bool, error) {
 	return getNextNodeInBranch[common.Value](n, source, path,
-		func(node Node, path []Nibble) (common.Value, error) {
+		func(node Node, path []Nibble) (common.Value, bool, error) {
 			return node.GetSlot(source, address, path, key)
 		},
 	)
@@ -323,37 +323,37 @@ func getNextNodeInExtension[V any](
 	n *ExtensionNode,
 	source NodeSource,
 	path []Nibble,
-	consume func(Node, []Nibble) (V, error),
-) (V, error) {
+	consume func(Node, []Nibble) (V, bool, error),
+) (V, bool, error) {
 	if !n.path.IsPrefixOf(path) {
-		return *new(V), nil
+		return *new(V), false, nil
 	}
 	node, err := source.getNode(n.next)
 	if err != nil {
-		return *new(V), err
+		return *new(V), false, err
 	}
 	return consume(node, path[n.path.Length():])
 }
 
-func (n *ExtensionNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, error) {
+func (n *ExtensionNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error) {
 	return getNextNodeInExtension[AccountInfo](n, source, path,
-		func(node Node, path []Nibble) (AccountInfo, error) {
+		func(node Node, path []Nibble) (AccountInfo, bool, error) {
 			return node.GetAccount(source, address, path)
 		},
 	)
 }
 
-func (n *ExtensionNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, error) {
+func (n *ExtensionNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, bool, error) {
 	return getNextNodeInExtension[common.Value](n, source, path,
-		func(node Node, path []Nibble) (common.Value, error) {
+		func(node Node, path []Nibble) (common.Value, bool, error) {
 			return node.GetValue(source, key, path)
 		},
 	)
 }
 
-func (n *ExtensionNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, error) {
+func (n *ExtensionNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, bool, error) {
 	return getNextNodeInExtension[common.Value](n, source, path,
-		func(node Node, path []Nibble) (common.Value, error) {
+		func(node Node, path []Nibble) (common.Value, bool, error) {
 			return node.GetSlot(source, address, path, key)
 		},
 	)
@@ -552,25 +552,25 @@ type AccountNode struct {
 	state   NodeId
 }
 
-func (n *AccountNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, error) {
+func (n *AccountNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error) {
 	if n.address == *address {
-		return n.info, nil
+		return n.info, true, nil
 	}
-	return AccountInfo{}, nil
+	return AccountInfo{}, false, nil
 }
 
-func (n *AccountNode) GetValue(NodeSource, *common.Key, []Nibble) (common.Value, error) {
-	return common.Value{}, fmt.Errorf("invalid request: value query should not reach accounts")
+func (n *AccountNode) GetValue(NodeSource, *common.Key, []Nibble) (common.Value, bool, error) {
+	return common.Value{}, false, fmt.Errorf("invalid request: value query should not reach accounts")
 }
 
-func (n *AccountNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, error) {
+func (n *AccountNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, bool, error) {
 	if n.address != *address {
-		return common.Value{}, nil
+		return common.Value{}, false, nil
 	}
 	subPath := keyToNibbles(key)
 	root, err := source.getNode(n.state)
 	if err != nil {
-		return common.Value{}, err
+		return common.Value{}, false, err
 	}
 	return root.GetValue(source, key, subPath[:])
 }
@@ -751,19 +751,19 @@ type ValueNode struct {
 	value common.Value
 }
 
-func (n *ValueNode) GetAccount(NodeSource, *common.Address, []Nibble) (AccountInfo, error) {
-	return AccountInfo{}, fmt.Errorf("invalid request: account query should not reach values")
+func (n *ValueNode) GetAccount(NodeSource, *common.Address, []Nibble) (AccountInfo, bool, error) {
+	return AccountInfo{}, false, fmt.Errorf("invalid request: account query should not reach values")
 }
 
-func (n *ValueNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, error) {
+func (n *ValueNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, bool, error) {
 	if n.key == *key {
-		return n.value, nil
+		return n.value, true, nil
 	}
-	return common.Value{}, nil
+	return common.Value{}, false, nil
 }
 
-func (n *ValueNode) GetSlot(NodeSource, *common.Address, []Nibble, *common.Key) (common.Value, error) {
-	return common.Value{}, fmt.Errorf("invalid request: slot query should not reach values")
+func (n *ValueNode) GetSlot(NodeSource, *common.Address, []Nibble, *common.Key) (common.Value, bool, error) {
+	return common.Value{}, false, fmt.Errorf("invalid request: slot query should not reach values")
 }
 
 func (n *ValueNode) SetAccount(NodeManager, NodeId, *common.Address, []Nibble, *AccountInfo) (NodeId, bool, error) {
