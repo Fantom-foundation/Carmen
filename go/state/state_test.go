@@ -336,6 +336,10 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 func TestCreatingAccountClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
+		if err := s.createAccount(address1); err != nil {
+			t.Errorf("failed to create account: %v", err)
+		}
+
 		val, err := s.GetStorage(address1, key1)
 		if err != nil {
 			t.Errorf("failed to fetch storage value: %v", err)
@@ -370,9 +374,12 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 	})
 }
 
-func TestDeleteAccountClearsStorage(t *testing.T) {
+func TestDeletingAccountsClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
+		if err := s.createAccount(address1); err != nil {
+			t.Errorf("failed to create account: %v", err)
+		}
 
 		if err := s.setStorage(address1, key1, val1); err != nil {
 			t.Errorf("failed to update storage slot: %v", err)

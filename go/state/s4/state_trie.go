@@ -1,8 +1,10 @@
 package s4
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"unsafe"
 
@@ -15,6 +17,9 @@ import (
 type StateTrie struct {
 	// The root node of the Trie.
 	root NodeId
+
+	// The file name for storing trie metadata.
+	metadatafile string
 
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint32, BranchNode]
@@ -30,6 +35,12 @@ type StateTrie struct {
 const cacheCapacity = 100_000_000
 
 func OpenInMemoryTrie(directory string) (*StateTrie, error) {
+	metadatafile := directory + "/meta.json"
+	metadata, err := readMetadata(metadatafile)
+	if err != nil {
+		return nil, err
+	}
+
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -47,15 +58,23 @@ func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 		return nil, err
 	}
 	return &StateTrie{
-		branches:   branches,
-		extensions: extensions,
-		accounts:   accounts,
-		values:     values,
-		nodeCache:  common.NewCache[NodeId, Node](cacheCapacity),
+		root:         metadata.RootNode,
+		metadatafile: metadatafile,
+		branches:     branches,
+		extensions:   extensions,
+		accounts:     accounts,
+		values:       values,
+		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
 	}, nil
 }
 
 func OpenFileTrie(directory string) (*StateTrie, error) {
+	metadatafile := directory + "/meta.json"
+	metadata, err := readMetadata(metadatafile)
+	if err != nil {
+		return nil, err
+	}
+
 	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -73,11 +92,13 @@ func OpenFileTrie(directory string) (*StateTrie, error) {
 		return nil, err
 	}
 	return &StateTrie{
-		branches:   branches,
-		extensions: extensions,
-		accounts:   accounts,
-		values:     values,
-		nodeCache:  common.NewCache[NodeId, Node](cacheCapacity),
+		root:         metadata.RootNode,
+		metadatafile: metadatafile,
+		branches:     branches,
+		extensions:   extensions,
+		accounts:     accounts,
+		values:       values,
+		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
 	}, nil
 }
 
@@ -138,10 +159,21 @@ func (s *StateTrie) ClearStorage(addr common.Address) error {
 }
 
 func (s *StateTrie) Flush() error {
+	// Update on-disk meta-data.
+	metadata, err := json.Marshal(metadata{
+		RootNode: s.root,
+	})
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
+		return err
+	}
+
 	// Flush entire cache content.
 	var errs = []error{}
 	s.nodeCache.Iterate(func(id NodeId, node Node) bool {
-		if err := s.update(id, node); err != nil {
+		if err := s.flush(id, node); err != nil {
 			errs = append(errs, err)
 		}
 		return true
@@ -157,6 +189,7 @@ func (s *StateTrie) Flush() error {
 
 func (s *StateTrie) Close() error {
 	return errors.Join(
+		s.Flush(),
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
@@ -255,7 +288,7 @@ func (s *StateTrie) getNode(id NodeId) (Node, error) {
 func (s *StateTrie) addToCache(id NodeId, node Node) error {
 	if evictedId, evictedNode, evicted := s.nodeCache.Set(id, node); evicted {
 		// TODO: perform update asynchroniously.
-		if err := s.update(evictedId, evictedNode); err != nil {
+		if err := s.flush(evictedId, evictedNode); err != nil {
 			return err
 		}
 	}
@@ -263,6 +296,11 @@ func (s *StateTrie) addToCache(id NodeId, node Node) error {
 }
 
 func (s *StateTrie) update(id NodeId, node Node) error {
+	// currently ignored since we do not track dirty nodes
+	return nil
+}
+
+func (s *StateTrie) flush(id NodeId, node Node) error {
 	if id.IsValue() {
 		return s.values.Set(id.Index(), node.(*ValueNode))
 	} else if id.IsAccount() {
@@ -341,4 +379,31 @@ func (s *StateTrie) release(id NodeId) error {
 		return s.values.Delete(id.Index())
 	}
 	return fmt.Errorf("unable to release node %v", id)
+}
+
+// metadata is the helper type to read and write metadata from/to the disk.
+type metadata struct {
+	RootNode NodeId
+}
+
+// readMetadata parses the content of the given file if it exists or returns
+// a default-initialized metadata struct if there is no such file.
+func readMetadata(filename string) (metadata, error) {
+
+	// If there is no file, initialize and return default metadata.
+	if _, err := os.Stat(filename); err != nil {
+		return metadata{}, nil
+	}
+
+	// If the file exists, parse it and return its content.
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return metadata{}, err
+	}
+
+	var meta metadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return meta, err
+	}
+	return meta, nil
 }

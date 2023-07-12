@@ -135,7 +135,8 @@ func getNextNodeInBranch[V any](
 	next := n.children[path[0]]
 	node, err := source.getNode(next)
 	if err != nil {
-		return *new(V), false, err
+		var val V
+		return val, false, err
 	}
 	return consume(node, path[1:])
 }
@@ -344,7 +345,8 @@ func getNextNodeInExtension[V any](
 	}
 	node, err := source.getNode(n.next)
 	if err != nil {
-		return *new(V), false, err
+		var val V
+		return val, false, err
 	}
 	return consume(node, path[n.path.Length():])
 }

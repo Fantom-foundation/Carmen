@@ -1,7 +1,11 @@
 package state
 
 import (
+	"encoding/binary"
+	"errors"
 	"hash"
+	"io"
+	"os"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -13,20 +17,26 @@ import (
 // GoSchema4 implementation of a state utilizes an MPT based data structure. However, it is
 // not binary compatible with the Ethereum variant of an MPT.
 type GoSchema4 struct {
-	trie *s4.StateTrie
-	// TODO: have a persistent storage for this
-	code   map[common.Hash][]byte
-	hasher hash.Hash
+	trie     *s4.StateTrie
+	code     map[common.Hash][]byte
+	codefile string
+	hasher   hash.Hash
 }
 
 func newS4State(params Parameters, trie *s4.StateTrie) (State, error) {
+	codefile := params.Directory + "/codes.json"
+	codes, err := readCodes(codefile)
+	if err != nil {
+		return nil, err
+	}
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 	return NewGoState(&GoSchema4{
-		trie: trie,
-		code: map[common.Hash][]byte{},
+		trie:     trie,
+		code:     codes,
+		codefile: codefile,
 	}, arch, []func(){archiveCleanup}), nil
 }
 
@@ -178,12 +188,19 @@ func (s *GoSchema4) GetHash() (hash common.Hash, err error) {
 	return common.Hash{}, nil
 }
 
-func (s *GoSchema4) Flush() (lastErr error) {
-	return s.trie.Flush()
+func (s *GoSchema4) Flush() error {
+	// Flush codes and state trie.
+	return errors.Join(
+		writeCodes(s.code, s.codefile),
+		s.trie.Flush(),
+	)
 }
 
 func (s *GoSchema4) Close() (lastErr error) {
-	return s.trie.Close()
+	return errors.Join(
+		s.Flush(),
+		s.trie.Close(),
+	)
 }
 
 func (s *GoSchema4) getSnapshotableComponents() []backend.Snapshotable {
@@ -202,4 +219,82 @@ func (s *GoSchema4) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("trie", s.trie.GetMemoryFootprint())
 	// TODO: add code store
 	return mf
+}
+
+var errCorruptedCodeFile = errors.New("invalid encoding of code file")
+
+// readCodes parses the content of the given file if it exists or returns
+// a an empty code collection if there is no such file.
+func readCodes(filename string) (map[common.Hash][]byte, error) {
+
+	// If there is no file, initialize and return an empty code collection.
+	if _, err := os.Stat(filename); err != nil {
+		return map[common.Hash][]byte{}, nil
+	}
+
+	// If the file exists, parse it and return its content.
+	res := map[common.Hash][]byte{}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// The format is simple: [<key>, <length>, <code>]*
+	var hash common.Hash
+	var length [4]byte
+	for {
+		if num, err := file.Read(hash[:]); err != nil {
+			if err == io.EOF {
+				return res, nil
+			}
+			return nil, err
+		} else if num != len(hash) {
+			return nil, errCorruptedCodeFile
+		}
+		if num, err := file.Read(length[:]); err != nil {
+			return nil, err
+		} else if num != len(length) {
+			return nil, errCorruptedCodeFile
+		}
+
+		size := binary.BigEndian.Uint32(length[:])
+		code := make([]byte, size)
+		if num, err := file.Read(code[:]); err != nil {
+			return nil, err
+		} else if num != len(code) {
+			return nil, errCorruptedCodeFile
+		}
+
+		res[hash] = code
+	}
+}
+
+// writeCodes write the given map of codes to the given file.
+func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, file.Close())
+	}()
+
+	// The format is simple: [<key>, <length>, <code>]*
+	for key, code := range codes {
+		if _, err := file.Write(key[:]); err != nil {
+			return err
+		}
+		var length [4]byte
+		binary.BigEndian.PutUint32(length[:], uint32(len(code)))
+		if _, err := file.Write(length[:]); err != nil {
+			return err
+		}
+		if _, err := file.Write(code); err != nil {
+			return err
+		}
+	}
+	return nil
 }

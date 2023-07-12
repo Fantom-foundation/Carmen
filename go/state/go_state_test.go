@@ -159,6 +159,45 @@ func TestBasicOperations(t *testing.T) {
 	}
 }
 
+func TestDeletingAccounts(t *testing.T) {
+	for _, config := range initGoStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer state.Close()
+
+			// fill-in values
+			if err := state.createAccount(address1); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if err := state.setNonce(address1, common.Nonce{123}); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if err := state.setBalance(address2, common.Balance{45}); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+
+			// fetch values
+			if val, err := state.Exists(address1); err != nil || val != true {
+				t.Errorf("Created account does not exists: Val: %t, Err: %v", val, err)
+			}
+
+			// delete account
+			if err := state.deleteAccount(address1); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if val, err := state.Exists(address1); err != nil || val != false {
+				t.Errorf("Deleted account is not deleted: Val: %t, Err: %s", val, err)
+			}
+		})
+	}
+}
+
 func TestMoreInserts(t *testing.T) {
 	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {

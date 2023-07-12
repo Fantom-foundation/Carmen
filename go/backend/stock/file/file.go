@@ -205,7 +205,7 @@ func (s *fileStock[I, V]) Flush() error {
 		return err
 	}
 	if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
-		return nil
+		return err
 	}
 
 	// Flush freelist and value file.
