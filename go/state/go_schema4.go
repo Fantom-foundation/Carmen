@@ -163,9 +163,12 @@ func (s *GoSchema4) setCode(address common.Address, code []byte) (err error) {
 	}
 	codeHash = common.GetHash(s.hasher, code)
 
-	info, _, err := s.trie.GetAccountInfo(address)
+	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
+	}
+	if !exists && len(code) == 0 {
+		return nil
 	}
 	if info.CodeHash == codeHash {
 		return nil
