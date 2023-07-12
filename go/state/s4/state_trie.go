@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -176,14 +177,23 @@ func (s *StateTrie) Flush() error {
 		return err
 	}
 
-	// Flush entire cache content.
+	// Flush dirty keys in order (to avoid excessive seeking).
+	ids := make([]NodeId, len(s.dirty))
+	for id := range s.dirty {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	var errs = []error{}
-	s.nodeCache.Iterate(func(id NodeId, node Node) bool {
-		if err := s.flush(id, node); err != nil {
-			errs = append(errs, err)
+	for _, id := range ids {
+		node, present := s.nodeCache.Get(id)
+		if present {
+			if err := s.flush(id, node); err != nil {
+				errs = append(errs, err)
+			}
+		} else {
+			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
 		}
-		return true
-	})
+	}
 	return errors.Join(
 		errors.Join(errs...),
 		s.accounts.Flush(),
@@ -377,6 +387,7 @@ func (s *StateTrie) createValue() (NodeId, *ValueNode, error) {
 
 func (s *StateTrie) release(id NodeId) error {
 	s.nodeCache.Remove(id)
+	delete(s.dirty, id)
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}

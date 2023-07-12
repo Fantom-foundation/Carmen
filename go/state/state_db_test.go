@@ -3144,7 +3144,7 @@ func TestPersistentStateDB(t *testing.T) {
 				stateDb.EndEpoch(1)
 
 				if err := stateDb.Close(); err != nil {
-					t.Errorf("Cannot close state: %e", err)
+					t.Errorf("Cannot close state: %v", err)
 				}
 
 				execSubProcessTest(t, dir, config.name, archiveType, "TestStateDBRead")

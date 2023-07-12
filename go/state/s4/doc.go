@@ -40,3 +40,14 @@ Todos:
 	- release state trie asynchroniously in the background
 
 */
+
+/*
+Issues: - blk ~15.9M
+
+2023-07-10 21:45:31.601 |  3:48:13 | 1 | validator | lfvm | carmen | go-file | s4 | 2023/07/10 21:45:31 INFO     runvm/RunVM[0m: Elapsed time: 3h 47m 56s, at block 15921431 (~ 5745 Tx/s, ~ 769288845 Gas/s)
+2023-07-10 21:45:39.705 |  3:48:22 | 1 | validator | lfvm | carmen | go-file | s4 | 2023/07/10 21:45:39 Diff for Exist([[0x9D601Eaf282e0078f2Ebe9b4FFA68d484F8Fc3AC]] )
+2023-07-10 21:45:39.705 |  3:48:22 | 1 | validator | lfvm | carmen | go-file | s4 | 	Primary: true 
+2023-07-10 21:45:39.705 |  3:48:22 | 1 | validator | lfvm | carmen | go-file | s4 | 	Shadow: false
+2023-07-10 21:45:39.768 |  3:48:22 | 1 | validator | lfvm | carmen | go-file | s4 | record-replay: CloseSubstateDB
+2023-07-10 21:45:40.246 |  3:48:22 | 1 | validator | lfvm | carmen | go-file | s4 | state-db error after block 15923693, transaction 1: Exist([0x9D601Eaf282e0078f2Ebe9b4FFA68d484F8Fc3AC] ) diverged from shadow DB.
+*/
