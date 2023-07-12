@@ -29,6 +29,10 @@ type StateTrie struct {
 
 	// A unified cache for all node types.
 	nodeCache *common.Cache[NodeId, Node]
+
+	// The set of dirty nodes. Nodes are dirty if there in-memory
+	// state does not match their on-disk content.
+	dirty map[NodeId]struct{}
 }
 
 // The number of elements to retain in the node cache.
@@ -65,6 +69,7 @@ func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 		accounts:     accounts,
 		values:       values,
 		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
+		dirty:        map[NodeId]struct{}{},
 	}, nil
 }
 
@@ -99,6 +104,7 @@ func OpenFileTrie(directory string) (*StateTrie, error) {
 		accounts:     accounts,
 		values:       values,
 		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
+		dirty:        map[NodeId]struct{}{},
 	}, nil
 }
 
@@ -296,11 +302,16 @@ func (s *StateTrie) addToCache(id NodeId, node Node) error {
 }
 
 func (s *StateTrie) update(id NodeId, node Node) error {
-	// currently ignored since we do not track dirty nodes
+	// all needed here is to register the modfied node as dirty
+	s.dirty[id] = struct{}{}
 	return nil
 }
 
 func (s *StateTrie) flush(id NodeId, node Node) error {
+	if _, dirty := s.dirty[id]; !dirty {
+		return nil
+	}
+	delete(s.dirty, id)
 	if id.IsValue() {
 		return s.values.Set(id.Index(), node.(*ValueNode))
 	} else if id.IsAccount() {
