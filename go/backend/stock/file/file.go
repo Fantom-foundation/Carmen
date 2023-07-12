@@ -12,11 +12,12 @@ import (
 )
 
 type fileStock[I stock.Index, V any] struct {
-	directory     string
-	encoder       stock.ValueEncoder[V]
-	values        *os.File
-	freelist      *fileBasedStack[I]
-	numValueSlots I
+	directory       string
+	encoder         stock.ValueEncoder[V]
+	values          *os.File
+	freelist        *fileBasedStack[I]
+	numValueSlots   I
+	numValuesInFile int64
 }
 
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
@@ -24,6 +25,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 	valuefile := directory + "/values.dat"
 	freelistfile := directory + "/freelist.dat"
 	numValueSlots := I(0)
+	numValuesInFile := int64(0)
 
 	// Create the direcory if needed.
 	if err := os.MkdirAll(directory, 0700); err != nil {
@@ -61,7 +63,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 			if err != nil {
 				return nil, err
 			}
-			if got, want := stats.Size(), int64(meta.ValueListLength*valueSize); got != want {
+			if got, want := stats.Size(), meta.NumValuesInFile*int64(valueSize); got != want {
 				return nil, fmt.Errorf("invalid value file size, got %d, wanted %d", got, want)
 			}
 		}
@@ -78,6 +80,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		}
 
 		numValueSlots = I(meta.ValueListLength)
+		numValuesInFile = meta.NumValuesInFile
 	}
 
 	values, err := os.OpenFile(valuefile, os.O_CREATE|os.O_RDWR, 0600)
@@ -92,11 +95,12 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Create new files
 	return &fileStock[I, V]{
-		encoder:       encoder,
-		directory:     directory,
-		values:        values,
-		freelist:      freelist,
-		numValueSlots: numValueSlots,
+		encoder:         encoder,
+		directory:       directory,
+		values:          values,
+		freelist:        freelist,
+		numValueSlots:   numValueSlots,
+		numValuesInFile: numValuesInFile,
 	}, nil
 }
 
@@ -112,16 +116,6 @@ func (s *fileStock[I, V]) New() (I, *V, error) {
 		index = free
 	} else {
 		s.numValueSlots++
-
-		// Add zero bytes to the end of the file.
-		if _, err := s.values.Seek(0, 2); err != nil {
-			return 0, nil, err
-		}
-
-		zeros := make([]byte, s.encoder.GetEncodedSize())
-		if _, err := s.values.Write(zeros); err != nil {
-			return 0, nil, err
-		}
 	}
 
 	var value V
@@ -129,8 +123,11 @@ func (s *fileStock[I, V]) New() (I, *V, error) {
 }
 
 func (s *fileStock[I, V]) Get(index I) (*V, error) {
-	if index >= s.numValueSlots || index < 0 {
+	if index >= I(s.numValueSlots) || index < 0 {
 		return nil, nil
+	}
+	if index >= I(s.numValuesInFile) {
+		return new(V), nil
 	}
 	// Load value from the file.
 	valueSize := s.encoder.GetEncodedSize()
@@ -157,8 +154,41 @@ func (s *fileStock[I, V]) Set(index I, value *V) error {
 		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, s.numValueSlots)
 	}
 
-	// Write a serialized form of the value to disk.
+	// Encode the value to be written.
 	valueSize := s.encoder.GetEncodedSize()
+	buffer := make([]byte, valueSize)
+	s.encoder.Store(buffer, value)
+
+	// If the new data is beyond the end of the current file and empty, we can skip
+	// the write operation.
+	if index >= I(s.numValuesInFile) && allZero(buffer) {
+		return nil
+	}
+
+	// Grow the file if needed.
+	if index >= I(s.numValuesInFile) {
+		data := make([]byte, int((int64(index)-s.numValuesInFile+1)*int64(valueSize)))
+		copy(data[int(int64(valueSize)*(int64(index)-s.numValuesInFile)):], buffer)
+
+		pos, err := s.values.Seek(0, 2)
+		if err != nil {
+			return err
+		}
+		if want, got := int64(s.numValuesInFile)*int64(valueSize), pos; want != got {
+			return fmt.Errorf("invalid file size, expected %d, got %d", want, got)
+		}
+		n, err := s.values.Write(data)
+		if err != nil {
+			return err
+		}
+		if n != len(data) {
+			return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", len(data), n)
+		}
+		s.numValuesInFile = int64(index) + 1
+		return nil
+	}
+
+	// Write a serialized form of the value to disk.
 	offset := int64(valueSize) * int64(index)
 	pos, err := s.values.Seek(offset, 0)
 	if err != nil {
@@ -168,8 +198,6 @@ func (s *fileStock[I, V]) Set(index I, value *V) error {
 		return fmt.Errorf("failed to seek to required position, wanted %d, got %d", offset, pos)
 	}
 
-	buffer := make([]byte, valueSize)
-	s.encoder.Store(buffer, value)
 	n, err := s.values.Write(buffer)
 	if err != nil {
 		return err
@@ -200,6 +228,7 @@ func (s *fileStock[I, V]) Flush() error {
 		ValueTypeSize:   s.encoder.GetEncodedSize(),
 		ValueListLength: int(s.numValueSlots),
 		FreeListLength:  s.freelist.Size(),
+		NumValuesInFile: s.numValuesInFile,
 	})
 	if err != nil {
 		return err
@@ -234,4 +263,14 @@ type metadata struct {
 	ValueTypeSize   int
 	ValueListLength int
 	FreeListLength  int
+	NumValuesInFile int64
+}
+
+func allZero(data []byte) bool {
+	for _, cur := range data {
+		if cur != 0 {
+			return false
+		}
+	}
+	return true
 }
