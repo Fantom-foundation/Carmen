@@ -14,7 +14,7 @@ import (
 type fileStock[I stock.Index, V any] struct {
 	directory       string
 	encoder         stock.ValueEncoder[V]
-	values          *os.File
+	values          *file
 	freelist        *fileBasedStack[I]
 	numValueSlots   I
 	numValuesInFile int64
@@ -83,7 +83,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		numValuesInFile = meta.NumValuesInFile
 	}
 
-	values, err := os.OpenFile(valuefile, os.O_CREATE|os.O_RDWR, 0600)
+	values, err := openFile(valuefile)
 	if err != nil {
 		return nil, err
 	}
@@ -132,12 +132,12 @@ func (s *fileStock[I, V]) Get(index I) (*V, error) {
 	// Load value from the file.
 	valueSize := s.encoder.GetEncodedSize()
 	offset := int64(valueSize) * int64(index)
-	if _, err := s.values.Seek(offset, 0); err != nil {
+	if err := s.values.seek(offset); err != nil {
 		return nil, err
 	}
 
 	buffer := make([]byte, valueSize)
-	_, err := s.values.Read(buffer)
+	err := s.values.read(buffer)
 	if err != nil {
 		return nil, err
 	}
@@ -169,20 +169,11 @@ func (s *fileStock[I, V]) Set(index I, value *V) error {
 	if index >= I(s.numValuesInFile) {
 		data := make([]byte, int((int64(index)-s.numValuesInFile+1)*int64(valueSize)))
 		copy(data[int(int64(valueSize)*(int64(index)-s.numValuesInFile)):], buffer)
-
-		pos, err := s.values.Seek(0, 2)
-		if err != nil {
+		if err := s.values.seek(s.numValuesInFile * int64(valueSize)); err != nil {
 			return err
 		}
-		if want, got := int64(s.numValuesInFile)*int64(valueSize), pos; want != got {
-			return fmt.Errorf("invalid file size, expected %d, got %d", want, got)
-		}
-		n, err := s.values.Write(data)
-		if err != nil {
+		if err := s.values.write(data); err != nil {
 			return err
-		}
-		if n != len(data) {
-			return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", len(data), n)
 		}
 		s.numValuesInFile = int64(index) + 1
 		return nil
@@ -190,20 +181,11 @@ func (s *fileStock[I, V]) Set(index I, value *V) error {
 
 	// Write a serialized form of the value to disk.
 	offset := int64(valueSize) * int64(index)
-	pos, err := s.values.Seek(offset, 0)
-	if err != nil {
+	if err := s.values.seek(offset); err != nil {
 		return err
 	}
-	if pos != offset {
-		return fmt.Errorf("failed to seek to required position, wanted %d, got %d", offset, pos)
-	}
-
-	n, err := s.values.Write(buffer)
-	if err != nil {
+	if err := s.values.write(buffer); err != nil {
 		return err
-	}
-	if n != valueSize {
-		return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", valueSize, n)
 	}
 	return nil
 }
@@ -239,8 +221,8 @@ func (s *fileStock[I, V]) Flush() error {
 
 	// Flush freelist and value file.
 	return errors.Join(
+		s.values.flush(),
 		s.freelist.Flush(),
-		s.values.Sync(),
 	)
 }
 
@@ -250,7 +232,8 @@ func (s *fileStock[I, V]) Close() error {
 	// see: https://go.dev/ref/spec#Order_of_evaluation
 	return errors.Join(
 		s.Flush(),
-		s.values.Close(),
+		s.values.close(),
+		s.freelist.Close(),
 	)
 }
 
@@ -273,4 +256,72 @@ func allZero(data []byte) bool {
 		}
 	}
 	return true
+}
+
+// file is a simple wrapper arround *os.File coordinating seek, read, and write
+// operations.
+
+// It has been observed that data is frequently accessed sequentially
+// in stocks when being used by state tries (especially during initialization),
+// and that many seek operations can be skipped because the current file pointer
+// is actually pointing to the desired location. This class filters out unnecessary
+// seek operations.
+type file struct {
+	file     *os.File // the file handle to represent
+	position int64    // the current position in the file
+}
+
+func openFile(path string) (*file, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+	return &file{file: f}, nil
+}
+
+func (f *file) seek(position int64) error {
+	if f.position == position {
+		return nil
+	}
+	pos, err := f.file.Seek(position, 0)
+	if err != nil {
+		return err
+	}
+	if pos != position {
+		return fmt.Errorf("failed to seek to required position, wanted %d, got %d", position, pos)
+	}
+	f.position = position
+	return nil
+}
+
+func (f *file) write(src []byte) error {
+	n, err := f.file.Write(src)
+	if err != nil {
+		return err
+	}
+	if n != len(src) {
+		return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", len(src), n)
+	}
+	f.position += int64(n)
+	return nil
+}
+
+func (f *file) read(dst []byte) error {
+	n, err := f.file.Read(dst)
+	if err != nil {
+		return err
+	}
+	if n != len(dst) {
+		return fmt.Errorf("failed to read sufficient bytes from file, wanted %d, got %d", len(dst), n)
+	}
+	f.position += int64(n)
+	return nil
+}
+
+func (f *file) flush() error {
+	return f.file.Sync()
+}
+
+func (f *file) close() error {
+	return f.file.Close()
 }
