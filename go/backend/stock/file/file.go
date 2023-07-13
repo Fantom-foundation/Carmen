@@ -63,7 +63,14 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 			if err != nil {
 				return nil, err
 			}
-			if got, want := stats.Size(), meta.NumValuesInFile*int64(valueSize); got != want {
+			expectedSize := meta.NumValuesInFile * int64(valueSize)
+			if expectedSize%bufferSize != 0 {
+				expectedSize += bufferSize - expectedSize%bufferSize
+			}
+			if expectedSize == 0 {
+				expectedSize = bufferSize
+			}
+			if got, want := stats.Size(), expectedSize; got != want {
 				return nil, fmt.Errorf("invalid value file size, got %d, wanted %d", got, want)
 			}
 		}
@@ -132,12 +139,8 @@ func (s *fileStock[I, V]) Get(index I) (*V, error) {
 	// Load value from the file.
 	valueSize := s.encoder.GetEncodedSize()
 	offset := int64(valueSize) * int64(index)
-	if err := s.values.seek(offset); err != nil {
-		return nil, err
-	}
-
 	buffer := make([]byte, valueSize)
-	err := s.values.read(buffer)
+	err := s.values.read(offset, buffer)
 	if err != nil {
 		return nil, err
 	}
@@ -165,27 +168,13 @@ func (s *fileStock[I, V]) Set(index I, value *V) error {
 		return nil
 	}
 
-	// Grow the file if needed.
-	if index >= I(s.numValuesInFile) {
-		data := make([]byte, int((int64(index)-s.numValuesInFile+1)*int64(valueSize)))
-		copy(data[int(int64(valueSize)*(int64(index)-s.numValuesInFile)):], buffer)
-		if err := s.values.seek(s.numValuesInFile * int64(valueSize)); err != nil {
-			return err
-		}
-		if err := s.values.write(data); err != nil {
-			return err
-		}
-		s.numValuesInFile = int64(index) + 1
-		return nil
-	}
-
 	// Write a serialized form of the value to disk.
 	offset := int64(valueSize) * int64(index)
-	if err := s.values.seek(offset); err != nil {
+	if err := s.values.write(offset, buffer); err != nil {
 		return err
 	}
-	if err := s.values.write(buffer); err != nil {
-		return err
+	if int64(index) >= s.numValuesInFile {
+		s.numValuesInFile = int64(index) + 1
 	}
 	return nil
 }
@@ -258,17 +247,25 @@ func allZero(data []byte) bool {
 	return true
 }
 
+const bufferSize = 4092
+
 // file is a simple wrapper arround *os.File coordinating seek, read, and write
 // operations.
-
 // It has been observed that data is frequently accessed sequentially
 // in stocks when being used by state tries (especially during initialization),
 // and that many seek operations can be skipped because the current file pointer
 // is actually pointing to the desired location. This class filters out unnecessary
 // seek operations.
+// The wrapper also adds a write buffer to combine multiple updates into a single
+// file write update which -- in particular during priming -- can reduce processing
+// time significantly.
+// TODO: move this into an extra file and add unit tests.
 type file struct {
-	file     *os.File // the file handle to represent
-	position int64    // the current position in the file
+	file         *os.File         // the file handle to represent
+	filesize     int64            // the current size of the file
+	position     int64            // the current position in the file
+	buffer       [bufferSize]byte // a buffer for write operations
+	bufferOffset int64            // the offset of the write buffer
 }
 
 func openFile(path string) (*file, error) {
@@ -276,7 +273,133 @@ func openFile(path string) (*file, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &file{file: f}, nil
+	stats, err := os.Stat(path)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	size := stats.Size()
+	if size%bufferSize != 0 {
+		f.Close()
+		return nil, fmt.Errorf("invalid file size, got %d, expected multiple of %d", size, bufferSize)
+	}
+	res := &file{
+		file:     f,
+		filesize: size,
+	}
+
+	if err := res.readInternal(0, res.buffer[:]); err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (f *file) write(position int64, src []byte) error {
+
+	if len(src) > bufferSize {
+		panic(fmt.Sprintf("writing data > %d bytes not supported so far, got %d", bufferSize, len(src)))
+	}
+
+	// If the data to be written covers multiple buffer blocks the write needs to be
+	// split in two.
+	if position/bufferSize != (position+int64(len(src))-1)/bufferSize {
+		covered := bufferSize - position%bufferSize
+		offsetB := f.bufferOffset + bufferSize
+		return errors.Join(
+			f.write(position, src[0:covered]),
+			f.write(offsetB, src[covered:]),
+		)
+	}
+
+	// Check whether the write operation targets the internal buffer.
+	if position >= f.bufferOffset && position+int64(len(src)) <= f.bufferOffset+int64(len(f.buffer)) {
+		copy(f.buffer[int(position-f.bufferOffset):], src)
+		return nil
+	}
+
+	// Flush the buffer and load another.
+	if err := f.writeInternal(f.bufferOffset, f.buffer[:]); err != nil {
+		return err
+	}
+	newOffset := position - position%bufferSize
+	if err := f.readInternal(newOffset, f.buffer[:]); err != nil {
+		return err
+	}
+	f.bufferOffset = newOffset
+	return f.write(position, src)
+}
+
+func (f *file) writeInternal(position int64, src []byte) error {
+	// Grow file if required.
+	if f.filesize < position {
+		data := make([]byte, int(position-f.filesize))
+		copy(data[int(position-f.filesize):], src)
+		if err := f.writeInternal(f.filesize, data); err != nil {
+			return err
+		}
+	}
+
+	if err := f.seek(position); err != nil {
+		return err
+	}
+	n, err := f.file.Write(src)
+	if err != nil {
+		return err
+	}
+	if n != len(src) {
+		return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", len(src), n)
+	}
+	f.position += int64(n)
+	if f.position > f.filesize {
+		f.filesize = f.position
+	}
+	return nil
+}
+
+func (f *file) read(position int64, dst []byte) error {
+	// Read data from buffer if covered.
+	if position >= f.bufferOffset && position+int64(len(dst)) <= f.bufferOffset+int64(len(f.buffer)) {
+		copy(dst, f.buffer[int(position-f.bufferOffset):])
+		return nil
+	}
+	return f.readInternal(position, dst)
+}
+
+func (f *file) readInternal(position int64, dst []byte) error {
+	if len(dst) == 0 {
+		return nil
+	}
+	// If read segment exceeds the current file size, read covered part and pad with zeros.
+	if position >= f.filesize {
+		for i := range dst {
+			dst[i] = 0
+		}
+		return nil
+	}
+	if position+int64(len(dst)) > f.filesize {
+		covered := f.filesize - position
+		if err := f.readInternal(position, dst[0:covered]); err != nil {
+			return err
+		}
+		for i := covered; i < int64(len(dst)); i++ {
+			dst[i] = 0
+		}
+		return nil
+	}
+	if err := f.seek(position); err != nil {
+		return err
+	}
+	n, err := f.file.Read(dst)
+	if err != nil {
+		return err
+	}
+	if n != len(dst) {
+		return fmt.Errorf("failed to read sufficient bytes from file, wanted %d, got %d", len(dst), n)
+	}
+	f.position += int64(n)
+	return nil
 }
 
 func (f *file) seek(position int64) error {
@@ -294,32 +417,11 @@ func (f *file) seek(position int64) error {
 	return nil
 }
 
-func (f *file) write(src []byte) error {
-	n, err := f.file.Write(src)
-	if err != nil {
-		return err
-	}
-	if n != len(src) {
-		return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", len(src), n)
-	}
-	f.position += int64(n)
-	return nil
-}
-
-func (f *file) read(dst []byte) error {
-	n, err := f.file.Read(dst)
-	if err != nil {
-		return err
-	}
-	if n != len(dst) {
-		return fmt.Errorf("failed to read sufficient bytes from file, wanted %d, got %d", len(dst), n)
-	}
-	f.position += int64(n)
-	return nil
-}
-
 func (f *file) flush() error {
-	return f.file.Sync()
+	return errors.Join(
+		f.writeInternal(f.bufferOffset, f.buffer[:]),
+		f.file.Sync(),
+	)
 }
 
 func (f *file) close() error {
