@@ -187,8 +187,7 @@ func (s *GoSchema4) GetCodeHash(address common.Address) (hash common.Hash, err e
 }
 
 func (s *GoSchema4) GetHash() (hash common.Hash, err error) {
-	// panic("not implemented")
-	return common.Hash{}, nil
+	return s.trie.GetHash()
 }
 
 func (s *GoSchema4) Flush() error {

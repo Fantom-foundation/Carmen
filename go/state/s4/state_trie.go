@@ -34,18 +34,16 @@ type StateTrie struct {
 	// The set of dirty nodes. Nodes are dirty if there in-memory
 	// state does not match their on-disk content.
 	dirty map[NodeId]struct{}
+
+	// The hasher used to compute state hashes.
+	hasher    Hasher
+	hashCache map[NodeId]common.Hash // TODO: make persistent!
 }
 
 // The number of elements to retain in the node cache.
 const cacheCapacity = 100_000_000
 
 func OpenInMemoryTrie(directory string) (*StateTrie, error) {
-	metadatafile := directory + "/meta.json"
-	metadata, err := readMetadata(metadatafile)
-	if err != nil {
-		return nil, err
-	}
-
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -62,25 +60,10 @@ func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StateTrie{
-		root:         metadata.RootNode,
-		metadatafile: metadatafile,
-		branches:     branches,
-		extensions:   extensions,
-		accounts:     accounts,
-		values:       values,
-		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
-		dirty:        map[NodeId]struct{}{},
-	}, nil
+	return makeTrie(directory, branches, extensions, accounts, values)
 }
 
 func OpenFileTrie(directory string) (*StateTrie, error) {
-	metadatafile := directory + "/meta.json"
-	metadata, err := readMetadata(metadatafile)
-	if err != nil {
-		return nil, err
-	}
-
 	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -97,6 +80,22 @@ func OpenFileTrie(directory string) (*StateTrie, error) {
 	if err != nil {
 		return nil, err
 	}
+	return makeTrie(directory, branches, extensions, accounts, values)
+}
+
+func makeTrie(
+	directory string,
+	branches stock.Stock[uint32, BranchNode],
+	extensions stock.Stock[uint32, ExtensionNode],
+	accounts stock.Stock[uint32, AccountNode],
+	values stock.Stock[uint32, ValueNode],
+) (*StateTrie, error) {
+	// Parse metadata file.
+	metadatafile := directory + "/meta.json"
+	metadata, err := readMetadata(metadatafile)
+	if err != nil {
+		return nil, err
+	}
 	return &StateTrie{
 		root:         metadata.RootNode,
 		metadatafile: metadatafile,
@@ -106,6 +105,8 @@ func OpenFileTrie(directory string) (*StateTrie, error) {
 		values:       values,
 		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
 		dirty:        map[NodeId]struct{}{},
+		hasher:       &DirectHasher{},
+		hashCache:    map[NodeId]common.Hash{},
 	}, nil
 }
 
@@ -163,6 +164,26 @@ func (s *StateTrie) ClearStorage(addr common.Address) error {
 	}
 	path := addressToNibbles(&addr)
 	return root.ClearStorage(s, &addr, path[:])
+}
+
+func (s *StateTrie) GetHash() (common.Hash, error) {
+	return s.GetHashFor(s.root)
+}
+
+func (s *StateTrie) GetHashFor(id NodeId) (common.Hash, error) {
+	if hash, exists := s.hashCache[id]; exists {
+		return hash, nil
+	}
+	node, err := s.getNode(id)
+	if err != nil {
+		return common.Hash{}, nil
+	}
+	hash, err := s.hasher.GetHash(node, s)
+	if err != nil {
+		return common.Hash{}, nil
+	}
+	s.hashCache[id] = hash
+	return hash, nil
 }
 
 func (s *StateTrie) Flush() error {
@@ -238,6 +259,7 @@ func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
 		}
 		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
 	}))
+	mf.AddChild("hashes", common.NewMemoryFootprint(uintptr(len(s.hashCache))*(unsafe.Sizeof(NodeId(0))+common.HashSize)))
 	return mf
 }
 
@@ -314,6 +336,7 @@ func (s *StateTrie) addToCache(id NodeId, node Node) error {
 func (s *StateTrie) update(id NodeId, node Node) error {
 	// all needed here is to register the modfied node as dirty
 	s.dirty[id] = struct{}{}
+	delete(s.hashCache, id)
 	return nil
 }
 

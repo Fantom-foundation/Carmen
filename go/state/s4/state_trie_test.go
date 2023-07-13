@@ -168,6 +168,62 @@ func TestStateTrie_ValuesCanBeSetAndRetrieved(t *testing.T) {
 	}
 }
 
+func TestStateTrie_SameContentProducesSameHash(t *testing.T) {
+	trie1, err := OpenInMemoryTrie(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	trie2, err := OpenInMemoryTrie(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+
+	hash1, err := trie1.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of empty trie: %v", err)
+	}
+	hash2, err := trie2.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of empty trie: %v", err)
+	}
+	if hash1 != hash2 {
+		t.Errorf("Expected empty tries to have same hash, got %v and %v", hash1, hash2)
+	}
+
+	info1 := AccountInfo{Nonce: common.ToNonce(1)}
+	info2 := AccountInfo{Nonce: common.ToNonce(2)}
+	trie1.SetAccountInfo(common.Address{1}, info1)
+	trie2.SetAccountInfo(common.Address{2}, info2)
+
+	hash1, err = trie1.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of non-empty trie: %v", err)
+	}
+	hash2, err = trie2.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of non-empty trie: %v", err)
+	}
+	if hash1 == hash2 {
+		t.Errorf("Expected different tries to have different hashes, got %v and %v", hash1, hash2)
+	}
+
+	// Update tries to contain same data.
+	trie1.SetAccountInfo(common.Address{2}, info2)
+	trie2.SetAccountInfo(common.Address{1}, info1)
+
+	hash1, err = trie1.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of non-empty trie: %v", err)
+	}
+	hash2, err = trie2.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of non-empty trie: %v", err)
+	}
+	if hash1 != hash2 {
+		t.Errorf("Expected equal tries to have same hashes, got %v and %v", hash1, hash2)
+	}
+}
+
 func TestStateTrie_InsertLotsOfData(t *testing.T) {
 	t.Parallel()
 	const N = 100
