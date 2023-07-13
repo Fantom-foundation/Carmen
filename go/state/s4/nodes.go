@@ -39,6 +39,7 @@ type NodeManager interface {
 	createValue() (NodeId, *ValueNode, error)
 
 	update(NodeId, Node) error
+	invalidateHash(NodeId)
 
 	release(NodeId) error
 }
@@ -183,6 +184,9 @@ func (n *BranchNode) setNextNode(
 	}
 
 	if newRoot == next {
+		if changed {
+			manager.invalidateHash(thisId)
+		}
 		return thisId, changed, nil
 	}
 
@@ -418,6 +422,8 @@ func (n *ExtensionNode) setNextNode(
 				manager.release(thisId)
 				return newRoot, true, nil
 			}
+		} else if changed {
+			manager.invalidateHash(thisId)
 		}
 		return thisId, changed, err
 	}
@@ -713,6 +719,8 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address *commo
 	if root != n.state {
 		n.state = root
 		manager.update(thisId, n)
+	} else if changed {
+		manager.invalidateHash(thisId)
 	}
 	return thisId, changed, nil
 }

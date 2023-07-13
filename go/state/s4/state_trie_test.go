@@ -224,6 +224,35 @@ func TestStateTrie_SameContentProducesSameHash(t *testing.T) {
 	}
 }
 
+func TestStateTrie_ChangeInTrieSubstructureUpdatesHash(t *testing.T) {
+	trie, err := OpenInMemoryTrie(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+
+	info1 := AccountInfo{Nonce: common.ToNonce(1)}
+	info2 := AccountInfo{Nonce: common.ToNonce(2)}
+	trie.SetAccountInfo(common.Address{1}, info1)
+	trie.SetAccountInfo(common.Address{2}, info2)
+
+	hash1, err := trie.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of empty trie: %v", err)
+	}
+
+	// The next update does not change anything in the root node, but the hash should
+	// still be updated.
+	trie.SetAccountInfo(common.Address{1}, info2)
+
+	hash2, err := trie.GetHash()
+	if err != nil {
+		t.Errorf("failed to fetch hash of empty trie: %v", err)
+	}
+	if hash1 == hash2 {
+		t.Errorf("Nested modification should have caused a change in hashes, got %v and %v", hash1, hash2)
+	}
+}
+
 func TestStateTrie_InsertLotsOfData(t *testing.T) {
 	t.Parallel()
 	const N = 100

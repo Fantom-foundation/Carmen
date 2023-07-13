@@ -176,11 +176,11 @@ func (s *StateTrie) GetHashFor(id NodeId) (common.Hash, error) {
 	}
 	node, err := s.getNode(id)
 	if err != nil {
-		return common.Hash{}, nil
+		return common.Hash{}, err
 	}
 	hash, err := s.hasher.GetHash(node, s)
 	if err != nil {
-		return common.Hash{}, nil
+		return common.Hash{}, err
 	}
 	s.hashCache[id] = hash
 	return hash, nil
@@ -333,13 +333,6 @@ func (s *StateTrie) addToCache(id NodeId, node Node) error {
 	return nil
 }
 
-func (s *StateTrie) update(id NodeId, node Node) error {
-	// all needed here is to register the modfied node as dirty
-	s.dirty[id] = struct{}{}
-	delete(s.hashCache, id)
-	return nil
-}
-
 func (s *StateTrie) flush(id NodeId, node Node) error {
 	if _, dirty := s.dirty[id]; !dirty {
 		return nil
@@ -408,9 +401,23 @@ func (s *StateTrie) createValue() (NodeId, *ValueNode, error) {
 	return id, node, err
 }
 
+func (s *StateTrie) update(id NodeId, node Node) error {
+	// all needed here is to register the modfied node as dirty
+	s.dirty[id] = struct{}{}
+	// ... and to invalidate the nodes hash.
+	s.invalidateHash(id)
+	return nil
+}
+
+func (s *StateTrie) invalidateHash(id NodeId) {
+	// for now, we only need to remove the cached hash from the map
+	delete(s.hashCache, id)
+}
+
 func (s *StateTrie) release(id NodeId) error {
 	s.nodeCache.Remove(id)
 	delete(s.dirty, id)
+	s.invalidateHash(id)
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}

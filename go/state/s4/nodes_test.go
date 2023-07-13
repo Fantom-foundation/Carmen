@@ -168,6 +168,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	branch := node.(*BranchNode)
 	account, _ := ctxt.getNode(branch.children[8])
 	ctxt.EXPECT().update(branch.children[8], account)
+	ctxt.EXPECT().invalidateHash(id)
 
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 	addr := common.Address{0x81}
@@ -511,10 +512,10 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 	id, node := ctxt.Build(
 		&Extension{
 			[]Nibble{1, 2, 3},
-			&Branch{
+			&Tag{"B", &Branch{
 				5: &Tag{"A", &Account{common.Address{0x12, 0x35}, info1}},
 				8: &Account{common.Address{0x12, 0x38}, info2},
-			},
+			}},
 		},
 	)
 	ctxt.Check(t, node)
@@ -532,6 +533,9 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 
 	accountId, account := ctxt.Get("A")
 	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, _ := ctxt.Get("B")
+	ctxt.EXPECT().invalidateHash(branchId).Return()
+	ctxt.EXPECT().invalidateHash(id).Return()
 
 	// Attempt to create an existing account.
 	trg := common.Address{0x12, 0x35}

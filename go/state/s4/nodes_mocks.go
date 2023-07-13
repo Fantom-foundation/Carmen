@@ -48,31 +48,92 @@ func (mr *MockNodeMockRecorder) Check(source, path interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockNode)(nil).Check), source, path)
 }
 
-// Dump mocks base method.
-func (m *MockNode) Dump(source NodeSource, indent string) {
+// ClearStorage mocks base method.
+func (m *MockNode) ClearStorage(manager NodeManager, address *common.Address, path []Nibble) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Dump", source, indent)
+	ret := m.ctrl.Call(m, "ClearStorage", manager, address, path)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ClearStorage indicates an expected call of ClearStorage.
+func (mr *MockNodeMockRecorder) ClearStorage(manager, address, path interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearStorage", reflect.TypeOf((*MockNode)(nil).ClearStorage), manager, address, path)
+}
+
+// Dump mocks base method.
+func (m *MockNode) Dump(source NodeSource, thisId NodeId, indent string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Dump", source, thisId, indent)
 }
 
 // Dump indicates an expected call of Dump.
-func (mr *MockNodeMockRecorder) Dump(source, indent interface{}) *gomock.Call {
+func (mr *MockNodeMockRecorder) Dump(source, thisId, indent interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockNode)(nil).Dump), source, indent)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockNode)(nil).Dump), source, thisId, indent)
 }
 
 // GetAccount mocks base method.
-func (m *MockNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, error) {
+func (m *MockNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAccount", source, address, path)
 	ret0, _ := ret[0].(AccountInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // GetAccount indicates an expected call of GetAccount.
 func (mr *MockNodeMockRecorder) GetAccount(source, address, path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccount", reflect.TypeOf((*MockNode)(nil).GetAccount), source, address, path)
+}
+
+// GetSlot mocks base method.
+func (m *MockNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSlot", source, address, path, key)
+	ret0, _ := ret[0].(common.Value)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetSlot indicates an expected call of GetSlot.
+func (mr *MockNodeMockRecorder) GetSlot(source, address, path, key interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSlot", reflect.TypeOf((*MockNode)(nil).GetSlot), source, address, path, key)
+}
+
+// GetValue mocks base method.
+func (m *MockNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValue", source, key, path)
+	ret0, _ := ret[0].(common.Value)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetValue indicates an expected call of GetValue.
+func (mr *MockNodeMockRecorder) GetValue(source, key, path interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockNode)(nil).GetValue), source, key, path)
+}
+
+// Release mocks base method.
+func (m *MockNode) Release(manager NodeManager, thisId NodeId) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Release", manager, thisId)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Release indicates an expected call of Release.
+func (mr *MockNodeMockRecorder) Release(manager, thisId interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockNode)(nil).Release), manager, thisId)
 }
 
 // SetAccount mocks base method.
@@ -89,6 +150,38 @@ func (m *MockNode) SetAccount(manager NodeManager, thisId NodeId, address *commo
 func (mr *MockNodeMockRecorder) SetAccount(manager, thisId, address, path, info interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAccount", reflect.TypeOf((*MockNode)(nil).SetAccount), manager, thisId, address, path, info)
+}
+
+// SetSlot mocks base method.
+func (m *MockNode) SetSlot(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, key *common.Key, value *common.Value) (NodeId, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetSlot", manager, thisId, address, path, key, value)
+	ret0, _ := ret[0].(NodeId)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// SetSlot indicates an expected call of SetSlot.
+func (mr *MockNodeMockRecorder) SetSlot(manager, thisId, address, path, key, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSlot", reflect.TypeOf((*MockNode)(nil).SetSlot), manager, thisId, address, path, key, value)
+}
+
+// SetValue mocks base method.
+func (m *MockNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key, path []Nibble, value *common.Value) (NodeId, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetValue", manager, thisId, key, path, value)
+	ret0, _ := ret[0].(NodeId)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// SetValue indicates an expected call of SetValue.
+func (mr *MockNodeMockRecorder) SetValue(manager, thisId, key, path, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockNode)(nil).SetValue), manager, thisId, key, path, value)
 }
 
 // MockNodeSource is a mock of NodeSource interface.
@@ -229,6 +322,18 @@ func (m *MockNodeManager) getNode(arg0 NodeId) (Node, error) {
 func (mr *MockNodeManagerMockRecorder) getNode(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeManager)(nil).getNode), arg0)
+}
+
+// invalidateHash mocks base method.
+func (m *MockNodeManager) invalidateHash(arg0 NodeId) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "invalidateHash", arg0)
+}
+
+// invalidateHash indicates an expected call of invalidateHash.
+func (mr *MockNodeManagerMockRecorder) invalidateHash(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "invalidateHash", reflect.TypeOf((*MockNodeManager)(nil).invalidateHash), arg0)
 }
 
 // release mocks base method.
