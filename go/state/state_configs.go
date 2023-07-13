@@ -71,7 +71,7 @@ type StateSchema uint8
 const defaultSchema StateSchema = 1
 
 func GetAllSchemas() []StateSchema {
-	return []StateSchema{1, 2, 3}
+	return []StateSchema{1, 2, 3, 4}
 }
 
 // Parameters struct defining configuration parameters for state instances.
@@ -79,6 +79,15 @@ type Parameters struct {
 	Directory string
 	Schema    StateSchema
 	Archive   ArchiveType
+}
+
+// UnsupportedConfiguration is the type of error returned if unsupported configuration
+// parameters have been specified. The text may contain further details regarding the
+// unsupported feature.
+type UnsupportedConfiguration string
+
+func (u UnsupportedConfiguration) Error() string {
+	return string(u)
 }
 
 // NewGoMemoryState creates in memory implementation

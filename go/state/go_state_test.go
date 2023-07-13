@@ -314,8 +314,14 @@ func TestHashing(t *testing.T) {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
 
-			_ = state.setStorage(address1, key1, val1)
+			_ = state.createAccount(address1)
 			hash1, err := state.GetHash()
+			if err != nil {
+				t.Fatalf("unable to get state hash; %v", err)
+			}
+
+			_ = state.setStorage(address1, key1, val1)
+			hash2, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
@@ -324,7 +330,7 @@ func TestHashing(t *testing.T) {
 			}
 
 			_ = state.setBalance(address1, balance1)
-			hash2, err := state.GetHash()
+			hash3, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
@@ -332,11 +338,6 @@ func TestHashing(t *testing.T) {
 				t.Errorf("hash of changed state not changed")
 			}
 
-			_ = state.createAccount(address1)
-			hash3, err := state.GetHash()
-			if err != nil {
-				t.Fatalf("unable to get state hash; %v", err)
-			}
 			if initialHash == hash3 || hash1 == hash3 || hash2 == hash3 {
 				t.Errorf("hash of changed state not changed")
 			}
@@ -451,7 +452,7 @@ func TestGetMemoryFootprint(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get state memory footprint; %s", err)
 			}
-			if !strings.Contains(str, "hashTree") {
+			if config.schema <= 3 && !strings.Contains(str, "hashTree") {
 				t.Errorf("memory footprint string does not contain any hashTree")
 			}
 		})
