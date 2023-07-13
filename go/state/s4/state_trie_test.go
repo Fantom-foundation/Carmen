@@ -308,3 +308,55 @@ func getTestKeys(number int) []common.Key {
 	})
 	return res
 }
+
+func benchmarkValueInsertion(trie *StateTrie, b *testing.B) {
+	accounts := getTestAddresses(100)
+	keys := getTestKeys(100)
+
+	info := AccountInfo{Nonce: common.ToNonce(1)}
+	val1 := common.Value{1}
+	for i := 0; i < b.N; i++ {
+		for _, account := range accounts {
+			if err := trie.SetAccountInfo(account, info); err != nil {
+				b.Fatalf("failed to create account %v: %v", account, err)
+			}
+			for _, key := range keys {
+				if err := trie.SetValue(account, key, val1); err != nil {
+					b.Fatalf("insertion failed: %v", err)
+				}
+			}
+		}
+		for _, account := range accounts {
+			for _, key := range keys {
+				if value, err := trie.GetValue(account, key); value != val1 || err != nil {
+					b.Fatalf("invalid element in trie, wanted %v, got %v, err %v", val1, value, err)
+				}
+			}
+		}
+		for _, account := range accounts {
+			for _, key := range keys {
+				if err := trie.SetValue(account, key, common.Value{}); err != nil {
+					b.Fatalf("deletion failed: %v", err)
+				}
+			}
+		}
+	}
+}
+
+func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
+	trie, err := OpenInMemoryTrie(b.TempDir())
+	if err != nil {
+		b.Fatalf("failed to open trie: %v", err)
+	}
+	defer trie.Close()
+	benchmarkValueInsertion(trie, b)
+}
+
+func BenchmarkValueInsertionInFileTrie(b *testing.B) {
+	trie, err := OpenFileTrie(b.TempDir())
+	if err != nil {
+		b.Fatalf("failed to open trie: %v", err)
+	}
+	defer trie.Close()
+	benchmarkValueInsertion(trie, b)
+}
