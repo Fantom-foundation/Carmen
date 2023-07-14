@@ -10,9 +10,9 @@ Todos:
  - implement Live MPT structure
     - ~~set values~~
     - ~~get values~~
-    - hashing
-    - ~consistency check~~
-    - ~dumping for debugging~~
+    - ~~hashing~~
+    - ~~consistency check~~
+    - ~~dumping for debugging~~
 	- implement full-state verification
 	- implement single-value verification
 	- implement partial states
@@ -40,5 +40,6 @@ Todos:
 	- ~~use write buffer in file-based Stock~~
 	- try passing arguments in node manipulations by value instead of by-pointer
 	- release state trie asynchroniously in the background
+	- implement a custom node cache with faster lookups
 
 */

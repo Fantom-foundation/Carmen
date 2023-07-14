@@ -36,51 +36,106 @@ type StateTrie struct {
 	dirty map[NodeId]struct{}
 
 	// The hasher used to compute state hashes.
-	hasher    Hasher
-	hashCache map[NodeId]common.Hash // TODO: make persistent!
+	hasher Hasher
+
+	// A store for hashes.
+	hashes      HashStore
+	dirtyHashes map[NodeId]struct{}
 }
 
 // The number of elements to retain in the node cache.
 const cacheCapacity = 100_000_000
 
 func OpenInMemoryTrie(directory string) (*StateTrie, error) {
+	success := false
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			branches.Close()
+		}
+	}()
 	extensions, err := memory.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			extensions.Close()
+		}
+	}()
 	accounts, err := memory.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			accounts.Close()
+		}
+	}()
 	values, err := memory.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
-	return makeTrie(directory, branches, extensions, accounts, values)
+	defer func() {
+		if !success {
+			values.Close()
+		}
+	}()
+	hashes, err := OpenInMemoryHashStore(directory + "/hashes")
+	if err != nil {
+		return nil, err
+	}
+	success = true
+	return makeTrie(directory, branches, extensions, accounts, values, hashes)
 }
 
 func OpenFileTrie(directory string) (*StateTrie, error) {
+	success := false
 	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			branches.Close()
+		}
+	}()
 	extensions, err := file.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			extensions.Close()
+		}
+	}()
 	accounts, err := file.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			accounts.Close()
+		}
+	}()
 	values, err := file.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
-	return makeTrie(directory, branches, extensions, accounts, values)
+	defer func() {
+		if !success {
+			values.Close()
+		}
+	}()
+	hashes, err := OpenFileBasedHashStore(directory + "/hashes")
+	if err != nil {
+		return nil, err
+	}
+	success = true
+	return makeTrie(directory, branches, extensions, accounts, values, hashes)
 }
 
 func makeTrie(
@@ -89,6 +144,7 @@ func makeTrie(
 	extensions stock.Stock[uint32, ExtensionNode],
 	accounts stock.Stock[uint32, AccountNode],
 	values stock.Stock[uint32, ValueNode],
+	hashes HashStore,
 ) (*StateTrie, error) {
 	// Parse metadata file.
 	metadatafile := directory + "/meta.json"
@@ -106,7 +162,8 @@ func makeTrie(
 		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
 		dirty:        map[NodeId]struct{}{},
 		hasher:       &DirectHasher{},
-		hashCache:    map[NodeId]common.Hash{},
+		hashes:       hashes,
+		dirtyHashes:  map[NodeId]struct{}{},
 	}, nil
 }
 
@@ -171,9 +228,16 @@ func (s *StateTrie) GetHash() (common.Hash, error) {
 }
 
 func (s *StateTrie) GetHashFor(id NodeId) (common.Hash, error) {
-	if hash, exists := s.hashCache[id]; exists {
-		return hash, nil
+	// The empty node is forced to have the empty hash.
+	if id.IsEmpty() {
+		return common.Hash{}, nil
 	}
+	// Non-dirty hashes can be taken from the store.
+	if _, dirty := s.dirtyHashes[id]; !dirty {
+		return s.hashes.Get(id)
+	}
+
+	// Dirty hashes need to be re-freshed.
 	node, err := s.getNode(id)
 	if err != nil {
 		return common.Hash{}, err
@@ -182,7 +246,10 @@ func (s *StateTrie) GetHashFor(id NodeId) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	s.hashCache[id] = hash
+	if err := s.hashes.Set(id, hash); err != nil {
+		return hash, err
+	}
+	delete(s.dirtyHashes, id)
 	return hash, nil
 }
 
@@ -215,12 +282,25 @@ func (s *StateTrie) Flush() error {
 			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
 		}
 	}
+
+	// Update hashes for dirty nodes.
+	dirty := make([]NodeId, len(s.dirty))
+	for id := range s.dirty {
+		dirty = append(dirty, id)
+	}
+	for _, id := range dirty {
+		if _, err := s.GetHashFor(id); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return errors.Join(
 		errors.Join(errs...),
 		s.accounts.Flush(),
 		s.branches.Flush(),
 		s.extensions.Flush(),
 		s.values.Flush(),
+		s.hashes.Flush(),
 	)
 }
 
@@ -231,6 +311,7 @@ func (s *StateTrie) Close() error {
 		s.branches.Close(),
 		s.extensions.Close(),
 		s.values.Close(),
+		s.hashes.Close(),
 	)
 }
 
@@ -259,7 +340,8 @@ func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
 		}
 		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
 	}))
-	mf.AddChild("hashes", common.NewMemoryFootprint(uintptr(len(s.hashCache))*(unsafe.Sizeof(NodeId(0))+common.HashSize)))
+	mf.AddChild("hashes", s.hashes.GetMemoryFootprint())
+	mf.AddChild("dirtyHashes", common.NewMemoryFootprint(uintptr(len(s.dirtyHashes))*unsafe.Sizeof(NodeId(0))))
 	return mf
 }
 
@@ -410,14 +492,17 @@ func (s *StateTrie) update(id NodeId, node Node) error {
 }
 
 func (s *StateTrie) invalidateHash(id NodeId) {
-	// for now, we only need to remove the cached hash from the map
-	delete(s.hashCache, id)
+	// by adding it to the dirty hashes set the hash will be
+	// re-evaluated the next time.
+	if !id.IsEmpty() {
+		s.dirtyHashes[id] = struct{}{}
+	}
 }
 
 func (s *StateTrie) release(id NodeId) error {
 	s.nodeCache.Remove(id)
 	delete(s.dirty, id)
-	s.invalidateHash(id)
+	delete(s.dirtyHashes, id)
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}

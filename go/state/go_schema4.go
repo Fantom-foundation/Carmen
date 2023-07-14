@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -242,12 +243,13 @@ func readCodes(filename string) (map[common.Hash][]byte, error) {
 		return nil, err
 	}
 	defer file.Close()
+	reader := bufio.NewReader(file)
 
 	// The format is simple: [<key>, <length>, <code>]*
 	var hash common.Hash
 	var length [4]byte
 	for {
-		if num, err := file.Read(hash[:]); err != nil {
+		if num, err := reader.Read(hash[:]); err != nil {
 			if err == io.EOF {
 				return res, nil
 			}
@@ -255,7 +257,7 @@ func readCodes(filename string) (map[common.Hash][]byte, error) {
 		} else if num != len(hash) {
 			return nil, errCorruptedCodeFile
 		}
-		if num, err := file.Read(length[:]); err != nil {
+		if num, err := reader.Read(length[:]); err != nil {
 			return nil, err
 		} else if num != len(length) {
 			return nil, errCorruptedCodeFile
@@ -263,7 +265,7 @@ func readCodes(filename string) (map[common.Hash][]byte, error) {
 
 		size := binary.BigEndian.Uint32(length[:])
 		code := make([]byte, size)
-		if num, err := file.Read(code[:]); err != nil {
+		if num, err := reader.Read(code[:]); err != nil {
 			return nil, err
 		} else if num != len(code) {
 			return nil, errCorruptedCodeFile
@@ -283,20 +285,24 @@ func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
 	defer func() {
 		err = errors.Join(err, file.Close())
 	}()
+	writer := bufio.NewWriter(file)
 
 	// The format is simple: [<key>, <length>, <code>]*
 	for key, code := range codes {
-		if _, err := file.Write(key[:]); err != nil {
+		if _, err := writer.Write(key[:]); err != nil {
 			return err
 		}
 		var length [4]byte
 		binary.BigEndian.PutUint32(length[:], uint32(len(code)))
-		if _, err := file.Write(length[:]); err != nil {
+		if _, err := writer.Write(length[:]); err != nil {
 			return err
 		}
-		if _, err := file.Write(code); err != nil {
+		if _, err := writer.Write(code); err != nil {
 			return err
 		}
 	}
-	return nil
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	return err
 }
