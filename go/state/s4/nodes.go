@@ -1156,7 +1156,7 @@ func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
 type ValueNodeEncoder struct{}
 
 func (ValueNodeEncoder) GetEncodedSize() int {
-	return PathEncoder{}.GetEncodedSize() + common.ValueSize
+	return common.KeySize + common.ValueSize
 }
 
 func (ValueNodeEncoder) Store(dst []byte, node *ValueNode) error {
