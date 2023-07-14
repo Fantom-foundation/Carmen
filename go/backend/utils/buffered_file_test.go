@@ -1,0 +1,123 @@
+package utils
+
+import (
+	"bytes"
+	"fmt"
+	"testing"
+)
+
+func TestBufferedFile_OpenClose(t *testing.T) {
+	path := t.TempDir() + "/test.dat"
+	file, err := OpenBufferedFile(path)
+	if err != nil {
+		t.Fatalf("failed to open buffered file: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Errorf("failed to close buffered file: %v", err)
+	}
+}
+
+func TestBufferedFile_WrittenDataCanBeRead(t *testing.T) {
+	for _, n := range []int{1, 10, 100, 1000} {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			path := t.TempDir() + "/test.dat"
+			file, err := OpenBufferedFile(path)
+			if err != nil {
+				t.Fatalf("failed to open buffered file: %v", err)
+			}
+
+			for i := 0; i < n; i++ {
+				if err := file.Write(int64(i), []byte{byte(i)}); err != nil {
+					t.Fatalf("failed to write at position %d: %v", i, err)
+				}
+			}
+
+			for i := 0; i < n; i++ {
+				dst := []byte{0}
+				if err := file.Read(int64(i), dst); err != nil {
+					t.Fatalf("failed to read at position %d: %v", i, err)
+				}
+				if dst[0] != byte(i) {
+					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i), dst[0])
+				}
+			}
+
+			if err := file.Close(); err != nil {
+				t.Errorf("failed to close buffered file: %v", err)
+			}
+		})
+	}
+}
+
+func TestBufferedFile_DataIsPersistent(t *testing.T) {
+	for _, n := range []int{1, 10, 100, 1000} {
+		t.Run(fmt.Sprintf("n=%d", n), func(t *testing.T) {
+			path := t.TempDir() + "/test.dat"
+			file, err := OpenBufferedFile(path)
+			if err != nil {
+				t.Fatalf("failed to open buffered file: %v", err)
+			}
+
+			for i := 0; i < n; i++ {
+				if err := file.Write(int64(i), []byte{byte(i)}); err != nil {
+					t.Fatalf("failed to write at position %d: %v", i, err)
+				}
+			}
+
+			if err := file.Close(); err != nil {
+				t.Fatalf("failed to close file: %v", err)
+			}
+
+			// Reopen the file.
+			file, err = OpenBufferedFile(path)
+			if err != nil {
+				t.Fatalf("failed to reopen buffered file: %v", err)
+			}
+
+			for i := 0; i < n; i++ {
+				dst := []byte{0}
+				if err := file.Read(int64(i), dst); err != nil {
+					t.Fatalf("failed to read at position %d: %v", i, err)
+				}
+				if dst[0] != byte(i) {
+					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i), dst[0])
+				}
+			}
+
+			if err := file.Close(); err != nil {
+				t.Errorf("failed to close buffered file: %v", err)
+			}
+		})
+	}
+}
+
+func TestBufferedFile_ReadAndWriteCanHandleUnalignedData(t *testing.T) {
+	path := t.TempDir() + "/test.dat"
+	file, err := OpenBufferedFile(path)
+	if err != nil {
+		t.Fatalf("failed to open buffered file: %v", err)
+	}
+
+	// By writting data of length 3 we are sometimes writing data crossing
+	// the internal aligned buffer-page boundary.
+	for i := 0; i < 1000; i++ {
+		if err := file.Write(int64(i)*3, []byte{byte(i), byte(i + 1), byte(i + 2)}); err != nil {
+			t.Fatalf("failed to write at position %d: %v", i, err)
+		}
+	}
+
+	for i := 0; i < 1000; i++ {
+		dst := []byte{0, 0, 0}
+		if err := file.Read(int64(i)*3, dst); err != nil {
+			t.Fatalf("failed to read at position %d: %v", i, err)
+		}
+		want := []byte{byte(i), byte(i + 1), byte(i + 2)}
+		if !bytes.Equal(dst, want) {
+			t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, want, dst)
+		}
+	}
+
+	if err := file.Close(); err != nil {
+		t.Errorf("failed to close buffered file: %v", err)
+	}
+}
