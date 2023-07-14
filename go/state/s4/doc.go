@@ -18,11 +18,13 @@ Todos:
 	- implement partial states
 
  - implement Archive MPT structure
-    - set values
-    - get values
-    - hashing
+    - ~~set values~~
+    - ~~get values~~
+    - ~~hashing~~
+	- implement unit tests for frozen nodes
+	- make thread safe
     - consistency check
-    - dumping for debugging
+    - ~~dumping for debugging~~
 	- implement full-history verification
 	- implement single-value verification
 

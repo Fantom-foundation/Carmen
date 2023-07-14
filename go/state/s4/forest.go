@@ -1,10 +1,8 @@
 package s4
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sort"
 	"unsafe"
@@ -15,13 +13,9 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-type StateTrie struct {
-	// The root node of the Trie.
-	root NodeId
-
-	// The file name for storing trie metadata.
-	metadatafile string
-
+// Forest is a utility node managing nodes for one or more Tries.
+// It provides the common foundation for the Live- and ArchiveTrie.
+type Forest struct {
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint32, BranchNode]
 	extensions stock.Stock[uint32, ExtensionNode]
@@ -46,7 +40,7 @@ type StateTrie struct {
 // The number of elements to retain in the node cache.
 const cacheCapacity = 100_000_000
 
-func OpenInMemoryTrie(directory string) (*StateTrie, error) {
+func OpenInMemoryForest(directory string) (*Forest, error) {
 	success := false
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
@@ -89,10 +83,10 @@ func OpenInMemoryTrie(directory string) (*StateTrie, error) {
 		return nil, err
 	}
 	success = true
-	return makeTrie(directory, branches, extensions, accounts, values, hashes)
+	return makeForest(directory, branches, extensions, accounts, values, hashes)
 }
 
-func OpenFileTrie(directory string) (*StateTrie, error) {
+func OpenFileForest(directory string) (*Forest, error) {
 	success := false
 	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
@@ -135,40 +129,32 @@ func OpenFileTrie(directory string) (*StateTrie, error) {
 		return nil, err
 	}
 	success = true
-	return makeTrie(directory, branches, extensions, accounts, values, hashes)
+	return makeForest(directory, branches, extensions, accounts, values, hashes)
 }
 
-func makeTrie(
+func makeForest(
 	directory string,
 	branches stock.Stock[uint32, BranchNode],
 	extensions stock.Stock[uint32, ExtensionNode],
 	accounts stock.Stock[uint32, AccountNode],
 	values stock.Stock[uint32, ValueNode],
 	hashes HashStore,
-) (*StateTrie, error) {
-	// Parse metadata file.
-	metadatafile := directory + "/meta.json"
-	metadata, err := readMetadata(metadatafile)
-	if err != nil {
-		return nil, err
-	}
-	return &StateTrie{
-		root:         metadata.RootNode,
-		metadatafile: metadatafile,
-		branches:     branches,
-		extensions:   extensions,
-		accounts:     accounts,
-		values:       values,
-		nodeCache:    common.NewCache[NodeId, Node](cacheCapacity),
-		dirty:        map[NodeId]struct{}{},
-		hasher:       &DirectHasher{},
-		hashes:       hashes,
-		dirtyHashes:  map[NodeId]struct{}{},
+) (*Forest, error) {
+	return &Forest{
+		branches:    branches,
+		extensions:  extensions,
+		accounts:    accounts,
+		values:      values,
+		nodeCache:   common.NewCache[NodeId, Node](cacheCapacity),
+		dirty:       map[NodeId]struct{}{},
+		hasher:      &DirectHasher{},
+		hashes:      hashes,
+		dirtyHashes: map[NodeId]struct{}{},
 	}, nil
 }
 
-func (s *StateTrie) GetAccountInfo(addr common.Address) (AccountInfo, bool, error) {
-	root, err := s.getNode(s.root)
+func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo, bool, error) {
+	root, err := s.getNode(rootId)
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
@@ -176,22 +162,21 @@ func (s *StateTrie) GetAccountInfo(addr common.Address) (AccountInfo, bool, erro
 	return root.GetAccount(s, &addr, path[:])
 }
 
-func (s *StateTrie) SetAccountInfo(addr common.Address, info AccountInfo) error {
-	root, err := s.getNode(s.root)
+func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info AccountInfo) (NodeId, error) {
+	root, err := s.getNode(rootId)
 	if err != nil {
-		return err
+		return NodeId(0), err
 	}
 	path := addressToNibbles(&addr)
-	newRoot, _, err := root.SetAccount(s, s.root, &addr, path[:], &info)
+	newRoot, _, err := root.SetAccount(s, rootId, &addr, path[:], &info)
 	if err != nil {
-		return err
+		return NodeId(0), err
 	}
-	s.root = newRoot
-	return nil
+	return newRoot, nil
 }
 
-func (s *StateTrie) GetValue(addr common.Address, key common.Key) (common.Value, error) {
-	root, err := s.getNode(s.root)
+func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (common.Value, error) {
+	root, err := s.getNode(rootId)
 	if err != nil {
 		return common.Value{}, err
 	}
@@ -200,34 +185,30 @@ func (s *StateTrie) GetValue(addr common.Address, key common.Key) (common.Value,
 	return value, err
 }
 
-func (s *StateTrie) SetValue(addr common.Address, key common.Key, value common.Value) error {
-	root, err := s.getNode(s.root)
+func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, value common.Value) (NodeId, error) {
+	root, err := s.getNode(rootId)
+	if err != nil {
+		return NodeId(0), err
+	}
+	path := addressToNibbles(&addr)
+	newRoot, _, err := root.SetSlot(s, rootId, &addr, path[:], &key, &value)
+	if err != nil {
+		return NodeId(0), err
+	}
+	return newRoot, nil
+}
+
+func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
+	root, err := s.getNode(rootId)
 	if err != nil {
 		return err
 	}
 	path := addressToNibbles(&addr)
-	newRoot, _, err := root.SetSlot(s, s.root, &addr, path[:], &key, &value)
-	if err != nil {
-		return err
-	}
-	s.root = newRoot
-	return nil
+	_, _, err = root.ClearStorage(s, rootId, &addr, path[:])
+	return err
 }
 
-func (s *StateTrie) ClearStorage(addr common.Address) error {
-	root, err := s.getNode(s.root)
-	if err != nil {
-		return err
-	}
-	path := addressToNibbles(&addr)
-	return root.ClearStorage(s, &addr, path[:])
-}
-
-func (s *StateTrie) GetHash() (common.Hash, error) {
-	return s.GetHashFor(s.root)
-}
-
-func (s *StateTrie) GetHashFor(id NodeId) (common.Hash, error) {
+func (s *Forest) GetHashFor(id NodeId) (common.Hash, error) {
 	// The empty node is forced to have the empty hash.
 	if id.IsEmpty() {
 		return common.Hash{}, nil
@@ -253,18 +234,7 @@ func (s *StateTrie) GetHashFor(id NodeId) (common.Hash, error) {
 	return hash, nil
 }
 
-func (s *StateTrie) Flush() error {
-	// Update on-disk meta-data.
-	metadata, err := json.Marshal(metadata{
-		RootNode: s.root,
-	})
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
-		return err
-	}
-
+func (s *Forest) Flush() error {
 	// Flush dirty keys in order (to avoid excessive seeking).
 	ids := make([]NodeId, len(s.dirty))
 	for id := range s.dirty {
@@ -304,7 +274,7 @@ func (s *StateTrie) Flush() error {
 	)
 }
 
-func (s *StateTrie) Close() error {
+func (s *Forest) Close() error {
 	return errors.Join(
 		s.Flush(),
 		s.accounts.Close(),
@@ -316,7 +286,7 @@ func (s *StateTrie) Close() error {
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
-func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
+func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
 	mf.AddChild("accounts", s.accounts.GetMemoryFootprint())
 	mf.AddChild("branches", s.branches.GetMemoryFootprint())
@@ -346,12 +316,12 @@ func (s *StateTrie) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
-func (s *StateTrie) Dump() {
-	root, err := s.getNode(s.root)
+func (s *Forest) Dump(rootId NodeId) {
+	root, err := s.getNode(rootId)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
 	} else {
-		root.Dump(s, s.root, "")
+		root.Dump(s, rootId, "")
 	}
 }
 
@@ -359,8 +329,8 @@ func (s *StateTrie) Dump() {
 // self-consistent, nil is returned and the Trie is read to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and
 // the behaviour of all other operations is undefined.
-func (s *StateTrie) Check() error {
-	root, err := s.getNode(s.root)
+func (s *Forest) Check(rootId NodeId) error {
+	root, err := s.getNode(rootId)
 	if err != nil {
 		return err
 	}
@@ -369,7 +339,7 @@ func (s *StateTrie) Check() error {
 
 // -- NodeManager interface --
 
-func (s *StateTrie) getNode(id NodeId) (Node, error) {
+func (s *Forest) getNode(id NodeId) (Node, error) {
 	// Start by checking the node cache.
 	res, found := s.nodeCache.Get(id)
 	if found {
@@ -405,7 +375,7 @@ func (s *StateTrie) getNode(id NodeId) (Node, error) {
 	return node, nil
 }
 
-func (s *StateTrie) addToCache(id NodeId, node Node) error {
+func (s *Forest) addToCache(id NodeId, node Node) error {
 	if evictedId, evictedNode, evicted := s.nodeCache.Set(id, node); evicted {
 		// TODO: perform update asynchroniously.
 		if err := s.flush(evictedId, evictedNode); err != nil {
@@ -415,7 +385,7 @@ func (s *StateTrie) addToCache(id NodeId, node Node) error {
 	return nil
 }
 
-func (s *StateTrie) flush(id NodeId, node Node) error {
+func (s *Forest) flush(id NodeId, node Node) error {
 	if _, dirty := s.dirty[id]; !dirty {
 		return nil
 	}
@@ -435,7 +405,7 @@ func (s *StateTrie) flush(id NodeId, node Node) error {
 	}
 }
 
-func (s *StateTrie) createAccount() (NodeId, *AccountNode, error) {
+func (s *Forest) createAccount() (NodeId, *AccountNode, error) {
 	i, node, err := s.accounts.New()
 	if err != nil {
 		return 0, nil, err
@@ -447,7 +417,7 @@ func (s *StateTrie) createAccount() (NodeId, *AccountNode, error) {
 	return id, node, err
 }
 
-func (s *StateTrie) createBranch() (NodeId, *BranchNode, error) {
+func (s *Forest) createBranch() (NodeId, *BranchNode, error) {
 	i, node, err := s.branches.New()
 	if err != nil {
 		return 0, nil, err
@@ -459,7 +429,7 @@ func (s *StateTrie) createBranch() (NodeId, *BranchNode, error) {
 	return id, node, err
 }
 
-func (s *StateTrie) createExtension() (NodeId, *ExtensionNode, error) {
+func (s *Forest) createExtension() (NodeId, *ExtensionNode, error) {
 	i, node, err := s.extensions.New()
 	if err != nil {
 		return 0, nil, err
@@ -471,7 +441,7 @@ func (s *StateTrie) createExtension() (NodeId, *ExtensionNode, error) {
 	return id, node, err
 }
 
-func (s *StateTrie) createValue() (NodeId, *ValueNode, error) {
+func (s *Forest) createValue() (NodeId, *ValueNode, error) {
 	i, node, err := s.values.New()
 	if err != nil {
 		return 0, nil, err
@@ -483,7 +453,7 @@ func (s *StateTrie) createValue() (NodeId, *ValueNode, error) {
 	return id, node, err
 }
 
-func (s *StateTrie) update(id NodeId, node Node) error {
+func (s *Forest) update(id NodeId, node Node) error {
 	// all needed here is to register the modfied node as dirty
 	s.dirty[id] = struct{}{}
 	// ... and to invalidate the nodes hash.
@@ -491,7 +461,7 @@ func (s *StateTrie) update(id NodeId, node Node) error {
 	return nil
 }
 
-func (s *StateTrie) invalidateHash(id NodeId) {
+func (s *Forest) invalidateHash(id NodeId) {
 	// by adding it to the dirty hashes set the hash will be
 	// re-evaluated the next time.
 	if !id.IsEmpty() {
@@ -499,7 +469,7 @@ func (s *StateTrie) invalidateHash(id NodeId) {
 	}
 }
 
-func (s *StateTrie) release(id NodeId) error {
+func (s *Forest) release(id NodeId) error {
 	s.nodeCache.Remove(id)
 	delete(s.dirty, id)
 	delete(s.dirtyHashes, id)
@@ -516,31 +486,4 @@ func (s *StateTrie) release(id NodeId) error {
 		return s.values.Delete(id.Index())
 	}
 	return fmt.Errorf("unable to release node %v", id)
-}
-
-// metadata is the helper type to read and write metadata from/to the disk.
-type metadata struct {
-	RootNode NodeId
-}
-
-// readMetadata parses the content of the given file if it exists or returns
-// a default-initialized metadata struct if there is no such file.
-func readMetadata(filename string) (metadata, error) {
-
-	// If there is no file, initialize and return default metadata.
-	if _, err := os.Stat(filename); err != nil {
-		return metadata{}, nil
-	}
-
-	// If the file exists, parse it and return its content.
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return metadata{}, err
-	}
-
-	var meta metadata
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return meta, err
-	}
-	return meta, nil
 }
