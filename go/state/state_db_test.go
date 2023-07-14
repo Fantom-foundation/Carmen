@@ -2883,7 +2883,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhases(t *testing.T) {
 
 func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -2915,7 +2915,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 
 func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -3106,7 +3106,7 @@ func TestPersistentStateDB(t *testing.T) {
 		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 			continue
 		}
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -3293,7 +3293,7 @@ func toKey(key uint64) common.Key {
 
 func TestStateDBArchive(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {

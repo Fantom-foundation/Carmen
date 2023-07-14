@@ -1,8 +1,12 @@
 package s4
 
 import (
+	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -12,18 +16,25 @@ import (
 // TODO: make thread safe.
 
 type ArchiveTrie struct {
-	head  *S4State // the current head-state
-	roots []NodeId // the roots of individual blocks indexed by block height
+	head     *S4State // the current head-state
+	roots    []NodeId // the roots of individual blocks indexed by block height
+	rootFile string   // the file storing the list of roots
 }
 
 func OpenArchiveTrie(directory string) (archive.Archive, error) {
+	rootfile := directory + "/roots.dat"
+	roots, err := loadRoots(rootfile)
+	if err != nil {
+		return nil, err
+	}
 	state, err := OpenGoFileState(directory)
 	if err != nil {
 		return nil, err
 	}
-	// TODO: load block root list
 	return &ArchiveTrie{
-		head: state,
+		head:     state,
+		roots:    roots,
+		rootFile: rootfile,
 	}, nil
 }
 
@@ -187,7 +198,10 @@ func (a *ArchiveTrie) Dump() {
 }
 
 func (a *ArchiveTrie) Flush() error {
-	return a.head.Flush()
+	return errors.Join(
+		a.head.Flush(),
+		storeRoots(a.rootFile, a.roots),
+	)
 }
 
 func (a *ArchiveTrie) Close() error {
@@ -195,4 +209,58 @@ func (a *ArchiveTrie) Close() error {
 		a.Flush(),
 		a.head.Close(),
 	)
+}
+
+// ---- Reading and Writing Root Node ID Lists ----
+
+func loadRoots(filename string) ([]NodeId, error) {
+	// If there is no file, initialize and return an empty list.
+	if _, err := os.Stat(filename); err != nil {
+		return nil, nil
+	}
+
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	reader := bufio.NewReader(f)
+
+	res := []NodeId{}
+	var id [4]byte
+	for {
+		if num, err := reader.Read(id[:]); err != nil {
+			if err == io.EOF {
+				return res, nil
+			}
+			return nil, err
+		} else if num != len(id) {
+			return nil, fmt.Errorf("invalid hash file")
+		}
+
+		id := NodeId(binary.BigEndian.Uint32(id[:]))
+		res = append(res, id)
+	}
+}
+
+func storeRoots(filename string, roots []NodeId) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	writer := bufio.NewWriter(f)
+
+	// Simple file format: [<node-id>]*
+	var buffer [4]byte
+	for _, id := range roots {
+		binary.BigEndian.PutUint32(buffer[:], uint32(id))
+		if _, err := writer.Write(buffer[:]); err != nil {
+			return err
+		}
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	return f.Close()
 }

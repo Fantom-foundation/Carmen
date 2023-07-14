@@ -421,7 +421,7 @@ func TestDeletingAccountsClearsStorage(t *testing.T) {
 // TestArchive inserts data into the state and tries to obtain the history from the archive.
 func TestArchive(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -518,13 +518,15 @@ func TestArchive(t *testing.T) {
 					t.Errorf("invalid slot value at block 2: %s, %s", value, err)
 				}
 
-				hash1, err := state1.GetHash()
-				if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
-					t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
-				}
-				hash2, err := state2.GetHash()
-				if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
-					t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
+				if archiveType != S4Archive {
+					hash1, err := state1.GetHash()
+					if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
+						t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
+					}
+					hash2, err := state2.GetHash()
+					if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
+						t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
+					}
 				}
 			})
 		}
@@ -539,7 +541,7 @@ func TestPersistentState(t *testing.T) {
 		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 			continue
 		}
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			archiveType := archiveType
 			config := config
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
