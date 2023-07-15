@@ -10,6 +10,8 @@ import (
 )
 
 type Node interface {
+	// Note: changed result is needed to decide whether hash should be invalidated.
+
 	GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error)
 	SetAccount(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, info *AccountInfo) (newRoot NodeId, changed bool, err error)
 
@@ -237,6 +239,21 @@ func (n *BranchNode) setNextNode(
 					return 0, false, err
 				}
 				extensionNode := extension.(*ExtensionNode)
+
+				// If the extension is frozen, we need to modify a copy.
+				if extensionNode.frozen {
+					copyId, copy, err := manager.createExtension()
+					if err != nil {
+						return 0, false, nil
+					}
+					copy.path = extensionNode.path
+					copy.next = extensionNode.next
+					extension = copy
+					extensionNode = copy
+					remaining = copyId
+					newRoot = copyId
+				}
+
 				extensionNode.path.Prepend(remainingPos)
 				manager.update(remaining, extension)
 			} else if remaining.IsBranch() {
@@ -652,7 +669,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sExtension (ID: %v): %v\n", indent, thisId, &n.path)
+	fmt.Printf("%sExtension (ID: %v/%t): %v\n", indent, thisId, n.frozen, &n.path)
 	if node, err := source.getNode(n.next); err == nil {
 		node.Dump(source, n.next, indent+"  ")
 	} else {
@@ -703,7 +720,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address *co
 		if info.IsEmpty() {
 			// TODO: test this
 			if n.frozen {
-				return EmptyId(), true, nil
+				return EmptyId(), false, nil
 			}
 			// Recursively release the entire state DB.
 			// TODO: consider performing this asynchroniously.
@@ -731,6 +748,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address *co
 			newNode.address = *address
 			newNode.info = *info
 			newNode.state = n.state
+			manager.update(newId, newNode)
 			return newId, false, nil
 		}
 
@@ -753,7 +771,8 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address *co
 	sibling.info = *info
 
 	thisPath := addressToNibbles(&n.address)
-	return splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
+	newRoot, err := splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
+	return newRoot, false, err
 }
 
 func splitLeafNode(
@@ -763,7 +782,7 @@ func splitLeafNode(
 	siblingPath []Nibble,
 	siblingId NodeId,
 	sibling Node,
-) (NodeId, bool, error) {
+) (NodeId, error) {
 	// This single node needs to be split into
 	//  - an optional common prefix extension
 	//  - a branch node linking this node and
@@ -771,7 +790,7 @@ func splitLeafNode(
 
 	branchId, branch, err := manager.createBranch()
 	if err != nil {
-		return 0, false, err
+		return 0, err
 	}
 	newRoot := branchId
 
@@ -781,7 +800,7 @@ func splitLeafNode(
 	if commonPrefixLength > 0 {
 		extensionId, extension, err := manager.createExtension()
 		if err != nil {
-			return 0, false, err
+			return 0, err
 		}
 		newRoot = extensionId
 
@@ -798,7 +817,7 @@ func splitLeafNode(
 	manager.update(siblingId, sibling)
 	manager.update(branchId, branch)
 
-	return newRoot, true, nil
+	return newRoot, nil
 }
 
 func (n *AccountNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key, path []Nibble, value *common.Value) (NodeId, bool, error) {
@@ -975,8 +994,10 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key
 			return thisId, false, nil
 		}
 		if *value == (common.Value{}) {
-			manager.release(thisId)
-			return EmptyId(), true, nil
+			if !n.frozen {
+				manager.release(thisId)
+			}
+			return EmptyId(), !n.frozen, nil
 		}
 		if n.frozen {
 			newId, newNode, err := manager.createValue()
@@ -985,6 +1006,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key
 			}
 			newNode.key = n.key
 			newNode.value = *value
+			manager.update(newId, newNode)
 			return newId, false, nil
 		}
 		n.value = *value
@@ -1006,7 +1028,8 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key
 	sibling.value = *value
 
 	thisPath := keyToNibbles(&n.key)
-	return splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
+	newRootId, err := splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
+	return newRootId, false, err
 }
 
 func (n *ValueNode) SetSlot(NodeManager, NodeId, *common.Address, []Nibble, *common.Key, *common.Value) (NodeId, bool, error) {

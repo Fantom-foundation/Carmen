@@ -162,6 +162,29 @@ func TestBranchNode_SetAccount_WithExistingAccount_NoChange(t *testing.T) {
 	}
 }
 
+func TestBranchNode_Frozen_SetAccount_WithExistingAccount_NoChange(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node")
+	}
+
+	addr := common.Address{0x81}
+	path := addressToNibbles(&addr)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, false, newRoot, changed, err)
+	}
+}
+
 func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -187,6 +210,60 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
+}
+
+func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	_, before := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info1},
+			8: &Account{common.Address{0x81}, info1},
+		},
+	)
+	ctxt.Check(t, before)
+
+	_, after := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info1},
+			8: &Account{common.Address{0x81}, info2},
+		},
+	)
+	ctxt.Check(t, after)
+
+	// Create and freeze the target node.
+	id, node := ctxt.Clone(before)
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node")
+	}
+
+	// This operation should create a new account and branch node.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+
+	addr := common.Address{0x81}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2)
+	if err != nil {
+		t.Fatalf("setting account failed: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen node should never change")
+	}
+	if id == newRoot {
+		t.Errorf("modification did not create a new root")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
@@ -223,6 +300,53 @@ func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
 	}
 
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestBranchNode_Frozen_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Branch{
+			2: &Account{common.Address{0x21}, info},
+			4: &Account{common.Address{0x40}, info},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, after)
+
+	// This operation is expected to create a new account and a new branch.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
@@ -266,6 +390,58 @@ func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x40}, info},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Branch{
+			4: &Branch{
+				0: &Account{common.Address{0x40}, info},
+				1: &Account{common.Address{0x41}, info},
+			},
+			8: &Account{common.Address{0x81}, info},
+		},
+	)
+	ctxt.Check(t, after)
+
+	// This operation is expected to create a new account and 2 new branches.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	branchId, branch = ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+
+	addr := common.Address{0x41}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -301,6 +477,51 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			2: &Account{common.Address{0x20}, info},
+			4: &Account{common.Address{0x41}, info},
+			8: &Account{common.Address{0x82}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Branch{
+			2: &Account{common.Address{0x20}, info},
+			8: &Account{common.Address{0x82}, info},
+		},
+	)
+	ctxt.Check(t, after)
+
+	// This situaton should create a new branch node to be used as a result.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x41}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -330,6 +551,45 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
 	}
 	node, _ = ctxt.getNode(wantId)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Account{common.Address{0x41}, info},
+			8: &Account{common.Address{0x82}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(&Account{common.Address{0x41}, info})
+	ctxt.Check(t, after)
+
+	// This operation creates a temporary branch node that gets removed again.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().release(branchId)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x82}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtension(t *testing.T) {
@@ -378,6 +638,62 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtension(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Extension{
+				[]Nibble{1, 2, 3},
+				&Branch{
+					1: &Account{common.Address{0x41, 0x23, 0x10}, info},
+					2: &Account{common.Address{0x41, 0x23, 0x20}, info},
+				},
+			},
+			8: &Account{common.Address{0x82}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(&Extension{
+		[]Nibble{4, 1, 2, 3},
+		&Branch{
+			1: &Account{common.Address{0x41, 0x23, 0x10}, info},
+			2: &Account{common.Address{0x41, 0x23, 0x20}, info},
+		},
+	})
+	ctxt.Check(t, after)
+
+	// This update creates a temporary branch that is released again.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().release(branchId)
+
+	// Also, a new extension node (the result) is expected to be created.
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x82}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtension(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -420,6 +736,60 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 	}
 	node, _ = ctxt.getNode(wantId)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtension(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Branch{
+			4: &Branch{
+				1: &Account{common.Address{0x41, 0x20}, info},
+				2: &Account{common.Address{0x42, 0x84}, info},
+			},
+			8: &Account{common.Address{0x82}, info},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(&Extension{
+		[]Nibble{4},
+		&Branch{
+			1: &Account{common.Address{0x41, 0x20}, info},
+			2: &Account{common.Address{0x42, 0x84}, info},
+		},
+	})
+	ctxt.Check(t, after)
+
+	// This update creates a temporary branch that is released again.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().release(branchId)
+
+	// Also, a new extension node (the result) is expected to be created.
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension)
+
+	empty := AccountInfo{}
+	addr := common.Address{0x82}
+	path := addressToNibbles(&addr)
+
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestBranchNode_Release(t *testing.T) {
@@ -543,6 +913,38 @@ func TestExtensionNode_SetAccount_ExistingLeaf_UnchangedInfo(t *testing.T) {
 	ctxt.Check(t, node)
 }
 
+func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_UnchangedInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Branch{
+				5: &Account{common.Address{0x12, 0x35}, info},
+				8: &Account{common.Address{0x12, 0x38}, info},
+			},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Clone(node)
+
+	// Attempt to create an existing account.
+	trg := common.Address{0x12, 0x35}
+	path := addressToNibbles(&trg)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &trg, path[:], &info); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, false, newRoot, changed, err)
+	}
+
+	// Make sure the tree fragment was not corrupted.
+	ctxt.Check(t, node)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, node)
+}
+
 func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -587,6 +989,63 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Branch{
+				5: &Account{common.Address{0x12, 0x35}, info1},
+				8: &Account{common.Address{0x12, 0x38}, info2},
+			},
+		},
+	)
+	ctxt.Check(t, node)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Branch{
+				5: &Account{common.Address{0x12, 0x35}, info2},
+				8: &Account{common.Address{0x12, 0x38}, info2},
+			},
+		},
+	)
+	ctxt.Check(t, after)
+
+	// The following update creates a new account, branch, and extension.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	// Attempt to create an existing account.
+	trg := common.Address{0x12, 0x35}
+	path := addressToNibbles(&trg)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &trg, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -622,7 +1081,7 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 	ctxt.Check(t, after)
 
 	// In this case, one new branch, extension and account is created.
-	accountId, account := ctxt.Build(&Account{info: info})
+	accountId, account := ctxt.Build(&Account{})
 	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
 	ctxt.EXPECT().update(accountId, account).Return(nil)
 	branchId, branch := ctxt.Build(&Branch{})
@@ -643,6 +1102,72 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 	node, _ = ctxt.getNode(extensionId)
 
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3, 4},
+			&Branch{
+				0xA: &Account{common.Address{0x12, 0x34, 0xAB}, info},
+				0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
+			},
+		},
+	)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2},
+			&Branch{
+				3: &Extension{
+					[]Nibble{4},
+					&Branch{
+						0xA: &Account{common.Address{0x12, 0x34, 0xAB}, info},
+						0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
+					},
+				},
+				4: &Account{common.Address{0x12, 0x40}, info},
+			},
+		},
+	)
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, after)
+
+	// In this case, one new branch, two extensions, and account is created.
+	accountId, account := ctxt.Build(&Account{info: info})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+	extensionId, extension = ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	// Attempt to create a new account that is partially covered by the extension.
+	addr := common.Address{0x12, 0x40}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
@@ -696,6 +1221,65 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3, 4},
+			&Branch{
+				0xA: &Account{common.Address{0x12, 0x34, 0xAB}, info},
+				0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
+			},
+		},
+	)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Branch{
+			1: &Extension{
+				[]Nibble{2, 3, 4},
+				&Branch{
+					0xA: &Account{common.Address{0x12, 0x34, 0xAB}, info},
+					0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
+				},
+			},
+			4: &Account{common.Address{0x40}, info},
+		},
+	)
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, after)
+
+	// In this case, one new branch, account, and extension is created.
+	accountId, account := ctxt.Build(&Account{info: info})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	addr := common.Address{0x40}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -746,6 +1330,65 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3, 4},
+			&Branch{
+				0xA: &Account{common.Address{0x12, 0x34, 0xAB}, info},
+				0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
+			},
+		},
+	)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 2, 3},
+			&Branch{
+				4: &Branch{
+					0xA: &Account{common.Address{0x12, 0x34, 0xAB}, info},
+					0xE: &Account{common.Address{0x12, 0x34, 0xEF}, info},
+				},
+				8: &Account{common.Address{0x12, 0x38}, info},
+			},
+		},
+	)
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, after)
+
+	// In this case, one new branch, account, and extension is created.
+	accountId, account := ctxt.Build(&Account{info: info})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	addr := common.Address{0x12, 0x38}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -792,6 +1435,67 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 
 	node, _ = ctxt.getNode(branchId)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1},
+			&Branch{
+				0xA: &Account{common.Address{0x1A}, info},
+				0xE: &Account{common.Address{0x1E}, info},
+			},
+		},
+	)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Branch{
+			1: &Branch{
+				0xA: &Account{common.Address{0x1A}, info},
+				0xE: &Account{common.Address{0x1E}, info},
+			},
+			2: &Account{common.Address{0x20}, info},
+		},
+	)
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, before)
+	ctxt.Check(t, after)
+
+	// The following update creates and discards a temporary extension.
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().release(extensionId)
+
+	// Also, the creation of a new account.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account)
+
+	// And the creation of a new branch.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch)
+
+	addr := common.Address{0x20}
+	path := addressToNibbles(&addr)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension(t *testing.T) {
@@ -850,6 +1554,72 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1},
+			&Tag{"B", &Branch{
+				1: &Branch{
+					1: &Account{common.Address{0x11, 0x10}, info},
+					2: &Account{common.Address{0x11, 0x20}, info},
+				},
+				2: &Tag{"A", &Account{common.Address{0x12}, info}},
+			}},
+		},
+	)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(
+		&Extension{
+			[]Nibble{1, 1},
+			&Branch{
+				1: &Account{common.Address{0x11, 0x10}, info},
+				2: &Account{common.Address{0x11, 0x20}, info},
+			},
+		},
+	)
+
+	ctxt.Check(t, node)
+	ctxt.Check(t, before)
+	ctxt.Check(t, after)
+
+	// The following update creates and release a temporary branch.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().release(branchId)
+
+	// It also requires a temporary extension.
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension)
+	ctxt.EXPECT().release(extensionId)
+
+	// And it also creates a new extension that constitutes the result.
+	extensionId, extension = ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension)
+
+	addr := common.Address{0x12}
+	path := addressToNibbles(&addr)
+	empty := AccountInfo{}
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -890,6 +1660,59 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(t *test
 	}
 
 	ctxt.ExpectEqual(t, after, result)
+}
+
+func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			[]Nibble{1},
+			&Tag{"B", &Branch{
+				1: &Tag{"R", &Account{common.Address{0x11, 0x10}, info}},
+				2: &Tag{"A", &Account{common.Address{0x12}, info}},
+			}},
+		},
+	)
+	node.Freeze(ctxt)
+
+	_, before := ctxt.Clone(node)
+	_, after := ctxt.Build(&Account{common.Address{0x11, 0x10}, info})
+
+	ctxt.Check(t, before)
+	ctxt.Check(t, node)
+	ctxt.Check(t, after)
+
+	// The following update creates and release a temporary branch.
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().release(branchId)
+
+	// It creates and discards an extension.
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().release(extensionId)
+
+	addr := common.Address{0x12}
+	path := addressToNibbles(&addr)
+	empty := AccountInfo{}
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &empty)
+	if err != nil {
+		t.Fatalf("failed to set account for extension node: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+	rId, _ := ctxt.Get("R")
+	if newRoot != rId {
+		t.Errorf("operatoin should return pre-existing node")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestExtensionNode_Release(t *testing.T) {
@@ -984,6 +1807,36 @@ func TestAccountNode_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
 	ctxt.ExpectEqual(t, node, node)
 }
 
+func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	_, before := ctxt.Build(&Account{addr, info})
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+	_, after := ctxt.Build(&Account{addr, info})
+
+	// Update the account information with the same information.
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+	if newRoot != id {
+		t.Errorf("update should return existing node")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -1003,6 +1856,37 @@ func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) 
 	}
 
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	_, before := ctxt.Build(&Account{addr, info1})
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+	_, after := ctxt.Build(&Account{addr, info2})
+
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
@@ -1025,6 +1909,33 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 
 	node, _ = ctxt.getNode(EmptyId())
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{}
+
+	_, before := ctxt.Build(&Account{addr, info1})
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+	_, after := ctxt.Build(Empty{})
+
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(t *testing.T) {
@@ -1051,12 +1962,53 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 	ctxt.EXPECT().update(res, after).Return(nil)
 
 	path := addressToNibbles(&addr2)
-	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x21}
+	addr2 := common.Address{0x34}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	_, before := ctxt.Build(&Account{addr1, info1})
+
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+
+	_, after := ctxt.Build(&Branch{
+		2: &Account{addr1, info1},
+		3: &Account{addr2, info2},
+	})
+
+	// This operation creates one new account node and a branch.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+
+	path := addressToNibbles(&addr2)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInfo(t *testing.T) {
@@ -1089,12 +2041,59 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	ctxt.EXPECT().update(res, after).Return(nil)
 
 	path := addressToNibbles(&addr2)
-	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
+	if newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x12, 0x3A}
+	addr2 := common.Address{0x12, 0x3B}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{Nonce: common.Nonce{2}}
+
+	_, before := ctxt.Build(&Account{addr1, info1})
+
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+
+	_, after := ctxt.Build(&Extension{
+		[]Nibble{1, 2, 3},
+		&Branch{
+			0xA: &Account{addr1, info1},
+			0xB: &Account{addr2, info2},
+		},
+	})
+
+	// This operation creates one new account, branch, and extension node.
+	accountId, account := ctxt.Build(&Account{})
+	ctxt.EXPECT().createAccount().Return(accountId, account, nil)
+	ctxt.EXPECT().update(accountId, account).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	path := addressToNibbles(&addr2)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *testing.T) {
@@ -1118,6 +2117,39 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x21}
+	addr2 := common.Address{0x34}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{}
+
+	_, before := ctxt.Build(&Account{addr1, info1})
+
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+
+	_, after := ctxt.Build(&Account{addr1, info1})
+
+	path := addressToNibbles(&addr2)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+	if newRoot != id {
+		t.Errorf("update should return existing node")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -1138,6 +2170,39 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr1 := common.Address{0x12, 0x3A}
+	addr2 := common.Address{0x12, 0x3B}
+	info1 := AccountInfo{Nonce: common.Nonce{1}}
+	info2 := AccountInfo{}
+
+	_, before := ctxt.Build(&Account{addr1, info1})
+
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+
+	_, after := ctxt.Build(&Account{addr1, info1})
+
+	path := addressToNibbles(&addr2)
+	newRoot, changed, err := node.SetAccount(ctxt, id, &addr2, path[:], &info2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+	if newRoot != id {
+		t.Errorf("update should return existing node")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestAccountNode_GetValue(t *testing.T) {
@@ -1163,6 +2228,23 @@ func TestAccountNode_SetValue(t *testing.T) {
 
 	id := AccountId(12)
 	node := &AccountNode{}
+
+	if _, _, err := node.SetValue(ctxt, id, &key, path[:], &value); err == nil {
+		t.Fatalf("SetValue call should always return an error")
+	}
+}
+
+func TestAccountNode_Frozen_SetValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value := common.Value{1}
+
+	id := AccountId(12)
+	node := &AccountNode{}
+	node.Freeze(ctxt)
 
 	if _, _, err := node.SetValue(ctxt, id, &key, path[:], &value); err == nil {
 		t.Fatalf("SetValue call should always return an error")
@@ -1253,6 +2335,23 @@ func TestValueNode_SetAccount(t *testing.T) {
 	}
 }
 
+func TestValueNode_Frozen_SetAccount(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(&addr)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id := ValueId(12)
+	node := &ValueNode{}
+	node.Freeze(ctxt)
+
+	if _, _, err := node.SetAccount(ctxt, id, &addr, path[:], &info); err == nil {
+		t.Fatalf("SetAccount call should always return an error")
+	}
+}
+
 func TestValueNode_GetValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mgr := NewMockNodeManager(ctrl)
@@ -1291,6 +2390,24 @@ func TestValueNode_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	ctxt.ExpectEqual(t, node, node)
 }
 
+func TestValueNode_Frozen_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value := common.Value{1}
+
+	id, node := ctxt.Build(&Value{key, value})
+	node.Freeze(ctxt)
+
+	// Update the value with the same value.
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key, path[:], &value); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, false, newRoot, changed, err)
+	}
+	ctxt.ExpectEqual(t, node, node)
+}
+
 func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -1310,6 +2427,38 @@ func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
 	}
 
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_Frozen_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	_, before := ctxt.Build(&Value{key, value1})
+	id, node := ctxt.Clone(before)
+	_, after := ctxt.Build(&Value{key, value2})
+
+	node.Freeze(ctxt)
+
+	valueId, value := ctxt.Build(&Value{})
+	ctxt.EXPECT().createValue().Return(valueId, value, nil)
+	ctxt.EXPECT().update(valueId, value).Return(nil)
+
+	newRoot, changed, err := node.SetValue(ctxt, id, &key, path[:], &value2)
+	if err != nil {
+		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
@@ -1332,6 +2481,34 @@ func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 
 	node, _ = ctxt.getNode(EmptyId())
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_Frozen_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key := common.Key{0x21}
+	path := keyToNibbles(&key)
+	value1 := common.Value{1}
+	value2 := common.Value{}
+
+	_, before := ctxt.Build(&Value{key, value1})
+	id, node := ctxt.Clone(before)
+	_, after := ctxt.Build(Empty{})
+
+	node.Freeze(ctxt)
+
+	newRoot, changed, err := node.SetValue(ctxt, id, &key, path[:], &value2)
+	if err != nil {
+		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *testing.T) {
@@ -1358,12 +2535,53 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *test
 	ctxt.EXPECT().update(res, after).Return(nil)
 
 	path := keyToNibbles(&key2)
-	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x21}
+	key2 := common.Key{0x34}
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	_, before := ctxt.Build(&Value{key1, value1})
+
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+
+	_, after := ctxt.Build(&Branch{
+		2: &Value{key1, value1},
+		3: &Value{key2, value2},
+	})
+
+	// This operation creates one new value node and a branch.
+	valueId, value := ctxt.Build(&Value{})
+	ctxt.EXPECT().createValue().Return(valueId, value, nil)
+	ctxt.EXPECT().update(valueId, value).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+
+	path := keyToNibbles(&key2)
+	newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2)
+	if err != nil {
+		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *testing.T) {
@@ -1396,12 +2614,59 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *te
 	ctxt.EXPECT().update(res, after).Return(nil)
 
 	path := keyToNibbles(&key2)
-	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
+	if newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2); newRoot != res || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x12, 0x3A}
+	key2 := common.Key{0x12, 0x3B}
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	_, before := ctxt.Build(&Value{key1, value1})
+
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+
+	_, after := ctxt.Build(&Extension{
+		[]Nibble{1, 2, 3},
+		&Branch{
+			0xA: &Value{key1, value1},
+			0xB: &Value{key2, value2},
+		},
+	})
+
+	// This operation creates one new value, branch, and extension node.
+	valueId, value := ctxt.Build(&Value{})
+	ctxt.EXPECT().createValue().Return(valueId, value, nil)
+	ctxt.EXPECT().update(valueId, value).Return(nil)
+	branchId, branch := ctxt.Build(&Branch{})
+	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
+	ctxt.EXPECT().update(branchId, branch).Return(nil)
+	extensionId, extension := ctxt.Build(&Extension{})
+	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
+	ctxt.EXPECT().update(extensionId, extension).Return(nil)
+
+	path := keyToNibbles(&key2)
+	newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2)
+	if err != nil {
+		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing.T) {
@@ -1425,6 +2690,37 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing
 	ctxt.ExpectEqual(t, after, node)
 }
 
+func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x21}
+	key2 := common.Key{0x34}
+	value1 := common.Value{1}
+	value2 := common.Value{}
+
+	_, before := ctxt.Build(&Value{key1, value1})
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+	_, after := ctxt.Build(&Value{key1, value1})
+
+	path := keyToNibbles(&key2)
+	newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2)
+	if err != nil {
+		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+	if newRoot != id {
+		t.Errorf("update should return existing node")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
+}
+
 func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -1445,6 +2741,37 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testi
 
 	node, _ = ctxt.getNode(res)
 	ctxt.ExpectEqual(t, after, node)
+}
+
+func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	key1 := common.Key{0x12, 0x3A}
+	key2 := common.Key{0x12, 0x3B}
+	value1 := common.Value{1}
+	value2 := common.Value{}
+
+	_, before := ctxt.Build(&Value{key1, value1})
+	id, node := ctxt.Clone(before)
+	node.Freeze(ctxt)
+	_, after := ctxt.Build(&Value{key1, value1})
+
+	path := keyToNibbles(&key2)
+	newRoot, changed, err := node.SetValue(ctxt, id, &key2, path[:], &value2)
+	if err != nil {
+		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
+	}
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+	if newRoot != id {
+		t.Errorf("update should return existing node")
+	}
+
+	res, _ := ctxt.getNode(newRoot)
+	ctxt.ExpectEqual(t, before, node)
+	ctxt.ExpectEqual(t, after, res)
 }
 
 func TestValueNode_Release(t *testing.T) {
@@ -1692,6 +3019,57 @@ func (c *nodeContext) ExpectEqual(t *testing.T, want, got Node) {
 		got.Dump(c, NodeId(0), "")
 		t.Errorf("unexpected resulting node structure")
 	}
+}
+
+func (c *nodeContext) Clone(node Node) (NodeId, Node) {
+	id, res := c.cloneInternal(node)
+	c.EXPECT().getNode(id).AnyTimes().Return(res, nil)
+	return id, res
+}
+
+func (c *nodeContext) cloneInternal(node Node) (NodeId, Node) {
+	if _, ok := node.(EmptyNode); ok {
+		return EmptyId(), EmptyNode{}
+	}
+
+	clone := func(id NodeId) NodeId {
+		original, _ := c.getNode(id)
+		cloneId, _ := c.Clone(original)
+		return cloneId
+	}
+
+	if a, ok := node.(*AccountNode); ok {
+		return AccountId(c.nextIndex()), &AccountNode{
+			address: a.address,
+			info:    a.info,
+			state:   clone(a.state),
+		}
+	}
+
+	if e, ok := node.(*ExtensionNode); ok {
+		return ExtensionId(c.nextIndex()), &ExtensionNode{
+			path: e.path,
+			next: clone(e.next),
+		}
+	}
+
+	if b, ok := node.(*BranchNode); ok {
+		id := BranchId(c.nextIndex())
+		res := &BranchNode{}
+		for i, next := range b.children {
+			res.children[i] = clone(next)
+		}
+		return id, res
+	}
+
+	if v, ok := node.(*ValueNode); ok {
+		return ValueId(c.nextIndex()), &ValueNode{
+			key:   v.key,
+			value: v.value,
+		}
+	}
+
+	panic(fmt.Sprintf("encountered unsupported node type: %v", reflect.TypeOf(node)))
 }
 
 func (c *nodeContext) equal(a, b Node) bool {
