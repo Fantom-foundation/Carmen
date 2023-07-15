@@ -49,17 +49,19 @@ func (mr *MockNodeMockRecorder) Check(source, path interface{}) *gomock.Call {
 }
 
 // ClearStorage mocks base method.
-func (m *MockNode) ClearStorage(manager NodeManager, address *common.Address, path []Nibble) error {
+func (m *MockNode) ClearStorage(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble) (NodeId, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ClearStorage", manager, address, path)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "ClearStorage", manager, thisId, address, path)
+	ret0, _ := ret[0].(NodeId)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // ClearStorage indicates an expected call of ClearStorage.
-func (mr *MockNodeMockRecorder) ClearStorage(manager, address, path interface{}) *gomock.Call {
+func (mr *MockNodeMockRecorder) ClearStorage(manager, thisId, address, path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearStorage", reflect.TypeOf((*MockNode)(nil).ClearStorage), manager, address, path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearStorage", reflect.TypeOf((*MockNode)(nil).ClearStorage), manager, thisId, address, path)
 }
 
 // Dump mocks base method.
@@ -72,6 +74,20 @@ func (m *MockNode) Dump(source NodeSource, thisId NodeId, indent string) {
 func (mr *MockNodeMockRecorder) Dump(source, thisId, indent interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockNode)(nil).Dump), source, thisId, indent)
+}
+
+// Freeze mocks base method.
+func (m *MockNode) Freeze(source NodeSource) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Freeze", source)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Freeze indicates an expected call of Freeze.
+func (mr *MockNodeMockRecorder) Freeze(source interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Freeze", reflect.TypeOf((*MockNode)(nil).Freeze), source)
 }
 
 // GetAccount mocks base method.

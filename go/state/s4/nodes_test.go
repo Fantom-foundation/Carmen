@@ -99,6 +99,17 @@ func TestEmptyNode_Release(t *testing.T) {
 	}
 }
 
+func TestEmptyNode_Freeze(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	_, node := ctxt.Build(Empty{})
+
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node: %v", err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Branch Node
 // ----------------------------------------------------------------------------
@@ -431,6 +442,35 @@ func TestBranchNode_Release(t *testing.T) {
 
 	if err := node.Release(ctxt, id); err != nil {
 		t.Errorf("failed to release node: %v", err)
+	}
+}
+
+func TestBranchNode_Freeze(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	node1 := NewMockNode(ctrl)
+	node2 := NewMockNode(ctrl)
+	node3 := NewMockNode(ctrl)
+
+	_, node := ctxt.Build(&Branch{
+		1: &Mock{node: node1},
+		4: &Mock{node: node2},
+		8: &Mock{node: node3},
+	})
+
+	node1.EXPECT().Freeze(gomock.Any()).Return(nil)
+	node2.EXPECT().Freeze(gomock.Any()).Return(nil)
+	node3.EXPECT().Freeze(gomock.Any()).Return(nil)
+
+	if node.(*BranchNode).frozen {
+		t.Errorf("node was created in frozen state")
+	}
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node: %v", err)
+	}
+	if !node.(*BranchNode).frozen {
+		t.Errorf("node not marked as frozen after call")
 	}
 }
 
@@ -878,6 +918,30 @@ func TestExtensionNode_Release(t *testing.T) {
 	}
 }
 
+func TestExtensionNode_Freeze(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	next := NewMockNode(ctrl)
+
+	_, node := ctxt.Build(&Extension{
+		[]Nibble{1, 2, 3},
+		&Mock{next},
+	})
+
+	next.EXPECT().Freeze(gomock.Any()).Return(nil)
+
+	if node.(*ExtensionNode).frozen {
+		t.Errorf("node was created in frozen state")
+	}
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node: %v", err)
+	}
+	if !node.(*ExtensionNode).frozen {
+		t.Errorf("node not marked as frozen after call")
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Account Node
 // ----------------------------------------------------------------------------
@@ -1133,6 +1197,29 @@ func TestAccountNode_ReleaseStateTrie(t *testing.T) {
 	}
 }
 
+func TestAccountNode_Freeze(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	stateRoot := NewMockNode(ctrl)
+
+	state, _ := ctxt.Build(&Mock{stateRoot})
+	_, node := ctxt.Build(&Account{})
+	node.(*AccountNode).state = state
+
+	stateRoot.EXPECT().Freeze(gomock.Any()).Return(nil)
+
+	if node.(*AccountNode).frozen {
+		t.Errorf("node was created in frozen state")
+	}
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node: %v", err)
+	}
+	if !node.(*AccountNode).frozen {
+		t.Errorf("node not marked as frozen after call")
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
@@ -1372,6 +1459,23 @@ func TestValueNode_Release(t *testing.T) {
 	}
 }
 
+func TestValueNode_Freeze(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	node := &ValueNode{}
+
+	if node.frozen {
+		t.Errorf("node was created in frozen state")
+	}
+	if err := node.Freeze(ctxt); err != nil {
+		t.Errorf("failed to freeze node: %v", err)
+	}
+	if !node.frozen {
+		t.Errorf("node not marked as frozen after call")
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Encoders
 // ----------------------------------------------------------------------------
@@ -1454,6 +1558,14 @@ type Empty struct{}
 
 func (Empty) Build(ctx *nodeContext) (NodeId, Node) {
 	return EmptyId(), EmptyNode{}
+}
+
+type Mock struct {
+	node Node
+}
+
+func (m *Mock) Build(ctx *nodeContext) (NodeId, Node) {
+	return ValueId(ctx.nextIndex()), m.node
 }
 
 type Account struct {
