@@ -172,7 +172,7 @@ func OpenFileBasedHashStore(directory string) (HashStore, error) {
 		return nil, err
 	}
 	return &fileBasedHashStore{
-		cache:      common.NewCache[NodeId, common.Hash](100_000_000),
+		cache:      common.NewCache[NodeId, common.Hash](10_000_000),
 		dirty:      map[NodeId]struct{}{},
 		branches:   branches,
 		extensions: extensions,
