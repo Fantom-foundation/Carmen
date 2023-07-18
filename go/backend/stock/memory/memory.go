@@ -134,14 +134,18 @@ func (s *inMemoryStock[I, V]) New() (I, *V, error) {
 		s.values = append(s.values, value)
 	}
 
-	return I(index), &s.values[index], nil
+	res := new(V)
+	*res = s.values[index]
+	return I(index), res, nil
 }
 
 func (s *inMemoryStock[I, V]) Get(index I) (*V, error) {
 	if index >= I(len(s.values)) || index < 0 {
 		return nil, nil
 	}
-	return &s.values[index], nil
+	res := new(V)
+	*res = s.values[index]
+	return res, nil
 }
 
 func (s *inMemoryStock[I, V]) Set(index I, value *V) error {
