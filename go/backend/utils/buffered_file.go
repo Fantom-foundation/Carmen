@@ -26,7 +26,7 @@ type BufferedFile struct {
 	bufferOffset int64            // the offset of the write buffer
 }
 
-const bufferSize = 4092
+const bufferSize = 1 << 12 // = 4 KB
 
 // OpenBufferedFile opens the file at the given path for read/write operations.
 // If it does not exist, a new file is implicitly created.
@@ -50,7 +50,7 @@ func OpenBufferedFile(path string) (*BufferedFile, error) {
 		filesize: size,
 	}
 
-	if err := res.readInternal(0, res.buffer[:]); err != nil {
+	if err := res.readFile(0, res.buffer[:]); err != nil {
 		f.Close()
 		return nil, err
 	}
@@ -61,50 +61,48 @@ func OpenBufferedFile(path string) (*BufferedFile, error) {
 // Write write the given byte data at the given position in the file. The file
 // will be extended in case the target position is beyond the file size.
 func (f *BufferedFile) Write(position int64, src []byte) error {
-
 	if len(src) > bufferSize {
 		panic(fmt.Sprintf("writing data > %d bytes not supported so far, got %d", bufferSize, len(src)))
 	}
 
 	// If the data to be written covers multiple buffer blocks the write needs to be
 	// split in two.
-	if position/bufferSize != (position+int64(len(src))-1)/bufferSize {
+	from, to := position, position+int64(len(src))
+	if position/bufferSize != (to-1)/bufferSize {
 		covered := bufferSize - position%bufferSize
-		offsetB := f.bufferOffset + bufferSize
+		nextBlock := position + covered
 		return errors.Join(
 			f.Write(position, src[0:covered]),
-			f.Write(offsetB, src[covered:]),
+			f.Write(nextBlock, src[covered:]),
 		)
 	}
 
 	// Check whether the write operation targets the internal buffer.
-	if position >= f.bufferOffset && position+int64(len(src)) <= f.bufferOffset+int64(len(f.buffer)) {
+	if f.bufferOffset <= from && to <= f.bufferOffset+int64(len(f.buffer)) {
 		copy(f.buffer[int(position-f.bufferOffset):], src)
 		return nil
 	}
 
 	// Flush the buffer and load another.
-	if err := f.writeInternal(f.bufferOffset, f.buffer[:]); err != nil {
+	if err := f.writeFile(f.bufferOffset, f.buffer[:]); err != nil {
 		return err
 	}
 	newOffset := position - position%bufferSize
-	if err := f.readInternal(newOffset, f.buffer[:]); err != nil {
+	if err := f.readFile(newOffset, f.buffer[:]); err != nil {
 		return err
 	}
 	f.bufferOffset = newOffset
 	return f.Write(position, src)
 }
 
-func (f *BufferedFile) writeInternal(position int64, src []byte) error {
+func (f *BufferedFile) writeFile(position int64, src []byte) error {
 	// Grow file if required.
 	if f.filesize < position {
-		data := make([]byte, int(position-f.filesize))
-		copy(data[int(position-f.filesize):], src)
-		if err := f.writeInternal(f.filesize, data); err != nil {
-			return err
-		}
+		padding := int(position - f.filesize)
+		data := make([]byte, padding+len(src))
+		copy(data[padding:], src)
+		return f.writeFile(f.filesize, data)
 	}
-
 	if err := f.seek(position); err != nil {
 		return err
 	}
@@ -126,15 +124,39 @@ func (f *BufferedFile) writeInternal(position int64, src []byte) error {
 // If the targeted range is partially or fully beyond the range of the file,
 // uncovered data is zero-padded in the destination slice.
 func (f *BufferedFile) Read(position int64, dst []byte) error {
+	from, to := position, position+int64(len(dst))
+	bufferFrom, bufferTo := f.bufferOffset, f.bufferOffset+bufferSize
+
 	// Read data from buffer if covered.
-	if position >= f.bufferOffset && position+int64(len(dst)) <= f.bufferOffset+int64(len(f.buffer)) {
-		copy(dst, f.buffer[int(position-f.bufferOffset):])
+	if bufferFrom <= from && to <= bufferTo {
+		if n := copy(dst, f.buffer[int(from-bufferFrom):]); n != len(dst) {
+			panic(fmt.Sprintf("failed to copy enough bytes, wanted %d, got %d", len(dst), n))
+		}
 		return nil
 	}
-	return f.readInternal(position, dst)
+
+	// Split read if partially covered by write buffer.
+	if from < bufferTo && bufferTo < to {
+		covered := bufferTo - from
+		return errors.Join(
+			f.Read(from, dst[0:covered]),
+			f.Read(bufferTo, dst[covered:]),
+		)
+	}
+
+	if from < bufferFrom && bufferFrom < to {
+		notCovered := len(dst) - int(to-bufferFrom)
+		return errors.Join(
+			f.Read(from, dst[0:notCovered]),
+			f.Read(bufferFrom, dst[notCovered:]),
+		)
+	}
+
+	// If not covered by the buffer at all, read from the file.
+	return f.readFile(position, dst)
 }
 
-func (f *BufferedFile) readInternal(position int64, dst []byte) error {
+func (f *BufferedFile) readFile(position int64, dst []byte) error {
 	if len(dst) == 0 {
 		return nil
 	}
@@ -147,7 +169,7 @@ func (f *BufferedFile) readInternal(position int64, dst []byte) error {
 	}
 	if position+int64(len(dst)) > f.filesize {
 		covered := f.filesize - position
-		if err := f.readInternal(position, dst[0:covered]); err != nil {
+		if err := f.readFile(position, dst[0:covered]); err != nil {
 			return err
 		}
 		for i := covered; i < int64(len(dst)); i++ {
@@ -187,7 +209,7 @@ func (f *BufferedFile) seek(position int64) error {
 // Flush syncs temporary cached content to the file system.
 func (f *BufferedFile) Flush() error {
 	return errors.Join(
-		f.writeInternal(f.bufferOffset, f.buffer[:]),
+		f.writeFile(f.bufferOffset, f.buffer[:]),
 		f.file.Sync(),
 	)
 }

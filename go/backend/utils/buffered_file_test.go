@@ -59,7 +59,7 @@ func TestBufferedFile_DataIsPersistent(t *testing.T) {
 			}
 
 			for i := 0; i < n; i++ {
-				if err := file.Write(int64(i), []byte{byte(i)}); err != nil {
+				if err := file.Write(int64(i), []byte{byte(i + 1)}); err != nil {
 					t.Fatalf("failed to write at position %d: %v", i, err)
 				}
 			}
@@ -79,8 +79,8 @@ func TestBufferedFile_DataIsPersistent(t *testing.T) {
 				if err := file.Read(int64(i), dst); err != nil {
 					t.Fatalf("failed to read at position %d: %v", i, err)
 				}
-				if dst[0] != byte(i) {
-					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i), dst[0])
+				if dst[0] != byte(i+1) {
+					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i+1), dst[0])
 				}
 			}
 
@@ -119,5 +119,23 @@ func TestBufferedFile_ReadAndWriteCanHandleUnalignedData(t *testing.T) {
 
 	if err := file.Close(); err != nil {
 		t.Errorf("failed to close buffered file: %v", err)
+	}
+}
+
+func TestBufferedFile_WriteAndReadAddBufferBoundary(t *testing.T) {
+	path := t.TempDir() + "/test.dat"
+	file, err := OpenBufferedFile(path)
+	if err != nil {
+		t.Fatalf("failed to open buffered file: %v", err)
+	}
+
+	src := []byte{1, 2, 3, 4, 5}
+	file.Write(5*bufferSize-2, src)
+
+	dst := []byte{0, 0, 0, 0, 0}
+	file.Read(5*bufferSize-2, dst)
+
+	if !bytes.Equal(src, dst) {
+		t.Errorf("failed to read data written across buffer boundary, wanted %v, got %v", src, dst)
 	}
 }
