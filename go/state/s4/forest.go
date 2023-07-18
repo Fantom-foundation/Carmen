@@ -10,6 +10,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock/shadow"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -38,7 +39,7 @@ type Forest struct {
 }
 
 // The number of elements to retain in the node cache.
-const cacheCapacity = 100_000_000
+const cacheCapacity = 10_000_000
 
 func OpenInMemoryForest(directory string) (*Forest, error) {
 	success := false
@@ -129,6 +130,50 @@ func OpenFileForest(directory string) (*Forest, error) {
 		return nil, err
 	}
 	success = true
+	return makeForest(directory, branches, extensions, accounts, values, hashes)
+}
+
+func OpenFileShadowForest(directory string) (*Forest, error) {
+	branchesA, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
+	if err != nil {
+		return nil, err
+	}
+	extensionsA, err := file.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/A/extensions")
+	if err != nil {
+		return nil, err
+	}
+	accountsA, err := file.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/A/accounts")
+	if err != nil {
+		return nil, err
+	}
+	valuesA, err := file.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/A/values")
+	if err != nil {
+		return nil, err
+	}
+	hashes, err := OpenFileBasedHashStore(directory + "/hashes")
+	if err != nil {
+		return nil, err
+	}
+	branchesB, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/B/branches")
+	if err != nil {
+		return nil, err
+	}
+	extensionsB, err := memory.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/B/extensions")
+	if err != nil {
+		return nil, err
+	}
+	accountsB, err := memory.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/B/accounts")
+	if err != nil {
+		return nil, err
+	}
+	valuesB, err := memory.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/B/values")
+	if err != nil {
+		return nil, err
+	}
+	branches := shadow.MakeShadowStock(branchesA, branchesB)
+	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
+	accounts := shadow.MakeShadowStock(accountsA, accountsB)
+	values := shadow.MakeShadowStock(valuesA, valuesB)
 	return makeForest(directory, branches, extensions, accounts, values, hashes)
 }
 
