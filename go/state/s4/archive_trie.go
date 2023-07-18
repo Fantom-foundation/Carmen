@@ -27,7 +27,7 @@ func OpenArchiveTrie(directory string) (archive.Archive, error) {
 	if err != nil {
 		return nil, err
 	}
-	state, err := OpenGoFileState(directory)
+	state, err := OpenGoFileState(directory, Archive)
 	if err != nil {
 		return nil, err
 	}

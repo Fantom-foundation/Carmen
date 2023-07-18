@@ -18,16 +18,16 @@ type LiveTrie struct {
 	forest *Forest
 }
 
-func OpenInMemoryLiveTrie(directory string) (*LiveTrie, error) {
-	forest, err := OpenInMemoryForest(directory)
+func OpenInMemoryLiveTrie(directory string, mode StorageMode) (*LiveTrie, error) {
+	forest, err := OpenInMemoryForest(directory, mode)
 	if err != nil {
 		return nil, err
 	}
 	return makeTrie(directory, forest)
 }
 
-func OpenFileLiveTrie(directory string) (*LiveTrie, error) {
-	forest, err := OpenFileForest(directory)
+func OpenFileLiveTrie(directory string, mode StorageMode) (*LiveTrie, error) {
+	forest, err := OpenFileForest(directory, mode)
 	if err != nil {
 		return nil, err
 	}

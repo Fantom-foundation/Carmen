@@ -145,6 +145,10 @@ type fileBasedHashStore struct {
 }
 
 func OpenFileBasedHashStore(directory string) (HashStore, error) {
+	return openFileBasedHashStore(directory, 10_000_000)
+}
+
+func openFileBasedHashStore(directory string, cacheSize int) (HashStore, error) {
 	// Create the direcory if needed.
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
@@ -172,7 +176,7 @@ func OpenFileBasedHashStore(directory string) (HashStore, error) {
 		return nil, err
 	}
 	return &fileBasedHashStore{
-		cache:      common.NewCache[NodeId, common.Hash](10_000_000),
+		cache:      common.NewCache[NodeId, common.Hash](cacheSize),
 		dirty:      map[NodeId]struct{}{},
 		branches:   branches,
 		extensions: extensions,
@@ -188,13 +192,13 @@ func (s *fileBasedHashStore) Get(id NodeId) (common.Hash, error) {
 	var hash common.Hash
 	var err error
 	if id.IsAccount() {
-		err = s.accounts.Read(int64(id.Index()), hash[:])
+		err = s.accounts.Read(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsBranch() {
-		err = s.branches.Read(int64(id.Index()), hash[:])
+		err = s.branches.Read(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsExtension() {
-		err = s.extensions.Read(int64(id.Index()), hash[:])
+		err = s.extensions.Read(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsValue() {
-		err = s.values.Read(int64(id.Index()), hash[:])
+		err = s.values.Read(int64(id.Index())*common.HashSize, hash[:])
 	} else {
 		err = fmt.Errorf("unsupported node ID type: %v", id)
 	}
@@ -228,13 +232,13 @@ func (s *fileBasedHashStore) sync(id NodeId, hash common.Hash) error {
 	}
 	delete(s.dirty, id)
 	if id.IsAccount() {
-		return s.accounts.Write(int64(id.Index()), hash[:])
+		return s.accounts.Write(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsBranch() {
-		return s.branches.Write(int64(id.Index()), hash[:])
+		return s.branches.Write(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsExtension() {
-		return s.extensions.Write(int64(id.Index()), hash[:])
+		return s.extensions.Write(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsValue() {
-		return s.values.Write(int64(id.Index()), hash[:])
+		return s.values.Write(int64(id.Index())*common.HashSize, hash[:])
 	} else {
 		return fmt.Errorf("unsupported node ID type: %v", id)
 	}

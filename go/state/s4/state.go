@@ -38,16 +38,16 @@ func newS4State(directory string, trie *LiveTrie) (*S4State, error) {
 	}, nil
 }
 
-func OpenGoMemoryState(directory string) (*S4State, error) {
-	trie, err := OpenInMemoryLiveTrie(directory)
+func OpenGoMemoryState(directory string, mode StorageMode) (*S4State, error) {
+	trie, err := OpenInMemoryLiveTrie(directory, mode)
 	if err != nil {
 		return nil, err
 	}
 	return newS4State(directory, trie)
 }
 
-func OpenGoFileState(directory string) (*S4State, error) {
-	trie, err := OpenFileLiveTrie(directory)
+func OpenGoFileState(directory string, mode StorageMode) (*S4State, error) {
+	trie, err := OpenFileLiveTrie(directory, mode)
 	if err != nil {
 		return nil, err
 	}

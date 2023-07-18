@@ -21,7 +21,7 @@ Todos:
     - ~~set values~~
     - ~~get values~~
     - ~~hashing~~
-	- implement unit tests for frozen nodes
+	- ~~implement unit tests for frozen nodes~~
 	- make thread safe
     - consistency check
     - ~~dumping for debugging~~

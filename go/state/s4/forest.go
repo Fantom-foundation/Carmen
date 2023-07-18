@@ -3,6 +3,7 @@ package s4
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"sort"
 	"unsafe"
@@ -12,6 +13,17 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/shadow"
 	"github.com/Fantom-foundation/Carmen/go/common"
+)
+
+type StorageMode bool
+
+const (
+	// Archive is the mode of an archive or a read-only state on the disk.
+	// All nodes written to disk will be finalized and never updated again.
+	Archive StorageMode = true
+	// Live is the mode of an archive in which the state on the disk can be
+	// modified through destructive updates.
+	Live StorageMode = false
 )
 
 // Forest is a utility node managing nodes for one or more Tries.
@@ -25,6 +37,11 @@ type Forest struct {
 
 	// A unified cache for all node types.
 	nodeCache *common.Cache[NodeId, Node]
+
+	// Indicates whether all values in the stock should be considered
+	// frozen, and thus immutable as required for the archive case or
+	// mutable, as for the live-db case.
+	storageMode StorageMode
 
 	// The set of dirty nodes. Nodes are dirty if there in-memory
 	// state does not match their on-disk content.
@@ -41,7 +58,7 @@ type Forest struct {
 // The number of elements to retain in the node cache.
 const cacheCapacity = 10_000_000
 
-func OpenInMemoryForest(directory string) (*Forest, error) {
+func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 	success := false
 	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
@@ -84,10 +101,10 @@ func OpenInMemoryForest(directory string) (*Forest, error) {
 		return nil, err
 	}
 	success = true
-	return makeForest(directory, branches, extensions, accounts, values, hashes)
+	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
 }
 
-func OpenFileForest(directory string) (*Forest, error) {
+func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 	success := false
 	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
@@ -130,10 +147,10 @@ func OpenFileForest(directory string) (*Forest, error) {
 		return nil, err
 	}
 	success = true
-	return makeForest(directory, branches, extensions, accounts, values, hashes)
+	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
 }
 
-func OpenFileShadowForest(directory string) (*Forest, error) {
+func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
 	branchesA, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
 	if err != nil {
 		return nil, err
@@ -174,7 +191,7 @@ func OpenFileShadowForest(directory string) (*Forest, error) {
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(directory, branches, extensions, accounts, values, hashes)
+	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
 }
 
 func makeForest(
@@ -184,12 +201,14 @@ func makeForest(
 	accounts stock.Stock[uint32, AccountNode],
 	values stock.Stock[uint32, ValueNode],
 	hashes HashStore,
+	mode StorageMode,
 ) (*Forest, error) {
 	return &Forest{
 		branches:    branches,
 		extensions:  extensions,
 		accounts:    accounts,
 		values:      values,
+		storageMode: mode,
 		nodeCache:   common.NewCache[NodeId, Node](cacheCapacity),
 		dirty:       map[NodeId]struct{}{},
 		hasher:      &DirectHasher{},
@@ -414,6 +433,12 @@ func (s *Forest) getNode(id NodeId) (Node, error) {
 		return nil, fmt.Errorf("no node with ID %d in storage", id)
 	}
 
+	// Everything that is loaded from an archive is to be considered
+	// frozen, and thus immutable.
+	if s.storageMode == Archive {
+		node.MarkFrozen()
+	}
+
 	if err := s.addToCache(id, node); err != nil {
 		return nil, err
 	}
@@ -422,7 +447,7 @@ func (s *Forest) getNode(id NodeId) (Node, error) {
 
 func (s *Forest) addToCache(id NodeId, node Node) error {
 	if evictedId, evictedNode, evicted := s.nodeCache.Set(id, node); evicted {
-		// TODO: perform update asynchroniously.
+		// TODO: perform flush asynchroniously.
 		if err := s.flush(evictedId, evictedNode); err != nil {
 			return err
 		}
@@ -431,6 +456,17 @@ func (s *Forest) addToCache(id NodeId, node Node) error {
 }
 
 func (s *Forest) flush(id NodeId, node Node) error {
+	// Note: flushing nodes in Archive mode will implicitly freeze them,
+	// since after the reload they will be considered frozen. This may
+	// cause temporary states between updates to be accidentially frozen,
+	// leaving unreferenced nodes in the archive, but it is not causing
+	// correctness issues. However, if the node-cache size is sufficiently
+	// large, such cases should be rare. Nevertheless, a warning is
+	// printed here to get informed if this changes in the future.
+	if s.storageMode == Archive && !node.IsFrozen() {
+		log.Printf("WARNING: temporary node stored in archive due to limited cache capacity")
+	}
+
 	if _, dirty := s.dirty[id]; !dirty {
 		return nil
 	}

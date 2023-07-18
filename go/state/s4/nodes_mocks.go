@@ -138,6 +138,32 @@ func (mr *MockNodeMockRecorder) GetValue(source, key, path interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockNode)(nil).GetValue), source, key, path)
 }
 
+// IsFrozen mocks base method.
+func (m *MockNode) IsFrozen() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsFrozen")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsFrozen indicates an expected call of IsFrozen.
+func (mr *MockNodeMockRecorder) IsFrozen() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsFrozen", reflect.TypeOf((*MockNode)(nil).IsFrozen))
+}
+
+// MarkFrozen mocks base method.
+func (m *MockNode) MarkFrozen() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MarkFrozen")
+}
+
+// MarkFrozen indicates an expected call of MarkFrozen.
+func (mr *MockNodeMockRecorder) MarkFrozen() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkFrozen", reflect.TypeOf((*MockNode)(nil).MarkFrozen))
+}
+
 // Release mocks base method.
 func (m *MockNode) Release(manager NodeManager, thisId NodeId) error {
 	m.ctrl.T.Helper()

@@ -23,6 +23,9 @@ type Node interface {
 	ClearStorage(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble) (newRoot NodeId, changed bool, err error)
 
 	Release(manager NodeManager, thisId NodeId) error
+
+	IsFrozen() bool
+	MarkFrozen()
 	Freeze(source NodeSource) error
 
 	Check(source NodeSource, path []Nibble) error
@@ -112,6 +115,12 @@ func (e EmptyNode) ClearStorage(manager NodeManager, thisId NodeId, address *com
 func (e EmptyNode) Release(NodeManager, NodeId) error {
 	return nil
 }
+
+func (e EmptyNode) IsFrozen() bool {
+	return true
+}
+
+func (e EmptyNode) MarkFrozen() {}
 
 func (e EmptyNode) Freeze(NodeSource) error {
 	// empty nodes are always frozen
@@ -325,6 +334,14 @@ func (n *BranchNode) Release(manager NodeManager, thisId NodeId) error {
 		}
 	}
 	return manager.release(thisId)
+}
+
+func (n *BranchNode) IsFrozen() bool {
+	return n.frozen
+}
+
+func (n *BranchNode) MarkFrozen() {
+	n.frozen = true
 }
 
 func (n *BranchNode) Freeze(source NodeSource) error {
@@ -630,6 +647,14 @@ func (n *ExtensionNode) Release(manager NodeManager, thisId NodeId) error {
 	return manager.release(thisId)
 }
 
+func (n *ExtensionNode) IsFrozen() bool {
+	return n.frozen
+}
+
+func (n *ExtensionNode) MarkFrozen() {
+	n.frozen = true
+}
+
 func (n *ExtensionNode) Freeze(source NodeSource) error {
 	if n.frozen {
 		return nil
@@ -905,6 +930,14 @@ func (n *AccountNode) Release(manager NodeManager, thisId NodeId) error {
 	return manager.release(thisId)
 }
 
+func (n *AccountNode) IsFrozen() bool {
+	return n.frozen
+}
+
+func (n *AccountNode) MarkFrozen() {
+	n.frozen = true
+}
+
 func (n *AccountNode) Freeze(source NodeSource) error {
 	if n.frozen {
 		return nil
@@ -1045,6 +1078,14 @@ func (n *ValueNode) Release(manager NodeManager, thisId NodeId) error {
 		return nil
 	}
 	return manager.release(thisId)
+}
+
+func (n *ValueNode) IsFrozen() bool {
+	return n.frozen
+}
+
+func (n *ValueNode) MarkFrozen() {
+	n.frozen = true
 }
 
 func (n *ValueNode) Freeze(NodeSource) error {

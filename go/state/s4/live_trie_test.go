@@ -8,7 +8,7 @@ import (
 )
 
 func TestLiveTrie_EmptyTrieIsConsistent(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestLiveTrie_EmptyTrieIsConsistent(t *testing.T) {
 }
 
 func TestLiveTrie_NonExistingAccountsHaveEmptyInfo(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestLiveTrie_NonExistingAccountsHaveEmptyInfo(t *testing.T) {
 }
 
 func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 }
 
 func TestLiveTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestLiveTrie_SetAndGetMultipleAccountInformationWorks(t *testing.T) {
 }
 
 func TestLiveTrie_NonExistingValueHasZeroValue(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestLiveTrie_NonExistingValueHasZeroValue(t *testing.T) {
 }
 
 func TestLiveTrie_ValuesCanBeSetAndRetrieved(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -169,11 +169,11 @@ func TestLiveTrie_ValuesCanBeSetAndRetrieved(t *testing.T) {
 }
 
 func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
-	trie1, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie1, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
-	trie2, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie2, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 }
 
 func TestLiveTrie_ChangeInTrieSubstructureUpdatesHash(t *testing.T) {
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 	t.Parallel()
 	const N = 100
 
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 	t.Parallel()
 	const N = 10000
 
-	trie, err := OpenInMemoryLiveTrie(t.TempDir())
+	trie, err := OpenInMemoryLiveTrie(t.TempDir(), Live)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -429,7 +429,7 @@ func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 }
 
 func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
-	trie, err := OpenInMemoryLiveTrie(b.TempDir())
+	trie, err := OpenInMemoryLiveTrie(b.TempDir(), Live)
 	if err != nil {
 		b.Fatalf("failed to open trie: %v", err)
 	}
@@ -438,7 +438,7 @@ func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
 }
 
 func BenchmarkValueInsertionInFileTrie(b *testing.B) {
-	trie, err := OpenFileLiveTrie(b.TempDir())
+	trie, err := OpenFileLiveTrie(b.TempDir(), Live)
 	if err != nil {
 		b.Fatalf("failed to open trie: %v", err)
 	}
