@@ -437,6 +437,7 @@ func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
 	defer trie.Close()
 	b.StartTimer()
 	benchmarkValueInsertion(trie, b)
+	b.StopTimer()
 }
 
 func BenchmarkValueInsertionInFileTrie(b *testing.B) {
@@ -448,4 +449,5 @@ func BenchmarkValueInsertionInFileTrie(b *testing.B) {
 	defer trie.Close()
 	b.StartTimer()
 	benchmarkValueInsertion(trie, b)
+	b.StopTimer()
 }
