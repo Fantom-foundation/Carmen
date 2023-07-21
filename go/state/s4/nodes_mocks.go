@@ -49,7 +49,7 @@ func (mr *MockNodeMockRecorder) Check(source, path interface{}) *gomock.Call {
 }
 
 // ClearStorage mocks base method.
-func (m *MockNode) ClearStorage(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble) (NodeId, bool, error) {
+func (m *MockNode) ClearStorage(manager NodeManager, thisId NodeId, address common.Address, path []Nibble) (NodeId, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ClearStorage", manager, thisId, address, path)
 	ret0, _ := ret[0].(NodeId)
@@ -91,7 +91,7 @@ func (mr *MockNodeMockRecorder) Freeze(source interface{}) *gomock.Call {
 }
 
 // GetAccount mocks base method.
-func (m *MockNode) GetAccount(source NodeSource, address *common.Address, path []Nibble) (AccountInfo, bool, error) {
+func (m *MockNode) GetAccount(source NodeSource, address common.Address, path []Nibble) (AccountInfo, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAccount", source, address, path)
 	ret0, _ := ret[0].(AccountInfo)
@@ -107,7 +107,7 @@ func (mr *MockNodeMockRecorder) GetAccount(source, address, path interface{}) *g
 }
 
 // GetSlot mocks base method.
-func (m *MockNode) GetSlot(source NodeSource, address *common.Address, path []Nibble, key *common.Key) (common.Value, bool, error) {
+func (m *MockNode) GetSlot(source NodeSource, address common.Address, path []Nibble, key common.Key) (common.Value, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSlot", source, address, path, key)
 	ret0, _ := ret[0].(common.Value)
@@ -123,7 +123,7 @@ func (mr *MockNodeMockRecorder) GetSlot(source, address, path, key interface{}) 
 }
 
 // GetValue mocks base method.
-func (m *MockNode) GetValue(source NodeSource, key *common.Key, path []Nibble) (common.Value, bool, error) {
+func (m *MockNode) GetValue(source NodeSource, key common.Key, path []Nibble) (common.Value, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetValue", source, key, path)
 	ret0, _ := ret[0].(common.Value)
@@ -179,7 +179,7 @@ func (mr *MockNodeMockRecorder) Release(manager, thisId interface{}) *gomock.Cal
 }
 
 // SetAccount mocks base method.
-func (m *MockNode) SetAccount(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, info *AccountInfo) (NodeId, bool, error) {
+func (m *MockNode) SetAccount(manager NodeManager, thisId NodeId, address common.Address, path []Nibble, info AccountInfo) (NodeId, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetAccount", manager, thisId, address, path, info)
 	ret0, _ := ret[0].(NodeId)
@@ -195,7 +195,7 @@ func (mr *MockNodeMockRecorder) SetAccount(manager, thisId, address, path, info 
 }
 
 // SetSlot mocks base method.
-func (m *MockNode) SetSlot(manager NodeManager, thisId NodeId, address *common.Address, path []Nibble, key *common.Key, value *common.Value) (NodeId, bool, error) {
+func (m *MockNode) SetSlot(manager NodeManager, thisId NodeId, address common.Address, path []Nibble, key common.Key, value common.Value) (NodeId, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetSlot", manager, thisId, address, path, key, value)
 	ret0, _ := ret[0].(NodeId)
@@ -211,7 +211,7 @@ func (mr *MockNodeMockRecorder) SetSlot(manager, thisId, address, path, key, val
 }
 
 // SetValue mocks base method.
-func (m *MockNode) SetValue(manager NodeManager, thisId NodeId, key *common.Key, path []Nibble, value *common.Value) (NodeId, bool, error) {
+func (m *MockNode) SetValue(manager NodeManager, thisId NodeId, key common.Key, path []Nibble, value common.Value) (NodeId, bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetValue", manager, thisId, key, path, value)
 	ret0, _ := ret[0].(NodeId)

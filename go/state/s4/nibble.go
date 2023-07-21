@@ -20,13 +20,13 @@ func (n Nibble) String() string {
 	return string(n.Rune())
 }
 
-func addressToNibbles(addr *common.Address) [40]Nibble {
+func addressToNibbles(addr common.Address) [40]Nibble {
 	var res [40]Nibble
 	parseNibbles(res[:], addr[:])
 	return res
 }
 
-func keyToNibbles(key *common.Key) [64]Nibble {
+func keyToNibbles(key common.Key) [64]Nibble {
 	var res [64]Nibble
 	parseNibbles(res[:], key[:])
 	return res

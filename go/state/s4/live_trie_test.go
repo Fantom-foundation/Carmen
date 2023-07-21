@@ -429,19 +429,23 @@ func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 }
 
 func BenchmarkValueInsertionInMemoryTrie(b *testing.B) {
+	b.StopTimer()
 	trie, err := OpenInMemoryLiveTrie(b.TempDir(), Live)
 	if err != nil {
 		b.Fatalf("failed to open trie: %v", err)
 	}
 	defer trie.Close()
+	b.StartTimer()
 	benchmarkValueInsertion(trie, b)
 }
 
 func BenchmarkValueInsertionInFileTrie(b *testing.B) {
+	b.StopTimer()
 	trie, err := OpenFileLiveTrie(b.TempDir(), Live)
 	if err != nil {
 		b.Fatalf("failed to open trie: %v", err)
 	}
 	defer trie.Close()
+	b.StartTimer()
 	benchmarkValueInsertion(trie, b)
 }
