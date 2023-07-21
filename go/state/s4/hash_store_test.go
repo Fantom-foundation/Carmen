@@ -15,14 +15,14 @@ func TestInMemoryHashStore_SetAndGet(t *testing.T) {
 	defer store.Close()
 
 	for i := 0; i < 2*N; i++ {
-		if err := store.Set(ValueId(uint32(i)), common.Hash{byte(i >> 16), byte(i >> 8), byte(i)}); err != nil {
+		if err := store.Set(ValueId(uint64(i)), common.Hash{byte(i >> 16), byte(i >> 8), byte(i)}); err != nil {
 			t.Fatalf("failed to set hash: %v", err)
 		}
 	}
 
 	for i := 0; i < 2*N; i++ {
 		want := common.Hash{byte(i >> 16), byte(i >> 8), byte(i)}
-		if hash, err := store.Get(ValueId(uint32(i))); err != nil || hash != want {
+		if hash, err := store.Get(ValueId(uint64(i))); err != nil || hash != want {
 			t.Fatalf("fetched invalid hash for %d, got %v, wanted %v, err %v", i, hash, want, err)
 		}
 	}
@@ -37,14 +37,14 @@ func TestFileBasedHashStore_SetAndGet(t *testing.T) {
 	defer store.Close()
 
 	for i := 0; i < 2*N; i++ {
-		if err := store.Set(ValueId(uint32(i)), common.Hash{byte(i >> 16), byte(i >> 8), byte(i)}); err != nil {
+		if err := store.Set(ValueId(uint64(i)), common.Hash{byte(i >> 16), byte(i >> 8), byte(i)}); err != nil {
 			t.Fatalf("failed to set hash: %v", err)
 		}
 	}
 
 	for i := 0; i < 2*N; i++ {
 		want := common.Hash{byte(i >> 16), byte(i >> 8), byte(i)}
-		if hash, err := store.Get(ValueId(uint32(i))); err != nil || hash != want {
+		if hash, err := store.Get(ValueId(uint64(i))); err != nil || hash != want {
 			t.Fatalf("fetched invalid hash for %d, got %v, wanted %v, err %v", i, hash, want, err)
 		}
 	}

@@ -2963,7 +2963,7 @@ type nodeContext struct {
 	*MockNodeManager
 	cache     map[NodeDesc]entry
 	tags      map[string]entry
-	lastIndex uint32
+	lastIndex uint64
 }
 
 func newNodeContext(ctrl *gomock.Controller) *nodeContext {
@@ -2999,7 +2999,7 @@ func (c *nodeContext) Get(label string) (NodeId, Node) {
 	return e.id, e.node
 }
 
-func (c *nodeContext) nextIndex() uint32 {
+func (c *nodeContext) nextIndex() uint64 {
 	c.lastIndex++
 	return c.lastIndex
 }

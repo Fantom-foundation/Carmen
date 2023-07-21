@@ -30,10 +30,10 @@ const (
 // It provides the common foundation for the Live- and ArchiveTrie.
 type Forest struct {
 	// The stock containers managing individual node types.
-	branches   stock.Stock[uint32, BranchNode]
-	extensions stock.Stock[uint32, ExtensionNode]
-	accounts   stock.Stock[uint32, AccountNode]
-	values     stock.Stock[uint32, ValueNode]
+	branches   stock.Stock[uint64, BranchNode]
+	extensions stock.Stock[uint64, ExtensionNode]
+	accounts   stock.Stock[uint64, AccountNode]
+	values     stock.Stock[uint64, ValueNode]
 
 	// A unified cache for all node types.
 	nodeCache *common.Cache[NodeId, Node]
@@ -60,7 +60,7 @@ const cacheCapacity = 10_000_000
 
 func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 	success := false
-	branches, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	branches, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 			branches.Close()
 		}
 	}()
-	extensions, err := memory.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	extensions, err := memory.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 			extensions.Close()
 		}
 	}()
-	accounts, err := memory.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	accounts, err := memory.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 			accounts.Close()
 		}
 	}()
-	values, err := memory.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	values, err := memory.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 
 func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 	success := false
-	branches, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	branches, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 			branches.Close()
 		}
 	}()
-	extensions, err := file.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	extensions, err := file.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 			extensions.Close()
 		}
 	}()
-	accounts, err := file.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	accounts, err := file.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 			accounts.Close()
 		}
 	}()
-	values, err := file.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	values, err := file.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
@@ -151,19 +151,19 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 }
 
 func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
-	branchesA, err := file.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
+	branchesA, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
 	if err != nil {
 		return nil, err
 	}
-	extensionsA, err := file.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/A/extensions")
+	extensionsA, err := file.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/A/extensions")
 	if err != nil {
 		return nil, err
 	}
-	accountsA, err := file.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/A/accounts")
+	accountsA, err := file.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/A/accounts")
 	if err != nil {
 		return nil, err
 	}
-	valuesA, err := file.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/A/values")
+	valuesA, err := file.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/A/values")
 	if err != nil {
 		return nil, err
 	}
@@ -171,19 +171,19 @@ func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
 	if err != nil {
 		return nil, err
 	}
-	branchesB, err := memory.OpenStock[uint32, BranchNode](BranchNodeEncoder{}, directory+"/B/branches")
+	branchesB, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/B/branches")
 	if err != nil {
 		return nil, err
 	}
-	extensionsB, err := memory.OpenStock[uint32, ExtensionNode](ExtensionNodeEncoder{}, directory+"/B/extensions")
+	extensionsB, err := memory.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/B/extensions")
 	if err != nil {
 		return nil, err
 	}
-	accountsB, err := memory.OpenStock[uint32, AccountNode](AccountNodeEncoder{}, directory+"/B/accounts")
+	accountsB, err := memory.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/B/accounts")
 	if err != nil {
 		return nil, err
 	}
-	valuesB, err := memory.OpenStock[uint32, ValueNode](ValueNodeEncoder{}, directory+"/B/values")
+	valuesB, err := memory.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/B/values")
 	if err != nil {
 		return nil, err
 	}
@@ -196,10 +196,10 @@ func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
 
 func makeForest(
 	directory string,
-	branches stock.Stock[uint32, BranchNode],
-	extensions stock.Stock[uint32, ExtensionNode],
-	accounts stock.Stock[uint32, AccountNode],
-	values stock.Stock[uint32, ValueNode],
+	branches stock.Stock[uint64, BranchNode],
+	extensions stock.Stock[uint64, ExtensionNode],
+	accounts stock.Stock[uint64, AccountNode],
+	values stock.Stock[uint64, ValueNode],
 	hashes HashStore,
 	mode StorageMode,
 ) (*Forest, error) {

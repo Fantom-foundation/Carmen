@@ -8,30 +8,30 @@ import (
 // Encoding:
 //
 //	0 ... empty node
-//	prefix 0 ... value node
-//	prefix 10 ... account node    // Account and value could use the same prefix since they can be distinguished by scope
-//	prefix 110 ... branch node
-//	prefix 111 ... extension node
-type NodeId uint32
+//	binary suffix 0 ... branch node    // Branch nodes are the most frequently used ones
+//	binary suffix 01 ... value node
+//	binary suffix 011 ... account node
+//	binary suffix 111 ... extension node
+type NodeId uint64
 
 func EmptyId() NodeId {
 	return NodeId(0)
 }
 
-func BranchId(index uint32) NodeId {
-	return NodeId(0xC0000000 | index)
+func BranchId(index uint64) NodeId {
+	return NodeId((index + 1) << 1)
 }
 
-func ExtensionId(index uint32) NodeId {
-	return NodeId(0xE0000000 | index)
+func ExtensionId(index uint64) NodeId {
+	return NodeId((index << 3) | 0b111)
 }
 
-func AccountId(index uint32) NodeId {
-	return NodeId(0x80000000 | index)
+func AccountId(index uint64) NodeId {
+	return NodeId((index << 3) | 0b011)
 }
 
-func ValueId(index uint32) NodeId {
-	return NodeId(index + 1)
+func ValueId(index uint64) NodeId {
+	return NodeId((index << 2) | 0b01)
 }
 
 func (n NodeId) IsEmpty() bool {
@@ -39,29 +39,29 @@ func (n NodeId) IsEmpty() bool {
 }
 
 func (n NodeId) IsBranch() bool {
-	return n>>29 == 0x6
+	return !n.IsEmpty() && (n&0b1 == 0b0)
 }
 
 func (n NodeId) IsExtension() bool {
-	return n>>29 == 0x7
+	return n&0b111 == 0b111
 }
 
 func (n NodeId) IsAccount() bool {
-	return n>>30 == 0x2
+	return n&0b111 == 0b011
 }
 
 func (n NodeId) IsValue() bool {
-	return !n.IsEmpty() && (n>>31) == 0
+	return n&0b11 == 0b01
 }
 
-func (n NodeId) Index() uint32 {
+func (n NodeId) Index() uint64 {
+	if n.IsBranch() {
+		return uint64(n>>1) - 1
+	}
 	if n.IsValue() {
-		return uint32(n - 1)
+		return uint64(n >> 2)
 	}
-	if n.IsAccount() {
-		return uint32(n) & ^uint32(0xC0000000)
-	}
-	return uint32(n) & ^uint32(0xE0000000)
+	return uint64(n >> 3)
 }
 
 func (n NodeId) String() string {
@@ -87,18 +87,26 @@ func (n NodeId) String() string {
 //                               NodeId Encoder
 // ----------------------------------------------------------------------------
 
+// NodeIdEncoder encode interal 8-byte node IDs using a fixed-length 6-byte disk
+// format ignoring the two most significant bytes which are always zero for any
+// state DB bellow ~1PB.
 type NodeIdEncoder struct{}
 
 func (NodeIdEncoder) GetEncodedSize() int {
-	return 4
+	return 6
 }
 
 func (NodeIdEncoder) Store(dst []byte, id *NodeId) error {
-	binary.LittleEndian.PutUint32(dst, uint32(*id))
+	var buffer [8]byte
+	binary.BigEndian.PutUint64(buffer[:], uint64(*id))
+	copy(dst, buffer[2:])
 	return nil
 }
 
 func (NodeIdEncoder) Load(src []byte, id *NodeId) error {
-	*id = NodeId(binary.LittleEndian.Uint32(src))
+	var buffer [8]byte
+	buffer[0] = src[0]
+	copy(buffer[2:], src)
+	*id = NodeId(binary.BigEndian.Uint64(buffer[:]))
 	return nil
 }
