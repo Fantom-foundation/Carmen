@@ -34,12 +34,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 	}
 
 	// If there is a meta-file in the directory, check its content.
-	if _, err := os.Stat(metafile); err == nil {
-		data, err := os.ReadFile(metafile)
-		if err != nil {
-			return nil, err
-		}
-
+	if data, err := os.ReadFile(metafile); err == nil {
 		var meta metadata
 		if err := json.Unmarshal(data, &meta); err != nil {
 			return nil, err
