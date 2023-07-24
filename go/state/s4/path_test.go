@@ -44,36 +44,48 @@ func TestPath_PathsCanBeCreatedFromNibbles(t *testing.T) {
 
 func TestPath_IndividualPositionsCanBeSet(t *testing.T) {
 	tests := []struct {
-		nibbles  []Nibble
-		position int
-		update   int
-		print    string
+		nibbles     []Nibble
+		position    int
+		update      int
+		print       string
+		shouldPanic bool
 	}{
-		{[]Nibble{}, 0, 2, "-empty-"},
-		{[]Nibble{}, 1, 2, "-empty-"},
-		{[]Nibble{}, -1, 2, "-empty-"},
+		{[]Nibble{}, 0, 2, "-empty-", true},
+		{[]Nibble{}, 1, 2, "-empty-", true},
+		{[]Nibble{}, -1, 2, "-empty-", true},
 
-		{[]Nibble{1}, 0, 2, "2 : 1"},
-		{[]Nibble{1}, 1, 2, "1 : 1"},
-		{[]Nibble{1}, -1, 2, "1 : 1"},
+		{[]Nibble{1}, 0, 2, "2 : 1", false},
+		{[]Nibble{1}, 1, 2, "1 : 1", true},
+		{[]Nibble{1}, -1, 2, "1 : 1", true},
 
-		{[]Nibble{1, 2, 3, 4}, 0, 9, "9234 : 4"},
-		{[]Nibble{1, 2, 3, 4}, 1, 9, "1934 : 4"},
-		{[]Nibble{1, 2, 3, 4}, 2, 9, "1294 : 4"},
-		{[]Nibble{1, 2, 3, 4}, 3, 9, "1239 : 4"},
+		{[]Nibble{1, 2, 3, 4}, 0, 9, "9234 : 4", false},
+		{[]Nibble{1, 2, 3, 4}, 1, 9, "1934 : 4", false},
+		{[]Nibble{1, 2, 3, 4}, 2, 9, "1294 : 4", false},
+		{[]Nibble{1, 2, 3, 4}, 3, 9, "1239 : 4", false},
 
-		{[]Nibble{1, 2, 3, 4, 5}, 0, 9, "92345 : 5"},
-		{[]Nibble{1, 2, 3, 4, 5}, 1, 9, "19345 : 5"},
-		{[]Nibble{1, 2, 3, 4, 5}, 2, 9, "12945 : 5"},
-		{[]Nibble{1, 2, 3, 4, 5}, 3, 9, "12395 : 5"},
-		{[]Nibble{1, 2, 3, 4, 5}, 4, 9, "12349 : 5"},
+		{[]Nibble{1, 2, 3, 4, 5}, 0, 9, "92345 : 5", false},
+		{[]Nibble{1, 2, 3, 4, 5}, 1, 9, "19345 : 5", false},
+		{[]Nibble{1, 2, 3, 4, 5}, 2, 9, "12945 : 5", false},
+		{[]Nibble{1, 2, 3, 4, 5}, 3, 9, "12395 : 5", false},
+		{[]Nibble{1, 2, 3, 4, 5}, 4, 9, "12349 : 5", false},
 	}
 
 	for _, test := range tests {
 		path := CreatePathFromNibbles(test.nibbles)
-		path.Set(test.position, Nibble(test.update))
+		paniced := false
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					paniced = true
+				}
+			}()
+			path.Set(test.position, Nibble(test.update))
+		}()
 		if got, want := path.String(), test.print; got != want {
 			t.Errorf("invalid set, wanted %s, got %s", want, got)
+		}
+		if paniced != test.shouldPanic {
+			t.Errorf("invalid panic result, wanted %t, got %t", test.shouldPanic, paniced)
 		}
 	}
 }

@@ -58,7 +58,7 @@ func (p *Path) Get(pos int) Nibble {
 // the position is not on the path, thus not in the range [0,Lenght()-1].
 func (p *Path) Set(pos int, val Nibble) {
 	if pos < 0 || pos >= int(p.length) {
-		return
+		panic(fmt.Sprintf("out-of-range path update at %d in range [%d,%d)", pos, 0, p.length))
 	}
 	if pos%2 == 0 {
 		p.path[pos/2] = (p.path[pos/2] & 0xF) | byte(val<<4)
@@ -100,7 +100,7 @@ func (p *Path) Append(n Nibble) *Path {
 	return p
 }
 
-// AppendAll appends the givne path to the end of this path.
+// AppendAll appends the given path to the end of this path.
 func (p *Path) AppendAll(other *Path) *Path {
 	for i := 0; i < other.Length(); i++ {
 		p.Append(other.Get(i))
@@ -111,7 +111,7 @@ func (p *Path) AppendAll(other *Path) *Path {
 // Prepend adds a nibble to be begin of this path, growing it by one element.
 func (p *Path) Prepend(n Nibble) *Path {
 	p.length++
-	for i := int(p.length - 2); i >= 0; i-- {
+	for i := int(p.length) - 2; i >= 0; i-- {
 		p.Set(i+1, p.Get(i))
 	}
 	p.Set(0, n)
