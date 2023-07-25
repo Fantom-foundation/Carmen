@@ -183,9 +183,10 @@ type Node interface {
 // NodeSource is a interface for any object capable of resolving NodeIds into
 // Nodes. It is intended to be implemented by a Node-governing component
 // handling the life-cycle of nodes and loading/storing nodes to persistent
-// storage.
+// storage. It also serves as a central source for trie configuration flags.
 type NodeSource interface {
-	getNode(NodeId) (Node, error)
+	GetConfig() MptConfig
+	GetNode(NodeId) (Node, error)
 }
 
 // NodeManager is a mutable extension of a NodeSource enabling the creation,
@@ -310,11 +311,15 @@ func (n *BranchNode) getNextNodeInBranch(
 	path []Nibble,
 ) (Node, []Nibble, error) {
 	next := n.children[path[0]]
-	node, err := source.getNode(next)
+	node, err := source.GetNode(next)
 	if err != nil {
 		return nil, nil, err
 	}
 	return node, path[1:], err
+}
+
+func (n *BranchNode) Children() [16]NodeId {
+	return n.children
 }
 
 func (n *BranchNode) GetAccount(source NodeSource, address common.Address, path []Nibble) (AccountInfo, bool, error) {
@@ -349,7 +354,7 @@ func (n *BranchNode) setNextNode(
 ) (NodeId, bool, error) {
 	// Forward call to child node.
 	child := n.children[path[0]]
-	node, err := manager.getNode(child)
+	node, err := manager.GetNode(child)
 	if err != nil {
 		return 0, false, err
 	}
@@ -400,7 +405,7 @@ func (n *BranchNode) setNextNode(
 			// This branch became obsolete and needs to be removed.
 			if remaining.IsExtension() {
 				// The present extension can be extended.
-				extension, err := manager.getNode(remaining)
+				extension, err := manager.GetNode(remaining)
 				if err != nil {
 					return 0, false, err
 				}
@@ -480,7 +485,7 @@ func (n *BranchNode) Release(manager NodeManager, thisId NodeId) error {
 	}
 	for _, cur := range n.children {
 		if !cur.IsEmpty() {
-			node, err := manager.getNode(cur)
+			node, err := manager.GetNode(cur)
 			if err != nil {
 				return err
 			}
@@ -510,7 +515,7 @@ func (n *BranchNode) Freeze(source NodeSource) error {
 		if cur.IsEmpty() {
 			continue
 		}
-		node, err := source.getNode(cur)
+		node, err := source.GetNode(cur)
 		if err != nil {
 			return err
 		}
@@ -533,7 +538,7 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 		}
 		numChildren++
 
-		if node, err := source.getNode(child); err == nil {
+		if node, err := source.GetNode(child); err == nil {
 			if err := node.Check(source, append(path, Nibble(i))); err != nil {
 				errs = append(errs, err)
 			}
@@ -554,7 +559,7 @@ func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
 			continue
 		}
 
-		if node, err := source.getNode(child); err == nil {
+		if node, err := source.GetNode(child); err == nil {
 			node.Dump(source, child, fmt.Sprintf("%s  %v ", indent, Nibble(i)))
 		} else {
 			fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, child, err)
@@ -582,7 +587,7 @@ func (n *ExtensionNode) getNextNodeInExtension(
 	if !n.path.IsPrefixOf(path) {
 		return EmptyNode{}, nil, nil
 	}
-	node, err := source.getNode(n.next)
+	node, err := source.GetNode(n.next)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -622,7 +627,7 @@ func (n *ExtensionNode) setNextNode(
 ) (NodeId, bool, error) {
 	// Check whether the updates targest the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
-		next, err := manager.getNode(n.next)
+		next, err := manager.GetNode(n.next)
 		if err != nil {
 			return 0, false, err
 		}
@@ -656,7 +661,7 @@ func (n *ExtensionNode) setNextNode(
 
 			if newRoot.IsExtension() {
 				// If the new next is an extension, merge it into this extension.
-				node, err := manager.getNode(newRoot)
+				node, err := manager.GetNode(newRoot)
 				if err != nil {
 					return 0, false, err
 				}
@@ -793,7 +798,7 @@ func (n *ExtensionNode) Release(manager NodeManager, thisId NodeId) error {
 	if n.frozen {
 		return nil
 	}
-	node, err := manager.getNode(n.next)
+	node, err := manager.GetNode(n.next)
 	if err != nil {
 		return err
 	}
@@ -817,7 +822,7 @@ func (n *ExtensionNode) Freeze(source NodeSource) error {
 		return nil
 	}
 	n.frozen = true
-	node, err := source.getNode(n.next)
+	node, err := source.GetNode(n.next)
 	if err != nil {
 		return err
 	}
@@ -836,7 +841,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 	if !n.next.IsBranch() {
 		errs = append(errs, fmt.Errorf("extension path must be followed by a branch"))
 	}
-	if node, err := source.getNode(n.next); err == nil {
+	if node, err := source.GetNode(n.next); err == nil {
 		extended := path
 		for i := 0; i < n.path.Length(); i++ {
 			extended = append(extended, n.path.Get(i))
@@ -852,7 +857,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 
 func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	fmt.Printf("%sExtension (ID: %v/%t): %v\n", indent, thisId, n.frozen, &n.path)
-	if node, err := source.getNode(n.next); err == nil {
+	if node, err := source.GetNode(n.next); err == nil {
 		node.Dump(source, n.next, indent+"  ")
 	} else {
 		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.next, err)
@@ -865,15 +870,23 @@ func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
 
 // AccountNode is the node type found in the middle of an MPT structure
 // representing an account. It stores the account's information and references
-// the root node of the account's state trie. It forms the boundary between
+// the root node of the account's storage trie. It forms the boundary between
 // the usage of addresses for navigating the trie and the usage of keys.
-// No AccountNode may be present in the trie rooted by an accounts state root.
-// Also, the retained account information must not be empty.
+// No AccountNode may be present in the trie rooted by an accounts storage
+// root. Also, the retained account information must not be empty.
 type AccountNode struct {
 	address common.Address
 	info    AccountInfo
-	state   NodeId
+	storage NodeId
 	frozen  bool
+}
+
+func (n *AccountNode) Info() AccountInfo {
+	return n.info
+}
+
+func (n *AccountNode) StorageRoot() NodeId {
+	return n.storage
 }
 
 func (n *AccountNode) GetAccount(source NodeSource, address common.Address, path []Nibble) (AccountInfo, bool, error) {
@@ -892,7 +905,7 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 		return common.Value{}, false, nil
 	}
 	subPath := KeyToNibbles(key)
-	root, err := source.getNode(n.state)
+	root, err := source.GetNode(n.storage)
 	if err != nil {
 		return common.Value{}, false, err
 	}
@@ -912,11 +925,11 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 			}
 			// Recursively release the entire state DB.
 			// TODO: consider performing this asynchroniously.
-			root, err := manager.getNode(n.state)
+			root, err := manager.GetNode(n.storage)
 			if err != nil {
 				return 0, false, err
 			}
-			err = root.Release(manager, n.state)
+			err = root.Release(manager, n.storage)
 			if err != nil {
 				return 0, false, err
 			}
@@ -935,7 +948,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 			}
 			newNode.address = address
 			newNode.info = info
-			newNode.state = n.state
+			newNode.storage = n.storage
 			manager.update(newId, newNode)
 			return newId, false, nil
 		}
@@ -1021,16 +1034,16 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 	}
 
 	// Continue from here with a value insertion.
-	node, err := manager.getNode(n.state)
+	node, err := manager.GetNode(n.storage)
 	if err != nil {
 		return 0, false, err
 	}
 	subPath := KeyToNibbles(key)
-	root, hasChanged, err := node.SetValue(manager, n.state, key, subPath[:], value)
+	root, hasChanged, err := node.SetValue(manager, n.storage, key, subPath[:], value)
 	if err != nil {
 		return 0, false, err
 	}
-	if root != n.state {
+	if root != n.storage {
 		// If this node is frozen, we need to write the result in
 		// a new account node.
 		// TODO: add a unit test for this
@@ -1041,10 +1054,10 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 			}
 			newNode.address = address
 			newNode.info = n.info
-			newNode.state = root
+			newNode.storage = root
 			return newId, false, nil
 		}
-		n.state = root
+		n.storage = root
 		manager.update(thisId, n)
 	} else if hasChanged {
 		manager.invalidateHash(thisId)
@@ -1053,7 +1066,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 }
 
 func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, address common.Address, path []Nibble) (newRoot NodeId, changed bool, err error) {
-	if n.address != address || n.state.IsEmpty() {
+	if n.address != address || n.storage.IsEmpty() {
 		return thisId, false, nil
 	}
 
@@ -1067,17 +1080,17 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, address c
 		}
 		newNode.address = address
 		newNode.info = n.info
-		newNode.state = EmptyId()
+		newNode.storage = EmptyId()
 		return newId, false, nil
 	}
 
-	root, err := manager.getNode(n.state)
+	root, err := manager.GetNode(n.storage)
 	if err != nil {
 		return thisId, false, err
 	}
 
-	err = root.Release(manager, n.state)
-	n.state = EmptyId()
+	err = root.Release(manager, n.storage)
+	n.storage = EmptyId()
 	return thisId, true, err
 }
 
@@ -1085,8 +1098,8 @@ func (n *AccountNode) Release(manager NodeManager, thisId NodeId) error {
 	if n.frozen {
 		return nil
 	}
-	if !n.state.IsEmpty() {
-		if err := manager.release(n.state); err != nil {
+	if !n.storage.IsEmpty() {
+		if err := manager.release(n.storage); err != nil {
 			return err
 		}
 	}
@@ -1106,7 +1119,7 @@ func (n *AccountNode) Freeze(source NodeSource) error {
 		return nil
 	}
 	n.frozen = true
-	node, err := source.getNode(n.state)
+	node, err := source.GetNode(n.storage)
 	if err != nil {
 		return err
 	}
@@ -1129,8 +1142,8 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 		errs = append(errs, fmt.Errorf("account information must not be empty"))
 	}
 
-	if !n.state.IsEmpty() {
-		if node, err := source.getNode(n.state); err == nil {
+	if !n.storage.IsEmpty() {
+		if node, err := source.GetNode(n.storage); err == nil {
 			if err := node.Check(source, make([]Nibble, 0, common.KeySize*2)); err != nil {
 				errs = append(errs, err)
 			}
@@ -1144,13 +1157,13 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 
 func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	fmt.Printf("%sAccount (ID: %v/%t): %v - %v\n", indent, thisId, n.frozen, n.address, n.info)
-	if n.state.IsEmpty() {
+	if n.storage.IsEmpty() {
 		return
 	}
-	if node, err := source.getNode(n.state); err == nil {
-		node.Dump(source, n.state, indent+"  ")
+	if node, err := source.GetNode(n.storage); err == nil {
+		node.Dump(source, n.storage, indent+"  ")
 	} else {
-		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.state, err)
+		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.storage, err)
 	}
 }
 
@@ -1165,6 +1178,10 @@ type ValueNode struct {
 	key    common.Key
 	value  common.Value
 	frozen bool
+}
+
+func (n *ValueNode) Value() common.Value {
+	return n.value
 }
 
 func (n *ValueNode) GetAccount(NodeSource, common.Address, []Nibble) (AccountInfo, bool, error) {
@@ -1362,7 +1379,7 @@ func (AccountNodeEncoder) Store(dst []byte, node *AccountNode) error {
 	dst = dst[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
-	return idEncoder.Store(dst, &node.state)
+	return idEncoder.Store(dst, &node.storage)
 }
 
 func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
@@ -1376,7 +1393,7 @@ func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
 	src = src[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
-	if err := idEncoder.Load(src, &node.state); err != nil {
+	if err := idEncoder.Load(src, &node.storage); err != nil {
 		return err
 	}
 

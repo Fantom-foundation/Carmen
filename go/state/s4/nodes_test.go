@@ -55,7 +55,7 @@ func TestEmptyNode_SetAccount(t *testing.T) {
 		t.Errorf("failed to return new root node ID, wanted %v, got %v", resId, newRoot)
 	}
 
-	got, _ := ctxt.getNode(resId)
+	got, _ := ctxt.GetNode(resId)
 	ctxt.ExpectEqual(t, after, got)
 }
 
@@ -84,7 +84,7 @@ func TestEmptyNode_SetAccount_ToEmptyInfo(t *testing.T) {
 		t.Errorf("failed to return new root node ID, wanted %v, got %v", resId, newRoot)
 	}
 
-	got, _ := ctxt.getNode(resId)
+	got, _ := ctxt.GetNode(resId)
 	ctxt.ExpectEqual(t, after, got)
 }
 
@@ -200,7 +200,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 
 	// The account node that is targeted should marked to be upated.
 	branch := node.(*BranchNode)
-	account, _ := ctxt.getNode(branch.children[8])
+	account, _ := ctxt.GetNode(branch.children[8])
 	ctxt.EXPECT().update(branch.children[8], account)
 	ctxt.EXPECT().invalidateHash(id)
 
@@ -261,7 +261,7 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing
 		t.Errorf("modification did not create a new root")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -344,7 +344,7 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T)
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -437,7 +437,7 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -517,7 +517,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *test
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -549,7 +549,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != wantId || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
 	}
-	node, _ = ctxt.getNode(wantId)
+	node, _ = ctxt.GetNode(wantId)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -587,7 +587,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -634,7 +634,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != wantId || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
 	}
-	node, _ = ctxt.getNode(wantId)
+	node, _ = ctxt.GetNode(wantId)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -689,7 +689,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainin
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -734,7 +734,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != wantId || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
 	}
-	node, _ = ctxt.getNode(wantId)
+	node, _ = ctxt.GetNode(wantId)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -787,7 +787,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedBy
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1041,7 +1041,7 @@ func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) 
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1099,7 +1099,7 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != extensionId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", extensionId, true, newRoot, changed, err)
 	}
-	node, _ = ctxt.getNode(extensionId)
+	node, _ = ctxt.GetNode(extensionId)
 
 	ctxt.ExpectEqual(t, after, node)
 }
@@ -1165,7 +1165,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *t
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1216,7 +1216,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != branchId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
-	node, _ = ctxt.getNode(branchId)
+	node, _ = ctxt.GetNode(branchId)
 
 	ctxt.ExpectEqual(t, after, node)
 }
@@ -1275,7 +1275,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T)
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1384,7 +1384,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1433,7 +1433,7 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(branchId)
+	node, _ = ctxt.GetNode(branchId)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -1493,7 +1493,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1615,7 +1615,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1710,7 +1710,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(
 		t.Errorf("operatoin should return pre-existing node")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1832,7 +1832,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T
 		t.Errorf("update should return existing node")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1884,7 +1884,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1907,7 +1907,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), true, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(EmptyId())
+	node, _ = ctxt.GetNode(EmptyId())
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -1933,7 +1933,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -1966,7 +1966,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2006,7 +2006,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2045,7 +2045,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2091,7 +2091,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2113,7 +2113,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2145,7 +2145,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroI
 		t.Errorf("update should return existing node")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2168,7 +2168,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2200,7 +2200,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Zer
 		t.Errorf("update should return existing node")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2267,12 +2267,12 @@ func TestAccountNode_ReleaseStateTrie(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 
-	state, _ := ctxt.Build(&Value{})
+	storage, _ := ctxt.Build(&Value{})
 	id, node := ctxt.Build(&Account{})
-	node.(*AccountNode).state = state
+	node.(*AccountNode).storage = storage
 
 	ctxt.EXPECT().release(id).Return(nil)
-	ctxt.EXPECT().release(state).Return(nil)
+	ctxt.EXPECT().release(storage).Return(nil)
 
 	if err := node.Release(ctxt, id); err != nil {
 		t.Errorf("failed to release node: %v", err)
@@ -2283,13 +2283,13 @@ func TestAccountNode_Freeze(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
 
-	stateRoot := NewMockNode(ctrl)
+	storageRoot := NewMockNode(ctrl)
 
-	state, _ := ctxt.Build(&Mock{stateRoot})
+	storage, _ := ctxt.Build(&Mock{storageRoot})
 	_, node := ctxt.Build(&Account{})
-	node.(*AccountNode).state = state
+	node.(*AccountNode).storage = storage
 
-	stateRoot.EXPECT().Freeze(gomock.Any()).Return(nil)
+	storageRoot.EXPECT().Freeze(gomock.Any()).Return(nil)
 
 	if node.(*AccountNode).frozen {
 		t.Errorf("node was created in frozen state")
@@ -2456,7 +2456,7 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_DifferentValue(t *testing.T) 
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2479,7 +2479,7 @@ func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), true, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(EmptyId())
+	node, _ = ctxt.GetNode(EmptyId())
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2506,7 +2506,7 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2539,7 +2539,7 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *test
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2579,7 +2579,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2618,7 +2618,7 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *te
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2664,7 +2664,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 		t.Errorf("frozen nodes should never change")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2686,7 +2686,7 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2716,7 +2716,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *
 		t.Errorf("update should return existing node")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2739,7 +2739,7 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testi
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 
-	node, _ = ctxt.getNode(res)
+	node, _ = ctxt.GetNode(res)
 	ctxt.ExpectEqual(t, after, node)
 }
 
@@ -2769,7 +2769,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t
 		t.Errorf("update should return existing node")
 	}
 
-	res, _ := ctxt.getNode(newRoot)
+	res, _ := ctxt.GetNode(newRoot)
 	ctxt.ExpectEqual(t, before, node)
 	ctxt.ExpectEqual(t, after, res)
 }
@@ -2814,7 +2814,7 @@ func TestAccountNodeEncoder(t *testing.T) {
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
-		state: NodeId(12),
+		storage: NodeId(12),
 	}
 	encoder := AccountNodeEncoder{}
 	buffer := make([]byte, encoder.GetEncodedSize())
@@ -2975,7 +2975,7 @@ func newNodeContext(ctrl *gomock.Controller) *nodeContext {
 		cache:           map[NodeDesc]entry{},
 		tags:            map[string]entry{},
 	}
-	res.EXPECT().getNode(EmptyId()).AnyTimes().Return(EmptyNode{}, nil)
+	res.EXPECT().GetNode(EmptyId()).AnyTimes().Return(EmptyNode{}, nil)
 	return res
 }
 
@@ -2989,7 +2989,7 @@ func (c *nodeContext) Build(desc NodeDesc) (NodeId, Node) {
 	}
 
 	id, node := desc.Build(c)
-	c.EXPECT().getNode(id).AnyTimes().Return(node, nil)
+	c.EXPECT().GetNode(id).AnyTimes().Return(node, nil)
 	c.cache[desc] = entry{id, node}
 	return id, node
 }
@@ -3026,7 +3026,7 @@ func (c *nodeContext) ExpectEqual(t *testing.T, want, got Node) {
 
 func (c *nodeContext) Clone(node Node) (NodeId, Node) {
 	id, res := c.cloneInternal(node)
-	c.EXPECT().getNode(id).AnyTimes().Return(res, nil)
+	c.EXPECT().GetNode(id).AnyTimes().Return(res, nil)
 	return id, res
 }
 
@@ -3036,7 +3036,7 @@ func (c *nodeContext) cloneInternal(node Node) (NodeId, Node) {
 	}
 
 	clone := func(id NodeId) NodeId {
-		original, _ := c.getNode(id)
+		original, _ := c.GetNode(id)
 		cloneId, _ := c.Clone(original)
 		return cloneId
 	}
@@ -3045,7 +3045,7 @@ func (c *nodeContext) cloneInternal(node Node) (NodeId, Node) {
 		return AccountId(c.nextIndex()), &AccountNode{
 			address: a.address,
 			info:    a.info,
-			state:   clone(a.state),
+			storage: clone(a.storage),
 		}
 	}
 
@@ -3083,7 +3083,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 
 	if a, ok := a.(*AccountNode); ok {
 		if b, ok := b.(*AccountNode); ok {
-			return a.address == b.address && a.info == b.info && c.equalTries(a.state, b.state)
+			return a.address == b.address && a.info == b.info && c.equalTries(a.storage, b.storage)
 		}
 		return false
 	}
@@ -3119,7 +3119,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 }
 
 func (c *nodeContext) equalTries(a, b NodeId) bool {
-	nodeA, _ := c.getNode(a)
-	nodeB, _ := c.getNode(b)
+	nodeA, _ := c.GetNode(a)
+	nodeB, _ := c.GetNode(b)
 	return c.equal(nodeA, nodeB)
 }

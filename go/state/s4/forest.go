@@ -40,6 +40,8 @@ func (m StorageMode) String() string {
 // Forest is a utility node managing nodes for one or more Tries.
 // It provides the common foundation for the Live and Archive Tries.
 type Forest struct {
+	config MptConfig
+
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
 	extensions stock.Stock[uint64, ExtensionNode]
@@ -229,7 +231,7 @@ func makeForest(
 }
 
 func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo, bool, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
@@ -238,7 +240,7 @@ func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo
 }
 
 func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info AccountInfo) (NodeId, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		return NodeId(0), err
 	}
@@ -251,7 +253,7 @@ func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info Account
 }
 
 func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (common.Value, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		return common.Value{}, err
 	}
@@ -261,7 +263,7 @@ func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (c
 }
 
 func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, value common.Value) (NodeId, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		return NodeId(0), err
 	}
@@ -274,7 +276,7 @@ func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, va
 }
 
 func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		return err
 	}
@@ -294,11 +296,11 @@ func (s *Forest) GetHashFor(id NodeId) (common.Hash, error) {
 	}
 
 	// Dirty hashes need to be re-freshed.
-	node, err := s.getNode(id)
+	node, err := s.GetNode(id)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	hash, err := s.hasher.GetHash(node, s)
+	hash, err := s.hasher.GetHash(node, s, s)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -313,7 +315,7 @@ func (f *Forest) Freeze(id NodeId) error {
 	if f.storageMode != Archive {
 		return fmt.Errorf("node-freezing only supported in archive mode")
 	}
-	root, err := f.getNode(id)
+	root, err := f.GetNode(id)
 	if err != nil {
 		return err
 	}
@@ -403,7 +405,7 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
 func (s *Forest) Dump(rootId NodeId) {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
 	} else {
@@ -416,7 +418,7 @@ func (s *Forest) Dump(rootId NodeId) {
 // errors are detected, the Trie is to be considered in an invalid state and
 // the behaviour of all other operations is undefined.
 func (s *Forest) Check(rootId NodeId) error {
-	root, err := s.getNode(rootId)
+	root, err := s.GetNode(rootId)
 	if err != nil {
 		return err
 	}
@@ -425,7 +427,11 @@ func (s *Forest) Check(rootId NodeId) error {
 
 // -- NodeManager interface --
 
-func (s *Forest) getNode(id NodeId) (Node, error) {
+func (s *Forest) GetConfig() MptConfig {
+	return s.config
+}
+
+func (s *Forest) GetNode(id NodeId) (Node, error) {
 	// Start by checking the node cache.
 	res, found := s.nodeCache.Get(id)
 	if found {

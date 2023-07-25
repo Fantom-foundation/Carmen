@@ -249,19 +249,33 @@ func (m *MockNodeSource) EXPECT() *MockNodeSourceMockRecorder {
 	return m.recorder
 }
 
-// getNode mocks base method.
-func (m *MockNodeSource) getNode(arg0 NodeId) (Node, error) {
+// GetConfig mocks base method.
+func (m *MockNodeSource) GetConfig() MptConfig {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getNode", arg0)
+	ret := m.ctrl.Call(m, "GetConfig")
+	ret0, _ := ret[0].(MptConfig)
+	return ret0
+}
+
+// GetConfig indicates an expected call of GetConfig.
+func (mr *MockNodeSourceMockRecorder) GetConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockNodeSource)(nil).GetConfig))
+}
+
+// GetNode mocks base method.
+func (m *MockNodeSource) GetNode(arg0 NodeId) (Node, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNode", arg0)
 	ret0, _ := ret[0].(Node)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getNode indicates an expected call of getNode.
-func (mr *MockNodeSourceMockRecorder) getNode(arg0 interface{}) *gomock.Call {
+// GetNode indicates an expected call of GetNode.
+func (mr *MockNodeSourceMockRecorder) GetNode(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeSource)(nil).getNode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNode", reflect.TypeOf((*MockNodeSource)(nil).GetNode), arg0)
 }
 
 // MockNodeManager is a mock of NodeManager interface.
@@ -285,6 +299,35 @@ func NewMockNodeManager(ctrl *gomock.Controller) *MockNodeManager {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockNodeManager) EXPECT() *MockNodeManagerMockRecorder {
 	return m.recorder
+}
+
+// GetConfig mocks base method.
+func (m *MockNodeManager) GetConfig() MptConfig {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConfig")
+	ret0, _ := ret[0].(MptConfig)
+	return ret0
+}
+
+// GetConfig indicates an expected call of GetConfig.
+func (mr *MockNodeManagerMockRecorder) GetConfig() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockNodeManager)(nil).GetConfig))
+}
+
+// GetNode mocks base method.
+func (m *MockNodeManager) GetNode(arg0 NodeId) (Node, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNode", arg0)
+	ret0, _ := ret[0].(Node)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNode indicates an expected call of GetNode.
+func (mr *MockNodeManagerMockRecorder) GetNode(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNode", reflect.TypeOf((*MockNodeManager)(nil).GetNode), arg0)
 }
 
 // createAccount mocks base method.
@@ -349,21 +392,6 @@ func (m *MockNodeManager) createValue() (NodeId, *ValueNode, error) {
 func (mr *MockNodeManagerMockRecorder) createValue() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "createValue", reflect.TypeOf((*MockNodeManager)(nil).createValue))
-}
-
-// getNode mocks base method.
-func (m *MockNodeManager) getNode(arg0 NodeId) (Node, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getNode", arg0)
-	ret0, _ := ret[0].(Node)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// getNode indicates an expected call of getNode.
-func (mr *MockNodeManagerMockRecorder) getNode(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeManager)(nil).getNode), arg0)
 }
 
 // invalidateHash mocks base method.

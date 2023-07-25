@@ -16,7 +16,7 @@ type Hasher interface {
 	// HashSource implementation. Due to its recursive nature, multiple calls to the
 	// function may be nested and/or processed concurrently. Thus, implementations are
 	// required to be reentrant and thread-safe.
-	GetHash(Node, HashSource) (common.Hash, error)
+	GetHash(Node, NodeSource, HashSource) (common.Hash, error)
 }
 
 type HashSource interface {
@@ -29,7 +29,7 @@ type HashSource interface {
 type DirectHasher struct{}
 
 // GetHash implements the DirectHasher's hashing algorithm.
-func (h *DirectHasher) GetHash(node Node, source HashSource) (common.Hash, error) {
+func (h *DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (common.Hash, error) {
 	hash := common.Hash{}
 	if _, ok := node.(EmptyNode); ok {
 		return hash, nil
@@ -42,7 +42,7 @@ func (h *DirectHasher) GetHash(node Node, source HashSource) (common.Hash, error
 		hasher.Write(node.info.Balance[:])
 		hasher.Write(node.info.Nonce[:])
 		hasher.Write(node.info.CodeHash[:])
-		if hash, err := source.GetHashFor(node.state); err == nil {
+		if hash, err := source.GetHashFor(node.storage); err == nil {
 			hasher.Write(hash[:])
 		} else {
 			return hash, err
