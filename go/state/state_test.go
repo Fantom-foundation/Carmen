@@ -58,7 +58,11 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedSt
 			t.Parallel()
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s", config.name)
+				if _, ok := err.(UnsupportedConfiguration); ok {
+					t.Skipf("failed to initialize state %s: %v", config.name, err)
+				} else {
+					t.Fatalf("failed to initialize state %s: %v", config.name, err)
+				}
 			}
 			defer state.Close()
 
@@ -67,10 +71,17 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedSt
 	}
 }
 
+func getReferenceStateFor(params Parameters) (State, error) {
+	if params.Schema == 4 {
+		return NewGoMemoryS4State(params)
+	}
+	return NewCppInMemoryState(params)
+}
+
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
 	want := map[StateSchema]common.Hash{}
 	for _, s := range GetAllSchemas() {
-		ref, err := NewCppInMemoryState(Parameters{Directory: t.TempDir(), Schema: s})
+		ref, err := getReferenceStateFor(Parameters{Directory: t.TempDir(), Schema: s})
 		if err != nil {
 			t.Fatalf("failed to create reference state: %v", err)
 		}
@@ -89,7 +100,7 @@ func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
 			t.Fatalf("failed to compute hash: %v", err)
 		}
 		if want[config.schema] != got {
-			t.Errorf("Invalid hash, wanted %v, got %v", want, got)
+			t.Errorf("Invalid hash, wanted %v, got %v", want[config.schema], got)
 		}
 	})
 }
@@ -336,6 +347,10 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 func TestCreatingAccountClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
+		if err := s.createAccount(address1); err != nil {
+			t.Errorf("failed to create account: %v", err)
+		}
+
 		val, err := s.GetStorage(address1, key1)
 		if err != nil {
 			t.Errorf("failed to fetch storage value: %v", err)
@@ -370,9 +385,12 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 	})
 }
 
-func TestDeleteAccountClearsStorage(t *testing.T) {
+func TestDeletingAccountsClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
+		if err := s.createAccount(address1); err != nil {
+			t.Errorf("failed to create account: %v", err)
+		}
 
 		if err := s.setStorage(address1, key1, val1); err != nil {
 			t.Errorf("failed to update storage slot: %v", err)
@@ -403,7 +421,7 @@ func TestDeleteAccountClearsStorage(t *testing.T) {
 // TestArchive inserts data into the state and tries to obtain the history from the archive.
 func TestArchive(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -411,7 +429,11 @@ func TestArchive(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s; %s", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					}
 				}
 				defer s.Close()
 
@@ -496,13 +518,15 @@ func TestArchive(t *testing.T) {
 					t.Errorf("invalid slot value at block 2: %s, %s", value, err)
 				}
 
-				hash1, err := state1.GetHash()
-				if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
-					t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
-				}
-				hash2, err := state2.GetHash()
-				if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
-					t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
+				if archiveType != S4Archive {
+					hash1, err := state1.GetHash()
+					if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
+						t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
+					}
+					hash2, err := state2.GetHash()
+					if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
+						t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
+					}
 				}
 			})
 		}
@@ -517,7 +541,7 @@ func TestPersistentState(t *testing.T) {
 		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 			continue
 		}
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			archiveType := archiveType
 			config := config
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -526,7 +550,11 @@ func TestPersistentState(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s", t.Name())
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s; %s", t.Name(), err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", t.Name(), err)
+					}
 				}
 
 				// init state data
@@ -562,7 +590,11 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			original, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				if _, ok := err.(UnsupportedConfiguration); ok {
+					t.Skipf("failed to initialize state %s; %s", config.name, err)
+				} else {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
 			}
 			defer original.Close()
 
@@ -656,7 +688,11 @@ func TestSnapshotCanBeCreatedAndVerified(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			original, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				if _, ok := err.(UnsupportedConfiguration); ok {
+					t.Skipf("failed to initialize state %s; %s", config.name, err)
+				} else {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
 			}
 			defer original.Close()
 

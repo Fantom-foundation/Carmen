@@ -3,17 +3,20 @@ package archive_test
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"io"
-	"testing"
+	"github.com/Fantom-foundation/Carmen/go/state/s4"
 )
 
 type archiveFactory struct {
 	label      string
 	getArchive func(tempDir string) archive.Archive
+	customHash bool
 }
 
 func getArchiveFactories(tb testing.TB) []archiveFactory {
@@ -41,6 +44,17 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 				}
 				return &ldbArchiveWrapper{archive, db}
 			},
+		},
+		{
+			label: "S4",
+			getArchive: func(tempDir string) archive.Archive {
+				archive, err := s4.OpenArchiveTrie(tempDir)
+				if err != nil {
+					tb.Fatalf("failed to open S4 archive: %v", err)
+				}
+				return archive
+			},
+			customHash: true,
 		},
 	}
 }
@@ -97,51 +111,58 @@ func TestAddGet(t *testing.T) {
 					{addr1, common.Key{0x05}, common.Value{0x89}},
 				},
 			}); err != nil {
-				t.Fatalf("failed to add block 5; %s", err)
+				t.Fatalf("failed to add block 5; %v", err)
+			}
+			if err := a.Add(7, common.Update{}); err != nil {
+				t.Fatalf("failed to add block 7; %v", err)
 			}
 
 			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
+				t.Errorf("unexpected balance at block 1: %x; %v", balance, err)
 			}
 			if balance, err := a.GetBalance(3, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 3: %x; %s", balance, err)
+				t.Errorf("unexpected balance at block 3: %x; %v", balance, err)
 			}
 			if balance, err := a.GetBalance(5, addr1); err != nil || balance != (common.Balance{0x34}) {
-				t.Errorf("unexpected balance at block 5: %x; %s", balance, err)
+				t.Errorf("unexpected balance at block 5: %x; %v", balance, err)
 			}
 
 			if code, err := a.GetCode(3, addr1); err != nil || code != nil {
-				t.Errorf("unexpected code at block 0: %x; %s", code, err)
+				t.Errorf("unexpected code at block 0: %x; %v", code, err)
 			}
 			if code, err := a.GetCode(5, addr1); err != nil || !bytes.Equal(code, []byte{0x12, 0x23}) {
-				t.Errorf("unexpected code at block 5: %x; %s", code, err)
+				t.Errorf("unexpected code at block 5: %x; %v", code, err)
 			}
 
 			if nonce, err := a.GetNonce(4, addr1); err != nil || nonce != (common.Nonce{}) {
-				t.Errorf("unexpected nonce at block 0: %x; %s", nonce, err)
+				t.Errorf("unexpected nonce at block 0: %x; %v", nonce, err)
 			}
 			if nonce, err := a.GetNonce(5, addr1); err != nil || nonce != (common.Nonce{0x54}) {
-				t.Errorf("unexpected nonce at block 5: %x; %s", nonce, err)
+				t.Errorf("unexpected nonce at block 5: %x; %v", nonce, err)
 			}
 
 			if value, err := a.GetStorage(0, addr1, common.Key{0x05}); err != nil || value != (common.Value{}) {
-				t.Errorf("unexpected value at block 0: %x; %s", value, err)
+				t.Errorf("unexpected value at block 0: %x; %v", value, err)
 			}
 			if value, err := a.GetStorage(2, addr1, common.Key{0x05}); err != nil || value != (common.Value{0x47}) {
-				t.Errorf("unexpected value at block 2: %x; %s", value, err)
+				t.Errorf("unexpected value at block 2: %x; %v", value, err)
 			}
 			if value, err := a.GetStorage(6, addr1, common.Key{0x05}); err != nil || value != (common.Value{0x89}) {
-				t.Errorf("unexpected value at block 6: %x; %s", value, err)
+				t.Errorf("unexpected value at block 6: %x; %v", value, err)
 			}
 
-			if lastBlock, err := a.GetLastBlockHeight(); err != nil || lastBlock != 5 {
-				t.Errorf("unexpected last block height: %d; %s", lastBlock, err)
+			if lastBlock, err := a.GetLastBlockHeight(); err != nil || lastBlock != 7 {
+				t.Errorf("unexpected last block height: %d; %v", lastBlock, err)
+			}
+
+			if factory.customHash {
+				return
 			}
 			if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "9834327080d1ead8544edff892ae26c6fe0640dc13ded9c15338721081490b04" {
-				t.Errorf("unexpected hash of block 1: %x; %s", hash, err)
+				t.Errorf("unexpected hash of block 1: %x; %v", hash, err)
 			}
 			if hash, err := a.GetHash(5); err != nil || fmt.Sprintf("%x", hash) != "6c616faab374f93e9322e02452da86dbbbf10e84c826afb5b13db0e2ef6e71e8" {
-				t.Errorf("unexpected hash of block 5: %x; %s", hash, err)
+				t.Errorf("unexpected hash of block 5: %x; %v", hash, err)
 			}
 
 		})
@@ -185,33 +206,36 @@ func TestAccountDeleteCreate(t *testing.T) {
 			}
 
 			if exists, err := a.Exists(1, addr1); err != nil || exists != true {
-				t.Errorf("unexpected existence status at block 1: %t; %s", exists, err)
+				t.Errorf("unexpected existence status at block 1: %t; %v", exists, err)
 			}
 			if exists, err := a.Exists(5, addr1); err != nil || exists != false {
-				t.Errorf("unexpected existence status at block 1: %t; %s", exists, err)
+				t.Errorf("unexpected existence status at block 1: %t; %v", exists, err)
 			}
 			if exists, err := a.Exists(9, addr1); err != nil || exists != true {
-				t.Errorf("unexpected existence status at block 1: %t; %s", exists, err)
+				t.Errorf("unexpected existence status at block 1: %t; %v", exists, err)
 			}
 
 			if value, err := a.GetStorage(1, addr1, common.Key{0x05}); err != nil || value != (common.Value{0x47}) {
-				t.Errorf("unexpected value at block 1: %x; %s", value, err)
+				t.Errorf("unexpected value at block 1: %x; %v", value, err)
 			}
 			if value, err := a.GetStorage(5, addr1, common.Key{0x05}); err != nil || value != (common.Value{}) {
-				t.Errorf("unexpected value at block 5: %x; %s", value, err)
+				t.Errorf("unexpected value at block 5: %x; %v", value, err)
 			}
 			if value, err := a.GetStorage(9, addr1, common.Key{0x05}); err != nil || value != (common.Value{}) {
-				t.Errorf("unexpected value at block 9: %x; %s", value, err)
+				t.Errorf("unexpected value at block 9: %x; %v", value, err)
 			}
 
+			if factory.customHash {
+				return
+			}
 			if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "5631163004034afb5bd05e1a8ddfd4b00e26f3ab80da10be86542267a05b1103" {
-				t.Errorf("unexpected hash of block 1: %x; %s", hash, err)
+				t.Errorf("unexpected hash of block 1: %x; %v", hash, err)
 			}
 			if hash, err := a.GetHash(5); err != nil || fmt.Sprintf("%x", hash) != "3d97c83a6e0da0fb5ada88bb93d161cd62834e25336b131d51d1a8bd74f7e617" {
-				t.Errorf("unexpected hash of block 5: %x; %s", hash, err)
+				t.Errorf("unexpected hash of block 5: %x; %v", hash, err)
 			}
 			if hash, err := a.GetHash(9); err != nil || fmt.Sprintf("%x", hash) != "2be813b99a1b766bbcb9619ed4daa69b6c33397d916f55af6ea11742cec8b391" {
-				t.Errorf("unexpected hash of block 9: %x; %s", hash, err)
+				t.Errorf("unexpected hash of block 9: %x; %v", hash, err)
 			}
 		})
 	}
@@ -227,6 +251,9 @@ func TestAccountStatusOnly(t *testing.T) {
 				CreatedAccounts: []common.Address{addr1},
 			}); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
+			}
+			if err := a.Add(2, common.Update{}); err != nil {
+				t.Fatalf("failed to add block 2; %s", err)
 			}
 
 			if exists, err := a.Exists(1, addr1); err != nil || !exists {
@@ -259,7 +286,11 @@ func TestBalanceOnly(t *testing.T) {
 					{addr1, common.Balance{0x34}},
 				},
 			}); err != nil {
-				t.Fatalf("failed to add block 2; %s", err)
+				t.Fatalf("failed to add block 200; %s", err)
+			}
+
+			if err := a.Add(400, common.Update{}); err != nil {
+				t.Fatalf("failed to add block 400; %s", err)
 			}
 
 			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
