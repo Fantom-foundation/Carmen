@@ -2883,7 +2883,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhases(t *testing.T) {
 
 func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -2891,7 +2891,11 @@ func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s; %s", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					}
 				}
 				db := CreateStateDBUsing(state)
 				defer db.Close()
@@ -2911,7 +2915,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 
 func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -2919,7 +2923,11 @@ func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s; %s", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					}
 				}
 				db := CreateStateDBUsing(state)
 				defer db.Close()
@@ -2964,7 +2972,7 @@ func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 	want := map[StateSchema]common.Hash{}
 	for _, s := range GetAllSchemas() {
-		ref_state, err := NewCppInMemoryState(Parameters{Directory: t.TempDir(), Schema: s})
+		ref_state, err := getReferenceStateFor(Parameters{Directory: t.TempDir(), Schema: s})
 		if err != nil {
 			t.Fatalf("failed to create reference state: %v", err)
 		}
@@ -2982,7 +2990,11 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 				t.Parallel()
 				state, err := config.createState(t.TempDir())
 				if err != nil {
-					t.Fatalf("failed to initialize state %s", config.name)
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s: %v", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s: %v", config.name, err)
+					}
 				}
 				stateDb := CreateStateDBUsing(state)
 				defer stateDb.Close()
@@ -3094,7 +3106,7 @@ func TestPersistentStateDB(t *testing.T) {
 		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 			continue
 		}
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -3102,7 +3114,11 @@ func TestPersistentStateDB(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s", t.Name())
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s: %v", t.Name(), err)
+					} else {
+						t.Fatalf("failed to initialize state %s: %v", t.Name(), err)
+					}
 				}
 
 				stateDb := CreateStateDBUsing(s)
@@ -3144,7 +3160,7 @@ func TestPersistentStateDB(t *testing.T) {
 				stateDb.EndEpoch(1)
 
 				if err := stateDb.Close(); err != nil {
-					t.Errorf("Cannot close state: %e", err)
+					t.Errorf("Cannot close state: %v", err)
 				}
 
 				execSubProcessTest(t, dir, config.name, archiveType, "TestStateDBRead")
@@ -3202,7 +3218,7 @@ func TestStateDBRead(t *testing.T) {
 		val := toVal(uint64(i))
 		key := toKey(uint64(i))
 		if storage := stateDb.GetState(address1, key); storage != val {
-			t.Errorf("Unexpected value, val: %v != %v", storage, val)
+			t.Fatalf("Unexpected value, val: %v != %v", storage, val)
 		}
 	}
 
@@ -3277,7 +3293,7 @@ func toKey(key uint64) common.Key {
 
 func TestStateDBArchive(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -3285,7 +3301,11 @@ func TestStateDBArchive(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s; %s", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					}
 				}
 				defer s.Close()
 				stateDb := CreateStateDBUsing(s)
@@ -3346,7 +3366,11 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("failed to initialize state %s; %s", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					}
 				}
 				defer state.Close()
 

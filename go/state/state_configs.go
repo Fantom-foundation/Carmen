@@ -9,6 +9,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
+	"github.com/Fantom-foundation/Carmen/go/state/s4"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 
@@ -52,6 +53,7 @@ const (
 	NoArchive      ArchiveType = 0
 	LevelDbArchive ArchiveType = 1
 	SqliteArchive  ArchiveType = 2
+	S4Archive      ArchiveType = 3
 )
 
 func (a ArchiveType) String() string {
@@ -62,6 +64,8 @@ func (a ArchiveType) String() string {
 		return "LevelDbArchive"
 	case SqliteArchive:
 		return "SqliteArchive"
+	case S4Archive:
+		return "S4Archive"
 	}
 	return "unknown"
 }
@@ -71,7 +75,7 @@ type StateSchema uint8
 const defaultSchema StateSchema = 1
 
 func GetAllSchemas() []StateSchema {
-	return []StateSchema{1, 2, 3}
+	return []StateSchema{1, 2, 3, 4}
 }
 
 // Parameters struct defining configuration parameters for state instances.
@@ -81,12 +85,25 @@ type Parameters struct {
 	Archive   ArchiveType
 }
 
+// UnsupportedConfiguration is the type of error returned if unsupported configuration
+// parameters have been specified. The text may contain further details regarding the
+// unsupported feature.
+type UnsupportedConfiguration string
+
+func (u UnsupportedConfiguration) Error() string {
+	return string(u)
+}
+
 // NewGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
 func NewGoMemoryState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
+	if params.Schema == 4 {
+		return NewGoMemoryS4State(params)
+	}
+
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
 	accountsStore, err := storemem.NewStore[uint32, common.AccountState](common.AccountStateSerializer{}, common.PageSize, htmemory.CreateHashTreeFactory(HashTreeFactor))
 	if err != nil {
@@ -194,6 +211,10 @@ func NewGoFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
+	if params.Schema == 4 {
+		return NewGoFileS4State(params)
+	}
+
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
@@ -364,6 +385,10 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
+	if params.Schema == 4 {
+		return NewGoFileS4State(params)
+	}
+
 	indexPath, storePath, err := createSubDirs(params.Directory)
 	if err != nil {
 		return nil, err
@@ -836,6 +861,14 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 			return nil, nil, err
 		}
 		arch, err := sqlite.NewArchive(path + string(filepath.Separator) + "archive.sqlite")
+		return arch, nil, err
+
+	case S4Archive:
+		path, err := getArchivePath()
+		if err != nil {
+			return nil, nil, err
+		}
+		arch, err := s4.OpenArchiveTrie(path)
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)

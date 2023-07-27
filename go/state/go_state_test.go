@@ -39,9 +39,11 @@ func initGoStates() []namedStateConfig {
 		{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
+		{"Memory 4", 4, castToDirectUpdateState(NewGoMemoryS4State)},
 		{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
 		{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
 		{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
+		{"File 4", 4, castToDirectUpdateState(NewGoFileS4State)},
 		{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
 		{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
 		{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
@@ -110,7 +112,7 @@ func TestBasicOperations(t *testing.T) {
 			if err := state.setBalance(address2, common.Balance{45}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setStorage(address3, key1, common.Value{67}); err != nil {
+			if err := state.setStorage(address1, key1, common.Value{67}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
@@ -119,22 +121,22 @@ func TestBasicOperations(t *testing.T) {
 
 			// fetch values
 			if val, err := state.Exists(address1); err != nil || val != true {
-				t.Errorf("Created account does not exists: Val: %t, Err: %s", val, err)
+				t.Errorf("Created account does not exists: Val: %t, Err: %v", val, err)
 			}
 			if val, err := state.GetNonce(address1); (err != nil || val != common.Nonce{123}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetBalance(address2); (err != nil || val != common.Balance{45}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
-			if val, err := state.GetStorage(address3, key1); (err != nil || val != common.Value{67}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+			if val, err := state.GetStorage(address1, key1); (err != nil || val != common.Value{67}) {
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetCode(address1); err != nil || !bytes.Equal(val, []byte{0x12, 0x34}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetCodeSize(address1); err != nil || val != 2 {
-				t.Errorf("Invalid code size or error returned: Val: %d, Err: %s", val, err)
+				t.Errorf("Invalid code size or error returned: Val: %d, Err: %v", val, err)
 			}
 
 			// delete account
@@ -147,7 +149,46 @@ func TestBasicOperations(t *testing.T) {
 
 			// fetch wrong combinations
 			if val, err := state.GetStorage(address1, key1); (err != nil || val != common.Value{}) {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
+			}
+		})
+	}
+}
+
+func TestDeletingAccounts(t *testing.T) {
+	for _, config := range initGoStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+			}
+			defer state.Close()
+
+			// fill-in values
+			if err := state.createAccount(address1); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if err := state.setNonce(address1, common.Nonce{123}); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if err := state.setBalance(address2, common.Balance{45}); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+
+			// fetch values
+			if val, err := state.Exists(address1); err != nil || val != true {
+				t.Errorf("Created account does not exists: Val: %t, Err: %v", val, err)
+			}
+
+			// delete account
+			if err := state.deleteAccount(address1); err != nil {
+				t.Errorf("Error: %s", err)
+			}
+			if val, err := state.Exists(address1); err != nil || val != false {
+				t.Errorf("Deleted account is not deleted: Val: %t, Err: %s", val, err)
 			}
 		})
 	}
@@ -161,6 +202,11 @@ func TestMoreInserts(t *testing.T) {
 				t.Fatalf("failed to initialize state %s; %s", config.name, err)
 			}
 			defer state.Close()
+
+			// create accounts since setting values to non-existing accounts may be ignored
+			state.setNonce(address1, common.ToNonce(12))
+			state.setNonce(address2, common.ToNonce(12))
+			state.setNonce(address3, common.ToNonce(12))
 
 			// insert more combinations, so we do not have only zero-indexes everywhere
 			_ = state.setStorage(address1, key1, val1)
@@ -176,20 +222,19 @@ func TestMoreInserts(t *testing.T) {
 			_ = state.setStorage(address3, key3, val3)
 
 			if val, err := state.GetStorage(address1, key3); err != nil || val != val3 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address2, key1); err != nil || val != val1 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address3, key2); err != nil || val != val2 {
-				t.Errorf("Invalid value or error returned: Val: %s, Err: %s", val, err)
+				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 		})
 	}
 }
 
-func TestHashing(t *testing.T) {
-	var hashes = [][]common.Hash{nil, nil, nil, nil}
+func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
@@ -198,45 +243,108 @@ func TestHashing(t *testing.T) {
 			}
 			defer state.Close()
 
+			code1 := []byte{1, 2, 3}
+
+			// create an account and set some of its properties
+			state.createAccount(address1)
+			state.setBalance(address1, balance1)
+			state.setNonce(address1, nonce1)
+			state.setCode(address1, code1)
+			state.setStorage(address1, key1, val1)
+
+			if exists, err := state.Exists(address1); !exists || err != nil {
+				t.Errorf("account does not exist, err %v", err)
+			}
+
+			if got, err := state.GetBalance(address1); got != balance1 || err != nil {
+				t.Errorf("unexpected balance, wanted %v, got %v, err %v", balance1, got, err)
+			}
+
+			if got, err := state.GetNonce(address1); got != nonce1 || err != nil {
+				t.Errorf("unexpected nonce, wanted %v, got %v, err %v", nonce1, got, err)
+			}
+
+			if got, err := state.GetCode(address1); !bytes.Equal(got, code1) || err != nil {
+				t.Errorf("unexpected code, wanted %v, got %v, err %v", code1, got, err)
+			}
+
+			if got, err := state.GetStorage(address1, key1); got != val1 || err != nil {
+				t.Errorf("unexpected storage, wanted %v, got %v, err %v", val1, got, err)
+			}
+
+			// re-creating the account preserves everything but the state.
+			state.createAccount(address1)
+
+			if exists, err := state.Exists(address1); !exists || err != nil {
+				t.Errorf("account should still exist, err %v", err)
+			}
+			if got, err := state.GetBalance(address1); got != balance1 || err != nil {
+				t.Errorf("unexpected balance, wanted %v, got %v, err %v", balance1, got, err)
+			}
+			if got, err := state.GetNonce(address1); got != nonce1 || err != nil {
+				t.Errorf("unexpected nonce, wanted %v, got %v, err %v", nonce1, got, err)
+			}
+			if got, err := state.GetCode(address1); !bytes.Equal(got, code1) || err != nil {
+				t.Errorf("unexpected code, wanted %v, got %v, err %v", code1, got, err)
+			}
+			if got, err := state.GetStorage(address1, key1); got != val0 || err != nil {
+				t.Errorf("failed to clear the storage, wanted %v, got %v, err %v", val0, got, err)
+			}
+
+		})
+	}
+}
+
+func TestHashing(t *testing.T) {
+	var hashes = [][]common.Hash{nil, nil, nil, nil, nil}
+	for _, config := range initGoStates() {
+		t.Run(config.name, func(t *testing.T) {
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %v", config.name, err)
+			}
+			defer state.Close()
+
 			initialHash, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
-			}
-
-			_ = state.setStorage(address1, key1, val1)
-			hash1, err := state.GetHash()
-			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
-			}
-			if initialHash == hash1 {
-				t.Errorf("hash of changed state not changed; %s", err)
-			}
-
-			_ = state.setBalance(address1, balance1)
-			hash2, err := state.GetHash()
-			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
-			}
-			if initialHash == hash2 || hash1 == hash2 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 
 			_ = state.createAccount(address1)
+			hash1, err := state.GetHash()
+			if err != nil {
+				t.Fatalf("unable to get state hash; %v", err)
+			}
+
+			_ = state.setStorage(address1, key1, val1)
+			hash2, err := state.GetHash()
+			if err != nil {
+				t.Fatalf("unable to get state hash; %v", err)
+			}
+			if initialHash == hash1 {
+				t.Errorf("hash of changed state not changed")
+			}
+
+			_ = state.setBalance(address1, balance1)
 			hash3, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
+			if initialHash == hash2 || hash1 == hash2 {
+				t.Errorf("hash of changed state not changed")
+			}
+
 			if initialHash == hash3 || hash1 == hash3 || hash2 == hash3 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Errorf("hash of changed state not changed")
 			}
 
 			_ = state.setCode(address1, []byte{0x12, 0x34, 0x56, 0x78})
 			hash4, err := state.GetHash()
 			if err != nil {
-				t.Fatalf("unable to get state hash; %s", err)
+				t.Fatalf("unable to get state hash; %v", err)
 			}
 			if initialHash == hash4 || hash3 == hash4 {
-				t.Errorf("hash of changed state not changed; %s", err)
+				t.Errorf("hash of changed state not changed")
 			}
 			hashes[int(config.schema)] = append(hashes[int(config.schema)], hash4) // store the last hash
 		})
@@ -340,7 +448,7 @@ func TestGetMemoryFootprint(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to get state memory footprint; %s", err)
 			}
-			if !strings.Contains(str, "hashTree") {
+			if config.schema <= 3 && !strings.Contains(str, "hashTree") {
 				t.Errorf("memory footprint string does not contain any hashTree")
 			}
 		})
