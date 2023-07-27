@@ -8,13 +8,7 @@ import (
 )
 
 func TestAccountsAreInitiallyUnknown(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		account_state, _ := state.Exists(address1)
 		if account_state != false {
 			t.Errorf("Initial account is not unknown, got %v", account_state)
@@ -23,13 +17,7 @@ func TestAccountsAreInitiallyUnknown(t *testing.T) {
 }
 
 func TestAccountsCanBeCreated(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		state.createAccount(address1)
 		account_state, _ := state.Exists(address1)
 		if account_state != true {
@@ -39,13 +27,7 @@ func TestAccountsCanBeCreated(t *testing.T) {
 }
 
 func TestAccountsCanBeDeleted(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		state.createAccount(address1)
 		state.deleteAccount(address1)
 		account_state, _ := state.Exists(address1)
@@ -56,13 +38,7 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 }
 
 func TestReadUninitializedBalance(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		balance, err := state.GetBalance(address1)
 		if err != nil {
 			t.Fatalf("Error fetching balance: %v", err)
@@ -74,14 +50,8 @@ func TestReadUninitializedBalance(t *testing.T) {
 }
 
 func TestWriteAndReadBalance(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
-		err = state.setBalance(address1, balance1)
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
+		err := state.setBalance(address1, balance1)
 		if err != nil {
 			t.Fatalf("Error updating balance: %v", err)
 		}
@@ -96,13 +66,7 @@ func TestWriteAndReadBalance(t *testing.T) {
 }
 
 func TestReadUninitializedNonce(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		nonce, err := state.GetNonce(address1)
 		if err != nil {
 			t.Fatalf("Error fetching nonce: %v", err)
@@ -114,14 +78,8 @@ func TestReadUninitializedNonce(t *testing.T) {
 }
 
 func TestWriteAndReadNonce(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
-		err = state.setNonce(address1, nonce1)
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
+		err := state.setNonce(address1, nonce1)
 		if err != nil {
 			t.Fatalf("Error updating nonce: %v", err)
 		}
@@ -136,13 +94,7 @@ func TestWriteAndReadNonce(t *testing.T) {
 }
 
 func TestReadUninitializedSlot(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		value, err := state.GetStorage(address1, key1)
 		if err != nil {
 			t.Fatalf("Error fetching storage slot: %v", err)
@@ -154,14 +106,8 @@ func TestReadUninitializedSlot(t *testing.T) {
 }
 
 func TestWriteAndReadSlot(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
-		err = state.setStorage(address1, key1, val1)
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
+		err := state.setStorage(address1, key1, val1)
 		if err != nil {
 			t.Fatalf("Error updating storage: %v", err)
 		}
@@ -196,13 +142,7 @@ func getTestCodes() [][]byte {
 }
 
 func TestSetAndGetCode(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		for _, code := range getTestCodes() {
 			err := state.setCode(address1, code)
 			if err != nil {
@@ -227,13 +167,7 @@ func TestSetAndGetCode(t *testing.T) {
 }
 
 func TestSetAndGetCodeHash(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, config *namedStateConfig) {
-		state, err := config.createState(t.TempDir())
-		if err != nil {
-			t.Fatalf("failed to initialize state %s", config.name)
-		}
-		defer state.Close()
-
+	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		for _, code := range getTestCodes() {
 			err := state.setCode(address1, code)
 			if err != nil {
@@ -263,12 +197,21 @@ func initCppStates() []namedStateConfig {
 	return list
 }
 
-func runForEachCppConfig(t *testing.T, test func(*testing.T, *namedStateConfig)) {
+func runForEachCppConfig(t *testing.T, test func(*testing.T, directUpdateState)) {
 	for _, config := range initCppStates() {
 		config := config
 		t.Run(config.name, func(t *testing.T) {
 			t.Parallel()
-			test(t, &config)
+			state, err := config.createState(t.TempDir())
+			if err != nil {
+				if _, ok := err.(UnsupportedConfiguration); ok {
+					t.Skipf("failed to initialize state %s: %v", config.name, err)
+				} else {
+					t.Fatalf("failed to initialize state %s: %v", config.name, err)
+				}
+			}
+			defer state.Close()
+			test(t, state)
 		})
 	}
 }
