@@ -11,29 +11,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-var (
-	address1 = common.Address{0x01}
-	address2 = common.Address{0x02}
-	address3 = common.Address{0x03}
-
-	key1 = common.Key{0x01}
-	key2 = common.Key{0x02}
-	key3 = common.Key{0x03}
-
-	val0 = common.Value{0x00}
-	val1 = common.Value{0x01}
-	val2 = common.Value{0x02}
-	val3 = common.Value{0x03}
-
-	balance1 = common.Balance{0x01}
-	balance2 = common.Balance{0x02}
-	balance3 = common.Balance{0x03}
-
-	nonce1 = common.Nonce{0x01}
-	nonce2 = common.Nonce{0x02}
-	nonce3 = common.Nonce{0x03}
-)
-
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
 		{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
@@ -51,6 +28,7 @@ func initGoStates() []namedStateConfig {
 		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
 		{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
 		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		{"File Index and Store 3 Ldb Archive", 3, castToDirectUpdateStatePathOnly(NewScheme3GoFileLdbArchiveState)},
 	}
 }
 

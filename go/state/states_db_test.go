@@ -1,0 +1,491 @@
+package state
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
+
+func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				state, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				db := CreateStateDBUsing(state)
+				defer db.Close()
+
+				for i := 0; i < 10; i++ {
+					load := db.StartBulkLoad(uint64(i))
+					load.CreateAccount(address1)
+					load.SetNonce(address1, uint64(i))
+					if err := load.Close(); err != nil {
+						t.Errorf("bulk-insert failed: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				state, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				db := CreateStateDBUsing(state)
+				defer db.Close()
+
+				for i := 0; i < 5; i++ {
+					// Run a bulk-load update (creates one block)
+					load := db.StartBulkLoad(uint64(i * 2))
+					load.CreateAccount(address1)
+					load.SetNonce(address1, uint64(i))
+					if err := load.Close(); err != nil {
+						t.Errorf("bulk-insert failed: %v", err)
+					}
+
+					// Run a regular block.
+					db.BeginBlock()
+					db.BeginTransaction()
+					if !db.Exist(address1) {
+						t.Errorf("account 1 should exist")
+					}
+					db.Suicide(address1)
+					db.EndTransaction()
+					db.EndBlock(uint64(i*2 + 1))
+				}
+			})
+		}
+	}
+}
+
+func TestCarmenStateHashIsDeterministicForEmptyState(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		// nothing
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForSingleUpdate(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetState(address1, key1, val1)
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForMultipleUpdate(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetState(address1, key1, val1)
+		s.SetState(address2, key2, val2)
+		s.SetState(address3, key3, val3)
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForMultipleAccountCreations(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.CreateAccount(address1)
+		s.CreateAccount(address2)
+		s.CreateAccount(address3)
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForMultipleAccountModifications(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.CreateAccount(address1)
+		s.CreateAccount(address2)
+		s.CreateAccount(address3)
+		s.Suicide(address2)
+		s.Suicide(address1)
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForMultipleBalanceUpdates(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.AddBalance(address1, big.NewInt(12))
+		s.AddBalance(address2, big.NewInt(14))
+		s.AddBalance(address3, big.NewInt(16))
+		s.SubBalance(address3, big.NewInt(8))
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForMultipleNonceUpdates(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetNonce(address1, 12)
+		s.SetNonce(address2, 14)
+		s.SetNonce(address3, 18)
+	})
+}
+
+func TestCarmenStateHashIsDeterministicForMultipleCodeUpdates(t *testing.T) {
+	testCarmenStateDbHashAfterModification(t, func(s StateDB) {
+		s.SetCode(address1, []byte{0xAC})
+		s.SetCode(address2, []byte{0xDC})
+		s.SetCode(address3, []byte{0x20})
+	})
+}
+
+func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
+	want := map[StateSchema]common.Hash{}
+	for _, s := range GetAllSchemas() {
+		ref_state, err := NewCppInMemoryState(Parameters{Directory: t.TempDir(), Schema: s})
+		if err != nil {
+			t.Fatalf("failed to create reference state: %v", err)
+		}
+		ref := CreateStateDBUsing(ref_state)
+		defer ref.Close()
+		mod(ref)
+		ref.EndTransaction()
+		ref.EndBlock(1)
+		want[s] = ref.GetHash()
+	}
+	for i := 0; i < 3; i++ {
+		for _, config := range initStates() {
+			config := config
+			t.Run(fmt.Sprintf("%v/run=%d", config.name, i), func(t *testing.T) {
+				t.Parallel()
+				state, err := config.createState(t.TempDir())
+				if err != nil {
+					t.Fatalf("failed to initialize state %s", config.name)
+				}
+				stateDb := CreateStateDBUsing(state)
+				defer stateDb.Close()
+
+				mod(stateDb)
+				stateDb.EndTransaction()
+				stateDb.EndBlock(1)
+				if got := stateDb.GetHash(); want[config.schema] != got {
+					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
+				}
+			})
+		}
+	}
+}
+
+const numSlots = 1000
+
+// TestPersistentStateDB modifies stateDB first, then it is closed and is re-opened in another process,
+// and it is tested that data are available, i.e. all was successfully persisted
+func TestPersistentStateDB(t *testing.T) {
+	for _, config := range initStates() {
+		// skip in-memory
+		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
+			continue
+		}
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s", t.Name())
+				}
+
+				stateDb := CreateStateDBUsing(s)
+
+				stateDb.BeginEpoch()
+				stateDb.BeginBlock()
+				stateDb.BeginTransaction()
+
+				// init state DB data
+				stateDb.CreateAccount(address1)
+				stateDb.AddBalance(address1, big.NewInt(153))
+				stateDb.SetNonce(address1, 58)
+				stateDb.SetCode(address1, []byte{1, 2, 3})
+
+				// insert number of slots to address 1
+				for i := 0; i < numSlots; i++ {
+					val := toVal(uint64(i))
+					stateDb.SetState(address1, toKey(uint64(i)), val)
+				}
+
+				stateDb.EndTransaction()
+				stateDb.EndBlock(1)
+				stateDb.BeginBlock()
+				stateDb.BeginTransaction()
+
+				stateDb.CreateAccount(address2)
+				stateDb.AddBalance(address2, big.NewInt(6789))
+				stateDb.SetNonce(address2, 91)
+				stateDb.SetCode(address2, []byte{3, 2, 1})
+
+				// insert number of slots to address 2
+				for i := 0; i < numSlots; i++ {
+					val := toVal(uint64(i + numSlots))
+					stateDb.SetState(address2, toKey(uint64(i)), val)
+				}
+
+				stateDb.EndTransaction()
+				stateDb.EndBlock(2)
+				stateDb.EndEpoch(1)
+
+				if err := stateDb.Close(); err != nil {
+					t.Errorf("Cannot close state: %e", err)
+				}
+
+				execSubProcessTest(t, dir, config.name, archiveType, "TestStateDBRead")
+			})
+		}
+	}
+}
+
+// TestStateDBRead verifies data are available in a stateDB.
+// The given state reads the data from the given directory and verifies the data are present.
+// Name of the index and directory is provided as command line arguments
+func TestStateDBRead(t *testing.T) {
+	// do not runt this test stand-alone
+	if *stateDir == "DEFAULT" {
+		return
+	}
+
+	s := createState(t, *stateImpl, *stateDir, *archiveImpl)
+	defer func() {
+		_ = s.Close()
+	}()
+
+	stateDb := CreateStateDBUsing(s)
+
+	if state := stateDb.Exist(address1); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if state := stateDb.Exist(address2); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+
+	if balance := stateDb.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
+	}
+	if balance := stateDb.GetBalance(address2); balance.Cmp(big.NewInt(6789)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 6789)
+	}
+
+	if nonce := stateDb.GetNonce(address1); nonce != 58 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 58)
+	}
+	if nonce := stateDb.GetNonce(address2); nonce != 91 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 91)
+	}
+
+	if code := stateDb.GetCode(address1); bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{1, 2, 3})
+	}
+	if code := stateDb.GetCode(address2); bytes.Compare(code, []byte{3, 2, 1}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{3, 2, 1})
+	}
+
+	// slots in address 1
+	for i := 0; i < numSlots; i++ {
+		val := toVal(uint64(i))
+		key := toKey(uint64(i))
+		if storage := stateDb.GetState(address1, key); storage != val {
+			t.Errorf("Unexpected value, val: %v != %v", storage, val)
+		}
+	}
+
+	// slots in address 2
+	for i := 0; i < numSlots; i++ {
+		val := toVal(uint64(i + numSlots))
+		key := toKey(uint64(i))
+		if storage := stateDb.GetState(address2, key); storage != val {
+			t.Errorf("Unexpected value, val: %v != %v", storage, val)
+		}
+	}
+
+	// state in archive
+	as1, err := stateDb.GetArchiveStateDB(1)
+	if as1 == nil || err != nil {
+		t.Fatalf("Unable to get archive stateDB, err: %v", err)
+	}
+	if state := as1.Exist(address1); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if state := as1.Exist(address2); state != false {
+		t.Errorf("Unexpected value, val: %v != %v", state, false)
+	}
+	if balance := as1.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
+	}
+	if balance := as1.GetBalance(address2); balance.Cmp(big.NewInt(0)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 0)
+	}
+
+	as2, err := stateDb.GetArchiveStateDB(2)
+	if as2 == nil || err != nil {
+		t.Fatalf("Unable to get archive stateDB, err: %v", err)
+	}
+	if state := as2.Exist(address1); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if state := as2.Exist(address2); state != true {
+		t.Errorf("Unexpected value, val: %v != %v", state, true)
+	}
+	if balance := as2.GetBalance(address1); balance.Cmp(big.NewInt(153)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 153)
+	}
+	if balance := as2.GetBalance(address2); balance.Cmp(big.NewInt(6789)) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", balance, 6789)
+	}
+	if nonce := as2.GetNonce(address1); nonce != 58 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 58)
+	}
+	if nonce := as2.GetNonce(address2); nonce != 91 {
+		t.Errorf("Unexpected value, val: %v != %v", nonce, 91)
+	}
+	if code := as2.GetCode(address1); bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{1, 2, 3})
+	}
+	if code := as2.GetCode(address2); bytes.Compare(code, []byte{3, 2, 1}) != 0 {
+		t.Errorf("Unexpected value, val: %v != %v", code, []byte{3, 2, 1})
+	}
+}
+
+func toVal(key uint64) common.Value {
+	keyBytes := make([]byte, 32)
+	binary.BigEndian.PutUint64(keyBytes, key)
+	return common.ValueSerializer{}.FromBytes(keyBytes)
+}
+
+func toKey(key uint64) common.Key {
+	keyBytes := make([]byte, 32)
+	binary.BigEndian.PutUint64(keyBytes, key)
+	return common.KeySerializer{}.FromBytes(keyBytes)
+}
+
+func TestStateDBArchive(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive} {
+			config := config
+			archiveType := archiveType
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				defer s.Close()
+				stateDb := CreateStateDBUsing(s)
+
+				stateDb.AddBalance(address2, big.NewInt(22))
+
+				bl := stateDb.StartBulkLoad(0)
+				bl.CreateAccount(address1)
+				bl.SetBalance(address1, big.NewInt(12))
+				if err := bl.Close(); err != nil {
+					t.Fatalf("failed to bulkload StateDB with archive; %s", err)
+				}
+
+				stateDb.BeginBlock()
+				stateDb.AddBalance(address1, big.NewInt(22))
+				stateDb.EndBlock(2)
+
+				if err := stateDb.Flush(); err != nil { // wait until archives are written
+					t.Fatalf("failed to flush StateDB; %s", err)
+				}
+
+				state1, err := stateDb.GetArchiveStateDB(1)
+				if err != nil {
+					t.Fatalf("failed to get state of block 1; %s", err)
+				}
+
+				state2, err := stateDb.GetArchiveStateDB(2)
+				if err != nil {
+					t.Fatalf("failed to get state of block 2; %s", err)
+				}
+
+				if exist := state1.Exist(address1); err != nil || exist != true {
+					t.Errorf("invalid account state at block 1: %t", exist)
+				}
+				if exist := state2.Exist(address1); err != nil || exist != true {
+					t.Errorf("invalid account state at block 2: %t", exist)
+				}
+				if balance := state1.GetBalance(address1); balance.Cmp(big.NewInt(12)) != 0 {
+					t.Errorf("invalid balance at block 1: %s", balance)
+				}
+				if balance := state2.GetBalance(address1); balance.Cmp(big.NewInt(34)) != 0 {
+					t.Errorf("invalid balance at block 2: %s", balance)
+				}
+			})
+		}
+	}
+}
+
+func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
+	const N = 10  // number of concurrent goroutines
+	const M = 100 // number of updates per goroutine
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{NoArchive /*LevelDbArchive, SqliteArchive*/} {
+			config := config
+			archiveType := archiveType
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				state, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				}
+				defer state.Close()
+
+				// Have multiple goroutines access the state concurrently.
+				ready := sync.WaitGroup{}
+				ready.Add(N)
+				done := sync.WaitGroup{}
+				done.Add(N)
+				for i := 0; i < N; i++ {
+					isPrimary := i == 0
+					go func() {
+						defer done.Done()
+						// Create a state and wait for other go-routines to be ready.
+						stateDb := CreateStateDBUsing(state)
+						ready.Done()
+						ready.Wait()
+
+						// Perform concurrent accesses.
+						block := 0
+						for j := 0; j < M; j++ {
+							stateDb.BeginBlock()
+							stateDb.BeginTransaction()
+							// Perform a read + update operation.
+							stateDb.AddBalance(address1, big.NewInt(1))
+							stateDb.EndTransaction()
+							if isPrimary {
+								stateDb.EndBlock(uint64(block))
+								block++
+							} else {
+								stateDb.(*stateDB).reset()
+							}
+						}
+					}()
+				}
+				done.Wait()
+
+				balance, err := state.GetBalance(address1)
+				if err != nil {
+					t.Fatalf("reading the final balance failed")
+				}
+				if got, want := balance.ToBigInt().Int64(), int64(M); got != want {
+					t.Fatalf("invalid final balance, wanted %d, got %d", want, got)
+				}
+			})
+		}
+	}
+}

@@ -40,6 +40,16 @@ func castToDirectUpdateState(factory func(params Parameters) (State, error)) fun
 	}
 }
 
+func castToDirectUpdateStatePathOnly(factory func(path string) (State, error)) func(params Parameters) (directUpdateState, error) {
+	return func(params Parameters) (directUpdateState, error) {
+		state, err := factory(params.Directory)
+		if err != nil {
+			return nil, err
+		}
+		return state.(directUpdateState), nil
+	}
+}
+
 func initStates() []namedStateConfig {
 	var res []namedStateConfig
 	for _, s := range initCppStates() {

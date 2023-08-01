@@ -1,8 +1,8 @@
 package cache
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 )
@@ -21,7 +21,8 @@ var (
 )
 
 func TestStoreCacheFilled(t *testing.T) {
-	mem, _ := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(BranchingFactor))
+	path := t.TempDir()
+	mem, _ := pagedfile.NewStore[uint32, common.Value](path, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(path, BranchingFactor), 10000)
 	store := NewStore[uint32, common.Value](mem, CacheCapacity)
 
 	if _, err := store.Get(0); err != nil {
@@ -54,7 +55,8 @@ func TestStoreCacheFilled(t *testing.T) {
 }
 
 func TestStoreCacheEviction(t *testing.T) {
-	mem, _ := memory.NewStore[uint32, common.Value](common.ValueSerializer{}, PageSize, htmemory.CreateHashTreeFactory(BranchingFactor))
+	path := t.TempDir()
+	mem, _ := pagedfile.NewStore[uint32, common.Value](path, common.ValueSerializer{}, PageSize, htfile.CreateHashTreeFactory(path, BranchingFactor), 10000)
 	store := NewStore[uint32, common.Value](mem, CacheCapacity)
 
 	// fill in store

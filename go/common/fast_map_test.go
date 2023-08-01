@@ -181,7 +181,6 @@ func getMapConfigs() []namedMapConfig {
 		{"BuildIn", func() Map[Key, int] { return NewBuildInMap[Key, int]() }},
 		{"FastMap", func() Map[Key, int] { return NewFastMap[Key, int](KeyShortHasher{}) }},
 		{"SpecializedKeyIntMap", func() Map[Key, int] { return NewKeyIntMap() }},
-		{"SortedMap", func() Map[Key, int] { return NewSortedMap[Key, int](kFastMapBuckets, KeyComparator{}) }},
 	}
 }
 

@@ -1,10 +1,10 @@
 package cache
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
-	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -16,7 +16,12 @@ var (
 )
 
 func TestIndexCacheFilled(t *testing.T) {
-	index := NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](common.AddressSerializer{}), 3)
+	path := t.TempDir()
+	wrapped, err := file.NewIndex[common.Address, uint32](path, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressHasher{}, common.AddressComparator{})
+	if err != nil {
+		t.Fatalf("cannot create index: %s", err)
+	}
+	index := NewIndex[common.Address, uint32](wrapped, 3)
 
 	_, _ = index.GetOrAdd(address1)
 	val, exists := index.cache.Get(address1)
@@ -26,7 +31,12 @@ func TestIndexCacheFilled(t *testing.T) {
 }
 
 func TestIndexCacheEviction(t *testing.T) {
-	index := NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](common.AddressSerializer{}), 3)
+	path := t.TempDir()
+	wrapped, err := file.NewIndex[common.Address, uint32](path, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressHasher{}, common.AddressComparator{})
+	if err != nil {
+		t.Fatalf("cannot create index: %s", err)
+	}
+	index := NewIndex[common.Address, uint32](wrapped, 3)
 
 	_, _ = index.GetOrAdd(address1)
 	_, _ = index.GetOrAdd(address2)
@@ -50,8 +60,13 @@ func TestIndexCacheEviction(t *testing.T) {
 var ErrNotFound = index.ErrNotFound
 
 func TestNonExistingValuesAreNotCached(t *testing.T) {
-	index := NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](common.AddressSerializer{}), 3)
-	_, err := index.Get(address1)
+	path := t.TempDir()
+	wrapped, err := file.NewIndex[common.Address, uint32](path, common.AddressSerializer{}, common.Identifier32Serializer{}, common.AddressHasher{}, common.AddressComparator{})
+	if err != nil {
+		t.Fatalf("cannot create index: %s", err)
+	}
+	index := NewIndex[common.Address, uint32](wrapped, 3)
+	_, err = index.Get(address1)
 	if err != ErrNotFound {
 		t.Errorf("Address 1 should not exist")
 	}

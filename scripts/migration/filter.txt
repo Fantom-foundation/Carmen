@@ -1,0 +1,101 @@
+README.md
+go.mod
+go.sum
+
+backend/composed_snapshot.go
+backend/composed_snapshot_test.go
+backend/snapshot.go
+backend/snapshot_test.go
+
+backend/archive/ldb/
+backend/archive/account_update.go
+backend/archive/archive.go
+# backend/archive/archive_test.go
+
+backend/array
+
+backend/depot/cache/
+backend/depot/file/
+backend/depot/depot.go
+# backend/depot/depot_test.go
+backend/depot/snapshot.go
+backend/depot/snapshot_test.go
+
+backend/hashtree/htfile/
+backend/hashtree/hashtree.go
+# backend/hashtree/hashtree_test.go
+backend/hashtree/reduction.go
+backend/hashtree/reduction_test.go
+backend/hashtree/nohash.go
+
+backend/index/cache/
+
+backend/index/file/file.go
+backend/index/file/file_test.go
+backend/index/file/indexpage.go
+backend/index/file/indexpage_test.go
+backend/index/file/linearhashmap.go
+backend/index/file/linearhashmap_test.go
+backend/index/file/pageid.go
+backend/index/file/pagelist.go
+backend/index/file/pagelist_test.go
+backend/index/file/pagestorage.go
+backend/index/file/pagestorage_test.go
+
+backend/index/indexhash/
+
+backend/index/index.go
+# backend/index/index_test.go
+backend/index/snapshot.go
+backend/index/snapshot_test.go
+
+backend/memsnap/
+
+backend/pagepool/
+
+backend/store/cache/
+
+backend/store/pagedfile/
+
+# Used only from state/go_schema3.go#L13 (snapsync)
+backend/store/memory/memory.go
+
+backend/store/snapshot.go
+backend/store/store.go
+# backend/store/store_test.go
+
+common/cache.go
+common/cache_test.go
+common/comparator_test.go
+common/fast_map.go
+common/fast_map_test.go
+common/interfaces.go
+common/ldb.go
+common/linearhashbase.go
+common/linearhashbase_test.go
+common/log.go
+common/mem_footprint.go
+common/mem_footprint_test.go
+common/scheme.go
+common/schema3.go
+common/schemas2_3.go
+common/serializers.go
+common/serializers_test.go
+common/types.go
+common/types_test.go
+common/testutils.go
+common/update.go
+common/update_test.go
+
+state/archive_state.go
+state/go_state.go
+state/go_schema3.go
+# state/go_state_test.go
+state/mock_state.go
+state/state.go
+# state/state_configs.go
+state/state_db.go
+state/state_db_test.go
+# state/state_test.go
+state/synced_state.go
+state/go-file-ldb-archive-sch3.go

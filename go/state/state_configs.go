@@ -31,20 +31,7 @@ import (
 	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
-
-// CacheCapacity is the size of the cache expressed as the number of cached keys
-const CacheCapacity = 1 << 20 // 2 ^ 20 keys -> 32MB for 32-bytes keys
-
-// TransactBufferMB is the size of buffer before the transaction is flushed expressed in MBs
-const TransactBufferMB = 128 * opt.MiB
-
-// PoolSize is the maximum amount of data pages loaded in memory for the paged file store
-const PoolSize = 100000
-
-// CodeHashGroupSize represents the number of codes grouped together in depots to form one leaf node of the hash tree.
-const CodeHashGroupSize = 4
 
 type ArchiveType int
 

@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
-	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
+	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 
@@ -31,6 +31,7 @@ const lengthSize = 4
 // myDepot implements a simple depot to test and demonstrate the snapshotting on depots.
 type myDepot struct {
 	pages [][32][]byte
+	path  string
 }
 
 func (s *myDepot) Get(pos int) []byte {
@@ -63,7 +64,7 @@ func (s *myDepot) Set(pos int, value []byte) {
 }
 
 func (s *myDepot) getHash() common.Hash {
-	hashTree := htmemory.CreateHashTreeFactory(myBranchingFactor).Create(s)
+	hashTree := htfile.CreateHashTreeFactory(s.path, myBranchingFactor).Create(s)
 	for i := 0; i < len(s.pages); i++ {
 		hashTree.MarkUpdated(i)
 	}
@@ -201,7 +202,7 @@ func checkDepotContent(t *testing.T, depot *myDepot, size int) {
 
 func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndRestored(t *testing.T) {
 	for _, size := range []int{0, 1, 5, 1000} {
-		original := &myDepot{}
+		original := &myDepot{path: t.TempDir()}
 		fillDepot(t, original, size)
 		originalProof, err := original.GetProof()
 		if err != nil {
@@ -222,7 +223,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndRestored(t *testing.T) {
 			t.Errorf("snapshot proof does not match data structure proof")
 		}
 
-		recovered := &myDepot{}
+		recovered := &myDepot{path: t.TempDir()}
 		if err := recovered.Restore(snapshot.GetData()); err != nil {
 			t.Errorf("failed to sync to snapshot: %v", err)
 			return
@@ -246,7 +247,7 @@ func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndRestored(t *testing.T) {
 }
 
 func TestDepotSnapshot_MyDepotSnapshotIsShieldedFromMutations(t *testing.T) {
-	original := &myDepot{}
+	original := &myDepot{path: t.TempDir()}
 	fillDepot(t, original, 20)
 	originalProof, err := original.GetProof()
 	if err != nil {
@@ -270,7 +271,7 @@ func TestDepotSnapshot_MyDepotSnapshotIsShieldedFromMutations(t *testing.T) {
 		t.Errorf("snapshot proof does not match data structure proof")
 	}
 
-	recovered := &myDepot{}
+	recovered := &myDepot{path: t.TempDir()}
 	if err := recovered.Restore(snapshot.GetData()); err != nil {
 		t.Errorf("failed to sync to snapshot: %v", err)
 		return
@@ -287,7 +288,7 @@ func TestDepotSnapshot_MyDepotSnapshotIsShieldedFromMutations(t *testing.T) {
 
 func TestDepotSnapshot_MyDepotSnapshotCanBeCreatedAndValidated(t *testing.T) {
 	for _, size := range []int{0, 1, 5, 1000, 100000} {
-		original := &myDepot{}
+		original := &myDepot{path: t.TempDir()}
 		fillDepot(t, original, size)
 
 		snapshot, err := original.CreateSnapshot()
