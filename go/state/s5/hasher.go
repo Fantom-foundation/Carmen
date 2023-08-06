@@ -44,10 +44,10 @@ func encode(node s4.Node, nodes s4.NodeSource, hashes s4.HashSource) ([]byte, er
 	}
 }
 
-var emptyListRlpEncoded = rlp.Encode(rlp.List{})
+var emptyStringRlpEncoded = rlp.Encode(rlp.String{})
 
 func encodeEmpty(s4.EmptyNode, s4.NodeSource, s4.HashSource) ([]byte, error) {
-	return emptyListRlpEncoded, nil
+	return emptyStringRlpEncoded, nil
 }
 
 func encodeBranch(node *s4.BranchNode, nodes s4.NodeSource, hashes s4.HashSource) ([]byte, error) {

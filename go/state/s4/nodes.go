@@ -881,6 +881,13 @@ type AccountNode struct {
 	frozen  bool
 }
 
+func NewAccountNode(address common.Address, info AccountInfo) *AccountNode {
+	return &AccountNode{
+		address: address,
+		info:    info,
+	}
+}
+
 func (n *AccountNode) Info() AccountInfo {
 	return n.info
 }
