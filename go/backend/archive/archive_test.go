@@ -48,9 +48,20 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "S4",
 			getArchive: func(tempDir string) archive.Archive {
-				archive, err := s4.OpenArchiveTrie(tempDir)
+				archive, err := s4.OpenArchiveTrie(tempDir, s4.S4Config)
 				if err != nil {
 					tb.Fatalf("failed to open S4 archive: %v", err)
+				}
+				return archive
+			},
+			customHash: true,
+		},
+		{
+			label: "S5",
+			getArchive: func(tempDir string) archive.Archive {
+				archive, err := s4.OpenArchiveTrie(tempDir, s4.S5Config)
+				if err != nil {
+					tb.Fatalf("failed to open S5 archive: %v", err)
 				}
 				return archive
 			},

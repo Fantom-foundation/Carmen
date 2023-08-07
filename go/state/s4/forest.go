@@ -71,7 +71,7 @@ type Forest struct {
 // The number of elements to retain in the node cache.
 const cacheCapacity = 10_000_000
 
-func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
+func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
 	branches, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
@@ -114,10 +114,10 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 		return nil, err
 	}
 	success = true
-	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
 }
 
-func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
+func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
 	branches, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
 	if err != nil {
@@ -160,10 +160,10 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 		return nil, err
 	}
 	success = true
-	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
 }
 
-func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
+func OpenFileShadowForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	branchesA, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
 	if err != nil {
 		return nil, err
@@ -204,10 +204,11 @@ func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
 }
 
 func makeForest(
+	config MptConfig,
 	directory string,
 	branches stock.Stock[uint64, BranchNode],
 	extensions stock.Stock[uint64, ExtensionNode],
@@ -217,6 +218,7 @@ func makeForest(
 	mode StorageMode,
 ) (*Forest, error) {
 	return &Forest{
+		config:      config,
 		branches:    branches,
 		extensions:  extensions,
 		accounts:    accounts,

@@ -5,6 +5,10 @@ package s4
 // of Ethereums MPT implementation (see schema 5) but may also be used for
 // experimenting with design options.
 type MptConfig struct {
+	// A describtive name for this configuration. It has no effect except for
+	// logging and debugging purposes.
+	Name string
+
 	// If set to true, the address of accounts is hashed using keccak256. If
 	// false, the address is directly used as key for the MPT.
 	UseHashedAccountAddress bool
@@ -17,3 +21,17 @@ type MptConfig struct {
 	// disk requirements for paths
 	PartialPathsInLeafs bool
 }
+
+var S4Config = MptConfig{
+	Name:                    "S4",
+	UseHashedAccountAddress: false,
+	PartialPathsInLeafs:     false,
+}
+
+var S5Config = MptConfig{
+	Name:                    "S5",
+	UseHashedAccountAddress: true,
+	PartialPathsInLeafs:     true,
+}
+
+var allMptConfigs = []MptConfig{S4Config, S5Config}
