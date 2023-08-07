@@ -284,9 +284,9 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 }
 
 func (s *Forest) GetHashFor(id NodeId) (common.Hash, error) {
-	// The empty node is forced to have the empty hash.
+	// The empty node is never dirty and needs to be handled explicitly.
 	if id.IsEmpty() {
-		return common.Hash{}, nil
+		return s.config.Hasher.GetHash(EmptyNode{}, s, s)
 	}
 	// Non-dirty hashes can be taken from the store.
 	if _, dirty := s.dirtyHashes[id]; !dirty {
