@@ -1,4 +1,4 @@
-package s5
+package s4
 
 import (
 	"errors"
@@ -7,24 +7,25 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/s4"
-	"github.com/Fantom-foundation/Carmen/go/state/s5/rlp"
+	"github.com/Fantom-foundation/Carmen/go/state/s4/rlp"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/trie"
+	gomock "github.com/golang/mock/gomock"
 
 	gethcommon "github.com/ethereum/go-ethereum/common"
 )
 
+var emptyNodeHash = keccak256(rlp.Encode(rlp.String{}))
+
 func TestMptHasher_EmptyNode(t *testing.T) {
 	hasher := MptHasher{}
-	hash, err := hasher.GetHash(s4.EmptyNode{}, nil, nil)
+	hash, err := hasher.GetHash(EmptyNode{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
 
-	empty := rlp.Encode(rlp.String{})
-	if got, want := hash, keccak256(empty); got != want {
+	if got, want := hash, emptyNodeHash; got != want {
 		t.Errorf("invalid hash of empty node, wanted %v, got %v", got, want)
 	}
 }
@@ -34,7 +35,7 @@ func TestMptHasher_EmptyTrie(t *testing.T) {
 	expected := trie.IntermediateRoot(true)
 
 	hasher := MptHasher{}
-	hash, err := hasher.GetHash(s4.EmptyNode{}, nil, nil)
+	hash, err := hasher.GetHash(EmptyNode{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
@@ -44,20 +45,34 @@ func TestMptHasher_EmptyTrie(t *testing.T) {
 	}
 }
 
-func _TestMptHasher_SingleAccount(t *testing.T) {
-	trie := newEthereumStateDB()
-	trie.SetBalance(gethcommon.Address{1}, big.NewInt(12))
-	trie.Commit(true)
-	expected := trie.IntermediateRoot(true)
+func TestMptHasher_SingleAccount(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	nodeSource := NewMockNodeSource(ctrl)
+	hashSource := NewMockHashSource(ctrl)
+
+	hashSource.EXPECT().GetHashFor(EmptyId()).Return(emptyNodeHash, nil)
+
+	nonce := common.ToNonce(10)
+	balance, _ := common.ToBalance(big.NewInt(12))
+	node := &AccountNode{
+		address: common.Address{1},
+		info: AccountInfo{
+			Nonce:   nonce,
+			Balance: balance,
+		},
+	}
 
 	hasher := MptHasher{}
-	balance, _ := common.ToBalance(big.NewInt(12))
-	hash, err := hasher.GetHash(s4.NewAccountNode(common.Address{1}, s4.AccountInfo{
-		Balance: balance,
-	}), nil, nil)
+	hash, err := hasher.GetHash(node, nodeSource, hashSource)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
+
+	trie := newEthereumStateDB()
+	trie.SetNonce(gethcommon.Address{1}, 10)
+	trie.SetBalance(gethcommon.Address{1}, big.NewInt(12))
+	trie.Commit(true)
+	expected := trie.IntermediateRoot(true)
 
 	if got := gethcommon.Hash(hash); got != expected {
 		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
@@ -66,7 +81,7 @@ func _TestMptHasher_SingleAccount(t *testing.T) {
 
 func TestMptHasher_ValueNode(t *testing.T) {
 	hasher := MptHasher{}
-	hash, err := hasher.GetHash(&s4.ValueNode{}, nil, nil)
+	hash, err := hasher.GetHash(&ValueNode{}, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}

@@ -1,11 +1,16 @@
 package s4
 
+//go:generate mockgen -source hasher.go -destination hasher_mocks.go -package s4
+
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"reflect"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state/s4/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // Hasher is an interface for implementations of MPT node hashing algorithms. It is
@@ -78,4 +83,142 @@ func (h *DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (comm
 	}
 	hasher.Sum(hash[0:0])
 	return hash, nil
+}
+
+// Based on Appendix D of https://ethereum.github.io/yellowpaper/paper.pdf
+type MptHasher struct{}
+
+// GetHash implements the MPT hashing algorithm.
+func (h *MptHasher) GetHash(node Node, nodes NodeSource, hashes HashSource) (common.Hash, error) {
+	data, err := encode(node, nodes, hashes)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return keccak256(data), nil
+}
+
+func keccak256(data []byte) common.Hash {
+	return common.GetHash(sha3.NewLegacyKeccak256(), data)
+}
+
+func encode(node Node, nodes NodeSource, hashes HashSource) ([]byte, error) {
+	switch trg := node.(type) {
+	case EmptyNode:
+		return encodeEmpty(trg, nodes, hashes)
+	case *AccountNode:
+		return encodeAccount(trg, nodes, hashes)
+	case *BranchNode:
+		return encodeBranch(trg, nodes, hashes)
+	case *ExtensionNode:
+		return encodeExtension(trg, nodes, hashes)
+	case *ValueNode:
+		return encodeValue(trg, nodes, hashes)
+	default:
+		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
+	}
+}
+
+var emptyStringRlpEncoded = rlp.Encode(rlp.String{})
+
+func encodeEmpty(EmptyNode, NodeSource, HashSource) ([]byte, error) {
+	return emptyStringRlpEncoded, nil
+}
+
+func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
+	children := node.Children()
+	items := make([]rlp.Item, len(children)+1)
+
+	for i, child := range children {
+		node, err := nodes.GetNode(child)
+		if err != nil {
+			return nil, err
+		}
+
+		encoded, err := encode(node, nodes, hashes)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(encoded) >= 32 {
+			hash, err := hashes.GetHashFor(child)
+			if err != nil {
+				return nil, err
+			}
+			encoded = hash[:]
+		}
+		items[i] = rlp.String{Str: encoded}
+	}
+
+	// There is one 17th entry which would be filled if this node is a terminator. However,
+	// branch nodes are never terminators in State or Storage Tries.
+	items[len(children)] = &rlp.String{}
+
+	var buffer bytes.Buffer
+	rlp.List{Items: items}.Write(&buffer)
+	return buffer.Bytes(), nil
+}
+
+func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
+	items := make([]rlp.Item, 2)
+
+	items[0] = &rlp.String{} // = should be the extension path
+
+	next, err := nodes.GetNode(node.next)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := encode(next, nodes, hashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(encoded) >= 32 {
+		hash, err := hashes.GetHashFor(node.next)
+		if err != nil {
+			return nil, err
+		}
+		encoded = hash[:]
+	}
+	items[1] = &rlp.String{Str: encoded}
+
+	var buffer bytes.Buffer
+	rlp.List{Items: items}.Write(&buffer)
+	return buffer.Bytes(), nil
+}
+
+func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
+	storageRoot := node.StorageRoot()
+	storageHash, err := hashes.GetHashFor(storageRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encode the account information to get the value.
+	info := node.Info()
+	items := make([]rlp.Item, 4)
+	items[0] = &rlp.String{Str: info.Nonce[:]}
+	items[1] = &rlp.String{Str: info.Balance[:]}
+	items[2] = &rlp.String{Str: storageHash[:]}
+	items[3] = &rlp.String{Str: info.CodeHash[:]}
+	value := rlp.Encode(rlp.List{Items: items})
+
+	// Encode the leaf node by combining the partial path with the value.
+	items = items[0:2]
+	items[0] = &rlp.String{} // Need partial path derived from the address
+	items[1] = &rlp.String{Str: value}
+	return rlp.Encode(rlp.List{Items: items}), nil
+}
+
+func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]byte, error) {
+	// TODO: need to know the suffix of the key to be encoded
+	// NOTE: the address of the account is not relevant
+
+	items := make([]rlp.Item, 2)
+	items[0] = &rlp.String{} // = should be the non-consumed key
+
+	value := node.Value()
+	items[1] = &rlp.String{Str: value[:]}
+
+	var buffer bytes.Buffer
+	rlp.List{Items: items}.Write(&buffer)
+	return buffer.Bytes(), nil
 }
