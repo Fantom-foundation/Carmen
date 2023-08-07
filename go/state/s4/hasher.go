@@ -34,7 +34,7 @@ type HashSource interface {
 type DirectHasher struct{}
 
 // GetHash implements the DirectHasher's hashing algorithm.
-func (h *DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (common.Hash, error) {
+func (h DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (common.Hash, error) {
 	hash := common.Hash{}
 	if _, ok := node.(EmptyNode); ok {
 		return hash, nil
@@ -89,7 +89,7 @@ func (h *DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (comm
 type MptHasher struct{}
 
 // GetHash implements the MPT hashing algorithm.
-func (h *MptHasher) GetHash(node Node, nodes NodeSource, hashes HashSource) (common.Hash, error) {
+func (h MptHasher) GetHash(node Node, nodes NodeSource, hashes HashSource) (common.Hash, error) {
 	data, err := encode(node, nodes, hashes)
 	if err != nil {
 		return common.Hash{}, err

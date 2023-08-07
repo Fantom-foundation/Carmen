@@ -60,9 +60,6 @@ type Forest struct {
 	// state does not match their on-disk content.
 	dirty map[NodeId]struct{}
 
-	// The hasher used to compute state hashes.
-	hasher Hasher
-
 	// A store for hashes.
 	hashes      HashStore
 	dirtyHashes map[NodeId]struct{}
@@ -226,7 +223,6 @@ func makeForest(
 		storageMode: mode,
 		nodeCache:   common.NewCache[NodeId, Node](cacheCapacity),
 		dirty:       map[NodeId]struct{}{},
-		hasher:      &DirectHasher{},
 		hashes:      hashes,
 		dirtyHashes: map[NodeId]struct{}{},
 	}, nil
@@ -302,7 +298,7 @@ func (s *Forest) GetHashFor(id NodeId) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	hash, err := s.hasher.GetHash(node, s, s)
+	hash, err := s.config.Hasher.GetHash(node, s, s)
 	if err != nil {
 		return common.Hash{}, err
 	}

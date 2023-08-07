@@ -20,18 +20,23 @@ type MptConfig struct {
 	// usage. For fixed-size storage, the worst case has to be assumed, causing
 	// disk requirements for paths
 	PartialPathsInLeafs bool
+
+	// The hashing algorithm to be used in the MPT implementation.
+	Hasher Hasher
 }
 
 var S4Config = MptConfig{
 	Name:                    "S4",
 	UseHashedAccountAddress: false,
 	PartialPathsInLeafs:     false,
+	Hasher:                  DirectHasher{},
 }
 
 var S5Config = MptConfig{
 	Name:                    "S5",
 	UseHashedAccountAddress: true,
 	PartialPathsInLeafs:     true,
+	Hasher:                  MptHasher{},
 }
 
 var allMptConfigs = []MptConfig{S4Config, S5Config}
