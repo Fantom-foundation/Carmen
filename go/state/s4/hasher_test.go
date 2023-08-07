@@ -80,20 +80,51 @@ func TestMptHasher_SingleAccount(t *testing.T) {
 	}
 }
 
-func TestMptHasher_ValueNode(t *testing.T) {
+func TestMptHasher_SingleAccountWithSingleValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	nodeSource := NewMockNodeSource(ctrl)
+	hashSource := NewMockHashSource(ctrl)
+
 	hasher := MptHasher{}
-	hash, err := hasher.GetHash(&ValueNode{}, nil, nil)
+
+	storageRoot := ValueId(1)
+	valueNode := &ValueNode{
+		key:   common.Key{1},
+		value: common.Value{2},
+	}
+	storageHash, err := hasher.GetHash(valueNode, nodeSource, hashSource)
+	if err != nil {
+		t.Fatalf("failed to hash value node")
+	}
+	hashSource.EXPECT().GetHashFor(storageRoot).Return(storageHash, nil)
+
+	nonce := common.ToNonce(10)
+	balance, _ := common.ToBalance(big.NewInt(12))
+	node := &AccountNode{
+		address: common.Address{1},
+		info: AccountInfo{
+			Nonce:    nonce,
+			Balance:  balance,
+			CodeHash: keccak256([]byte{}),
+		},
+		storage: storageRoot,
+	}
+
+	hash, err := hasher.GetHash(node, nodeSource, hashSource)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
 
-	empty := rlp.Encode(
-		rlp.List{[]rlp.Item{
-			rlp.String{}, // TODO: encode path here
-			rlp.String{make([]byte, common.ValueSize)},
-		}})
-	if got, want := hash, keccak256(empty); got != want {
-		t.Errorf("invalid hash of empty node, wanted %v, got %v", got, want)
+	gethAddr := gethcommon.Address{1}
+	trie := newEthereumStateDB()
+	trie.SetNonce(gethAddr, 10)
+	trie.SetBalance(gethAddr, big.NewInt(12))
+	trie.SetState(gethAddr, gethcommon.Hash{1}, gethcommon.Hash{2})
+	trie.Commit(true)
+	expected := trie.IntermediateRoot(true)
+
+	if got := gethcommon.Hash(hash); got != expected {
+		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
 	}
 }
 

@@ -219,10 +219,20 @@ func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]by
 	// NOTE: the address of the account is not relevant
 
 	items := make([]rlp.Item, 2)
-	items[0] = &rlp.String{} // = should be the non-consumed key
 
-	value := node.Value()
-	items[1] = &rlp.String{Str: value[:]}
+	path := keccak256(node.key[:])
+	key := make([]byte, 33)
+	key[0] = 32 // TODO: encode actual path length?
+	copy(key[1:], path[:])
+	items[0] = &rlp.String{Str: key} // = should be the non-consumed key
+
+	// leading zeros of the value are ignored
+	value := node.value[:]
+	for len(value) > 0 && value[0] == 0 {
+		value = value[1:]
+	}
+
+	items[1] = &rlp.String{Str: rlp.Encode(&rlp.String{Str: value[:]})}
 
 	var buffer bytes.Buffer
 	rlp.List{Items: items}.Write(&buffer)
