@@ -57,8 +57,9 @@ func TestMptHasher_SingleAccount(t *testing.T) {
 	node := &AccountNode{
 		address: common.Address{1},
 		info: AccountInfo{
-			Nonce:   nonce,
-			Balance: balance,
+			Nonce:    nonce,
+			Balance:  balance,
+			CodeHash: keccak256([]byte{}),
 		},
 	}
 

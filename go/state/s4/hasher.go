@@ -195,15 +195,21 @@ func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]by
 	// Encode the account information to get the value.
 	info := node.Info()
 	items := make([]rlp.Item, 4)
-	items[0] = &rlp.String{Str: info.Nonce[:]}
-	items[1] = &rlp.String{Str: info.Balance[:]}
+	items[0] = &rlp.Uint64{Value: info.Nonce.ToUint64()}
+	items[1] = &rlp.BigInt{Value: info.Balance.ToBigInt()}
 	items[2] = &rlp.String{Str: storageHash[:]}
 	items[3] = &rlp.String{Str: info.CodeHash[:]}
 	value := rlp.Encode(rlp.List{Items: items})
 
+	// TODO: consider the length of the path
+	path := keccak256(node.address[:])
+	key := make([]byte, 33)
+	key[0] = 32 // TODO: encode actual path length?
+	copy(key[1:], path[:])
+
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = &rlp.String{} // Need partial path derived from the address
+	items[0] = &rlp.String{Str: key}
 	items[1] = &rlp.String{Str: value}
 	return rlp.Encode(rlp.List{Items: items}), nil
 }

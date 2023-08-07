@@ -2,7 +2,9 @@ package rlp
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
+	"math/big"
 )
 
 // The definition of the RLP encoding can be found here:
@@ -19,6 +21,10 @@ func Encode(item Item) []byte {
 	item.Write(&buffer)
 	return buffer.Bytes()
 }
+
+// ----------------------------------------------------------------------------
+//                           Core Item Types
+// ----------------------------------------------------------------------------
 
 type String struct {
 	Str []byte
@@ -59,19 +65,70 @@ func encodeLength(length int, offset byte, writer io.Writer) {
 		writer.Write([]byte{offset + byte(length)})
 		return
 	}
-	numBytesForLength := getNumBytes(length)
+	numBytesForLength := getNumBytes(uint64(length))
 	writer.Write([]byte{offset + 55 + numBytesForLength})
 	for i := byte(0); i < numBytesForLength; i++ {
 		writer.Write([]byte{byte(length >> (8 * (numBytesForLength - i - 1)))})
 	}
 }
 
-func getNumBytes(value int) byte {
+func getNumBytes(value uint64) byte {
 	if value == 0 {
 		return 0
 	}
-	if value < 256 {
-		return 1
+	for res := byte(1); ; res++ {
+		if value >>= 8; value == 0 {
+			return res
+		}
 	}
-	return 1 + getNumBytes(value/256)
+}
+
+// ----------------------------------------------------------------------------
+//                           Utility Item Types
+// ----------------------------------------------------------------------------
+
+type Uint64 struct {
+	Value uint64
+}
+
+func (u Uint64) Write(writer io.Writer) {
+	// Uint64 values are encoded using their non-zero big-endian encoding suffix.
+	if u.Value == 0 {
+		writer.Write([]byte{0x80})
+		return
+	}
+	var buffer = make([]byte, 8)
+	binary.BigEndian.PutUint64(buffer, u.Value)
+	for buffer[0] == 0 {
+		buffer = buffer[1:]
+	}
+	String{Str: buffer}.Write(writer)
+}
+
+type BigInt struct {
+	Value *big.Int
+}
+
+func (i BigInt) Write(writer io.Writer) {
+	// Based on: https://github.com/ethereum/go-ethereum/blob/v1.12.0/rlp/encbuffer.go#L152
+	// Values that fit in 64 bit are encoded using the uint64 encoder.
+	bitlen := i.Value.BitLen()
+	if bitlen <= 64 {
+		Uint64{Value: i.Value.Uint64()}.Write(writer)
+		return
+	}
+	// Integer is larger than 64 bits, encode from BigInt's Bits()
+	// using big-endian order.
+	const wordBytes = (32 << (uint64(^big.Word(0)) >> 63)) / 8
+	length := ((bitlen + 7) & -8) >> 3
+	index := length
+	var buffer = make([]byte, length)
+	for _, d := range i.Value.Bits() {
+		for j := 0; j < wordBytes && index > 0; j++ {
+			index--
+			buffer[index] = byte(d)
+			d >>= 8
+		}
+	}
+	String{Str: buffer}.Write(writer)
 }
