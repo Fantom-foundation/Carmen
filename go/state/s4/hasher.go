@@ -160,9 +160,6 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 
 	var buffer bytes.Buffer
 	rlp.List{Items: items}.Write(&buffer)
-
-	fmt.Printf("Branch node: %v\n", buffer.Bytes())
-
 	return buffer.Bytes(), nil
 }
 
@@ -211,12 +208,9 @@ func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]by
 
 	//fmt.Printf("Account encoding: %v\n", value)
 
-	// TODO: get this number of nibbles from the node!
-	numNibbles := 64 // number of nibbles in path
-
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = &rlp.String{Str: encodePath(node.address[:], numNibbles)}
+	items[0] = &rlp.String{Str: encodePath(node.address[:], int(node.pathLength))}
 	items[1] = &rlp.String{Str: value}
 
 	/*
@@ -231,14 +225,12 @@ func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]by
 }
 
 func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]byte, error) {
-	// TODO: need to know the suffix of the key to be encoded
 	// NOTE: the address of the account is not relevant
 
 	items := make([]rlp.Item, 2)
 
 	// The first item is an encoded path fragment.
-	numNibbles := 64 // TODO: load from the node
-	items[0] = &rlp.String{Str: encodePath(node.key[:], numNibbles)}
+	items[0] = &rlp.String{Str: encodePath(node.key[:], int(node.pathLength))}
 
 	// The second item is the value without leading zeros.
 	value := node.value[:]

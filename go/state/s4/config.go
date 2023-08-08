@@ -14,30 +14,28 @@ type MptConfig struct {
 	// addresses and keys are directly used as paths for the MPT.
 	UseHashedPaths bool
 
-	// If enabled, leafs retain partial paths, while if disabled, the full path
-	// is stored. The partial path mode is required for Ethereum's MPT variant.
-	// While in many cases being a few bytes more compact than the full path, in
-	// the worst case, the need for storing the length can result in higher disk
-	// usage. For fixed-size storage, the worst case has to be assumed, causing
-	// disk requirements for paths
-	PartialPathsInLeafs bool
+	// If enabled, leaf nodes are tracking the number of nibbles of their path
+	// not covered by parent nodes. If disabled, this information is not
+	// maintained. In either way, the full path is stored in leaf nodes.
+	// The suffix length is required for Ethereum's MPT variant.
+	TrackSuffixLengthsInLeafNodes bool
 
 	// The hashing algorithm to be used in the MPT implementation.
 	Hasher Hasher
 }
 
 var S4Config = MptConfig{
-	Name:                "S4",
-	UseHashedPaths:      false,
-	PartialPathsInLeafs: false,
-	Hasher:              DirectHasher{},
+	Name:                          "S4",
+	UseHashedPaths:                false,
+	TrackSuffixLengthsInLeafNodes: false,
+	Hasher:                        DirectHasher{},
 }
 
 var S5Config = MptConfig{
-	Name:                "S5",
-	UseHashedPaths:      true,
-	PartialPathsInLeafs: true,
-	Hasher:              MptHasher{},
+	Name:                          "S5",
+	UseHashedPaths:                true,
+	TrackSuffixLengthsInLeafNodes: true,
+	Hasher:                        MptHasher{}, // requires tracking of suffix lengths
 }
 
 var allMptConfigs = []MptConfig{S4Config, S5Config}

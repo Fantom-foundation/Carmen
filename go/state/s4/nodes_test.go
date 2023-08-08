@@ -2826,6 +2826,26 @@ func TestAccountNodeEncoder(t *testing.T) {
 	}
 }
 
+func TestAccountNodeWithPathLengthEncoder(t *testing.T) {
+	node := AccountNode{
+		info: AccountInfo{
+			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
+			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
+		storage:    NodeId(12),
+		pathLength: 14,
+	}
+	encoder := AccountNodeWithPathLengthEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := AccountNode{}
+	encoder.Load(buffer, &recovered)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
 func TestBranchNodeEncoder(t *testing.T) {
 	node := BranchNode{
 		children: [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
@@ -2864,6 +2884,22 @@ func TestValueNodeEncoder(t *testing.T) {
 		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
 	encoder := ValueNodeEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ValueNode{}
+	encoder.Load(buffer, &recovered)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestValueNodeWithPathLengthEncoder(t *testing.T) {
+	node := ValueNode{
+		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		pathLength: 12,
+	}
+	encoder := ValueNodeWithPathLengthEncoder{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}

@@ -70,7 +70,8 @@ const cacheCapacity = 10_000_000
 
 func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
-	branches, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +80,7 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 			branches.Close()
 		}
 	}()
-	extensions, err := memory.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	extensions, err := memory.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 			extensions.Close()
 		}
 	}()
-	accounts, err := memory.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	accounts, err := memory.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +98,7 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 			accounts.Close()
 		}
 	}()
-	values, err := memory.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	values, err := memory.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,8 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 
 func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
-	branches, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +127,7 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 			branches.Close()
 		}
 	}()
-	extensions, err := file.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	extensions, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +136,7 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 			extensions.Close()
 		}
 	}()
-	accounts, err := file.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	accounts, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +145,7 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 			accounts.Close()
 		}
 	}()
-	values, err := file.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	values, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
@@ -161,19 +163,20 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 }
 
 func OpenFileShadowForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
-	branchesA, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	branchesA, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/A/branches")
 	if err != nil {
 		return nil, err
 	}
-	extensionsA, err := file.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/A/extensions")
+	extensionsA, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/A/extensions")
 	if err != nil {
 		return nil, err
 	}
-	accountsA, err := file.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/A/accounts")
+	accountsA, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/A/accounts")
 	if err != nil {
 		return nil, err
 	}
-	valuesA, err := file.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/A/values")
+	valuesA, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/A/values")
 	if err != nil {
 		return nil, err
 	}
@@ -181,19 +184,19 @@ func OpenFileShadowForest(directory string, config MptConfig, mode StorageMode) 
 	if err != nil {
 		return nil, err
 	}
-	branchesB, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/B/branches")
+	branchesB, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/B/branches")
 	if err != nil {
 		return nil, err
 	}
-	extensionsB, err := memory.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/B/extensions")
+	extensionsB, err := memory.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/B/extensions")
 	if err != nil {
 		return nil, err
 	}
-	accountsB, err := memory.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/B/accounts")
+	accountsB, err := memory.OpenStock[uint64, AccountNode](accountEncoder, directory+"/B/accounts")
 	if err != nil {
 		return nil, err
 	}
-	valuesB, err := memory.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/B/values")
+	valuesB, err := memory.OpenStock[uint64, ValueNode](valueEncoder, directory+"/B/values")
 	if err != nil {
 		return nil, err
 	}
@@ -604,4 +607,22 @@ func (s *Forest) release(id NodeId) error {
 		return s.values.Delete(id.Index())
 	}
 	return fmt.Errorf("unable to release node %v", id)
+}
+
+func getEncoder(config MptConfig) (
+	stock.ValueEncoder[AccountNode],
+	stock.ValueEncoder[BranchNode],
+	stock.ValueEncoder[ExtensionNode],
+	stock.ValueEncoder[ValueNode],
+) {
+	if config.TrackSuffixLengthsInLeafNodes {
+		return AccountNodeWithPathLengthEncoder{},
+			BranchNodeEncoder{},
+			ExtensionNodeEncoder{},
+			ValueNodeWithPathLengthEncoder{}
+	}
+	return AccountNodeEncoder{},
+		BranchNodeEncoder{},
+		ExtensionNodeEncoder{},
+		ValueNodeEncoder{}
 }

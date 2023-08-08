@@ -237,6 +237,7 @@ func (e EmptyNode) SetAccount(manager NodeManager, thisId NodeId, address common
 	}
 	res.address = address
 	res.info = info
+	res.pathLength = byte(len(path))
 	if err := manager.update(id, res); err != nil {
 		return 0, false, err
 	}
@@ -253,6 +254,7 @@ func (e EmptyNode) SetValue(manager NodeManager, thisId NodeId, key common.Key, 
 	}
 	res.key = key
 	res.value = value
+	res.pathLength = byte(len(path))
 	if err := manager.update(id, res); err != nil {
 		return 0, false, err
 	}
@@ -438,6 +440,27 @@ func (n *BranchNode) setNextNode(
 				extension.next = remaining
 				manager.update(extensionId, extension)
 				newRoot = extensionId
+			} else if manager.GetConfig().TrackSuffixLengthsInLeafNodes {
+				// If suffix lengths need to be tracked, leaf nodes require an update.
+				if remaining.IsAccount() {
+					node, err := manager.GetNode(remaining)
+					if err != nil {
+						return 0, false, err
+					}
+					newRoot, _, err = node.(*AccountNode).setPathLength(manager, remaining, byte(len(path)))
+					if err != nil {
+						return 0, false, err
+					}
+				} else if remaining.IsValue() {
+					node, err := manager.GetNode(remaining)
+					if err != nil {
+						return 0, false, err
+					}
+					newRoot, _, err = node.(*ValueNode).setPathLength(manager, remaining, byte(len(path)))
+					if err != nil {
+						return 0, false, err
+					}
+				}
 			}
 			manager.release(thisId)
 			return newRoot, !isClone, nil
@@ -677,6 +700,25 @@ func (n *ExtensionNode) setNextNode(
 			} else {
 				// If the next node is anything but a branch or extension, remove this extension.
 				manager.release(thisId)
+
+				// Grow path length of next nodes if tracking of length is enabled.
+				if manager.GetConfig().TrackSuffixLengthsInLeafNodes {
+					root, err := manager.GetNode(newRoot)
+					if err != nil {
+						return 0, false, err
+					}
+					if newRoot.IsAccount() {
+						newRoot, _, err = root.(*AccountNode).setPathLength(manager, newRoot, byte(len(path)))
+					} else if newRoot.IsValue() {
+						newRoot, _, err = root.(*ValueNode).setPathLength(manager, newRoot, byte(len(path)))
+					} else {
+						panic(fmt.Sprintf("unsupported new root type: %v", newRoot))
+					}
+					if err != nil {
+						return 0, false, err
+					}
+				}
+
 				return newRoot, !isClone, nil
 			}
 		} else if hasChanged {
@@ -880,6 +922,10 @@ type AccountNode struct {
 	info    AccountInfo
 	storage NodeId
 	frozen  bool
+	// pathLengh is the number of nibbles of the key (or its hash) not covered
+	// by the navigation path to this node. It is only maintained if the
+	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
+	pathLength byte
 }
 
 func (n *AccountNode) Info() AccountInfo {
@@ -941,7 +987,6 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 
 		// If this node is frozen, we need to write the result in
 		// a new account node.
-		// TODO: add a unit test for this
 		if n.frozen {
 			newId, newNode, err := manager.createAccount()
 			if err != nil {
@@ -949,7 +994,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 			}
 			newNode.address = address
 			newNode.info = info
-			newNode.storage = n.storage
+			newNode.pathLength = n.pathLength
 			manager.update(newId, newNode)
 			return newId, false, nil
 		}
@@ -973,17 +1018,23 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 	sibling.info = info
 
 	thisPath := ToNibblePath(n.address[:], manager.GetConfig().UseHashedPaths)
-	newRoot, err := splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
+	newRoot, err := splitLeafNode(manager, thisId, thisPath[:], n, path, siblingId, sibling)
 	return newRoot, false, err
+}
+
+type leafNode interface {
+	Node
+	setPathLength(manager NodeManager, thisId NodeId, length byte) (newRoot NodeId, changed bool, err error)
 }
 
 func splitLeafNode(
 	manager NodeManager,
 	thisId NodeId,
 	thisPath []Nibble,
+	this leafNode,
 	siblingPath []Nibble,
 	siblingId NodeId,
-	sibling Node,
+	sibling leafNode,
 ) (NodeId, error) {
 	// This single node needs to be split into
 	//  - an optional common prefix extension
@@ -1009,6 +1060,22 @@ func splitLeafNode(
 		extension.path = CreatePathFromNibbles(siblingPath[0:commonPrefixLength])
 		extension.next = branchId
 		manager.update(extensionId, extension)
+	}
+
+	// If enabled, keep track of the suffix length of leaf values.
+	// TODO: cover this in unit tests
+	remainingPathLength := byte(len(partialPath)-commonPrefixLength) - 1
+	if manager.GetConfig().TrackSuffixLengthsInLeafNodes {
+		sibling.setPathLength(manager, siblingId, remainingPathLength)
+
+		var changed bool
+		thisId, changed, err = this.setPathLength(manager, thisId, remainingPathLength)
+		if err != nil {
+			return 0, err
+		}
+		if changed {
+			manager.update(thisId, this)
+		}
 	}
 
 	// Add this node and the new sibling node to the branch node.
@@ -1055,6 +1122,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 			}
 			newNode.address = address
 			newNode.info = n.info
+			newNode.pathLength = n.pathLength
 			newNode.storage = root
 			return newId, false, nil
 		}
@@ -1081,6 +1149,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, address c
 		}
 		newNode.address = address
 		newNode.info = n.info
+		newNode.pathLength = n.pathLength
 		newNode.storage = EmptyId()
 		return newId, false, nil
 	}
@@ -1105,6 +1174,25 @@ func (n *AccountNode) Release(manager NodeManager, thisId NodeId) error {
 		}
 	}
 	return manager.release(thisId)
+}
+
+func (n *AccountNode) setPathLength(manager NodeManager, thisId NodeId, length byte) (NodeId, bool, error) {
+	if n.pathLength == length {
+		return thisId, false, nil
+	}
+	if n.frozen {
+		newId, newNode, err := manager.createAccount()
+		if err != nil {
+			return 0, false, err
+		}
+		newNode.address = n.address
+		newNode.info = n.info
+		newNode.pathLength = length
+		return newId, false, manager.update(newId, newNode)
+	}
+
+	n.pathLength = length
+	return thisId, true, manager.update(thisId, n)
 }
 
 func (n *AccountNode) IsFrozen() bool {
@@ -1132,6 +1220,7 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 	//  - account information must not be empty
 	//  - the account is at a correct position in the trie
 	//  - state sub-trie is correct
+	//  - path length
 	errs := []error{}
 
 	fullPath := ToNibblePath(n.address[:], source.GetConfig().UseHashedPaths)
@@ -1153,11 +1242,17 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 		}
 	}
 
+	if source.GetConfig().TrackSuffixLengthsInLeafNodes {
+		if got, want := n.pathLength, byte(64-len(path)); got != want {
+			errs = append(errs, fmt.Errorf("invalid path length, wanted %d, got %d", want, got))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
 func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sAccount (ID: %v/%t, Hash: %v): %v - %v\n", indent, thisId, n.frozen, formatHashForDump(source, thisId), n.address, n.info)
+	fmt.Printf("%sAccount (ID: %v/%t/%v, Hash: %v): %v - %v\n", indent, thisId, n.frozen, n.pathLength, formatHashForDump(source, thisId), n.address, n.info)
 	if n.storage.IsEmpty() {
 		return
 	}
@@ -1179,10 +1274,10 @@ type ValueNode struct {
 	key    common.Key
 	value  common.Value
 	frozen bool
-}
-
-func (n *ValueNode) Value() common.Value {
-	return n.value
+	// pathLengh is the number of nibbles of the key (or its hash) not covered
+	// by the navigation path to this node. It is only maintained if the
+	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
+	pathLength byte
 }
 
 func (n *ValueNode) GetAccount(NodeSource, common.Address, []Nibble) (AccountInfo, bool, error) {
@@ -1223,6 +1318,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key common.Key,
 			}
 			newNode.key = n.key
 			newNode.value = value
+			newNode.pathLength = n.pathLength
 			manager.update(newId, newNode)
 			return newId, false, nil
 		}
@@ -1245,7 +1341,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key common.Key,
 	sibling.value = value
 
 	thisPath := ToNibblePath(n.key[:], manager.GetConfig().UseHashedPaths)
-	newRootId, err := splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
+	newRootId, err := splitLeafNode(manager, thisId, thisPath[:], n, path, siblingId, sibling)
 	return newRootId, false, err
 }
 
@@ -1262,6 +1358,25 @@ func (n *ValueNode) Release(manager NodeManager, thisId NodeId) error {
 		return nil
 	}
 	return manager.release(thisId)
+}
+
+func (n *ValueNode) setPathLength(manager NodeManager, thisId NodeId, length byte) (NodeId, bool, error) {
+	if n.pathLength == length {
+		return thisId, false, nil
+	}
+	if n.frozen {
+		newId, newNode, err := manager.createValue()
+		if err != nil {
+			return 0, false, err
+		}
+		newNode.key = n.key
+		newNode.value = n.value
+		newNode.pathLength = length
+		return newId, false, manager.update(newId, newNode)
+	}
+
+	n.pathLength = length
+	return thisId, true, manager.update(thisId, n)
 }
 
 func (n *ValueNode) IsFrozen() bool {
@@ -1281,6 +1396,7 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 	// Checked invariants:
 	//  - value must not be empty
 	//  - values are in the right position of the trie
+	//  - the path length is correct (if enabled to be tracked)
 	errs := []error{}
 
 	fullPath := ToNibblePath(n.key[:], source.GetConfig().UseHashedPaths)
@@ -1292,11 +1408,17 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 		errs = append(errs, fmt.Errorf("value slot must not be empty"))
 	}
 
+	if source.GetConfig().TrackSuffixLengthsInLeafNodes {
+		if got, want := n.pathLength, byte(64-len(path)); got != want {
+			errs = append(errs, fmt.Errorf("invalid path length, wanted %d, got %d", want, got))
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
 func (n *ValueNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sValue (ID: %v/%t, Hash: %v): %v - %v\n", indent, thisId, n.frozen, formatHashForDump(source, thisId), n.key, n.value)
+	fmt.Printf("%sValue (ID: %v/%t/%d, Hash: %v): %v - %v\n", indent, thisId, n.frozen, n.pathLength, formatHashForDump(source, thisId), n.key, n.value)
 }
 
 // ----------------------------------------------------------------------------
@@ -1401,6 +1523,24 @@ func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
 	return nil
 }
 
+type AccountNodeWithPathLengthEncoder struct{}
+
+func (AccountNodeWithPathLengthEncoder) GetEncodedSize() int {
+	return AccountNodeEncoder{}.GetEncodedSize() + 1
+}
+
+func (AccountNodeWithPathLengthEncoder) Store(dst []byte, node *AccountNode) error {
+	AccountNodeEncoder{}.Store(dst, node)
+	dst[len(dst)-1] = node.pathLength
+	return nil
+}
+
+func (AccountNodeWithPathLengthEncoder) Load(src []byte, node *AccountNode) error {
+	AccountNodeEncoder{}.Load(src, node)
+	node.pathLength = src[len(src)-1]
+	return nil
+}
+
 type ValueNodeEncoder struct{}
 
 func (ValueNodeEncoder) GetEncodedSize() int {
@@ -1418,6 +1558,24 @@ func (ValueNodeEncoder) Load(src []byte, node *ValueNode) error {
 	copy(node.key[:], src)
 	src = src[len(node.key):]
 	copy(node.value[:], src)
+	return nil
+}
+
+type ValueNodeWithPathLengthEncoder struct{}
+
+func (ValueNodeWithPathLengthEncoder) GetEncodedSize() int {
+	return ValueNodeEncoder{}.GetEncodedSize() + 1
+}
+
+func (ValueNodeWithPathLengthEncoder) Store(dst []byte, node *ValueNode) error {
+	ValueNodeEncoder{}.Store(dst, node)
+	dst[len(dst)-1] = node.pathLength
+	return nil
+}
+
+func (ValueNodeWithPathLengthEncoder) Load(src []byte, node *ValueNode) error {
+	ValueNodeEncoder{}.Load(src, node)
+	node.pathLength = src[len(src)-1]
 	return nil
 }
 
