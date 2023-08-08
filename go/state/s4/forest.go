@@ -338,17 +338,20 @@ func (s *Forest) Flush() error {
 			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
 		}
 	}
+	s.dirty = map[NodeId]struct{}{}
 
 	// Update hashes for dirty nodes.
-	dirty := make([]NodeId, len(s.dirty))
-	for id := range s.dirty {
+	dirty := make([]NodeId, len(s.dirtyHashes))
+	for id := range s.dirtyHashes {
 		dirty = append(dirty, id)
 	}
+	sort.Slice(dirty, func(i, j int) bool { return dirty[i] < dirty[j] })
 	for _, id := range dirty {
 		if _, err := s.GetHashFor(id); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	s.dirtyHashes = map[NodeId]struct{}{}
 
 	return errors.Join(
 		errors.Join(errs...),
