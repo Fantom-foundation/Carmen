@@ -83,6 +83,35 @@ func TestEthereumCompatibleHash_SingleAccountWithSingleValue(t *testing.T) {
 	}
 }
 
+func _TestEthereumCompatibleHash_TwoAccounts(t *testing.T) {
+
+	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	if err != nil {
+		t.Fatalf("failed to open empty state: %v", err)
+	}
+	balance, _ := common.ToBalance(big.NewInt(12))
+	state.SetNonce(common.Address{1}, common.ToNonce(10))
+	state.SetBalance(common.Address{2}, balance)
+	hash, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("failed to get hash for empty state: %v", err)
+	}
+	state.trie.Dump()
+
+	gethAddr1 := gethcommon.Address{1}
+	gethAddr2 := gethcommon.Address{2}
+	trie := newEthereumStateDB()
+	trie.SetNonce(gethAddr1, 10)
+	trie.SetBalance(gethAddr2, big.NewInt(12))
+	trie.Commit(true)
+	expected := trie.IntermediateRoot(true)
+	trie.DumpToConsole()
+
+	if got := gethcommon.Hash(hash); got != expected {
+		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
+	}
+}
+
 // --- The following is copied from Aida ----
 // DO NOT SUBMIT -- DO NOT SUBMIT -- DO NOT SUBMIT -- DO NOT SUBMIT
 

@@ -233,7 +233,7 @@ func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	return root.GetAccount(s, addr, path[:])
 }
 
@@ -242,7 +242,7 @@ func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info Account
 	if err != nil {
 		return NodeId(0), err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	newRoot, _, err := root.SetAccount(s, rootId, addr, path[:], info)
 	if err != nil {
 		return NodeId(0), err
@@ -255,7 +255,7 @@ func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (c
 	if err != nil {
 		return common.Value{}, err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	value, _, err := root.GetSlot(s, addr, path[:], key)
 	return value, err
 }
@@ -265,7 +265,7 @@ func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, va
 	if err != nil {
 		return NodeId(0), err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	newRoot, _, err := root.SetSlot(s, rootId, addr, path[:], key, value)
 	if err != nil {
 		return NodeId(0), err
@@ -278,7 +278,7 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 	if err != nil {
 		return err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	_, _, err = root.ClearStorage(s, rootId, addr, path[:])
 	return err
 }

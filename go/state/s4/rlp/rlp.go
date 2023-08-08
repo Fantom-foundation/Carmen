@@ -38,7 +38,7 @@ func (s String) Write(writer io.Writer) {
 		writer.Write(s.Str)
 		return
 	}
-	// For the rest, the lenght is encoded, followed by the string itself.
+	// For the rest, the length is encoded, followed by the string itself.
 	encodeLength(l, 0x80, writer)
 	writer.Write(s.Str)
 }

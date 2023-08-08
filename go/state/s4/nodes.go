@@ -187,6 +187,7 @@ type Node interface {
 type NodeSource interface {
 	GetConfig() MptConfig
 	GetNode(NodeId) (Node, error)
+	GetHashFor(NodeId) (common.Hash, error)
 }
 
 // NodeManager is a mutable extension of a NodeSource enabling the creation,
@@ -291,7 +292,7 @@ func (EmptyNode) Check(NodeSource, []Nibble) error {
 }
 
 func (EmptyNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%s-empty- (ID: %v)\n", indent, thisId)
+	fmt.Printf("%s-empty- (ID: %v, Hash: %s)\n", indent, thisId, formatHashForDump(source, thisId))
 }
 
 // ----------------------------------------------------------------------------
@@ -553,7 +554,7 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sBranch (ID: %v/%t):\n", indent, thisId, n.frozen)
+	fmt.Printf("%sBranch (ID: %v/%t, Hash: %v):\n", indent, thisId, n.frozen, formatHashForDump(source, thisId))
 	for i, child := range n.children {
 		if child.IsEmpty() {
 			continue
@@ -856,7 +857,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sExtension (ID: %v/%t): %v\n", indent, thisId, n.frozen, &n.path)
+	fmt.Printf("%sExtension (ID: %v/%t, Hash: %v): %v\n", indent, thisId, n.frozen, formatHashForDump(source, thisId), &n.path)
 	if node, err := source.GetNode(n.next); err == nil {
 		node.Dump(source, n.next, indent+"  ")
 	} else {
@@ -904,7 +905,7 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 	if n.address != address {
 		return common.Value{}, false, nil
 	}
-	subPath := KeyToNibbles(key)
+	subPath := ToNibblePath(key[:], source.GetConfig().UseHashedPaths)
 	root, err := source.GetNode(n.storage)
 	if err != nil {
 		return common.Value{}, false, err
@@ -971,7 +972,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 	sibling.address = address
 	sibling.info = info
 
-	thisPath := AddressToNibbles(n.address)
+	thisPath := ToNibblePath(n.address[:], manager.GetConfig().UseHashedPaths)
 	newRoot, err := splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
 	return newRoot, false, err
 }
@@ -1038,7 +1039,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 	if err != nil {
 		return 0, false, err
 	}
-	subPath := KeyToNibbles(key)
+	subPath := ToNibblePath(key[:], manager.GetConfig().UseHashedPaths)
 	root, hasChanged, err := node.SetValue(manager, n.storage, key, subPath[:], value)
 	if err != nil {
 		return 0, false, err
@@ -1133,7 +1134,7 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 	//  - state sub-trie is correct
 	errs := []error{}
 
-	fullPath := AddressToNibbles(n.address)
+	fullPath := ToNibblePath(n.address[:], source.GetConfig().UseHashedPaths)
 	if !IsPrefixOf(path, fullPath[:]) {
 		errs = append(errs, fmt.Errorf("account node %v located in wrong branch: %v", n.address, path))
 	}
@@ -1156,7 +1157,7 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sAccount (ID: %v/%t): %v - %v\n", indent, thisId, n.frozen, n.address, n.info)
+	fmt.Printf("%sAccount (ID: %v/%t, Hash: %v): %v - %v\n", indent, thisId, n.frozen, formatHashForDump(source, thisId), n.address, n.info)
 	if n.storage.IsEmpty() {
 		return
 	}
@@ -1243,7 +1244,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key common.Key,
 	sibling.key = key
 	sibling.value = value
 
-	thisPath := KeyToNibbles(n.key)
+	thisPath := ToNibblePath(n.key[:], manager.GetConfig().UseHashedPaths)
 	newRootId, err := splitLeafNode(manager, thisId, thisPath[:], path, siblingId, sibling)
 	return newRootId, false, err
 }
@@ -1282,7 +1283,7 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 	//  - values are in the right position of the trie
 	errs := []error{}
 
-	fullPath := KeyToNibbles(n.key)
+	fullPath := ToNibblePath(n.key[:], source.GetConfig().UseHashedPaths)
 	if !IsPrefixOf(path, fullPath[:]) {
 		errs = append(errs, fmt.Errorf("value node %v located in wrong branch: %v", n.key, path))
 	}
@@ -1295,7 +1296,7 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *ValueNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sValue (ID: %v/%t): %v - %v\n", indent, thisId, n.frozen, n.key, n.value)
+	fmt.Printf("%sValue (ID: %v/%t, Hash: %v): %v - %v\n", indent, thisId, n.frozen, formatHashForDump(source, thisId), n.key, n.value)
 }
 
 // ----------------------------------------------------------------------------
@@ -1418,4 +1419,12 @@ func (ValueNodeEncoder) Load(src []byte, node *ValueNode) error {
 	src = src[len(node.key):]
 	copy(node.value[:], src)
 	return nil
+}
+
+func formatHashForDump(source NodeSource, id NodeId) string {
+	hash, err := source.GetHashFor(id)
+	if err != nil {
+		return fmt.Sprintf("%v", err)
+	}
+	return fmt.Sprintf("0x%x", hash)
 }

@@ -20,7 +20,7 @@ func TestEmptyNode_GetAccount(t *testing.T) {
 	addr := common.Address{1}
 
 	empty := EmptyNode{}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if info, exists, err := empty.GetAccount(mgr, addr, path[:]); !info.IsEmpty() || exists || err != nil {
 		t.Fatalf("lookup should return empty info, got %v, exists %v, err %v", info, exists, err)
 	}
@@ -43,7 +43,7 @@ func TestEmptyNode_SetAccount(t *testing.T) {
 	ctxt.EXPECT().createAccount().Return(resId, after, nil)
 	ctxt.EXPECT().update(resId, after).Return(nil)
 
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to create account: %v", err)
@@ -72,7 +72,7 @@ func TestEmptyNode_SetAccount_ToEmptyInfo(t *testing.T) {
 	// The state after the insert should remain unchanged.
 	resId, after := id, node
 
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to create account: %v", err)
@@ -129,14 +129,14 @@ func TestBranchNode_GetAccount(t *testing.T) {
 
 	// Case 1: the trie does not contain the requested account.
 	trg := common.Address{}
-	path := AddressToNibbles(trg)
+	path := addressToNibbles(trg)
 	if info, exists, err := node.GetAccount(ctxt, trg, path[:]); !info.IsEmpty() || exists || err != nil {
 		t.Fatalf("lookup should return empty info, got %v, exists %v, err %v", info, exists, err)
 	}
 
 	// Case 2: the trie contains the requested account.
 	trg = common.Address{0x81}
-	path = AddressToNibbles(trg)
+	path = addressToNibbles(trg)
 	if res, exists, err := node.GetAccount(ctxt, trg, path[:]); res != info || !exists || err != nil {
 		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", info, res, exists, err)
 	}
@@ -156,7 +156,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_NoChange(t *testing.T) {
 	ctxt.Check(t, node)
 
 	addr := common.Address{0x81}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != id || changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, false, newRoot, changed, err)
 	}
@@ -179,7 +179,7 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_NoChange(t *testing.T)
 	}
 
 	addr := common.Address{0x81}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != id || changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, false, newRoot, changed, err)
 	}
@@ -206,7 +206,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 	addr := common.Address{0x81}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info2); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
@@ -249,7 +249,7 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
 	addr := common.Address{0x81}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info2)
 	if err != nil {
 		t.Fatalf("setting account failed: %v", err)
@@ -294,7 +294,7 @@ func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
 	ctxt.EXPECT().update(id, node).Return(nil)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
@@ -335,7 +335,7 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T)
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -382,7 +382,7 @@ func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
 	ctxt.EXPECT().update(id, node).Return(nil)
 
 	addr := common.Address{0x41}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
@@ -428,7 +428,7 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
 	addr := common.Address{0x41}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -470,7 +470,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 
 	empty := AccountInfo{}
 	addr := common.Address{0x41}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
 	}
@@ -508,7 +508,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *test
 
 	empty := AccountInfo{}
 	addr := common.Address{0x41}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -544,7 +544,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	wantId := node.(*BranchNode).children[4]
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != wantId || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
@@ -578,7 +578,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -629,7 +629,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	wantId := node.(*BranchNode).children[4]
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != wantId || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
@@ -680,7 +680,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainin
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -729,7 +729,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	wantId := extensionId
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != wantId || !changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", wantId, true, newRoot, changed, err)
@@ -777,7 +777,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedBy
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty)
 	if err != nil {
@@ -866,21 +866,21 @@ func TestExtensionNode_GetAccount(t *testing.T) {
 
 	// Case 1: try to locate a non-existing address
 	trg := common.Address{}
-	path := AddressToNibbles(trg)
+	path := addressToNibbles(trg)
 	if res, exists, err := node.GetAccount(ctxt, trg, path[:]); !res.IsEmpty() || exists || err != nil {
 		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", AccountInfo{}, res, exists, err)
 	}
 
 	// Case 2: locate an existing address
 	trg = common.Address{0x12, 0x35}
-	path = AddressToNibbles(trg)
+	path = addressToNibbles(trg)
 	if res, exists, err := node.GetAccount(ctxt, trg, path[:]); res != info || !exists || err != nil {
 		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", info, res, exists, err)
 	}
 
 	// Case 3: locate an address with a partial extension path overlap only
 	trg = common.Address{0x12, 0x4F}
-	path = AddressToNibbles(trg)
+	path = addressToNibbles(trg)
 	if res, exists, err := node.GetAccount(ctxt, trg, path[:]); !res.IsEmpty() || exists || err != nil {
 		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", AccountInfo{}, res, exists, err)
 	}
@@ -904,7 +904,7 @@ func TestExtensionNode_SetAccount_ExistingLeaf_UnchangedInfo(t *testing.T) {
 
 	// Attempt to create an existing account.
 	trg := common.Address{0x12, 0x35}
-	path := AddressToNibbles(trg)
+	path := addressToNibbles(trg)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, trg, path[:], info); newRoot != id || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, false, newRoot, changed, err)
 	}
@@ -934,7 +934,7 @@ func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_UnchangedInfo(t *testing.T
 
 	// Attempt to create an existing account.
 	trg := common.Address{0x12, 0x35}
-	path := AddressToNibbles(trg)
+	path := addressToNibbles(trg)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, trg, path[:], info); newRoot != id || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, false, newRoot, changed, err)
 	}
@@ -981,7 +981,7 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 
 	// Attempt to create an existing account.
 	trg := common.Address{0x12, 0x35}
-	path := AddressToNibbles(trg)
+	path := addressToNibbles(trg)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, trg, path[:], info2); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, true, newRoot, changed, err)
 	}
@@ -1032,7 +1032,7 @@ func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) 
 
 	// Attempt to create an existing account.
 	trg := common.Address{0x12, 0x35}
-	path := AddressToNibbles(trg)
+	path := addressToNibbles(trg)
 	newRoot, changed, err := node.SetAccount(ctxt, id, trg, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -1095,7 +1095,7 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 
 	// Attempt to create a new account that is partially covered by the extension.
 	addr := common.Address{0x12, 0x40}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != extensionId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", extensionId, true, newRoot, changed, err)
 	}
@@ -1156,7 +1156,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *t
 
 	// Attempt to create a new account that is partially covered by the extension.
 	addr := common.Address{0x12, 0x40}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -1212,7 +1212,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 	ctxt.EXPECT().update(id, node).Return(nil)
 
 	addr := common.Address{0x40}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != branchId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
@@ -1266,7 +1266,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T)
 	ctxt.EXPECT().update(extensionId, extension).Return(nil)
 
 	addr := common.Address{0x40}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -1322,7 +1322,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 	ctxt.EXPECT().update(id, node).Return(nil)
 
 	addr := common.Address{0x12, 0x38}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, true, newRoot, changed, err)
 	}
@@ -1375,7 +1375,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing
 	ctxt.EXPECT().update(extensionId, extension).Return(nil)
 
 	addr := common.Address{0x12, 0x38}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -1428,7 +1428,7 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 	ctxt.EXPECT().release(id).Return(nil)
 
 	addr := common.Address{0x20}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info); newRoot != branchId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
@@ -1484,7 +1484,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *
 	ctxt.EXPECT().update(branchId, branch)
 
 	addr := common.Address{0x20}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to set account for extension node: %v", err)
@@ -1545,7 +1545,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 	ctxt.EXPECT().update(id, node).Return(nil)
 
 	addr := common.Address{0x12}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	empty := AccountInfo{}
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != id || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, true, newRoot, changed, err)
@@ -1605,7 +1605,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 	ctxt.EXPECT().update(extensionId, extension)
 
 	addr := common.Address{0x12}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	empty := AccountInfo{}
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty)
 	if err != nil {
@@ -1653,7 +1653,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(t *test
 	resultId, result := ctxt.Get("R")
 
 	addr := common.Address{0x12}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	empty := AccountInfo{}
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty); newRoot != resultId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", resultId, true, newRoot, changed, err)
@@ -1696,7 +1696,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(
 	ctxt.EXPECT().release(extensionId)
 
 	addr := common.Address{0x12}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	empty := AccountInfo{}
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr, path[:], empty)
 	if err != nil {
@@ -1778,7 +1778,7 @@ func TestAccountNode_GetAccount(t *testing.T) {
 	node := &AccountNode{info: info}
 
 	// Case 1: the node does not contain the requested info.
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if res, exists, err := node.GetAccount(mgr, addr, path[:]); !res.IsEmpty() || exists || err != nil {
 		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", AccountInfo{}, res, exists, err)
 	}
@@ -1795,7 +1795,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	id, node := ctxt.Build(&Account{addr, info})
@@ -1812,7 +1812,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	_, before := ctxt.Build(&Account{addr, info})
@@ -1842,7 +1842,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) 
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
@@ -1863,7 +1863,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
@@ -1894,7 +1894,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{}
 
@@ -1916,7 +1916,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{}
 
@@ -1961,7 +1961,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 	ctxt.EXPECT().update(accountId, account).Return(nil)
 	ctxt.EXPECT().update(res, after).Return(nil)
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -1997,7 +1997,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
@@ -2040,7 +2040,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 	ctxt.EXPECT().update(res, after).Return(nil)
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2082,7 +2082,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
 	ctxt.EXPECT().update(extensionId, extension).Return(nil)
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
@@ -2108,7 +2108,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *
 	id, node := ctxt.Build(&Account{addr1, info1})
 	res, after := id, node
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2133,7 +2133,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroI
 
 	_, after := ctxt.Build(&Account{addr1, info1})
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
@@ -2163,7 +2163,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t
 
 	res, after := id, node
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	if newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2188,7 +2188,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Zer
 
 	_, after := ctxt.Build(&Account{addr1, info1})
 
-	path := AddressToNibbles(addr2)
+	path := addressToNibbles(addr2)
 	newRoot, changed, err := node.SetAccount(ctxt, id, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
@@ -2212,7 +2212,7 @@ func TestAccountNode_GetValue(t *testing.T) {
 	node := &AccountNode{}
 
 	key := common.Key{}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	if _, _, err := node.GetValue(ctxt, key, path[:]); err == nil {
 		t.Fatalf("GetValue call should always return an error")
 	}
@@ -2223,7 +2223,7 @@ func TestAccountNode_SetValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value := common.Value{1}
 
 	id := AccountId(12)
@@ -2239,7 +2239,7 @@ func TestAccountNode_Frozen_SetValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value := common.Value{1}
 
 	id := AccountId(12)
@@ -2313,7 +2313,7 @@ func TestValueNode_GetAccount(t *testing.T) {
 	node := &ValueNode{}
 
 	addr := common.Address{}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	if _, _, err := node.GetAccount(ctxt, addr, path[:]); err == nil {
 		t.Fatalf("GetAccount call should always return an error")
 	}
@@ -2324,7 +2324,7 @@ func TestValueNode_SetAccount(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	id := ValueId(12)
@@ -2340,7 +2340,7 @@ func TestValueNode_Frozen_SetAccount(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	addr := common.Address{0x21}
-	path := AddressToNibbles(addr)
+	path := addressToNibbles(addr)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	id := ValueId(12)
@@ -2361,7 +2361,7 @@ func TestValueNode_GetValue(t *testing.T) {
 	node := &ValueNode{value: value}
 
 	// Case 1: the node does not contain the requested info.
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	if res, exists, err := node.GetValue(mgr, key, path[:]); res != (common.Value{}) || exists || err != nil {
 		t.Fatalf("lookup should return %v, got %v, exists %v, err %v", common.Value{}, res, exists, err)
 	}
@@ -2378,7 +2378,7 @@ func TestValueNode_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value := common.Value{1}
 
 	id, node := ctxt.Build(&Value{key, value})
@@ -2395,7 +2395,7 @@ func TestValueNode_Frozen_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value := common.Value{1}
 
 	id, node := ctxt.Build(&Value{key, value})
@@ -2413,7 +2413,7 @@ func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
@@ -2434,7 +2434,7 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_DifferentValue(t *testing.T) 
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
@@ -2466,7 +2466,7 @@ func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
@@ -2488,7 +2488,7 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 	ctxt := newNodeContext(ctrl)
 
 	key := common.Key{0x21}
-	path := KeyToNibbles(key)
+	path := keyToNibbles(key)
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
@@ -2534,7 +2534,7 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *test
 	ctxt.EXPECT().update(valueId, value).Return(nil)
 	ctxt.EXPECT().update(res, after).Return(nil)
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	if newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2570,7 +2570,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(
 	ctxt.EXPECT().createBranch().Return(branchId, branch, nil)
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2)
 	if err != nil {
 		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
@@ -2613,7 +2613,7 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *te
 	ctxt.EXPECT().update(branchId, branch).Return(nil)
 	ctxt.EXPECT().update(res, after).Return(nil)
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	if newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2655,7 +2655,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 	ctxt.EXPECT().createExtension().Return(extensionId, extension, nil)
 	ctxt.EXPECT().update(extensionId, extension).Return(nil)
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2)
 	if err != nil {
 		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
@@ -2681,7 +2681,7 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing
 	id, node := ctxt.Build(&Value{key1, value1})
 	res, after := id, node
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	if newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2704,7 +2704,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *
 	node.Freeze(ctxt)
 	_, after := ctxt.Build(&Value{key1, value1})
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2)
 	if err != nil {
 		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
@@ -2734,7 +2734,7 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testi
 
 	res, after := id, node
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	if newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2757,7 +2757,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t
 	node.Freeze(ctxt)
 	_, after := ctxt.Build(&Value{key1, value1})
 
-	path := KeyToNibbles(key2)
+	path := keyToNibbles(key2)
 	newRoot, changed, err := node.SetValue(ctxt, id, key2, path[:], value2)
 	if err != nil {
 		t.Fatalf("failed to SetValue on frozen ValueNode: %v", err)
@@ -2976,6 +2976,7 @@ func newNodeContext(ctrl *gomock.Controller) *nodeContext {
 		tags:            map[string]entry{},
 	}
 	res.EXPECT().GetNode(EmptyId()).AnyTimes().Return(EmptyNode{}, nil)
+	res.EXPECT().GetConfig().AnyTimes().Return(S4Config)
 	return res
 }
 
@@ -3122,4 +3123,12 @@ func (c *nodeContext) equalTries(a, b NodeId) bool {
 	nodeA, _ := c.GetNode(a)
 	nodeB, _ := c.GetNode(b)
 	return c.equal(nodeA, nodeB)
+}
+
+func addressToNibbles(addr common.Address) []Nibble {
+	return ToNibblePath(addr[:], false)
+}
+
+func keyToNibbles(key common.Key) []Nibble {
+	return ToNibblePath(key[:], false)
 }

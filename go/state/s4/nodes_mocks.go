@@ -263,6 +263,21 @@ func (mr *MockNodeSourceMockRecorder) GetConfig() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockNodeSource)(nil).GetConfig))
 }
 
+// GetHashFor mocks base method.
+func (m *MockNodeSource) GetHashFor(arg0 NodeId) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHashFor", arg0)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHashFor indicates an expected call of GetHashFor.
+func (mr *MockNodeSourceMockRecorder) GetHashFor(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashFor", reflect.TypeOf((*MockNodeSource)(nil).GetHashFor), arg0)
+}
+
 // GetNode mocks base method.
 func (m *MockNodeSource) GetNode(arg0 NodeId) (Node, error) {
 	m.ctrl.T.Helper()
@@ -313,6 +328,21 @@ func (m *MockNodeManager) GetConfig() MptConfig {
 func (mr *MockNodeManagerMockRecorder) GetConfig() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfig", reflect.TypeOf((*MockNodeManager)(nil).GetConfig))
+}
+
+// GetHashFor mocks base method.
+func (m *MockNodeManager) GetHashFor(arg0 NodeId) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHashFor", arg0)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHashFor indicates an expected call of GetHashFor.
+func (mr *MockNodeManagerMockRecorder) GetHashFor(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashFor", reflect.TypeOf((*MockNodeManager)(nil).GetHashFor), arg0)
 }
 
 // GetNode mocks base method.

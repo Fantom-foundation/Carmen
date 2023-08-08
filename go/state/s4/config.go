@@ -9,9 +9,10 @@ type MptConfig struct {
 	// logging and debugging purposes.
 	Name string
 
-	// If set to true, the address of accounts is hashed using keccak256. If
-	// false, the address is directly used as key for the MPT.
-	UseHashedAccountAddress bool
+	// If set to true, the address of accounts and keys of values are hashed
+	// using keccak256 before being used to navigate the trie. If false, the
+	// addresses and keys are directly used as paths for the MPT.
+	UseHashedPaths bool
 
 	// If enabled, leafs retain partial paths, while if disabled, the full path
 	// is stored. The partial path mode is required for Ethereum's MPT variant.
@@ -26,17 +27,17 @@ type MptConfig struct {
 }
 
 var S4Config = MptConfig{
-	Name:                    "S4",
-	UseHashedAccountAddress: false,
-	PartialPathsInLeafs:     false,
-	Hasher:                  DirectHasher{},
+	Name:                "S4",
+	UseHashedPaths:      false,
+	PartialPathsInLeafs: false,
+	Hasher:              DirectHasher{},
 }
 
 var S5Config = MptConfig{
-	Name:                    "S5",
-	UseHashedAccountAddress: true,
-	PartialPathsInLeafs:     true,
-	Hasher:                  MptHasher{},
+	Name:                "S5",
+	UseHashedPaths:      true,
+	PartialPathsInLeafs: true,
+	Hasher:              MptHasher{},
 }
 
 var allMptConfigs = []MptConfig{S4Config, S5Config}

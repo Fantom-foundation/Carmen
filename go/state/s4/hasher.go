@@ -129,6 +129,11 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 	items := make([]rlp.Item, len(children)+1)
 
 	for i, child := range children {
+		if child.IsEmpty() {
+			items[i] = rlp.String{}
+			continue
+		}
+
 		node, err := nodes.GetNode(child)
 		if err != nil {
 			return nil, err
@@ -155,6 +160,9 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 
 	var buffer bytes.Buffer
 	rlp.List{Items: items}.Write(&buffer)
+
+	fmt.Printf("Branch node: %v\n", buffer.Bytes())
+
 	return buffer.Bytes(), nil
 }
 
@@ -201,16 +209,24 @@ func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]by
 	items[3] = &rlp.String{Str: info.CodeHash[:]}
 	value := rlp.Encode(rlp.List{Items: items})
 
-	// TODO: consider the length of the path
-	path := keccak256(node.address[:])
-	key := make([]byte, 33)
-	key[0] = 32 // TODO: encode actual path length?
-	copy(key[1:], path[:])
+	//fmt.Printf("Account encoding: %v\n", value)
+
+	// TODO: get this number of nibbles from the node!
+	numNibbles := 64 // number of nibbles in path
 
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = &rlp.String{Str: key}
+	items[0] = &rlp.String{Str: encodePath(node.address[:], numNibbles)}
 	items[1] = &rlp.String{Str: value}
+
+	/*
+		fmt.Printf("Path:    %v\n", path)
+		fmt.Printf("Nibbles: %v\n", ToNibblePath(path[:], false))
+		fmt.Printf("Packed:      %v\n", ToNibblePath(packedNibbles[:], false))
+		fmt.Printf("Compact: %v\n", ToNibblePath(compact, false))
+
+		fmt.Printf("Account-Node encoding: %v\n", rlp.Encode(rlp.List{Items: items}))
+	*/
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
@@ -220,21 +236,48 @@ func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]by
 
 	items := make([]rlp.Item, 2)
 
-	path := keccak256(node.key[:])
-	key := make([]byte, 33)
-	key[0] = 32 // TODO: encode actual path length?
-	copy(key[1:], path[:])
-	items[0] = &rlp.String{Str: key} // = should be the non-consumed key
+	// The first item is an encoded path fragment.
+	numNibbles := 64 // TODO: load from the node
+	items[0] = &rlp.String{Str: encodePath(node.key[:], numNibbles)}
 
-	// leading zeros of the value are ignored
+	// The second item is the value without leading zeros.
 	value := node.value[:]
 	for len(value) > 0 && value[0] == 0 {
 		value = value[1:]
 	}
-
 	items[1] = &rlp.String{Str: rlp.Encode(&rlp.String{Str: value[:]})}
 
 	var buffer bytes.Buffer
 	rlp.List{Items: items}.Write(&buffer)
 	return buffer.Bytes(), nil
+}
+
+func encodePath(unhashed []byte, numNibbles int) []byte {
+	// Path encosing derived from Ethereum.
+	// see https://github.com/ethereum/go-ethereum/blob/v1.12.0/trie/encoding.go#L37
+	oddLength := false
+	if numNibbles%2 == 1 {
+		oddLength = true
+	}
+
+	compact := make([]byte, numNibbles/2+1)
+
+	// The high nibble of the first byte encodes the 'is-value' mark and whether the
+	// length is even or odd.
+	compact[0] |= 1 << 5                      // Accounts are always values
+	compact[0] |= (byte(numNibbles) % 2) << 4 // odd flag
+
+	// The rest is filled with the nibbles from the path.
+	path := keccak256(unhashed)
+	packedNibbles := path[32-(numNibbles/2+numNibbles%2):]
+
+	// If there is an odd number of nibbles, the first is included in the
+	// low-part of the compact path encoding.
+	if oddLength {
+		compact[0] |= packedNibbles[0] & 0xf
+		packedNibbles = packedNibbles[1:]
+	}
+	// The rest of the nibbles can be copied.
+	copy(compact[1:], packedNibbles)
+	return compact
 }

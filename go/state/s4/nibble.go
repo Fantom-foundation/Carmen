@@ -1,7 +1,5 @@
 package s4
 
-import "github.com/Fantom-foundation/Carmen/go/common"
-
 // Nibble is a 4-bit signed integer in the range 0-F. It is a single letter
 // used to navigate in the MPT structure.
 type Nibble byte
@@ -22,19 +20,15 @@ func (n Nibble) String() string {
 	return string(n.Rune())
 }
 
-// AddressToNibbles converts a common.Address into a fixed-length sequence of
-// Nibbles. Slices of Nibbles are the main format used while navigating MPTs.
-func AddressToNibbles(addr common.Address) [40]Nibble {
-	var res [40]Nibble
-	parseNibbles(res[:], addr[:])
-	return res
-}
-
-// KeyToNibbles converts a common.Key into a fixed-length sequence of Nibbles.
-// Slices of Nibbles are the main format used while navigating MPTs.
-func KeyToNibbles(key common.Key) [64]Nibble {
-	var res [64]Nibble
-	parseNibbles(res[:], key[:])
+// ToNibblePath converts the given path into a slice of Nibbles. Optionally, the
+// path is hashed before being converted.
+func ToNibblePath(path []byte, hashPath bool) []Nibble {
+	if hashPath {
+		hash := keccak256(path)
+		return ToNibblePath(hash[:], false)
+	}
+	res := make([]Nibble, len(path)*2)
+	parseNibbles(res, path)
 	return res
 }
 
