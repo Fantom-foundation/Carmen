@@ -40,6 +40,22 @@ func (p *Path) Length() int {
 	return int(p.length)
 }
 
+// TODO: test this!
+func (p *Path) GetPackedNibbles() []byte {
+	// If the length is even, we can return a prefix of the path.
+	if p.length%2 == 0 {
+		return p.path[:p.length/2]
+	}
+	// Otherwise we need to shift the path by 4 bit.
+	length := p.length/2 + 1
+	res := make([]byte, length)
+	res[0] = p.path[0] >> 4
+	for i := 1; i < len(res); i++ {
+		res[i] = (p.path[i]&0x7)<<4 | (p.path[i+1] >> 4)
+	}
+	return res
+}
+
 // Get returns the Nibble value at the given path position, where pos == 0
 // is the first position and Length()-1 the last. For positions outside this
 // range the value 0 is returned.

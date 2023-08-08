@@ -166,7 +166,9 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
 	items := make([]rlp.Item, 2)
 
-	items[0] = &rlp.String{} // = should be the extension path
+	numNibbles := node.path.Length()
+	packedNibbles := node.path.GetPackedNibbles()
+	items[0] = &rlp.String{Str: encodePartialPath(packedNibbles, numNibbles, false)}
 
 	next, err := nodes.GetNode(node.next)
 	if err != nil {
@@ -245,6 +247,12 @@ func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]by
 }
 
 func encodePath(unhashed []byte, numNibbles int) []byte {
+	path := keccak256(unhashed)
+	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
+}
+
+// Requires packedNibbles to include nibbles as [0a bc de] or [ab cd ef]
+func encodePartialPath(packedNibbles []byte, numNibbles int, targetsValue bool) []byte {
 	// Path encosing derived from Ethereum.
 	// see https://github.com/ethereum/go-ethereum/blob/v1.12.0/trie/encoding.go#L37
 	oddLength := false
@@ -254,14 +262,12 @@ func encodePath(unhashed []byte, numNibbles int) []byte {
 
 	compact := make([]byte, numNibbles/2+1)
 
-	// The high nibble of the first byte encodes the 'is-value' mark and whether the
-	// length is even or odd.
-	compact[0] |= 1 << 5                      // Accounts are always values
+	// The high nibble of the first byte encodes the 'is-value' mark
+	// and whether the length is even or odd.
+	if targetsValue {
+		compact[0] |= 1 << 5
+	}
 	compact[0] |= (byte(numNibbles) % 2) << 4 // odd flag
-
-	// The rest is filled with the nibbles from the path.
-	path := keccak256(unhashed)
-	packedNibbles := path[32-(numNibbles/2+numNibbles%2):]
 
 	// If there is an odd number of nibbles, the first is included in the
 	// low-part of the compact path encoding.

@@ -96,7 +96,6 @@ func TestEthereumCompatibleHash_TwoAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get hash for empty state: %v", err)
 	}
-	state.trie.Dump()
 
 	gethAddr1 := gethcommon.Address{1}
 	gethAddr2 := gethcommon.Address{2}
@@ -105,7 +104,6 @@ func TestEthereumCompatibleHash_TwoAccounts(t *testing.T) {
 	trie.SetBalance(gethAddr2, big.NewInt(12))
 	trie.Commit(true)
 	expected := trie.IntermediateRoot(true)
-	trie.DumpToConsole()
 
 	if got := gethcommon.Hash(hash); got != expected {
 		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
@@ -130,7 +128,6 @@ func TestEthereumCompatibleHash_TwoAccountsWithValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get hash for empty state: %v", err)
 	}
-	state.trie.Dump()
 
 	gethAddr1 := gethcommon.Address{1}
 	gethAddr2 := gethcommon.Address{2}
@@ -143,10 +140,207 @@ func TestEthereumCompatibleHash_TwoAccountsWithValues(t *testing.T) {
 	trie.SetState(gethAddr2, gethcommon.Hash{2}, gethcommon.Hash{2})
 	trie.Commit(true)
 	expected := trie.IntermediateRoot(true)
-	trie.DumpToConsole()
 
 	if got := gethcommon.Hash(hash); got != expected {
 		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
+	}
+}
+
+func TestEthereumCompatibleHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
+	// These two addresses have the same first byte when hashed:
+	addr1 := common.Address{0x04}
+	addr2 := common.Address{0x2F}
+	if a, b := keccak256(addr1[:])[0], keccak256(addr2[:])[0]; a != b {
+		t.Fatalf("invalid setup, addresses do not have common prefix")
+	}
+
+	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	if err != nil {
+		t.Fatalf("failed to open empty state: %v", err)
+	}
+	balance, _ := common.ToBalance(big.NewInt(12))
+	state.SetNonce(addr1, common.ToNonce(10))
+	state.SetBalance(addr2, balance)
+	hash, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("failed to get hash for empty state: %v", err)
+	}
+
+	gethAddr1 := gethcommon.Address(addr1)
+	gethAddr2 := gethcommon.Address(addr2)
+	trie := newEthereumStateDB()
+	trie.SetNonce(gethAddr1, 10)
+	trie.SetBalance(gethAddr2, big.NewInt(12))
+	trie.Commit(true)
+	expected := trie.IntermediateRoot(true)
+
+	if got := gethcommon.Hash(hash); got != expected {
+		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
+	}
+}
+
+func TestEthereumCompatibleHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
+	// These two addresses have the same first nibble when hashed:
+	addr1 := common.Address{0x02}
+	addr2 := common.Address{0x07}
+	if a, b := keccak256(addr1[:])[0], keccak256(addr2[:])[0]; (a>>4) != (b>>4) && a == b {
+		t.Fatalf("invalid setup, addresses do not have single prefix bit prefix")
+	}
+
+	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	if err != nil {
+		t.Fatalf("failed to open empty state: %v", err)
+	}
+	balance, _ := common.ToBalance(big.NewInt(12))
+	state.SetNonce(addr1, common.ToNonce(10))
+	state.SetBalance(addr2, balance)
+	hash, err := state.GetHash()
+	if err != nil {
+		t.Fatalf("failed to get hash for empty state: %v", err)
+	}
+
+	gethAddr1 := gethcommon.Address(addr1)
+	gethAddr2 := gethcommon.Address(addr2)
+	trie := newEthereumStateDB()
+	trie.SetNonce(gethAddr1, 10)
+	trie.SetBalance(gethAddr2, big.NewInt(12))
+	trie.Commit(true)
+	expected := trie.IntermediateRoot(true)
+
+	if got := gethcommon.Hash(hash); got != expected {
+		t.Errorf("invalid hash\nexpected %v\n     got %v", expected, got)
+	}
+}
+
+func TestEthereumCompatibleHash_InsertLotsOfData(t *testing.T) {
+	const N = 100
+
+	reference := newEthereumStateDB()
+
+	trie, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	defer trie.Close()
+
+	address := getTestAddresses(N)
+	keys := getTestKeys(N)
+
+	// Fill the tree.
+	for i, addr := range address {
+		refAddr := gethcommon.Address(addr)
+		trgAddr := common.Address(addr)
+
+		reference.SetNonce(refAddr, uint64(i)+1)
+		if err := trie.SetNonce(trgAddr, common.ToNonce(uint64(i)+1)); err != nil {
+			t.Fatalf("failed to insert account: %v", err)
+		}
+
+		for i, key := range keys {
+			reference.SetState(refAddr, gethcommon.Hash(key), gethcommon.Hash{byte(i)})
+			if err := trie.SetStorage(trgAddr, key, common.Value{byte(i)}); err != nil {
+				t.Fatalf("failed to insert value: %v", err)
+			}
+
+			want := common.Hash(reference.IntermediateRoot(true))
+			got, err := trie.GetHash()
+			if err != nil {
+				t.Fatalf("failed to compute hash: %v", err)
+			}
+
+			if got != want {
+				fmt.Printf("Have:\n")
+				trie.trie.Dump()
+				fmt.Printf("Should:\n")
+				reference.DumpToConsole()
+
+				t.Fatalf("invalid hash, expected %x, got %x", got, want)
+			}
+		}
+	}
+
+	// Delete all accounts.
+	for _, addr := range address {
+		refAddr := gethcommon.Address(addr)
+		trgAddr := common.Address(addr)
+
+		reference.SetNonce(refAddr, 0)
+		if err := trie.DeleteAccount(trgAddr); err != nil {
+			t.Fatalf("failed to delete account: %v", err)
+		}
+
+		want := common.Hash(reference.IntermediateRoot(true))
+		got, err := trie.GetHash()
+		if err != nil {
+			t.Fatalf("failed to compute hash: %v", err)
+		}
+
+		if got != want {
+			fmt.Printf("Have:\n")
+			trie.trie.Dump()
+			fmt.Printf("Should:\n")
+			reference.DumpToConsole()
+
+			t.Fatalf("invalid hash, expected %x, got %x", got, want)
+		}
+	}
+}
+
+func TestEthereumCompatibleHash_InsertLotsOfValues(t *testing.T) {
+	const N = 1000
+
+	reference := newEthereumStateDB()
+
+	trie, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	defer trie.Close()
+
+	refAddr := gethcommon.Address{}
+	trgAddr := common.Address{}
+	keys := getTestKeys(N)
+
+	// Create a single account.
+	reference.SetNonce(refAddr, 1)
+	if err := trie.SetNonce(trgAddr, common.ToNonce(1)); err != nil {
+		t.Fatalf("failed to insert account: %v", err)
+	}
+
+	// Insert keys one-by-one.
+	for i, key := range keys {
+		reference.SetState(refAddr, gethcommon.Hash(key), gethcommon.Hash{byte(i)})
+		if err := trie.SetStorage(trgAddr, key, common.Value{byte(i)}); err != nil {
+			t.Fatalf("failed to insert value: %v", err)
+		}
+
+		want := common.Hash(reference.IntermediateRoot(true))
+		got, err := trie.GetHash()
+		if err != nil {
+			t.Fatalf("failed to compute hash: %v", err)
+		}
+
+		if got != want {
+			t.Fatalf("invalid hash, expected %v, got %v", got, want)
+		}
+	}
+
+	// Delete all values.
+	for _, key := range keys {
+		reference.SetState(refAddr, gethcommon.Hash(key), gethcommon.Hash{})
+		if err := trie.SetStorage(trgAddr, key, common.Value{}); err != nil {
+			t.Fatalf("failed to insert value: %v", err)
+		}
+
+		want := common.Hash(reference.IntermediateRoot(true))
+		got, err := trie.GetHash()
+		if err != nil {
+			t.Fatalf("failed to compute hash: %v", err)
+		}
+
+		if got != want {
+			t.Fatalf("invalid hash, expected %v, got %v", got, want)
+		}
 	}
 }
 

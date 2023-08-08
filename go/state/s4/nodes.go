@@ -1127,6 +1127,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 			return newId, false, nil
 		}
 		n.storage = root
+		hasChanged = true
 		manager.update(thisId, n)
 	} else if hasChanged {
 		manager.invalidateHash(thisId)
