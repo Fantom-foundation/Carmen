@@ -75,6 +75,9 @@ func getReferenceStateFor(params Parameters) (State, error) {
 	if params.Schema == 4 {
 		return NewGoMemoryS4State(params)
 	}
+	if params.Schema == 5 {
+		return NewGoMemoryS5State(params)
+	}
 	return NewCppInMemoryState(params)
 }
 

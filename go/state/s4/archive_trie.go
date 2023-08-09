@@ -28,13 +28,13 @@ type ArchiveTrie struct {
 	rootFile string   // the file storing the list of roots
 }
 
-func OpenArchiveTrie(directory string) (archive.Archive, error) {
+func OpenArchiveTrie(directory string, config MptConfig) (archive.Archive, error) {
 	rootfile := directory + "/roots.dat"
 	roots, err := loadRoots(rootfile)
 	if err != nil {
 		return nil, err
 	}
-	forest, err := OpenFileForest(directory, Archive)
+	forest, err := OpenFileForest(directory, config, Archive)
 	if err != nil {
 		return nil, err
 	}

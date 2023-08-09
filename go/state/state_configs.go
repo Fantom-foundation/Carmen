@@ -54,7 +54,12 @@ const (
 	LevelDbArchive ArchiveType = 1
 	SqliteArchive  ArchiveType = 2
 	S4Archive      ArchiveType = 3
+	S5Archive      ArchiveType = 4
 )
+
+var allArchiveTypes = []ArchiveType{
+	NoArchive, LevelDbArchive, SqliteArchive, S4Archive, S5Archive,
+}
 
 func (a ArchiveType) String() string {
 	switch a {
@@ -66,6 +71,8 @@ func (a ArchiveType) String() string {
 		return "SqliteArchive"
 	case S4Archive:
 		return "S4Archive"
+	case S5Archive:
+		return "S5Archive"
 	}
 	return "unknown"
 }
@@ -75,7 +82,7 @@ type StateSchema uint8
 const defaultSchema StateSchema = 1
 
 func GetAllSchemas() []StateSchema {
-	return []StateSchema{1, 2, 3, 4}
+	return []StateSchema{1, 2, 3, 4, 5}
 }
 
 // Parameters struct defining configuration parameters for state instances.
@@ -102,6 +109,9 @@ func NewGoMemoryState(params Parameters) (State, error) {
 	}
 	if params.Schema == 4 {
 		return NewGoMemoryS4State(params)
+	}
+	if params.Schema == 5 {
+		return NewGoMemoryS5State(params)
 	}
 
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
@@ -213,6 +223,9 @@ func NewGoFileState(params Parameters) (State, error) {
 	}
 	if params.Schema == 4 {
 		return NewGoFileS4State(params)
+	}
+	if params.Schema == 5 {
+		return NewGoFileS5State(params)
 	}
 
 	indexPath, storePath, err := createSubDirs(params.Directory)
@@ -387,6 +400,9 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 	}
 	if params.Schema == 4 {
 		return NewGoFileS4State(params)
+	}
+	if params.Schema == 5 {
+		return NewGoFileS5State(params)
 	}
 
 	indexPath, storePath, err := createSubDirs(params.Directory)
@@ -868,7 +884,15 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := s4.OpenArchiveTrie(path)
+		arch, err := s4.OpenArchiveTrie(path, s4.S4Config)
+		return arch, nil, err
+
+	case S5Archive:
+		path, err := getArchivePath()
+		if err != nil {
+			return nil, nil, err
+		}
+		arch, err := s4.OpenArchiveTrie(path, s4.S5Config)
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)

@@ -40,6 +40,8 @@ func (m StorageMode) String() string {
 // Forest is a utility node managing nodes for one or more Tries.
 // It provides the common foundation for the Live and Archive Tries.
 type Forest struct {
+	config MptConfig
+
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
 	extensions stock.Stock[uint64, ExtensionNode]
@@ -58,9 +60,6 @@ type Forest struct {
 	// state does not match their on-disk content.
 	dirty map[NodeId]struct{}
 
-	// The hasher used to compute state hashes.
-	hasher Hasher
-
 	// A store for hashes.
 	hashes      HashStore
 	dirtyHashes map[NodeId]struct{}
@@ -69,9 +68,10 @@ type Forest struct {
 // The number of elements to retain in the node cache.
 const cacheCapacity = 10_000_000
 
-func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
+func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
-	branches, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 			branches.Close()
 		}
 	}()
-	extensions, err := memory.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	extensions, err := memory.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 			extensions.Close()
 		}
 	}()
-	accounts, err := memory.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	accounts, err := memory.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 			accounts.Close()
 		}
 	}()
-	values, err := memory.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	values, err := memory.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
@@ -112,12 +112,13 @@ func OpenInMemoryForest(directory string, mode StorageMode) (*Forest, error) {
 		return nil, err
 	}
 	success = true
-	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
 }
 
-func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
+func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
-	branches, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/branches")
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +127,7 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 			branches.Close()
 		}
 	}()
-	extensions, err := file.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/extensions")
+	extensions, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +136,7 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 			extensions.Close()
 		}
 	}()
-	accounts, err := file.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/accounts")
+	accounts, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +145,7 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 			accounts.Close()
 		}
 	}()
-	values, err := file.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/values")
+	values, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
@@ -158,23 +159,24 @@ func OpenFileForest(directory string, mode StorageMode) (*Forest, error) {
 		return nil, err
 	}
 	success = true
-	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
 }
 
-func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
-	branchesA, err := file.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/A/branches")
+func OpenFileShadowForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	branchesA, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/A/branches")
 	if err != nil {
 		return nil, err
 	}
-	extensionsA, err := file.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/A/extensions")
+	extensionsA, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/A/extensions")
 	if err != nil {
 		return nil, err
 	}
-	accountsA, err := file.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/A/accounts")
+	accountsA, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/A/accounts")
 	if err != nil {
 		return nil, err
 	}
-	valuesA, err := file.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/A/values")
+	valuesA, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/A/values")
 	if err != nil {
 		return nil, err
 	}
@@ -182,19 +184,19 @@ func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
 	if err != nil {
 		return nil, err
 	}
-	branchesB, err := memory.OpenStock[uint64, BranchNode](BranchNodeEncoder{}, directory+"/B/branches")
+	branchesB, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/B/branches")
 	if err != nil {
 		return nil, err
 	}
-	extensionsB, err := memory.OpenStock[uint64, ExtensionNode](ExtensionNodeEncoder{}, directory+"/B/extensions")
+	extensionsB, err := memory.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/B/extensions")
 	if err != nil {
 		return nil, err
 	}
-	accountsB, err := memory.OpenStock[uint64, AccountNode](AccountNodeEncoder{}, directory+"/B/accounts")
+	accountsB, err := memory.OpenStock[uint64, AccountNode](accountEncoder, directory+"/B/accounts")
 	if err != nil {
 		return nil, err
 	}
-	valuesB, err := memory.OpenStock[uint64, ValueNode](ValueNodeEncoder{}, directory+"/B/values")
+	valuesB, err := memory.OpenStock[uint64, ValueNode](valueEncoder, directory+"/B/values")
 	if err != nil {
 		return nil, err
 	}
@@ -202,10 +204,11 @@ func OpenFileShadowForest(directory string, mode StorageMode) (*Forest, error) {
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
 }
 
 func makeForest(
+	config MptConfig,
 	directory string,
 	branches stock.Stock[uint64, BranchNode],
 	extensions stock.Stock[uint64, ExtensionNode],
@@ -215,6 +218,7 @@ func makeForest(
 	mode StorageMode,
 ) (*Forest, error) {
 	return &Forest{
+		config:      config,
 		branches:    branches,
 		extensions:  extensions,
 		accounts:    accounts,
@@ -222,7 +226,6 @@ func makeForest(
 		storageMode: mode,
 		nodeCache:   common.NewCache[NodeId, Node](cacheCapacity),
 		dirty:       map[NodeId]struct{}{},
-		hasher:      &DirectHasher{},
 		hashes:      hashes,
 		dirtyHashes: map[NodeId]struct{}{},
 	}, nil
@@ -233,7 +236,7 @@ func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	return root.GetAccount(s, addr, path[:])
 }
 
@@ -242,7 +245,7 @@ func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info Account
 	if err != nil {
 		return NodeId(0), err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	newRoot, _, err := root.SetAccount(s, rootId, addr, path[:], info)
 	if err != nil {
 		return NodeId(0), err
@@ -255,7 +258,7 @@ func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (c
 	if err != nil {
 		return common.Value{}, err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	value, _, err := root.GetSlot(s, addr, path[:], key)
 	return value, err
 }
@@ -265,7 +268,7 @@ func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, va
 	if err != nil {
 		return NodeId(0), err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	newRoot, _, err := root.SetSlot(s, rootId, addr, path[:], key, value)
 	if err != nil {
 		return NodeId(0), err
@@ -278,15 +281,15 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 	if err != nil {
 		return err
 	}
-	path := AddressToNibbles(addr)
+	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
 	_, _, err = root.ClearStorage(s, rootId, addr, path[:])
 	return err
 }
 
-func (s *Forest) GetHashFor(id NodeId) (common.Hash, error) {
-	// The empty node is forced to have the empty hash.
+func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
+	// The empty node is never dirty and needs to be handled explicitly.
 	if id.IsEmpty() {
-		return common.Hash{}, nil
+		return s.config.Hasher.GetHash(EmptyNode{}, s, s)
 	}
 	// Non-dirty hashes can be taken from the store.
 	if _, dirty := s.dirtyHashes[id]; !dirty {
@@ -298,7 +301,7 @@ func (s *Forest) GetHashFor(id NodeId) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	hash, err := s.hasher.GetHash(node, s)
+	hash, err := s.config.Hasher.GetHash(node, s, s)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -338,17 +341,20 @@ func (s *Forest) Flush() error {
 			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
 		}
 	}
+	s.dirty = map[NodeId]struct{}{}
 
 	// Update hashes for dirty nodes.
-	dirty := make([]NodeId, len(s.dirty))
-	for id := range s.dirty {
+	dirty := make([]NodeId, len(s.dirtyHashes))
+	for id := range s.dirtyHashes {
 		dirty = append(dirty, id)
 	}
+	sort.Slice(dirty, func(i, j int) bool { return dirty[i] < dirty[j] })
 	for _, id := range dirty {
-		if _, err := s.GetHashFor(id); err != nil {
+		if _, err := s.getHashFor(id); err != nil {
 			errs = append(errs, err)
 		}
 	}
+	s.dirtyHashes = map[NodeId]struct{}{}
 
 	return errors.Join(
 		errors.Join(errs...),
@@ -424,6 +430,10 @@ func (s *Forest) Check(rootId NodeId) error {
 }
 
 // -- NodeManager interface --
+
+func (s *Forest) getConfig() MptConfig {
+	return s.config
+}
 
 func (s *Forest) getNode(id NodeId) (Node, error) {
 	// Start by checking the node cache.
@@ -597,4 +607,22 @@ func (s *Forest) release(id NodeId) error {
 		return s.values.Delete(id.Index())
 	}
 	return fmt.Errorf("unable to release node %v", id)
+}
+
+func getEncoder(config MptConfig) (
+	stock.ValueEncoder[AccountNode],
+	stock.ValueEncoder[BranchNode],
+	stock.ValueEncoder[ExtensionNode],
+	stock.ValueEncoder[ValueNode],
+) {
+	if config.TrackSuffixLengthsInLeafNodes {
+		return AccountNodeWithPathLengthEncoder{},
+			BranchNodeEncoder{},
+			ExtensionNodeEncoder{},
+			ValueNodeWithPathLengthEncoder{}
+	}
+	return AccountNodeEncoder{},
+		BranchNodeEncoder{},
+		ExtensionNodeEncoder{},
+		ValueNodeEncoder{}
 }
