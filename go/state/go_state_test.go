@@ -40,10 +40,12 @@ func initGoStates() []namedStateConfig {
 		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
 		{"Memory 4", 4, castToDirectUpdateState(NewGoMemoryS4State)},
+		{"Memory 5", 5, castToDirectUpdateState(NewGoMemoryS5State)},
 		{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
 		{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
 		{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
 		{"File 4", 4, castToDirectUpdateState(NewGoFileS4State)},
+		{"File 5", 5, castToDirectUpdateState(NewGoFileS5State)},
 		{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
 		{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
 		{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
@@ -296,7 +298,7 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 }
 
 func TestHashing(t *testing.T) {
-	var hashes = [][]common.Hash{nil, nil, nil, nil, nil}
+	var hashes = [][]common.Hash{nil, nil, nil, nil, nil, nil}
 	for _, config := range initGoStates() {
 		t.Run(config.name, func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
