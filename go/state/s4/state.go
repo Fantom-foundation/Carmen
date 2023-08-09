@@ -44,16 +44,16 @@ func newS4State(directory string, trie *LiveTrie) (*S4State, error) {
 
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirly retained in memory.
-func OpenGoMemoryState(directory string) (*S4State, error) {
-	trie, err := OpenInMemoryLiveTrie(directory)
+func OpenGoMemoryState(directory string, config MptConfig) (*S4State, error) {
+	trie, err := OpenInMemoryLiveTrie(directory, config)
 	if err != nil {
 		return nil, err
 	}
 	return newS4State(directory, trie)
 }
 
-func OpenGoFileState(directory string) (*S4State, error) {
-	trie, err := OpenFileLiveTrie(directory)
+func OpenGoFileState(directory string, config MptConfig) (*S4State, error) {
+	trie, err := OpenFileLiveTrie(directory, config)
 	if err != nil {
 		return nil, err
 	}

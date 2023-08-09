@@ -48,9 +48,20 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "S4",
 			getArchive: func(tempDir string) archive.Archive {
-				archive, err := s4.OpenArchiveTrie(tempDir)
+				archive, err := s4.OpenArchiveTrie(tempDir, s4.S4Config)
 				if err != nil {
 					tb.Fatalf("failed to open S4 archive: %v", err)
+				}
+				return archive
+			},
+			customHash: true,
+		},
+		{
+			label: "S5",
+			getArchive: func(tempDir string) archive.Archive {
+				archive, err := s4.OpenArchiveTrie(tempDir, s4.S5Config)
+				if err != nil {
+					tb.Fatalf("failed to open S5 archive: %v", err)
 				}
 				return archive
 			},
@@ -397,41 +408,41 @@ func TestEmptyBlockHash(t *testing.T) {
 			defer a.Close()
 
 			if err := a.Add(0, common.Update{}); err != nil {
-				t.Fatalf("failed to add empty block 0; %s", err)
+				t.Fatalf("failed to add empty block 0; %v", err)
 			}
 
 			if err := a.Add(1, common.Update{}); err != nil {
-				t.Fatalf("failed to add empty block 1; %s", err)
+				t.Fatalf("failed to add empty block 1; %v", err)
 			}
 
 			if err := a.Add(2, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 			}); err != nil {
-				t.Fatalf("failed to add block 2; %s", err)
+				t.Fatalf("failed to add block 2; %v", err)
 			}
 
 			if err := a.Add(3, common.Update{}); err != nil {
-				t.Fatalf("failed to add empty block 3; %s", err)
+				t.Fatalf("failed to add empty block 3; %v", err)
 			}
 
 			if err := a.Add(4, common.Update{}); err != nil {
-				t.Fatalf("failed to add empty block 4; %s", err)
+				t.Fatalf("failed to add empty block 4; %v", err)
 			}
 
-			if hash, err := a.GetHash(1); err != nil || hash != (common.Hash{}) {
-				t.Errorf("unexpected hash of block 1: %s; %s", hash, err)
+			if hash, err := a.GetHash(1); err != nil || (factory.label != "S5" && hash != (common.Hash{})) {
+				t.Errorf("unexpected hash of block 1: %x; %v", hash, err)
 			}
 			hash2, err := a.GetHash(2)
 			if err != nil || hash2 == (common.Hash{}) {
-				t.Errorf("unexpected hash of block 1: %s; %s", hash2, err)
+				t.Errorf("unexpected hash of block 1: %x; %v", hash2, err)
 			}
 			hash3, err := a.GetHash(3)
 			if err != nil || hash2 != hash3 {
-				t.Errorf("unexpected hash of block 3: %s != %s; %s", hash2, hash3, err)
+				t.Errorf("unexpected hash of block 3: %x != %x; %v", hash2, hash3, err)
 			}
 			hash4, err := a.GetHash(4)
 			if err != nil || hash2 != hash4 {
-				t.Errorf("unexpected hash of block 4: %s != %s; %s", hash2, hash4, err)
+				t.Errorf("unexpected hash of block 4: %x != %x; %v", hash2, hash4, err)
 			}
 		})
 	}

@@ -1,6 +1,7 @@
 package s4
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 )
@@ -202,6 +203,30 @@ func TestPath_ShiftLeft(t *testing.T) {
 		path = *path.ShiftLeft(test.shift)
 		if got, want := path.String(), test.result; got != want {
 			t.Errorf("invalid shift result of %v and %v, wanted %s, got %s", test.path, test.shift, want, got)
+		}
+	}
+}
+
+func TestPath_GetPackedNibbles(t *testing.T) {
+	tests := []struct {
+		input  []Nibble
+		result []byte
+	}{
+		{[]Nibble{}, []byte{}},
+		{[]Nibble{1}, []byte{0x01}},
+		{[]Nibble{2}, []byte{0x02}},
+		{[]Nibble{1, 2}, []byte{0x12}},
+		{[]Nibble{1, 2, 3}, []byte{0x01, 0x23}},
+		{[]Nibble{1, 2, 3, 4}, []byte{0x12, 0x34}},
+		{[]Nibble{1, 2, 3, 4, 5}, []byte{0x01, 0x23, 0x45}},
+		{[]Nibble{5, 4, 3, 2, 1}, []byte{0x05, 0x43, 0x21}},
+	}
+
+	for _, test := range tests {
+		path := CreatePathFromNibbles(test.input)
+		got := path.GetPackedNibbles()
+		if !bytes.Equal(test.result, got) {
+			t.Errorf("unexpected result, wanted %x, got %x", test.result, got)
 		}
 	}
 }
