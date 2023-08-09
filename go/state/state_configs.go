@@ -868,7 +868,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := s4.OpenArchiveTrie(path)
+		arch, err := s4.OpenArchiveTrie(path, s4.S4Config)
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)
