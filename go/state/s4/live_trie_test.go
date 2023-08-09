@@ -413,7 +413,7 @@ func getTestAddresses(number int) []common.Address {
 		res[i][2] = byte(j >> 16)
 		res[i][3] = byte(j >> 24)
 	}
-	rand.Seed(0)
+	rand := rand.New(rand.NewSource(0))
 	rand.Shuffle(len(res), func(i, j int) {
 		res[i], res[j] = res[j], res[i]
 	})
@@ -429,7 +429,7 @@ func getTestKeys(number int) []common.Key {
 		res[i][2] = byte(j >> 16)
 		res[i][3] = byte(j >> 24)
 	}
-	rand.Seed(0)
+	rand := rand.New(rand.NewSource(0))
 	rand.Shuffle(len(res), func(i, j int) {
 		res[i], res[j] = res[j], res[i]
 	})
