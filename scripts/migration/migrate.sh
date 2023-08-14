@@ -9,7 +9,7 @@
 # In particular, this version exports GoLang implementation of file-based Index/Store StateDB
 # with LevelDB Archive database.
 #
-# This script checkouts fresh Carmen repository, filters out unnecessary parts and pushes
+# This script checkouts a fresh Carmen repository, filters out unnecessary parts and pushes
 # resulting files into another repository.
 #
 # Input and output repositories as well as other configurations are customisable
