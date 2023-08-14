@@ -12,6 +12,7 @@ In particular, current version exports GoLang implementation of file-based Index
 with LevelDB Archive.
 
 The migration script uses `git-filter-repo`, which must be installed. 
+ * Ubuntu: `sudo apt install git-filter-repo`
  * MacOs: `brew install git-filter-repo`
 
 The script to migrate the repository is executed as:
