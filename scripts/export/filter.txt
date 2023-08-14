@@ -78,7 +78,7 @@ common/mem_footprint.go
 common/mem_footprint_test.go
 common/scheme.go
 common/schema3.go
-common/schemas2_3.go
+common/slot_index_key.go
 common/serializers.go
 common/serializers_test.go
 common/types.go
