@@ -4,7 +4,7 @@
 # This script migrates Carmen repository to its public version.
 #
 # It removes all experimental, alternative and unfinished features
-# and keep only to be productized ones.
+# and keeps only those to be disclosed.
 #
 # In particular, this version exports GoLang implementation of file-based Index/Store StateDB
 # with LevelDB Archive database.
