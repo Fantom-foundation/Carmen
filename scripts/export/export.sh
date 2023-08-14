@@ -4,7 +4,7 @@
 # This script migrates Carmen repository to its public version.
 #
 # It removes all experimental, alternative and unfinished features
-# and keep only to be productized ones.
+# and keep only to be published ones.
 #
 # In particular, this version exports GoLang implementation of file-based Index/Store StateDB
 # with LevelDB Archive database.
@@ -31,7 +31,7 @@
 # Temporary folder to checkout Carmen into, and use it as worskpace for
 # modifications.
 #
-REPO_DIR=~/_carmen_temp
+REPO_DIR=${TMPDIR-/tmp}/_carmen_temp
 
 #
 # Source repository with Carmen.
@@ -39,28 +39,17 @@ REPO_DIR=~/_carmen_temp
 SOURCE_REPO=git@github.com:Fantom-foundation/Carmen.git
 
 #
-# Destination repository, where modified Carmen will be stored into.
-#
-DEST_REPO=git@github.com:Fantom-foundation/carmen-migration-test.git
-
-#
 # Git branch name to checkout specific version of Carmen.
 #
 SOURCE_BRANCH="kjezek/migration-scripts"
-
-#
-# Git branch where the modified Carmen will be pushed into.
-#
-DEST_BRANCH="main"
 
 ## Program starts here
 
 #
 # Clone the repo to a new directory
 #
-rm -rf $REPO_DIR
-mkdir -p $REPO_DIR
-git clone $SOURCE_REPO $REPO_DIR
+mkdir "$REPO_DIR" || exit
+git clone $SOURCE_REPO "$REPO_DIR"
 
 ORIGINAL_DIR=$(pwd)
 
@@ -77,21 +66,20 @@ git remote rm origin
 # Filter out unnecessary parts
 #
 git filter-repo --force --path go/ --path-rename go/:
-git filter-repo --force --paths-from-file "$ORIGINAL_DIR/scripts/migration/filter.txt"
+git filter-repo --force --paths-from-file "$ORIGINAL_DIR/scripts/export/filter.txt"
 
 #
 # Push to the new repository, while adding required extra files.
 #
 d=$(date)
-cp -r "$ORIGINAL_DIR/scripts/migration/extra-files/" .
-git remote add origin $DEST_REPO
+cp -r "$ORIGINAL_DIR/scripts/export/extra-files/" .
 git add -A
 git commit -a -m "migrates to public repository at $d"
-git push -f origin $SOURCE_BRANCH:$DEST_BRANCH
 
 #
 # Clean-up
 #
 
-#rm -rf $REPO_DIR ## keep the tmp directory for debug
 cd "$ORIGINAL_DIR" || exit
+
+echo "Result stored in '$REPO_DIR'"

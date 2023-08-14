@@ -23,9 +23,7 @@ The script can be configured by modifying variables in the script:
 
 * `REPO_DIR` - Temporary folder to checkout Carmen into, and use it as worskpace for modifications
 * `SOURCE_REPO` - Source repository with Carmen
-* `DEST_REPO` - Destination repository, where modified Carmen will be stored into.
 * `SOURCE_BRANCH` - Git branch name to checkout specific version of Carmen.
-* `DEST_BRANCH` - Git branch where the modified Carmen will be pushed into.
 
 
 

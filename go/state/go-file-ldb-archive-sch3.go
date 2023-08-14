@@ -15,6 +15,15 @@ import (
 	"path/filepath"
 )
 
+// CacheCapacity is the size of the cache expressed as the number of cached keys
+const CacheCapacity = 1 << 20 // 2 ^ 20 keys -> 32MB for 32-bytes keys
+
+// PoolSize is the maximum amount of data pages loaded in memory for the paged file store
+const PoolSize = 100000
+
+// CodeHashGroupSize represents the number of codes grouped together in depots to form one leaf node of the hash tree.
+const CodeHashGroupSize = 4
+
 // NewScheme3GoFileLdbArchiveState creates File based Index and Store implementations,
 // using the Scheme 3 and LDB Archive.
 func NewScheme3GoFileLdbArchiveState(path string) (State, error) {
