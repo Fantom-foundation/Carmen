@@ -295,3 +295,11 @@ func (a Address) String() string {
 func (a Key) String() string {
 	return fmt.Sprintf("%x", a[:])
 }
+
+func (v Value) String() string {
+	return fmt.Sprintf("%x", v[:])
+}
+
+func (h Hash) String() string {
+	return fmt.Sprintf("%x", h[:])
+}
