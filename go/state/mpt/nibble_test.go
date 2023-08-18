@@ -1,4 +1,4 @@
-package s4
+package mpt
 
 import "testing"
 

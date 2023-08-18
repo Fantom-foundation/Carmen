@@ -10,7 +10,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/s4"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
 type archiveFactory struct {
@@ -48,7 +48,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "S4",
 			getArchive: func(tempDir string) archive.Archive {
-				archive, err := s4.OpenArchiveTrie(tempDir, s4.S4Config)
+				archive, err := mpt.OpenArchiveTrie(tempDir, mpt.S4Config)
 				if err != nil {
 					tb.Fatalf("failed to open S4 archive: %v", err)
 				}
@@ -59,7 +59,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "S5",
 			getArchive: func(tempDir string) archive.Archive {
-				archive, err := s4.OpenArchiveTrie(tempDir, s4.S5Config)
+				archive, err := mpt.OpenArchiveTrie(tempDir, mpt.S5Config)
 				if err != nil {
 					tb.Fatalf("failed to open S5 archive: %v", err)
 				}

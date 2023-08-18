@@ -1,9 +1,9 @@
-package s4
+package mpt
 
 import (
 	"testing"
 
-	"github.com/Fantom-foundation/Carmen/go/state/s4/rlp"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
 )
 
 var emptyNodeHash = keccak256(rlp.Encode(rlp.String{}))

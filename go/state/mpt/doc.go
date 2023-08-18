@@ -1,8 +1,8 @@
-package s4
+package mpt
 
 /*
 
-Package s4 ...
+package mpt ...
 
 Todos:
  - document this package

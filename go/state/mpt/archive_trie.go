@@ -1,4 +1,4 @@
-package s4
+package mpt
 
 import (
 	"bufio"
@@ -23,9 +23,9 @@ import (
 // Its main task is to keep track of state rootes and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
-	head     *S4State // the current head-state
-	roots    []NodeId // the roots of individual blocks indexed by block height
-	rootFile string   // the file storing the list of roots
+	head     *MptState // the current head-state
+	roots    []NodeId  // the roots of individual blocks indexed by block height
+	rootFile string    // the file storing the list of roots
 }
 
 func OpenArchiveTrie(directory string, config MptConfig) (archive.Archive, error) {
@@ -43,7 +43,7 @@ func OpenArchiveTrie(directory string, config MptConfig) (archive.Archive, error
 		forest.Close()
 		return nil, err
 	}
-	state, err := newS4State(directory, head)
+	state, err := newMptState(directory, head)
 	if err != nil {
 		head.Close()
 		return nil, err

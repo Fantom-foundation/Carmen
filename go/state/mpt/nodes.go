@@ -1,6 +1,6 @@
-package s4
+package mpt
 
-//go:generate mockgen -source nodes.go -destination nodes_mocks.go -package s4
+//go:generate mockgen -source nodes.go -destination nodes_mocks.go -package mpt
 
 import (
 	"errors"

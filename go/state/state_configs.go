@@ -9,7 +9,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
-	"github.com/Fantom-foundation/Carmen/go/state/s4"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 
@@ -884,7 +884,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := s4.OpenArchiveTrie(path, s4.S4Config)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S4Config)
 		return arch, nil, err
 
 	case S5Archive:
@@ -892,7 +892,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := s4.OpenArchiveTrie(path, s4.S5Config)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S5Config)
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)
