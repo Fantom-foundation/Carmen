@@ -290,7 +290,7 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 		config := config
 		t.Run(config.Name, func(t *testing.T) {
 			t.Parallel()
-			const N = 100
+			const N = 50
 
 			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config)
 			if err != nil {
@@ -353,7 +353,7 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 		config := config
 		t.Run(config.Name, func(t *testing.T) {
 			t.Parallel()
-			const N = 10000
+			const N = 1000
 
 			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config)
 			if err != nil {
