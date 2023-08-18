@@ -3,7 +3,6 @@ package mpt
 //go:generate mockgen -source hasher.go -destination hasher_mocks.go -package mpt
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"reflect"
@@ -158,9 +157,7 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 	// branch nodes are never terminators in State or Storage Tries.
 	items[len(children)] = &rlp.String{}
 
-	var buffer bytes.Buffer
-	rlp.List{Items: items}.Write(&buffer)
-	return buffer.Bytes(), nil
+	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
 func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
@@ -187,9 +184,7 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 	}
 	items[1] = &rlp.String{Str: encoded}
 
-	var buffer bytes.Buffer
-	rlp.List{Items: items}.Write(&buffer)
-	return buffer.Bytes(), nil
+	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
 func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
@@ -228,9 +223,7 @@ func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]by
 	}
 	items[1] = &rlp.String{Str: rlp.Encode(&rlp.String{Str: value[:]})}
 
-	var buffer bytes.Buffer
-	rlp.List{Items: items}.Write(&buffer)
-	return buffer.Bytes(), nil
+	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
 func encodePath(unhashed []byte, numNibbles int) []byte {

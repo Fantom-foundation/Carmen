@@ -64,7 +64,10 @@ func TestEncoding_EncodeStrings(t *testing.T) {
 
 	for _, test := range tests {
 		if got, want := Encode(String{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v", want, got)
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
+		}
+		if got, want := (String{test.input}).getEncodedLength(), len(test.result); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
 		}
 	}
 }
@@ -90,7 +93,10 @@ func TestEncoding_EncodeList(t *testing.T) {
 
 	for _, test := range tests {
 		if got, want := Encode(List{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v", want, got)
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
+		}
+		if got, want := (List{test.input}).getEncodedLength(), len(test.result); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
 		}
 	}
 }
@@ -132,7 +138,10 @@ func TestEncoding_Uint64(t *testing.T) {
 	}
 	for _, test := range tests {
 		if got, want := Encode(Uint64{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v", want, got)
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
+		}
+		if got, want := (Uint64{test.input}).getEncodedLength(), len(test.result); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
 		}
 	}
 }
@@ -173,7 +182,10 @@ func TestEncoding_BigInt(t *testing.T) {
 	}
 	for _, test := range tests {
 		if got, want := Encode(BigInt{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v", want, got)
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
+		}
+		if got, want := (BigInt{test.input}).getEncodedLength(), len(test.result); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
 		}
 	}
 }

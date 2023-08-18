@@ -1,9 +1,7 @@
 package rlp
 
 import (
-	"bytes"
 	"encoding/binary"
-	"io"
 	"math/big"
 )
 
@@ -23,15 +21,32 @@ import (
 
 // Item is an interface for everything that can be RLP encoded by this package.
 type Item interface {
-	// Writes the RLP encoding of this item to the given writer.
-	Write(io.Writer)
+	// write writes the RLP encoding of this item to the given writer.
+	write(*writer)
+
+	// getEncodedLength computes the encoded length of this item in bytes.
+	getEncodedLength() int
 }
 
 // Encode is a convenience function for serializing an item structure.
 func Encode(item Item) []byte {
-	var buffer bytes.Buffer
-	item.Write(&buffer)
-	return buffer.Bytes()
+	length := item.getEncodedLength()
+	writer := writer(make([]byte, 0, length))
+	item.write(&writer)
+	return writer
+}
+
+// writer is a specialized writer for this package writing encoded RLP
+// content in a pre-allocated buffer.
+type writer []byte
+
+func (w *writer) Write(data []byte) {
+	*w = append(*w, data...)
+}
+
+func (w *writer) WriteByte(c byte) error {
+	*w = append(*w, c)
+	return nil
 }
 
 // ----------------------------------------------------------------------------
@@ -44,7 +59,7 @@ type String struct {
 	Str []byte
 }
 
-func (s String) Write(writer io.Writer) {
+func (s String) write(writer *writer) {
 	l := len(s.Str)
 	// Single-element strings are encoded as a single byte if the
 	// value is small enough.
@@ -57,35 +72,49 @@ func (s String) Write(writer io.Writer) {
 	writer.Write(s.Str)
 }
 
+func (s String) getEncodedLength() int {
+	l := len(s.Str)
+	if l == 1 && s.Str[0] < 0x80 {
+		return 1
+	}
+	return l + getEncodedLengthLength(l)
+}
+
 // List composes a list of items into a new item to be serialized.
 type List struct {
 	Items []Item
 }
 
-func (l List) Write(writer io.Writer) {
-	// TODO: eliminate this temporary buffer by obtaining the
-	// encoded length first, write the length, and then write
-	// the result directly in the output writer.
-	var buffer bytes.Buffer
+func (l List) write(writer *writer) {
+	length := 0
 	for _, item := range l.Items {
-		item.Write(&buffer)
+		length += item.getEncodedLength()
 	}
-	data := buffer.Bytes()
-	encodeLength(len(data), 0xc0, writer)
-	writer.Write(data)
+	encodeLength(length, 0xc0, writer)
+	for _, item := range l.Items {
+		item.write(writer)
+	}
+}
+
+func (s List) getEncodedLength() int {
+	sum := 0
+	for _, item := range s.Items {
+		sum += item.getEncodedLength()
+	}
+	return sum + getEncodedLengthLength(sum)
 }
 
 // encodeLength is utility function used by String and List structures to
 // encode the length of the string or list in the output stream.
-func encodeLength(length int, offset byte, writer io.Writer) {
+func encodeLength(length int, offset byte, writer *writer) {
 	if length < 56 {
-		writer.Write([]byte{offset + byte(length)})
+		writer.WriteByte(offset + byte(length))
 		return
 	}
 	numBytesForLength := getNumBytes(uint64(length))
-	writer.Write([]byte{offset + 55 + numBytesForLength})
+	writer.WriteByte(offset + 55 + numBytesForLength)
 	for i := byte(0); i < numBytesForLength; i++ {
-		writer.Write([]byte{byte(length >> (8 * (numBytesForLength - i - 1)))})
+		writer.WriteByte(byte(length >> (8 * (numBytesForLength - i - 1))))
 	}
 }
 
@@ -102,6 +131,13 @@ func getNumBytes(value uint64) byte {
 	}
 }
 
+func getEncodedLengthLength(length int) int {
+	if length < 56 {
+		return 1
+	}
+	return int(getNumBytes(uint64(length))) + 1
+}
+
 // ----------------------------------------------------------------------------
 //                           Utility Item Types
 // ----------------------------------------------------------------------------
@@ -113,10 +149,10 @@ type Uint64 struct {
 	Value uint64
 }
 
-func (u Uint64) Write(writer io.Writer) {
+func (u Uint64) write(writer *writer) {
 	// Uint64 values are encoded using their non-zero big-endian encoding suffix.
 	if u.Value == 0 {
-		writer.Write([]byte{0x80})
+		writer.WriteByte(0x80)
 		return
 	}
 	var buffer = make([]byte, 8)
@@ -124,7 +160,14 @@ func (u Uint64) Write(writer io.Writer) {
 	for buffer[0] == 0 {
 		buffer = buffer[1:]
 	}
-	String{Str: buffer}.Write(writer)
+	String{Str: buffer}.write(writer)
+}
+
+func (u Uint64) getEncodedLength() int {
+	if u.Value < 0x80 {
+		return 1
+	}
+	return 1 + int(getNumBytes(u.Value))
 }
 
 // BigInt is an Item encoding big.Int values into RLP by interpreting them
@@ -134,12 +177,12 @@ type BigInt struct {
 	Value *big.Int
 }
 
-func (i BigInt) Write(writer io.Writer) {
+func (i BigInt) write(writer *writer) {
 	// Based on: https://github.com/ethereum/go-ethereum/blob/v1.12.0/rlp/encbuffer.go#L152
 	// Values that fit in 64 bit are encoded using the uint64 encoder.
 	bitlen := i.Value.BitLen()
 	if bitlen <= 64 {
-		Uint64{Value: i.Value.Uint64()}.Write(writer)
+		Uint64{Value: i.Value.Uint64()}.write(writer)
 		return
 	}
 	// Integer is larger than 64 bits, encode from BigInt's Bits()
@@ -157,4 +200,13 @@ func (i BigInt) Write(writer io.Writer) {
 	}
 	encodeLength(length, 0x80, writer)
 	writer.Write(buffer)
+}
+
+func (i BigInt) getEncodedLength() int {
+	bitlen := i.Value.BitLen()
+	if bitlen <= 64 {
+		return Uint64{Value: i.Value.Uint64()}.getEncodedLength()
+	}
+	length := ((bitlen + 7) & -8) >> 3
+	return getEncodedLengthLength(length) + length
 }
