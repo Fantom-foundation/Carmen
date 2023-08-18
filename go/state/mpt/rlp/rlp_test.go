@@ -177,3 +177,45 @@ func TestEncoding_BigInt(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkListEncoding(b *testing.B) {
+	example := &List{
+		[]Item{
+			&String{[]byte("hello")},
+			&String{[]byte("world")},
+			&List{
+				[]Item{
+					&String{[]byte("nested")},
+					&String{[]byte("content")},
+				},
+			},
+			// Some 'hashes'
+			&String{make([]byte, 32)},
+			&String{make([]byte, 32)},
+			&List{
+				[]Item{
+					&String{[]byte("1")},
+					&String{[]byte("2")},
+					&String{[]byte("3")},
+					&String{[]byte("4")},
+					&String{[]byte("5")},
+					&String{[]byte("6")},
+					&String{[]byte("7")},
+					&String{[]byte("8")},
+					&String{[]byte("9")},
+					&String{[]byte("10")},
+					&String{[]byte("11")},
+					&String{[]byte("12")},
+					&String{[]byte("13")},
+					&String{[]byte("14")},
+					&String{[]byte("15")},
+					&String{[]byte("16")},
+				},
+			},
+		},
+	}
+
+	for i := 0; i < b.N; i++ {
+		Encode(example)
+	}
+}
