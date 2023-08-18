@@ -1,6 +1,6 @@
-package s4
+package mpt
 
-//go:generate mockgen -source hasher.go -destination hasher_mocks.go -package s4
+//go:generate mockgen -source hasher.go -destination hasher_mocks.go -package mpt
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"reflect"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/s4/rlp"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

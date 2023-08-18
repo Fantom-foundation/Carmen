@@ -3,27 +3,27 @@ package state
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/s4"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
 // goSchema5 implements a state utilizes an MPT based data structure that
 // produces the same hashes as Ethereum's MPT implementation.
 type goSchema5 struct {
-	*s4.S4State
+	*mpt.MptState
 }
 
-func newS5State(params Parameters, state *s4.S4State) (State, error) {
+func newS5State(params Parameters, state *mpt.MptState) (State, error) {
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
 		return nil, err
 	}
 	return NewGoState(&goSchema5{
-		S4State: state,
+		MptState: state,
 	}, arch, []func(){archiveCleanup}), nil
 }
 
 func NewGoMemoryS5State(params Parameters) (State, error) {
-	state, err := s4.OpenGoMemoryState(params.Directory, s4.S5Config)
+	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S5Config)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func NewGoMemoryS5State(params Parameters) (State, error) {
 }
 
 func NewGoFileS5State(params Parameters) (State, error) {
-	state, err := s4.OpenGoFileState(params.Directory, s4.S5Config)
+	state, err := mpt.OpenGoFileState(params.Directory, mpt.S5Config)
 	if err != nil {
 		return nil, err
 	}

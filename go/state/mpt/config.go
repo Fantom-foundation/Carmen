@@ -1,4 +1,4 @@
-package s4
+package mpt
 
 // MptConfig defines a set of configuration options for customizing the MPT
 // implementation. It is mainly intended to facilitate the accurate modeling

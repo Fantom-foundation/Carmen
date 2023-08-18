@@ -1,4 +1,4 @@
-package s4
+package mpt
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"

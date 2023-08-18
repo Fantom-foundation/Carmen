@@ -1,4 +1,4 @@
-package s4
+package mpt
 
 // Nibble is a 4-bit signed integer in the range 0-F. It is a single letter
 // used to navigate in the MPT structure.

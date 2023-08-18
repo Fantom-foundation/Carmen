@@ -1,4 +1,4 @@
-package s4
+package mpt
 
 import (
 	"bufio"
@@ -14,13 +14,13 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// S4State implementation of a state utilizes an MPT based data structure. While
+// MptState implementation of a state utilizes an MPT based data structure. While
 // functionally equivalent to the Ethereum State MPT, hashes are computed using
-// a distinct algorithm.
+// a configurable algorithm.
 //
-// The main role of the S4State is to provide an adapter between a LiveTrie and
+// The main role of the MptState is to provide an adapter between a LiveTrie and
 // Carmen's State interface. Also, it retains an index of contract codes.
-type S4State struct {
+type MptState struct {
 	trie     *LiveTrie
 	code     map[common.Hash][]byte
 	codefile string
@@ -29,13 +29,13 @@ type S4State struct {
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
-func newS4State(directory string, trie *LiveTrie) (*S4State, error) {
+func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
 	codefile := directory + "/codes.json"
 	codes, err := readCodes(codefile)
 	if err != nil {
 		return nil, err
 	}
-	return &S4State{
+	return &MptState{
 		trie:     trie,
 		code:     codes,
 		codefile: codefile,
@@ -44,23 +44,23 @@ func newS4State(directory string, trie *LiveTrie) (*S4State, error) {
 
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirly retained in memory.
-func OpenGoMemoryState(directory string, config MptConfig) (*S4State, error) {
+func OpenGoMemoryState(directory string, config MptConfig) (*MptState, error) {
 	trie, err := OpenInMemoryLiveTrie(directory, config)
 	if err != nil {
 		return nil, err
 	}
-	return newS4State(directory, trie)
+	return newMptState(directory, trie)
 }
 
-func OpenGoFileState(directory string, config MptConfig) (*S4State, error) {
+func OpenGoFileState(directory string, config MptConfig) (*MptState, error) {
 	trie, err := OpenFileLiveTrie(directory, config)
 	if err != nil {
 		return nil, err
 	}
-	return newS4State(directory, trie)
+	return newMptState(directory, trie)
 }
 
-func (s *S4State) CreateAccount(address common.Address) (err error) {
+func (s *MptState) CreateAccount(address common.Address) (err error) {
 	_, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
@@ -75,7 +75,7 @@ func (s *S4State) CreateAccount(address common.Address) (err error) {
 	})
 }
 
-func (s *S4State) Exists(address common.Address) (bool, error) {
+func (s *MptState) Exists(address common.Address) (bool, error) {
 	_, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return false, err
@@ -83,11 +83,11 @@ func (s *S4State) Exists(address common.Address) (bool, error) {
 	return exists, nil
 }
 
-func (s *S4State) DeleteAccount(address common.Address) error {
+func (s *MptState) DeleteAccount(address common.Address) error {
 	return s.trie.SetAccountInfo(address, AccountInfo{})
 }
 
-func (s *S4State) GetBalance(address common.Address) (balance common.Balance, err error) {
+func (s *MptState) GetBalance(address common.Address) (balance common.Balance, err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if !exists || err != nil {
 		return common.Balance{}, err
@@ -95,7 +95,7 @@ func (s *S4State) GetBalance(address common.Address) (balance common.Balance, er
 	return info.Balance, nil
 }
 
-func (s *S4State) SetBalance(address common.Address, balance common.Balance) (err error) {
+func (s *MptState) SetBalance(address common.Address, balance common.Balance) (err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (s *S4State) SetBalance(address common.Address, balance common.Balance) (er
 	return s.trie.SetAccountInfo(address, info)
 }
 
-func (s *S4State) GetNonce(address common.Address) (nonce common.Nonce, err error) {
+func (s *MptState) GetNonce(address common.Address) (nonce common.Nonce, err error) {
 	info, _, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return common.Nonce{}, err
@@ -118,7 +118,7 @@ func (s *S4State) GetNonce(address common.Address) (nonce common.Nonce, err erro
 	return info.Nonce, nil
 }
 
-func (s *S4State) SetNonce(address common.Address, nonce common.Nonce) (err error) {
+func (s *MptState) SetNonce(address common.Address, nonce common.Nonce) (err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return err
@@ -133,15 +133,15 @@ func (s *S4State) SetNonce(address common.Address, nonce common.Nonce) (err erro
 	return s.trie.SetAccountInfo(address, info)
 }
 
-func (s *S4State) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
+func (s *MptState) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
 	return s.trie.GetValue(address, key)
 }
 
-func (s *S4State) SetStorage(address common.Address, key common.Key, value common.Value) error {
+func (s *MptState) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	return s.trie.SetValue(address, key, value)
 }
 
-func (s *S4State) GetCode(address common.Address) (value []byte, err error) {
+func (s *MptState) GetCode(address common.Address) (value []byte, err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {
 		return nil, err
@@ -152,7 +152,7 @@ func (s *S4State) GetCode(address common.Address) (value []byte, err error) {
 	return s.code[info.CodeHash], nil
 }
 
-func (s *S4State) GetCodeSize(address common.Address) (size int, err error) {
+func (s *MptState) GetCodeSize(address common.Address) (size int, err error) {
 	code, err := s.GetCode(address)
 	if err != nil {
 		return 0, err
@@ -160,7 +160,7 @@ func (s *S4State) GetCodeSize(address common.Address) (size int, err error) {
 	return len(code), err
 }
 
-func (s *S4State) SetCode(address common.Address, code []byte) (err error) {
+func (s *MptState) SetCode(address common.Address, code []byte) (err error) {
 	var codeHash common.Hash
 	if s.hasher == nil {
 		s.hasher = sha3.NewLegacyKeccak256()
@@ -182,7 +182,7 @@ func (s *S4State) SetCode(address common.Address, code []byte) (err error) {
 	return s.trie.SetAccountInfo(address, info)
 }
 
-func (s *S4State) GetCodeHash(address common.Address) (hash common.Hash, err error) {
+func (s *MptState) GetCodeHash(address common.Address) (hash common.Hash, err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if !exists || err != nil {
 		return emptyCodeHash, err
@@ -190,11 +190,11 @@ func (s *S4State) GetCodeHash(address common.Address) (hash common.Hash, err err
 	return info.CodeHash, nil
 }
 
-func (s *S4State) GetHash() (hash common.Hash, err error) {
+func (s *MptState) GetHash() (hash common.Hash, err error) {
 	return s.trie.GetHash()
 }
 
-func (s *S4State) Flush() error {
+func (s *MptState) Flush() error {
 	// Flush codes and state trie.
 	return errors.Join(
 		writeCodes(s.code, s.codefile),
@@ -202,25 +202,25 @@ func (s *S4State) Flush() error {
 	)
 }
 
-func (s *S4State) Close() (lastErr error) {
+func (s *MptState) Close() (lastErr error) {
 	return errors.Join(
 		s.Flush(),
 		s.trie.Close(),
 	)
 }
 
-func (s *S4State) GetSnapshotableComponents() []backend.Snapshotable {
+func (s *MptState) GetSnapshotableComponents() []backend.Snapshotable {
 	//panic("not implemented")
 	return nil
 }
 
-func (s *S4State) RunPostRestoreTasks() error {
+func (s *MptState) RunPostRestoreTasks() error {
 	//panic("not implemented")
 	return nil
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
-func (s *S4State) GetMemoryFootprint() *common.MemoryFootprint {
+func (s *MptState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
 	mf.AddChild("trie", s.trie.GetMemoryFootprint())
 	// TODO: add code store
