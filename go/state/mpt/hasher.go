@@ -5,11 +5,11 @@ package mpt
 import (
 	"crypto/sha256"
 	"fmt"
+	"golang.org/x/crypto/sha3"
 	"reflect"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 // Hasher is an interface for implementations of MPT node hashing algorithms. It is
@@ -308,7 +308,7 @@ func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]by
 
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = &rlp.String{Str: encodePath(node.address[:], int(node.pathLength))}
+	items[0] = &rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), nodes)}
 	items[1] = &rlp.String{Str: value}
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
@@ -324,7 +324,7 @@ func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]by
 	items := make([]rlp.Item, 2)
 
 	// The first item is an encoded path fragment.
-	items[0] = &rlp.String{Str: encodePath(node.key[:], int(node.pathLength))}
+	items[0] = &rlp.String{Str: encodeKeyPath(node.key, int(node.pathLength), nodes)}
 
 	// The second item is the value without leading zeros.
 	value := node.value[:]
@@ -352,8 +352,13 @@ func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSour
 	return size + len(value) + 1, nil
 }
 
-func encodePath(unhashed []byte, numNibbles int) []byte {
-	path := keccak256(unhashed)
+func encodeKeyPath(key common.Key, numNibbles int, nodes NodeSource) []byte {
+	path := nodes.hashKey(key)
+	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
+}
+
+func encodeAddressPath(address common.Address, numNibbles int, nodes NodeSource) []byte {
+	path := nodes.hashAddress(address)
 	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
 }
 

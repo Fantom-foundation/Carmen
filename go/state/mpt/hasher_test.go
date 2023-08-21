@@ -48,12 +48,16 @@ func TestMptHasher_GetLowerBoundForAccountNode(t *testing.T) {
 	hashSource := NewMockHashSource(ctrl)
 	hashSource.EXPECT().getHashFor(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
 
+	nodesSource := NewMockNodeSource(ctrl)
+	nodesSource.EXPECT().getConfig().AnyTimes().Return(S5Config)
+	nodesSource.EXPECT().hashAddress(gomock.Any()).AnyTimes().Return(common.Hash{})
+
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nil)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := encode(test, nil, hashSource)
+		encoded, err := encode(test, nodesSource, hashSource)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -79,6 +83,7 @@ func TestMptHasher_GetLowerBoundForBranchNode(t *testing.T) {
 	nodeSource := NewMockNodeSource(ctrl)
 	nodeSource.EXPECT().getNode(smallChild).AnyTimes().Return(smallValue, nil)
 	nodeSource.EXPECT().getNode(bigChild).AnyTimes().Return(bigValue, nil)
+	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	tests := []*BranchNode{
 		(&BranchNode{}),
@@ -118,6 +123,7 @@ func TestMptHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 	nodeSource := NewMockNodeSource(ctrl)
 	nodeSource.EXPECT().getNode(smallChild).AnyTimes().Return(smallValue, nil)
 	nodeSource.EXPECT().getNode(bigChild).AnyTimes().Return(bigValue, nil)
+	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	tests := []*ExtensionNode{
 		(&ExtensionNode{next: smallChild}),
@@ -162,12 +168,16 @@ func TestMptHasher_GetLowerBoundForValueNode(t *testing.T) {
 		(&ValueNode{pathLength: 64, value: common.Value{255}}),
 	}
 
+	ctrl := gomock.NewController(t)
+	nodeSource := NewMockNodeSource(ctrl)
+	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
+
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nil)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := encode(test, nil, nil)
+		encoded, err := encode(test, nodeSource, nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}

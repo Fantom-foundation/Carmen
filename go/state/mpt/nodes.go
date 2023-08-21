@@ -188,6 +188,8 @@ type NodeSource interface {
 	getConfig() MptConfig
 	getNode(NodeId) (Node, error)
 	getHashFor(NodeId) (common.Hash, error)
+	hashKey(common.Key) common.Hash
+	hashAddress(address common.Address) common.Hash
 }
 
 // NodeManager is a mutable extension of a NodeSource enabling the creation,
@@ -939,7 +941,7 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 	if n.address != address {
 		return common.Value{}, false, nil
 	}
-	subPath := ToNibblePath(key[:], source.getConfig().UseHashedPaths)
+	subPath := KeyToNibblePath(key, source)
 	root, err := source.getNode(n.storage)
 	if err != nil {
 		return common.Value{}, false, err
@@ -1005,7 +1007,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, address com
 	sibling.address = address
 	sibling.info = info
 
-	thisPath := ToNibblePath(n.address[:], manager.getConfig().UseHashedPaths)
+	thisPath := AddressToNibblePath(n.address, manager)
 	newRoot, err := splitLeafNode(manager, thisId, thisPath[:], n, path, siblingId, sibling)
 	return newRoot, false, err
 }
@@ -1090,7 +1092,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, address common
 	if err != nil {
 		return 0, false, err
 	}
-	subPath := ToNibblePath(key[:], manager.getConfig().UseHashedPaths)
+	subPath := KeyToNibblePath(key, manager)
 	root, hasChanged, err := node.SetValue(manager, n.storage, key, subPath[:], value)
 	if err != nil {
 		return 0, false, err
@@ -1208,7 +1210,7 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 	//  - path length
 	errs := []error{}
 
-	fullPath := ToNibblePath(n.address[:], source.getConfig().UseHashedPaths)
+	fullPath := AddressToNibblePath(n.address, source)
 	if !IsPrefixOf(path, fullPath[:]) {
 		errs = append(errs, fmt.Errorf("account node %v located in wrong branch: %v", n.address, path))
 	}
@@ -1329,7 +1331,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, key common.Key,
 	sibling.key = key
 	sibling.value = value
 
-	thisPath := ToNibblePath(n.key[:], manager.getConfig().UseHashedPaths)
+	thisPath := KeyToNibblePath(n.key, manager)
 	newRootId, err := splitLeafNode(manager, thisId, thisPath[:], n, path, siblingId, sibling)
 	return newRootId, false, err
 }
@@ -1388,7 +1390,7 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 	//  - the path length is correct (if enabled to be tracked)
 	errs := []error{}
 
-	fullPath := ToNibblePath(n.key[:], source.getConfig().UseHashedPaths)
+	fullPath := KeyToNibblePath(n.key, source)
 	if !IsPrefixOf(path, fullPath[:]) {
 		errs = append(errs, fmt.Errorf("value node %v located in wrong branch: %v", n.key, path))
 	}
