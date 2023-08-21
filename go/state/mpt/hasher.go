@@ -117,10 +117,34 @@ func encode(node Node, nodes NodeSource, hashes HashSource) ([]byte, error) {
 	}
 }
 
+// getLowerBoundForEncodedSize computes a lower bound for the length of the RLP encoding of
+// the given node. The provided limit indicates an upper bound beyond which any higher
+// result is no longer relevant.
+func getLowerBoundForEncodedSize(node Node, limit int, nodes NodeSource) (int, error) {
+	switch trg := node.(type) {
+	case EmptyNode:
+		return getLowerBoundForEncodedSizeEmpty(trg, limit, nodes)
+	case *AccountNode:
+		return getLowerBoundForEncodedSizeAccount(trg, limit, nodes)
+	case *BranchNode:
+		return getLowerBoundForEncodedSizeBranch(trg, limit, nodes)
+	case *ExtensionNode:
+		return getLowerBoundForEncodedSizeExtension(trg, limit, nodes)
+	case *ValueNode:
+		return getLowerBoundForEncodedSizeValue(trg, limit, nodes)
+	default:
+		return 0, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
+	}
+}
+
 var emptyStringRlpEncoded = rlp.Encode(rlp.String{})
 
 func encodeEmpty(EmptyNode, NodeSource, HashSource) ([]byte, error) {
 	return emptyStringRlpEncoded, nil
+}
+
+func getLowerBoundForEncodedSizeEmpty(node EmptyNode, limit int, nodes NodeSource) (int, error) {
+	return len(emptyStringRlpEncoded), nil
 }
 
 func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
@@ -138,18 +162,30 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 			return nil, err
 		}
 
-		encoded, err := encode(node, nodes, hashes)
+		minSize, err := getLowerBoundForEncodedSize(node, 32, nodes)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(encoded) >= 32 {
+		var encoded []byte
+		if minSize < 32 {
+			encoded, err = encode(node, nodes, hashes)
+			if err != nil {
+				return nil, err
+			}
+			if len(encoded) >= 32 {
+				encoded = nil
+			}
+		}
+
+		if encoded == nil {
 			hash, err := hashes.getHashFor(child)
 			if err != nil {
 				return nil, err
 			}
 			encoded = hash[:]
 		}
+
 		items[i] = rlp.String{Str: encoded}
 	}
 
@@ -158,6 +194,35 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 	items[len(children)] = &rlp.String{}
 
 	return rlp.Encode(rlp.List{Items: items}), nil
+}
+
+func getLowerBoundForEncodedSizeBranch(node *BranchNode, limit int, nodes NodeSource) (int, error) {
+	var emptySize = len(emptyStringRlpEncoded)
+	sum := emptySize // the 17th element.
+	for _, child := range node.children {
+		if sum >= limit {
+			return limit, nil
+		}
+		if child.IsEmpty() {
+			sum += emptySize
+			continue
+		}
+
+		node, err := nodes.getNode(child)
+		if err != nil {
+			return 0, err
+		}
+
+		size, err := getLowerBoundForEncodedSize(node, limit-sum, nodes)
+		if err != nil {
+			return 0, err
+		}
+		if size >= 32 {
+			size = 32
+		}
+		sum += size
+	}
+	return sum + 1, nil // the list length adds another byte
 }
 
 func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
@@ -171,11 +236,24 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 	if err != nil {
 		return nil, err
 	}
-	encoded, err := encode(next, nodes, hashes)
+
+	minSize, err := getLowerBoundForEncodedSize(next, 32, nodes)
 	if err != nil {
 		return nil, err
 	}
-	if len(encoded) >= 32 {
+
+	var encoded []byte
+	if minSize < 32 {
+		encoded, err = encode(next, nodes, hashes)
+		if err != nil {
+			return nil, err
+		}
+		if len(encoded) >= 32 {
+			encoded = nil
+		}
+	}
+
+	if encoded == nil {
 		hash, err := hashes.getHashFor(node.next)
 		if err != nil {
 			return nil, err
@@ -185,6 +263,31 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 	items[1] = &rlp.String{Str: encoded}
 
 	return rlp.Encode(rlp.List{Items: items}), nil
+}
+
+func getLowerBoundForEncodedSizeExtension(node *ExtensionNode, limit int, nodes NodeSource) (int, error) {
+	sum := 1 // list header
+
+	sum += getEncodedPartialPathSize(node.path.Length())
+	if sum >= limit {
+		return sum, nil
+	}
+
+	next, err := nodes.getNode(node.next)
+	if err != nil {
+		return 0, err
+	}
+
+	size, err := getLowerBoundForEncodedSize(next, limit-sum, nodes)
+	if err != nil {
+		return 0, err
+	}
+	if size > 32 {
+		size = 32
+	}
+	sum += size
+
+	return sum, nil
 }
 
 func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
@@ -210,6 +313,13 @@ func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]by
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
+func getLowerBoundForEncodedSizeAccount(node *AccountNode, limit int, nodes NodeSource) (int, error) {
+	size := 32 + 32 // storage and code hash
+	// There is no need for anything more accurate so far, since
+	// all queries will use a limit <= 32.
+	return size, nil
+}
+
 func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]byte, error) {
 	items := make([]rlp.Item, 2)
 
@@ -226,6 +336,22 @@ func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]by
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
+func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSource) (int, error) {
+	size := getEncodedPartialPathSize(int(node.pathLength))
+	if size > 1 {
+		size++ // one extra byte for the length
+	}
+	if size >= limit {
+		return size, nil
+	}
+
+	value := node.value[:]
+	for len(value) > 0 && value[0] == 0 {
+		value = value[1:]
+	}
+	return size + len(value) + 1, nil
+}
+
 func encodePath(unhashed []byte, numNibbles int) []byte {
 	path := keccak256(unhashed)
 	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
@@ -236,7 +362,7 @@ func encodePartialPath(packedNibbles []byte, numNibbles int, targetsValue bool) 
 	// Path encosing derived from Ethereum.
 	// see https://github.com/ethereum/go-ethereum/blob/v1.12.0/trie/encoding.go#L37
 	oddLength := numNibbles%2 == 1
-	compact := make([]byte, numNibbles/2+1)
+	compact := make([]byte, getEncodedPartialPathSize(numNibbles))
 
 	// The high nibble of the first byte encodes the 'is-value' mark
 	// and whether the length is even or odd.
@@ -254,4 +380,8 @@ func encodePartialPath(packedNibbles []byte, numNibbles int, targetsValue bool) 
 	// The rest of the nibbles can be copied.
 	copy(compact[1:], packedNibbles)
 	return compact
+}
+
+func getEncodedPartialPathSize(numNibbles int) int {
+	return numNibbles/2 + 1
 }
