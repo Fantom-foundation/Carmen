@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"math/big"
@@ -294,4 +295,20 @@ func (a Address) String() string {
 
 func (a Key) String() string {
 	return fmt.Sprintf("%x", a[:])
+}
+
+// HashFromString converst a 64-character long hex string into a hash.
+// The operation is slow and mainly intended for producing readable test
+// cases. The operation will panic if the provided hash is mailformed.
+func HashFromString(str string) Hash {
+	if len(str) != 64 {
+		panic(fmt.Sprintf("invalid hash-string length, expected %d, got %d", 64, len(str)))
+	}
+	bytes, err := hex.DecodeString(str)
+	if err != nil {
+		panic(fmt.Sprintf("invalid hex string `%s`: %v", str, err))
+	}
+	res := Hash{}
+	copy(res[:], bytes)
+	return res
 }

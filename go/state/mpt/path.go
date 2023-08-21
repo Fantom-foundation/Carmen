@@ -52,7 +52,7 @@ func (p *Path) GetPackedNibbles() []byte {
 	res := make([]byte, length)
 	res[0] = p.path[0] >> 4
 	for i := 1; i < len(res); i++ {
-		res[i] = (p.path[i-1]&0x7)<<4 | (p.path[i] >> 4)
+		res[i] = (p.path[i-1]&0xf)<<4 | (p.path[i] >> 4)
 	}
 	return res
 }

@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -19,6 +20,40 @@ func TestMptHasher_EmptyNode(t *testing.T) {
 
 	if got, want := hash, emptyNodeHash; got != want {
 		t.Errorf("invalid hash of empty node, wanted %v, got %v", got, want)
+	}
+}
+
+func TestMptHasher_ExtensionNode_KnownHash(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	// This test case reconstructs an issue encountered while hashing the
+	// state tree of block 25399 of the Fantom main-net.
+
+	nextId, _ := ctxt.Build(
+		&Branch{
+			0x7: &Account{},
+			0xd: &Account{},
+		},
+	)
+
+	hasher := MptHasher{}
+	node := &ExtensionNode{
+		path: CreatePathFromNibbles([]Nibble{0x8, 0xe, 0xf}),
+		next: nextId,
+	}
+
+	hashSource := NewMockHashSource(ctrl)
+	hashSource.EXPECT().getHashFor(nextId).Return(common.HashFromString("43085a287ea060fa9089bd4797d2471c6d57136b666a314e6a789735251317d4"), nil)
+
+	hash, err := hasher.GetHash(node, ctxt, hashSource)
+	if err != nil {
+		t.Fatalf("error computing hash: %v", err)
+	}
+	want := "ebf7c28d351f2ec8a26d0e40049ddf406117e0468a49af0d261bb74d88e17560"
+	got := fmt.Sprintf("%x", hash)
+	if got != want {
+		t.Fatalf("unexpected hash\nwanted %v\n   got %v", want, got)
 	}
 }
 

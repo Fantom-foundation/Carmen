@@ -105,3 +105,21 @@ func TestKeccak256KnownHashes(t *testing.T) {
 		}
 	}
 }
+
+func TestHashFromString(t *testing.T) {
+	tests := []struct {
+		input  string
+		result Hash
+	}{
+		{"0000000000000000000000000000000000000000000000000000000000000000", Hash{}},
+		{"1000000000000000000000000000000000000000000000000000000000000000", Hash{0x10}},
+		{"1200000000000000000000000000000000000000000000000000000000000000", Hash{0x12}},
+		{"123456789abcdefABCDEF0000000000000000000000000000000000000000000", Hash{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xfa, 0xbc, 0xde, 0xf0}},
+	}
+
+	for _, test := range tests {
+		if got, want := HashFromString(test.input), test.result; got != want {
+			t.Errorf("failed to parse %s: expected %v, got %v", test.input, want, got)
+		}
+	}
+}
