@@ -387,6 +387,17 @@ func (s *Forest) Dump(rootId NodeId) {
 	}
 }
 
+func (s *Forest) VisitAll(rootId NodeId, visitor NodeVisitor) error {
+	root, err := s.getNode(rootId)
+	if err != nil {
+		return err
+	}
+	return VisitPreorder(visitor, root, NodeInfo{
+		Id:     rootId,
+		Source: s,
+	})
+}
+
 // Check verifies internal invariants of the Trie instance. If the trie is
 // self-consistent, nil is returned and the Trie is read to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and

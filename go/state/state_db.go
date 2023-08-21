@@ -77,6 +77,7 @@ type StateDB interface {
 	GetHash() common.Hash
 
 	// Flushes committed state to disk.
+	Dump()
 	Flush() error
 	Close() error
 
@@ -1140,6 +1141,10 @@ func (s *stateDB) GetHash() common.Hash {
 		panic(fmt.Sprintf("Failed to compute hash: %v", err))
 	}
 	return hash
+}
+
+func (s *stateDB) Dump() {
+	s.state.Dump()
 }
 
 func (s *stateDB) Flush() error {

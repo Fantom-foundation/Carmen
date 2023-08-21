@@ -24,6 +24,67 @@ func TestMptHasher_EmptyNode(t *testing.T) {
 	}
 }
 
+func TestMptHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(ctrl)
+
+	// This test case reconstructs an issue encountered while hashing the
+	// state tree of block 652606 of the Fantom main-net.
+
+	/*
+		Have:
+		1cd3 - 267222e216a9febf1db123715d9a48a0424b05b3c66dc384953e9ec554eb6228
+		1cd32 - 3937f00b4c39d1f3120ad9d9557bfc62d2ed2d3e2e08108c080cd6c7d5de4b02
+		1cd32d2b - e512951de8d7532804d7add78a5625e6570b46c5ad9f39d42342e5ad665818d9
+		1cd32d2b7 - 9df823fbe8929925be376981e614e1e191fd6be3770a5d366dd2d16af3bdeaf2
+		1cd32d2bc - e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612
+	*/
+
+	/*
+	   1cd32d2b - 0f284164ed2106b827a49f8298c2fedc8b726c1fff3b574fba83fda47aa1fe8e
+	   1cd32d2b7 - 0000000000000000000000000000000000000000000000000000000000000000
+	   1cd32d2bc - e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612
+	*/
+
+	v31 := common.Value{}
+	v31[len(v31)-1] = 31
+
+	var key common.Key
+	data, _ := hex.DecodeString("c1bb1e5ab6acf1bef1a125f3d60e0941b9a8624288ffd67282484c25519f9e65")
+	copy(key[:], data)
+
+	child1Id, value := ctxt.Build(&ValueWithLength{length: 55, key: key, value: v31})
+	child2Id, _ := ctxt.Build(&ValueWithLength{length: 55, value: common.Value{255}})
+
+	hasher := MptHasher{}
+
+	{
+		hash, _ := hasher.GetHash(value, nil, nil)
+		want := "9df823fbe8929925be376981e614e1e191fd6be3770a5d366dd2d16af3bdeaf2"
+		got := fmt.Sprintf("%x", hash)
+		if got != want {
+			t.Fatalf("invalid content of value node\nwanted %v\n   got %v\n", want, got)
+		}
+	}
+
+	node := &BranchNode{}
+	node.children[0x7] = child1Id
+	node.children[0xc] = child2Id
+
+	hashSource := NewMockHashSource(ctrl)
+	hashSource.EXPECT().getHashFor(child2Id).Return(common.HashFromString("e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612"), nil)
+
+	hash, err := hasher.GetHash(node, ctxt, hashSource)
+	if err != nil {
+		t.Fatalf("error computing hash: %v", err)
+	}
+	want := "0f284164ed2106b827a49f8298c2fedc8b726c1fff3b574fba83fda47aa1fe8e"
+	got := fmt.Sprintf("%x", hash)
+	if got != want {
+		t.Fatalf("unexpected hash\nwanted %v\n   got %v", want, got)
+	}
+}
+
 func TestMptHasher_ExtensionNode_KnownHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(ctrl)
@@ -52,43 +113,6 @@ func TestMptHasher_ExtensionNode_KnownHash(t *testing.T) {
 		t.Fatalf("error computing hash: %v", err)
 	}
 	want := "ebf7c28d351f2ec8a26d0e40049ddf406117e0468a49af0d261bb74d88e17560"
-	got := fmt.Sprintf("%x", hash)
-	if got != want {
-		t.Fatalf("unexpected hash\nwanted %v\n   got %v", want, got)
-	}
-}
-
-func TestMptHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	ctxt := newNodeContext(ctrl)
-
-	// This test case reconstructs an issue encountered while hashing the
-	// state tree of block 652606 of the Fantom main-net.
-
-	v31 := common.Value{}
-	v31[len(v31)-1] = 31
-
-	var key common.Key
-	data, _ := hex.DecodeString("c1bb1e5ab6acf1bef1a125f3d60e0941b9a8624288ffd67282484c25519f9e65")
-	copy(key[:], data)
-
-	child1Id, _ := ctxt.Build(&ValueWithLength{length: 55, key: key, value: v31})
-	child2Id, _ := ctxt.Build(&ValueWithLength{length: 55, value: common.Value{255}})
-
-	hasher := MptHasher{}
-
-	node := &BranchNode{}
-	node.children[0x7] = child1Id
-	node.children[0xc] = child2Id
-
-	hashSource := NewMockHashSource(ctrl)
-	hashSource.EXPECT().getHashFor(child2Id).Return(common.HashFromString("e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612"), nil)
-
-	hash, err := hasher.GetHash(node, ctxt, hashSource)
-	if err != nil {
-		t.Fatalf("error computing hash: %v", err)
-	}
-	want := "0f284164ed2106b827a49f8298c2fedc8b726c1fff3b574fba83fda47aa1fe8e"
 	got := fmt.Sprintf("%x", hash)
 	if got != want {
 		t.Fatalf("unexpected hash\nwanted %v\n   got %v", want, got)

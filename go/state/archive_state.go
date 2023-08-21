@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -64,6 +65,10 @@ func (s *ArchiveState) GetHash() (hash common.Hash, err error) {
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
 func (s *ArchiveState) GetMemoryFootprint() *common.MemoryFootprint {
 	return common.NewMemoryFootprint(unsafe.Sizeof(*s))
+}
+
+func (s *ArchiveState) Dump() {
+	fmt.Printf("dumping of archive state not implemented")
 }
 
 func (s *ArchiveState) Flush() error {

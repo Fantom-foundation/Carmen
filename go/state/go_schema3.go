@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"hash"
 	"io"
 
@@ -264,6 +265,10 @@ func (s *GoSchema3) GetHash() (hash common.Hash, err error) {
 	}
 	copy(hash[:], h.Sum(nil))
 	return hash, nil
+}
+
+func (s *GoSchema3) Dump() {
+	fmt.Printf("dumping of GoSchema3 not implemented")
 }
 
 func (s *GoSchema3) Flush() (lastErr error) {

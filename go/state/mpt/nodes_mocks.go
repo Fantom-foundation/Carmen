@@ -226,6 +226,18 @@ func (mr *MockNodeMockRecorder) SetValue(manager, thisId, key, path, value inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockNode)(nil).SetValue), manager, thisId, key, path, value)
 }
 
+// accept mocks base method.
+func (m *MockNode) accept(arg0 NodeVisitor, arg1 NodeInfo) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "accept", arg0, arg1)
+}
+
+// accept indicates an expected call of accept.
+func (mr *MockNodeMockRecorder) accept(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "accept", reflect.TypeOf((*MockNode)(nil).accept), arg0, arg1)
+}
+
 // MockNodeSource is a mock of NodeSource interface.
 type MockNodeSource struct {
 	ctrl     *gomock.Controller
@@ -733,6 +745,18 @@ func (m *MockleafNode) SetValue(manager NodeManager, thisId NodeId, key common.K
 func (mr *MockleafNodeMockRecorder) SetValue(manager, thisId, key, path, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockleafNode)(nil).SetValue), manager, thisId, key, path, value)
+}
+
+// accept mocks base method.
+func (m *MockleafNode) accept(arg0 NodeVisitor, arg1 NodeInfo) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "accept", arg0, arg1)
+}
+
+// accept indicates an expected call of accept.
+func (mr *MockleafNodeMockRecorder) accept(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "accept", reflect.TypeOf((*MockleafNode)(nil).accept), arg0, arg1)
 }
 
 // setPathLength mocks base method.

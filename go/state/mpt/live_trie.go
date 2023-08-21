@@ -139,6 +139,10 @@ func (s *LiveTrie) Dump() {
 	s.forest.Dump(s.root)
 }
 
+func (s *LiveTrie) VisitAll(visitor NodeVisitor) error {
+	return s.forest.VisitAll(s.root, visitor)
+}
+
 // Check verifies internal invariants of the Trie instance. If the trie is
 // self-consistent, nil is returned and the Trie is read to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and

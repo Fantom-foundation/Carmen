@@ -5,11 +5,11 @@ package mpt
 import (
 	"crypto/sha256"
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"reflect"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // Hasher is an interface for implementations of MPT node hashing algorithms. It is

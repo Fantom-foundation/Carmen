@@ -36,6 +36,8 @@ type State interface {
 	// GetHash hashes the values.
 	GetHash() (common.Hash, error)
 
+	Dump()
+
 	// Flush writes all committed content to disk.
 	Flush() error
 

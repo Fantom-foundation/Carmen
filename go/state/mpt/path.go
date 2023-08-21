@@ -40,6 +40,15 @@ func (p *Path) Length() int {
 	return int(p.length)
 }
 
+// GetNibble returns this path as a slice of nibbles.
+func (p *Path) GetNibbles() []Nibble {
+	res := make([]Nibble, p.length)
+	for i := range res {
+		res[i] = p.Get(i)
+	}
+	return res
+}
+
 // GetPackedNibbles returns a slice of nibbles encoded in consecutive high/low
 // bits of bytes. If the path length is odd, a leading 0 is added.
 func (p *Path) GetPackedNibbles() []byte {

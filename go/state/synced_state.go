@@ -79,6 +79,10 @@ func (s *syncedState) GetHash() (common.Hash, error) {
 	return s.state.GetHash()
 }
 
+func (s *syncedState) Dump() {
+	s.state.Dump()
+}
+
 func (s *syncedState) Flush() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

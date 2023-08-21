@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"os"
@@ -192,6 +193,15 @@ func (s *MptState) GetCodeHash(address common.Address) (hash common.Hash, err er
 
 func (s *MptState) GetHash() (hash common.Hash, err error) {
 	return s.trie.GetHash()
+}
+
+func (s *MptState) Dump() {
+	if err := s.trie.Check(); err != nil {
+		fmt.Printf("inconsistent trie:\n%v", err)
+	} else {
+		//s.trie.Dump()
+		s.trie.VisitAll(HashPrinter{})
+	}
 }
 
 func (s *MptState) Flush() error {

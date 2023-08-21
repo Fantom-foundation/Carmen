@@ -172,6 +172,10 @@ func (cs *CppState) Apply(block uint64, update common.Update) error {
 	return nil
 }
 
+func (cs *CppState) Dump() {
+	fmt.Printf("dumping of C++ state not implemented")
+}
+
 func (cs *CppState) Flush() error {
 	C.Carmen_Flush(cs.state)
 	return nil

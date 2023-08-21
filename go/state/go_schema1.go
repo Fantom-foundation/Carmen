@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"hash"
 	"io"
 
@@ -272,6 +273,10 @@ func (s *GoSchema1) GetHash() (hash common.Hash, err error) {
 	}
 	copy(hash[:], h.Sum(nil))
 	return hash, nil
+}
+
+func (s *GoSchema1) Dump() {
+	fmt.Printf("dumping of GoSchema1 not implemented")
 }
 
 func (s *GoSchema1) Flush() (lastErr error) {

@@ -178,6 +178,8 @@ type Node interface {
 	// Dumps this node and its induced sub-tree to the console. It is mainly
 	// intended for debugging and may be very costly for larger instances.
 	Dump(source NodeSource, thisId NodeId, indent string)
+
+	accept(NodeVisitor, NodeInfo)
 }
 
 // NodeSource is a interface for any object capable of resolving NodeIds into
@@ -297,6 +299,10 @@ func (EmptyNode) Check(NodeSource, []Nibble) error {
 
 func (EmptyNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	fmt.Printf("%s-empty- (ID: %v, Hash: %s)\n", indent, thisId, formatHashForDump(source, thisId))
+}
+
+func (e EmptyNode) accept(visitor NodeVisitor, info NodeInfo) {
+	visitor.VisitEmpty(e, info)
 }
 
 // ----------------------------------------------------------------------------
@@ -587,6 +593,10 @@ func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
 			fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, child, err)
 		}
 	}
+}
+
+func (n *BranchNode) accept(visitor NodeVisitor, info NodeInfo) {
+	visitor.VisitBranch(n, info)
 }
 
 // ----------------------------------------------------------------------------
@@ -903,6 +913,10 @@ func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	} else {
 		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.next, err)
 	}
+}
+
+func (n *ExtensionNode) accept(visitor NodeVisitor, info NodeInfo) {
+	visitor.VisitExtension(n, info)
 }
 
 // ----------------------------------------------------------------------------
@@ -1254,6 +1268,10 @@ func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	}
 }
 
+func (n *AccountNode) accept(visitor NodeVisitor, info NodeInfo) {
+	visitor.VisitAccount(n, info)
+}
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
@@ -1418,6 +1436,10 @@ func formatHashForDump(source NodeSource, id NodeId) string {
 		return fmt.Sprintf("%v", err)
 	}
 	return fmt.Sprintf("0x%x", hash)
+}
+
+func (n *ValueNode) accept(visitor NodeVisitor, info NodeInfo) {
+	visitor.VisitValue(n, info)
 }
 
 // ----------------------------------------------------------------------------

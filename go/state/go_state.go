@@ -41,6 +41,7 @@ type GoSchema interface {
 	setCode(address common.Address, code []byte) (err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
 	GetHash() (hash common.Hash, err error)
+	Dump()
 	Flush() error
 	Close() error
 	common.MemoryFootprintProvider

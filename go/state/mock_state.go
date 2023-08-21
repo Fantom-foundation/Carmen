@@ -78,6 +78,18 @@ func (mr *MockStateMockRecorder) CreateSnapshot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockState)(nil).CreateSnapshot))
 }
 
+// Dump mocks base method.
+func (m *MockState) Dump() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Dump")
+}
+
+// Dump indicates an expected call of Dump.
+func (mr *MockStateMockRecorder) Dump() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockState)(nil).Dump))
+}
+
 // Exists mocks base method.
 func (m *MockState) Exists(address common.Address) (bool, error) {
 	m.ctrl.T.Helper()
@@ -349,6 +361,18 @@ func (m *MockdirectUpdateState) CreateSnapshot() (backend.Snapshot, error) {
 func (mr *MockdirectUpdateStateMockRecorder) CreateSnapshot() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockdirectUpdateState)(nil).CreateSnapshot))
+}
+
+// Dump mocks base method.
+func (m *MockdirectUpdateState) Dump() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Dump")
+}
+
+// Dump indicates an expected call of Dump.
+func (mr *MockdirectUpdateStateMockRecorder) Dump() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockdirectUpdateState)(nil).Dump))
 }
 
 // Exists mocks base method.
