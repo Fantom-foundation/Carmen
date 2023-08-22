@@ -107,6 +107,24 @@ func expand(prefix []byte, size int) []byte {
 	return res
 }
 
+func TestEncoding_EncodeEncoded(t *testing.T) {
+	tests := [][]byte{
+		{},
+		{1},
+		{1, 2},
+		{1, 2, 3},
+	}
+
+	for _, test := range tests {
+		if got, want := Encode(Encoded{test}), test; !bytes.Equal(got, want) {
+			t.Errorf("invalid encoding, wanted %v, got %v", want, got)
+		}
+		if got, want := (Encoded{test}).getEncodedLength(), len(test); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d", want, got)
+		}
+	}
+}
+
 func TestEncoding_Uint64(t *testing.T) {
 	tests := []struct {
 		input  uint64
