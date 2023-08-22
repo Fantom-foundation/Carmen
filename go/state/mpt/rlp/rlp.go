@@ -138,6 +138,19 @@ func getEncodedLengthLength(length int) int {
 	return int(getNumBytes(uint64(length))) + 1
 }
 
+// Encoded allows for embedding an already RLP encoded data fragment in a new RLP encoding.
+type Encoded struct {
+	Data []byte
+}
+
+func (e Encoded) write(writer *writer) {
+	writer.Write(e.Data)
+}
+
+func (e Encoded) getEncodedLength() int {
+	return len(e.Data)
+}
+
 // ----------------------------------------------------------------------------
 //                           Utility Item Types
 // ----------------------------------------------------------------------------

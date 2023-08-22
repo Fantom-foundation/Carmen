@@ -183,10 +183,10 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 			if err != nil {
 				return nil, err
 			}
-			encoded = hash[:]
+			items[i] = rlp.String{Str: hash[:]}
+		} else {
+			items[i] = rlp.Encoded{Data: encoded}
 		}
-
-		items[i] = rlp.String{Str: encoded}
 	}
 
 	// There is one 17th entry which would be filled if this node is a terminator. However,
@@ -258,9 +258,14 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 		if err != nil {
 			return nil, err
 		}
-		encoded = hash[:]
+		items[1] = rlp.String{Str: hash[:]}
+	} else {
+		// TODO: the use of a direct encoding here is done for
+		// symetry with the branch node, but there is no unit test
+		// for this yet; it would require to find two keys or address
+		// with a very long common hash prefix.
+		items[1] = rlp.Encoded{Data: encoded}
 	}
-	items[1] = &rlp.String{Str: encoded}
 
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
