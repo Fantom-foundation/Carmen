@@ -1,5 +1,7 @@
 package mpt
 
+import "github.com/Fantom-foundation/Carmen/go/common"
+
 // Nibble is a 4-bit signed integer in the range 0-F. It is a single letter
 // used to navigate in the MPT structure.
 type Nibble byte
@@ -20,13 +22,33 @@ func (n Nibble) String() string {
 	return string(n.Rune())
 }
 
-// ToNibblePath converts the given path into a slice of Nibbles. Optionally, the
-// path is hashed before being converted.
-func ToNibblePath(path []byte, hashPath bool) []Nibble {
-	if hashPath {
-		hash := keccak256(path)
-		return ToNibblePath(hash[:], false)
+// AddressToNibblePath converts the given path into a slice of Nibbles. Optionally, the
+// path is hashed before being converted. The path is hashed when hashing is enabled in configuration.
+func AddressToNibblePath(address common.Address, source NodeSource) []Nibble {
+	var path []byte
+	if source != nil && source.getConfig().UseHashedPaths {
+		hash := source.hashAddress(address)
+		path = hash[:]
+	} else {
+		path = address[:]
 	}
+
+	res := make([]Nibble, len(path)*2)
+	parseNibbles(res, path)
+	return res
+}
+
+// KeyToNibblePath converts the given path into a slice of Nibbles. Optionally, the
+// path is hashed before being converted. The path is hashed when hashing is enabled in configuration.
+func KeyToNibblePath(key common.Key, source NodeSource) []Nibble {
+	var path []byte
+	if source != nil && source.getConfig().UseHashedPaths {
+		hash := source.hashKey(key)
+		path = hash[:]
+	} else {
+		path = key[:]
+	}
+
 	res := make([]Nibble, len(path)*2)
 	parseNibbles(res, path)
 	return res

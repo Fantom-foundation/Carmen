@@ -62,10 +62,16 @@ type Forest struct {
 	// A store for hashes.
 	hashes      HashStore
 	dirtyHashes map[NodeId]struct{}
+
+	keyHasher     *common.CachedHasher[common.Key]
+	addressHasher *common.CachedHasher[common.Address]
 }
 
 // The number of elements to retain in the node cache.
 const cacheCapacity = 10_000_000
+
+// The number of hashes retained in the cache of the addresses or caches keys
+const hashesCacheCapacity = 100_000
 
 func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
@@ -172,16 +178,18 @@ func makeForest(
 	mode StorageMode,
 ) (*Forest, error) {
 	return &Forest{
-		config:      config,
-		branches:    branches,
-		extensions:  extensions,
-		accounts:    accounts,
-		values:      values,
-		storageMode: mode,
-		nodeCache:   common.NewCache[NodeId, Node](cacheCapacity),
-		dirty:       map[NodeId]struct{}{},
-		hashes:      hashes,
-		dirtyHashes: map[NodeId]struct{}{},
+		config:        config,
+		branches:      branches,
+		extensions:    extensions,
+		accounts:      accounts,
+		values:        values,
+		storageMode:   mode,
+		nodeCache:     common.NewCache[NodeId, Node](cacheCapacity),
+		dirty:         map[NodeId]struct{}{},
+		hashes:        hashes,
+		dirtyHashes:   map[NodeId]struct{}{},
+		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
+		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
 	}, nil
 }
 
@@ -190,7 +198,7 @@ func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
-	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
+	path := AddressToNibblePath(addr, s)
 	return root.GetAccount(s, addr, path[:])
 }
 
@@ -199,7 +207,7 @@ func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info Account
 	if err != nil {
 		return NodeId(0), err
 	}
-	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
+	path := AddressToNibblePath(addr, s)
 	newRoot, _, err := root.SetAccount(s, rootId, addr, path[:], info)
 	if err != nil {
 		return NodeId(0), err
@@ -212,7 +220,7 @@ func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (c
 	if err != nil {
 		return common.Value{}, err
 	}
-	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
+	path := AddressToNibblePath(addr, s)
 	value, _, err := root.GetSlot(s, addr, path[:], key)
 	return value, err
 }
@@ -222,7 +230,7 @@ func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, va
 	if err != nil {
 		return NodeId(0), err
 	}
-	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
+	path := AddressToNibblePath(addr, s)
 	newRoot, _, err := root.SetSlot(s, rootId, addr, path[:], key, value)
 	if err != nil {
 		return NodeId(0), err
@@ -235,7 +243,7 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 	if err != nil {
 		return err
 	}
-	path := ToNibblePath(addr[:], s.config.UseHashedPaths)
+	path := AddressToNibblePath(addr, s)
 	_, _, err = root.ClearStorage(s, rootId, addr, path[:])
 	return err
 }
@@ -264,6 +272,14 @@ func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
 	}
 	delete(s.dirtyHashes, id)
 	return hash, nil
+}
+
+func (s *Forest) hashKey(key common.Key) common.Hash {
+	return s.keyHasher.Hash(key)
+}
+
+func (s *Forest) hashAddress(address common.Address) common.Hash {
+	return s.addressHasher.Hash(address)
 }
 
 func (f *Forest) Freeze(id NodeId) error {

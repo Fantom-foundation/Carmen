@@ -293,6 +293,34 @@ func (mr *MockNodeSourceMockRecorder) getNode(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeSource)(nil).getNode), arg0)
 }
 
+// hashAddress mocks base method.
+func (m *MockNodeSource) hashAddress(address common.Address) common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "hashAddress", address)
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// hashAddress indicates an expected call of hashAddress.
+func (mr *MockNodeSourceMockRecorder) hashAddress(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashAddress", reflect.TypeOf((*MockNodeSource)(nil).hashAddress), address)
+}
+
+// hashKey mocks base method.
+func (m *MockNodeSource) hashKey(arg0 common.Key) common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "hashKey", arg0)
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// hashKey indicates an expected call of hashKey.
+func (mr *MockNodeSourceMockRecorder) hashKey(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashKey", reflect.TypeOf((*MockNodeSource)(nil).hashKey), arg0)
+}
+
 // MockNodeManager is a mock of NodeManager interface.
 type MockNodeManager struct {
 	ctrl     *gomock.Controller
@@ -422,6 +450,34 @@ func (m *MockNodeManager) getNode(arg0 NodeId) (Node, error) {
 func (mr *MockNodeManagerMockRecorder) getNode(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeManager)(nil).getNode), arg0)
+}
+
+// hashAddress mocks base method.
+func (m *MockNodeManager) hashAddress(address common.Address) common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "hashAddress", address)
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// hashAddress indicates an expected call of hashAddress.
+func (mr *MockNodeManagerMockRecorder) hashAddress(address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashAddress", reflect.TypeOf((*MockNodeManager)(nil).hashAddress), address)
+}
+
+// hashKey mocks base method.
+func (m *MockNodeManager) hashKey(arg0 common.Key) common.Hash {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "hashKey", arg0)
+	ret0, _ := ret[0].(common.Hash)
+	return ret0
+}
+
+// hashKey indicates an expected call of hashKey.
+func (mr *MockNodeManagerMockRecorder) hashKey(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashKey", reflect.TypeOf((*MockNodeManager)(nil).hashKey), arg0)
 }
 
 // invalidateHash mocks base method.

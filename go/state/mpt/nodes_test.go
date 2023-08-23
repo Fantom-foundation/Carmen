@@ -3525,9 +3525,9 @@ func (c *nodeContext) equalTries(a, b NodeId) bool {
 }
 
 func addressToNibbles(addr common.Address) []Nibble {
-	return ToNibblePath(addr[:], false)
+	return AddressToNibblePath(addr, nil)
 }
 
 func keyToNibbles(key common.Key) []Nibble {
-	return ToNibblePath(key[:], false)
+	return KeyToNibblePath(key, nil)
 }
