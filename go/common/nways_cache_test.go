@@ -1,0 +1,170 @@
+package common
+
+import (
+	"fmt"
+	"math/rand"
+	"testing"
+)
+
+func TestNWaysCacheInitialisation(t *testing.T) {
+	c := NewNWaysCache[int, int](31, 4)
+
+	// capacity rounded up
+	if got, want := len(c.items), 32; got != want {
+		t.Errorf("sizes do not match: %d != %d", got, want)
+	}
+
+	if got, want := c.nways, uint(4); got != want {
+		t.Errorf("number of ways do not match: %d != %d", got, want)
+	}
+
+	if got, want := c.numsets, uint(8); got != want {
+		t.Errorf("number of sets do not match: %d != %d", got, want)
+	}
+
+}
+
+func TestNWaysExceedCapacity(t *testing.T) {
+	c := NewNWaysCache[int, int](3, 2)
+
+	c.Set(1, 11)
+	c.Set(3, 22)
+
+	// value will get evicted from its slot even if the cache is not fully utilised
+	evictedKey, evictedValue, evicted := c.Set(5, 55)
+	if evictedKey != 1 || evictedValue != 11 || !evicted {
+		t.Errorf("Incorrectly evicted items: %d/%d", evictedKey, evictedValue)
+	}
+
+	_, exists := c.Get(5) // one refreshed - first in the list now
+	if exists == false {
+		t.Errorf("Item should exist")
+	}
+
+	// fills the other set - no eviction
+	evictedKey, evictedValue, evicted = c.Set(4, 44)
+	if evictedKey != 0 || evictedValue != 0 || evicted {
+		t.Errorf("No items should have been evicted yet")
+	}
+}
+
+func TestNWaysLRUEvictedCapacity(t *testing.T) {
+	c := NewNWaysCache[int, int](6, 3)
+
+	c.Set(8, 8)
+	c.Set(9, 9)
+	c.Set(10, 10)
+	c.Set(11, 11)
+	c.Set(12, 12)
+	c.Set(13, 13)
+
+	// it will cause eviction
+	if evictedKey, evictedVal, evicted := c.Set(14, 14); evictedKey != 8 || evictedVal != 8 || !evicted {
+		t.Errorf("unexpected or unvecited entry: %d -> %d evicted: %v", evictedKey, evictedVal, evicted)
+	}
+
+	// touch keys from the same set as the key 14
+	c.Get(10)
+	c.Get(12)
+
+	// 14 will be evicted now
+	if evictedKey, evictedVal, evicted := c.Set(16, 15); evictedKey != 14 || evictedVal != 14 || !evicted {
+		t.Errorf("unexpected or unvecited entry: %d -> %d evicted: %v", evictedKey, evictedVal, evicted)
+	}
+}
+
+func TestNWaysCacheSetGetVariousConfigurations(t *testing.T) {
+	capacity := 1024
+	for ways := 2; ways < capacity; ways *= 2 {
+		t.Run(fmt.Sprintf("ways: %d", ways), func(t *testing.T) {
+			c := NewNWaysCache[int, int](capacity, ways)
+			for i := 0; i < capacity; i++ {
+				if evictedKey, evictedVal, evicted := c.Set(i, i); evictedKey != 0 || evictedVal != 0 || evicted {
+					t.Errorf("No value should be evicted when adding: %d", i)
+				}
+			}
+
+			for want := 0; want < capacity; want++ {
+				got, exists := c.Get(want)
+				if !exists {
+					t.Errorf("key should exist: %d", want)
+				}
+				if got != want {
+					t.Errorf("values do not match: %d != %d", got, want)
+				}
+			}
+
+		})
+	}
+}
+
+func TestNWaysCacheSetGetMissingValuesVariousConfigurations(t *testing.T) {
+	capacity := 1024
+	for ways := 2; ways < capacity; ways *= 2 {
+		t.Run(fmt.Sprintf("ways: %d", ways), func(t *testing.T) {
+			c := NewNWaysCache[int, int](capacity, ways)
+			for i := 0; i < capacity; i++ {
+				if evictedKey, evictedVal, evicted := c.Set(i, i); evictedKey != 0 || evictedVal != 0 || evicted {
+					t.Errorf("No value should be evicted when adding: %d", i)
+				}
+			}
+
+			offset := 5000
+			for want := offset; want < offset+capacity; want++ {
+				got, exists := c.Get(want)
+				if exists {
+					t.Errorf("key should NOT exist: %d", want)
+				}
+				if got != 0 {
+					t.Errorf("value shuold be empty: %d", got)
+				}
+			}
+		})
+	}
+}
+
+func TestNWaysCacheSetGetRandomKeysVariousConfigurations(t *testing.T) {
+	capacity := 1024
+
+	keys := make(map[int]int, capacity)
+	for i := 0; i < capacity/2; i++ {
+		keys[rand.Int()] = i
+	}
+
+	for ways := 2; ways < capacity; ways *= 2 {
+		t.Run(fmt.Sprintf("ways: %d", ways), func(t *testing.T) {
+			c := NewNWaysCache[int, int](capacity, ways)
+
+			evictedKeys := make([]int, 0, capacity)
+			for key, val := range keys {
+				if evictedKey, _, evicted := c.Set(key, val); evicted {
+					evictedKeys = append(evictedKeys, evictedKey)
+					delete(keys, evictedKey)
+				}
+			}
+
+			// all non evicted keys must be present
+			for key, value := range keys {
+				got, exists := c.Get(key)
+				if !exists {
+					t.Errorf("key should exist: %d", key)
+				}
+				if got != value {
+					t.Errorf("values do not match: %d != %d", got, key)
+				}
+			}
+
+			// evicted keys must not be available
+			for _, key := range evictedKeys {
+				got, exists := c.Get(key)
+				if exists {
+					t.Errorf("key should not exist: %d", key)
+				}
+				if got != 0 {
+					t.Errorf("value should not be set: %d", got)
+				}
+			}
+
+		})
+	}
+}
