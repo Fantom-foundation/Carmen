@@ -2,12 +2,11 @@ package mpt
 
 import (
 	"fmt"
-	"testing"
-
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/shadow"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"testing"
 )
 
 var variants = []struct {
@@ -257,6 +256,34 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
 			})
+		}
+	}
+}
+
+func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for _, mode := range []StorageMode{Live, Archive} {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, mode)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					defer forest.Close()
+
+					if forest.GetMemoryFootprint().Total() <= uintptr(0) {
+						t.Errorf("memory foodprint not provided")
+					}
+
+					for _, memChild := range []string{"accounts", "branches", "extensions", "values", "cache",
+						"hashes", "dirtyHashes", "hashedKeysCache", "hashedAddressesCache"} {
+
+						if forest.GetMemoryFootprint().GetChild(memChild) == nil {
+							t.Errorf("memory foodprint not provided: %v", memChild)
+						}
+					}
+				})
+			}
 		}
 	}
 }
