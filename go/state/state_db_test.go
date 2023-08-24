@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/golang/mock/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestCarmenStateImplementsStateDbInterface(t *testing.T) {
