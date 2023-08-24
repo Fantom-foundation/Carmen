@@ -29,7 +29,7 @@ func openCachedMemoryStock(t *testing.T, directory string) (stock.Stock[int, int
 	if err != nil {
 		return nil, err
 	}
-	return CreateCachedStock(stock), nil
+	return CreateCachedStockWithCapacity(stock, 10_000), nil
 }
 
 func openCachedFileStock(t *testing.T, directory string) (stock.Stock[int, int], error) {
@@ -37,5 +37,5 @@ func openCachedFileStock(t *testing.T, directory string) (stock.Stock[int, int],
 	if err != nil {
 		return nil, err
 	}
-	return CreateCachedStock(stock), nil
+	return CreateCachedStockWithCapacity(stock, 10_000), nil
 }

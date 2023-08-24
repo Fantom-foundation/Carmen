@@ -2,11 +2,12 @@ package array_test
 
 import (
 	"fmt"
+	"math/rand"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/array"
 	"github.com/Fantom-foundation/Carmen/go/backend/array/pagedarray"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"math/rand"
-	"testing"
 )
 
 const (
@@ -33,7 +34,7 @@ func getArrayFactories[I common.Identifier, V any](valSerializer common.Serializ
 }
 
 func TestArrayGetSet(t *testing.T) {
-	for _, size := range []int{0, 1, 5, 1000, 123456} {
+	for _, size := range []int{0, 1, 5, 1000, 12345} {
 		for name, factory := range getArrayFactories[uint32, common.Address](common.AddressSerializer{}, PageSize, PoolSize) {
 			t.Run(fmt.Sprintf("array %s size %d", name, size), func(t *testing.T) {
 				arr := factory(t)

@@ -16,9 +16,13 @@ type cachedStock[I stock.Index, V any] struct {
 }
 
 func CreateCachedStock[I stock.Index, V any](stock stock.Stock[I, V]) stock.Stock[I, V] {
+	return CreateCachedStockWithCapacity[I, V](stock, defaultCacheCapacity)
+}
+
+func CreateCachedStockWithCapacity[I stock.Index, V any](stock stock.Stock[I, V], capacity int) stock.Stock[I, V] {
 	return &cachedStock[I, V]{
 		underlying: stock,
-		cache:      common.NewCache[I, V](defaultCacheCapacity),
+		cache:      common.NewCache[I, V](capacity),
 	}
 }
 

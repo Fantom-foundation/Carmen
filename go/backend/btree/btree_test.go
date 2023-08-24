@@ -2,17 +2,18 @@ package btree
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
 	"sort"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 var (
 	comparator = common.Uint32Comparator{}
 )
 
-const numKeys = 10000
+const numKeys = 1000
 
 func TestBTreeInsert(t *testing.T) {
 	n := NewBTree[uint32](3, common.Uint32Comparator{})

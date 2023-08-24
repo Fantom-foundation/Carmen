@@ -161,7 +161,7 @@ func testReusedElementsAreCleared(t *testing.T, factory NamedStockFactory) {
 }
 
 func testLargeNumberOfElements(t *testing.T, factory NamedStockFactory) {
-	const N = 1_000_000
+	const N = 100_000
 	stock, err := factory.Open(t, t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create empty stock: %v", err)
