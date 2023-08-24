@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 var PathLengthTracking = MptConfig{

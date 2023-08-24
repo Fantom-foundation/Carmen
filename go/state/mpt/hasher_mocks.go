@@ -8,7 +8,7 @@ import (
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockHasher is a mock of Hasher interface.
