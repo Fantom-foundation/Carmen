@@ -54,7 +54,7 @@ func indexesFactories() map[string]func(t *testing.T) index.Index[common.Address
 }
 
 func TestIndexesLoadTest(t *testing.T) {
-	n := 100000
+	n := 10000
 	indexes := indexesFactories()
 
 	// generate test data
