@@ -4,6 +4,7 @@ import (
 	"golang.org/x/crypto/sha3"
 	"hash"
 	"sync"
+	"unsafe"
 )
 
 // CachedHasher allows for hashing input keys.
@@ -63,6 +64,13 @@ func (h *CachedHasher[T]) Hash(t T) Hash {
 	return res
 }
 
+func (h *CachedHasher[T]) GetMemoryFootprint() *MemoryFootprint {
+	mf := NewMemoryFootprint(unsafe.Sizeof(*h))
+	mf.AddChild("cache", h.cache.GetMemoryFootprint(0))
+	mf.AddChild("hashersPool", h.pool.GetMemoryFootprint())
+	return mf
+}
+
 // hasherPool is a synchronised pool of hashers. Whenever a hasher is required
 // it is either returned from the pool, or created as new, if no hasher is available in the pool
 type hasherPool struct {
@@ -101,4 +109,12 @@ func (p *hasherPool) returnHasher(hasher hash.Hash) {
 	defer p.lock.Unlock()
 
 	p.pool = append(p.pool, hasher)
+}
+
+func (p *hasherPool) GetMemoryFootprint() *MemoryFootprint {
+	mf := NewMemoryFootprint(unsafe.Sizeof(*p))
+	var h hash.Hash
+	mf.AddChild("cache", NewMemoryFootprint(uintptr(len(p.pool))*unsafe.Sizeof(h)))
+	return mf
+
 }

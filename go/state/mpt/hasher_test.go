@@ -65,6 +65,10 @@ func TestMptHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 		return keccak256(key[:]), nil
 	})
 
+	ctxt.EXPECT().hashKey(gomock.Any()).AnyTimes().DoAndReturn(func(k common.Key) common.Hash {
+		return keccak256(k[:])
+	})
+
 	// This test case reconstructs an issue encountered while hashing the
 	// state tree of block 652606 of the Fantom main-net.
 

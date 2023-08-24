@@ -374,6 +374,8 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 	}))
 	mf.AddChild("hashes", s.hashes.GetMemoryFootprint())
 	mf.AddChild("dirtyHashes", common.NewMemoryFootprint(uintptr(len(s.dirtyHashes))*unsafe.Sizeof(NodeId(0))))
+	mf.AddChild("hashedKeysCache", s.keyHasher.GetMemoryFootprint())
+	mf.AddChild("hashedAddressesCache", s.addressHasher.GetMemoryFootprint())
 	return mf
 }
 
