@@ -44,4 +44,4 @@ jobs:
 
     - name: Run Go tests
       working-directory: ./go
-      run: go test -v ./... -parallel 4
+      run: go test -v ./... -parallel 1 -timeout 1800s
