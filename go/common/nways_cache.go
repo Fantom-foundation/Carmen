@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"golang.org/x/exp/constraints"
 	"math"
+	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -15,9 +17,10 @@ import (
 // Since key association to the set is computing using modulo, it is cheap and thus fast.
 type NWaysCache[K constraints.Integer, V any] struct {
 	items   []nWaysCacheEntry[K, V]
-	nways   uint // number of ways
-	numsets uint // number of sets: nways * numsets -> capacity rounded up
-	ticker  uint64
+	locks   []sync.Mutex // locks for each Way of the cache
+	nways   uint         // number of ways
+	numsets uint         // number of sets: nways * numsets -> capacity rounded up
+	ticker  *atomic.Uint64
 
 	misses int
 	hits   int
@@ -27,21 +30,30 @@ type NWaysCache[K constraints.Integer, V any] struct {
 // Note that actual capacity will be aligned to multiplies of ways.
 func NewNWaysCache[K constraints.Integer, V any](capacity, ways int) *NWaysCache[K, V] {
 	numsets := int(math.Ceil(float64(capacity) / float64(ways)))
+	locks := make([]sync.Mutex, numsets)
+
 	return &NWaysCache[K, V]{
 		items:   make([]nWaysCacheEntry[K, V], numsets*ways), // adjust capacity by rounding up
+		locks:   locks,
 		nways:   uint(ways),
 		numsets: uint(numsets),
+		ticker:  &atomic.Uint64{},
 	}
 }
 
 func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
-	c.ticker++
+	setIndex := uint(key) % c.numsets
+	c.locks[setIndex].Lock()
+	defer c.locks[setIndex].Unlock()
+
+	oldest := c.ticker.Add(1)
+
 	// find first position of the sat
 	position := uint(key) % c.numsets * c.nways
 	// try to find the key by iterating the set from its starting position
 	for i := position; i < position+c.nways; i++ {
 		if c.items[i].used > 0 && c.items[i].key == key {
-			c.items[i].used = c.ticker
+			c.items[i].used = oldest
 			if MissHitMeasuring {
 				c.hits++
 			}
@@ -57,12 +69,16 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 }
 
 func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted bool) {
-	c.ticker++
+	setIndex := uint(key) % c.numsets
+	c.locks[setIndex].Lock()
+	defer c.locks[setIndex].Unlock()
+
+	oldest := c.ticker.Add(1)
 	var oldestIndex uint
+
 	// find first free position
 	position := uint(key) % c.numsets * c.nways
 	// try to find the key by iterating the set from its starting position
-	oldest := c.ticker
 	for i := position; i < position+c.nways; i++ {
 		// either empty position or replacing the same key
 		if c.items[i].used == 0 || c.items[i].key == key {
@@ -70,7 +86,7 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 			evictedValue = c.items[i].value
 			c.items[i].key = key
 			c.items[i].value = val
-			c.items[i].used = c.ticker
+			c.items[i].used = oldest
 			return evictedKey, evictedValue, false
 		}
 		if c.items[i].used < oldest {
@@ -84,12 +100,16 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 	evictedValue = c.items[oldestIndex].value
 	c.items[oldestIndex].key = key
 	c.items[oldestIndex].value = val
-	c.items[oldestIndex].used = c.ticker
+	c.items[oldestIndex].used = oldest
 	return evictedKey, evictedValue, true
 }
 
 func (c *NWaysCache[K, V]) Remove(key K) (original V, exists bool) {
-	// find first position of the sat
+	setIndex := uint(key) % c.numsets
+	c.locks[setIndex].Lock()
+	defer c.locks[setIndex].Unlock()
+
+	// find first free position
 	position := uint(key) % c.numsets * c.nways
 	// try to find the key by iterating the set from its starting position
 	for i := position; i < position+c.nways; i++ {
