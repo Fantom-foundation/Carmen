@@ -44,5 +44,7 @@ Todos:
 	- release state trie asynchroniously in the background
 	- implement a custom node cache with faster lookups
 	- compute hashes in parallel
+	- perform lookups iterative instead of recursive
+	- lock only pairs of nodes instead of full path for reads
 
 */

@@ -2,11 +2,13 @@ package mpt
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/shadow"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 var variants = []struct {
@@ -281,6 +283,117 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 						if forest.GetMemoryFootprint().GetChild(memChild) == nil {
 							t.Errorf("memory foodprint not provided: %v", memChild)
 						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for _, mode := range []StorageMode{Live, Archive} {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+					const N = 100
+					forest, err := variant.factory(t.TempDir(), config, mode)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					defer forest.Close()
+
+					// Fill in some data (sequentially).
+					root := EmptyId()
+					for i := 0; i < N; i++ {
+						root, err = forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
+						if err != nil {
+							t.Fatalf("failed to insert account %d: %v", i, err)
+						}
+					}
+
+					// Read account information concurrently.
+					var errors [N]error
+					var wg sync.WaitGroup
+					wg.Add(N)
+					for i := 0; i < N; i++ {
+						go func() {
+							defer wg.Done()
+							for i := 0; i < N; i++ {
+								info, _, err := forest.GetAccountInfo(root, common.Address{byte(i)})
+								if err != nil {
+									errors[i] = err
+									return
+								}
+								if got, want := info.Nonce.ToUint64(), uint64(i+1); got != want {
+									errors[i] = fmt.Errorf("unexpected nonce for account %d: wanted %d, got %d", i, want, got)
+									return
+								}
+							}
+						}()
+					}
+					wg.Wait()
+
+					for i, err := range errors {
+						if err != nil {
+							t.Errorf("error in goroutine %d: %v", i, err)
+						}
+					}
+
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for _, mode := range []StorageMode{Live, Archive} {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+					const N = 100
+					forest, err := variant.factory(t.TempDir(), config, mode)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// Fill in some data (sequentially).
+					root := EmptyId()
+					for i := 0; i < N; i++ {
+						root, err = forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
+						if err != nil {
+							t.Fatalf("failed to insert account %d: %v", i, err)
+						}
+					}
+
+					// Update account information concurrently.
+					var errors [N]error
+					var wg sync.WaitGroup
+					wg.Add(N)
+					for i := 0; i < N; i++ {
+						go func() {
+							defer wg.Done()
+							for i := 0; i < N; i++ {
+								_, err := forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 2))})
+								if err != nil {
+									errors[i] = err
+									return
+								}
+							}
+						}()
+					}
+					wg.Wait()
+
+					for i, err := range errors {
+						if err != nil {
+							t.Errorf("error in goroutine %d: %v", i, err)
+						}
+					}
+
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
 					}
 				})
 			}

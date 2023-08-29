@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -303,6 +304,7 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 
 			// Fill the tree.
 			for i, addr := range address {
+				fmt.Printf("Creating account %d ...\n", i+1)
 				if err := trie.SetAccountInfo(addr, AccountInfo{Nonce: common.ToNonce(uint64(i) + 1)}); err != nil {
 					t.Fatalf("failed to insert account: %v", err)
 				}
@@ -312,6 +314,7 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 				}
 
 				for i, key := range keys {
+					fmt.Printf("\tsetting key %d ...\n", i)
 					if err := trie.SetValue(addr, key, common.Value{byte(i)}); err != nil {
 						t.Fatalf("failed to insert value: %v", err)
 					}
@@ -336,6 +339,7 @@ func TestLiveTrie_InsertLotsOfData(t *testing.T) {
 
 			// Delete all accounts.
 			for _, addr := range address {
+				fmt.Printf("Deleting account %v ..\n", addr)
 				if err := trie.SetAccountInfo(addr, AccountInfo{}); err != nil {
 					t.Fatalf("failed to delete account: %v", err)
 				}

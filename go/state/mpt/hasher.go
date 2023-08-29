@@ -5,8 +5,9 @@ package mpt
 import (
 	"crypto/sha256"
 	"fmt"
-	"golang.org/x/crypto/sha3"
 	"reflect"
+
+	"golang.org/x/crypto/sha3"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
@@ -161,15 +162,16 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 		if err != nil {
 			return nil, err
 		}
+		defer node.Release()
 
-		minSize, err := getLowerBoundForEncodedSize(node, 32, nodes)
+		minSize, err := getLowerBoundForEncodedSize(node.Get(), 32, nodes)
 		if err != nil {
 			return nil, err
 		}
 
 		var encoded []byte
 		if minSize < 32 {
-			encoded, err = encode(node, nodes, hashes)
+			encoded, err = encode(node.Get(), nodes, hashes)
 			if err != nil {
 				return nil, err
 			}
@@ -212,8 +214,9 @@ func getLowerBoundForEncodedSizeBranch(node *BranchNode, limit int, nodes NodeSo
 		if err != nil {
 			return 0, err
 		}
+		defer node.Release()
 
-		size, err := getLowerBoundForEncodedSize(node, limit-sum, nodes)
+		size, err := getLowerBoundForEncodedSize(node.Get(), limit-sum, nodes)
 		if err != nil {
 			return 0, err
 		}
@@ -236,15 +239,16 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 	if err != nil {
 		return nil, err
 	}
+	defer next.Release()
 
-	minSize, err := getLowerBoundForEncodedSize(next, 32, nodes)
+	minSize, err := getLowerBoundForEncodedSize(next.Get(), 32, nodes)
 	if err != nil {
 		return nil, err
 	}
 
 	var encoded []byte
 	if minSize < 32 {
-		encoded, err = encode(next, nodes, hashes)
+		encoded, err = encode(next.Get(), nodes, hashes)
 		if err != nil {
 			return nil, err
 		}
@@ -282,8 +286,9 @@ func getLowerBoundForEncodedSizeExtension(node *ExtensionNode, limit int, nodes 
 	if err != nil {
 		return 0, err
 	}
+	defer next.Release()
 
-	size, err := getLowerBoundForEncodedSize(next, limit-sum, nodes)
+	size, err := getLowerBoundForEncodedSize(next.Get(), limit-sum, nodes)
 	if err != nil {
 		return 0, err
 	}
