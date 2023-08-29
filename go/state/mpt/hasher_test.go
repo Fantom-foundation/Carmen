@@ -7,6 +7,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"go.uber.org/mock/gomock"
 )
 
@@ -26,7 +27,7 @@ func TestMptHasher_EmptyNode(t *testing.T) {
 
 func TestMptHasher_ExtensionNode_KnownHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	ctxt := newNodeContext(ctrl)
+	ctxt := newNodeContext(t, ctrl)
 
 	// This test case reconstructs an issue encountered while hashing the
 	// state tree of block 25399 of the Fantom main-net.
@@ -60,7 +61,7 @@ func TestMptHasher_ExtensionNode_KnownHash(t *testing.T) {
 
 func TestMptHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	ctxt := newNodeContext(ctrl)
+	ctxt := newNodeContext(t, ctrl)
 	ctxt.EXPECT().hashKey(gomock.Any()).AnyTimes().DoAndReturn(func(key common.Key) (common.Hash, error) {
 		return keccak256(key[:]), nil
 	})
@@ -157,12 +158,16 @@ func TestMptHasher_GetLowerBoundForBranchNode(t *testing.T) {
 
 	one := common.Value{}
 	one[len(one)-1] = 1
-	smallValue := &ValueNode{pathLength: 4, value: one}
-	bigValue := &ValueNode{pathLength: 64, value: one}
+	smallValue := shared.MakeShared[Node](&ValueNode{pathLength: 4, value: one})
+	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
 	nodeSource := NewMockNodeSource(ctrl)
-	nodeSource.EXPECT().getNode(smallChild).AnyTimes().Return(smallValue, nil)
-	nodeSource.EXPECT().getNode(bigChild).AnyTimes().Return(bigValue, nil)
+	nodeSource.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+		return smallValue.GetReadHandle(), nil
+	})
+	nodeSource.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+		return bigValue.GetReadHandle(), nil
+	})
 	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	tests := []*BranchNode{
@@ -197,12 +202,17 @@ func TestMptHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 
 	one := common.Value{}
 	one[len(one)-1] = 1
-	smallValue := &ValueNode{pathLength: 4, value: one}
-	bigValue := &ValueNode{pathLength: 64, value: one}
+	smallValue := shared.MakeShared[Node](&ValueNode{pathLength: 4, value: one})
+	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
 	nodeSource := NewMockNodeSource(ctrl)
-	nodeSource.EXPECT().getNode(smallChild).AnyTimes().Return(smallValue, nil)
-	nodeSource.EXPECT().getNode(bigChild).AnyTimes().Return(bigValue, nil)
+	nodeSource.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+		return smallValue.GetReadHandle(), nil
+	})
+	nodeSource.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+		return bigValue.GetReadHandle(), nil
+	})
+
 	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	tests := []*ExtensionNode{

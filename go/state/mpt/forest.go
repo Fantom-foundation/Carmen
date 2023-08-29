@@ -6,12 +6,15 @@ import (
 	"log"
 	"reflect"
 	"sort"
+	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock/synced"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
 
 type StorageMode bool
@@ -38,6 +41,9 @@ func (m StorageMode) String() string {
 
 // Forest is a utility node managing nodes for one or more Tries.
 // It provides the common foundation for the Live and Archive Tries.
+//
+// Forests are thread safe. Thus, read and write operations may be
+// conducted concurrently.
 type Forest struct {
 	config MptConfig
 
@@ -53,16 +59,20 @@ type Forest struct {
 	storageMode StorageMode
 
 	// A unified cache for all node types.
-	nodeCache *common.Cache[NodeId, Node]
+	nodeCache      *common.Cache[NodeId, *shared.Shared[Node]]
+	nodeCacheMutex sync.Mutex
 
 	// The set of dirty nodes. Nodes are dirty if there in-memory
 	// state does not match their on-disk content.
-	dirty map[NodeId]struct{}
+	dirty      map[NodeId]struct{}
+	dirtyMutex sync.Mutex
 
 	// A store for hashes.
-	hashes      HashStore
-	dirtyHashes map[NodeId]struct{}
+	hashes           HashStore
+	dirtyHashes      map[NodeId]struct{}
+	dirtyHashesMutex sync.Mutex
 
+	// Cached hashers for keys and addresses (thread safe).
 	keyHasher     *common.CachedHasher[common.Key]
 	addressHasher *common.CachedHasher[common.Address]
 }
@@ -179,12 +189,12 @@ func makeForest(
 ) (*Forest, error) {
 	return &Forest{
 		config:        config,
-		branches:      branches,
-		extensions:    extensions,
-		accounts:      accounts,
-		values:        values,
+		branches:      synced.Sync(branches),
+		extensions:    synced.Sync(extensions),
+		accounts:      synced.Sync(accounts),
+		values:        synced.Sync(values),
 		storageMode:   mode,
-		nodeCache:     common.NewCache[NodeId, Node](cacheCapacity),
+		nodeCache:     common.NewCache[NodeId, *shared.Shared[Node]](cacheCapacity),
 		dirty:         map[NodeId]struct{}{},
 		hashes:        hashes,
 		dirtyHashes:   map[NodeId]struct{}{},
@@ -194,21 +204,23 @@ func makeForest(
 }
 
 func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo, bool, error) {
-	root, err := s.getNode(rootId)
+	handle, err := s.getNode(rootId)
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
+	defer handle.Release()
 	path := AddressToNibblePath(addr, s)
-	return root.GetAccount(s, addr, path[:])
+	return handle.Get().GetAccount(s, addr, path[:])
 }
 
 func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info AccountInfo) (NodeId, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.getMutableNode(rootId)
 	if err != nil {
 		return NodeId(0), err
 	}
+	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	newRoot, _, err := root.SetAccount(s, rootId, addr, path[:], info)
+	newRoot, _, err := root.Get().SetAccount(s, rootId, root, addr, path[:], info)
 	if err != nil {
 		return NodeId(0), err
 	}
@@ -220,18 +232,20 @@ func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (c
 	if err != nil {
 		return common.Value{}, err
 	}
+	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	value, _, err := root.GetSlot(s, addr, path[:], key)
+	value, _, err := root.Get().GetSlot(s, addr, path[:], key)
 	return value, err
 }
 
 func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, value common.Value) (NodeId, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.getMutableNode(rootId)
 	if err != nil {
 		return NodeId(0), err
 	}
+	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	newRoot, _, err := root.SetSlot(s, rootId, addr, path[:], key, value)
+	newRoot, _, err := root.Get().SetSlot(s, rootId, root, addr, path[:], key, value)
 	if err != nil {
 		return NodeId(0), err
 	}
@@ -239,12 +253,13 @@ func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, va
 }
 
 func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
-	root, err := s.getNode(rootId)
+	root, err := s.getMutableNode(rootId)
 	if err != nil {
 		return err
 	}
+	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	_, _, err = root.ClearStorage(s, rootId, addr, path[:])
+	_, _, err = root.Get().ClearStorage(s, rootId, root, addr, path[:])
 	return err
 }
 
@@ -254,23 +269,30 @@ func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
 		return s.config.Hasher.GetHash(EmptyNode{}, s, s)
 	}
 	// Non-dirty hashes can be taken from the store.
+	s.dirtyHashesMutex.Lock()
 	if _, dirty := s.dirtyHashes[id]; !dirty {
+		s.dirtyHashesMutex.Unlock()
 		return s.hashes.Get(id)
 	}
+	delete(s.dirtyHashes, id)
+	s.dirtyHashesMutex.Unlock()
 
 	// Dirty hashes need to be re-freshed.
 	node, err := s.getNode(id)
 	if err != nil {
+		s.invalidateHash(id)
 		return common.Hash{}, err
 	}
-	hash, err := s.config.Hasher.GetHash(node, s, s)
+	defer node.Release()
+	hash, err := s.config.Hasher.GetHash(node.Get(), s, s)
 	if err != nil {
+		s.invalidateHash(id)
 		return common.Hash{}, err
 	}
 	if err := s.hashes.Set(id, hash); err != nil {
+		s.invalidateHash(id)
 		return hash, err
 	}
-	delete(s.dirtyHashes, id)
 	return hash, nil
 }
 
@@ -286,45 +308,58 @@ func (f *Forest) Freeze(id NodeId) error {
 	if f.storageMode != Archive {
 		return fmt.Errorf("node-freezing only supported in archive mode")
 	}
-	root, err := f.getNode(id)
+	root, err := f.getMutableNode(id)
 	if err != nil {
 		return err
 	}
-	return root.Freeze(f)
+	defer root.Release()
+	return root.Get().Freeze(f, root)
 }
 
 func (s *Forest) Flush() error {
-	// Flush dirty keys in order (to avoid excessive seeking).
+	// Get snapshot of set of dirty Node IDs.
+	s.dirtyMutex.Lock()
 	ids := make([]NodeId, len(s.dirty))
 	for id := range s.dirty {
 		ids = append(ids, id)
 	}
+	s.dirty = map[NodeId]struct{}{}
+	s.dirtyMutex.Unlock()
+
+	// Flush dirty keys in order (to avoid excessive seeking).
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	var errs = []error{}
 	for _, id := range ids {
+		s.nodeCacheMutex.Lock()
 		node, present := s.nodeCache.Get(id)
+		s.nodeCacheMutex.Unlock()
 		if present {
-			if err := s.flush(id, node); err != nil {
+			handle := node.GetReadHandle()
+			err := s.flushNode(id, handle.Get(), false)
+			handle.Release()
+			if err != nil {
 				errs = append(errs, err)
 			}
 		} else {
 			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
 		}
 	}
-	s.dirty = map[NodeId]struct{}{}
 
 	// Update hashes for dirty nodes.
+	s.dirtyHashesMutex.Lock()
 	dirty := make([]NodeId, len(s.dirtyHashes))
 	for id := range s.dirtyHashes {
 		dirty = append(dirty, id)
 	}
+	s.dirtyHashes = map[NodeId]struct{}{}
+	s.dirtyHashesMutex.Unlock()
+
 	sort.Slice(dirty, func(i, j int) bool { return dirty[i] < dirty[j] })
 	for _, id := range dirty {
 		if _, err := s.getHashFor(id); err != nil {
 			errs = append(errs, err)
 		}
 	}
-	s.dirtyHashes = map[NodeId]struct{}{}
 
 	return errors.Join(
 		errors.Join(errs...),
@@ -354,20 +389,24 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("branches", s.branches.GetMemoryFootprint())
 	mf.AddChild("extensions", s.extensions.GetMemoryFootprint())
 	mf.AddChild("values", s.values.GetMemoryFootprint())
-	mf.AddChild("cache", s.nodeCache.GetDynamicMemoryFootprint(func(node Node) uintptr {
-		if _, ok := node.(*AccountNode); ok {
+	s.nodeCacheMutex.Lock()
+	defer s.nodeCacheMutex.Unlock()
+	mf.AddChild("cache", s.nodeCache.GetDynamicMemoryFootprint(func(node *shared.Shared[Node]) uintptr {
+		handle := node.GetReadHandle()
+		defer handle.Release()
+		if _, ok := handle.Get().(*AccountNode); ok {
 			return unsafe.Sizeof(AccountNode{})
 		}
-		if _, ok := node.(*BranchNode); ok {
+		if _, ok := handle.Get().(*BranchNode); ok {
 			return unsafe.Sizeof(BranchNode{})
 		}
-		if _, ok := node.(EmptyNode); ok {
+		if _, ok := handle.Get().(EmptyNode); ok {
 			return unsafe.Sizeof(EmptyNode{})
 		}
-		if _, ok := node.(*ExtensionNode); ok {
+		if _, ok := handle.Get().(*ExtensionNode); ok {
 			return unsafe.Sizeof(ExtensionNode{})
 		}
-		if _, ok := node.(*ValueNode); ok {
+		if _, ok := handle.Get().(*ValueNode); ok {
 			return unsafe.Sizeof(ValueNode{})
 		}
 		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
@@ -384,9 +423,10 @@ func (s *Forest) Dump(rootId NodeId) {
 	root, err := s.getNode(rootId)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
-	} else {
-		root.Dump(s, rootId, "")
+		return
 	}
+	defer root.Release()
+	root.Get().Dump(s, rootId, "")
 }
 
 // Check verifies internal invariants of the Trie instance. If the trie is
@@ -398,7 +438,8 @@ func (s *Forest) Check(rootId NodeId) error {
 	if err != nil {
 		return err
 	}
-	return root.Check(s, make([]Nibble, 0, common.AddressSize*2))
+	defer root.Release()
+	return root.Get().Check(s, make([]Nibble, 0, common.AddressSize*2))
 }
 
 // -- NodeManager interface --
@@ -407,8 +448,10 @@ func (s *Forest) getConfig() MptConfig {
 	return s.config
 }
 
-func (s *Forest) getNode(id NodeId) (Node, error) {
+func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 	// Start by checking the node cache.
+	s.nodeCacheMutex.Lock()
+	defer s.nodeCacheMutex.Unlock()
 	res, found := s.nodeCache.Get(id)
 	if found {
 		return res, nil
@@ -447,16 +490,46 @@ func (s *Forest) getNode(id NodeId) (Node, error) {
 		node.MarkFrozen()
 	}
 
-	if err := s.addToCache(id, node); err != nil {
+	instance := shared.MakeShared[Node](node)
+	if err := s.addToCacheHoldingCacheMutexLock(id, instance); err != nil {
 		return nil, err
 	}
-	return node, nil
+	return instance, nil
 }
 
-func (s *Forest) addToCache(id NodeId, node Node) error {
-	if evictedId, evictedNode, evicted := s.nodeCache.Set(id, node); evicted {
+func (s *Forest) getNode(id NodeId) (shared.ReadHandle[Node], error) {
+	instance, err := s.getSharedNode(id)
+	if err != nil {
+		return shared.ReadHandle[Node]{}, err
+	}
+	return instance.GetReadHandle(), nil
+}
+
+func (s *Forest) getMutableNode(id NodeId) (shared.WriteHandle[Node], error) {
+	instance, err := s.getSharedNode(id)
+	if err != nil {
+		return shared.WriteHandle[Node]{}, err
+	}
+	return instance.GetWriteHandle(), nil
+}
+
+func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) error {
+	s.nodeCacheMutex.Lock()
+	defer s.nodeCacheMutex.Unlock()
+	return s.addToCacheHoldingCacheMutexLock(id, node)
+}
+
+func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[Node]) error {
+	if s.nodeCacheMutex.TryLock() {
+		return fmt.Errorf("caller must hold node cache lock")
+	}
+	evictedId, evictedNode, evicted := s.nodeCache.Set(id, node)
+	if evicted {
 		// TODO: perform flush asynchroniously.
-		if err := s.flush(evictedId, evictedNode); err != nil {
+		// Make sure there is no write access on the node.
+		handle := evictedNode.GetReadHandle()
+		defer handle.Release()
+		if err := s.flush(evictedId, handle.Get()); err != nil {
 			return err
 		}
 	}
@@ -464,6 +537,10 @@ func (s *Forest) addToCache(id NodeId, node Node) error {
 }
 
 func (s *Forest) flush(id NodeId, node Node) error {
+	return s.flushNode(id, node, true)
+}
+
+func (s *Forest) flushNode(id NodeId, node Node, checkDirty bool) error {
 	// Note: flushing nodes in Archive mode will implicitly freeze them,
 	// since after the reload they will be considered frozen. This may
 	// cause temporary states between updates to be accidentially frozen,
@@ -475,10 +552,15 @@ func (s *Forest) flush(id NodeId, node Node) error {
 		log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
 	}
 
-	if _, dirty := s.dirty[id]; !dirty {
-		return nil
+	if checkDirty {
+		s.dirtyMutex.Lock()
+		if _, dirty := s.dirty[id]; !dirty {
+			s.dirtyMutex.Unlock()
+			return nil
+		}
+		delete(s.dirty, id)
+		s.dirtyMutex.Unlock()
 	}
-	delete(s.dirty, id)
 	if id.IsValue() {
 		return s.values.Set(id.Index(), *node.(*ValueNode))
 	} else if id.IsAccount() {
@@ -494,61 +576,67 @@ func (s *Forest) flush(id NodeId, node Node) error {
 	}
 }
 
-func (s *Forest) createAccount() (NodeId, *AccountNode, error) {
+func (s *Forest) createAccount() (NodeId, shared.WriteHandle[Node], error) {
 	i, err := s.accounts.New()
 	if err != nil {
-		return 0, nil, err
+		return 0, shared.WriteHandle[Node]{}, err
 	}
 	id := AccountId(i)
 	node := new(AccountNode)
-	if err := s.addToCache(id, node); err != nil {
-		return 0, nil, err
+	instance := shared.MakeShared[Node](node)
+	if err := s.addToCache(id, instance); err != nil {
+		return 0, shared.WriteHandle[Node]{}, err
 	}
-	return id, node, err
+	return id, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) createBranch() (NodeId, *BranchNode, error) {
+func (s *Forest) createBranch() (NodeId, shared.WriteHandle[Node], error) {
 	i, err := s.branches.New()
 	if err != nil {
-		return 0, nil, err
+		return 0, shared.WriteHandle[Node]{}, err
 	}
 	id := BranchId(i)
 	node := new(BranchNode)
-	if err := s.addToCache(id, node); err != nil {
-		return 0, nil, err
+	instance := shared.MakeShared[Node](node)
+	if err := s.addToCache(id, instance); err != nil {
+		return 0, shared.WriteHandle[Node]{}, err
 	}
-	return id, node, err
+	return id, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) createExtension() (NodeId, *ExtensionNode, error) {
+func (s *Forest) createExtension() (NodeId, shared.WriteHandle[Node], error) {
 	i, err := s.extensions.New()
 	if err != nil {
-		return 0, nil, err
+		return 0, shared.WriteHandle[Node]{}, err
 	}
 	id := ExtensionId(i)
 	node := new(ExtensionNode)
-	if err := s.addToCache(id, node); err != nil {
-		return 0, nil, err
+	instance := shared.MakeShared[Node](node)
+	if err := s.addToCache(id, instance); err != nil {
+		return 0, shared.WriteHandle[Node]{}, err
 	}
-	return id, node, err
+	return id, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) createValue() (NodeId, *ValueNode, error) {
+func (s *Forest) createValue() (NodeId, shared.WriteHandle[Node], error) {
 	i, err := s.values.New()
 	if err != nil {
-		return 0, nil, err
+		return 0, shared.WriteHandle[Node]{}, err
 	}
 	id := ValueId(i)
 	node := new(ValueNode)
-	if err := s.addToCache(id, node); err != nil {
-		return 0, nil, err
+	instance := shared.MakeShared[Node](node)
+	if err := s.addToCache(id, instance); err != nil {
+		return 0, shared.WriteHandle[Node]{}, err
 	}
-	return id, node, err
+	return id, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) update(id NodeId, node Node) error {
+func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
 	// all needed here is to register the modfied node as dirty
+	s.dirtyMutex.Lock()
 	s.dirty[id] = struct{}{}
+	s.dirtyMutex.Unlock()
 	// ... and to invalidate the nodes hash.
 	s.invalidateHash(id)
 	return nil
@@ -558,14 +646,25 @@ func (s *Forest) invalidateHash(id NodeId) {
 	// by adding it to the dirty hashes set the hash will be
 	// re-evaluated the next time.
 	if !id.IsEmpty() {
+		s.dirtyHashesMutex.Lock()
 		s.dirtyHashes[id] = struct{}{}
+		s.dirtyHashesMutex.Unlock()
 	}
 }
 
 func (s *Forest) release(id NodeId) error {
+	s.nodeCacheMutex.Lock()
 	s.nodeCache.Remove(id)
+	s.nodeCacheMutex.Unlock()
+
+	s.dirtyMutex.Lock()
 	delete(s.dirty, id)
+	s.dirtyMutex.Unlock()
+
+	s.dirtyHashesMutex.Lock()
 	delete(s.dirtyHashes, id)
+	s.dirtyHashesMutex.Unlock()
+
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}
