@@ -49,6 +49,33 @@ func TestNWaysExceedCapacity(t *testing.T) {
 	}
 }
 
+func TestNWaysCache_GetOrSet(t *testing.T) {
+	c := NewNWaysCache[int, int](8, 4)
+
+	if _, present, _, _, evicted := c.GetOrSet(1, 11); present || evicted {
+		t.Errorf("value should neither present nor evicted")
+	}
+
+	if current, present, _, _, _ := c.GetOrSet(1, 12); !present || current != 11 {
+		t.Errorf("previous value should be present")
+	}
+
+	// cause eviction
+	c.Set(5, 5)
+	c.Set(9, 9)
+	c.Set(13, 13)
+
+	if _, present, evictedKey, evictedValue, evicted := c.GetOrSet(17, 13); !evicted || present || evictedKey != 1 || evictedValue != 11 {
+		t.Errorf("value should be evicted")
+	}
+
+	// no eviction - replacing
+	if current, present, _, _, evicted := c.GetOrSet(9, 13); evicted || !present || current != 9 {
+		t.Errorf("value should be evicted")
+	}
+
+}
+
 func TestNWaysLRUEvictedCapacity(t *testing.T) {
 	c := NewNWaysCache[int, int](6, 3)
 
