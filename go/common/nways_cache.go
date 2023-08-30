@@ -47,14 +47,14 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
-	oldest := c.ticker.Add(1)
+	ticker := c.ticker.Add(1)
 
 	// find first position of the sat
 	position := uint(key) % c.numsets * c.nways
 	// try to find the key by iterating the set from its starting position
 	for i := position; i < position+c.nways; i++ {
 		if c.items[i].used > 0 && c.items[i].key == key {
-			c.items[i].used = oldest
+			c.items[i].used = ticker
 			if MissHitMeasuring {
 				c.hits.Add(1)
 			}
@@ -74,7 +74,8 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
-	oldest := c.ticker.Add(1)
+	ticker := c.ticker.Add(1)
+	oldest := ticker
 	var oldestIndex uint
 
 	// find first free position
@@ -87,7 +88,7 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 			evictedValue = c.items[i].value
 			c.items[i].key = key
 			c.items[i].value = val
-			c.items[i].used = oldest
+			c.items[i].used = ticker
 			return evictedKey, evictedValue, false
 		}
 		if c.items[i].used < oldest {
@@ -101,7 +102,7 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 	evictedValue = c.items[oldestIndex].value
 	c.items[oldestIndex].key = key
 	c.items[oldestIndex].value = val
-	c.items[oldestIndex].used = oldest
+	c.items[oldestIndex].used = ticker
 	return evictedKey, evictedValue, true
 }
 
@@ -121,6 +122,52 @@ func (c *NWaysCache[K, V]) Remove(key K) (original V, exists bool) {
 	}
 
 	return original, false
+}
+
+// GetOrSet tries to locate the input key in the cache. IF the key exists, its value is returned.
+// If the key does not exist, the input value is stored under this key.
+// When the key is stored in this cache, another key and value may be evicted.
+// This method returns true if the key was present in the cache. It also returns if another key was evicted due
+// to inserting this key.
+func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool) {
+	setIndex := uint(key) % c.numsets
+	c.locks[setIndex].Lock()
+	defer c.locks[setIndex].Unlock()
+
+	ticker := c.ticker.Add(1)
+	oldest := ticker
+	var oldestIndex uint
+
+	// find first free position
+	position := uint(key) % c.numsets * c.nways
+	// try to find the key by iterating the set from its starting position
+	for i := position; i < position+c.nways; i++ {
+		// key found in a non-empty location -> return its value.
+		if c.items[i].used > 0 && c.items[i].key == key {
+			c.items[i].used = ticker
+			if MissHitMeasuring {
+				c.hits.Add(1)
+			}
+			return c.items[i].value, true, evictedKey, evictedValue, false
+		}
+		if c.items[i].used < oldest {
+			oldest = c.items[i].used
+			oldestIndex = i
+		}
+	}
+
+	if MissHitMeasuring {
+		c.misses.Add(1)
+	}
+
+	// evict the oldest used key
+	evictedKey = c.items[oldestIndex].key
+	evictedValue = c.items[oldestIndex].value
+	isEvicted := c.items[oldestIndex].used > 0
+	c.items[oldestIndex].key = key
+	c.items[oldestIndex].value = val
+	c.items[oldestIndex].used = ticker
+	return current, false, evictedKey, evictedValue, isEvicted
 }
 
 // GetMemoryFootprint provides the size of the cache in memory in bytes
