@@ -4,8 +4,10 @@ package mpt
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 
 	"golang.org/x/crypto/sha3"
 
@@ -56,13 +58,28 @@ func (h DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (commo
 	case *BranchNode:
 		hasher.Write([]byte{'B'})
 		// TODO: compute sub-tree hashes in parallel
-		for _, child := range node.children {
-			if hash, err := source.getHashFor(child); err == nil {
-				hasher.Write(hash[:])
-			} else {
-				return hash, err
-			}
+		var wg sync.WaitGroup
+		wg.Add(16)
+		var errs [16]error
+		var hashes [16]common.Hash
+		for i, child := range node.children {
+			go func(i int, child NodeId) {
+				defer wg.Done()
+				if hash, err := source.getHashFor(child); err == nil {
+					hashes[i] = hash
+				} else {
+					errs[i] = err
+				}
+			}(i, child)
 		}
+		wg.Wait()
+		if err := errors.Join(errs[:]...); err != nil {
+			return hash, nil
+		}
+		for _, hash := range hashes {
+			hasher.Write(hash[:])
+		}
+		hasher.Write(hash[:])
 
 	case *ExtensionNode:
 		hasher.Write([]byte{'E'})
@@ -152,48 +169,64 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 	children := node.children
 	items := make([]rlp.Item, len(children)+1)
 
+	var wg sync.WaitGroup
+	var errs [16]error
 	for i, child := range children {
 		if child.IsEmpty() {
 			items[i] = rlp.String{}
 			continue
 		}
 
-		node, err := nodes.getNode(child)
-		if err != nil {
-			return nil, err
-		}
-		defer node.Release()
-
-		minSize, err := getLowerBoundForEncodedSize(node.Get(), 32, nodes)
-		if err != nil {
-			return nil, err
-		}
-
-		var encoded []byte
-		if minSize < 32 {
-			encoded, err = encode(node.Get(), nodes, hashes)
+		wg.Add(1)
+		go func(i int, child NodeId) {
+			defer wg.Done()
+			node, err := nodes.getNode(child)
 			if err != nil {
-				return nil, err
+				errs[i] = err
+				return
 			}
-			if len(encoded) >= 32 {
-				encoded = nil
-			}
-		}
+			defer node.Release()
 
-		if encoded == nil {
-			hash, err := hashes.getHashFor(child)
+			minSize, err := getLowerBoundForEncodedSize(node.Get(), 32, nodes)
 			if err != nil {
-				return nil, err
+				errs[i] = err
+				return
 			}
-			items[i] = rlp.String{Str: hash[:]}
-		} else {
-			items[i] = rlp.Encoded{Data: encoded}
-		}
+
+			var encoded []byte
+			if minSize < 32 {
+				encoded, err = encode(node.Get(), nodes, hashes)
+				if err != nil {
+					errs[i] = err
+					return
+				}
+				if len(encoded) >= 32 {
+					encoded = nil
+				}
+			}
+
+			if encoded == nil {
+				hash, err := hashes.getHashFor(child)
+				if err != nil {
+					errs[i] = err
+					return
+				}
+				items[i] = rlp.String{Str: hash[:]}
+			} else {
+				items[i] = rlp.Encoded{Data: encoded}
+			}
+		}(i, child)
 	}
 
 	// There is one 17th entry which would be filled if this node is a terminator. However,
 	// branch nodes are never terminators in State or Storage Tries.
 	items[len(children)] = &rlp.String{}
+
+	wg.Wait()
+
+	if err := errors.Join(errs[:]...); err != nil {
+		return nil, err
+	}
 
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
