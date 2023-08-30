@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
@@ -38,6 +39,7 @@ type HashStore interface {
 type inMemoryHashStore struct {
 	hashes   map[NodeId]common.Hash
 	filename string
+	mu       sync.Mutex
 }
 
 // OpenInMemoryHashStore opens a HashStore backed by a file and retaining all
@@ -63,15 +65,21 @@ func OpenInMemoryHashStore(directory string) (HashStore, error) {
 }
 
 func (s *inMemoryHashStore) Get(id NodeId) (common.Hash, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.hashes[id], nil
 }
 
 func (s *inMemoryHashStore) Set(id NodeId, hash common.Hash) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.hashes[id] = hash
 	return nil
 }
 
 func (s *inMemoryHashStore) Flush() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return storeHashes(s.filename, s.hashes)
 }
 
@@ -80,6 +88,8 @@ func (s *inMemoryHashStore) Close() error {
 }
 
 func (s *inMemoryHashStore) GetMemoryFootprint() *common.MemoryFootprint {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return common.NewMemoryFootprint(uintptr(len(s.hashes)) * (unsafe.Sizeof(NodeId(0)) + common.HashSize))
 }
 
@@ -151,12 +161,14 @@ func storeHashes(file string, hashes map[NodeId]common.Hash) error {
 // fileBasedHashStore is a HashStore implementation backed by a file that
 // retains a cache of most recently accessed hashes in memory.
 type fileBasedHashStore struct {
-	cache      *common.NWaysCache[NodeId, common.Hash]
+	cache      *common.NWaysCache[NodeId, common.Hash] // < inherently thread safe
 	dirty      map[NodeId]struct{}
+	dirtyLock  sync.Mutex // protects access to the dirty map
 	branches   *utils.BufferedFile
 	extensions *utils.BufferedFile
 	accounts   *utils.BufferedFile
 	values     *utils.BufferedFile
+	fileLock   sync.Mutex // protects access to all files
 }
 
 // OpenFileBasedHashStore opens a HashStore backed by a file and retaining a
@@ -212,6 +224,7 @@ func (s *fileBasedHashStore) Get(id NodeId) (common.Hash, error) {
 	}
 	var hash common.Hash
 	var err error
+	s.fileLock.Lock()
 	if id.IsAccount() {
 		err = s.accounts.Read(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsBranch() {
@@ -223,6 +236,7 @@ func (s *fileBasedHashStore) Get(id NodeId) (common.Hash, error) {
 	} else {
 		err = fmt.Errorf("unsupported node ID type: %v", id)
 	}
+	s.fileLock.Unlock()
 	if err != nil {
 		return hash, err
 	}
@@ -233,7 +247,9 @@ func (s *fileBasedHashStore) Get(id NodeId) (common.Hash, error) {
 }
 
 func (s *fileBasedHashStore) Set(id NodeId, hash common.Hash) error {
+	s.dirtyLock.Lock()
 	s.dirty[id] = struct{}{}
+	s.dirtyLock.Unlock()
 	return s.set(id, hash)
 }
 
@@ -248,10 +264,15 @@ func (s *fileBasedHashStore) set(id NodeId, hash common.Hash) error {
 
 func (s *fileBasedHashStore) sync(id NodeId, hash common.Hash) error {
 	// Only write the hash if it is dirty.
+	s.dirtyLock.Lock()
 	if _, present := s.dirty[id]; !present {
+		s.dirtyLock.Unlock()
 		return nil
 	}
 	delete(s.dirty, id)
+	s.dirtyLock.Unlock()
+	s.fileLock.Lock()
+	defer s.fileLock.Unlock()
 	if id.IsAccount() {
 		return s.accounts.Write(int64(id.Index())*common.HashSize, hash[:])
 	} else if id.IsBranch() {
@@ -267,10 +288,12 @@ func (s *fileBasedHashStore) sync(id NodeId, hash common.Hash) error {
 
 func (s *fileBasedHashStore) Flush() error {
 	// Flush dirty hashes in order to reduce random seeking.
+	s.dirtyLock.Lock()
 	ids := make([]NodeId, 0, len(s.dirty))
 	for id := range s.dirty {
 		ids = append(ids, id)
 	}
+	s.dirtyLock.Unlock()
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
 		hash, present := s.cache.Get(id)
@@ -281,6 +304,8 @@ func (s *fileBasedHashStore) Flush() error {
 			return err
 		}
 	}
+	s.fileLock.Lock()
+	defer s.fileLock.Unlock()
 	return errors.Join(
 		s.branches.Flush(),
 		s.extensions.Flush(),
