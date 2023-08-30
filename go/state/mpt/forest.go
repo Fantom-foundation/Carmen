@@ -274,25 +274,24 @@ func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
 		s.dirtyHashesMutex.Unlock()
 		return s.hashes.Get(id)
 	}
-	delete(s.dirtyHashes, id)
 	s.dirtyHashesMutex.Unlock()
 
 	// Dirty hashes need to be re-freshed.
 	node, err := s.getNode(id)
 	if err != nil {
-		s.invalidateHash(id)
 		return common.Hash{}, err
 	}
 	defer node.Release()
 	hash, err := s.config.Hasher.GetHash(node.Get(), s, s)
 	if err != nil {
-		s.invalidateHash(id)
 		return common.Hash{}, err
 	}
 	if err := s.hashes.Set(id, hash); err != nil {
-		s.invalidateHash(id)
 		return hash, err
 	}
+	s.dirtyHashesMutex.Lock()
+	delete(s.dirtyHashes, id)
+	s.dirtyHashesMutex.Unlock()
 	return hash, nil
 }
 
