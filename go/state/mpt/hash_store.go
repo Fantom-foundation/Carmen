@@ -151,7 +151,7 @@ func storeHashes(file string, hashes map[NodeId]common.Hash) error {
 // fileBasedHashStore is a HashStore implementation backed by a file that
 // retains a cache of most recently accessed hashes in memory.
 type fileBasedHashStore struct {
-	cache      *common.Cache[NodeId, common.Hash]
+	cache      *common.NWaysCache[NodeId, common.Hash]
 	dirty      map[NodeId]struct{}
 	branches   *utils.BufferedFile
 	extensions *utils.BufferedFile
@@ -197,7 +197,7 @@ func openFileBasedHashStore(directory string, cacheSize int) (HashStore, error) 
 		return nil, err
 	}
 	return &fileBasedHashStore{
-		cache:      common.NewCache[NodeId, common.Hash](cacheSize),
+		cache:      common.NewNWaysCache[NodeId, common.Hash](cacheSize, 16),
 		dirty:      map[NodeId]struct{}{},
 		branches:   branches,
 		extensions: extensions,

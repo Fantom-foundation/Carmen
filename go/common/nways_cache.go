@@ -1,8 +1,10 @@
 package common
 
 import (
+	"fmt"
 	"golang.org/x/exp/constraints"
 	"math"
+	"unsafe"
 )
 
 // NWaysCache is a cache witch configurable capacity and the number of ways.
@@ -16,6 +18,9 @@ type NWaysCache[K constraints.Integer, V any] struct {
 	nways   uint // number of ways
 	numsets uint // number of sets: nways * numsets -> capacity rounded up
 	ticker  uint64
+
+	misses int
+	hits   int
 }
 
 // NewNWaysCache creates a new N-ways Cache with the configured capacity and number of ways.
@@ -37,10 +42,16 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 	for i := position; i < position+c.nways; i++ {
 		if c.items[i].used > 0 && c.items[i].key == key {
 			c.items[i].used = c.ticker
+			if MissHitMeasuring {
+				c.hits++
+			}
 			return c.items[i].value, true
 		}
 	}
 
+	if MissHitMeasuring {
+		c.misses++
+	}
 	var v V
 	return v, false
 }
@@ -89,6 +100,45 @@ func (c *NWaysCache[K, V]) Remove(key K) (original V, exists bool) {
 	}
 
 	return original, false
+}
+
+// GetMemoryFootprint provides the size of the cache in memory in bytes
+// If V is a pointer type, it needs to provide the size of a referenced value.
+// If the size is different for individual values, use GetDynamicMemoryFootprint instead.
+func (c *NWaysCache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
+	selfSize := unsafe.Sizeof(*c)
+	entrySize := unsafe.Sizeof(entry[K, V]{})
+	capacity := c.numsets * c.nways
+	mf := NewMemoryFootprint(selfSize + uintptr(capacity)*(entrySize+referencedValueSize))
+	if MissHitMeasuring {
+		mf.SetNote(c.getHitRatioReport())
+	}
+	return mf
+}
+
+// GetDynamicMemoryFootprint provides the size of the cache in memory in bytes for values,
+// which reference dynamic amount of memory - like slices.
+func (c *NWaysCache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintptr) *MemoryFootprint {
+	selfSize := unsafe.Sizeof(*c)
+	entryPointerSize := unsafe.Sizeof(&entry[K, V]{})
+	capacity := c.numsets * c.nways
+	size := uintptr(capacity) * entryPointerSize
+	for _, value := range c.items {
+		size += unsafe.Sizeof(entry[K, V]{})
+		if value.used > 0 {
+			size += valueSizeProvider(value.value)
+		}
+	}
+	mf := NewMemoryFootprint(selfSize + size)
+	if MissHitMeasuring {
+		mf.SetNote(c.getHitRatioReport())
+	}
+	return mf
+}
+
+func (c *NWaysCache[K, V]) getHitRatioReport() string {
+	hitRatio := float32(c.hits) / float32(c.hits+c.misses)
+	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", c.misses, c.hits, hitRatio)
 }
 
 type nWaysCacheEntry[K constraints.Integer, V any] struct {
