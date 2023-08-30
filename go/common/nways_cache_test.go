@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 )
 
@@ -166,5 +167,47 @@ func TestNWaysCacheSetGetRandomKeysVariousConfigurations(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func TestNWaysLRUConcurrentWrites(t *testing.T) {
+	loops := 10_000
+	c := NewNWaysCache[int, int](1024, 16)
+
+	// generate keys
+	keys := make(map[int]bool, loops)
+	for i := 0; i < loops; i++ {
+		key := rand.Intn(2048)
+		keys[key] = true
+	}
+
+	// multi-producer
+	evictedKeys := make(map[int]bool, loops)
+	var wg sync.WaitGroup
+	var lock sync.Mutex
+	for key := range keys {
+		wg.Add(1)
+		go func(key int) {
+			defer wg.Done()
+			if evictedKey, _, evicted := c.Set(key, 1); evicted {
+				lock.Lock()
+				evictedKeys[evictedKey] = false
+				lock.Unlock()
+			}
+		}(key)
+	}
+
+	wg.Wait()
+
+	// multi consumer
+	for key := range keys {
+		go func(key int) {
+			lock.Lock()
+			_, evicted := evictedKeys[key]
+			lock.Unlock()
+			if _, exists := c.Get(key); !exists && !evicted {
+				t.Errorf("key %d does not exist", key)
+			}
+		}(key)
 	}
 }
