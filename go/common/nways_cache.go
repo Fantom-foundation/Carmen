@@ -2,11 +2,12 @@ package common
 
 import (
 	"fmt"
-	"golang.org/x/exp/constraints"
 	"math"
 	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"golang.org/x/exp/constraints"
 )
 
 // NWaysCache is a cache witch configurable capacity and the number of ways.
@@ -22,8 +23,8 @@ type NWaysCache[K constraints.Integer, V any] struct {
 	numsets uint         // number of sets: nways * numsets -> capacity rounded up
 	ticker  *atomic.Uint64
 
-	misses int
-	hits   int
+	misses atomic.Uint64
+	hits   atomic.Uint64
 }
 
 // NewNWaysCache creates a new N-ways Cache with the configured capacity and number of ways.
@@ -55,14 +56,14 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 		if c.items[i].used > 0 && c.items[i].key == key {
 			c.items[i].used = oldest
 			if MissHitMeasuring {
-				c.hits++
+				c.hits.Add(1)
 			}
 			return c.items[i].value, true
 		}
 	}
 
 	if MissHitMeasuring {
-		c.misses++
+		c.misses.Add(1)
 	}
 	var v V
 	return v, false
@@ -157,8 +158,10 @@ func (c *NWaysCache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) u
 }
 
 func (c *NWaysCache[K, V]) getHitRatioReport() string {
-	hitRatio := float32(c.hits) / float32(c.hits+c.misses)
-	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", c.misses, c.hits, hitRatio)
+	hits := c.hits.Load()
+	misses := c.misses.Load()
+	hitRatio := float32(hits) / float32(hits+misses)
+	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", misses, hits, hitRatio)
 }
 
 type nWaysCacheEntry[K constraints.Integer, V any] struct {
