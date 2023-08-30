@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -96,7 +97,41 @@ type cache[K any, V any] interface {
 
 func initCaches(capacity int) map[string]cache[int, int] {
 	return map[string]cache[int, int]{
-		"lruCache":     NewCache[int, int](capacity),
-		"n-ways Cache": NewNWaysCache[int, int](capacity, 2),
+		"lruCache":            NewCache[int, int](capacity),
+		"synced lruCache":     NewSyncedCache[int, int](NewCache[int, int](capacity)),
+		"synced n-ways Cache": NewNWaysCache[int, int](capacity, 2),
 	}
+}
+
+type SyncedCache[K any, V any] struct {
+	cache[K, V]
+	lock sync.Mutex
+}
+
+func NewSyncedCache[K any, V any](wrapped cache[K, V]) *SyncedCache[K, V] {
+	return &SyncedCache[K, V]{
+		cache: wrapped,
+		lock:  sync.Mutex{},
+	}
+}
+
+func (c *SyncedCache[K, V]) Get(key K) (V, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.cache.Get(key)
+}
+
+func (c *SyncedCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.cache.Set(key, val)
+}
+
+func (c *SyncedCache[K, V]) Remove(key K) (original V, exists bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.cache.Remove(key)
 }
