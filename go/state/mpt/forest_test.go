@@ -278,7 +278,7 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 					}
 
 					for _, memChild := range []string{"accounts", "branches", "extensions", "values", "cache",
-						"hashes", "dirtyHashes", "hashedKeysCache", "hashedAddressesCache"} {
+						"hasher", "hashedKeysCache", "hashedAddressesCache"} {
 
 						if forest.GetMemoryFootprint().GetChild(memChild) == nil {
 							t.Errorf("memory foodprint not provided: %v", memChild)

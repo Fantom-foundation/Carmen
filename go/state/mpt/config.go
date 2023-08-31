@@ -21,21 +21,21 @@ type MptConfig struct {
 	TrackSuffixLengthsInLeafNodes bool
 
 	// The hashing algorithm to be used in the MPT implementation.
-	Hasher Hasher
+	Hashing hashAlgorithm
 }
 
 var S4Config = MptConfig{
 	Name:                          "S4",
 	UseHashedPaths:                false,
 	TrackSuffixLengthsInLeafNodes: false,
-	Hasher:                        DirectHasher{},
+	Hashing:                       DirectHashing,
 }
 
 var S5Config = MptConfig{
 	Name:                          "S5",
 	UseHashedPaths:                true,
 	TrackSuffixLengthsInLeafNodes: true,
-	Hasher:                        MptHasher{}, // requires tracking of suffix lengths
+	Hashing:                       EthereumLikeHashing, // requires tracking of suffix lengths
 }
 
 var allMptConfigs = []MptConfig{S4Config, S5Config}

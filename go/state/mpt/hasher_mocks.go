@@ -11,78 +11,106 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockHasher is a mock of Hasher interface.
-type MockHasher struct {
+// Mockhasher is a mock of hasher interface.
+type Mockhasher struct {
 	ctrl     *gomock.Controller
-	recorder *MockHasherMockRecorder
+	recorder *MockhasherMockRecorder
 }
 
-// MockHasherMockRecorder is the mock recorder for MockHasher.
-type MockHasherMockRecorder struct {
-	mock *MockHasher
+// MockhasherMockRecorder is the mock recorder for Mockhasher.
+type MockhasherMockRecorder struct {
+	mock *Mockhasher
 }
 
-// NewMockHasher creates a new mock instance.
-func NewMockHasher(ctrl *gomock.Controller) *MockHasher {
-	mock := &MockHasher{ctrl: ctrl}
-	mock.recorder = &MockHasherMockRecorder{mock}
+// NewMockhasher creates a new mock instance.
+func NewMockhasher(ctrl *gomock.Controller) *Mockhasher {
+	mock := &Mockhasher{ctrl: ctrl}
+	mock.recorder = &MockhasherMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockHasher) EXPECT() *MockHasherMockRecorder {
+func (m *Mockhasher) EXPECT() *MockhasherMockRecorder {
 	return m.recorder
 }
 
-// GetHash mocks base method.
-func (m *MockHasher) GetHash(arg0 Node, arg1 NodeSource, arg2 HashSource) (common.Hash, error) {
+// GetMemoryFootprint mocks base method.
+func (m *Mockhasher) GetMemoryFootprint() *common.MemoryFootprint {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHash", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetMemoryFootprint")
+	ret0, _ := ret[0].(*common.MemoryFootprint)
+	return ret0
+}
+
+// GetMemoryFootprint indicates an expected call of GetMemoryFootprint.
+func (mr *MockhasherMockRecorder) GetMemoryFootprint() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*Mockhasher)(nil).GetMemoryFootprint))
+}
+
+// close mocks base method.
+func (m *Mockhasher) close(arg0 NodeSource) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "close", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// close indicates an expected call of close.
+func (mr *MockhasherMockRecorder) close(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "close", reflect.TypeOf((*Mockhasher)(nil).close), arg0)
+}
+
+// flush mocks base method.
+func (m *Mockhasher) flush(arg0 NodeSource) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "flush", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// flush indicates an expected call of flush.
+func (mr *MockhasherMockRecorder) flush(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "flush", reflect.TypeOf((*Mockhasher)(nil).flush), arg0)
+}
+
+// forget mocks base method.
+func (m *Mockhasher) forget(arg0 NodeId) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "forget", arg0)
+}
+
+// forget indicates an expected call of forget.
+func (mr *MockhasherMockRecorder) forget(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "forget", reflect.TypeOf((*Mockhasher)(nil).forget), arg0)
+}
+
+// getHash mocks base method.
+func (m *Mockhasher) getHash(arg0 NodeId, arg1 NodeSource) (common.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getHash", arg0, arg1)
 	ret0, _ := ret[0].(common.Hash)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetHash indicates an expected call of GetHash.
-func (mr *MockHasherMockRecorder) GetHash(arg0, arg1, arg2 interface{}) *gomock.Call {
+// getHash indicates an expected call of getHash.
+func (mr *MockhasherMockRecorder) getHash(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockHasher)(nil).GetHash), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHash", reflect.TypeOf((*Mockhasher)(nil).getHash), arg0, arg1)
 }
 
-// MockHashSource is a mock of HashSource interface.
-type MockHashSource struct {
-	ctrl     *gomock.Controller
-	recorder *MockHashSourceMockRecorder
-}
-
-// MockHashSourceMockRecorder is the mock recorder for MockHashSource.
-type MockHashSourceMockRecorder struct {
-	mock *MockHashSource
-}
-
-// NewMockHashSource creates a new mock instance.
-func NewMockHashSource(ctrl *gomock.Controller) *MockHashSource {
-	mock := &MockHashSource{ctrl: ctrl}
-	mock.recorder = &MockHashSourceMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockHashSource) EXPECT() *MockHashSourceMockRecorder {
-	return m.recorder
-}
-
-// getHashFor mocks base method.
-func (m *MockHashSource) getHashFor(arg0 NodeId) (common.Hash, error) {
+// invalidate mocks base method.
+func (m *Mockhasher) invalidate(arg0 NodeId) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getHashFor", arg0)
-	ret0, _ := ret[0].(common.Hash)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	m.ctrl.Call(m, "invalidate", arg0)
 }
 
-// getHashFor indicates an expected call of getHashFor.
-func (mr *MockHashSourceMockRecorder) getHashFor(arg0 interface{}) *gomock.Call {
+// invalidate indicates an expected call of invalidate.
+func (mr *MockhasherMockRecorder) invalidate(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHashFor", reflect.TypeOf((*MockHashSource)(nil).getHashFor), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "invalidate", reflect.TypeOf((*Mockhasher)(nil).invalidate), arg0)
 }
