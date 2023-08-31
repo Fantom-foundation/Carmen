@@ -10,6 +10,14 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
+// PaddingMultiplier is used for extending the size of arrays that stores mutexes
+// and potentially other variables.
+// It serves as padding for memory that may be cached and shared by more threads,
+// trying to avoid False Sharing (see https://en.wikipedia.org/wiki/False_sharing#:~:text=In%20computer%20science%2C%20false%20sharing,managed%20by%20the%20caching%20mechanism.)
+// by adding extra elements.
+// The mutex size is 8bytes, for 64bytes of cache, data are stored in the array at every 8th position.
+const PaddingMultiplier = 8
+
 // NWaysCache is a cache witch configurable capacity and the number of ways.
 // It divides its capacity into sets such that every set can accommodate up to the confined number
 // of elements (=ways). When a key is inserted, its corresponding set is computed first.
@@ -33,15 +41,15 @@ func NewNWaysCache[K constraints.Integer, V any](capacity, ways int) *NWaysCache
 	numsets := int(math.Ceil(float64(capacity) / float64(ways)))
 	return &NWaysCache[K, V]{
 		items:   make([]nWaysCacheEntry[K, V], numsets*ways), // adjust capacity by rounding up
-		locks:   make([]sync.Mutex, numsets),
+		locks:   make([]sync.Mutex, PaddingMultiplier*numsets),
 		nways:   uint(ways),
 		numsets: uint(numsets),
-		tickers: make([]uint64, numsets),
+		tickers: make([]uint64, PaddingMultiplier*numsets),
 	}
 }
 
 func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
-	setIndex := uint(key) % c.numsets
+	setIndex := (uint(key) % c.numsets) * PaddingMultiplier
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
@@ -68,7 +76,7 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 }
 
 func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted bool) {
-	setIndex := uint(key) % c.numsets
+	setIndex := (uint(key) % c.numsets) * PaddingMultiplier
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
@@ -105,7 +113,7 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 }
 
 func (c *NWaysCache[K, V]) Remove(key K) (original V, exists bool) {
-	setIndex := uint(key) % c.numsets
+	setIndex := (uint(key) % c.numsets) * PaddingMultiplier
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
@@ -128,7 +136,7 @@ func (c *NWaysCache[K, V]) Remove(key K) (original V, exists bool) {
 // This method returns true if the key was present in the cache. It also returns if another key was evicted due
 // to inserting this key.
 func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool) {
-	setIndex := uint(key) % c.numsets
+	setIndex := (uint(key) % c.numsets) * PaddingMultiplier
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
