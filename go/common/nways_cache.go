@@ -21,7 +21,7 @@ type NWaysCache[K constraints.Integer, V any] struct {
 	locks   []sync.Mutex // locks for each Way of the cache
 	nways   uint         // number of ways
 	numsets uint         // number of sets: nways * numsets -> capacity rounded up
-	ticker  *atomic.Uint64
+	tickers []uint64
 
 	misses atomic.Uint64
 	hits   atomic.Uint64
@@ -31,14 +31,12 @@ type NWaysCache[K constraints.Integer, V any] struct {
 // Note that actual capacity will be aligned to multiplies of ways.
 func NewNWaysCache[K constraints.Integer, V any](capacity, ways int) *NWaysCache[K, V] {
 	numsets := int(math.Ceil(float64(capacity) / float64(ways)))
-	locks := make([]sync.Mutex, numsets)
-
 	return &NWaysCache[K, V]{
 		items:   make([]nWaysCacheEntry[K, V], numsets*ways), // adjust capacity by rounding up
-		locks:   locks,
+		locks:   make([]sync.Mutex, numsets),
 		nways:   uint(ways),
 		numsets: uint(numsets),
-		ticker:  &atomic.Uint64{},
+		tickers: make([]uint64, numsets),
 	}
 }
 
@@ -47,14 +45,14 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
-	ticker := c.ticker.Add(1)
+	c.tickers[setIndex]++
 
 	// find first position of the sat
 	position := uint(key) % c.numsets * c.nways
 	// try to find the key by iterating the set from its starting position
 	for i := position; i < position+c.nways; i++ {
 		if c.items[i].used > 0 && c.items[i].key == key {
-			c.items[i].used = ticker
+			c.items[i].used = c.tickers[setIndex]
 			if MissHitMeasuring {
 				c.hits.Add(1)
 			}
@@ -74,8 +72,8 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
-	ticker := c.ticker.Add(1)
-	oldest := ticker
+	c.tickers[setIndex]++
+	oldest := c.tickers[setIndex]
 	var oldestIndex uint
 
 	// find first free position
@@ -88,7 +86,7 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 			evictedValue = c.items[i].value
 			c.items[i].key = key
 			c.items[i].value = val
-			c.items[i].used = ticker
+			c.items[i].used = c.tickers[setIndex]
 			return evictedKey, evictedValue, false
 		}
 		if c.items[i].used < oldest {
@@ -102,7 +100,7 @@ func (c *NWaysCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evic
 	evictedValue = c.items[oldestIndex].value
 	c.items[oldestIndex].key = key
 	c.items[oldestIndex].value = val
-	c.items[oldestIndex].used = ticker
+	c.items[oldestIndex].used = c.tickers[setIndex]
 	return evictedKey, evictedValue, true
 }
 
@@ -134,8 +132,8 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 	c.locks[setIndex].Lock()
 	defer c.locks[setIndex].Unlock()
 
-	ticker := c.ticker.Add(1)
-	oldest := ticker
+	c.tickers[setIndex]++
+	oldest := c.tickers[setIndex]
 	var oldestIndex uint
 
 	// find first free position
@@ -144,7 +142,7 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 	for i := position; i < position+c.nways; i++ {
 		// key found in a non-empty location -> return its value.
 		if c.items[i].used > 0 && c.items[i].key == key {
-			c.items[i].used = ticker
+			c.items[i].used = c.tickers[setIndex]
 			if MissHitMeasuring {
 				c.hits.Add(1)
 			}
@@ -166,7 +164,7 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 	isEvicted := c.items[oldestIndex].used > 0
 	c.items[oldestIndex].key = key
 	c.items[oldestIndex].value = val
-	c.items[oldestIndex].used = ticker
+	c.items[oldestIndex].used = c.tickers[setIndex]
 	return current, false, evictedKey, evictedValue, isEvicted
 }
 
