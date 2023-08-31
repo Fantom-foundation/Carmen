@@ -4,8 +4,12 @@ package mpt
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"reflect"
+	"sort"
+	"sync"
+	"unsafe"
 
 	"golang.org/x/crypto/sha3"
 
@@ -13,8 +17,38 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
 )
 
+// ----------------------------------------------------------------------------
+//                             Public Interfaces
+// ----------------------------------------------------------------------------
+
+type hashAlgorithm struct {
+	Name         string
+	createHasher func(HashStore) hasher
+}
+
+var DirectHashing = hashAlgorithm{
+	Name:         "DirectHashing",
+	createHasher: makeDirectHasher,
+}
+
+var EthereumLikeHashing = hashAlgorithm{
+	Name:         "EthereumLikeHashing",
+	createHasher: makeEthereumLikeHasher,
+}
+
+type hasher interface {
+	getHash(NodeId, NodeSource) (common.Hash, error)
+	invalidate(NodeId) // when a node is changed
+	forget(NodeId)     // when the node is released
+	flush(NodeSource) error
+	close(NodeSource) error
+	common.MemoryFootprintProvider
+}
+
+/*
 // Hasher is an interface for implementations of MPT node hashing algorithms. It is
-// intended to be one of the differentiator between S4 and derived schemas.
+// a configurable property of an MPT instance to enable experimenting with different
+// hashing schemas.
 type Hasher interface {
 	// GetHash requests a hash value for the given node. To compute the node's hash,
 	// implementations may recursively resolve hashes for other nodes using the given
@@ -23,22 +57,133 @@ type Hasher interface {
 	// required to be reentrant and thread-safe.
 	GetHash(Node, NodeSource, HashSource) (common.Hash, error)
 }
+*/
 
-type HashSource interface {
-	getHashFor(NodeId) (common.Hash, error)
+// ----------------------------------------------------------------------------
+//                         Abstract Hasher Base
+// ----------------------------------------------------------------------------
+
+type hashFunction = func(NodeId, NodeSource, *genericHasher) (common.Hash, error)
+
+type genericHasher struct {
+	store            HashStore
+	dirtyHashes      map[NodeId]struct{}
+	dirtyHashesMutex sync.Mutex
+	hash             hashFunction
 }
 
-// DirectHasher implements a simple, direct node-value hashing algorithm that combines
-// the content of individual nodes with the hashes of referenced child nodes into a
-// hash for individual nodes.
-type DirectHasher struct{}
+func makeGenericHasher(store HashStore, hash hashFunction) *genericHasher {
+	return &genericHasher{
+		store:       store,
+		dirtyHashes: map[NodeId]struct{}{},
+		hash:        hash,
+	}
+}
 
-// GetHash implements the DirectHasher's hashing algorithm.
-func (h DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (common.Hash, error) {
+func (h *genericHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
+	// The empty node is never dirty and needs to be handled explicitly.
+	if id.IsEmpty() {
+		return h.hash(id, source, h)
+	}
+	// Non-dirty hashes can be taken from the store.
+	h.dirtyHashesMutex.Lock()
+	if _, dirty := h.dirtyHashes[id]; !dirty {
+		h.dirtyHashesMutex.Unlock()
+		return h.store.Get(id)
+	}
+	h.dirtyHashesMutex.Unlock()
+
+	// Dirty hashes need to be re-freshed.
+	hash, err := h.hash(id, source, h)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if err := h.store.Set(id, hash); err != nil {
+		return hash, err
+	}
+	h.dirtyHashesMutex.Lock()
+	delete(h.dirtyHashes, id)
+	h.dirtyHashesMutex.Unlock()
+	return hash, nil
+}
+
+func (h *genericHasher) invalidate(id NodeId) {
+	h.dirtyHashesMutex.Lock()
+	h.dirtyHashes[id] = struct{}{}
+	h.dirtyHashesMutex.Unlock()
+}
+
+func (h *genericHasher) forget(id NodeId) {
+	h.dirtyHashesMutex.Lock()
+	delete(h.dirtyHashes, id)
+	h.dirtyHashesMutex.Unlock()
+}
+
+func (h *genericHasher) flush(source NodeSource) error {
+	// Get list of dirty nodes to be re-hashed.
+	h.dirtyHashesMutex.Lock()
+	dirty := make([]NodeId, len(h.dirtyHashes))
+	for id := range h.dirtyHashes {
+		dirty = append(dirty, id)
+	}
+	h.dirtyHashes = map[NodeId]struct{}{}
+	h.dirtyHashesMutex.Unlock()
+
+	// Sort the list to improve store write performance.
+	sort.Slice(dirty, func(i, j int) bool { return dirty[i] < dirty[j] })
+	errs := []error{}
+	for _, id := range dirty {
+		if _, err := h.getHash(id, source); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return h.store.Flush()
+}
+
+func (h *genericHasher) close(source NodeSource) error {
+	return errors.Join(
+		h.flush(source),
+		h.store.Close(),
+	)
+}
+
+func (h *genericHasher) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*h))
+	mf.AddChild("store", h.store.GetMemoryFootprint())
+	mf.AddChild("dirtyHashes", common.NewMemoryFootprint(uintptr(len(h.dirtyHashes))*unsafe.Sizeof(NodeId(0))))
+	return mf
+}
+
+// ----------------------------------------------------------------------------
+//                             Direct Hasher
+// ----------------------------------------------------------------------------
+
+// makeDirectHasher creates a hasher using a simple, direct node-value hashing
+// algorithm that combines the content of individual nodes with the hashes of
+// referenced child nodes into a hash for individual nodes.
+func makeDirectHasher(store HashStore) hasher {
+	return makeGenericHasher(store, getDirectHash)
+}
+
+// getDirectHash implements the DirectHasher's hashing algorithm.
+func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash, error) {
 	hash := common.Hash{}
-	if _, ok := node.(EmptyNode); ok {
+	if id.IsEmpty() {
 		return hash, nil
 	}
+
+	// Get read access to the node.
+	handle, err := source.getNode(id)
+	if err != nil {
+		return hash, err
+	}
+	defer handle.Release()
+	node := handle.Get()
+
+	// Compute a simple hash for the node.
 	hasher := sha256.New()
 	switch node := node.(type) {
 	case *AccountNode:
@@ -85,34 +230,92 @@ func (h DirectHasher) GetHash(node Node, _ NodeSource, source HashSource) (commo
 	return hash, nil
 }
 
-// Based on Appendix D of https://ethereum.github.io/yellowpaper/paper.pdf
-type MptHasher struct{}
+// ----------------------------------------------------------------------------
+//                          Ethereum Like Hasher
+// ----------------------------------------------------------------------------
 
-// GetHash implements the MPT hashing algorithm.
-func (h MptHasher) GetHash(node Node, nodes NodeSource, hashes HashSource) (common.Hash, error) {
-	data, err := encode(node, nodes, hashes)
+type ethHasher struct {
+	base               *genericHasher
+	embeddedCache      *common.NWaysCache[NodeId, bool]
+	embeddedCacheMutex sync.Mutex
+}
+
+// makeEthereumLikeHasher creates a hasher producing hashes according to
+// Ethereum's State and Storage Trie specification.
+// See Appendix D of https://ethereum.github.io/yellowpaper/paper.pdf
+func makeEthereumLikeHasher(store HashStore) hasher {
+	res := &ethHasher{
+		base:          makeGenericHasher(store, nil),
+		embeddedCache: common.NewNWaysCache[NodeId, bool](1<<20, 16),
+	}
+	res.base.hash = func(id NodeId, source NodeSource, _ *genericHasher) (common.Hash, error) {
+		return res.getHashInternal(id, source)
+	}
+	return res
+}
+
+func (h *ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
+	return h.base.getHash(id, source)
+}
+
+func (h *ethHasher) getHashInternal(id NodeId, nodes NodeSource) (common.Hash, error) {
+	// Get read access to the node.
+	handle, err := nodes.getNode(id)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	defer handle.Release()
+	node := handle.Get()
+
+	// Encode the node in RLP and compute its hash.
+	data, err := h.encode(node, nodes)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return keccak256(data), nil
 }
 
+func (h *ethHasher) invalidate(id NodeId) {
+	h.embeddedCache.Remove(id)
+	h.base.invalidate(id)
+}
+
+func (h *ethHasher) forget(id NodeId) {
+	h.embeddedCache.Remove(id)
+	h.base.forget(id)
+}
+
+func (h *ethHasher) flush(source NodeSource) error {
+	return h.base.flush(source)
+}
+
+func (h *ethHasher) close(source NodeSource) error {
+	return h.base.close(source)
+}
+
+func (h *ethHasher) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*h))
+	mf.AddChild("base", h.base.GetMemoryFootprint())
+	mf.AddChild("embeddedCache", h.embeddedCache.GetMemoryFootprint(0))
+	return mf
+}
+
 func keccak256(data []byte) common.Hash {
 	return common.GetHash(sha3.NewLegacyKeccak256(), data)
 }
 
-func encode(node Node, nodes NodeSource, hashes HashSource) ([]byte, error) {
+func (h *ethHasher) encode(node Node, nodes NodeSource) ([]byte, error) {
 	switch trg := node.(type) {
 	case EmptyNode:
-		return encodeEmpty(trg, nodes, hashes)
+		return h.encodeEmpty(trg, nodes)
 	case *AccountNode:
-		return encodeAccount(trg, nodes, hashes)
+		return h.encodeAccount(trg, nodes)
 	case *BranchNode:
-		return encodeBranch(trg, nodes, hashes)
+		return h.encodeBranch(trg, nodes)
 	case *ExtensionNode:
-		return encodeExtension(trg, nodes, hashes)
+		return h.encodeExtension(trg, nodes)
 	case *ValueNode:
-		return encodeValue(trg, nodes, hashes)
+		return h.encodeValue(trg, nodes)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -140,7 +343,7 @@ func getLowerBoundForEncodedSize(node Node, limit int, nodes NodeSource) (int, e
 
 var emptyStringRlpEncoded = rlp.Encode(rlp.String{})
 
-func encodeEmpty(EmptyNode, NodeSource, HashSource) ([]byte, error) {
+func (h *ethHasher) encodeEmpty(EmptyNode, NodeSource) ([]byte, error) {
 	return emptyStringRlpEncoded, nil
 }
 
@@ -148,7 +351,7 @@ func getLowerBoundForEncodedSizeEmpty(node EmptyNode, limit int, nodes NodeSourc
 	return len(emptyStringRlpEncoded), nil
 }
 
-func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
+func (h *ethHasher) encodeBranch(node *BranchNode, nodes NodeSource) ([]byte, error) {
 	children := node.children
 	items := make([]rlp.Item, len(children)+1)
 
@@ -171,7 +374,7 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 
 		var encoded []byte
 		if minSize < 32 {
-			encoded, err = encode(node.Get(), nodes, hashes)
+			encoded, err = h.encode(node.Get(), nodes)
 			if err != nil {
 				return nil, err
 			}
@@ -181,7 +384,7 @@ func encodeBranch(node *BranchNode, nodes NodeSource, hashes HashSource) ([]byte
 		}
 
 		if encoded == nil {
-			hash, err := hashes.getHashFor(child)
+			hash, err := h.getHash(child, nodes)
 			if err != nil {
 				return nil, err
 			}
@@ -228,7 +431,7 @@ func getLowerBoundForEncodedSizeBranch(node *BranchNode, limit int, nodes NodeSo
 	return sum + 1, nil // the list length adds another byte
 }
 
-func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
+func (h *ethHasher) encodeExtension(node *ExtensionNode, nodes NodeSource) ([]byte, error) {
 	items := make([]rlp.Item, 2)
 
 	numNibbles := node.path.Length()
@@ -248,7 +451,7 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 
 	var encoded []byte
 	if minSize < 32 {
-		encoded, err = encode(next.Get(), nodes, hashes)
+		encoded, err = h.encode(next.Get(), nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -258,7 +461,7 @@ func encodeExtension(node *ExtensionNode, nodes NodeSource, hashes HashSource) (
 	}
 
 	if encoded == nil {
-		hash, err := hashes.getHashFor(node.next)
+		hash, err := h.getHash(node.next, nodes)
 		if err != nil {
 			return nil, err
 		}
@@ -300,9 +503,9 @@ func getLowerBoundForEncodedSizeExtension(node *ExtensionNode, limit int, nodes 
 	return sum, nil
 }
 
-func encodeAccount(node *AccountNode, nodes NodeSource, hashes HashSource) ([]byte, error) {
+func (h *ethHasher) encodeAccount(node *AccountNode, nodes NodeSource) ([]byte, error) {
 	storageRoot := node.storage
-	storageHash, err := hashes.getHashFor(storageRoot)
+	storageHash, err := h.getHash(storageRoot, nodes)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +533,7 @@ func getLowerBoundForEncodedSizeAccount(node *AccountNode, limit int, nodes Node
 	return size, nil
 }
 
-func encodeValue(node *ValueNode, nodes NodeSource, hashSource HashSource) ([]byte, error) {
+func (h *ethHasher) encodeValue(node *ValueNode, nodes NodeSource) ([]byte, error) {
 	items := make([]rlp.Item, 2)
 
 	// The first item is an encoded path fragment.

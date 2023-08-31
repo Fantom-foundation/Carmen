@@ -67,10 +67,8 @@ type Forest struct {
 	dirty      map[NodeId]struct{}
 	dirtyMutex sync.Mutex
 
-	// A store for hashes.
-	hashes           HashStore
-	dirtyHashes      map[NodeId]struct{}
-	dirtyHashesMutex sync.Mutex
+	// The hasher managing node hashes for this forest.
+	hasher hasher
 
 	// Cached hashers for keys and addresses (thread safe).
 	keyHasher     *common.CachedHasher[common.Key]
@@ -196,8 +194,7 @@ func makeForest(
 		storageMode:   mode,
 		nodeCache:     common.NewCache[NodeId, *shared.Shared[Node]](cacheCapacity),
 		dirty:         map[NodeId]struct{}{},
-		hashes:        hashes,
-		dirtyHashes:   map[NodeId]struct{}{},
+		hasher:        config.Hashing.createHasher(hashes),
 		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
 		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
 	}, nil
@@ -264,35 +261,7 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 }
 
 func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
-	// The empty node is never dirty and needs to be handled explicitly.
-	if id.IsEmpty() {
-		return s.config.Hasher.GetHash(EmptyNode{}, s, s)
-	}
-	// Non-dirty hashes can be taken from the store.
-	s.dirtyHashesMutex.Lock()
-	if _, dirty := s.dirtyHashes[id]; !dirty {
-		s.dirtyHashesMutex.Unlock()
-		return s.hashes.Get(id)
-	}
-	s.dirtyHashesMutex.Unlock()
-
-	// Dirty hashes need to be re-freshed.
-	node, err := s.getNode(id)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	defer node.Release()
-	hash, err := s.config.Hasher.GetHash(node.Get(), s, s)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	if err := s.hashes.Set(id, hash); err != nil {
-		return hash, err
-	}
-	s.dirtyHashesMutex.Lock()
-	delete(s.dirtyHashes, id)
-	s.dirtyHashesMutex.Unlock()
-	return hash, nil
+	return s.hasher.getHash(id, s)
 }
 
 func (s *Forest) hashKey(key common.Key) common.Hash {
@@ -344,40 +313,24 @@ func (s *Forest) Flush() error {
 		}
 	}
 
-	// Update hashes for dirty nodes.
-	s.dirtyHashesMutex.Lock()
-	dirty := make([]NodeId, len(s.dirtyHashes))
-	for id := range s.dirtyHashes {
-		dirty = append(dirty, id)
-	}
-	s.dirtyHashes = map[NodeId]struct{}{}
-	s.dirtyHashesMutex.Unlock()
-
-	sort.Slice(dirty, func(i, j int) bool { return dirty[i] < dirty[j] })
-	for _, id := range dirty {
-		if _, err := s.getHashFor(id); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
 	return errors.Join(
 		errors.Join(errs...),
+		s.hasher.flush(s),
 		s.accounts.Flush(),
 		s.branches.Flush(),
 		s.extensions.Flush(),
 		s.values.Flush(),
-		s.hashes.Flush(),
 	)
 }
 
 func (s *Forest) Close() error {
 	return errors.Join(
 		s.Flush(),
+		s.hasher.close(s), // needs to be closed first because it may have to access nodes
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
 		s.values.Close(),
-		s.hashes.Close(),
 	)
 }
 
@@ -410,8 +363,7 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 		}
 		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
 	}))
-	mf.AddChild("hashes", s.hashes.GetMemoryFootprint())
-	mf.AddChild("dirtyHashes", common.NewMemoryFootprint(uintptr(len(s.dirtyHashes))*unsafe.Sizeof(NodeId(0))))
+	mf.AddChild("hasher", s.hasher.GetMemoryFootprint())
 	mf.AddChild("hashedKeysCache", s.keyHasher.GetMemoryFootprint())
 	mf.AddChild("hashedAddressesCache", s.addressHasher.GetMemoryFootprint())
 	return mf
@@ -645,9 +597,7 @@ func (s *Forest) invalidateHash(id NodeId) {
 	// by adding it to the dirty hashes set the hash will be
 	// re-evaluated the next time.
 	if !id.IsEmpty() {
-		s.dirtyHashesMutex.Lock()
-		s.dirtyHashes[id] = struct{}{}
-		s.dirtyHashesMutex.Unlock()
+		s.hasher.invalidate(id)
 	}
 }
 
@@ -660,9 +610,7 @@ func (s *Forest) release(id NodeId) error {
 	delete(s.dirty, id)
 	s.dirtyMutex.Unlock()
 
-	s.dirtyHashesMutex.Lock()
-	delete(s.dirtyHashes, id)
-	s.dirtyHashesMutex.Unlock()
+	s.hasher.forget(id)
 
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())

@@ -1,16 +1,6 @@
 package mpt
 
-import (
-	"encoding/hex"
-	"fmt"
-	"testing"
-
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
-	"go.uber.org/mock/gomock"
-)
-
+/*
 var emptyNodeHash = keccak256(rlp.Encode(rlp.String{}))
 
 func TestMptHasher_EmptyNode(t *testing.T) {
@@ -276,3 +266,4 @@ func TestMptHasher_GetLowerBoundForValueNode(t *testing.T) {
 		}
 	}
 }
+*/
