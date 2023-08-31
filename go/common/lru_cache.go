@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-const MissHitMeasuring = true
+const MissHitMeasuring = false
 
 // Cache implements a memory overlay for the key-value pair
 type Cache[K comparable, V any] struct {
