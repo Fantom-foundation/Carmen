@@ -21,43 +21,48 @@ import (
 //                             Public Interfaces
 // ----------------------------------------------------------------------------
 
+// hashAlgorithm is the type of a configuration toke selecting the algorithm to
+// be used for hashing nodes in an MPT. Its main application is to serve as a
+// configuration parameter in the MPT Config.
 type hashAlgorithm struct {
 	Name         string
 	createHasher func(HashStore) hasher
 }
 
+// DirectHashing is a simple, fast hashing algorithm which is taking a simple
+// serialization of node content or the hashes of referenced nodes to compute
+// the hash of individual nodes.
 var DirectHashing = hashAlgorithm{
 	Name:         "DirectHashing",
 	createHasher: makeDirectHasher,
 }
 
+// EthereumLikeHashing is an implementation following the specification of the
+// State and Storage Trie hashing as defined in Ethereum's yellow paper.
 var EthereumLikeHashing = hashAlgorithm{
 	Name:         "EthereumLikeHashing",
 	createHasher: makeEthereumLikeHasher,
 }
 
+// hasher is an entity retaining hashing information for individual nodes,
+// computing them as required.
 type hasher interface {
+	// getHash obtains the hash of a given node.
 	getHash(NodeId, NodeSource) (common.Hash, error)
-	invalidate(NodeId) // when a node is changed
-	forget(NodeId)     // when the node is released
+	// update signals to the hasher that the given node has been updated and
+	// that its hash is to be considered outdated.
+	update(NodeId) // when a node is changed
+	// forget signals that the given node has been removed and its hash no
+	// longer needs to be tracked.
+	forget(NodeId) // when the node is released
+	// flush writes all temporary state information to secondary storage.
 	flush(NodeSource) error
+	// close flushes the hasher's content and closes underlying resources.
+	// After closing the hasher no more operations are supported.
 	close(NodeSource) error
+
 	common.MemoryFootprintProvider
 }
-
-/*
-// Hasher is an interface for implementations of MPT node hashing algorithms. It is
-// a configurable property of an MPT instance to enable experimenting with different
-// hashing schemas.
-type Hasher interface {
-	// GetHash requests a hash value for the given node. To compute the node's hash,
-	// implementations may recursively resolve hashes for other nodes using the given
-	// HashSource implementation. Due to its recursive nature, multiple calls to the
-	// function may be nested and/or processed concurrently. Thus, implementations are
-	// required to be reentrant and thread-safe.
-	GetHash(Node, NodeSource, HashSource) (common.Hash, error)
-}
-*/
 
 // ----------------------------------------------------------------------------
 //                         Abstract Hasher Base
@@ -65,11 +70,13 @@ type Hasher interface {
 
 type hashFunction = func(NodeId, NodeSource, *genericHasher) (common.Hash, error)
 
+// genericHasher is a common base implementation covering common features to be
+// offered by the direct and ethereum like hasher.
 type genericHasher struct {
 	store            HashStore
 	dirtyHashes      map[NodeId]struct{}
 	dirtyHashesMutex sync.Mutex
-	hash             hashFunction
+	hash             hashFunction // call-back to the actual hasher function
 }
 
 func makeGenericHasher(store HashStore, hash hashFunction) *genericHasher {
@@ -107,7 +114,7 @@ func (h *genericHasher) getHash(id NodeId, source NodeSource) (common.Hash, erro
 	return hash, nil
 }
 
-func (h *genericHasher) invalidate(id NodeId) {
+func (h *genericHasher) update(id NodeId) {
 	h.dirtyHashesMutex.Lock()
 	h.dirtyHashes[id] = struct{}{}
 	h.dirtyHashesMutex.Unlock()
@@ -234,19 +241,13 @@ func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash,
 //                          Ethereum Like Hasher
 // ----------------------------------------------------------------------------
 
-type ethHasher struct {
-	base               *genericHasher
-	embeddedCache      *common.NWaysCache[NodeId, bool]
-	embeddedCacheMutex sync.Mutex
-}
-
 // makeEthereumLikeHasher creates a hasher producing hashes according to
 // Ethereum's State and Storage Trie specification.
 // See Appendix D of https://ethereum.github.io/yellowpaper/paper.pdf
 func makeEthereumLikeHasher(store HashStore) hasher {
 	res := &ethHasher{
 		base:          makeGenericHasher(store, nil),
-		embeddedCache: common.NewNWaysCache[NodeId, bool](1<<20, 16),
+		encodingCache: common.NewNWaysCache[NodeId, rlp.Item](1<<20, 16),
 	}
 	res.base.hash = func(id NodeId, source NodeSource, _ *genericHasher) (common.Hash, error) {
 		return res.getHashInternal(id, source)
@@ -254,11 +255,21 @@ func makeEthereumLikeHasher(store HashStore) hasher {
 	return res
 }
 
+type ethHasher struct {
+	base          *genericHasher
+	encodingCache *common.NWaysCache[NodeId, rlp.Item]
+}
+
 func (h *ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 	return h.base.getHash(id, source)
 }
 
+var emptyNodeEthereumHash = keccak256(rlp.Encode(rlp.String{}))
+
 func (h *ethHasher) getHashInternal(id NodeId, nodes NodeSource) (common.Hash, error) {
+	if id.IsEmpty() {
+		return emptyNodeEthereumHash, nil
+	}
 	// Get read access to the node.
 	handle, err := nodes.getNode(id)
 	if err != nil {
@@ -275,13 +286,13 @@ func (h *ethHasher) getHashInternal(id NodeId, nodes NodeSource) (common.Hash, e
 	return keccak256(data), nil
 }
 
-func (h *ethHasher) invalidate(id NodeId) {
-	h.embeddedCache.Remove(id)
-	h.base.invalidate(id)
+func (h *ethHasher) update(id NodeId) {
+	h.encodingCache.Remove(id)
+	h.base.update(id)
 }
 
 func (h *ethHasher) forget(id NodeId) {
-	h.embeddedCache.Remove(id)
+	h.encodingCache.Remove(id)
 	h.base.forget(id)
 }
 
@@ -296,7 +307,8 @@ func (h *ethHasher) close(source NodeSource) error {
 func (h *ethHasher) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*h))
 	mf.AddChild("base", h.base.GetMemoryFootprint())
-	mf.AddChild("embeddedCache", h.embeddedCache.GetMemoryFootprint(0))
+	// TODO: compute actual size of items ...
+	mf.AddChild("encodingCache", h.encodingCache.GetMemoryFootprint(0))
 	return mf
 }
 
@@ -361,37 +373,11 @@ func (h *ethHasher) encodeBranch(node *BranchNode, nodes NodeSource) ([]byte, er
 			continue
 		}
 
-		node, err := nodes.getNode(child)
+		item, err := h.toItem(child, nodes)
 		if err != nil {
 			return nil, err
 		}
-		defer node.Release()
-
-		minSize, err := getLowerBoundForEncodedSize(node.Get(), 32, nodes)
-		if err != nil {
-			return nil, err
-		}
-
-		var encoded []byte
-		if minSize < 32 {
-			encoded, err = h.encode(node.Get(), nodes)
-			if err != nil {
-				return nil, err
-			}
-			if len(encoded) >= 32 {
-				encoded = nil
-			}
-		}
-
-		if encoded == nil {
-			hash, err := h.getHash(child, nodes)
-			if err != nil {
-				return nil, err
-			}
-			items[i] = rlp.String{Str: hash[:]}
-		} else {
-			items[i] = rlp.Encoded{Data: encoded}
-		}
+		items[i] = item
 	}
 
 	// There is one 17th entry which would be filled if this node is a terminator. However,
@@ -438,41 +424,15 @@ func (h *ethHasher) encodeExtension(node *ExtensionNode, nodes NodeSource) ([]by
 	packedNibbles := node.path.GetPackedNibbles()
 	items[0] = &rlp.String{Str: encodePartialPath(packedNibbles, numNibbles, false)}
 
-	next, err := nodes.getNode(node.next)
+	// TODO: the use of the same encoding as for the branch nodes is
+	// done for symetry, but there is no unit test for this yet; it
+	// would require to find two keys or address with a very long
+	// common hash prefix.
+	item, err := h.toItem(node.next, nodes)
 	if err != nil {
 		return nil, err
 	}
-	defer next.Release()
-
-	minSize, err := getLowerBoundForEncodedSize(next.Get(), 32, nodes)
-	if err != nil {
-		return nil, err
-	}
-
-	var encoded []byte
-	if minSize < 32 {
-		encoded, err = h.encode(next.Get(), nodes)
-		if err != nil {
-			return nil, err
-		}
-		if len(encoded) >= 32 {
-			encoded = nil
-		}
-	}
-
-	if encoded == nil {
-		hash, err := h.getHash(node.next, nodes)
-		if err != nil {
-			return nil, err
-		}
-		items[1] = rlp.String{Str: hash[:]}
-	} else {
-		// TODO: the use of a direct encoding here is done for
-		// symetry with the branch node, but there is no unit test
-		// for this yet; it would require to find two keys or address
-		// with a very long common hash prefix.
-		items[1] = rlp.Encoded{Data: encoded}
-	}
+	items[1] = item
 
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
@@ -602,4 +562,49 @@ func encodePartialPath(packedNibbles []byte, numNibbles int, targetsValue bool) 
 
 func getEncodedPartialPathSize(numNibbles int) int {
 	return numNibbles/2 + 1
+}
+
+func (h *ethHasher) toItem(id NodeId, source NodeSource) (rlp.Item, error) {
+	// Check cache first.
+	if item, found := h.encodingCache.Get(id); found {
+		return item, nil
+	}
+
+	// The encoding is not cached, so we need to reproduce it.
+	node, err := source.getNode(id)
+	if err != nil {
+		return nil, err
+	}
+	defer node.Release()
+
+	minSize, err := getLowerBoundForEncodedSize(node.Get(), 32, source)
+	if err != nil {
+		return nil, err
+	}
+
+	var encoded []byte
+	if minSize < 32 {
+		encoded, err = h.encode(node.Get(), source)
+		if err != nil {
+			return nil, err
+		}
+		if len(encoded) >= 32 {
+			encoded = nil
+		}
+	}
+
+	var res rlp.Item
+	if encoded == nil {
+		hash, err := h.getHash(id, source)
+		if err != nil {
+			return nil, err
+		}
+		res = rlp.String{Str: hash[:]}
+	} else {
+		res = rlp.Encoded{Data: encoded}
+	}
+
+	// cache result for future reuse.
+	h.encodingCache.Set(id, res)
+	return res, nil
 }

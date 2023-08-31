@@ -597,7 +597,7 @@ func (s *Forest) invalidateHash(id NodeId) {
 	// by adding it to the dirty hashes set the hash will be
 	// re-evaluated the next time.
 	if !id.IsEmpty() {
-		s.hasher.invalidate(id)
+		s.hasher.update(id)
 	}
 }
 

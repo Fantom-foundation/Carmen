@@ -1,5 +1,7 @@
 package mpt
 
+//go:generate mockgen -source hash_store.go -destination hash_store_mocks.go -package mpt
+
 import (
 	"bufio"
 	"encoding/binary"
