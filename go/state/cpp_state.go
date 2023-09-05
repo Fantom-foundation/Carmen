@@ -45,15 +45,15 @@ func newCppState(impl C.enum_StateImpl, params Parameters) (State, error) {
 	}), nil
 }
 
-func NewCppInMemoryState(params Parameters) (State, error) {
+func newCppInMemoryState(params Parameters) (State, error) {
 	return newCppState(C.kState_Memory, params)
 }
 
-func NewCppFileBasedState(params Parameters) (State, error) {
+func newCppFileBasedState(params Parameters) (State, error) {
 	return newCppState(C.kState_File, params)
 }
 
-func NewCppLevelDbBasedState(params Parameters) (State, error) {
+func newCppLevelDbBasedState(params Parameters) (State, error) {
 	return newCppState(C.kState_LevelDb, params)
 }
 

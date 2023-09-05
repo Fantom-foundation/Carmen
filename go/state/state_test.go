@@ -73,12 +73,12 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedSt
 
 func getReferenceStateFor(params Parameters) (State, error) {
 	if params.Schema == 4 {
-		return NewGoMemoryS4State(params)
+		return newGoMemoryS4State(params)
 	}
 	if params.Schema == 5 {
-		return NewGoMemoryS5State(params)
+		return newGoMemoryS5State(params)
 	}
-	return NewCppInMemoryState(params)
+	return newCppInMemoryState(params)
 }
 
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {

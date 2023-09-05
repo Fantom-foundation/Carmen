@@ -17,12 +17,12 @@ func newS4State(params Parameters, state *mpt.MptState) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewGoState(&goSchema4{
+	return newGoState(&goSchema4{
 		MptState: state,
 	}, arch, []func(){archiveCleanup}), nil
 }
 
-func NewGoMemoryS4State(params Parameters) (State, error) {
+func newGoMemoryS4State(params Parameters) (State, error) {
 	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S4Config)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func NewGoMemoryS4State(params Parameters) (State, error) {
 	return newS4State(params, state)
 }
 
-func NewGoFileS4State(params Parameters) (State, error) {
+func newGoFileS4State(params Parameters) (State, error) {
 	state, err := mpt.OpenGoFileState(params.Directory, mpt.S4Config)
 	if err != nil {
 		return nil, err

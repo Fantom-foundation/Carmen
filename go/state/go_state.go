@@ -54,7 +54,7 @@ type GoSchema interface {
 	runPostRestoreTasks() error
 }
 
-func NewGoState(schema GoSchema, archive archive.Archive, cleanup []func()) State {
+func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) State {
 	return wrapIntoSyncedState(&GoState{
 		schema,
 		cleanup,

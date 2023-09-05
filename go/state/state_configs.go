@@ -77,6 +77,26 @@ func (a ArchiveType) String() string {
 	return "unknown"
 }
 
+type Variant string
+
+const (
+	GoMemory         Variant = "go-memory"
+	GoFile                   = "go-file"
+	GoFileNoCache            = "go-file-nocache"
+	GoLevelDb                = "go-ldb"
+	GoLevelDbNoCache         = "go-ldb-nocache"
+	CppMemory                = "cpp-memory"
+	CppFile                  = "cpp-file"
+	CppLevelDb               = "cpp-ldb"
+)
+
+func GetAllVariants() []Variant {
+	return []Variant{
+		GoMemory, GoFile, GoFileNoCache, GoLevelDb, GoLevelDbNoCache,
+		CppMemory, CppFile, CppLevelDb,
+	}
+}
+
 type StateSchema uint8
 
 const defaultSchema StateSchema = 1
@@ -88,6 +108,7 @@ func GetAllSchemas() []StateSchema {
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
 	Directory string
+	Variant   Variant
 	Schema    StateSchema
 	Archive   ArchiveType
 }
@@ -101,17 +122,44 @@ func (u UnsupportedConfiguration) Error() string {
 	return string(u)
 }
 
-// NewGoMemoryState creates in memory implementation
+// NewState is the public interface fro creating Carmen state instances. If for the
+// given parameters a state can be constructed, the resulting state is returned. If
+// construction fails, an error is reported. If the requested configuration is not
+// supported, the error is an UnsupportedConfiguration error.
+func NewState(params Parameters) (State, error) {
+	switch params.Variant {
+	case GoMemory:
+		return newGoMemoryState(params)
+	case GoFileNoCache:
+		return newGoFileState(params)
+	case GoFile:
+		return newGoCachedFileState(params)
+	case GoLevelDbNoCache:
+		return newGoLeveLIndexAndStoreState(params)
+	case GoLevelDb:
+		return newGoCachedLeveLIndexAndStoreState(params)
+	case CppMemory:
+		return newCppInMemoryState(params)
+	case CppFile:
+		return newCppFileBasedState(params)
+	case CppLevelDb:
+		return newCppLevelDbBasedState(params)
+	default:
+		return nil, UnsupportedConfiguration(fmt.Sprintf("unsupported variant: '%s'", params.Variant))
+	}
+}
+
+// newGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
-func NewGoMemoryState(params Parameters) (State, error) {
+func newGoMemoryState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
 	if params.Schema == 4 {
-		return NewGoMemoryS4State(params)
+		return newGoMemoryS4State(params)
 	}
 	if params.Schema == 5 {
-		return NewGoMemoryS5State(params)
+		return newGoMemoryS5State(params)
 	}
 
 	addressIndex := indexmem.NewIndex[common.Address, uint32](common.AddressSerializer{})
@@ -212,20 +260,20 @@ func NewGoMemoryState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := NewGoState(schema, arch, []func(){archiveCleanup})
+	state := newGoState(schema, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
-// NewGoFileState creates File based Index and Store implementations
-func NewGoFileState(params Parameters) (State, error) {
+// newGoFileState creates File based Index and Store implementations
+func newGoFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
 	if params.Schema == 4 {
-		return NewGoFileS4State(params)
+		return newGoFileS4State(params)
 	}
 	if params.Schema == 5 {
-		return NewGoFileS5State(params)
+		return newGoFileS5State(params)
 	}
 
 	indexPath, storePath, err := createSubDirs(params.Directory)
@@ -389,20 +437,20 @@ func NewGoFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := NewGoState(schema, arch, []func(){archiveCleanup})
+	state := newGoState(schema, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
-// NewGoCachedFileState creates File based Index and Store implementations
-func NewGoCachedFileState(params Parameters) (State, error) {
+// newGoCachedFileState creates File based Index and Store implementations
+func newGoCachedFileState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
 	if params.Schema == 4 {
-		return NewGoFileS4State(params)
+		return newGoFileS4State(params)
 	}
 	if params.Schema == 5 {
-		return NewGoFileS5State(params)
+		return newGoFileS5State(params)
 	}
 
 	indexPath, storePath, err := createSubDirs(params.Directory)
@@ -562,12 +610,12 @@ func NewGoCachedFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := NewGoState(schema, arch, []func(){archiveCleanup})
+	state := newGoState(schema, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
-// NewGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
+// newGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
+func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -691,12 +739,12 @@ func NewGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := NewGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
+	state := newGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 
-// NewGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
+// newGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
+func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -820,7 +868,7 @@ func NewGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := NewGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
+	state := newGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 

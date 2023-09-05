@@ -40,8 +40,9 @@ func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 	}()
 
 	// Initialize this client's State DB.
-	state, err := state.NewGoFileState(state.Parameters{
+	state, err := state.NewState(state.Parameters{
 		Directory: t.TempDir(),
+		Variant:   state.GoFile,
 		Schema:    3,
 		Archive:   state.NoArchive,
 	})

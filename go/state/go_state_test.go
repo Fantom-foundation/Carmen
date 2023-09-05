@@ -36,25 +36,25 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory 1", 1, castToDirectUpdateState(NewGoMemoryState)},
-		{"Memory 2", 2, castToDirectUpdateState(NewGoMemoryState)},
-		{"Memory 3", 3, castToDirectUpdateState(NewGoMemoryState)},
-		{"Memory 4", 4, castToDirectUpdateState(NewGoMemoryS4State)},
-		{"Memory 5", 5, castToDirectUpdateState(NewGoMemoryS5State)},
-		{"File Index and Store 1", 1, castToDirectUpdateState(NewGoFileState)},
-		{"File Index and Store 2", 2, castToDirectUpdateState(NewGoFileState)},
-		{"File Index and Store 3", 3, castToDirectUpdateState(NewGoFileState)},
-		{"File 4", 4, castToDirectUpdateState(NewGoFileS4State)},
-		{"File 5", 5, castToDirectUpdateState(NewGoFileS5State)},
-		{"Cached File Index and Store 1", 1, castToDirectUpdateState(NewGoCachedFileState)},
-		{"Cached File Index and Store 2", 2, castToDirectUpdateState(NewGoCachedFileState)},
-		{"Cached File Index and Store 3", 3, castToDirectUpdateState(NewGoCachedFileState)},
-		{"LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(NewGoCachedLeveLIndexAndStoreState)},
+		{"Memory 1", 1, castToDirectUpdateState(newGoMemoryState)},
+		{"Memory 2", 2, castToDirectUpdateState(newGoMemoryState)},
+		{"Memory 3", 3, castToDirectUpdateState(newGoMemoryState)},
+		{"Memory 4", 4, castToDirectUpdateState(newGoMemoryS4State)},
+		{"Memory 5", 5, castToDirectUpdateState(newGoMemoryS5State)},
+		{"File Index and Store 1", 1, castToDirectUpdateState(newGoFileState)},
+		{"File Index and Store 2", 2, castToDirectUpdateState(newGoFileState)},
+		{"File Index and Store 3", 3, castToDirectUpdateState(newGoFileState)},
+		{"File 4", 4, castToDirectUpdateState(newGoFileS4State)},
+		{"File 5", 5, castToDirectUpdateState(newGoFileS5State)},
+		{"Cached File Index and Store 1", 1, castToDirectUpdateState(newGoCachedFileState)},
+		{"Cached File Index and Store 2", 2, castToDirectUpdateState(newGoCachedFileState)},
+		{"Cached File Index and Store 3", 3, castToDirectUpdateState(newGoCachedFileState)},
+		{"LevelDB Index and Store 1", 1, castToDirectUpdateState(newGoLeveLIndexAndStoreState)},
+		{"LevelDB Index and Store 2", 2, castToDirectUpdateState(newGoLeveLIndexAndStoreState)},
+		{"LevelDB Index and Store 3", 3, castToDirectUpdateState(newGoLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(newGoCachedLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(newGoCachedLeveLIndexAndStoreState)},
+		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(newGoCachedLeveLIndexAndStoreState)},
 	}
 }
 
@@ -383,7 +383,7 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := NewGoMemoryState(Parameters{Schema: 1})
+	state, err := newGoMemoryState(Parameters{Schema: 1})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
@@ -413,7 +413,7 @@ func TestFailingStore(t *testing.T) {
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := NewGoMemoryState(Parameters{Schema: 1})
+	state, err := newGoMemoryState(Parameters{Schema: 1})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
