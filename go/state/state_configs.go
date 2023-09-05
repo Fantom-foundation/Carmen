@@ -85,15 +85,11 @@ const (
 	GoFileNoCache            = "go-file-nocache"
 	GoLevelDb                = "go-ldb"
 	GoLevelDbNoCache         = "go-ldb-nocache"
-	CppMemory                = "cpp-memory"
-	CppFile                  = "cpp-file"
-	CppLevelDb               = "cpp-ldb"
 )
 
 func GetAllVariants() []Variant {
 	return []Variant{
 		GoMemory, GoFile, GoFileNoCache, GoLevelDb, GoLevelDbNoCache,
-		CppMemory, CppFile, CppLevelDb,
 	}
 }
 
@@ -138,12 +134,6 @@ func NewState(params Parameters) (State, error) {
 		return newGoLeveLIndexAndStoreState(params)
 	case GoLevelDb:
 		return newGoCachedLeveLIndexAndStoreState(params)
-	case CppMemory:
-		return newCppInMemoryState(params)
-	case CppFile:
-		return newCppFileBasedState(params)
-	case CppLevelDb:
-		return newCppLevelDbBasedState(params)
 	default:
 		return nil, UnsupportedConfiguration(fmt.Sprintf("unsupported variant: '%s'", params.Variant))
 	}

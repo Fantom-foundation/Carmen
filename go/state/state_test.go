@@ -42,9 +42,6 @@ func castToDirectUpdateState(factory func(params Parameters) (State, error)) fun
 
 func initStates() []namedStateConfig {
 	var res []namedStateConfig
-	for _, s := range initCppStates() {
-		res = append(res, namedStateConfig{name: fmt.Sprintf("cpp-%s/s%d", s.name, s.schema), schema: s.schema, factory: s.factory})
-	}
 	for _, s := range initGoStates() {
 		res = append(res, namedStateConfig{name: fmt.Sprintf("go-%s/s%d", s.name, s.schema), schema: s.schema, factory: s.factory})
 	}
@@ -78,7 +75,7 @@ func getReferenceStateFor(params Parameters) (State, error) {
 	if params.Schema == 5 {
 		return newGoMemoryS5State(params)
 	}
-	return newCppInMemoryState(params)
+	return newGoMemoryState(params)
 }
 
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {

@@ -8,15 +8,7 @@
 
 .PHONY: all clean
 
-all: carmen-cpp
-
-# this target builds the C++ library required by Go
-carmen-cpp: 
-	@cd ./go/lib ; \
-	./build_libcarmen.sh ;
+all:
 
 clean:
-	cd ./go ; \
-	rm -f lib/libcarmen.so ; \
-	cd ../cpp ; \
-	bazel clean ; \
+	
