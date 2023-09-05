@@ -17,12 +17,12 @@ func newS5State(params Parameters, state *mpt.MptState) (State, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewGoState(&goSchema5{
+	return newGoState(&goSchema5{
 		MptState: state,
 	}, arch, []func(){archiveCleanup}), nil
 }
 
-func NewGoMemoryS5State(params Parameters) (State, error) {
+func newGoMemoryS5State(params Parameters) (State, error) {
 	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S5Config)
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func NewGoMemoryS5State(params Parameters) (State, error) {
 	return newS5State(params, state)
 }
 
-func NewGoFileS5State(params Parameters) (State, error) {
+func newGoFileS5State(params Parameters) (State, error) {
 	state, err := mpt.OpenGoFileState(params.Directory, mpt.S5Config)
 	if err != nil {
 		return nil, err

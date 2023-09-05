@@ -189,9 +189,9 @@ func initCppStates() []namedStateConfig {
 	list := []namedStateConfig{}
 	for _, s := range GetAllSchemas() {
 		list = append(list, []namedStateConfig{
-			{"memory", s, castToDirectUpdateState(NewCppInMemoryState)},
-			{"file", s, castToDirectUpdateState(NewCppFileBasedState)},
-			{"leveldb", s, castToDirectUpdateState(NewCppLevelDbBasedState)},
+			{"memory", s, castToDirectUpdateState(newCppInMemoryState)},
+			{"file", s, castToDirectUpdateState(newCppFileBasedState)},
+			{"leveldb", s, castToDirectUpdateState(newCppLevelDbBasedState)},
 		}...)
 	}
 	return list
