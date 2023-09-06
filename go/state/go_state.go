@@ -209,6 +209,9 @@ func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
 }
 
 func (s *GoState) GetLastArchiveBlockHeight() (uint64, error) {
+	if s.archive == nil {
+		return 0, fmt.Errorf("archive not enabled for this GoState")
+	}
 	lastBlock, err := s.archive.GetLastBlockHeight()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get last block in the archive; %s", err)
