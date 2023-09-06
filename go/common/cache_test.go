@@ -78,6 +78,33 @@ func TestSettingExisting(t *testing.T) {
 	}
 }
 
+func TestPrintNumberOfEvictions(t *testing.T) {
+	if !testing.Verbose() {
+		return
+	}
+	ExamplePrintNumberOfEvictions()
+}
+
+func ExamplePrintNumberOfEvictions() {
+	const N = 15_000
+	const CAPACITY = 10_000
+	keys := generateRandomKeys(N)
+
+	evictions := make(map[string]int)
+
+	for name, c := range initCaches(CAPACITY) {
+		evictions[name] = 0
+		for i := 0; i < N; i++ {
+			if _, _, evicted := c.Set(keys[i], i); evicted {
+				evictions[name]++
+			}
+		}
+	}
+	for name, count := range evictions {
+		fmt.Printf("Cache: %s, evictions: %2.2f%%\n", name, float32(count)/float32(N)*100)
+	}
+}
+
 // Cache implements a memory overlay for the key-value pair.
 // The keys can be set and obtained from the cache. The keys
 // accumulate in the cache until the cache is full, i.e. it reaches its capacity.
@@ -97,9 +124,13 @@ type cache[K any, V any] interface {
 
 func initCaches(capacity int) map[string]cache[int, int] {
 	return map[string]cache[int, int]{
-		"lruCache":            NewCache[int, int](capacity),
-		"synced lruCache":     NewSyncedCache[int, int](NewCache[int, int](capacity)),
-		"synced n-ways Cache": NewNWaysCache[int, int](capacity, 2),
+		"lruCache":        NewCache[int, int](capacity),
+		"synced lruCache": NewSyncedCache[int, int](NewCache[int, int](capacity)),
+		"2-ways Cache":    NewNWaysCache[int, int](capacity, 2),
+		"4-ways Cache":    NewNWaysCache[int, int](capacity, 4),
+		"8-ways Cache":    NewNWaysCache[int, int](capacity, 8),
+		"16-ways Cache":   NewNWaysCache[int, int](capacity, 16),
+		"32-ways Cache":   NewNWaysCache[int, int](capacity, 32),
 	}
 }
 

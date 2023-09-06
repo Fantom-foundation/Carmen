@@ -2,12 +2,13 @@ package common
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 )
 
 var iSink int
 
-func BenchmarkIntIdMissLatency(b *testing.B) {
+func BenchmarkCacheMissLatency(b *testing.B) {
 	cacheSize := 100_000
 	for name, c := range initCaches(cacheSize) {
 		b.Run(fmt.Sprintf("cache %s", name), func(b *testing.B) {
@@ -27,7 +28,7 @@ func BenchmarkIntIdMissLatency(b *testing.B) {
 	}
 }
 
-func BenchmarkIntIdHitLatency(b *testing.B) {
+func BenchmarkCacheHitLatency(b *testing.B) {
 	cacheSize := 100_000
 	for name, c := range initCaches(cacheSize) {
 		b.Run(fmt.Sprintf("cache %s", name), func(b *testing.B) {
@@ -48,7 +49,7 @@ func BenchmarkIntIdHitLatency(b *testing.B) {
 	}
 }
 
-func BenchmarkIntIdCacheEvictions(b *testing.B) {
+func BenchmarkCacheEvictions(b *testing.B) {
 	cacheSize := 100_000 // there will be millions iterations - i.e. evictions will happen
 	for name, c := range initCaches(cacheSize) {
 		b.Run(fmt.Sprintf("cache %s", name), func(b *testing.B) {
@@ -57,4 +58,48 @@ func BenchmarkIntIdCacheEvictions(b *testing.B) {
 			}
 		})
 	}
+}
+
+func BenchmarkCacheSingleThreadWrites(b *testing.B) {
+	b.StopTimer()
+	const N = 100_000
+	const SIZE = 1024
+	keys := generateRandomKeys(N)
+	b.StartTimer()
+
+	for name, c := range initCaches(SIZE) {
+		b.Run(fmt.Sprintf("cache %s", name), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				c.Set(keys[i%N], i)
+			}
+		})
+	}
+}
+
+func BenchmarkCacheSingleThreadReads(b *testing.B) {
+	b.StopTimer()
+	const N = 100_000
+	keys := generateRandomKeys(N)
+	b.StartTimer()
+
+	for name, c := range initCaches(N) {
+		b.StopTimer()
+		for i := 0; i < N; i++ {
+			c.Set(keys[i], i)
+		}
+		b.StartTimer()
+		b.Run(fmt.Sprintf("cache %s", name), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				iSink, _ = c.Get(keys[i%N])
+			}
+		})
+	}
+}
+
+func generateRandomKeys(count int) []int {
+	keys := make([]int, 0, count)
+	for i := 0; i < count; i++ {
+		keys = append(keys, rand.Intn(1024*count))
+	}
+	return keys
 }
