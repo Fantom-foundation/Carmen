@@ -208,6 +208,14 @@ func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
 	}, nil
 }
 
+func (s *GoState) GetLastArchiveBlockHeight() (uint64, error) {
+	lastBlock, err := s.archive.GetLastBlockHeight()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last block in the archive; %s", err)
+	}
+	return lastBlock, nil
+}
+
 func (s *GoState) GetProof() (backend.Proof, error) {
 	components := s.GoSchema.getSnapshotableComponents()
 	if components == nil {

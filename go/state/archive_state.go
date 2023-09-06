@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -92,8 +93,23 @@ func (s *ArchiveState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVer
 }
 
 func (s *ArchiveState) GetArchiveState(block uint64) (State, error) {
+	lastBlock, err := s.archive.GetLastBlockHeight()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last block in the archive; %s", err)
+	}
+	if block > lastBlock {
+		return nil, fmt.Errorf("block %d is not present in the archive (last block %d)", block, lastBlock)
+	}
 	return &ArchiveState{
 		archive: s.archive,
 		block:   block,
 	}, nil
+}
+
+func (s *ArchiveState) GetLastArchiveBlockHeight() (uint64, error) {
+	lastBlock, err := s.archive.GetLastBlockHeight()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get last block in the archive; %s", err)
+	}
+	return lastBlock, nil
 }

@@ -48,6 +48,9 @@ type State interface {
 	// GetArchiveState provides a historical State view for given block.
 	GetArchiveState(block uint64) (State, error)
 
+	// GetLastArchiveBlockHeight provides the last block height available in the archive.
+	GetLastArchiveBlockHeight() (uint64, error)
+
 	// States can be snapshotted.
 	backend.Snapshotable
 }

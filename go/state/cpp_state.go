@@ -238,6 +238,10 @@ func (cs *CppState) GetArchiveState(block uint64) (State, error) {
 	}, nil
 }
 
+func (cs *CppState) GetLastArchiveBlockHeight() (uint64, error) {
+	return 0, fmt.Errorf("last archive block not available in cpp state")
+}
+
 type objectId struct {
 	obj_loc, obj_type uint64
 }
