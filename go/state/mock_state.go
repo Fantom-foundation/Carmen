@@ -197,6 +197,21 @@ func (mr *MockStateMockRecorder) GetHash() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockState)(nil).GetHash))
 }
 
+// GetLastArchiveBlockHeight mocks base method.
+func (m *MockState) GetLastArchiveBlockHeight() (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLastArchiveBlockHeight")
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLastArchiveBlockHeight indicates an expected call of GetLastArchiveBlockHeight.
+func (mr *MockStateMockRecorder) GetLastArchiveBlockHeight() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastArchiveBlockHeight", reflect.TypeOf((*MockState)(nil).GetLastArchiveBlockHeight))
+}
+
 // GetMemoryFootprint mocks base method.
 func (m *MockState) GetMemoryFootprint() *common.MemoryFootprint {
 	m.ctrl.T.Helper()
@@ -468,6 +483,21 @@ func (m *MockdirectUpdateState) GetHash() (common.Hash, error) {
 func (mr *MockdirectUpdateStateMockRecorder) GetHash() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockdirectUpdateState)(nil).GetHash))
+}
+
+// GetLastArchiveBlockHeight mocks base method.
+func (m *MockdirectUpdateState) GetLastArchiveBlockHeight() (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLastArchiveBlockHeight")
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLastArchiveBlockHeight indicates an expected call of GetLastArchiveBlockHeight.
+func (mr *MockdirectUpdateStateMockRecorder) GetLastArchiveBlockHeight() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastArchiveBlockHeight", reflect.TypeOf((*MockdirectUpdateState)(nil).GetLastArchiveBlockHeight))
 }
 
 // GetMemoryFootprint mocks base method.

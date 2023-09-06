@@ -59,7 +59,7 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedSt
 			state, err := config.createState(t.TempDir())
 			if err != nil {
 				if _, ok := err.(UnsupportedConfiguration); ok {
-					t.Skipf("failed to initialize state %s: %v", config.name, err)
+					t.Skipf("unsupported state %s: %v", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s: %v", config.name, err)
 				}
@@ -433,7 +433,7 @@ func TestArchive(t *testing.T) {
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
 					if _, ok := err.(UnsupportedConfiguration); ok {
-						t.Skipf("failed to initialize state %s; %s", config.name, err)
+						t.Skipf("unsupported state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
 					}
@@ -536,6 +536,79 @@ func TestArchive(t *testing.T) {
 	}
 }
 
+// TestLastArchiveBlock tests obtaining the state at the last (highest) block in the archive.
+func TestLastArchiveBlock(t *testing.T) {
+	for _, config := range initStates() {
+		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
+			config := config
+			archiveType := archiveType
+
+			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
+				t.Parallel()
+				dir := t.TempDir()
+				if config.name[0:3] == "cpp" {
+					t.Skipf("GetLastArchiveBlockHeight not supported by the cpp state")
+				}
+				s, err := config.createStateWithArchive(dir, archiveType)
+				if err != nil {
+					if _, ok := err.(UnsupportedConfiguration); ok {
+						t.Skipf("unsupported state %s; %s", config.name, err)
+					} else {
+						t.Fatalf("failed to initialize state %s; %s", config.name, err)
+					}
+				}
+				defer s.Close()
+
+				lastBlockHeight, err := s.GetLastArchiveBlockHeight()
+				if err == nil {
+					t.Fatalf("obtaining the last block from an empty archive did not failed")
+				}
+
+				if err := s.Apply(1, common.Update{
+					CreatedAccounts: []common.Address{address1},
+				}); err != nil {
+					t.Fatalf("failed to add block 1; %s", err)
+				}
+
+				if err := s.Apply(2, common.Update{
+					CreatedAccounts: []common.Address{address2},
+				}); err != nil {
+					t.Fatalf("failed to add block 2; %s", err)
+				}
+
+				if err := s.Flush(); err != nil {
+					t.Fatalf("failed to flush updates, %s", err)
+				}
+
+				lastBlockHeight, err = s.GetLastArchiveBlockHeight()
+				if err != nil {
+					t.Fatalf("failed to get the last available block height; %s", err)
+				}
+				if lastBlockHeight != 2 {
+					t.Errorf("invalid last available block height %d (expected 2)", lastBlockHeight)
+				}
+
+				state2, err := s.GetArchiveState(lastBlockHeight)
+				if err != nil {
+					t.Fatalf("failed to get state at the last block in the archive; %s", err)
+				}
+
+				if as, err := state2.Exists(address1); err != nil || as != true {
+					t.Errorf("invalid account state at the last block: %t, %s", as, err)
+				}
+				if as, err := state2.Exists(address2); err != nil || as != true {
+					t.Errorf("invalid account state at the last block: %t, %s", as, err)
+				}
+
+				_, err = s.GetArchiveState(lastBlockHeight + 1)
+				if err == nil {
+					t.Errorf("obtainig a block higher than the last one (%d) did not failed", lastBlockHeight)
+				}
+			})
+		}
+	}
+}
+
 // TestPersistentState inserts data into the state and closes it first, then the state
 // is re-opened in another process, and it is tested that data are available, i.e. all was successfully persisted
 func TestPersistentState(t *testing.T) {
@@ -554,7 +627,7 @@ func TestPersistentState(t *testing.T) {
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
 					if _, ok := err.(UnsupportedConfiguration); ok {
-						t.Skipf("failed to initialize state %s; %s", t.Name(), err)
+						t.Skipf("unsupported state %s; %s", t.Name(), err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", t.Name(), err)
 					}
@@ -594,7 +667,7 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 			original, err := config.createState(t.TempDir())
 			if err != nil {
 				if _, ok := err.(UnsupportedConfiguration); ok {
-					t.Skipf("failed to initialize state %s; %s", config.name, err)
+					t.Skipf("unsupported state %s; %s", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s; %s", config.name, err)
 				}
@@ -692,7 +765,7 @@ func TestSnapshotCanBeCreatedAndVerified(t *testing.T) {
 			original, err := config.createState(t.TempDir())
 			if err != nil {
 				if _, ok := err.(UnsupportedConfiguration); ok {
-					t.Skipf("failed to initialize state %s; %s", config.name, err)
+					t.Skipf("unsupported state %s; %s", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s; %s", config.name, err)
 				}

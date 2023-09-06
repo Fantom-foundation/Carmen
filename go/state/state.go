@@ -46,7 +46,12 @@ type State interface {
 	GetMemoryFootprint() *common.MemoryFootprint
 
 	// GetArchiveState provides a historical State view for given block.
+	// An error is returned if the archive is not enabled or if it is empty.
 	GetArchiveState(block uint64) (State, error)
+
+	// GetLastArchiveBlockHeight provides the last block height available in the archive.
+	// An error is returned if the archive is not enabled or if it is empty.
+	GetLastArchiveBlockHeight() (uint64, error)
 
 	// States can be snapshotted.
 	backend.Snapshotable

@@ -1199,6 +1199,10 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
 	return CreateNonCommittableStateDBUsing(archiveState), nil
 }
 
+func (s *stateDB) GetLastArchiveBlockHeight() (uint64, error) {
+	return s.state.GetLastArchiveBlockHeight()
+}
+
 func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
