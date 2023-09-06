@@ -87,8 +87,13 @@ type StateDB interface {
 	// outside the scope of any block.
 	StartBulkLoad(block uint64) BulkLoad
 
-	// GetArchiveStateDB provides a historical State view for given block.
+	// GetArchiveStateDB provides a historical state view for given block.
+	// An error is returned if the archive is not enabled or if it is empty.
 	GetArchiveStateDB(block uint64) (StateDB, error)
+
+	// GetLastArchiveBlockHeight provides the last block height available in the archive.
+	// An error is returned if the archive is not enabled or if it is empty.
+	GetLastArchiveBlockHeight() (uint64, error)
 
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
