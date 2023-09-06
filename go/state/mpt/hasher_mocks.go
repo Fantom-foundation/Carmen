@@ -103,14 +103,14 @@ func (mr *MockhasherMockRecorder) getHash(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHash", reflect.TypeOf((*Mockhasher)(nil).getHash), arg0, arg1)
 }
 
-// invalidate mocks base method.
-func (m *Mockhasher) invalidate(arg0 NodeId) {
+// update mocks base method.
+func (m *Mockhasher) update(arg0 NodeId) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "invalidate", arg0)
+	m.ctrl.Call(m, "update", arg0)
 }
 
-// invalidate indicates an expected call of invalidate.
-func (mr *MockhasherMockRecorder) invalidate(arg0 interface{}) *gomock.Call {
+// update indicates an expected call of update.
+func (mr *MockhasherMockRecorder) update(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "invalidate", reflect.TypeOf((*Mockhasher)(nil).invalidate), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "update", reflect.TypeOf((*Mockhasher)(nil).update), arg0)
 }
