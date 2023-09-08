@@ -207,12 +207,11 @@ func readMetadata(filePath string, pageSize int) (removedIDs map[int]bool, lastI
 	if err != nil {
 		return removedIDs, lastID, err
 	}
-	buffer := make([]byte, 4)
-	_, err = file.Read(buffer)
+
+	lastID, err = parseLastId(file)
 	if err != nil {
 		return removedIDs, lastID, err
 	}
-	lastID = int(binary.LittleEndian.Uint32(buffer[0:4]))
 
 	// read removed IDs that are stored after pages and before the LastID
 	metadataStartOffset := int64((lastID) * pageSize)
@@ -229,6 +228,15 @@ func readMetadata(filePath string, pageSize int) (removedIDs map[int]bool, lastI
 	}
 
 	return removedIDs, lastID, nil
+}
+
+func parseLastId(reader io.Reader) (int, error) {
+	buffer := make([]byte, 4)
+	_, err := io.ReadFull(reader, buffer)
+	if err != nil {
+		return 0, err
+	}
+	return int(binary.LittleEndian.Uint32(buffer)), nil
 }
 
 func (c *FilePageStorage) writeMetadata() error {

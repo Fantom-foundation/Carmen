@@ -2,6 +2,7 @@ package file
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
 	"testing"
@@ -270,4 +271,39 @@ func TestFileHashMemoryFootprint(t *testing.T) {
 	if size := hashes.Value(); size == 0 {
 		t.Errorf("Mem footprint wrong: %d", size)
 	}
+}
+
+func TestParseMetadata_ReadByChunks(t *testing.T) {
+	var wantHash common.Hash
+	wantHash[0] = 0xAA
+	wantHash[31] = 0xBB
+
+	var data []byte
+	data = append(wantHash[:], []byte{0x00, 0x00, 0x00, 0x01}...)
+	data = append(data, []byte{0x00, 0x00, 0x00, 0x02}...)
+	data = append(data, []byte{0x00, 0x00, 0x00, 0x03}...)
+
+	testReader := utils.NewChunkReader(data, 3)
+	gotHash, numBuckets, records, idx, err := parseMetadata[uint32](testReader, common.Identifier32Serializer{})
+
+	if err != nil {
+		t.Fatalf("error: %s", err)
+	}
+
+	if gotHash != wantHash {
+		t.Errorf("wrong value got: %v != %v", gotHash, wantHash)
+	}
+
+	if numBuckets != 1 {
+		t.Errorf("wrong value got: %v != %v", numBuckets, 1)
+	}
+
+	if records != 2 {
+		t.Errorf("wrong value got: %v != %v", records, 2)
+	}
+
+	if idx != 3 {
+		t.Errorf("wrong value got: %v != %v", idx, 3)
+	}
+
 }

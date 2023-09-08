@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"io"
 	"testing"
 )
 
@@ -63,7 +63,7 @@ func TestReadCodes(t *testing.T) {
 	data = append(data, append(binary.BigEndian.AppendUint32(h2[:], uint32(len(code2))), code2...)...)
 	data = append(data, append(binary.BigEndian.AppendUint32(h3[:], uint32(len(code3))), code3...)...)
 
-	reader := &testReader{data: data, chunkSize: 3}
+	reader := utils.NewChunkReader(data, 3)
 	res, err := parseCodes(reader)
 	if err != nil {
 		t.Fatalf("should not fail: %s", err)
@@ -80,27 +80,4 @@ func TestReadCodes(t *testing.T) {
 	if code, exists := res[h3]; !exists || !bytes.Equal(code, code3) {
 		t.Errorf("byted do not match: %x != %x", code, code1)
 	}
-}
-
-// testReader reads from the stored data
-// by various chunks.
-type testReader struct {
-	data      []byte
-	chunkSize int
-}
-
-func (r *testReader) Read(p []byte) (int, error) {
-	if len(r.data) == 0 {
-		return 0, io.EOF
-	}
-
-	if r.chunkSize >= len(r.data) {
-		n := copy(p, r.data)
-		r.data = r.data[n:]
-		return n, nil
-	}
-
-	n := copy(p, r.data[0:r.chunkSize-1])
-	r.data = r.data[n:]
-	return n, nil
 }
