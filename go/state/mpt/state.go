@@ -227,19 +227,13 @@ func (s *MptState) GetMemoryFootprint() *common.MemoryFootprint {
 	return mf
 }
 
-var errCorruptedCodeFile = errors.New("invalid encoding of code file")
-
 // readCodes parses the content of the given file if it exists or returns
 // a an empty code collection if there is no such file.
 func readCodes(filename string) (map[common.Hash][]byte, error) {
-
 	// If there is no file, initialize and return an empty code collection.
 	if _, err := os.Stat(filename); err != nil {
 		return map[common.Hash][]byte{}, nil
 	}
-
-	// If the file exists, parse it and return its content.
-	res := map[common.Hash][]byte{}
 
 	file, err := os.Open(filename)
 	if err != nil {
@@ -247,33 +241,30 @@ func readCodes(filename string) (map[common.Hash][]byte, error) {
 	}
 	defer file.Close()
 	reader := bufio.NewReader(file)
+	return parseCodes(reader)
+}
 
+func parseCodes(reader io.Reader) (map[common.Hash][]byte, error) {
+	// If the file exists, parse it and return its content.
+	res := map[common.Hash][]byte{}
 	// The format is simple: [<key>, <length>, <code>]*
 	var hash common.Hash
 	var length [4]byte
 	for {
-		if num, err := reader.Read(hash[:]); err != nil {
+		if _, err := io.ReadFull(reader, hash[:]); err != nil {
 			if err == io.EOF {
 				return res, nil
 			}
 			return nil, err
-		} else if num != len(hash) {
-			return nil, errCorruptedCodeFile
 		}
-		if num, err := reader.Read(length[:]); err != nil {
+		if _, err := io.ReadFull(reader, length[:]); err != nil {
 			return nil, err
-		} else if num != len(length) {
-			return nil, errCorruptedCodeFile
 		}
-
 		size := binary.BigEndian.Uint32(length[:])
 		code := make([]byte, size)
-		if num, err := reader.Read(code[:]); err != nil {
+		if _, err := io.ReadFull(reader, code[:]); err != nil {
 			return nil, err
-		} else if num != len(code) {
-			return nil, errCorruptedCodeFile
 		}
-
 		res[hash] = code
 	}
 }
