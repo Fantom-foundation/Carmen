@@ -209,6 +209,21 @@ func (a *ArchiveTrie) Dump() {
 	}
 }
 
+// Check verifies internal invariants of the Trie instance. If the trie is
+// self-consistent, nil is returned and the Trie is ready to be accessed. If
+// errors are detected, the Trie is to be considered in an invalid state and
+// the behavior of all other operations is undefined.
+func (a *ArchiveTrie) Check() error {
+	errs := []error{}
+	for i, root := range a.roots {
+		view := getTrieView(root, a.head.trie.forest)
+		if err := view.Check(); err != nil {
+			errs = append(errs, fmt.Errorf("issue encountered for block %d: %v", i, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (a *ArchiveTrie) Flush() error {
 	return errors.Join(
 		a.head.Flush(),

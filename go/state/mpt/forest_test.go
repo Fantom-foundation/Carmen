@@ -438,7 +438,7 @@ func openFileShadowForest(directory string, config MptConfig, mode StorageMode) 
 	if err != nil {
 		return nil, err
 	}
-	hashes, err := OpenFileBasedHashStore(directory + "/hashes")
+	hashes, err := OpenFileBasedHashStore(directory+"/hashes", 1000)
 	if err != nil {
 		return nil, err
 	}

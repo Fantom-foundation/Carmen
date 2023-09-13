@@ -140,9 +140,9 @@ func (s *LiveTrie) Dump() {
 }
 
 // Check verifies internal invariants of the Trie instance. If the trie is
-// self-consistent, nil is returned and the Trie is read to be accessed. If
+// self-consistent, nil is returned and the Trie is ready to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and
-// the behaviour of all other operations is undefined.
+// the behavior of all other operations is undefined.
 func (s *LiveTrie) Check() error {
 	return s.forest.Check(s.root)
 }

@@ -75,12 +75,6 @@ type Forest struct {
 	addressHasher *common.CachedHasher[common.Address]
 }
 
-// The number of elements to retain in the node cache.
-const cacheCapacity = 10_000_000
-
-// The number of hashes retained in the cache of the addresses or caches keys
-const hashesCacheCapacity = 100_000
-
 func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
 	success := false
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
@@ -167,7 +161,7 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 			values.Close()
 		}
 	}()
-	hashes, err := OpenFileBasedHashStore(directory + "/hashes")
+	hashes, err := OpenFileBasedHashStore(directory+"/hashes", config.HashCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -192,11 +186,11 @@ func makeForest(
 		accounts:      synced.Sync(accounts),
 		values:        synced.Sync(values),
 		storageMode:   mode,
-		nodeCache:     common.NewCache[NodeId, *shared.Shared[Node]](cacheCapacity),
+		nodeCache:     common.NewCache[NodeId, *shared.Shared[Node]](config.NodeCacheSize),
 		dirty:         map[NodeId]struct{}{},
 		hasher:        config.Hashing.createHasher(hashes),
-		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
-		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
+		keyHasher:     common.NewCachedHasher[common.Key](config.KeyHashCacheSize, common.KeySerializer{}),
+		addressHasher: common.NewCachedHasher[common.Address](config.AddressHashCacheSize, common.AddressSerializer{}),
 	}, nil
 }
 
@@ -476,7 +470,7 @@ func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[
 	}
 	evictedId, evictedNode, evicted := s.nodeCache.Set(id, node)
 	if evicted {
-		// TODO: perform flush asynchroniously.
+		// TODO: perform flush asynchronously.
 		// Make sure there is no write access on the node.
 		handle := evictedNode.GetReadHandle()
 		defer handle.Release()
@@ -494,7 +488,7 @@ func (s *Forest) flush(id NodeId, node Node) error {
 func (s *Forest) flushNode(id NodeId, node Node, checkDirty bool) error {
 	// Note: flushing nodes in Archive mode will implicitly freeze them,
 	// since after the reload they will be considered frozen. This may
-	// cause temporary states between updates to be accidentially frozen,
+	// cause temporary states between updates to be accidentally frozen,
 	// leaving unreferenced nodes in the archive, but it is not causing
 	// correctness issues. However, if the node-cache size is sufficiently
 	// large, such cases should be rare. Nevertheless, a warning is

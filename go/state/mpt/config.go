@@ -22,6 +22,18 @@ type MptConfig struct {
 
 	// The hashing algorithm to be used in the MPT implementation.
 	Hashing hashAlgorithm
+
+	// The number of nodes to be retained in the node cache. If set to 0, caching is disabled.
+	NodeCacheSize int
+
+	// The number of node hashes to be retained in an in-memory cache cache. If set to 0, caching is disabled.
+	HashCacheSize int
+
+	// The size of the cache used for hashing addresses (only useful if paths are hashed).
+	AddressHashCacheSize int
+
+	// The size of the cache used for hashing keys (only useful if paths are hashed).
+	KeyHashCacheSize int
 }
 
 var S4Config = MptConfig{
@@ -29,6 +41,8 @@ var S4Config = MptConfig{
 	UseHashedPaths:                false,
 	TrackSuffixLengthsInLeafNodes: false,
 	Hashing:                       DirectHashing,
+	NodeCacheSize:                 10_000_000,
+	HashCacheSize:                 10_000_000,
 }
 
 var S5Config = MptConfig{
@@ -36,6 +50,10 @@ var S5Config = MptConfig{
 	UseHashedPaths:                true,
 	TrackSuffixLengthsInLeafNodes: true,
 	Hashing:                       EthereumLikeHashing, // requires tracking of suffix lengths
+	NodeCacheSize:                 10_000_000,
+	HashCacheSize:                 10_000_000,
+	AddressHashCacheSize:          100_000,
+	KeyHashCacheSize:              100_000,
 }
 
 var allMptConfigs = []MptConfig{S4Config, S5Config}

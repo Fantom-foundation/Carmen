@@ -164,8 +164,8 @@ type fileBasedHashStore struct {
 // OpenFileBasedHashStore opens a HashStore backed by a file and retaining a
 // cache of the most recently accessed hashes in memory. Its memory utilization
 // is thus constant. It is intended to be utilized in production.
-func OpenFileBasedHashStore(directory string) (HashStore, error) {
-	return openFileBasedHashStore(directory, 10_000_000)
+func OpenFileBasedHashStore(directory string, cacheSize int) (HashStore, error) {
+	return openFileBasedHashStore(directory, cacheSize)
 }
 
 // openFileBasedHashStore is the same as OpenFileBasedHashStore but with the
