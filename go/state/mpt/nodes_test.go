@@ -2579,6 +2579,99 @@ func TestAccountNode_Freeze(t *testing.T) {
 	}
 }
 
+func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0xAA}
+	key := common.Key{0x12, 0x3A}
+	value := common.Value{1}
+
+	newValue := common.Value{2}
+
+	ctxt.Build(&Value{
+		key, value,
+	})
+
+	id, node := ctxt.Build(&Account{
+		addr, AccountInfo{
+			common.Nonce{1}, common.Balance{1}, common.Hash{0xAA},
+		},
+	})
+
+	newId, _ := ctxt.ExpectCreateAccount() // new account will be created
+
+	path := keyToNibbles(key)
+	handle := node.GetWriteHandle()
+	ctxt.ExpectCreateValue()
+	ctxt.EXPECT().update(id, handle).Return(nil)
+	handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value)
+	defer handle.Release()
+
+	handle.Get().Freeze(ctxt, handle)
+	ctxt.ExpectCreateValue()
+
+	newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, newValue)
+	if newRoot != newId || changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", newId, false, newRoot, changed, err)
+	}
+
+	// check value exists for the original node
+	if _, exists, _ := handle.Get().GetSlot(ctxt, addr, path[:], key); !exists {
+		t.Errorf("value for key: %s should exist: ", key)
+	}
+
+	// check value is gone for the new root
+	newHandle, err := ctxt.getNode(newRoot)
+	defer newHandle.Release()
+	if val, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); val != newValue || !exists {
+		t.Errorf("value for key: %s should not exist: ", key)
+	}
+}
+
+func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0xAA}
+	key := common.Key{0x12, 0x3A}
+	value := common.Value{1}
+
+	id, node := ctxt.Build(&Account{
+		addr, AccountInfo{
+			common.Nonce{1}, common.Balance{1}, common.Hash{0xAA},
+		},
+	})
+
+	newId, _ := ctxt.ExpectCreateAccount() // new account will be created
+
+	path := keyToNibbles(key)
+	handle := node.GetWriteHandle()
+	ctxt.ExpectCreateValue()
+	ctxt.EXPECT().update(id, handle).Return(nil)
+	handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value)
+	defer handle.Release()
+
+	handle.Get().Freeze(ctxt, handle)
+
+	newRoot, changed, err := handle.Get().ClearStorage(ctxt, id, handle, addr, path[:])
+	if newRoot != newId || changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", newId, false, newRoot, changed, err)
+	}
+
+	// check value exists for the original node
+	if _, exists, _ := handle.Get().GetSlot(ctxt, addr, path[:], key); !exists {
+		t.Errorf("value for key: %s should exist: ", key)
+	}
+
+	// check value is gone for the new root
+	newHandle, err := ctxt.getNode(newRoot)
+	defer newHandle.Release()
+	if _, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); exists {
+		t.Errorf("value for key: %s should not exist: ", key)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
