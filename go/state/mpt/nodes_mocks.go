@@ -227,6 +227,20 @@ func (mr *MockNodeMockRecorder) SetValue(manager, thisId, this, key, path, value
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockNode)(nil).SetValue), manager, thisId, this, key, path, value)
 }
 
+// VisitAll mocks base method.
+func (m *MockNode) VisitAll(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VisitAll", source, thisId, depth, visitor)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VisitAll indicates an expected call of VisitAll.
+func (mr *MockNodeMockRecorder) VisitAll(source, thisId, depth, visitor interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VisitAll", reflect.TypeOf((*MockNode)(nil).VisitAll), source, thisId, depth, visitor)
+}
+
 // MockNodeSource is a mock of NodeSource interface.
 type MockNodeSource struct {
 	ctrl     *gomock.Controller
@@ -749,6 +763,20 @@ func (m *MockleafNode) SetValue(manager NodeManager, thisId NodeId, this shared.
 func (mr *MockleafNodeMockRecorder) SetValue(manager, thisId, this, key, path, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockleafNode)(nil).SetValue), manager, thisId, this, key, path, value)
+}
+
+// VisitAll mocks base method.
+func (m *MockleafNode) VisitAll(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VisitAll", source, thisId, depth, visitor)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VisitAll indicates an expected call of VisitAll.
+func (mr *MockleafNodeMockRecorder) VisitAll(source, thisId, depth, visitor interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VisitAll", reflect.TypeOf((*MockleafNode)(nil).VisitAll), source, thisId, depth, visitor)
 }
 
 // setPathLength mocks base method.

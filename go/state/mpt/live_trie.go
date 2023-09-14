@@ -106,6 +106,10 @@ func (s *LiveTrie) GetHash() (common.Hash, error) {
 	return s.forest.getHashFor(s.root)
 }
 
+func (s *LiveTrie) VisitAll(visitor NodeVisitor) error {
+	return s.forest.VisitAll(s.root, visitor)
+}
+
 func (s *LiveTrie) Flush() error {
 	// Update on-disk meta-data.
 	metadata, err := json.Marshal(metadata{

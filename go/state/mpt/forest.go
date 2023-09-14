@@ -73,6 +73,8 @@ type Forest struct {
 	// Cached hashers for keys and addresses (thread safe).
 	keyHasher     *common.CachedHasher[common.Key]
 	addressHasher *common.CachedHasher[common.Address]
+
+	getNodeCounter int
 }
 
 // The number of elements to retain in the node cache.
@@ -260,8 +262,43 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 	return err
 }
 
+func (s *Forest) VisitAll(rootId NodeId, visitor NodeVisitor) error {
+	root, err := s.getNode(rootId)
+	if err != nil {
+		return err
+	}
+	defer root.Release()
+	return root.Get().VisitAll(s, rootId, 0, visitor)
+}
+
 func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
-	return s.hasher.getHash(id, s)
+	if false {
+		if genericHasher, ok := s.hasher.(*genericHasher); ok {
+			fmt.Printf("Number of dirty nodes before hash: %d\n", len(genericHasher.dirtyHashes))
+			genericHasher.stats.Reset()
+			s.getNodeCounter = 0
+		}
+		if ethHasher, ok := s.hasher.(*ethHasher); ok {
+			fmt.Printf("Number of dirty nodes before hash: %d\n", len(ethHasher.base.dirtyHashes))
+			ethHasher.base.stats.Reset()
+			s.getNodeCounter = 0
+		}
+		res, err := s.hasher.getHash(id, s)
+
+		if genericHasher, ok := s.hasher.(*genericHasher); ok {
+			fmt.Printf("Number of dirty nodes after hash: %d\n", len(genericHasher.dirtyHashes))
+			fmt.Printf("Hashing required the resolution of %d nodes\n", s.getNodeCounter)
+			fmt.Printf("Hashing stats: %v\n\n", &genericHasher.stats)
+		}
+		if ethHasher, ok := s.hasher.(*ethHasher); ok {
+			fmt.Printf("Number of dirty nodes after hash: %d\n", len(ethHasher.base.dirtyHashes))
+			fmt.Printf("Hashing required the resolution of %d nodes\n", s.getNodeCounter)
+			fmt.Printf("Hashing stats: %v\n\n", &ethHasher.base.stats)
+		}
+		return res, err
+	} else {
+		return s.hasher.getHash(id, s)
+	}
 }
 
 func (s *Forest) hashKey(key common.Key) common.Hash {
@@ -449,6 +486,7 @@ func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 }
 
 func (s *Forest) getNode(id NodeId) (shared.ReadHandle[Node], error) {
+	s.getNodeCounter++
 	instance, err := s.getSharedNode(id)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, err

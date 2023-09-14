@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash"
 	"reflect"
 	"sort"
 	"sync"
@@ -77,6 +78,62 @@ type genericHasher struct {
 	dirtyHashes      map[NodeId]struct{}
 	dirtyHashesMutex sync.Mutex
 	hash             hashFunction // call-back to the actual hasher function
+	stats            hasherStats
+}
+
+type hasherStats struct {
+	hashCalls           int
+	cachedHashes        int
+	unnecessaryRehashes int
+
+	hashAccount   int
+	hashBranch    int
+	hashExtension int
+	hashValue     int
+
+	toItemCalls int
+	toItemHits  int
+
+	prunedByLargeEnoughLowerBound int
+	prunedByLargeEnoughEncoding   int
+}
+
+func (s *hasherStats) Reset() {
+	s.hashCalls = 0
+	s.cachedHashes = 0
+	s.hashAccount = 0
+	s.hashBranch = 0
+	s.hashExtension = 0
+	s.hashValue = 0
+	s.toItemCalls = 0
+	s.toItemHits = 0
+	s.prunedByLargeEnoughLowerBound = 0
+	s.prunedByLargeEnoughEncoding = 0
+	//s.unnecessaryRehashes = 0
+}
+
+func (s *hasherStats) String() string {
+	total := s.hashCalls
+	hits := s.cachedHashes
+	return fmt.Sprintf(
+		"calls %d, hits %d, misses %d (hit rate %.2f) (A,B,E,V)=(%d,%d,%d,%d)\n"+
+			"toItem calls %d, misses %d (hit rate %.2f); pruned by limit %d, pruned by size %d\n"+
+			"total unnecessary rehashes: %d",
+		total,
+		hits,
+		total-hits,
+		float64(hits)/float64(total),
+		s.hashAccount,
+		s.hashBranch,
+		s.hashExtension,
+		s.hashValue,
+		s.toItemCalls,
+		s.toItemCalls-s.toItemHits,
+		float64(s.toItemHits)/float64(s.toItemCalls),
+		s.prunedByLargeEnoughLowerBound,
+		s.prunedByLargeEnoughEncoding,
+		s.unnecessaryRehashes,
+	)
 }
 
 func makeGenericHasher(store HashStore, hash hashFunction) *genericHasher {
@@ -92,19 +149,36 @@ func (h *genericHasher) getHash(id NodeId, source NodeSource) (common.Hash, erro
 	if id.IsEmpty() {
 		return h.hash(id, source, h)
 	}
+	h.stats.hashCalls++
 	// Non-dirty hashes can be taken from the store.
 	h.dirtyHashesMutex.Lock()
 	if _, dirty := h.dirtyHashes[id]; !dirty {
 		h.dirtyHashesMutex.Unlock()
+		h.stats.cachedHashes++
 		return h.store.Get(id)
 	}
 	h.dirtyHashesMutex.Unlock()
+
+	if id.IsAccount() {
+		h.stats.hashAccount++
+	} else if id.IsBranch() {
+		h.stats.hashBranch++
+	} else if id.IsExtension() {
+		h.stats.hashExtension++
+	} else if id.IsValue() {
+		h.stats.hashValue++
+	}
 
 	// Dirty hashes need to be re-freshed.
 	hash, err := h.hash(id, source, h)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	old, _ := h.store.Get(id)
+	if old == hash {
+		fmt.Printf("WARNING: refreshed hash without change for node %v\n", id)
+	}
+
 	if err := h.store.Set(id, hash); err != nil {
 		return hash, err
 	}
@@ -176,7 +250,7 @@ func makeDirectHasher(store HashStore) hasher {
 }
 
 // getDirectHash implements the DirectHasher's hashing algorithm.
-func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash, error) {
+func getDirectHash(id NodeId, source NodeSource, base *genericHasher) (common.Hash, error) {
 	hash := common.Hash{}
 	if id.IsEmpty() {
 		return hash, nil
@@ -199,7 +273,7 @@ func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash,
 		hasher.Write(node.info.Balance[:])
 		hasher.Write(node.info.Nonce[:])
 		hasher.Write(node.info.CodeHash[:])
-		if hash, err := source.getHashFor(node.storage); err == nil {
+		if hash, err := base.getHash(node.storage, source); err == nil {
 			hasher.Write(hash[:])
 		} else {
 			return hash, err
@@ -209,7 +283,7 @@ func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash,
 		hasher.Write([]byte{'B'})
 		// TODO: compute sub-tree hashes in parallel
 		for _, child := range node.children {
-			if hash, err := source.getHashFor(child); err == nil {
+			if hash, err := base.getHash(child, source); err == nil {
 				hasher.Write(hash[:])
 			} else {
 				return hash, err
@@ -219,7 +293,7 @@ func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash,
 	case *ExtensionNode:
 		hasher.Write([]byte{'E'})
 		hasher.Write(node.path.path[:])
-		if hash, err := source.getHashFor(node.next); err == nil {
+		if hash, err := base.getHash(node.next, source); err == nil {
 			hasher.Write(hash[:])
 		} else {
 			return hash, err
@@ -246,8 +320,8 @@ func getDirectHash(id NodeId, source NodeSource, _ *genericHasher) (common.Hash,
 // See Appendix D of https://ethereum.github.io/yellowpaper/paper.pdf
 func makeEthereumLikeHasher(store HashStore) hasher {
 	res := &ethHasher{
-		base:          makeGenericHasher(store, nil),
-		encodingCache: common.NewNWaysCache[NodeId, rlp.Item](1<<20, 16),
+		base:            makeGenericHasher(store, nil),
+		isEmbeddedCache: common.NewCache[NodeId, bool](1 << 20), // common.NewNWaysCache[NodeId, bool](1<<20, 16),
 	}
 	res.base.hash = func(id NodeId, source NodeSource, _ *genericHasher) (common.Hash, error) {
 		return res.getHashInternal(id, source)
@@ -256,8 +330,9 @@ func makeEthereumLikeHasher(store HashStore) hasher {
 }
 
 type ethHasher struct {
-	base          *genericHasher
-	encodingCache *common.NWaysCache[NodeId, rlp.Item]
+	base            *genericHasher
+	isEmbeddedCache *common.Cache[NodeId, bool]
+	//isEmbeddedCache *common.NWaysCache[NodeId, bool]
 }
 
 func (h *ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
@@ -275,11 +350,11 @@ func (h *ethHasher) getHashInternal(id NodeId, nodes NodeSource) (common.Hash, e
 	if err != nil {
 		return common.Hash{}, err
 	}
-	defer handle.Release()
 	node := handle.Get()
 
 	// Encode the node in RLP and compute its hash.
 	data, err := h.encode(node, nodes)
+	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -287,12 +362,12 @@ func (h *ethHasher) getHashInternal(id NodeId, nodes NodeSource) (common.Hash, e
 }
 
 func (h *ethHasher) update(id NodeId) {
-	h.encodingCache.Remove(id)
+	h.isEmbeddedCache.Remove(id)
 	h.base.update(id)
 }
 
 func (h *ethHasher) forget(id NodeId) {
-	h.encodingCache.Remove(id)
+	h.isEmbeddedCache.Remove(id)
 	h.base.forget(id)
 }
 
@@ -307,13 +382,17 @@ func (h *ethHasher) close(source NodeSource) error {
 func (h *ethHasher) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*h))
 	mf.AddChild("base", h.base.GetMemoryFootprint())
-	// TODO: compute actual size of items ...
-	mf.AddChild("encodingCache", h.encodingCache.GetMemoryFootprint(0))
+	mf.AddChild("isEmbeddedCache", h.isEmbeddedCache.GetMemoryFootprint(0))
 	return mf
 }
 
+var keccakHasherPool = sync.Pool{New: func() any { return sha3.NewLegacyKeccak256() }}
+
 func keccak256(data []byte) common.Hash {
-	return common.GetHash(sha3.NewLegacyKeccak256(), data)
+	hasher := keccakHasherPool.Get().(hash.Hash)
+	hash := common.GetHash(hasher, data)
+	keccakHasherPool.Put(hasher)
+	return hash
 }
 
 func (h *ethHasher) encode(node Node, nodes NodeSource) ([]byte, error) {
@@ -336,6 +415,25 @@ func (h *ethHasher) encode(node Node, nodes NodeSource) ([]byte, error) {
 // getLowerBoundForEncodedSize computes a lower bound for the length of the RLP encoding of
 // the given node. The provided limit indicates an upper bound beyond which any higher
 // result is no longer relevant.
+func (h *ethHasher) getLowerBoundForEncodedSize(id NodeId, limit int, nodes NodeSource) (int, error) {
+	return limit, nil
+
+	/*
+		if res, found := h.lowerBoundCache.Get(id); found && res >= limit {
+			return res, nil
+		}
+
+
+
+		res, err := getLowerBoundForEncodedSize(node, limit, nodes)
+		if err != nil {
+			return 0, err
+		}
+		h.lowerBoundCache.Set(id, res)
+		return res, nil
+	*/
+}
+
 func getLowerBoundForEncodedSize(node Node, limit int, nodes NodeSource) (int, error) {
 	switch trg := node.(type) {
 	case EmptyNode:
@@ -565,46 +663,91 @@ func getEncodedPartialPathSize(numNibbles int) int {
 }
 
 func (h *ethHasher) toItem(id NodeId, source NodeSource) (rlp.Item, error) {
-	// Check cache first.
-	if item, found := h.encodingCache.Get(id); found {
-		return item, nil
-	}
+	h.base.stats.toItemCalls++
+	// Check cache whether this item is embedded.
+	/*
+		embedded, found := h.isEmbeddedCache.Get(id)
+		if !found {
+			// Determine whether the given node is embedded.
+			// TODO: figure this out for real
+			embedded = false
+			h.isEmbeddedCache.Set(id, embedded)
+		}
+	*/
+	embedded := false
 
-	// The encoding is not cached, so we need to reproduce it.
-	node, err := source.getNode(id)
-	if err != nil {
-		return nil, err
-	}
-	defer node.Release()
-
-	minSize, err := getLowerBoundForEncodedSize(node.Get(), 32, source)
-	if err != nil {
-		return nil, err
-	}
-
-	var encoded []byte
-	if minSize < 32 {
-		encoded, err = h.encode(node.Get(), source)
+	if embedded {
+		// If it is embedded, we need the items encoding.
+		node, err := source.getNode(id)
 		if err != nil {
 			return nil, err
 		}
-		if len(encoded) >= 32 {
-			encoded = nil
-		}
-	}
+		defer node.Release()
 
-	var res rlp.Item
-	if encoded == nil {
-		hash, err := h.getHash(id, source)
+		encoded, err := h.encode(node.Get(), source)
 		if err != nil {
 			return nil, err
 		}
-		res = rlp.String{Str: hash[:]}
-	} else {
-		res = rlp.Encoded{Data: encoded}
+		return rlp.Encoded{Data: encoded}, nil
 	}
 
-	// cache result for future reuse.
-	h.encodingCache.Set(id, res)
-	return res, nil
+	// If the node is not embedded, it is represented by its hash encoded as a string.
+	hash, err := h.getHash(id, source)
+	if err != nil {
+		return nil, err
+	}
+	return rlp.String{Str: hash[:]}, nil
+
+	/*
+	   	if item, found := h.encodingCache.Get(id); found {
+	   		h.base.stats.toItemHits++
+	   		return item, nil
+	   	}
+
+	   // The encoding is not cached, so we need to reproduce it.
+	   minSize, err := h.getLowerBoundForEncodedSize(id, 32, source)
+
+	   	if err != nil {
+	   		return nil, err
+	   	}
+
+	   var encoded []byte
+
+	   	if minSize < 32 {
+	   		node, err := source.getNode(id)
+	   		if err != nil {
+	   			return nil, err
+	   		}
+	   		defer node.Release()
+
+	   		encoded, err = h.encode(node.Get(), source)
+	   		if err != nil {
+	   			return nil, err
+	   		}
+	   		if len(encoded) >= 32 {
+	   			h.base.stats.prunedByLargeEnoughEncoding++
+	   			encoded = nil
+	   		}
+	   	} else {
+
+	   		h.base.stats.prunedByLargeEnoughLowerBound++
+	   	}
+
+	   var res rlp.Item
+
+	   	if encoded == nil {
+	   		hash, err := h.getHash(id, source)
+	   		if err != nil {
+	   			return nil, err
+	   		}
+	   		res = rlp.String{Str: hash[:]}
+	   	} else {
+
+	   		res = rlp.Encoded{Data: encoded}
+	   	}
+
+	   // cache result for future reuse.
+	   h.encodingCache.Set(id, res)
+	   return res, nil
+	*/
 }

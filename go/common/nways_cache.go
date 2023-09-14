@@ -57,7 +57,7 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 	position := uint(key) % c.numsets * c.nways
 	// try to find the key by iterating the set from its starting position
 	for i := position; i < position+c.nways; i++ {
-		if c.items[i].used > 0 && c.items[i].key == key {
+		if c.items[i].key == key && c.items[i].used > 0 {
 			c.items[i].used = c.tickers[setIndex]
 			if MissHitMeasuring {
 				c.hits.Add(1)
@@ -220,7 +220,7 @@ func (c *NWaysCache[K, V]) getHitRatioReport() string {
 	hits := c.hits.Load()
 	misses := c.misses.Load()
 	hitRatio := float32(hits) / float32(hits+misses)
-	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", misses, hits, hitRatio)
+	return fmt.Sprintf("(n-way, size: %d, misses: %d, hits: %d, hitRatio: %f)", len(c.items), misses, hits, hitRatio)
 }
 
 type nWaysCacheEntry[K constraints.Integer, V any] struct {

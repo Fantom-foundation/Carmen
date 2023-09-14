@@ -1,8 +1,12 @@
 package mpt
 
 import (
+	"fmt"
+	"io/fs"
 	"math/rand"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -500,4 +504,92 @@ func BenchmarkValueInsertionInFileTrie(b *testing.B) {
 			b.StopTimer()
 		})
 	}
+}
+
+func TestLiveTrie_InsertHugeAmountOfValues(t *testing.T) {
+	// This test is intended for manual performance evaluations and is, due to
+	// its runtime, not intended for regular execution. To enable this test,
+	// for manual evaluations, remove the following line:
+	//t.SkipNow()
+
+	dir := t.TempDir()
+	fmt.Printf("Working directory: %v\n", dir)
+	trie, err := OpenFileLiveTrie(dir, S5Config)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	defer trie.Close()
+
+	const numBlocks = 500_000
+	const reportingInterval = 10_000
+	const numChangesPerBlock = 100
+
+	last := time.Now()
+	counter := uint32(0)
+	fmt.Printf("block,rate,memory,disk,processing,flush\n")
+	for i := 0; i <= numBlocks; i++ {
+		if i%reportingInterval == 0 {
+			now := time.Now()
+			elapsed := now.Sub(last)
+
+			start := time.Now()
+			trie.Flush()
+			flushTime := time.Since(start)
+
+			memory := trie.GetMemoryFootprint()
+			disk := GetDirectorySize(dir)
+
+			fmt.Printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+				i,
+				float64(reportingInterval)/elapsed.Seconds(),
+				float32(memory.Total())/(1024*1024*1024),
+				float32(disk)/(1024*1024*1024),
+				elapsed.Seconds(),
+				flushTime.Seconds(),
+			)
+
+			if i%(reportingInterval /**10*/) == 0 {
+				fmt.Printf("Memory usage:\n%v", memory)
+
+				stats, err := GetNodeStatistics(trie)
+				if err != nil {
+					t.Fatalf("failed to collect node statistics: %v", err)
+				}
+				fmt.Printf("Node Statistics:\n%v\n", &stats)
+			}
+
+			last = time.Now()
+		}
+
+		for j := 0; j < numChangesPerBlock; j++ {
+			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
+			if err := trie.SetAccountInfo(addr, AccountInfo{Nonce: common.ToNonce(1)}); err != nil {
+				t.Fatalf("failed to insert account %d: %v", i, err)
+			}
+			counter++
+		}
+		/*
+			if _, err := trie.GetHash(); err != nil {
+				t.Fatalf("failed to get has %d: %v", i, err)
+			}
+		*/
+	}
+
+	fmt.Printf("Memory usage:\n%v", trie.GetMemoryFootprint())
+
+}
+
+// GetDirectorySize computes the size of all files in the given directory in bytes.
+func GetDirectorySize(directory string) int64 {
+	var sum int64 = 0
+	filepath.Walk(directory, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			sum += info.Size()
+		}
+		return nil
+	})
+	return sum
 }
