@@ -2589,10 +2589,6 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 
 	newValue := common.Value{2}
 
-	ctxt.Build(&Value{
-		key, value,
-	})
-
 	id, node := ctxt.Build(&Account{
 		addr, AccountInfo{
 			common.Nonce{1}, common.Balance{1}, common.Hash{0xAA},
