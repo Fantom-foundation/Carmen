@@ -2618,7 +2618,7 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 	}
 
 	// check value is gone for the new root
-	newHandle, err := ctxt.getNode(newRoot)
+	newHandle, _ := ctxt.getNode(newRoot)
 	defer newHandle.Release()
 	if val, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); val != newValue || !exists {
 		t.Errorf("value for key: %s should not exist: ", key)
