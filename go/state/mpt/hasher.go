@@ -13,6 +13,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
 
 // ----------------------------------------------------------------------------
@@ -202,7 +203,7 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 	node := handle.Get()
 
 	// Encode the node in RLP and compute its hash.
-	data, err := h.encode(node, manager, manager)
+	data, err := h.encode(id, node, handle, manager, manager)
 	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
@@ -222,7 +223,7 @@ func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 	node := handle.Get()
 
 	// Encode the node in RLP and compute its hash.
-	data, err := h.encode(node, nil, source)
+	data, err := h.encode(id, node, shared.WriteHandle[Node]{}, nil, source)
 	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
@@ -236,18 +237,18 @@ func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 // hashes and embedded flags are updated. If the manager is nil, this operation is a
 // read-only operation accepting the current hashes and embedded flags as the true value
 // even if dirty flags are set. The node and source parameter must not be nil.
-func (h ethHasher) encode(node Node, manager NodeManager, source NodeSource) ([]byte, error) {
+func (h ethHasher) encode(id NodeId, node Node, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
 	switch trg := node.(type) {
 	case EmptyNode:
 		return h.encodeEmpty(trg, manager, source)
 	case *AccountNode:
-		return h.encodeAccount(trg, manager, source)
+		return h.encodeAccount(id, trg, handle, manager, source)
 	case *BranchNode:
-		return h.encodeBranch(trg, manager, source)
+		return h.encodeBranch(id, trg, handle, manager, source)
 	case *ExtensionNode:
-		return h.encodeExtension(trg, manager, source)
+		return h.encodeExtension(id, trg, handle, manager, source)
 	case *ValueNode:
-		return h.encodeValue(trg, manager, source)
+		return h.encodeValue(id, trg, handle, manager, source)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -259,13 +260,14 @@ func (h ethHasher) encodeEmpty(EmptyNode, NodeManager, NodeSource) ([]byte, erro
 	return emptyStringRlpEncoded, nil
 }
 
-func (h ethHasher) encodeBranch(node *BranchNode, manager NodeManager, source NodeSource) ([]byte, error) {
+func (h ethHasher) encodeBranch(id NodeId, node *BranchNode, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
 	children := node.children
 	items := make([]rlp.Item, len(children)+1)
 
 	// Refresh all child hashes.
 	// TODO: test whether doing this in parallel provides any benefits.
 	if manager != nil {
+		modified := false
 		for i, child := range children {
 			if child.IsEmpty() || !node.isChildHashDirty(byte(i)) {
 				continue
@@ -286,9 +288,14 @@ func (h ethHasher) encodeBranch(node *BranchNode, manager NodeManager, source No
 				}
 				node.hashes[i] = hash
 			}
+
+			modified = true
 		}
 
 		node.clearChildHashDirtyFlags()
+		if modified {
+			manager.update(id, handle)
+		}
 	}
 
 	for i, child := range children {
@@ -303,7 +310,7 @@ func (h ethHasher) encodeBranch(node *BranchNode, manager NodeManager, source No
 				return nil, err
 			}
 			defer node.Release()
-			encoded, err := h.encode(node.Get(), nil, source)
+			encoded, err := h.encode(child, node.Get(), shared.WriteHandle[Node]{}, nil, source)
 			if err != nil {
 				return nil, err
 			}
@@ -320,7 +327,7 @@ func (h ethHasher) encodeBranch(node *BranchNode, manager NodeManager, source No
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
-func (h ethHasher) encodeExtension(node *ExtensionNode, manager NodeManager, source NodeSource) ([]byte, error) {
+func (h ethHasher) encodeExtension(id NodeId, node *ExtensionNode, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
 	items := make([]rlp.Item, 2)
 
 	numNibbles := node.path.Length()
@@ -344,6 +351,8 @@ func (h ethHasher) encodeExtension(node *ExtensionNode, manager NodeManager, sou
 			node.nextHash = hash
 		}
 		node.nextHashDirty = false
+
+		manager.update(id, handle)
 	}
 
 	// TODO: the use of the same encoding as for the branch nodes is
@@ -356,7 +365,7 @@ func (h ethHasher) encodeExtension(node *ExtensionNode, manager NodeManager, sou
 			return nil, err
 		}
 		defer next.Release()
-		encoded, err := h.encode(next.Get(), nil, source)
+		encoded, err := h.encode(id, next.Get(), shared.WriteHandle[Node]{}, nil, source)
 		if err != nil {
 			return nil, err
 		}
@@ -368,7 +377,7 @@ func (h ethHasher) encodeExtension(node *ExtensionNode, manager NodeManager, sou
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
-func (h *ethHasher) encodeAccount(node *AccountNode, manager NodeManager, source NodeSource) ([]byte, error) {
+func (h *ethHasher) encodeAccount(id NodeId, node *AccountNode, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
 	storageRoot := node.storage
 	if manager != nil && node.storageHashDirty {
 		storageHash, err := h.updateHashes(storageRoot, manager)
@@ -377,6 +386,7 @@ func (h *ethHasher) encodeAccount(node *AccountNode, manager NodeManager, source
 		}
 		node.storageHash = storageHash
 		node.storageHashDirty = false
+		manager.update(id, handle)
 	}
 
 	// Encode the account information to get the value.
@@ -399,7 +409,7 @@ func (h *ethHasher) encodeAccount(node *AccountNode, manager NodeManager, source
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
-func (h *ethHasher) encodeValue(node *ValueNode, _ NodeManager, source NodeSource) ([]byte, error) {
+func (h *ethHasher) encodeValue(_ NodeId, node *ValueNode, _ shared.WriteHandle[Node], _ NodeManager, source NodeSource) ([]byte, error) {
 	items := make([]rlp.Item, 2)
 
 	// The first item is an encoded path fragment.
@@ -479,7 +489,7 @@ func (h ethHasher) isEmbedded(id NodeId, manager NodeManager) (bool, error) {
 	}
 
 	// We need to encode it to be certain.
-	encoded, err := h.encode(node.Get(), manager, manager)
+	encoded, err := h.encode(id, node.Get(), node, manager, manager)
 	if err != nil {
 		return false, err
 	}
