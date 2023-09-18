@@ -142,7 +142,7 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nil, nodesSource)
+		encoded, err := hasher.encode(AccountId(1), test, shared.WriteHandle[Node]{}, nil, nodesSource)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -185,7 +185,7 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nil, nodeManager)
+		encoded, err := hasher.encode(BranchId(1), test, shared.WriteHandle[Node]{}, nil, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -233,7 +233,7 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nil, nodeManager)
+		encoded, err := hasher.encode(ExtensionId(1), test, shared.WriteHandle[Node]{}, nil, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -270,7 +270,7 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nil, nodeManager)
+		encoded, err := hasher.encode(ValueId(1), test, shared.WriteHandle[Node]{}, nil, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
