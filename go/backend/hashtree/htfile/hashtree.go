@@ -102,13 +102,8 @@ func (ht *HashTree) childrenOfNode(childrenLayer *os.File, node int) ([]byte, er
 
 // readLayer provides a substring of a layer as a slice of bytes
 func (ht *HashTree) readLayer(layer *os.File, from int64, length int) ([]byte, error) {
-	_, err := layer.Seek(from, io.SeekStart)
-	if err != nil {
-		return nil, fmt.Errorf("failed to seek in hashtree layer; %s", err)
-	}
-
 	bytes := make([]byte, length)
-	_, err = layer.Read(bytes)
+	_, err := layer.ReadAt(bytes, from)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("failed to read hashtree layer; %s", err)
 	}

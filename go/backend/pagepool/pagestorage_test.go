@@ -1,6 +1,8 @@
 package pagepool
 
 import (
+	"encoding/binary"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
 )
@@ -185,6 +187,15 @@ func TestPageDirtyFlag(t *testing.T) {
 	restoredPage.FromBytes(dump)
 	if dirty := restoredPage.IsDirty(); !dirty {
 		t.Errorf("page should be dirty")
+	}
+}
+
+func TestParseLastId__ReadByChunks(t *testing.T) {
+	data := []byte{0xFF, 0xFF, 0xFF, 0xFF}
+
+	reader := utils.NewChunkReader(data, 2)
+	if got, _ := parseLastId(reader); got != int(binary.LittleEndian.Uint32(data)) {
+		t.Errorf("values do not math: %d != %d", got, int(binary.LittleEndian.Uint32(data)))
 	}
 }
 

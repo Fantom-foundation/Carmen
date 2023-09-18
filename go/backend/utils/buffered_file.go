@@ -3,6 +3,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -180,12 +181,9 @@ func (f *BufferedFile) readFile(position int64, dst []byte) error {
 	if err := f.seek(position); err != nil {
 		return err
 	}
-	n, err := f.file.Read(dst)
+	n, err := io.ReadFull(f.file, dst)
 	if err != nil {
 		return err
-	}
-	if n != len(dst) {
-		return fmt.Errorf("failed to read sufficient bytes from file, wanted %d, got %d", len(dst), n)
 	}
 	f.position += int64(n)
 	return nil

@@ -2,6 +2,7 @@ package file
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"unsafe"
 
@@ -51,7 +52,7 @@ func openFileBasedStack[I stock.Index](filename string) (*fileBasedStack[I], err
 
 		valueBuffer := make([]byte, valueSize)
 		for i := 0; i < toLoad; i++ {
-			if _, err := file.Read(valueBuffer); err != nil {
+			if _, err := io.ReadFull(file, valueBuffer); err != nil {
 				return nil, err
 			}
 			buffer = append(buffer, stock.DecodeIndex[I](valueBuffer))
@@ -104,7 +105,7 @@ func (s *fileBasedStack[I]) Pop() (I, error) {
 
 		buffer := make([]byte, valueSize)
 		for i := 0; i < cap(s.buffer); i++ {
-			if _, err := s.file.Read(buffer); err != nil {
+			if _, err := io.ReadFull(s.file, buffer); err != nil {
 				return 0, err
 			}
 			s.buffer = append(s.buffer, stock.DecodeIndex[I](buffer))

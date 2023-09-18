@@ -436,11 +436,14 @@ func readMetadata[I common.Identifier](path string, indexSerializer common.Seria
 		return
 	}
 	defer metadataFile.Close()
+	return parseMetadata(metadataFile, indexSerializer)
+}
 
+func parseMetadata[I common.Identifier](reader io.Reader, indexSerializer common.Serializer[I]) (hash common.Hash, numBuckets, records int, lastIndex I, err error) {
 	// read metadata
 	size := len(hash) + indexSerializer.Size() + 2*uint32ByteSize
 	data := make([]byte, size)
-	_, err = metadataFile.Read(data)
+	_, err = io.ReadFull(reader, data)
 	if err == nil {
 		hash = *(*common.Hash)(data[0:32])
 		numBuckets = int(binary.BigEndian.Uint32(data[32:36]))

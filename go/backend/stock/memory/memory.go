@@ -3,6 +3,7 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"unsafe"
 
@@ -79,7 +80,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		}
 		defer file.Close()
 		for i := 0; i < meta.ValueListLength; i++ {
-			_, err := file.Read(buffer)
+			_, err := io.ReadFull(file, buffer)
 			if err != nil {
 				return nil, err
 			}
@@ -107,7 +108,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		}
 		defer file.Close()
 		for i := 0; i < meta.FreeListLength; i++ {
-			_, err := file.Read(buffer)
+			_, err := io.ReadFull(file, buffer)
 			if err != nil {
 				return nil, err
 			}
