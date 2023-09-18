@@ -2661,7 +2661,7 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	}
 
 	// check value is gone for the new root
-	newHandle, err := ctxt.getNode(newRoot)
+	newHandle, _ := ctxt.getNode(newRoot)
 	defer newHandle.Release()
 	if _, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); exists {
 		t.Errorf("value for key: %s should not exist: ", key)
