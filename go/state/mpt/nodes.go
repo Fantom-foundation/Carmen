@@ -1161,7 +1161,6 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, this shared.Wr
 	if root != n.storage {
 		// If this node is frozen, we need to write the result in
 		// a new account node.
-		// TODO: add a unit test for this
 		if n.frozen {
 			newId, newHandle, err := manager.createAccount()
 			if err != nil {
@@ -1173,7 +1172,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, this shared.Wr
 			newNode.info = n.info
 			newNode.pathLength = n.pathLength
 			newNode.storage = root
-			// TODO: check whether an update for the new node is missing here
+			manager.update(newId, newHandle)
 			return newId, false, nil
 		}
 		n.storage = root
@@ -1192,7 +1191,6 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 
 	// If this node is frozen, we need to write the result in
 	// a new account node.
-	// TODO: add a unit test for this
 	if n.frozen {
 		newId, newHandle, err := manager.createAccount()
 		if err != nil {
@@ -1204,7 +1202,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 		newNode.info = n.info
 		newNode.pathLength = n.pathLength
 		newNode.storage = EmptyId()
-		// TODO: check whether an update for the new node is missing here
+		manager.update(newId, newHandle)
 		return newId, false, nil
 	}
 
