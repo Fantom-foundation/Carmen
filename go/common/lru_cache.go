@@ -211,7 +211,7 @@ func (c *Cache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintpt
 
 func (c *Cache[K, V]) getHitRatioReport() string {
 	hitRatio := float32(c.hits) / float32(c.hits+c.misses)
-	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", c.misses, c.hits, hitRatio)
+	return fmt.Sprintf("(lru, size: %d, misses: %d, hits: %d, hitRatio: %f)", c.capacity, c.misses, c.hits, hitRatio)
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

@@ -220,7 +220,7 @@ func (c *NWaysCache[K, V]) getHitRatioReport() string {
 	hits := c.hits.Load()
 	misses := c.misses.Load()
 	hitRatio := float32(hits) / float32(hits+misses)
-	return fmt.Sprintf("(misses: %d, hits: %d, hitRatio: %f)", misses, hits, hitRatio)
+	return fmt.Sprintf("(n-way, size: %d, misses: %d, hits: %d, hitRatio: %f)", len(c.items), misses, hits, hitRatio)
 }
 
 type nWaysCacheEntry[K constraints.Integer, V any] struct {
