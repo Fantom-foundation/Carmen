@@ -12,11 +12,10 @@ import (
 
 func TestEthereumLikeHasher_EmptyNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := NewMockHashStore(ctrl)
-	source := NewMockNodeSource(ctrl)
-	hasher := makeEthereumLikeHasher(store)
+	nodes := NewMockNodeManager(ctrl)
+	hasher := makeEthereumLikeHasher()
 
-	hash, err := hasher.getHash(EmptyId(), source)
+	hash, err := hasher.getHash(EmptyId(), nodes)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
@@ -28,28 +27,28 @@ func TestEthereumLikeHasher_EmptyNode(t *testing.T) {
 
 func TestEthereumLikeHasher_ExtensionNode_KnownHash(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := NewMockHashStore(ctrl)
 	ctxt := newNodeContext(t, ctrl)
 
 	// This test case reconstructs an issue encountered while hashing the
 	// state tree of block 25399 of the Fantom main-net.
 
-	hasher := makeEthereumLikeHasher(store)
+	hasher := makeEthereumLikeHasher()
 	id, node := ctxt.Build(&Extension{
 		path: []Nibble{0x8, 0xe, 0xf},
 		next: &Branch{
-			0x7: &Account{},
-			0xd: &Account{},
+			children: Children{
+				0x7: &Account{},
+				0xd: &Account{},
+			},
 		},
 	})
 
-	handle := node.GetReadHandle()
-	nextId := handle.Get().(*ExtensionNode).next
+	handle := node.GetWriteHandle()
+	ext := handle.Get().(*ExtensionNode)
+	ext.nextHash = common.HashFromString("43085a287ea060fa9089bd4797d2471c6d57136b666a314e6a789735251317d4")
+	ext.nextHashDirty = false
 	handle.Release()
-	store.EXPECT().Get(nextId).Return(common.HashFromString("43085a287ea060fa9089bd4797d2471c6d57136b666a314e6a789735251317d4"), nil)
-	store.EXPECT().Set(id, common.HashFromString("ebf7c28d351f2ec8a26d0e40049ddf406117e0468a49af0d261bb74d88e17560"))
 
-	hasher.update(id)
 	hash, err := hasher.getHash(id, ctxt)
 	if err != nil {
 		t.Fatalf("error computing hash: %v", err)
@@ -63,7 +62,6 @@ func TestEthereumLikeHasher_ExtensionNode_KnownHash(t *testing.T) {
 
 func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := NewMockHashStore(ctrl)
 	ctxt := newNodeContext(t, ctrl)
 	ctxt.EXPECT().hashKey(gomock.Any()).AnyTimes().DoAndReturn(func(key common.Key) (common.Hash, error) {
 		return keccak256(key[:]), nil
@@ -83,18 +81,21 @@ func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 	data, _ := hex.DecodeString("c1bb1e5ab6acf1bef1a125f3d60e0941b9a8624288ffd67282484c25519f9e65")
 	copy(key[:], data)
 
-	hasher := makeEthereumLikeHasher(store)
+	hasher := makeEthereumLikeHasher()
 
-	id, _ := ctxt.Build(&Branch{
-		0x7: &ValueWithLength{length: 55, key: key, value: v31},
-		0xc: &Tag{"A", &ValueWithLength{length: 55, value: common.Value{255}}},
+	id, branch := ctxt.Build(&Branch{
+		children: Children{
+			0x7: &ValueWithLength{length: 55, key: key, value: v31},
+			0xc: &ValueWithLength{length: 55, value: common.Value{255}},
+		},
 	})
-	child2Id, _ := ctxt.Get("A")
 
-	store.EXPECT().Get(child2Id).Return(common.HashFromString("e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612"), nil)
-	store.EXPECT().Set(id, common.HashFromString("0f284164ed2106b827a49f8298c2fedc8b726c1fff3b574fba83fda47aa1fe8e"))
+	handle := branch.GetWriteHandle()
+	node := handle.Get().(*BranchNode)
+	node.setEmbedded(0x7, true)
+	node.hashes[0xc] = common.HashFromString("e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612")
+	handle.Release()
 
-	hasher.update(id)
 	hash, err := hasher.getHash(id, ctxt)
 	if err != nil {
 		t.Fatalf("error computing hash: %v", err)
@@ -113,8 +114,8 @@ func TestEthereumLikeHasher_GetLowerBoundForEmptyNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get lower bound for encoding: %v", err)
 	}
-	hasher := makeEthereumLikeHasher(nil).(*ethHasher)
-	encoded, _ := hasher.encodeEmpty(EmptyNode{}, nil)
+	hasher := makeEthereumLikeHasher().(*ethHasher)
+	encoded, _ := hasher.encodeEmpty(EmptyNode{}, nil, nil)
 	if got, want := size, len(encoded); got != want {
 		t.Fatalf("empty code size prediction is off, want %d, got %d", want, got)
 	}
@@ -130,20 +131,18 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	store := NewMockHashStore(ctrl)
-	store.EXPECT().Get(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
 
 	nodesSource := NewMockNodeSource(ctrl)
 	nodesSource.EXPECT().getConfig().AnyTimes().Return(S5Config)
 	nodesSource.EXPECT().hashAddress(gomock.Any()).AnyTimes().Return(common.Hash{})
 
-	hasher := makeEthereumLikeHasher(store).(*ethHasher)
+	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nil)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodesSource)
+		encoded, err := hasher.encode(test, nil, nodesSource)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -155,8 +154,6 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 
 func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := NewMockHashStore(ctrl)
-	store.EXPECT().Get(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
 
 	smallChild := ValueId(12) // A node that can be encoded in less than 32 bytes
 	bigChild := ValueId(14)   // A node that can requires more than 32 bytes
@@ -166,14 +163,14 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 	smallValue := shared.MakeShared[Node](&ValueNode{pathLength: 4, value: one})
 	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
-	nodeSource := NewMockNodeSource(ctrl)
-	nodeSource.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	nodeManager := NewMockNodeManager(ctrl)
+	nodeManager.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return smallValue.GetReadHandle(), nil
 	})
-	nodeSource.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	nodeManager.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return bigValue.GetReadHandle(), nil
 	})
-	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
+	nodeManager.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	tests := []*BranchNode{
 		(&BranchNode{}),
@@ -182,13 +179,13 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 		(&BranchNode{children: [16]NodeId{bigChild}}),
 	}
 
-	hasher := makeEthereumLikeHasher(store).(*ethHasher)
+	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
-		size, err := getLowerBoundForEncodedSize(test, 10000, nodeSource)
+		size, err := getLowerBoundForEncodedSize(test, 10000, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodeSource)
+		encoded, err := hasher.encode(test, nil, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -200,8 +197,6 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 
 func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	store := NewMockHashStore(ctrl)
-	store.EXPECT().Get(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
 
 	smallChild := ValueId(12) // A node that can be encoded in less than 32 bytes
 	bigChild := ValueId(14)   // A node that can requires more than 32 bytes
@@ -211,15 +206,15 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 	smallValue := shared.MakeShared[Node](&ValueNode{pathLength: 4, value: one})
 	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
-	nodeSource := NewMockNodeSource(ctrl)
-	nodeSource.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	nodeManager := NewMockNodeManager(ctrl)
+	nodeManager.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return smallValue.GetReadHandle(), nil
 	})
-	nodeSource.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	nodeManager.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return bigValue.GetReadHandle(), nil
 	})
 
-	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
+	nodeManager.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	tests := []*ExtensionNode{
 		(&ExtensionNode{next: smallChild}),
@@ -232,13 +227,13 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 		(&ExtensionNode{path: CreatePathFromNibbles([]Nibble{1, 2, 3}), next: bigChild}),
 	}
 
-	hasher := makeEthereumLikeHasher(store).(*ethHasher)
+	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
-		size, err := getLowerBoundForEncodedSize(test, 10000, nodeSource)
+		size, err := getLowerBoundForEncodedSize(test, 10000, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodeSource)
+		encoded, err := hasher.encode(test, nil, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -266,16 +261,16 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	nodeSource := NewMockNodeSource(ctrl)
-	nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
+	nodeManager := NewMockNodeManager(ctrl)
+	nodeManager.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
-	hasher := makeEthereumLikeHasher(nil).(*ethHasher)
+	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nil)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodeSource)
+		encoded, err := hasher.encode(test, nil, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}

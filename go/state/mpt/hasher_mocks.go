@@ -34,60 +34,6 @@ func (m *Mockhasher) EXPECT() *MockhasherMockRecorder {
 	return m.recorder
 }
 
-// GetMemoryFootprint mocks base method.
-func (m *Mockhasher) GetMemoryFootprint() *common.MemoryFootprint {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMemoryFootprint")
-	ret0, _ := ret[0].(*common.MemoryFootprint)
-	return ret0
-}
-
-// GetMemoryFootprint indicates an expected call of GetMemoryFootprint.
-func (mr *MockhasherMockRecorder) GetMemoryFootprint() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*Mockhasher)(nil).GetMemoryFootprint))
-}
-
-// close mocks base method.
-func (m *Mockhasher) close(arg0 NodeSource) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "close", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// close indicates an expected call of close.
-func (mr *MockhasherMockRecorder) close(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "close", reflect.TypeOf((*Mockhasher)(nil).close), arg0)
-}
-
-// flush mocks base method.
-func (m *Mockhasher) flush(arg0 NodeSource) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "flush", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// flush indicates an expected call of flush.
-func (mr *MockhasherMockRecorder) flush(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "flush", reflect.TypeOf((*Mockhasher)(nil).flush), arg0)
-}
-
-// forget mocks base method.
-func (m *Mockhasher) forget(arg0 NodeId) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "forget", arg0)
-}
-
-// forget indicates an expected call of forget.
-func (mr *MockhasherMockRecorder) forget(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "forget", reflect.TypeOf((*Mockhasher)(nil).forget), arg0)
-}
-
 // getHash mocks base method.
 func (m *Mockhasher) getHash(arg0 NodeId, arg1 NodeSource) (common.Hash, error) {
 	m.ctrl.T.Helper()
@@ -103,14 +49,17 @@ func (mr *MockhasherMockRecorder) getHash(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHash", reflect.TypeOf((*Mockhasher)(nil).getHash), arg0, arg1)
 }
 
-// update mocks base method.
-func (m *Mockhasher) update(arg0 NodeId) {
+// updateHashes mocks base method.
+func (m *Mockhasher) updateHashes(root NodeId, nodes NodeManager) (common.Hash, error) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "update", arg0)
+	ret := m.ctrl.Call(m, "updateHashes", root, nodes)
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// update indicates an expected call of update.
-func (mr *MockhasherMockRecorder) update(arg0 interface{}) *gomock.Call {
+// updateHashes indicates an expected call of updateHashes.
+func (mr *MockhasherMockRecorder) updateHashes(root, nodes interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "update", reflect.TypeOf((*Mockhasher)(nil).update), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateHashes", reflect.TypeOf((*Mockhasher)(nil).updateHashes), root, nodes)
 }

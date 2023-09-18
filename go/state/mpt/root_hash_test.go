@@ -212,13 +212,13 @@ func TestS5RootHash_AddressAndKeys(t *testing.T) {
 
 			want := nextHash()
 			if got := fmt.Sprintf("%x", hash); want != got {
-				t.Errorf("invalid hash\nexpected %v\n     got %v", want, got)
+				t.Fatalf("invalid hash after insert #%d\nexpected %v\n     got %v", i, want, got)
 			}
 		}
 	}
 
 	// Delete all accounts.
-	for _, addr := range address {
+	for i, addr := range address {
 		if err := trie.DeleteAccount(addr); err != nil {
 			t.Fatalf("failed to delete account: %v", err)
 		}
@@ -230,7 +230,7 @@ func TestS5RootHash_AddressAndKeys(t *testing.T) {
 
 		want := nextHash()
 		if got := fmt.Sprintf("%x", hash); want != got {
-			t.Errorf("invalid hash\nexpected %v\n     got %v", want, got)
+			t.Fatalf("invalid hash after delete #%d\nexpected %v\n     got %v", i, want, got)
 		}
 	}
 }
@@ -277,12 +277,12 @@ func TestS5RootHash_Values(t *testing.T) {
 
 		want := nextHash()
 		if got := fmt.Sprintf("%x", hash); want != got {
-			t.Errorf("invalid hash\nexpected %v\n     got %v", want, got)
+			t.Fatalf("invalid hash after insert #%d\nexpected %v\n     got %v", i, want, got)
 		}
 	}
 
 	// Delete all values.
-	for _, key := range keys {
+	for i, key := range keys {
 		if err := trie.SetStorage(trgAddr, key, common.Value{}); err != nil {
 			t.Fatalf("failed to insert value: %v", err)
 		}
@@ -294,7 +294,7 @@ func TestS5RootHash_Values(t *testing.T) {
 
 		want := nextHash()
 		if got := fmt.Sprintf("%x", hash); want != got {
-			t.Errorf("invalid hash\nexpected %v\n     got %v", want, got)
+			t.Fatalf("invalid hash after delete #%d\nexpected %v\n     got %v", i, want, got)
 		}
 	}
 }

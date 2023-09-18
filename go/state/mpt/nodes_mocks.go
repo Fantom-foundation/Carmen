@@ -496,18 +496,6 @@ func (mr *MockNodeManagerMockRecorder) hashKey(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashKey", reflect.TypeOf((*MockNodeManager)(nil).hashKey), arg0)
 }
 
-// invalidateHash mocks base method.
-func (m *MockNodeManager) invalidateHash(arg0 NodeId) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "invalidateHash", arg0)
-}
-
-// invalidateHash indicates an expected call of invalidateHash.
-func (mr *MockNodeManagerMockRecorder) invalidateHash(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "invalidateHash", reflect.TypeOf((*MockNodeManager)(nil).invalidateHash), arg0)
-}
-
 // release mocks base method.
 func (m *MockNodeManager) release(arg0 NodeId) error {
 	m.ctrl.T.Helper()

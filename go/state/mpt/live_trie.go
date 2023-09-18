@@ -103,13 +103,20 @@ func (s *LiveTrie) ClearStorage(addr common.Address) error {
 }
 
 func (s *LiveTrie) GetHash() (common.Hash, error) {
-	return s.forest.getHashFor(s.root)
+	return s.forest.updateHashesFor(s.root)
 }
 
 func (s *LiveTrie) Flush() error {
+	// Update hashes to eliminate dirty hashes before flushing.
+	hash, err := s.GetHash()
+	if err != nil {
+		return err
+	}
+
 	// Update on-disk meta-data.
 	metadata, err := json.Marshal(metadata{
 		RootNode: s.root,
+		RootHash: hash,
 	})
 	if err != nil {
 		return err
@@ -117,6 +124,7 @@ func (s *LiveTrie) Flush() error {
 	if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
 		return err
 	}
+
 	return s.forest.Flush()
 }
 
@@ -152,6 +160,7 @@ func (s *LiveTrie) Check() error {
 // metadata is the helper type to read and write metadata from/to the disk.
 type metadata struct {
 	RootNode NodeId
+	RootHash common.Hash
 }
 
 // readMetadata parses the content of the given file if it exists or returns
