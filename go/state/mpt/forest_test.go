@@ -140,7 +140,7 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 						t.Errorf("empty tree should not contain any info, wanted %v, got %v, err %v", value0, value, err)
 					}
 
-					// Setting it without an account does nto have an effect.
+					// Setting it without an account does not have an effect.
 					if newRoot, err := forest.SetValue(root, addr, key, value1); newRoot != root || err != nil {
 						t.Errorf("setting a value without an account should not change the root, wanted %v, got %v, err %v", root, newRoot, err)
 					}
@@ -161,6 +161,10 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 
 					if err := forest.Check(root); err != nil {
 						t.Errorf("inconsistent trie: %v", err)
+					}
+
+					if _, err := forest.updateHashesFor(root); err != nil {
+						t.Errorf("failed to update hash for root")
 					}
 
 					if err := forest.Close(); err != nil {
@@ -274,14 +278,14 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 					defer forest.Close()
 
 					if forest.GetMemoryFootprint().Total() <= uintptr(0) {
-						t.Errorf("memory foodprint not provided")
+						t.Errorf("memory footprint not provided")
 					}
 
 					for _, memChild := range []string{"accounts", "branches", "extensions", "values", "cache",
-						"hasher", "hashedKeysCache", "hashedAddressesCache"} {
+						"hashedKeysCache", "hashedAddressesCache"} {
 
 						if forest.GetMemoryFootprint().GetChild(memChild) == nil {
-							t.Errorf("memory foodprint not provided: %v", memChild)
+							t.Errorf("memory footprint not provided: %v", memChild)
 						}
 					}
 				})
@@ -339,6 +343,10 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 						}
 					}
 
+					// Update hashes to avoid writing dirty hashes during close.
+					if _, err := forest.updateHashesFor(root); err != nil {
+						t.Fatalf("failed to get hash for forest content, err %v", err)
+					}
 					if err := forest.Close(); err != nil {
 						t.Fatalf("failed to close forest: %v", err)
 					}
@@ -406,6 +414,10 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 						}
 					}
 
+					// Update hashes to avoid writing dirty hashes during close.
+					if _, err := forest.updateHashesFor(root); err != nil {
+						t.Fatalf("failed to get hash for forest content, err %v", err)
+					}
 					if err := forest.Close(); err != nil {
 						t.Fatalf("failed to close forest: %v", err)
 					}
@@ -438,10 +450,6 @@ func openFileShadowForest(directory string, config MptConfig, mode StorageMode) 
 	if err != nil {
 		return nil, err
 	}
-	hashes, err := OpenFileBasedHashStore(directory + "/hashes")
-	if err != nil {
-		return nil, err
-	}
 	branchesB, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/B/branches")
 	if err != nil {
 		return nil, err
@@ -462,5 +470,5 @@ func openFileShadowForest(directory string, config MptConfig, mode StorageMode) 
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, mode)
 }

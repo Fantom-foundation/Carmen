@@ -120,12 +120,8 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 			values.Close()
 		}
 	}()
-	hashes, err := OpenInMemoryHashStore(directory + "/hashes")
-	if err != nil {
-		return nil, err
-	}
 	success = true
-	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, mode)
 }
 
 func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
@@ -167,12 +163,8 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 			values.Close()
 		}
 	}()
-	hashes, err := OpenFileBasedHashStore(directory + "/hashes")
-	if err != nil {
-		return nil, err
-	}
 	success = true
-	return makeForest(config, directory, branches, extensions, accounts, values, hashes, mode)
+	return makeForest(config, directory, branches, extensions, accounts, values, mode)
 }
 
 func makeForest(
@@ -182,7 +174,6 @@ func makeForest(
 	extensions stock.Stock[uint64, ExtensionNode],
 	accounts stock.Stock[uint64, AccountNode],
 	values stock.Stock[uint64, ValueNode],
-	hashes HashStore,
 	mode StorageMode,
 ) (*Forest, error) {
 	return &Forest{
@@ -194,7 +185,7 @@ func makeForest(
 		storageMode:   mode,
 		nodeCache:     common.NewCache[NodeId, *shared.Shared[Node]](cacheCapacity),
 		dirty:         map[NodeId]struct{}{},
-		hasher:        config.Hashing.createHasher(hashes),
+		hasher:        config.Hashing.createHasher(),
 		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
 		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
 	}, nil
@@ -260,6 +251,10 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 	return err
 }
 
+func (s *Forest) updateHashesFor(id NodeId) (common.Hash, error) {
+	return s.hasher.updateHashes(id, s)
+}
+
 func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
 	return s.hasher.getHash(id, s)
 }
@@ -315,7 +310,6 @@ func (s *Forest) Flush() error {
 
 	return errors.Join(
 		errors.Join(errs...),
-		s.hasher.flush(s),
 		s.accounts.Flush(),
 		s.branches.Flush(),
 		s.extensions.Flush(),
@@ -326,7 +320,6 @@ func (s *Forest) Flush() error {
 func (s *Forest) Close() error {
 	return errors.Join(
 		s.Flush(),
-		s.hasher.close(s), // needs to be closed first because it may have to access nodes
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
@@ -363,7 +356,6 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 		}
 		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
 	}))
-	mf.AddChild("hasher", s.hasher.GetMemoryFootprint())
 	mf.AddChild("hashedKeysCache", s.keyHasher.GetMemoryFootprint())
 	mf.AddChild("hashedAddressesCache", s.addressHasher.GetMemoryFootprint())
 	return mf
@@ -584,21 +576,11 @@ func (s *Forest) createValue() (NodeId, shared.WriteHandle[Node], error) {
 }
 
 func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
-	// all needed here is to register the modfied node as dirty
+	// all needed here is to register the modified node as dirty
 	s.dirtyMutex.Lock()
 	s.dirty[id] = struct{}{}
 	s.dirtyMutex.Unlock()
-	// ... and to invalidate the nodes hash.
-	s.invalidateHash(id)
 	return nil
-}
-
-func (s *Forest) invalidateHash(id NodeId) {
-	// by adding it to the dirty hashes set the hash will be
-	// re-evaluated the next time.
-	if !id.IsEmpty() {
-		s.hasher.update(id)
-	}
 }
 
 func (s *Forest) release(id NodeId) error {
@@ -609,8 +591,6 @@ func (s *Forest) release(id NodeId) error {
 	s.dirtyMutex.Lock()
 	delete(s.dirty, id)
 	s.dirtyMutex.Unlock()
-
-	s.hasher.forget(id)
 
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())

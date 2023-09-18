@@ -3,6 +3,7 @@ package mpt
 //go:generate mockgen -source nodes.go -destination nodes_mocks.go -package mpt
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -206,7 +207,6 @@ type NodeManager interface {
 	createValue() (NodeId, shared.WriteHandle[Node], error)
 
 	update(NodeId, shared.WriteHandle[Node]) error
-	invalidateHash(NodeId)
 
 	release(NodeId) error
 }
@@ -314,8 +314,11 @@ func (EmptyNode) Dump(source NodeSource, thisId NodeId, indent string) {
 // root to a leaf node in a trie. The Nibble is used to select one out of 16
 // potential child nodes. Each BranchNode has at least 2 non-empty children.
 type BranchNode struct {
-	children [16]NodeId
-	frozen   bool
+	children         [16]NodeId      // the ID of child nodes
+	hashes           [16]common.Hash // the hashes of child nodes
+	dirtyHashes      uint16          // a bit mask marking hashes as dirty; 0 .. clean, 1 .. dirty
+	embeddedChildren uint16          // a bit mask marking children as embedded; 0 .. not, 1 .. embedded
+	frozen           bool            // a flag marking the node as immutable
 }
 
 func (n *BranchNode) getNextNodeInBranch(
@@ -378,7 +381,7 @@ func (n *BranchNode) setNextNode(
 
 	if newRoot == child {
 		if hasChanged {
-			manager.invalidateHash(thisId)
+			n.markChildHashDirty(byte(path[0]))
 		}
 		return thisId, hasChanged, nil
 	}
@@ -392,7 +395,8 @@ func (n *BranchNode) setNextNode(
 		}
 		defer handle.Release()
 		newNode := handle.Get().(*BranchNode)
-		newNode.children = n.children
+		*newNode = *n
+		newNode.frozen = false
 		n = newNode
 		thisId = newId
 		this = handle
@@ -400,6 +404,7 @@ func (n *BranchNode) setNextNode(
 	}
 
 	n.children[path[0]] = newRoot
+	n.markChildHashDirty(byte(path[0]))
 
 	// If a branch got removed, check that there are enough children left.
 	if !child.IsEmpty() && newRoot.IsEmpty() {
@@ -437,8 +442,8 @@ func (n *BranchNode) setNextNode(
 					}
 					defer handle.Release()
 					copy := handle.Get().(*ExtensionNode)
-					copy.path = extensionNode.path
-					copy.next = extensionNode.next
+					*copy = *extensionNode
+					copy.frozen = false
 					extensionNode = copy
 					remainingHandle = handle
 					remaining = copyId
@@ -457,6 +462,7 @@ func (n *BranchNode) setNextNode(
 				extension := handle.Get().(*ExtensionNode)
 				extension.path = SingleStepPath(remainingPos)
 				extension.next = remaining
+				extension.nextHashDirty = true
 				manager.update(extensionId, handle)
 				newRoot = extensionId
 			} else if manager.getConfig().TrackSuffixLengthsInLeafNodes {
@@ -593,6 +599,15 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 		} else {
 			errs = append(errs, fmt.Errorf("unable to resolve node %v: %v", child, err))
 		}
+
+		if !n.isChildHashDirty(byte(i)) && !n.isEmbedded(byte(i)) {
+			want, err := source.getHashFor(child)
+			if err != nil {
+				errs = append(errs, err)
+			} else if got := n.hashes[i]; want != got {
+				errs = append(errs, fmt.Errorf("hash for child %d invalid\nwant: %v\ngot: %v\n", i, want, got))
+			}
+		}
 	}
 	if numChildren < 2 {
 		errs = append(errs, fmt.Errorf("insufficient child nodes: %d", numChildren))
@@ -601,7 +616,7 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sBranch (ID: %v/%t, Hash: %v):\n", indent, thisId, n.frozen, formatHashForDump(source, thisId))
+	fmt.Printf("%sBranch (ID: %v/%t, Dirty: %016b, Embedded: %016b, Hash: %v):\n", indent, thisId, n.frozen, n.dirtyHashes, n.embeddedChildren, formatHashForDump(source, thisId))
 	for i, child := range n.children {
 		if child.IsEmpty() {
 			continue
@@ -616,6 +631,30 @@ func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	}
 }
 
+func (n *BranchNode) markChildHashDirty(index byte) {
+	n.dirtyHashes = n.dirtyHashes | (1 << index)
+}
+
+func (n *BranchNode) isChildHashDirty(index byte) bool {
+	return (n.dirtyHashes & (1 << index)) != 0
+}
+
+func (n *BranchNode) clearChildHashDirtyFlags() {
+	n.dirtyHashes = 0
+}
+
+func (n *BranchNode) isEmbedded(index byte) bool {
+	return (n.embeddedChildren & (1 << index)) != 0
+}
+
+func (n *BranchNode) setEmbedded(index byte, embedded bool) {
+	if embedded {
+		n.embeddedChildren = n.embeddedChildren | (1 << index)
+	} else {
+		n.embeddedChildren = n.embeddedChildren & ^(1 << index)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                              Extension Node
 // ----------------------------------------------------------------------------
@@ -624,9 +663,12 @@ func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
 // node to a leaf node in a trie. Neither the path nor the referenced sub-trie
 // must be empty.
 type ExtensionNode struct {
-	path   Path
-	next   NodeId
-	frozen bool
+	path           Path
+	next           NodeId
+	nextHash       common.Hash
+	nextHashDirty  bool
+	nextIsEmbedded bool // TODO: include this in encoding; also for the branch node
+	frozen         bool
 }
 
 func (n *ExtensionNode) getNextNodeInExtension(
@@ -679,7 +721,7 @@ func (n *ExtensionNode) setNextNode(
 	valueIsEmpty bool,
 	createSubTree func(NodeId, shared.WriteHandle[Node], []Nibble) (NodeId, bool, error),
 ) (NodeId, bool, error) {
-	// Check whether the updates targest the node referenced by this extension.
+	// Check whether the updates targets the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
 		handle, err := manager.getMutableNode(n.next)
 		if err != nil {
@@ -710,11 +752,14 @@ func (n *ExtensionNode) setNextNode(
 				}
 				defer handle.Release()
 				newNode := handle.Get().(*ExtensionNode)
-				newNode.path = n.path
-				newNode.next = n.next
+				*newNode = *n
+				newNode.frozen = false
 				thisId, this, n = newId, handle, newNode
 				isClone = true
 			}
+
+			// The referenced sub-tree has changed, so the hash needs to be updated.
+			n.nextHashDirty = true
 
 			if newRoot.IsExtension() {
 				// If the new next is an extension, merge it into this extension.
@@ -726,10 +771,12 @@ func (n *ExtensionNode) setNextNode(
 				extension := handle.Get().(*ExtensionNode)
 				n.path.AppendAll(&extension.path)
 				n.next = extension.next
+				n.nextHashDirty = true
 				manager.update(thisId, this)
 				manager.release(newRoot)
 			} else if newRoot.IsBranch() {
 				n.next = newRoot
+				n.nextHashDirty = true
 				manager.update(thisId, this)
 			} else {
 				// If the next node is anything but a branch or extension, remove this extension.
@@ -757,7 +804,7 @@ func (n *ExtensionNode) setNextNode(
 				return newRoot, !isClone, nil
 			}
 		} else if hasChanged {
-			manager.invalidateHash(thisId)
+			n.nextHashDirty = true
 		}
 		return thisId, hasChanged, err
 	}
@@ -776,8 +823,8 @@ func (n *ExtensionNode) setNextNode(
 		}
 		defer handle.Release()
 		newNode := handle.Get().(*ExtensionNode)
-		newNode.path = n.path
-		newNode.next = n.next
+		*newNode = *n
+		newNode.frozen = false
 		thisId, this, n = newId, handle, newNode
 		isClone = true
 	}
@@ -804,11 +851,14 @@ func (n *ExtensionNode) setNextNode(
 	if commonPrefixLength < n.path.Length()-1 {
 		// We re-use the current node for this - all we need is to update the path.
 		branch.children[n.path.Get(commonPrefixLength)] = thisId
+		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
 		n.path.ShiftLeft(commonPrefixLength + 1)
+		n.nextHashDirty = true
 		thisNodeWasReused = true
 		manager.update(thisId, this)
 	} else {
 		branch.children[n.path.Get(commonPrefixLength)] = n.next
+		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
 	}
 
 	// Build the extension covering the common prefix.
@@ -830,6 +880,7 @@ func (n *ExtensionNode) setNextNode(
 
 		extension.path = CreatePathFromNibbles(path[0:commonPrefixLength])
 		extension.next = branchId
+		extension.nextHashDirty = true
 		manager.update(extensionId, extensionHandle)
 		newRoot = extensionId
 	}
@@ -918,9 +969,10 @@ func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node
 
 func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 	// Checked invariants:
-	//  - extension path have a lenght > 0
+	//  - extension path have a length > 0
 	//  - extension can only be followed by a branch
 	//  - sub-trie is correct
+	//  - hash of sub-tree is either dirty or correct
 	errs := []error{}
 	if n.path.Length() <= 0 {
 		errs = append(errs, fmt.Errorf("extension path must not be empty"))
@@ -940,11 +992,19 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 	} else {
 		errs = append(errs, err)
 	}
+	if !n.nextHashDirty && !n.nextIsEmbedded {
+		want, err := source.getHashFor(n.next)
+		if err != nil {
+			errs = append(errs, err)
+		} else if want != n.nextHash {
+			errs = append(errs, fmt.Errorf("next node hash invalid\nwant: %v\ngot: %v\n", want, n.nextHash))
+		}
+	}
 	return errors.Join(errs...)
 }
 
 func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sExtension (ID: %v/%t, Hash: %v): %v\n", indent, thisId, n.frozen, formatHashForDump(source, thisId), &n.path)
+	fmt.Printf("%sExtension (ID: %v/%t, Dirty: %t, Embedded: %t, Hash: %v): %v\n", indent, thisId, n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(source, thisId), &n.path)
 	if handle, err := source.getNode(n.next); err == nil {
 		defer handle.Release()
 		handle.Get().Dump(source, n.next, indent+"  ")
@@ -964,10 +1024,12 @@ func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
 // No AccountNode may be present in the trie rooted by an accounts storage
 // root. Also, the retained account information must not be empty.
 type AccountNode struct {
-	address common.Address
-	info    AccountInfo
-	storage NodeId
-	frozen  bool
+	address          common.Address
+	info             AccountInfo
+	storage          NodeId
+	storageHash      common.Hash
+	storageHashDirty bool
+	frozen           bool
 	// pathLengh is the number of nibbles of the key (or its hash) not covered
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
@@ -1010,7 +1072,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, this shared
 				return EmptyId(), false, nil
 			}
 			// Recursively release the entire state DB.
-			// TODO: consider performing this asynchroniously.
+			// TODO: consider performing this asynchronously.
 			root, err := manager.getMutableNode(n.storage)
 			if err != nil {
 				return 0, false, err
@@ -1034,9 +1096,9 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, this shared
 			}
 			defer handle.Release()
 			newNode := handle.Get().(*AccountNode)
-			newNode.address = address
+			*newNode = *n
+			newNode.frozen = false
 			newNode.info = info
-			newNode.pathLength = n.pathLength
 			manager.update(newId, handle)
 			return newId, false, nil
 		}
@@ -1109,6 +1171,7 @@ func splitLeafNode(
 
 		extension.path = CreatePathFromNibbles(siblingPath[0:commonPrefixLength])
 		extension.next = branchId
+		extension.nextHashDirty = true
 		manager.update(extensionId, handle)
 	}
 
@@ -1128,6 +1191,8 @@ func splitLeafNode(
 	// Add this node and the new sibling node to the branch node.
 	branch.children[partialPath[commonPrefixLength]] = thisId
 	branch.children[siblingPath[commonPrefixLength]] = siblingId
+	branch.markChildHashDirty(byte(partialPath[commonPrefixLength]))
+	branch.markChildHashDirty(byte(siblingPath[commonPrefixLength]))
 
 	// Commit the changes to the the branch node.
 	manager.update(branchId, branchHandle)
@@ -1168,18 +1233,19 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, this shared.Wr
 			}
 			defer newHandle.Release()
 			newNode := newHandle.Get().(*AccountNode)
-			newNode.address = address
-			newNode.info = n.info
-			newNode.pathLength = n.pathLength
+			*newNode = *n
+			newNode.frozen = false
 			newNode.storage = root
+			newNode.storageHashDirty = true
 			manager.update(newId, newHandle)
 			return newId, false, nil
 		}
 		n.storage = root
+		n.storageHashDirty = true
 		hasChanged = true
 		manager.update(thisId, this)
 	} else if hasChanged {
-		manager.invalidateHash(thisId)
+		n.storageHashDirty = true
 	}
 	return thisId, hasChanged, nil
 }
@@ -1198,10 +1264,10 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 		}
 		defer newHandle.Release()
 		newNode := newHandle.Get().(*AccountNode)
-		newNode.address = address
-		newNode.info = n.info
-		newNode.pathLength = n.pathLength
+		*newNode = *n
+		newNode.frozen = false
 		newNode.storage = EmptyId()
+		newNode.storageHashDirty = true
 		manager.update(newId, newHandle)
 		return newId, false, nil
 	}
@@ -1214,6 +1280,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 
 	err = rootHandle.Get().Release(manager, n.storage, rootHandle)
 	n.storage = EmptyId()
+	n.storageHashDirty = true
 	return thisId, true, err
 }
 
@@ -1505,10 +1572,13 @@ type BranchNodeEncoder struct{}
 
 func (BranchNodeEncoder) GetEncodedSize() int {
 	encoder := NodeIdEncoder{}
-	return encoder.GetEncodedSize() * 16
+	return encoder.GetEncodedSize()*16 + common.HashSize*16 + 2
 }
 
 func (BranchNodeEncoder) Store(dst []byte, node *BranchNode) error {
+	if node.dirtyHashes != 0 {
+		panic("unable to store branch node with dirty hash")
+	}
 	encoder := NodeIdEncoder{}
 	step := encoder.GetEncodedSize()
 	for i := 0; i < 16; i++ {
@@ -1516,6 +1586,12 @@ func (BranchNodeEncoder) Store(dst []byte, node *BranchNode) error {
 			return err
 		}
 	}
+	dst = dst[step*16:]
+	for i := 0; i < 16; i++ {
+		copy(dst, node.hashes[i][:])
+		dst = dst[common.HashSize:]
+	}
+	binary.BigEndian.PutUint16(dst, node.embeddedChildren)
 	return nil
 }
 
@@ -1527,6 +1603,12 @@ func (BranchNodeEncoder) Load(src []byte, node *BranchNode) error {
 			return err
 		}
 	}
+	src = src[step*16:]
+	for i := 0; i < 16; i++ {
+		copy(node.hashes[i][:], src)
+		src = src[common.HashSize:]
+	}
+	node.embeddedChildren = binary.BigEndian.Uint16(src)
 	return nil
 }
 
@@ -1535,16 +1617,31 @@ type ExtensionNodeEncoder struct{}
 func (ExtensionNodeEncoder) GetEncodedSize() int {
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
-	return pathEncoder.GetEncodedSize() + idEncoder.GetEncodedSize()
+	return pathEncoder.GetEncodedSize() + idEncoder.GetEncodedSize() + common.HashSize + 1
 }
 
 func (ExtensionNodeEncoder) Store(dst []byte, value *ExtensionNode) error {
+	if value.nextHashDirty {
+		panic("unable to store extension node with dirty hash")
+	}
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
 	if err := pathEncoder.Store(dst, &value.path); err != nil {
 		return err
 	}
-	return idEncoder.Store(dst[pathEncoder.GetEncodedSize():], &value.next)
+	dst = dst[pathEncoder.GetEncodedSize():]
+	if err := idEncoder.Store(dst, &value.next); err != nil {
+		return err
+	}
+	dst = dst[idEncoder.GetEncodedSize():]
+	copy(dst, value.nextHash[:])
+	dst = dst[common.HashSize:]
+	if value.nextIsEmbedded {
+		dst[0] = 1
+	} else {
+		dst[0] = 0
+	}
+	return nil
 }
 
 func (ExtensionNodeEncoder) Load(src []byte, node *ExtensionNode) error {
@@ -1553,9 +1650,14 @@ func (ExtensionNodeEncoder) Load(src []byte, node *ExtensionNode) error {
 	if err := pathEncoder.Load(src, &node.path); err != nil {
 		return err
 	}
-	if err := idEncoder.Load(src[pathEncoder.GetEncodedSize():], &node.next); err != nil {
+	src = src[pathEncoder.GetEncodedSize():]
+	if err := idEncoder.Load(src, &node.next); err != nil {
 		return err
 	}
+	src = src[idEncoder.GetEncodedSize():]
+	copy(node.nextHash[:], src)
+	src = src[common.HashSize:]
+	node.nextIsEmbedded = src[0] != 0
 	return nil
 }
 
@@ -1564,10 +1666,14 @@ type AccountNodeEncoder struct{}
 func (AccountNodeEncoder) GetEncodedSize() int {
 	return common.AddressSize +
 		AccountInfoEncoder{}.GetEncodedSize() +
-		NodeIdEncoder{}.GetEncodedSize()
+		NodeIdEncoder{}.GetEncodedSize() +
+		common.HashSize
 }
 
 func (AccountNodeEncoder) Store(dst []byte, node *AccountNode) error {
+	if node.storageHashDirty {
+		panic("unable to store account node with dirty hash")
+	}
 	copy(dst, node.address[:])
 	dst = dst[len(node.address):]
 
@@ -1578,7 +1684,12 @@ func (AccountNodeEncoder) Store(dst []byte, node *AccountNode) error {
 	dst = dst[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
-	return idEncoder.Store(dst, &node.storage)
+	if err := idEncoder.Store(dst, &node.storage); err != nil {
+		return err
+	}
+	dst = dst[idEncoder.GetEncodedSize():]
+	copy(dst[:], node.storageHash[:])
+	return nil
 }
 
 func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
@@ -1595,7 +1706,8 @@ func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
 	if err := idEncoder.Load(src, &node.storage); err != nil {
 		return err
 	}
-
+	src = src[idEncoder.GetEncodedSize():]
+	copy(node.storageHash[:], src)
 	return nil
 }
 
