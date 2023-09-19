@@ -81,7 +81,7 @@ func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, 
 		return hash, err
 	}
 	defer handle.Release()
-	return h.hash(handle.Get(), source)
+	return h.hash(id, handle.Get(), handle, source)
 }
 
 // getHash implements the DirectHasher's hashing algorithm.
@@ -97,14 +97,14 @@ func (h directHasher) getHash(id NodeId, source NodeSource) (common.Hash, error)
 		return hash, err
 	}
 	defer handle.Release()
-	return h.hash(handle.Get(), nil)
+	return h.hash(id, handle.Get(), shared.WriteHandle[Node]{}, nil)
 }
 
 // hash is the internal implementation of the direct hasher to compute the hash
-// of a given node or to recursively refresh the hashes. If source is nil, only
+// of a given node or to recursively refresh the hashes. If manager is nil, only
 // the hash for the given node is computed, without modifying it, otherwise the
 // hash of all recursively reachable nodes is refreshed.
-func (h directHasher) hash(node Node, source NodeManager) (common.Hash, error) {
+func (h directHasher) hash(id NodeId, node Node, handle shared.WriteHandle[Node], manager NodeManager) (common.Hash, error) {
 	hash := common.Hash{}
 
 	// Compute a simple hash for the node.
@@ -113,13 +113,14 @@ func (h directHasher) hash(node Node, source NodeManager) (common.Hash, error) {
 	case *AccountNode:
 
 		// Refresh storage hash if needed.
-		if source != nil && node.storageHashDirty {
-			hash, err := h.updateHashes(node.storage, source)
+		if manager != nil && node.storageHashDirty {
+			hash, err := h.updateHashes(node.storage, manager)
 			if err != nil {
 				return hash, err
 			}
 			node.storageHash = hash
 			node.storageHashDirty = false
+			manager.update(id, handle)
 		}
 
 		hasher.Write([]byte{'A'})
@@ -131,33 +132,43 @@ func (h directHasher) hash(node Node, source NodeManager) (common.Hash, error) {
 
 	case *BranchNode:
 		// TODO: compute sub-tree hashes in parallel
-		if source != nil {
+		if manager != nil {
+			modified := false
 			for i, child := range node.children {
-				if node.isChildHashDirty(byte(i)) {
-					hash, err := h.updateHashes(child, source)
+				if !child.IsEmpty() && node.isChildHashDirty(byte(i)) {
+					hash, err := h.updateHashes(child, manager)
 					if err != nil {
 						return hash, err
 					}
 					node.hashes[byte(i)] = hash
+					modified = true
 				}
 			}
 			node.clearChildHashDirtyFlags()
+			if modified {
+				manager.update(id, handle)
+			}
 		}
 
 		hasher.Write([]byte{'B'})
-		for i := range node.children {
-			hasher.Write(node.hashes[byte(i)][:])
+		for i, child := range node.children {
+			if child.IsEmpty() {
+				hasher.Write([]byte{'E'})
+			} else {
+				hasher.Write(node.hashes[byte(i)][:])
+			}
 		}
 
 	case *ExtensionNode:
 
-		if source != nil && node.nextHashDirty {
-			hash, err := h.updateHashes(node.next, source)
+		if manager != nil && node.nextHashDirty {
+			hash, err := h.updateHashes(node.next, manager)
 			if err != nil {
 				return hash, err
 			}
 			node.nextHash = hash
 			node.nextHashDirty = false
+			manager.update(id, handle)
 		}
 
 		hasher.Write([]byte{'E'})
