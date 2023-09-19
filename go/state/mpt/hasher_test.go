@@ -10,6 +10,239 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// ----------------------------------------------------------------------------
+//                        General Hasher Tests
+// ----------------------------------------------------------------------------
+
+var allHashAlgorithms = []hashAlgorithm{DirectHashing, EthereumLikeHashing}
+
+func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Extension{
+				path: []Nibble{0x8, 0xe, 0xf},
+				next: &Branch{
+					children: Children{
+						0x7: &Account{},
+						0xd: &Account{},
+					},
+				},
+				dirtyHash: true,
+			})
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.getHash(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is cleared.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if !handle.Get().(*ExtensionNode).nextHashDirty {
+				t.Errorf("dirty hash flag should not be changed")
+			}
+		})
+	}
+}
+
+func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Extension{
+				path: []Nibble{0x8, 0xe, 0xf},
+				next: &Branch{
+					children: Children{
+						0x7: &Account{},
+						0xd: &Account{},
+					},
+				},
+				dirtyHash: true,
+			})
+
+			// The node is updated while being hashed.
+			ctxt.EXPECT().update(id, gomock.Any())
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.updateHashes(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is cleared.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if handle.Get().(*ExtensionNode).nextHashDirty {
+				t.Errorf("node still marked as dirty after updating the hashes")
+			}
+		})
+	}
+}
+
+func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Branch{
+				children: Children{
+					0x7: &Account{},
+					0xd: &Account{},
+				},
+				dirty: []int{0x7, 0xd},
+			})
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.getHash(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is not touched.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if handle.Get().(*BranchNode).dirtyHashes != ((1 << 0x7) | (1 << 0xd)) {
+				t.Errorf("dirty hash flags should not be changed")
+			}
+		})
+	}
+}
+
+func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Branch{
+				children: Children{
+					0x7: &Account{},
+					0xd: &Account{},
+				},
+				dirty: []int{0x7, 0xd},
+			})
+
+			// The node is updated while being hashed.
+			ctxt.EXPECT().update(id, gomock.Any())
+			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(2)
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.updateHashes(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is cleared.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if handle.Get().(*BranchNode).dirtyHashes != 0 {
+				t.Errorf("dirty hash flags should be cleared")
+			}
+		})
+	}
+}
+
+func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoUpdateIssued(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Branch{
+				children: Children{
+					0x7: &Account{},
+					0xd: &Account{},
+				},
+				dirty: []int{1, 2, 3}, // < all empty children
+			})
+
+			// the node is not marked to be modified
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.updateHashes(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is cleared.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if handle.Get().(*BranchNode).dirtyHashes != 0 {
+				t.Errorf("dirty hash flags should be cleared")
+			}
+		})
+	}
+}
+
+func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Account{
+				storageHashDirty: true,
+			})
+
+			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.getHash(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is not changed.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if !handle.Get().(*AccountNode).storageHashDirty {
+				t.Errorf("dirty hash flags should not be changed")
+			}
+		})
+	}
+}
+
+func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
+	for _, algorithm := range allHashAlgorithms {
+		t.Run(algorithm.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			id, node := ctxt.Build(&Account{
+				storageHashDirty: true,
+			})
+
+			// The node is updated while being hashed.
+			ctxt.EXPECT().update(id, gomock.Any())
+			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
+
+			hasher := algorithm.createHasher()
+			_, err := hasher.updateHashes(id, ctxt)
+			if err != nil {
+				t.Fatalf("error computing hash: %v", err)
+			}
+
+			// The dirty flag is cleared.
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			if handle.Get().(*AccountNode).storageHashDirty {
+				t.Errorf("dirty hash flags should be cleared")
+			}
+		})
+	}
+}
+
+// ----------------------------------------------------------------------------
+//                          Ethereum Like Hasher
+// ----------------------------------------------------------------------------
+
 func TestEthereumLikeHasher_EmptyNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	nodes := NewMockNodeManager(ctrl)

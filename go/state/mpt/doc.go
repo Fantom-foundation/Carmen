@@ -41,10 +41,11 @@ Todos:
 	- ~~lazy-initialize files in Stock data structure~~
 	- ~~use write buffer in file-based Stock~~
 	- ~~try passing arguments in node manipulations by value instead of by-pointer~~
-	- release state trie asynchroniously in the background
+	- release state trie asynchronously in the background
 	- implement a custom node cache with faster lookups
 	- compute hashes in parallel
 	- perform lookups iterative instead of recursive
 	- lock only pairs of nodes instead of full path for reads
+	- split locks for Node content updates and hash updates to support hashing while reading
 
 */
