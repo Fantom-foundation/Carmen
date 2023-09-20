@@ -172,6 +172,18 @@ func (s *fileStock[I, V]) Delete(index I) error {
 	return s.freelist.Push(index)
 }
 
+func (s *fileStock[I, V]) GetIds() (stock.IndexSet[I], error) {
+	free, err := s.freelist.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	res := stock.MakeComplementSet[I](0, s.numValueSlots)
+	for _, i := range free {
+		res.Remove(i)
+	}
+	return res, nil
+}
+
 func (s *fileStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	res := common.NewMemoryFootprint(unsafe.Sizeof(*s))
 	res.AddChild("freelist", s.freelist.GetMemoryFootprint())

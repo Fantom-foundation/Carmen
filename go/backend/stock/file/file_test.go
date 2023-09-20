@@ -6,7 +6,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 )
 
-func TestInMemoryStock(t *testing.T) {
+func TestFileStock(t *testing.T) {
 	stock.RunStockTests(t, stock.NamedStockFactory{
 		ImplementationName: "file",
 		Open:               openFileStock,

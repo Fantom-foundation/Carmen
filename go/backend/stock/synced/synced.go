@@ -45,6 +45,12 @@ func (s *syncedStock[I, V]) Delete(index I) error {
 	return s.nested.Delete(index)
 }
 
+func (s *syncedStock[I, V]) GetIds() (stock.IndexSet[I], error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.GetIds()
+}
+
 func (s *syncedStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	s.mu.Lock()
 	defer s.mu.Unlock()
