@@ -44,10 +44,11 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("ReusedElementsAreCleared", wrap(testReusedElementsAreCleared))
 	t.Run("LargeNumberOfElements", wrap(testLargeNumberOfElements))
 	t.Run("ProvidesMemoryFootprint", wrap(testProvidesMemoryFootprint))
-	t.Run("CreatsMissingDirectories", wrap(testCreatsMissingDirectories))
+	t.Run("CreatesMissingDirectories", wrap(testCreatesMissingDirectories))
 	t.Run("CanBeFlushed", wrap(testCanBeFlushed))
 	t.Run("CanBeClosed", wrap(testCanBeClosed))
 	t.Run("CanBeClosedAndReopened", wrap(testCanBeClosedAndReopened))
+	t.Run("GetIdsProducesAllIdsInTheStock", wrap(testGetIdsProducesAllIdsInTheStock))
 }
 
 func testNewCreatesFreshIndexValues(t *testing.T, factory NamedStockFactory) {
@@ -208,7 +209,7 @@ func testProvidesMemoryFootprint(t *testing.T, factory NamedStockFactory) {
 	}
 }
 
-func testCreatsMissingDirectories(t *testing.T, factory NamedStockFactory) {
+func testCreatesMissingDirectories(t *testing.T, factory NamedStockFactory) {
 	directory := t.TempDir() + "/some/missing/directory"
 	stock, err := factory.Open(t, directory)
 	if err != nil {
@@ -296,25 +297,75 @@ func testCanBeClosedAndReopened(t *testing.T, factory NamedStockFactory) {
 
 	got, err := stock.Get(key2)
 	if err != nil {
-		t.Fatalf("failed to read value from reopend stock: %v", err)
+		t.Fatalf("failed to read value from reopened stock: %v", err)
 	}
 	if got != 123 {
-		t.Fatalf("invalid value read from reopend stock: got %v, wanted 123", got)
+		t.Fatalf("invalid value read from reopened stock: got %v, wanted 123", got)
 	}
 
 	got, err = stock.Get(key3)
 	if err != nil {
-		t.Fatalf("failed to read value from reopend stock: %v", err)
+		t.Fatalf("failed to read value from reopened stock: %v", err)
 	}
 	if got != 0 {
-		t.Fatalf("invalid value read from reopend stock: got %v, wanted 0", got)
+		t.Fatalf("invalid value read from reopened stock: got %v, wanted 0", got)
 	}
 
 	keyX, err := stock.New()
 	if err != nil {
-		t.Fatalf("failed to create new entry in re-opend stock: %v", err)
+		t.Fatalf("failed to create new entry in reopened stock: %v", err)
 	}
 	if keyX != key1 {
 		t.Errorf("expected key reuse, wanted %d, got %d", key1, keyX)
+	}
+}
+
+func testGetIdsProducesAllIdsInTheStock(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create empty stock: %v", err)
+	}
+	defer stock.Close()
+
+	const N = 100
+	ids := map[int]struct{}{}
+	for i := 0; i < N; i++ {
+		i, err := stock.New()
+		if err != nil {
+			t.Fatalf("failed to insert single element into empty stock: %v", err)
+		}
+		ids[i] = struct{}{}
+	}
+
+	for len(ids) > 0 {
+		set, err := stock.GetIds()
+		if err != nil {
+			t.Fatalf("failed to produce an index set: %v", err)
+		}
+
+		// Check that all IDs are in the index set.
+		for id := range ids {
+			if !set.Contains(id) {
+				t.Errorf("Id set does not contain valid ID %v", id)
+			}
+		}
+
+		// The set does not contain extra elements.
+		for i := set.GetLowerBound() - 10; i <= set.GetUpperBound()+10; i++ {
+			got := set.Contains(i)
+			_, want := ids[i]
+			if got != want {
+				t.Fatalf("unexpected membership of %d, wanted %t, got %t", i, want, got)
+			}
+		}
+
+		// Remove a random element from the IDs.
+		for i := range ids {
+			delete(ids, i)
+			if err := stock.Delete(i); err != nil {
+				t.Fatalf("failed to delete an element from the set: %v", err)
+			}
+			break
+		}
 	}
 }

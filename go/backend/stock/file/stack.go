@@ -12,7 +12,7 @@ import (
 
 // stackBufferSize a constant defining the batch size of elements buffered in
 // memory by the fileBasedStack implementation below.
-const stackBufferSize = 1_000
+const stackBufferSize = 1_024
 
 // fileBasedStack is a file-backed stack of integer values.
 type fileBasedStack[I stock.Index] struct {
@@ -133,6 +133,31 @@ func (s *fileBasedStack[I]) flushBuffer() error {
 		}
 	}
 	return nil
+}
+
+func (s *fileBasedStack[I]) GetAll() ([]I, error) {
+	// We flush out temporary data and load all entries from the file.
+	if err := s.Flush(); err != nil {
+		return nil, err
+	}
+	res := make([]I, 0, s.size)
+
+	var i I
+	entrySize := int(unsafe.Sizeof(i))
+	buffer := make([]byte, s.size*entrySize)
+
+	if _, err := s.file.Seek(0, 0); err != nil {
+		return nil, err
+	}
+
+	if _, err := io.ReadFull(s.file, buffer); err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < s.size; i++ {
+		res = append(res, stock.DecodeIndex[I](buffer[i*entrySize:]))
+	}
+	return res, nil
 }
 
 func (s *fileBasedStack[I]) Flush() error {

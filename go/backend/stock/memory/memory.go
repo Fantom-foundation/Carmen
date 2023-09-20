@@ -159,6 +159,14 @@ func (s *inMemoryStock[I, V]) Delete(index I) error {
 	return nil
 }
 
+func (s *inMemoryStock[I, V]) GetIds() (stock.IndexSet[I], error) {
+	res := stock.MakeComplementSet[I](0, I(len(s.values)))
+	for _, i := range s.freeList {
+		res.Remove(i)
+	}
+	return res, nil
+}
+
 func (s *inMemoryStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	indexSize := unsafe.Sizeof(I(0))
 	valueSize := unsafe.Sizeof(s.values[0])

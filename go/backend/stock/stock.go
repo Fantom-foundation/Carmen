@@ -37,12 +37,18 @@ type Stock[I Index, V any] interface {
 	// and not released.
 	Set(I, V) error
 
-	// Delete removes the value assocaited to the given index. The index may be
+	// Delete removes the value associated to the given index. The index may be
 	// reused as the result of future New() calls.
 	// Indexes may only be deleted once. However, implementations are not
 	// required to check this. Releasing the same index multiple times leads
-	// to undefined behaviour.
+	// to undefined behavior.
 	Delete(I) error
+
+	// GetIndexSet fetches a snapshot of the valid indexes at a given time. This
+	// may be a costly operation in terms of IO activities. It is thus not intended
+	// for regular use in performance critical code. Its main motivation is to
+	// provide a building block for consistency checks of Stock content.
+	GetIds() (IndexSet[I], error)
 
 	// Stocks must provide information on their memory footprint.
 	common.MemoryFootprintProvider
@@ -54,6 +60,18 @@ type Stock[I Index, V any] interface {
 // Index defines the type constraints on Stock index types.
 type Index interface {
 	constraints.Integer
+}
+
+// IndexSet is an interface for the representation of a set of index value. To
+// avoid the need of explicit enumerations (which could be very memory intensive)
+// this abstract interface is used to facilitate more compact representations.
+type IndexSet[I Index] interface {
+	// Contains tests whether the given index element is part of this set.
+	Contains(I) bool
+	// GetLowerBound returns an index value less or equal to any element in the set.
+	GetLowerBound() I
+	// GetUpperBound returns an index value greater than any element in this set.
+	GetUpperBound() I
 }
 
 // EncodeIndex encodes an index into a binary form to be persisted.

@@ -3,6 +3,7 @@ package shadow
 import (
 	"errors"
 	"fmt"
+	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -61,8 +62,15 @@ func (s *shadowStock[I, V]) Delete(index I) error {
 	)
 }
 
+func (s *shadowStock[I, V]) GetIds() (stock.IndexSet[I], error) {
+	return s.primary.GetIds()
+}
+
 func (s *shadowStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
-	return s.primary.GetMemoryFootprint()
+	res := common.NewMemoryFootprint(unsafe.Sizeof(*s))
+	res.AddChild("primary", s.primary.GetMemoryFootprint())
+	res.AddChild("secondary", s.secondary.GetMemoryFootprint())
+	return res
 }
 
 func (s *shadowStock[I, V]) Flush() error {

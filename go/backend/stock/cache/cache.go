@@ -70,6 +70,13 @@ func (s *cachedStock[I, V]) Delete(index I) error {
 	return nil
 }
 
+func (s *cachedStock[I, V]) GetIds() (stock.IndexSet[I], error) {
+	if err := s.Flush(); err != nil {
+		return nil, err
+	}
+	return s.underlying.GetIds()
+}
+
 func (s *cachedStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 	var value V
 	res := common.NewMemoryFootprint(unsafe.Sizeof(*s))
