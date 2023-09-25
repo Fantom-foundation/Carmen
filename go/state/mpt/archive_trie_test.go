@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"os"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -59,6 +60,154 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 				if err != nil || got != want {
 					t.Errorf("wrong balance for block %d, got %v, wanted %v, err %v", i, got, want, err)
 				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_VerificationOfEmptyDirectoryPasses(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := VerifyArchive(dir, config, NilVerificationObserver{}); err != nil {
+				t.Errorf("an empty directory should be fine, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{1}, Nonce: common.ToNonce(1)},
+					{Account: common.Address{2}, Nonce: common.ToNonce(2)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{1}, Value: common.Value{3}},
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
+					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
+				},
+			})
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			err = archive.Add(4, common.Update{
+				CreatedAccounts: []common.Address{{3}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{3}, Nonce: common.ToNonce(3)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{3}, Key: common.Key{2}, Value: common.Value{2}},
+					{Account: common.Address{3}, Key: common.Key{3}, Value: common.Value{1}},
+				},
+			})
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			if err := archive.Close(); err != nil {
+				t.Fatalf("failed to close archive: %v", err)
+			}
+
+			if err := VerifyArchive(dir, config, NilVerificationObserver{}); err != nil {
+				t.Errorf("a freshly closed archive should be fine, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_VerificationOfArchiveWithMissingFileFails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{1}, Nonce: common.ToNonce(1)},
+					{Account: common.Address{2}, Nonce: common.ToNonce(2)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{1}, Value: common.Value{3}},
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
+					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
+				},
+			})
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			if err := archive.Close(); err != nil {
+				t.Fatalf("failed to close archive: %v", err)
+			}
+
+			if err := os.Remove(dir + "/branches/freelist.dat"); err != nil {
+				t.Fatalf("failed to delete file")
+			}
+
+			if err := VerifyArchive(dir, config, NilVerificationObserver{}); err == nil {
+				t.Errorf("missing file should be detected")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{1}, Nonce: common.ToNonce(1)},
+					{Account: common.Address{2}, Nonce: common.ToNonce(2)},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{1}, Value: common.Value{3}},
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
+					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
+				},
+			})
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			if err := archive.Close(); err != nil {
+				t.Fatalf("failed to close archive: %v", err)
+			}
+
+			// manipulate one of the files
+			filename := dir + "/branches/values.dat"
+			data, err := os.ReadFile(filename)
+			if err != nil {
+				t.Fatalf("failed to load data from file: %v", err)
+			}
+			data[0]++
+			if err := os.WriteFile(filename, data, 0600); err != nil {
+				t.Fatalf("failed to modify file")
+			}
+
+			if err := VerifyArchive(dir, config, NilVerificationObserver{}); err == nil {
+				t.Errorf("corrupted file should have been detected")
 			}
 		})
 	}

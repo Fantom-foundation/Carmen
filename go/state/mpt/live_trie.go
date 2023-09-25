@@ -47,13 +47,30 @@ func OpenFileLiveTrie(directory string, config MptConfig) (*LiveTrie, error) {
 	return makeTrie(directory, forest)
 }
 
+// VerifyFileLiveTrie validates a file-based live trie stored in the given
+// directory. If the test passes, the data stored in the respective directory
+// can be considered to be a valid Live Trie of the given configuration.
+func VerifyFileLiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
+	metadata, exists, err := readMetadata(directory + "/meta.json")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	return VerifyFileForest(directory, config, []Root{{
+		metadata.RootNode,
+		metadata.RootHash,
+	}}, observer)
+}
+
 func makeTrie(
 	directory string,
 	forest *Forest,
 ) (*LiveTrie, error) {
 	// Parse metadata file.
 	metadatafile := directory + "/meta.json"
-	metadata, err := readMetadata(metadatafile)
+	metadata, _, err := readMetadata(metadatafile)
 	if err != nil {
 		return nil, err
 	}
@@ -165,22 +182,22 @@ type metadata struct {
 
 // readMetadata parses the content of the given file if it exists or returns
 // a default-initialized metadata struct if there is no such file.
-func readMetadata(filename string) (metadata, error) {
+func readMetadata(filename string) (metadata, bool, error) {
 
 	// If there is no file, initialize and return default metadata.
 	if _, err := os.Stat(filename); err != nil {
-		return metadata{}, nil
+		return metadata{}, false, nil
 	}
 
 	// If the file exists, parse it and return its content.
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return metadata{}, err
+		return metadata{}, false, err
 	}
 
 	var meta metadata
 	if err := json.Unmarshal(data, &meta); err != nil {
-		return meta, err
+		return meta, false, err
 	}
-	return meta, nil
+	return meta, true, nil
 }
