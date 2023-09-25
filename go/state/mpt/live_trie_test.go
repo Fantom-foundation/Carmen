@@ -2,6 +2,7 @@ package mpt
 
 import (
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -434,6 +435,143 @@ func getTestKeys(number int) []common.Key {
 		res[i], res[j] = res[j], res[i]
 	})
 	return res
+}
+
+func TestLiveTrie_VerificationOfEmptyDirectoryPasses(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+				t.Errorf("an empty directory should be fine, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestLiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			trie, err := OpenFileLiveTrie(dir, config)
+			if err != nil {
+				t.Fatalf("failed to create empty trie, err %v", err)
+			}
+
+			// Add some data.
+			trie.SetAccountInfo(common.Address{1}, AccountInfo{Nonce: common.ToNonce(1)})
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{Nonce: common.ToNonce(2)})
+			trie.SetAccountInfo(common.Address{3}, AccountInfo{Nonce: common.ToNonce(3)})
+
+			trie.SetValue(common.Address{1}, common.Key{1}, common.Value{1})
+
+			trie.SetValue(common.Address{2}, common.Key{1}, common.Value{1})
+			trie.SetValue(common.Address{2}, common.Key{2}, common.Value{1})
+
+			trie.SetValue(common.Address{3}, common.Key{1}, common.Value{1})
+			trie.SetValue(common.Address{3}, common.Key{2}, common.Value{1})
+			trie.SetValue(common.Address{3}, common.Key{3}, common.Value{1})
+
+			// Delete some data.
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{})
+
+			if err := trie.Close(); err != nil {
+				t.Fatalf("failed to close trie: %v", err)
+			}
+
+			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+				t.Errorf("a freshly closed LiveTrie should be fine, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestLiveTrie_VerificationOfLiveTrieWithMissingFileFails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			trie, err := OpenFileLiveTrie(dir, config)
+			if err != nil {
+				t.Fatalf("failed to create empty trie, err %v", err)
+			}
+
+			// Add some data.
+			trie.SetAccountInfo(common.Address{1}, AccountInfo{Nonce: common.ToNonce(1)})
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{Nonce: common.ToNonce(2)})
+			trie.SetAccountInfo(common.Address{3}, AccountInfo{Nonce: common.ToNonce(3)})
+
+			trie.SetValue(common.Address{1}, common.Key{1}, common.Value{1})
+
+			trie.SetValue(common.Address{2}, common.Key{1}, common.Value{1})
+			trie.SetValue(common.Address{2}, common.Key{2}, common.Value{1})
+
+			trie.SetValue(common.Address{3}, common.Key{1}, common.Value{1})
+			trie.SetValue(common.Address{3}, common.Key{2}, common.Value{1})
+			trie.SetValue(common.Address{3}, common.Key{3}, common.Value{1})
+
+			// Delete some data.
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{})
+
+			if err := trie.Close(); err != nil {
+				t.Fatalf("failed to close trie: %v", err)
+			}
+
+			if err := os.Remove(dir + "/branches/freelist.dat"); err != nil {
+				t.Fatalf("failed to delete file")
+			}
+
+			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+				t.Errorf("missing file should be detected")
+			}
+		})
+	}
+}
+
+func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			trie, err := OpenFileLiveTrie(dir, config)
+			if err != nil {
+				t.Fatalf("failed to create empty trie, err %v", err)
+			}
+
+			// Add some data.
+			trie.SetAccountInfo(common.Address{1}, AccountInfo{Nonce: common.ToNonce(1)})
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{Nonce: common.ToNonce(2)})
+			trie.SetAccountInfo(common.Address{3}, AccountInfo{Nonce: common.ToNonce(3)})
+
+			trie.SetValue(common.Address{1}, common.Key{1}, common.Value{1})
+
+			trie.SetValue(common.Address{2}, common.Key{1}, common.Value{1})
+			trie.SetValue(common.Address{2}, common.Key{2}, common.Value{1})
+
+			trie.SetValue(common.Address{3}, common.Key{1}, common.Value{1})
+			trie.SetValue(common.Address{3}, common.Key{2}, common.Value{1})
+			trie.SetValue(common.Address{3}, common.Key{3}, common.Value{1})
+
+			// Delete some data.
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{})
+
+			if err := trie.Close(); err != nil {
+				t.Fatalf("failed to close trie: %v", err)
+			}
+
+			// manipulate one of the files
+			filename := dir + "/branches/values.dat"
+			data, err := os.ReadFile(filename)
+			if err != nil {
+				t.Fatalf("failed to load data from file: %v", err)
+			}
+			data[0]++
+			if err := os.WriteFile(filename, data, 0600); err != nil {
+				t.Fatalf("failed to modify file")
+			}
+
+			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+				t.Errorf("corrupted file should have been detected")
+			}
+		})
+	}
 }
 
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
