@@ -21,65 +21,23 @@ type fileStock[I stock.Index, V any] struct {
 	numValuesInFile int64
 }
 
+// OpenStock opens a stock retained in the given directory. To that end, meta
+// data is loaded and verified. A non-existing directory will be implicitly
+// created and an empty directory is a valid target to be initialized as an
+// empty stock.
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
-	metafile := directory + "/meta.json"
-	valuefile := directory + "/values.dat"
-	freelistfile := directory + "/freelist.dat"
-	numValueSlots := I(0)
-	numValuesInFile := int64(0)
-
-	// Create the direcory if needed.
+	// Create the directory if needed.
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
 
-	// If there is a meta-file in the directory, check its content.
-	if data, err := os.ReadFile(metafile); err == nil {
-		var meta metadata
-		if err := json.Unmarshal(data, &meta); err != nil {
-			return nil, err
-		}
-
-		// Check meta-data format information.
-		if meta.Version != dataFormatVersion {
-			return nil, fmt.Errorf("invalid file format version, got %d, wanted %d", meta.Version, dataFormatVersion)
-		}
-		indexSize := int(unsafe.Sizeof(I(0)))
-		if meta.IndexTypeSize != indexSize {
-			return nil, fmt.Errorf("invalid index type encoding, expected %d byte, found %d", indexSize, meta.IndexTypeSize)
-		}
-		valueSize := encoder.GetEncodedSize()
-		if meta.ValueTypeSize != valueSize {
-			return nil, fmt.Errorf("invalid value type encoding, expected %d byte, found %d", valueSize, meta.ValueTypeSize)
-		}
-
-		// Check size of the value file.
-		{
-			stats, err := os.Stat(valuefile)
-			if err != nil {
-				return nil, err
-			}
-			expectedSize := meta.NumValuesInFile * int64(valueSize)
-			if got, want := stats.Size(), expectedSize; got < want {
-				return nil, fmt.Errorf("insufficient value file size, got %d, wanted %d", got, want)
-			}
-		}
-
-		// Check size of the free-list file.
-		{
-			stats, err := os.Stat(freelistfile)
-			if err != nil {
-				return nil, err
-			}
-			if got, want := stats.Size(), int64(meta.FreeListLength*indexSize); got != want {
-				return nil, fmt.Errorf("invalid free-list file size, got %d, wanted %d", got, want)
-			}
-		}
-
-		numValueSlots = I(meta.ValueListLength)
-		numValuesInFile = meta.NumValuesInFile
+	// Verify the content of the stock and get its metadata.
+	meta, err := verifyStockInternal[I, V](encoder, directory)
+	if err != nil {
+		return nil, err
 	}
 
+	_, valuefile, freelistfile := getFileNames(directory)
 	values, err := utils.OpenBufferedFile(valuefile)
 	if err != nil {
 		return nil, err
@@ -96,9 +54,114 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		directory:       directory,
 		values:          values,
 		freelist:        freelist,
-		numValueSlots:   numValueSlots,
-		numValuesInFile: numValuesInFile,
+		numValueSlots:   I(meta.ValueListLength),
+		numValuesInFile: meta.NumValuesInFile,
 	}, nil
+}
+
+// VerifyStock verifies the consistency of the meta-information maintained for the stock in
+// the given directory. This includes
+//   - checking the presence and size of all required files
+//   - checking the correct metadata for a stock using the given index and encoder
+//   - checking the value range of elements in the free-list
+//
+// For compatibility with the OpenStock function above, an empty directory is considered a
+// valid stock as well.
+func VerifyStock[I stock.Index, V any](directory string, encoder stock.ValueEncoder[V]) error {
+	if !isDirectory(directory) {
+		return fmt.Errorf("directory %v does not exist", directory)
+	}
+	_, err := verifyStockInternal[I, V](encoder, directory)
+	return err
+}
+
+func verifyStockInternal[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (metadata, error) {
+	var meta metadata
+
+	// If none of the needed files exist, the stock is empty and thus consistent.
+	metafile, valuefile, freelistfile := getFileNames(directory)
+	if !exists(metafile) && !exists(valuefile) && !exists(freelistfile) {
+		return meta, nil
+	}
+
+	// Missing files are a problem.
+	for _, file := range []string{metafile, valuefile, freelistfile} {
+		if !exists(file) {
+			return meta, fmt.Errorf("required `%v` not found", file)
+		}
+	}
+
+	// Attempt to parse the meta-data.
+	data, err := os.ReadFile(metafile)
+	if err != nil {
+		return meta, err
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return meta, err
+	}
+
+	// Check meta-data format information.
+	if meta.Version != dataFormatVersion {
+		return meta, fmt.Errorf("invalid file format version, got %d, wanted %d", meta.Version, dataFormatVersion)
+	}
+	indexSize := int(unsafe.Sizeof(I(0)))
+	if meta.IndexTypeSize != indexSize {
+		return meta, fmt.Errorf("invalid index type encoding, expected %d byte, found %d", indexSize, meta.IndexTypeSize)
+	}
+	valueSize := encoder.GetEncodedSize()
+	if meta.ValueTypeSize != valueSize {
+		return meta, fmt.Errorf("invalid value type encoding, expected %d byte, found %d", valueSize, meta.ValueTypeSize)
+	}
+
+	// Check size of the value file.
+	{
+		stats, err := os.Stat(valuefile)
+		if err != nil {
+			return meta, err
+		}
+		expectedSize := meta.NumValuesInFile * int64(valueSize)
+		if got, want := stats.Size(), expectedSize; got < want {
+			return meta, fmt.Errorf("insufficient value file size, got %d, wanted %d", got, want)
+		}
+	}
+
+	// Check size of the free-list file.
+	{
+		stats, err := os.Stat(freelistfile)
+		if err != nil {
+			return meta, err
+		}
+		if got, want := stats.Size(), int64(meta.FreeListLength*indexSize); got != want {
+			return meta, fmt.Errorf("invalid free-list file size, got %d, wanted %d", got, want)
+		}
+	}
+
+	// Check the content of the free-list file.
+	{
+		stack, err := openFileBasedStack[I](freelistfile)
+		if err != nil {
+			return meta, err
+		}
+		defer stack.Close()
+		list, err := stack.GetAll()
+		if err != nil {
+			return meta, err
+		}
+		for _, entry := range list {
+			if entry < 0 || entry >= I(meta.ValueListLength) {
+				return meta, fmt.Errorf("invalid value in free list: %d not in range [%d,%d)", entry, 0, meta.ValueListLength)
+			}
+		}
+	}
+
+	return meta, nil
+}
+
+func getFileNames(directory string) (metafile string, valuefile string, freelistfile string) {
+	metafile = directory + "/meta.json"
+	valuefile = directory + "/values.dat"
+	freelistfile = directory + "/freelist.dat"
+	return
 }
 
 func (s *fileStock[I, V]) New() (I, error) {
@@ -246,4 +309,14 @@ func allZero(data []byte) bool {
 		}
 	}
 	return true
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func isDirectory(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
