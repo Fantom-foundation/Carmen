@@ -24,7 +24,7 @@ import (
 // state after each block.
 type ArchiveTrie struct {
 	head     *MptState // the current head-state
-	roots    []NodeId  // the roots of individual blocks indexed by block height
+	roots    []Root    // the roots of individual blocks indexed by block height
 	rootFile string    // the file storing the list of roots
 }
 
@@ -55,14 +55,31 @@ func OpenArchiveTrie(directory string, config MptConfig) (archive.Archive, error
 	}, nil
 }
 
+func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) error {
+	roots, err := loadRoots(directory + "/roots.dat")
+	if err != nil {
+		return err
+	}
+	if len(roots) == 0 {
+		return nil
+	}
+	return VerifyFileForest(directory, config, roots, observer)
+}
+
 func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	if uint64(len(a.roots)) > block {
 		return fmt.Errorf("block %d already present", block)
 	}
 
 	// Mark skipped blocks as having no changes.
-	for uint64(len(a.roots)) < block {
-		a.roots = append(a.roots, a.head.trie.root)
+	if uint64(len(a.roots)) < block {
+		lastHash, err := a.head.trie.GetHash()
+		if err != nil {
+			return err
+		}
+		for uint64(len(a.roots)) < block {
+			a.roots = append(a.roots, Root{a.head.trie.root, lastHash})
+		}
 	}
 
 	// Apply all the changes of the update.
@@ -98,20 +115,20 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 		}
 	}
 
-	// Freez new state.
+	// Freeze new state.
 	trie := a.head.trie
 	if err := trie.forest.Freeze(trie.root); err != nil {
 		return err
 	}
 
 	// Refresh hashes.
-	_, err := a.head.GetHash()
+	hash, err := a.head.GetHash()
 	if err != nil {
 		return err
 	}
 
 	// Save new root node.
-	a.roots = append(a.roots, trie.root)
+	a.roots = append(a.roots, Root{trie.root, hash})
 	return nil
 }
 
@@ -127,7 +144,7 @@ func (a *ArchiveTrie) Exists(block uint64, account common.Address) (exists bool,
 		return false, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
 	}
 	root := a.roots[block]
-	view := getTrieView(root, a.head.trie.forest)
+	view := getTrieView(root.nodeId, a.head.trie.forest)
 	_, exists, err = view.GetAccountInfo(account)
 	return exists, err
 }
@@ -137,7 +154,7 @@ func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance 
 		return common.Balance{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
 	}
 	root := a.roots[block]
-	view := getTrieView(root, a.head.trie.forest)
+	view := getTrieView(root.nodeId, a.head.trie.forest)
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
 		return common.Balance{}, err
@@ -150,7 +167,7 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 		return nil, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
 	}
 	root := a.roots[block]
-	view := getTrieView(root, a.head.trie.forest)
+	view := getTrieView(root.nodeId, a.head.trie.forest)
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
 		return nil, err
@@ -163,7 +180,7 @@ func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce comm
 		return common.Nonce{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
 	}
 	root := a.roots[block]
-	view := getTrieView(root, a.head.trie.forest)
+	view := getTrieView(root.nodeId, a.head.trie.forest)
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
 		return common.Nonce{}, err
@@ -176,7 +193,7 @@ func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot comm
 		return common.Value{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
 	}
 	root := a.roots[block]
-	view := getTrieView(root, a.head.trie.forest)
+	view := getTrieView(root.nodeId, a.head.trie.forest)
 	return view.GetValue(account, slot)
 }
 
@@ -189,7 +206,7 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 		return common.Hash{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
 	}
 	root := a.roots[block]
-	view := getTrieView(root, a.head.trie.forest)
+	view := getTrieView(root.nodeId, a.head.trie.forest)
 	return view.GetHash()
 }
 
@@ -202,8 +219,8 @@ func (s *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 
 func (a *ArchiveTrie) Dump() {
 	for i, root := range a.roots {
-		fmt.Printf("\nBlock %d:\n", i)
-		view := getTrieView(root, a.head.trie.forest)
+		fmt.Printf("\nBlock %d: %x\n", i, root.hash)
+		view := getTrieView(root.nodeId, a.head.trie.forest)
 		view.Dump()
 		fmt.Printf("\n")
 	}
@@ -225,7 +242,7 @@ func (a *ArchiveTrie) Close() error {
 
 // ---- Reading and Writing Root Node ID Lists ----
 
-func loadRoots(filename string) ([]NodeId, error) {
+func loadRoots(filename string) ([]Root, error) {
 	// If there is no file, initialize and return an empty list.
 	if _, err := os.Stat(filename); err != nil {
 		return nil, nil
@@ -238,8 +255,9 @@ func loadRoots(filename string) ([]NodeId, error) {
 	defer f.Close()
 	reader := bufio.NewReader(f)
 
-	res := []NodeId{}
+	res := []Root{}
 	var id [4]byte
+	var hash common.Hash
 	for {
 		if num, err := reader.Read(id[:]); err != nil {
 			if err == io.EOF {
@@ -250,12 +268,18 @@ func loadRoots(filename string) ([]NodeId, error) {
 			return nil, fmt.Errorf("invalid hash file")
 		}
 
+		if num, err := reader.Read(hash[:]); err != nil {
+			return nil, err
+		} else if num != len(hash) {
+			return nil, fmt.Errorf("invalid hash file")
+		}
+
 		id := NodeId(binary.BigEndian.Uint32(id[:]))
-		res = append(res, id)
+		res = append(res, Root{id, hash})
 	}
 }
 
-func storeRoots(filename string, roots []NodeId) error {
+func storeRoots(filename string, roots []Root) error {
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -265,9 +289,12 @@ func storeRoots(filename string, roots []NodeId) error {
 
 	// Simple file format: [<node-id>]*
 	var buffer [4]byte
-	for _, id := range roots {
-		binary.BigEndian.PutUint32(buffer[:], uint32(id))
+	for _, root := range roots {
+		binary.BigEndian.PutUint32(buffer[:], uint32(root.nodeId))
 		if _, err := writer.Write(buffer[:]); err != nil {
+			return err
+		}
+		if _, err := writer.Write(root.hash[:]); err != nil {
 			return err
 		}
 	}
