@@ -1,8 +1,12 @@
 package mpt
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -211,4 +215,97 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestArchiveTrie_InsertHugeAmountOfValues(t *testing.T) {
+	// This test is intended for manual performance evaluations and is, due to
+	// its runtime, not intended for regular execution. To enable this test,
+	// for manual evaluations, remove the following line:
+	t.SkipNow()
+
+	//dir := t.TempDir()
+	dir := "/tmp/example_archive_small"
+	fmt.Printf("Working directory: %v\n", dir)
+	archive, err := OpenArchiveTrie(dir, S5Config)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	defer archive.Close()
+
+	const numBlocks = 1_000
+	const reportingInterval = 1000
+	const numChangesPerBlock = 100
+
+	last := time.Now()
+	counter := uint32(0)
+	fmt.Printf("block,rate,memory,disk,processing,flush\n")
+	for i := 0; i <= numBlocks; i++ {
+		if i%reportingInterval == 0 {
+			now := time.Now()
+			elapsed := now.Sub(last)
+
+			start := time.Now()
+			archive.(*ArchiveTrie).Flush()
+			flushTime := time.Since(start)
+
+			memory := archive.GetMemoryFootprint()
+			disk := GetDirectorySize(dir)
+
+			fmt.Printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+				i,
+				float64(reportingInterval)/elapsed.Seconds(),
+				float32(memory.Total())/(1024*1024*1024),
+				float32(disk)/(1024*1024*1024),
+				elapsed.Seconds(),
+				flushTime.Seconds(),
+			)
+
+			if i%(reportingInterval*10) == 0 {
+				fmt.Printf("Memory usage:\n%v", memory)
+
+				/*
+					stats, err := GetNodeStatistics(trie)
+					if err != nil {
+						t.Fatalf("failed to collect node statistics: %v", err)
+					}
+					fmt.Printf("Node Statistics:\n%v\n", &stats)
+				*/
+			}
+
+			last = time.Now()
+		}
+
+		update := common.Update{}
+		for j := 0; j < numChangesPerBlock; j++ {
+			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
+			update.CreatedAccounts = append(update.CreatedAccounts, addr)
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: addr, Nonce: common.ToNonce(1)})
+			counter++
+		}
+		if err := archive.Add(uint64(i), update); err != nil {
+			t.Fatalf("failed to add block update: %v", err)
+		}
+
+		if _, err := archive.(*ArchiveTrie).GetHash(uint64(i)); err != nil {
+			t.Fatalf("failed to get has %d: %v", i, err)
+		}
+	}
+
+	fmt.Printf("Memory usage:\n%v", archive.GetMemoryFootprint())
+
+}
+
+// GetDirectorySize computes the size of all files in the given directory in bytes.
+func GetDirectorySize(directory string) int64 {
+	var sum int64 = 0
+	filepath.Walk(directory, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			sum += info.Size()
+		}
+		return nil
+	})
+	return sum
 }
