@@ -195,9 +195,12 @@ func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
 	if s.archive == nil {
 		return nil, fmt.Errorf("archive not enabled for this GoState")
 	}
-	lastBlock, err := s.archive.GetLastBlockHeight()
+	lastBlock, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get last block in the archive; %s", err)
+	}
+	if empty {
+		return nil, fmt.Errorf("block %d is not present in the archive (archive is empty)", block)
 	}
 	if block > lastBlock {
 		return nil, fmt.Errorf("block %d is not present in the archive (last block %d)", block, lastBlock)
@@ -208,15 +211,15 @@ func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
 	}, nil
 }
 
-func (s *GoState) GetLastArchiveBlockHeight() (uint64, error) {
+func (s *GoState) GetArchiveBlockHeight() (uint64, bool, error) {
 	if s.archive == nil {
-		return 0, fmt.Errorf("archive not enabled for this GoState")
+		return 0, false, fmt.Errorf("archive not enabled for this GoState")
 	}
-	lastBlock, err := s.archive.GetLastBlockHeight()
+	lastBlock, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get last block in the archive; %s", err)
+		return 0, false, fmt.Errorf("failed to get last block in the archive; %s", err)
 	}
-	return lastBlock, nil
+	return lastBlock, empty, nil
 }
 
 func (s *GoState) GetProof() (backend.Proof, error) {

@@ -49,9 +49,10 @@ type State interface {
 	// An error is returned if the archive is not enabled or if it is empty.
 	GetArchiveState(block uint64) (State, error)
 
-	// GetLastArchiveBlockHeight provides the last block height available in the archive.
-	// An error is returned if the archive is not enabled or if it is empty.
-	GetLastArchiveBlockHeight() (uint64, error)
+	// GetArchiveBlockHeight provides the block height available in the archive. If
+	// there is no block in the archive, the empty flag is returned.
+	// An error is returned if the archive is not enabled or an IO issue occurred.
+	GetArchiveBlockHeight() (height uint64, empty bool, err error)
 
 	// States can be snapshotted.
 	backend.Snapshotable

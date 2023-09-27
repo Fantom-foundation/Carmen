@@ -92,8 +92,9 @@ type StateDB interface {
 	GetArchiveStateDB(block uint64) (StateDB, error)
 
 	// GetLastArchiveBlockHeight provides the last block height available in the archive.
-	// An error is returned if the archive is not enabled or if it is empty.
-	GetLastArchiveBlockHeight() (uint64, error)
+	// An empty archive is signaled by an extra return value. An error is returned if the
+	// archive is not enabled or some other issue has occurred.
+	GetArchiveBlockHeight() (height uint64, empty bool, err error)
 
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
@@ -1204,8 +1205,8 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
 	return CreateNonCommittableStateDBUsing(archiveState), nil
 }
 
-func (s *stateDB) GetLastArchiveBlockHeight() (uint64, error) {
-	return s.state.GetLastArchiveBlockHeight()
+func (s *stateDB) GetArchiveBlockHeight() (uint64, bool, error) {
+	return s.state.GetArchiveBlockHeight()
 }
 
 func (s *stateDB) resetTransactionContext() {

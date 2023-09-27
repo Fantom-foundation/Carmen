@@ -547,7 +547,7 @@ func TestLastArchiveBlock(t *testing.T) {
 				t.Parallel()
 				dir := t.TempDir()
 				if config.name[0:3] == "cpp" {
-					t.Skipf("GetLastArchiveBlockHeight not supported by the cpp state")
+					t.Skipf("GetArchiveBlockHeight not supported by the cpp state")
 				}
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
@@ -559,9 +559,12 @@ func TestLastArchiveBlock(t *testing.T) {
 				}
 				defer s.Close()
 
-				lastBlockHeight, err := s.GetLastArchiveBlockHeight()
-				if err == nil {
-					t.Fatalf("obtaining the last block from an empty archive did not failed")
+				_, empty, err := s.GetArchiveBlockHeight()
+				if err != nil {
+					t.Fatalf("obtaining the last block from an empty archive failed: %v", err)
+				}
+				if !empty {
+					t.Fatalf("empty archive is not reporting lack of blocks")
 				}
 
 				if err := s.Apply(1, common.Update{
@@ -580,12 +583,12 @@ func TestLastArchiveBlock(t *testing.T) {
 					t.Fatalf("failed to flush updates, %s", err)
 				}
 
-				lastBlockHeight, err = s.GetLastArchiveBlockHeight()
+				lastBlockHeight, empty, err := s.GetArchiveBlockHeight()
 				if err != nil {
 					t.Fatalf("failed to get the last available block height; %s", err)
 				}
-				if lastBlockHeight != 2 {
-					t.Errorf("invalid last available block height %d (expected 2)", lastBlockHeight)
+				if empty || lastBlockHeight != 2 {
+					t.Errorf("invalid last available block height %d (expected 2); empty: %t", lastBlockHeight, empty)
 				}
 
 				state2, err := s.GetArchiveState(lastBlockHeight)

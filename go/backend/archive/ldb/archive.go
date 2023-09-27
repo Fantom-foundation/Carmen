@@ -3,12 +3,13 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
+	"sync"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"sync"
-	"unsafe"
 )
 
 type Archive struct {
@@ -38,11 +39,11 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()
 
-	lastBlock, lastHash, err := a.getLastBlock()
-	if err != nil && err != leveldb.ErrNotFound {
+	lastBlock, isEmpty, lastHash, err := a.getLastBlock()
+	if err != nil {
 		return fmt.Errorf("failed to get preceding block hash; %s", err)
 	}
-	if block <= lastBlock && err != leveldb.ErrNotFound {
+	if !isEmpty && block <= lastBlock {
 		return fmt.Errorf("unable to add block %d, is higher or equal to already present block %d", block, lastBlock)
 	}
 
@@ -172,17 +173,17 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 }
 
 // getLastBlock provides info about the last completely written block
-func (a *Archive) getLastBlock() (number uint64, hash common.Hash, err error) {
+func (a *Archive) getLastBlock() (number uint64, empty bool, hash common.Hash, err error) {
 	number, hash = a.lastBlockCache.get()
 	if number != 0 {
-		return number, hash, nil
+		return number, false, hash, nil
 	}
-	number, hash, err = a.getLastBlockSlow()
-	return number, hash, err
+	number, empty, hash, err = a.getLastBlockSlow()
+	return number, empty, hash, err
 }
 
 // getLastBlockSlow represents the slow path of getLastBlock() method (extracted to allow inlining the fast path)
-func (a *Archive) getLastBlockSlow() (number uint64, hash common.Hash, err error) {
+func (a *Archive) getLastBlockSlow() (number uint64, empty bool, hash common.Hash, err error) {
 	keyRange := getBlockKeyRangeFromHighest()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
@@ -191,18 +192,14 @@ func (a *Archive) getLastBlockSlow() (number uint64, hash common.Hash, err error
 		var blockK blockKey
 		copy(blockK[:], it.Key())
 		copy(hash[:], it.Value())
-		return blockK.get(), hash, nil
+		return blockK.get(), false, hash, nil
 	}
-	err = it.Error()
-	if err == nil {
-		err = leveldb.ErrNotFound
-	}
-	return 0, common.Hash{}, err
+	return 0, true, common.Hash{}, it.Error()
 }
 
-func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
-	block, _, err = a.getLastBlock()
-	return block, err
+func (a *Archive) GetBlockHeight() (block uint64, empty bool, err error) {
+	block, empty, _, err = a.getLastBlock()
+	return block, empty, err
 }
 
 func (a *Archive) getStatus(block uint64, account common.Address) (exists bool, reincarnation int, err error) {
