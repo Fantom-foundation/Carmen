@@ -2649,6 +2649,77 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 	}
 }
 
+func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContextWithConfig(t, ctrl, MptConfig{
+		Name:                          "S4",
+		UseHashedPaths:                false,
+		TrackSuffixLengthsInLeafNodes: true,
+		Hashing:                       DirectHashing,
+	})
+
+	addr1 := common.Address{0xA0}
+	addr2 := common.Address{0xB0}
+
+	key := common.Key{0x12}
+	value := common.Value{1}
+
+	id, node := ctxt.Build(
+		&Branch{
+			children: Children{
+				0xA: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+					storage:    &ValueWithLength{key: key, value: value, length: 64},
+					pathLength: 39},
+				0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
+					pathLength: 39},
+			},
+		})
+
+	ctxt.Check(t, id)
+	ctxt.Freeze(id)
+
+	before, _ := ctxt.Clone(id)
+
+	newInfo := AccountInfo{common.Nonce{1}, common.Balance{100}, common.Hash{0xAA}}
+	newAddr := common.Address{0xAA, 0xB}
+
+	after, _ := ctxt.Build(&Branch{
+		children: Children{
+			0xA: &Branch{
+				children: Children{
+					0: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+						storage:    &ValueWithLength{key: key, value: value, length: 64},
+						pathLength: 38},
+					0xA: &Account{address: newAddr, info: newInfo,
+						pathLength: 38},
+				},
+				dirty: []int{0, 10},
+			},
+			0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
+				pathLength: 39},
+		},
+		dirty: []int{10},
+	})
+	ctxt.Check(t, after)
+
+	ctxt.ExpectCreateAccount()
+	ctxt.ExpectCreateBranch()
+	ctxt.ExpectCreateAccount()
+	newId, _ := ctxt.ExpectCreateBranch()
+
+	handle := node.GetWriteHandle()
+	path := addressToNibbles(newAddr)
+	// This creates a new account on the path of a frozen account
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, newAddr, path, newInfo)
+	if newRoot != newId || changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", newId, false, newRoot, changed, err)
+	}
+	handle.Release()
+
+	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, after, newRoot)
+}
+
 func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)

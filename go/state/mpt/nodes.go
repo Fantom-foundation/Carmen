@@ -1307,8 +1307,8 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisId NodeId, this sha
 		}
 		defer newHandle.Release()
 		newNode := newHandle.Get().(*AccountNode)
-		newNode.address = n.address
-		newNode.info = n.info
+		*newNode = *n
+		newNode.frozen = false
 		newNode.pathLength = length
 		return newId, false, manager.update(newId, newHandle)
 	}
