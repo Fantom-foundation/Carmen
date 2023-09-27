@@ -132,11 +132,11 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	return nil
 }
 
-func (a *ArchiveTrie) GetLastBlockHeight() (block uint64, err error) {
+func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
 	if len(a.roots) == 0 {
-		return 0, fmt.Errorf("no block in archive")
+		return 0, true, nil
 	}
-	return uint64(len(a.roots) - 1), nil
+	return uint64(len(a.roots) - 1), false, nil
 }
 
 func (a *ArchiveTrie) Exists(block uint64, account common.Address) (exists bool, err error) {

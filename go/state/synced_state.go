@@ -103,10 +103,10 @@ func (s *syncedState) GetArchiveState(block uint64) (State, error) {
 	return s.state.GetArchiveState(block)
 }
 
-func (s *syncedState) GetLastArchiveBlockHeight() (uint64, error) {
+func (s *syncedState) GetArchiveBlockHeight() (uint64, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.GetLastArchiveBlockHeight()
+	return s.state.GetArchiveBlockHeight()
 }
 
 func (s *syncedState) GetProof() (backend.Proof, error) {

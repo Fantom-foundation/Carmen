@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -21,10 +21,6 @@ var (
 		"PRAGMA cache_size = -1048576", // abs(N*1024) = 1GB
 		"PRAGMA locking_mode = EXCLUSIVE",
 	}
-)
-
-var (
-	ErrNoLastBlock = errors.New("sqlite archive: no block in archive")
 )
 
 const (
@@ -216,11 +212,11 @@ func (a *Archive) Add(block uint64, update common.Update) error {
 		}
 	}()
 
-	lastBlock, lastHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
-	if err != nil && err != ErrNoLastBlock {
+	lastBlock, isEmpty, lastHash, err := a.getLastBlock(tx) // needs to be in tx, otherwise database is locked
+	if err != nil {
 		return fmt.Errorf("failed to get preceding block hash; %s", err)
 	}
-	if block <= lastBlock && err != ErrNoLastBlock {
+	if !isEmpty && block <= lastBlock {
 		return fmt.Errorf("unable to add block %d, is lower or equal to already present block %d", block, lastBlock)
 	}
 
@@ -367,32 +363,28 @@ func (a *Archive) getStatus(tx *sql.Tx, block uint64, account common.Address) (e
 	return false, 0, rows.Err()
 }
 
-func (a *Archive) GetLastBlockHeight() (block uint64, err error) {
-	block, _, err = a.getLastBlock(nil)
-	return block, err
+func (a *Archive) GetBlockHeight() (block uint64, empty bool, err error) {
+	block, empty, _, err = a.getLastBlock(nil)
+	return block, empty, err
 }
 
-func (a *Archive) getLastBlock(tx *sql.Tx) (number uint64, hash common.Hash, err error) {
+func (a *Archive) getLastBlock(tx *sql.Tx) (number uint64, empty bool, hash common.Hash, err error) {
 	stmt := a.getBlockHeightStmt
 	if tx != nil {
 		stmt = tx.Stmt(stmt)
 	}
 	rows, err := stmt.Query()
 	if err != nil {
-		return 0, common.Hash{}, err
+		return 0, false, common.Hash{}, err
 	}
 	defer rows.Close()
 	if rows.Next() {
 		var hashBytes sql.RawBytes
 		err = rows.Scan(&number, &hashBytes)
 		copy(hash[:], hashBytes)
-		return number, hash, err
+		return number, false, hash, err
 	}
-	err = rows.Err()
-	if err == nil {
-		err = ErrNoLastBlock
-	}
-	return 0, common.Hash{}, err
+	return 0, true, common.Hash{}, rows.Err()
 }
 
 func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err error) {

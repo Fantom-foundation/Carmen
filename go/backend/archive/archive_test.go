@@ -162,8 +162,8 @@ func TestAddGet(t *testing.T) {
 				t.Errorf("unexpected value at block 6: %x; %v", value, err)
 			}
 
-			if lastBlock, err := a.GetLastBlockHeight(); err != nil || lastBlock != 7 {
-				t.Errorf("unexpected last block height: %d; %v", lastBlock, err)
+			if lastBlock, empty, err := a.GetBlockHeight(); err != nil || empty || lastBlock != 7 {
+				t.Errorf("unexpected last block height: %d; %t, %v", lastBlock, empty, err)
 			}
 
 			if !factory.customHash {
@@ -517,6 +517,38 @@ func TestTwinProtection(t *testing.T) {
 				},
 			}); err == nil {
 				t.Errorf("second adding of block 1 should have failed but it succeed")
+			}
+		})
+	}
+}
+
+func TestBlockHeight(t *testing.T) {
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			// Initially, the block height should be indicated as empty.
+			if _, empty, err := a.GetBlockHeight(); !empty || err != nil {
+				t.Fatalf("failed to report proper block height for empty archive, got %t, err %v", empty, err)
+			}
+
+			// Adding block 0 should turn the archive non-empty.
+			if err := a.Add(0, common.Update{}); err != nil {
+				t.Fatalf("failed to add empty block 0; %s", err)
+			}
+
+			if height, empty, err := a.GetBlockHeight(); height != 0 || empty || err != nil {
+				t.Fatalf("failed to report proper block height for archive with block height 0: %d, %t, %v", height, empty, err)
+			}
+
+			// Adding block 5 should raise the block height accordingly.
+			if err := a.Add(5, common.Update{CreatedAccounts: []common.Address{addr1}}); err != nil {
+				t.Fatalf("failed to add block 5; %s", err)
+			}
+
+			if height, empty, err := a.GetBlockHeight(); height != 5 || empty || err != nil {
+				t.Fatalf("failed to report proper block height for archive with block height 5: %d, %t, %v", height, empty, err)
 			}
 		})
 	}

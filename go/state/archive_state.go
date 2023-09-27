@@ -93,12 +93,12 @@ func (s *ArchiveState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVer
 }
 
 func (s *ArchiveState) GetArchiveState(block uint64) (State, error) {
-	lastBlock, err := s.archive.GetLastBlockHeight()
+	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get last block in the archive; %s", err)
+		return nil, fmt.Errorf("failed to get block height from the archive; %s", err)
 	}
-	if block > lastBlock {
-		return nil, fmt.Errorf("block %d is not present in the archive (last block %d)", block, lastBlock)
+	if empty || block > height {
+		return nil, fmt.Errorf("block %d is not present in the archive (height %d)", block, height)
 	}
 	return &ArchiveState{
 		archive: s.archive,
@@ -106,10 +106,10 @@ func (s *ArchiveState) GetArchiveState(block uint64) (State, error) {
 	}, nil
 }
 
-func (s *ArchiveState) GetLastArchiveBlockHeight() (uint64, error) {
-	lastBlock, err := s.archive.GetLastBlockHeight()
+func (s *ArchiveState) GetArchiveBlockHeight() (uint64, bool, error) {
+	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get last block in the archive; %s", err)
+		return 0, false, fmt.Errorf("failed to get last block in the archive; %s", err)
 	}
-	return lastBlock, nil
+	return height, empty, nil
 }
