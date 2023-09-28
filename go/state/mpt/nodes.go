@@ -563,16 +563,17 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 		return nil
 	}
 	n.frozen = true
-	for _, cur := range n.children {
-		if cur.IsEmpty() {
+	for i := 0; i < len(n.children); i++ {
+		if n.children[i].IsEmpty() {
 			continue
 		}
-		handle, err := manager.getMutableNode(cur)
+		handle, err := manager.getMutableNode(n.children[i])
 		if err != nil {
 			return err
 		}
-		defer handle.Release()
-		if err := handle.Get().Freeze(manager, handle); err != nil {
+		err = handle.Get().Freeze(manager, handle)
+		handle.Release()
+		if err != nil {
 			return err
 		}
 	}
