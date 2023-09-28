@@ -5,7 +5,6 @@ package mpt
 import (
 	"crypto/sha256"
 	"fmt"
-	"hash"
 	"reflect"
 	"sync"
 
@@ -628,8 +627,17 @@ func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSour
 var keccakHasherPool = sync.Pool{New: func() any { return sha3.NewLegacyKeccak256() }}
 
 func keccak256(data []byte) common.Hash {
-	hasher := keccakHasherPool.Get().(hash.Hash)
-	hash := common.GetHash(hasher, data)
+	hasher := keccakHasherPool.Get().(keccakHasher)
+	hasher.Reset()
+	hasher.Write(data)
+	var res common.Hash
+	hasher.Read(res[:])
 	keccakHasherPool.Put(hasher)
-	return hash
+	return res
+}
+
+type keccakHasher interface {
+	Reset()
+	Write(in []byte) (int, error)
+	Read(out []byte) (int, error)
 }
