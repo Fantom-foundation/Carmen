@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-// StateDB serves as the public interface definition of a Carmen StateDB.
-type StateDB interface {
+// VmStateDB defines the basic operations that can be conducted on a StateDB as
+// required by an EVM implementation.
+type VmStateDB interface {
 	// Account management.
 	CreateAccount(common.Address)
 	Exist(common.Address) bool
@@ -67,14 +69,19 @@ type StateDB interface {
 	// Deprecated: not necessary, to be removed
 	AbortTransaction()
 
+	// GetHash obtains a cryptographically unique hash of the committed state.
+	GetHash() common.Hash
+}
+
+// StateDB serves as the public interface definition of a Carmen StateDB.
+type StateDB interface {
+	VmStateDB
+
 	BeginBlock()
 	EndBlock(number uint64)
 
 	BeginEpoch()
 	EndEpoch(number uint64)
-
-	// GetHash obtains a cryptographically unique hash of this state.
-	GetHash() common.Hash
 
 	// Flushes committed state to disk.
 	Flush() error
@@ -89,7 +96,7 @@ type StateDB interface {
 
 	// GetArchiveStateDB provides a historical state view for given block.
 	// An error is returned if the archive is not enabled or if it is empty.
-	GetArchiveStateDB(block uint64) (StateDB, error)
+	GetArchiveStateDB(block uint64) (NonCommittableStateDB, error)
 
 	// GetLastArchiveBlockHeight provides the last block height available in the archive.
 	// An empty archive is signaled by an extra return value. An error is returned if the
@@ -98,6 +105,19 @@ type StateDB interface {
 
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
+}
+
+// NonCommittableStateDB is the public interface offered for views on states that can not
+// be permanently modified. The prime example for those are views on historic blocks backed
+// by an archive. While volatile transaction internal changes are supported, there is no
+// way offered for committing those.
+type NonCommittableStateDB interface {
+	VmStateDB
+
+	// Release should be called whenever this instance is no longer needed to allow
+	// held resources to be reused for future requests. After the release, no more
+	// operations may be conducted on this StateDB instance.
+	Release()
 }
 
 // BulkLoad serves as the public interface for loading preset data into the state DB.
@@ -315,34 +335,34 @@ type codeValue struct {
 	sizeValid bool // < set if size is loaded from the state (or written as dirty)
 }
 
-const StoredDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
+const storedDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
 
 // storedDataCacheValue maintains the cached version of a value in the store. To
 // support the efficient clearing of values cached for accounts being deleted, an
 // additional account reincarnation counter is added.
 type storedDataCacheValue struct {
 	value         common.Value // < the cached version of the value in the store
-	reincarnation uint64       // < the reincarnation the cached value blongs to
+	reincarnation uint64       // < the reincarnation the cached value belongs to
 }
 
 // CreateStateDBUsing creates a StateDB instance wrapping the given state supporting
-// all operations including end-of-block operations mutating theunderlying state.
+// all operations including end-of-block operations mutating the underlying state.
 // Note: any StateDB instanced becomes invalid if the underlying state is
 // modified by any other StateDB instance or through any other direct modification.
 func CreateStateDBUsing(state State) StateDB {
-	return createStateDBWith(state, StoredDataCacheSize, true)
+	return createStateDBWith(state, storedDataCacheSize, true)
 }
 
-// CreateNonCommittableStateDBUsing creates a read-only StateDB instance wrapping
-// the given state supporting all operations except the EndBlock() step. Attempts
-// to call EndBlock() are ignored.
+// createNonCommittableStateDBUsing creates a read-only StateDB instance wrapping
+// the given state supporting all operations specified by the VmStateDB interface.
 // Note: any StateDB instanced becomes invalid if the underlying state is
 // modified by any other StateDB instance or through any other direct modification.
-func CreateNonCommittableStateDBUsing(state State) StateDB {
-	// We use a smaller stored-data cache size to support faster initialization
-	// and discarding of instances. NonCommittable instances are expected to live
-	// only for the duration of a few transactions.
-	return createStateDBWith(state, 1000, false)
+func createNonCommittableStateDBUsing(state State) NonCommittableStateDB {
+	// Since StateDB instances are big objects costly to create we reuse those using
+	// a pool of objects. However, instances need to be properly reset.
+	db := nonCommittableStateDbPool.Get().(*stateDB)
+	db.resetState(state)
+	return &nonCommittableStateDB{db}
 }
 
 func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges bool) *stateDB {
@@ -1128,7 +1148,7 @@ func (s *stateDB) EndBlock(block uint64) {
 	}
 
 	// Reset internal state for next block
-	s.reset()
+	s.resetBlockContext()
 }
 
 func (s *stateDB) BeginEpoch() {
@@ -1197,12 +1217,12 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	return mf
 }
 
-func (s *stateDB) GetArchiveStateDB(block uint64) (StateDB, error) {
+func (s *stateDB) GetArchiveStateDB(block uint64) (NonCommittableStateDB, error) {
 	archiveState, err := s.state.GetArchiveState(block)
 	if err != nil {
 		return nil, err
 	}
-	return CreateNonCommittableStateDBUsing(archiveState), nil
+	return createNonCommittableStateDBUsing(archiveState), nil
 }
 
 func (s *stateDB) GetArchiveBlockHeight() (uint64, bool, error) {
@@ -1217,7 +1237,7 @@ func (s *stateDB) resetTransactionContext() {
 	s.logs = s.logs[0:0]
 }
 
-func (s *stateDB) reset() {
+func (s *stateDB) resetBlockContext() {
 	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
@@ -1226,6 +1246,13 @@ func (s *stateDB) reset() {
 	s.codes = make(map[common.Address]*codeValue)
 	s.logsInBlock = 0
 	s.resetTransactionContext()
+}
+
+func (s *stateDB) resetState(state State) {
+	s.resetBlockContext()
+	s.storedDataCache.Clear()
+	s.reincarnation = map[common.Address]uint64{}
+	s.state = state
 }
 
 type bulkLoad struct {
@@ -1286,4 +1313,22 @@ func (l *bulkLoad) Close() error {
 	// Compute hash to bring cached hashes up-to-date.
 	_, err := l.state.GetHash()
 	return err
+}
+
+var nonCommittableStateDbPool = sync.Pool{
+	New: func() any {
+		// We use a smaller stored-data cache size to support faster initialization
+		// and resetting of instances. NonCommittable instances are expected to live
+		// only for the duration of a few transactions.
+		return createStateDBWith(nil, 100, false)
+	},
+}
+
+type nonCommittableStateDB struct {
+	*stateDB
+}
+
+func (db *nonCommittableStateDB) Release() {
+	nonCommittableStateDbPool.Put(db.stateDB)
+	db.stateDB = nil
 }
