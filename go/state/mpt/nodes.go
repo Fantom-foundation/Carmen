@@ -319,6 +319,7 @@ type BranchNode struct {
 	dirtyHashes      uint16          // a bit mask marking hashes as dirty; 0 .. clean, 1 .. dirty
 	embeddedChildren uint16          // a bit mask marking children as embedded; 0 .. not, 1 .. embedded
 	frozen           bool            // a flag marking the node as immutable
+	frozenChildren   uint16          // a bit mask marking frozen children; not persisted
 }
 
 func (n *BranchNode) getNextNodeInBranch(
@@ -405,6 +406,7 @@ func (n *BranchNode) setNextNode(
 
 	n.children[path[0]] = newRoot
 	n.markChildHashDirty(byte(path[0]))
+	n.setChildFrozen(byte(path[0]), false)
 
 	// If a branch got removed, check that there are enough children left.
 	if !child.IsEmpty() && newRoot.IsEmpty() {
@@ -564,7 +566,7 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 	}
 	n.frozen = true
 	for i := 0; i < len(n.children); i++ {
-		if n.children[i].IsEmpty() {
+		if n.children[i].IsEmpty() || n.isChildFrozen(byte(i)) {
 			continue
 		}
 		handle, err := manager.getMutableNode(n.children[i])
@@ -576,6 +578,7 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 		if err != nil {
 			return err
 		}
+		n.setChildFrozen(byte(i), true)
 	}
 	return nil
 }
@@ -617,7 +620,7 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sBranch (ID: %v/%t, Dirty: %016b, Embedded: %016b, Hash: %v):\n", indent, thisId, n.frozen, n.dirtyHashes, n.embeddedChildren, formatHashForDump(source, thisId))
+	fmt.Printf("%sBranch (ID: %v/%t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v):\n", indent, thisId, n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(source, thisId))
 	for i, child := range n.children {
 		if child.IsEmpty() {
 			continue
@@ -653,6 +656,18 @@ func (n *BranchNode) setEmbedded(index byte, embedded bool) {
 		n.embeddedChildren = n.embeddedChildren | (1 << index)
 	} else {
 		n.embeddedChildren = n.embeddedChildren & ^(1 << index)
+	}
+}
+
+func (n *BranchNode) isChildFrozen(index byte) bool {
+	return (n.frozenChildren & (1 << index)) != 0
+}
+
+func (n *BranchNode) setChildFrozen(index byte, frozen bool) {
+	if frozen {
+		n.frozenChildren = n.frozenChildren | (1 << index)
+	} else {
+		n.frozenChildren = n.frozenChildren & ^(1 << index)
 	}
 }
 

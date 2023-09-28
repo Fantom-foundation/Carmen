@@ -492,7 +492,7 @@ func (s *Forest) flush(id NodeId, node Node) error {
 func (s *Forest) flushNode(id NodeId, node Node, checkDirty bool) error {
 	// Note: flushing nodes in Archive mode will implicitly freeze them,
 	// since after the reload they will be considered frozen. This may
-	// cause temporary states between updates to be accidentially frozen,
+	// cause temporary states between updates to be accidentally frozen,
 	// leaving unreferenced nodes in the archive, but it is not causing
 	// correctness issues. However, if the node-cache size is sufficiently
 	// large, such cases should be rare. Nevertheless, a warning is
