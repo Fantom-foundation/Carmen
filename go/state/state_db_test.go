@@ -3406,7 +3406,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 								stateDb.EndBlock(uint64(block))
 								block++
 							} else {
-								stateDb.(*stateDB).reset()
+								stateDb.(*stateDB).resetBlockContext()
 							}
 						}
 					}()

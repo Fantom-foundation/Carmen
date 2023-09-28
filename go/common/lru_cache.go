@@ -139,7 +139,9 @@ func (c *Cache[K, V]) Remove(key K) (original V, exists bool) {
 }
 
 func (c *Cache[K, V]) Clear() {
-	c.cache = make(map[K]*entry[K, V], c.capacity)
+	if len(c.cache) > 0 {
+		c.cache = make(map[K]*entry[K, V], c.capacity)
+	}
 	c.head = nil
 	c.tail = nil
 }
