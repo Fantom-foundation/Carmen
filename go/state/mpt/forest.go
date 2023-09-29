@@ -3,7 +3,6 @@ package mpt
 import (
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 	"sync"
@@ -79,6 +78,9 @@ type Forest struct {
 	// Cached hashers for keys and addresses (thread safe).
 	keyHasher     *common.CachedHasher[common.Key]
 	addressHasher *common.CachedHasher[common.Address]
+
+	// A buffer for asynchronously writing nodes to files.
+	writeBuffer WriteBuffer
 }
 
 // The number of elements to retain in the node cache.
@@ -182,7 +184,7 @@ func makeForest(
 	values stock.Stock[uint64, ValueNode],
 	mode StorageMode,
 ) (*Forest, error) {
-	return &Forest{
+	res := &Forest{
 		config:        config,
 		branches:      synced.Sync(branches),
 		extensions:    synced.Sync(extensions),
@@ -194,7 +196,9 @@ func makeForest(
 		hasher:        config.Hashing.createHasher(),
 		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
 		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
-	}, nil
+	}
+	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, 1024)
+	return res, nil
 }
 
 func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo, bool, error) {
@@ -304,7 +308,7 @@ func (s *Forest) Flush() error {
 		s.nodeCacheMutex.Unlock()
 		if present {
 			handle := node.GetReadHandle()
-			err := s.flushNode(id, handle.Get(), false)
+			err := s.flushNode(id, handle.Get())
 			handle.Release()
 			if err != nil {
 				errs = append(errs, err)
@@ -316,6 +320,7 @@ func (s *Forest) Flush() error {
 
 	return errors.Join(
 		errors.Join(errs...),
+		s.writeBuffer.Flush(),
 		s.accounts.Flush(),
 		s.branches.Flush(),
 		s.extensions.Flush(),
@@ -326,6 +331,7 @@ func (s *Forest) Flush() error {
 func (s *Forest) Close() error {
 	return errors.Join(
 		s.Flush(),
+		s.writeBuffer.Close(),
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
@@ -406,7 +412,19 @@ func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 		return res, nil
 	}
 
-	// Load the node from peristent storage.
+	// Check whether the node is in the write buffer.
+	res, found = s.writeBuffer.Cancel(id)
+	if found {
+		s.addToCacheHoldingCacheMutexLock(id, res)
+		// Since the write was canceled, the fetched node is
+		// still dirty (only dirty nodes are in the buffer).
+		s.dirtyMutex.Lock()
+		s.dirty[id] = struct{}{}
+		s.dirtyMutex.Unlock()
+		return res, nil
+	}
+
+	// Load the node from persistent storage.
 	var node Node
 	var err error
 	if id.IsValue() {
@@ -440,9 +458,7 @@ func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 	}
 
 	instance := shared.MakeShared[Node](node)
-	if err := s.addToCacheHoldingCacheMutexLock(id, instance); err != nil {
-		return nil, err
-	}
+	s.addToCacheHoldingCacheMutexLock(id, instance)
 	return instance, nil
 }
 
@@ -462,34 +478,36 @@ func (s *Forest) getMutableNode(id NodeId) (shared.WriteHandle[Node], error) {
 	return instance.GetWriteHandle(), nil
 }
 
-func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) error {
+func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) {
 	s.nodeCacheMutex.Lock()
 	defer s.nodeCacheMutex.Unlock()
-	return s.addToCacheHoldingCacheMutexLock(id, node)
+	s.addToCacheHoldingCacheMutexLock(id, node)
 }
 
-func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[Node]) error {
+func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[Node]) {
 	if s.nodeCacheMutex.TryLock() {
-		return fmt.Errorf("caller must hold node cache lock")
+		panic("caller must hold node cache lock")
 	}
 	evictedId, evictedNode, evicted := s.nodeCache.Set(id, node)
-	if evicted {
-		// TODO: perform flush asynchroniously.
-		// Make sure there is no write access on the node.
-		handle := evictedNode.GetReadHandle()
-		defer handle.Release()
-		if err := s.flush(evictedId, handle.Get()); err != nil {
-			return err
-		}
+	if !evicted {
+		return
 	}
-	return nil
+
+	// Clean nodes can be ignored, dirty nodes need to be written.
+	s.dirtyMutex.Lock()
+	_, dirty := s.dirty[evictedId]
+	if !dirty {
+		s.dirtyMutex.Unlock()
+		return
+	}
+	delete(s.dirty, evictedId)
+	s.dirtyMutex.Unlock()
+
+	// Enqueue evicted node for asynchronous write to file.
+	s.writeBuffer.Add(evictedId, evictedNode)
 }
 
-func (s *Forest) flush(id NodeId, node Node) error {
-	return s.flushNode(id, node, true)
-}
-
-func (s *Forest) flushNode(id NodeId, node Node, checkDirty bool) error {
+func (s *Forest) flushNode(id NodeId, node Node) error {
 	// Note: flushing nodes in Archive mode will implicitly freeze them,
 	// since after the reload they will be considered frozen. This may
 	// cause temporary states between updates to be accidentally frozen,
@@ -498,18 +516,9 @@ func (s *Forest) flushNode(id NodeId, node Node, checkDirty bool) error {
 	// large, such cases should be rare. Nevertheless, a warning is
 	// printed here to get informed if this changes in the future.
 	if s.storageMode == Archive && !node.IsFrozen() {
-		log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
+		//log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
 	}
 
-	if checkDirty {
-		s.dirtyMutex.Lock()
-		if _, dirty := s.dirty[id]; !dirty {
-			s.dirtyMutex.Unlock()
-			return nil
-		}
-		delete(s.dirty, id)
-		s.dirtyMutex.Unlock()
-	}
 	if id.IsValue() {
 		return s.values.Set(id.Index(), *node.(*ValueNode))
 	} else if id.IsAccount() {
@@ -533,9 +542,7 @@ func (s *Forest) createAccount() (NodeId, shared.WriteHandle[Node], error) {
 	id := AccountId(i)
 	node := new(AccountNode)
 	instance := shared.MakeShared[Node](node)
-	if err := s.addToCache(id, instance); err != nil {
-		return 0, shared.WriteHandle[Node]{}, err
-	}
+	s.addToCache(id, instance)
 	return id, instance.GetWriteHandle(), err
 }
 
@@ -547,9 +554,7 @@ func (s *Forest) createBranch() (NodeId, shared.WriteHandle[Node], error) {
 	id := BranchId(i)
 	node := new(BranchNode)
 	instance := shared.MakeShared[Node](node)
-	if err := s.addToCache(id, instance); err != nil {
-		return 0, shared.WriteHandle[Node]{}, err
-	}
+	s.addToCache(id, instance)
 	return id, instance.GetWriteHandle(), err
 }
 
@@ -561,9 +566,7 @@ func (s *Forest) createExtension() (NodeId, shared.WriteHandle[Node], error) {
 	id := ExtensionId(i)
 	node := new(ExtensionNode)
 	instance := shared.MakeShared[Node](node)
-	if err := s.addToCache(id, instance); err != nil {
-		return 0, shared.WriteHandle[Node]{}, err
-	}
+	s.addToCache(id, instance)
 	return id, instance.GetWriteHandle(), err
 }
 
@@ -575,9 +578,7 @@ func (s *Forest) createValue() (NodeId, shared.WriteHandle[Node], error) {
 	id := ValueId(i)
 	node := new(ValueNode)
 	instance := shared.MakeShared[Node](node)
-	if err := s.addToCache(id, instance); err != nil {
-		return 0, shared.WriteHandle[Node]{}, err
-	}
+	s.addToCache(id, instance)
 	return id, instance.GetWriteHandle(), err
 }
 
@@ -629,4 +630,12 @@ func getEncoder(config MptConfig) (
 		BranchNodeEncoder{},
 		ExtensionNodeEncoder{},
 		ValueNodeEncoder{}
+}
+
+type writeBufferSink struct {
+	forest *Forest
+}
+
+func (s writeBufferSink) Write(id NodeId, handle shared.ReadHandle[Node]) error {
+	return s.forest.flushNode(id, handle.Get())
 }
