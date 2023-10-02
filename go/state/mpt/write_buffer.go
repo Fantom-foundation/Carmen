@@ -5,7 +5,6 @@ package mpt
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
@@ -53,11 +52,12 @@ type writeBuffer struct {
 	buffer      map[NodeId]*shared.Shared[Node]
 	bufferMutex sync.Mutex
 	ids         chan NodeId
+	idsMutex    sync.Mutex
+	idsClosed   bool
 	flushDone   <-chan struct{}
 	done        <-chan struct{}
 	errs        []error
 	errsMutex   sync.Mutex
-	closed      atomic.Bool
 }
 
 func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
@@ -91,13 +91,13 @@ func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
 			if !ok {
 				continue // element was canceled
 			}
-			read := node.GetReadHandle()
-			if err := sink.Write(id, read); err != nil {
+			handle := node.GetReadHandle()
+			if err := sink.Write(id, handle); err != nil {
 				res.errsMutex.Lock()
 				res.errs = append(res.errs, err)
 				res.errsMutex.Unlock()
 			}
-			read.Release()
+			handle.Release()
 			res.bufferMutex.Lock()
 			delete(res.buffer, id)
 			res.bufferMutex.Unlock()
@@ -115,7 +115,11 @@ func (b *writeBuffer) Add(id NodeId, node *shared.Shared[Node]) {
 	b.bufferMutex.Lock()
 	b.buffer[id] = node
 	b.bufferMutex.Unlock()
-	b.ids <- id
+	b.idsMutex.Lock()
+	if !b.idsClosed {
+		b.ids <- id
+	}
+	b.idsMutex.Unlock()
 }
 
 func (b *writeBuffer) contains(id NodeId) bool {
@@ -137,23 +141,25 @@ func (b *writeBuffer) Cancel(id NodeId) (*shared.Shared[Node], bool) {
 }
 
 func (b *writeBuffer) Flush() error {
-	if b.closed.Load() {
-		return nil
+	b.idsMutex.Lock()
+	if !b.idsClosed {
+		b.ids <- EmptyId()
 	}
-	b.ids <- EmptyId()
-	<-b.flushDone
+	b.idsMutex.Unlock()
+	<-b.flushDone // finishes either due to flush signal or being closed
 	b.errsMutex.Lock()
 	defer b.errsMutex.Unlock()
 	return errors.Join(b.errs...)
 }
 
 func (b *writeBuffer) Close() error {
-	if !b.closed.CompareAndSwap(false, true) {
-		<-b.done
-		return nil
+	b.idsMutex.Lock()
+	if !b.idsClosed {
+		close(b.ids)
+		b.idsClosed = true
 	}
-	close(b.ids)
-	<-b.done
+	b.idsMutex.Unlock()
+	<-b.done // finishes once all elements are written
 	b.errsMutex.Lock()
 	defer b.errsMutex.Unlock()
 	return errors.Join(b.errs...)
