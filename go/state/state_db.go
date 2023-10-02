@@ -98,7 +98,7 @@ type StateDB interface {
 	// An error is returned if the archive is not enabled or if it is empty.
 	GetArchiveStateDB(block uint64) (NonCommittableStateDB, error)
 
-	// GetLastArchiveBlockHeight provides the last block height available in the archive.
+	// GetArchiveBlockHeight provides the last block height available in the archive.
 	// An empty archive is signaled by an extra return value. An error is returned if the
 	// archive is not enabled or some other issue has occurred.
 	GetArchiveBlockHeight() (height uint64, empty bool, err error)
@@ -353,11 +353,11 @@ func CreateStateDBUsing(state State) StateDB {
 	return createStateDBWith(state, storedDataCacheSize, true)
 }
 
-// createNonCommittableStateDBUsing creates a read-only StateDB instance wrapping
+// CreateNonCommittableStateDBUsing creates a read-only StateDB instance wrapping
 // the given state supporting all operations specified by the VmStateDB interface.
 // Note: any StateDB instanced becomes invalid if the underlying state is
 // modified by any other StateDB instance or through any other direct modification.
-func createNonCommittableStateDBUsing(state State) NonCommittableStateDB {
+func CreateNonCommittableStateDBUsing(state State) NonCommittableStateDB {
 	// Since StateDB instances are big objects costly to create we reuse those using
 	// a pool of objects. However, instances need to be properly reset.
 	db := nonCommittableStateDbPool.Get().(*stateDB)
@@ -1222,7 +1222,7 @@ func (s *stateDB) GetArchiveStateDB(block uint64) (NonCommittableStateDB, error)
 	if err != nil {
 		return nil, err
 	}
-	return createNonCommittableStateDBUsing(archiveState), nil
+	return CreateNonCommittableStateDBUsing(archiveState), nil
 }
 
 func (s *stateDB) GetArchiveBlockHeight() (uint64, bool, error) {
