@@ -184,6 +184,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
+				defer forest.Close()
 
 				addr := common.Address{1}
 				info1 := AccountInfo{Nonce: common.Nonce{12}}
@@ -205,7 +206,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 
 				// The second update should have not introduced a new root.
 				if root1 != root2 {
-					t.Errorf("expeted same root, got %v and %v", root1, root2)
+					t.Errorf("expected same root, got %v and %v", root1, root2)
 				}
 				if info, found, err := forest.GetAccountInfo(root1, addr); info != info2 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
@@ -223,6 +224,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
+				defer forest.Close()
 
 				addr := common.Address{1}
 				info1 := AccountInfo{Nonce: common.Nonce{12}}
@@ -251,7 +253,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 					t.Errorf("failed to freeze root2: %v", err)
 				}
 
-				// All versions should still be accessable.
+				// All versions should still be accessible.
 				if info, found, err := forest.GetAccountInfo(root1, addr); info != info1 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info1, info, found, err)
 				}

@@ -88,6 +88,7 @@ func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
 		if err != nil {
 			t.Fatalf("failed to create reference state: %v", err)
 		}
+		defer ref.Close()
 		mod(ref.(directUpdateState))
 		hash, err := ref.GetHash()
 		if err != nil {
