@@ -558,6 +558,7 @@ func (n *BranchNode) IsFrozen() bool {
 
 func (n *BranchNode) MarkFrozen() {
 	n.frozen = true
+	n.frozenChildren = ^uint16(0)
 }
 
 func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
