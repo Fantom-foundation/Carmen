@@ -387,7 +387,7 @@ func (s *Forest) Dump(rootId NodeId) {
 // Check verifies internal invariants of the Trie instance. If the trie is
 // self-consistent, nil is returned and the Trie is read to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and
-// the behaviour of all other operations is undefined.
+// the behavior of all other operations is undefined.
 func (s *Forest) Check(rootId NodeId) error {
 	root, err := s.getNode(rootId)
 	if err != nil {
@@ -413,6 +413,11 @@ func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 	}
 
 	// Check whether the node is in the write buffer.
+	// Note: although Cancel is thread safe, it is important to make sure
+	// that this part is only run by a single thread to avoid one thread
+	// recovering a node from the buffer and another fetching it from the
+	// storage. This synchronization is currently ensured by the
+	// nodeCacheMutex acquired above and held until the end of the function.
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
 		s.addToCacheHoldingCacheMutexLock(id, res)
