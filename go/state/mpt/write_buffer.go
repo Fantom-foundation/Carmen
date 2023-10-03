@@ -4,6 +4,7 @@ package mpt
 
 import (
 	"errors"
+	"sort"
 	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
@@ -49,6 +50,8 @@ func MakeWriteBuffer(sink NodeSink) WriteBuffer {
 // ----------------------------------------------------------------------------
 
 type writeBuffer struct {
+	sink        NodeSink
+	capacity    int
 	buffer      map[NodeId]*shared.Shared[Node]
 	bufferMutex sync.Mutex
 	ids         chan NodeId
@@ -70,7 +73,9 @@ func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
 	done := make(chan struct{})
 
 	res := &writeBuffer{
-		buffer:    make(map[NodeId]*shared.Shared[Node], capacity),
+		sink:      sink,
+		capacity:  capacity,
+		buffer:    make(map[NodeId]*shared.Shared[Node], 2*capacity),
 		ids:       ids,
 		flushDone: flushDone,
 		done:      done,
@@ -79,28 +84,20 @@ func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
 	go func() {
 		defer close(done)
 		defer close(flushDone)
+		counter := 0
 		for id := range ids {
 			// Check if this is a token signaling a flush request.
 			if id.IsEmpty() {
+				res.emptyBuffer()
 				flushDone <- struct{}{}
 				continue
 			}
-			res.bufferMutex.Lock()
-			node, ok := res.buffer[id]
-			res.bufferMutex.Unlock()
-			if !ok {
-				continue // element was canceled
+			// Otherwise, perform a flush every time the capacity is reached.
+			counter++
+			if counter >= capacity {
+				res.emptyBuffer()
+				counter = 0
 			}
-			handle := node.GetReadHandle()
-			if err := sink.Write(id, handle); err != nil {
-				res.errsMutex.Lock()
-				res.errs = append(res.errs, err)
-				res.errsMutex.Unlock()
-			}
-			handle.Release()
-			res.bufferMutex.Lock()
-			delete(res.buffer, id)
-			res.bufferMutex.Unlock()
 		}
 	}()
 
@@ -163,4 +160,49 @@ func (b *writeBuffer) Close() error {
 	b.errsMutex.Lock()
 	defer b.errsMutex.Unlock()
 	return errors.Join(b.errs...)
+}
+
+func (b *writeBuffer) emptyBuffer() {
+
+	// Collect a list of all IDs in the buffer.
+	ids := make([]NodeId, 0, 2*b.capacity)
+	b.bufferMutex.Lock()
+	for id := range b.buffer {
+		ids = append(ids, id)
+	}
+	b.bufferMutex.Unlock()
+
+	// Sort IDs to minimize disk seeks.
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+
+	// Flush all nodes of current patch.
+	for i := 0; i < len(ids); i++ {
+		id := ids[i]
+		// Check whether the given node has not been canceled in the meantime.
+		b.bufferMutex.Lock()
+		node, found := b.buffer[id]
+		if !found {
+			b.bufferMutex.Unlock()
+			continue
+		}
+
+		// Lock read access on the node before unlocking the buffer to avoid
+		// another thread to cancel the write and gain write access in-between.
+		handle := node.GetReadHandle()
+		b.bufferMutex.Unlock()
+
+		if err := b.sink.Write(id, handle); err != nil {
+			b.errsMutex.Lock()
+			b.errs = append(b.errs, err)
+			b.errsMutex.Unlock()
+		}
+
+		b.bufferMutex.Lock()
+		delete(b.buffer, id)
+		b.bufferMutex.Unlock()
+
+		// Only release read access of the node after it has been removed from
+		// the buffer such that subsequent updates are not lost.
+		handle.Release()
+	}
 }
