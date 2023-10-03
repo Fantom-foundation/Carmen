@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 func BenchmarkStorageChanges(b *testing.B) {
@@ -21,6 +22,7 @@ func BenchmarkStorageChanges(b *testing.B) {
 				if err != nil {
 					b.Fail()
 				}
+				defer state.Close()
 
 				address := common.Address{}
 				state.SetNonce(address, common.ToNonce(12))
@@ -70,14 +72,14 @@ func TestReadCodes(t *testing.T) {
 	}
 
 	if code, exists := res[h1]; !exists || !bytes.Equal(code, code1) {
-		t.Errorf("byted do not match: %x != %x", code, code1)
+		t.Errorf("bytes do not match: %x != %x", code, code1)
 	}
 
 	if code, exists := res[h2]; !exists || !bytes.Equal(code, code2) {
-		t.Errorf("byted do not match: %x != %x", code, code1)
+		t.Errorf("bytes do not match: %x != %x", code, code1)
 	}
 
 	if code, exists := res[h3]; !exists || !bytes.Equal(code, code3) {
-		t.Errorf("byted do not match: %x != %x", code, code1)
+		t.Errorf("bytes do not match: %x != %x", code, code1)
 	}
 }

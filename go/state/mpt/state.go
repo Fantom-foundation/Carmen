@@ -43,7 +43,7 @@ func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
 }
 
 // OpenGoMemoryState loads state information from the given directory and
-// creates a Trie entirly retained in memory.
+// creates a Trie entirely retained in memory.
 func OpenGoMemoryState(directory string, config MptConfig) (*MptState, error) {
 	trie, err := OpenInMemoryLiveTrie(directory, config)
 	if err != nil {
