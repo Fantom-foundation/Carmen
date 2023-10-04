@@ -2,10 +2,10 @@ package mpt
 
 // MptConfig defines a set of configuration options for customizing the MPT
 // implementation. It is mainly intended to facilitate the accurate modeling
-// of Ethereums MPT implementation (see schema 5) but may also be used for
+// of Ethereum's MPT implementation (see schema 5) but may also be used for
 // experimenting with design options.
 type MptConfig struct {
-	// A describtive name for this configuration. It has no effect except for
+	// A descriptive name for this configuration. It has no effect except for
 	// logging and debugging purposes.
 	Name string
 
@@ -39,3 +39,13 @@ var S5Config = MptConfig{
 }
 
 var allMptConfigs = []MptConfig{S4Config, S5Config}
+
+// GetConfigByName attempts to locate a configuration with the given name.
+func GetConfigByName(name string) (MptConfig, bool) {
+	for _, config := range allMptConfigs {
+		if config.Name == name {
+			return config, true
+		}
+	}
+	return MptConfig{}, false
+}
