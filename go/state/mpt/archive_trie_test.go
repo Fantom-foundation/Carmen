@@ -1,9 +1,13 @@
 package mpt
 
 import (
+	"bufio"
+	"bytes"
 	"os"
+	"reflect"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -210,5 +214,29 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 				t.Errorf("corrupted file should have been detected")
 			}
 		})
+	}
+}
+
+func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
+
+	roots := []Root{
+		{ValueId(12), common.Hash{12}},
+		{ValueId(14), common.Hash{14}},
+	}
+
+	var b bytes.Buffer
+	writer := bufio.NewWriter(&b)
+	storeRootsTo(writer, roots)
+	writer.Flush()
+
+	for _, size := range []int{1, 2, 4, 1024} {
+		reader := utils.NewChunkReader(b.Bytes(), size)
+		res, err := loadRootsFrom(reader)
+		if err != nil {
+			t.Fatalf("error loading roots: %v", err)
+		}
+		if !reflect.DeepEqual(roots, res) {
+			t.Errorf("failed to restore roots, wanted %v, got %v", roots, res)
+		}
 	}
 }

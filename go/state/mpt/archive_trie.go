@@ -254,24 +254,23 @@ func loadRoots(filename string) ([]Root, error) {
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
+	return loadRootsFrom(reader)
+}
 
+func loadRootsFrom(reader io.Reader) ([]Root, error) {
 	res := []Root{}
 	var id [4]byte
 	var hash common.Hash
 	for {
-		if num, err := reader.Read(id[:]); err != nil {
+		if _, err := io.ReadFull(reader, id[:]); err != nil {
 			if err == io.EOF {
 				return res, nil
 			}
-			return nil, err
-		} else if num != len(id) {
-			return nil, fmt.Errorf("invalid root file")
+			return nil, fmt.Errorf("invalid root file format: %v", err)
 		}
 
-		if num, err := reader.Read(hash[:]); err != nil {
-			return nil, err
-		} else if num != len(hash) {
-			return nil, fmt.Errorf("invalid root file")
+		if _, err := io.ReadFull(reader, hash[:]); err != nil {
+			return nil, fmt.Errorf("invalid root file format: %v", err)
 		}
 
 		id := NodeId(binary.BigEndian.Uint32(id[:]))
@@ -286,7 +285,16 @@ func storeRoots(filename string, roots []Root) error {
 	}
 	defer f.Close()
 	writer := bufio.NewWriter(f)
+	if err := storeRootsTo(writer, roots); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	return f.Close()
+}
 
+func storeRootsTo(writer io.Writer, roots []Root) error {
 	// Simple file format: [<node-id>]*
 	var buffer [4]byte
 	for _, root := range roots {
@@ -298,8 +306,5 @@ func storeRoots(filename string, roots []Root) error {
 			return err
 		}
 	}
-	if err := writer.Flush(); err != nil {
-		return err
-	}
-	return f.Close()
+	return nil
 }

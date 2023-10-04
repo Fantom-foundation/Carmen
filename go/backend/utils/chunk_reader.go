@@ -34,7 +34,7 @@ func (r *chunkReader) Read(p []byte) (int, error) {
 		return n, nil
 	}
 
-	n := copy(p, r.data[0:r.size-1])
+	n := copy(p, r.data[0:r.size])
 	r.data = r.data[n:]
 	return n, nil
 }
