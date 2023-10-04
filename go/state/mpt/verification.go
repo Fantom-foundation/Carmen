@@ -45,10 +45,10 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 
 	// ------------------------- Meta-Data Checks -----------------------------
 
-	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...\n", directory))
+	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...", directory))
 
 	// Verify stock data structures.
-	observer.Progress("Checking meta-data ...\n")
+	observer.Progress("Checking meta-data ...")
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
 	if err := file.VerifyStock[uint64](directory+"/accounts", accountEncoder); err != nil {
 		return err
@@ -64,7 +64,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	// Open stock data structures for content verification.
-	observer.Progress("Obtaining read access to files ...\n")
+	observer.Progress("Obtaining read access to files ...")
 	source, err := openVerificationNodeSource(directory, config)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	// ----------------- First Pass: check Node References --------------------
 
 	// Check that all IDs used to reference other nodes are valid.
-	observer.Progress("Checking node references ...\n")
+	observer.Progress("Checking node references ...")
 	checkId := func(id NodeId) error {
 		if source.isValid(id) {
 			return nil
@@ -179,7 +179,7 @@ func verifyHashes[N any](
 	lowerBound := ids.GetLowerBound()
 	upperBound := ids.GetUpperBound()
 	nodes := make([]N, upperBound-lowerBound)
-	observer.Progress(fmt.Sprintf("Loading up to %d %ss ...\n", len(nodes), name))
+	observer.Progress(fmt.Sprintf("Loading up to %d %ss ...", len(nodes), name))
 	for i := lowerBound; i < upperBound; i++ {
 		if ids.Contains(i) {
 			node, err := stock.Get(i)
@@ -191,7 +191,7 @@ func verifyHashes[N any](
 	}
 
 	// Compute hashes for loaded nodes.
-	observer.Progress(fmt.Sprintf("Hashing up to %d %ss ...\n", len(nodes), name))
+	observer.Progress(fmt.Sprintf("Hashing up to %d %ss ...", len(nodes), name))
 	hashes := make([]common.Hash, len(nodes))
 	for i := lowerBound; i < upperBound; i++ {
 		if ids.Contains(i) {
@@ -242,7 +242,7 @@ func verifyHashes[N any](
 		return nil
 	}
 
-	observer.Progress(fmt.Sprintf("Checking hash references of up to %d %ss ...\n", len(nodes), name))
+	observer.Progress(fmt.Sprintf("Checking hash references of up to %d %ss ...", len(nodes), name))
 	if err := source.forAllInnerNodes(checkContainedHashes); err != nil {
 		return err
 	}
