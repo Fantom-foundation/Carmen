@@ -1,8 +1,10 @@
 package mpt
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"sync"
@@ -90,6 +92,10 @@ const cacheCapacity = 10_000_000
 const hashesCacheCapacity = 100_000
 
 func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
+	if _, err := checkForestMetadata(directory, config, mode); err != nil {
+		return nil, err
+	}
+
 	success := false
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
 	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
@@ -133,6 +139,10 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 }
 
 func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
+	if _, err := checkForestMetadata(directory, config, mode); err != nil {
+		return nil, err
+	}
+
 	success := false
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
 	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
@@ -173,6 +183,42 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 	}()
 	success = true
 	return makeForest(config, directory, branches, extensions, accounts, values, mode)
+}
+
+func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (ForestMetadata, error) {
+	path := directory + "/forest.json"
+	meta, present, err := ReadForestMetadata(path)
+	if err != nil {
+		return meta, err
+	}
+
+	// Check present metadata to match expected configuration.
+	if present {
+		if want, got := config.Name, meta.Configuration; want != got {
+			return meta, fmt.Errorf("unexpected MPT configuration in directory, wanted %v, got %v", want, got)
+		}
+		if want, got := StorageMode(mode == Archive), StorageMode(meta.Archive); want != got {
+			return meta, fmt.Errorf("unexpected MPT storage mode in directory, wanted %v, got %v", want, got)
+		}
+		return meta, nil
+	}
+
+	// Write metadata to disk to create new forest.
+	meta = ForestMetadata{
+		Configuration: config.Name,
+		Archive:       mode == Archive,
+	}
+
+	// Update on-disk meta-data.
+	metadata, err := json.Marshal(meta)
+	if err != nil {
+		return meta, err
+	}
+	if err := os.WriteFile(path, metadata, 0600); err != nil {
+		return meta, err
+	}
+
+	return meta, nil
 }
 
 func makeForest(
@@ -643,4 +689,34 @@ type writeBufferSink struct {
 
 func (s writeBufferSink) Write(id NodeId, handle shared.ReadHandle[Node]) error {
 	return s.forest.flushNode(id, handle.Get())
+}
+
+// -- Forest metadata --
+
+// ForestMetadata is the helper type to read and write metadata from/to the disk.
+type ForestMetadata struct {
+	Configuration string
+	Archive       bool
+}
+
+// ReadForestMetadata parses the content of the given file if it exists or returns
+// a default-initialized metadata struct if there is no such file.
+func ReadForestMetadata(filename string) (ForestMetadata, bool, error) {
+
+	// If there is no file, initialize and return default metadata.
+	if _, err := os.Stat(filename); err != nil {
+		return ForestMetadata{}, false, nil
+	}
+
+	// If the file exists, parse it and return its content.
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return ForestMetadata{}, false, err
+	}
+
+	var meta ForestMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return meta, false, err
+	}
+	return meta, true, nil
 }

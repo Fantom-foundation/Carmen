@@ -265,13 +265,13 @@ func loadRoots(filename string) ([]Root, error) {
 			}
 			return nil, err
 		} else if num != len(id) {
-			return nil, fmt.Errorf("invalid hash file")
+			return nil, fmt.Errorf("invalid root file")
 		}
 
 		if num, err := reader.Read(hash[:]); err != nil {
 			return nil, err
 		} else if num != len(hash) {
-			return nil, fmt.Errorf("invalid hash file")
+			return nil, fmt.Errorf("invalid root file")
 		}
 
 		id := NodeId(binary.BigEndian.Uint32(id[:]))
