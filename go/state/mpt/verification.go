@@ -227,13 +227,18 @@ func verifyHashes[N any](
 		case *AccountNode:
 			return checkNodeHash(n.storage, n.storageHash)
 		case *ExtensionNode:
-			return checkNodeHash(n.next, n.nextHash)
+			if !n.nextIsEmbedded {
+				return checkNodeHash(n.next, n.nextHash)
+			}
+			return nil
 		case *BranchNode:
 			{
 				errs := []error{}
 				for i := 0; i < len(n.children); i++ {
-					if err := checkNodeHash(n.children[i], n.hashes[i]); err != nil {
-						errs = append(errs, err)
+					if !n.isEmbedded(byte(i)) {
+						if err := checkNodeHash(n.children[i], n.hashes[i]); err != nil {
+							errs = append(errs, err)
+						}
 					}
 				}
 				return errors.Join(errs...)

@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"encoding/hex"
 	"os"
 	"testing"
 
@@ -323,6 +324,58 @@ func TestVerification_ValueModificationIsDetected(t *testing.T) {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
+}
+
+func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
+	// Construct an MPT with some embedded nodes. For this we need some keys
+	// with their hashes sharing a long common prefix. The hashes of the
+	// following keys have a 4-byte long common prefix.
+	var key1, key2 common.Key
+	data, _ := hex.DecodeString("965866864f3cc23585ad48a3b4b061c5e1d5a471dbb2360538029046ac528d85")
+	copy(key1[:], data)
+	data, _ = hex.DecodeString("c1bb1e5ab6acf1bef1a125f3d60e0941b9a8624288ffd67282484c25519f9e65")
+	copy(key2[:], data)
+
+	var v1 common.Value
+	v1[len(v1)-1] = 1
+
+	dir := t.TempDir()
+	forest, err := OpenFileForest(dir, S5Config, Archive)
+	if err != nil {
+		t.Fatalf("failed to start empty forest: %v", err)
+	}
+
+	root := EmptyId()
+
+	addr := common.Address{}
+	root, err = forest.SetAccountInfo(root, addr, AccountInfo{Nonce: common.ToNonce(1)})
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+
+	root, err = forest.SetValue(root, addr, key1, v1)
+	if err != nil {
+		t.Fatalf("failed to set value for key1: %v", err)
+	}
+
+	root, err = forest.SetValue(root, addr, key2, v1)
+	if err != nil {
+		t.Fatalf("failed to set value for key2: %v", err)
+	}
+
+	hash, err := forest.updateHashesFor(root)
+	if err != nil {
+		t.Fatalf("failed to compute hash for trie: %v", err)
+	}
+
+	if err := forest.Close(); err != nil {
+		t.Fatalf("failed to close trie: %v", err)
+	}
+
+	// Run the verification for the trie (which includes embedded nodes).
+	if err := VerifyFileForest(dir, S5Config, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
+		t.Errorf("Unexpected verification error: %v", err)
+	}
 }
 
 func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, config MptConfig, roots []Root)) {
