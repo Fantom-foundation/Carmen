@@ -17,6 +17,7 @@ func main() {
 		Flags:     []cli.Flag{},
 		Commands: []*cli.Command{
 			&Info,
+			&Verify,
 		},
 	}
 
