@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -20,12 +21,14 @@ import (
 // be applied through the `Add` method, according to the `archive.Archive“
 // interface, which this type is implementing.
 //
-// Its main task is to keep track of state rootes and to freeze the head
+// Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
-	head     *MptState // the current head-state
-	roots    []Root    // the roots of individual blocks indexed by block height
-	rootFile string    // the file storing the list of roots
+	head       *MptState  // the current head-state
+	roots      []Root     // the roots of individual blocks indexed by block height
+	rootsMutex sync.Mutex // protecting access to the roots list
+	rootFile   string     // the file storing the list of roots
+	addMutex   sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
 }
 
 func OpenArchiveTrie(directory string, config MptConfig) (archive.Archive, error) {
@@ -67,7 +70,12 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
+	a.addMutex.Lock()
+	defer a.addMutex.Unlock()
+
+	a.rootsMutex.Lock()
 	if uint64(len(a.roots)) > block {
+		a.rootsMutex.Unlock()
 		return fmt.Errorf("block %d already present", block)
 	}
 
@@ -75,12 +83,14 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	if uint64(len(a.roots)) < block {
 		lastHash, err := a.head.trie.GetHash()
 		if err != nil {
+			a.rootsMutex.Unlock()
 			return err
 		}
 		for uint64(len(a.roots)) < block {
 			a.roots = append(a.roots, Root{a.head.trie.root, lastHash})
 		}
 	}
+	a.rootsMutex.Unlock()
 
 	// Apply all the changes of the update.
 	// TODO: refactor update infrastructure to use applyUpdate
@@ -128,33 +138,36 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	}
 
 	// Save new root node.
+	a.rootsMutex.Lock()
 	a.roots = append(a.roots, Root{trie.root, hash})
+	a.rootsMutex.Unlock()
 	return nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
-	if len(a.roots) == 0 {
+	a.rootsMutex.Lock()
+	length := uint64(len(a.roots))
+	a.rootsMutex.Unlock()
+	if length == 0 {
 		return 0, true, nil
 	}
-	return uint64(len(a.roots) - 1), false, nil
+	return length - 1, false, nil
 }
 
 func (a *ArchiveTrie) Exists(block uint64, account common.Address) (exists bool, err error) {
-	if block >= uint64(len(a.roots)) {
-		return false, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
+	view, err := a.getView(block)
+	if err != nil {
+		return false, err
 	}
-	root := a.roots[block]
-	view := getTrieView(root.nodeId, a.head.trie.forest)
 	_, exists, err = view.GetAccountInfo(account)
 	return exists, err
 }
 
 func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
-	if block >= uint64(len(a.roots)) {
-		return common.Balance{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
+	view, err := a.getView(block)
+	if err != nil {
+		return common.Balance{}, err
 	}
-	root := a.roots[block]
-	view := getTrieView(root.nodeId, a.head.trie.forest)
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
 		return common.Balance{}, err
@@ -163,11 +176,10 @@ func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance 
 }
 
 func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte, err error) {
-	if block >= uint64(len(a.roots)) {
-		return nil, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
+	view, err := a.getView(block)
+	if err != nil {
+		return nil, err
 	}
-	root := a.roots[block]
-	view := getTrieView(root.nodeId, a.head.trie.forest)
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
 		return nil, err
@@ -176,11 +188,10 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 }
 
 func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce common.Nonce, err error) {
-	if block >= uint64(len(a.roots)) {
-		return common.Nonce{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
+	view, err := a.getView(block)
+	if err != nil {
+		return common.Nonce{}, err
 	}
-	root := a.roots[block]
-	view := getTrieView(root.nodeId, a.head.trie.forest)
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
 		return common.Nonce{}, err
@@ -189,11 +200,10 @@ func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce comm
 }
 
 func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot common.Key) (value common.Value, err error) {
-	if block >= uint64(len(a.roots)) {
-		return common.Value{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
+	view, err := a.getView(block)
+	if err != nil {
+		return common.Value{}, err
 	}
-	root := a.roots[block]
-	view := getTrieView(root.nodeId, a.head.trie.forest)
 	return view.GetValue(account, slot)
 }
 
@@ -202,22 +212,29 @@ func (a *ArchiveTrie) GetAccountHash(block uint64, account common.Address) (comm
 }
 
 func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
-	if block >= uint64(len(a.roots)) {
-		return common.Hash{}, fmt.Errorf("invalid block: %d >= %d", block, len(a.roots))
+	a.rootsMutex.Lock()
+	length := uint64(len(a.roots))
+	if block >= length {
+		a.rootsMutex.Unlock()
+		return common.Hash{}, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	root := a.roots[block]
-	view := getTrieView(root.nodeId, a.head.trie.forest)
-	return view.GetHash()
+	res := a.roots[block].hash
+	a.rootsMutex.Unlock()
+	return res, nil
 }
 
-func (s *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
-	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
-	mf.AddChild("head", s.head.GetMemoryFootprint())
-	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(len(s.roots))*unsafe.Sizeof(NodeId(0))))
+func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
+	mf.AddChild("head", a.head.GetMemoryFootprint())
+	a.rootsMutex.Lock()
+	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(len(a.roots))*unsafe.Sizeof(NodeId(0))))
+	a.rootsMutex.Unlock()
 	return mf
 }
 
 func (a *ArchiveTrie) Dump() {
+	a.rootsMutex.Lock()
+	defer a.rootsMutex.Unlock()
 	for i, root := range a.roots {
 		fmt.Printf("\nBlock %d: %x\n", i, root.hash)
 		view := getTrieView(root.nodeId, a.head.trie.forest)
@@ -227,6 +244,8 @@ func (a *ArchiveTrie) Dump() {
 }
 
 func (a *ArchiveTrie) Flush() error {
+	a.rootsMutex.Lock()
+	defer a.rootsMutex.Unlock()
 	return errors.Join(
 		a.head.Flush(),
 		storeRoots(a.rootFile, a.roots),
@@ -238,6 +257,18 @@ func (a *ArchiveTrie) Close() error {
 		a.Flush(),
 		a.head.Close(),
 	)
+}
+
+func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
+	a.rootsMutex.Lock()
+	length := uint64(len(a.roots))
+	if block >= length {
+		a.rootsMutex.Unlock()
+		return nil, fmt.Errorf("invalid block: %d >= %d", block, length)
+	}
+	rootId := a.roots[block].nodeId
+	a.rootsMutex.Unlock()
+	return getTrieView(rootId, a.head.trie.forest), nil
 }
 
 // ---- Reading and Writing Root Node ID Lists ----
