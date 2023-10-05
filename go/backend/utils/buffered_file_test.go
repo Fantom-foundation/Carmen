@@ -100,7 +100,7 @@ func TestBufferedFile_ReadAndWriteCanHandleUnalignedData(t *testing.T) {
 		t.Fatalf("failed to open buffered file: %v", err)
 	}
 
-	// By writting data of length 3 we are sometimes writing data crossing
+	// By writing data of length 3 we are sometimes writing data crossing
 	// the internal aligned buffer-page boundary.
 	for i := 0; i < 1000; i++ {
 		if err := file.Write(int64(i)*3, []byte{byte(i), byte(i + 1), byte(i + 2)}); err != nil {

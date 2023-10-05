@@ -31,7 +31,7 @@ const bufferSize = 1 << 12 // = 4 KB
 
 // OpenBufferedFile opens the file at the given path for read/write operations.
 // If it does not exist, a new file is implicitly created.
-func OpenBufferedFile(path string) (*BufferedFile, error) {
+func OpenBufferedFile(path string) (File, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err

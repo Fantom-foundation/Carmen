@@ -25,7 +25,8 @@ func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
 	}
 }
 
-// Iterate all cached entries - calls the callback for each key-value pair in the cache
+// Iterate all cached entries - calls the callback for each key-value pair in the cache.
+// Iteration aborts if the callback returns false.
 func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 	for key, value := range c.cache {
 		if !callback(key, value.val) {
@@ -35,6 +36,7 @@ func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 }
 
 // Iterate all cached entries by passing a mutable value reference to the provided callback.
+// Iteration aborts if the callback returns false.
 func (c *Cache[K, V]) IterateMutable(callback func(K, *V) bool) {
 	for key, value := range c.cache {
 		if !callback(key, &value.val) {

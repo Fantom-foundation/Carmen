@@ -15,7 +15,7 @@ import (
 type fileStock[I stock.Index, V any] struct {
 	directory       string
 	encoder         stock.ValueEncoder[V]
-	values          *utils.BufferedFile
+	values          utils.File
 	freelist        *fileBasedStack[I]
 	numValueSlots   I
 	numValuesInFile int64
@@ -38,7 +38,8 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 	}
 
 	_, valuefile, freelistfile := getFileNames(directory)
-	values, err := utils.OpenBufferedFile(valuefile)
+	//values, err := utils.OpenBufferedFile(valuefile)
+	values, err := utils.OpenPagedFile(valuefile)
 	if err != nil {
 		return nil, err
 	}
