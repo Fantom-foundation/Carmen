@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -13,6 +14,7 @@ type pagedFile struct {
 	file        *os.File                    // the file handle to represent
 	pagesInFile int64                       // the number of pages in the file
 	pages       *common.Cache[int64, *page] // an in-memory page cache
+	pool        sync.Pool                   // a pool for recycling pages
 }
 
 func OpenPagedFile(path string) (File, error) {
@@ -34,6 +36,7 @@ func OpenPagedFile(path string) (File, error) {
 		file:        f,
 		pagesInFile: size / pageSize,
 		pages:       common.NewCache[int64, *page](1024), // ~ 4 MB of cache
+		pool:        sync.Pool{New: func() any { return new(page) }},
 	}, nil
 }
 
@@ -111,6 +114,8 @@ func (f *pagedFile) getPage(id int64) (*page, error) {
 		if err := f.writePage(evictedId, evictedPage); err != nil {
 			return nil, err
 		}
+		evictedPage.clear()
+		f.pool.Put(evictedPage)
 	}
 
 	return res, nil
@@ -119,7 +124,7 @@ func (f *pagedFile) getPage(id int64) (*page, error) {
 func (f *pagedFile) readPage(id int64) (*page, error) {
 	// Reading data beyond the end of file is allowed and
 	// returns zero values.
-	res := new(page)
+	res := f.pool.Get().(*page)
 	if id >= f.pagesInFile {
 		return res, nil
 	}
@@ -170,4 +175,9 @@ const pageSize = 1 << 12 // = 4 KB
 type page struct {
 	data  [pageSize]byte
 	dirty bool
+}
+
+func (p *page) clear() {
+	p.dirty = false
+	p.data = [pageSize]byte{}
 }
