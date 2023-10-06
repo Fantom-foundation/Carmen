@@ -80,7 +80,7 @@ func TestPagedFile_DataIsPersistent(t *testing.T) {
 					t.Fatalf("failed to read at position %d: %v", i, err)
 				}
 				if dst[0] != byte(i+1) {
-					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i+1), dst[0])
+					t.Errorf("invalid data read at position %d, wanted %d, got %d", i, byte(i+1), dst[0])
 				}
 			}
 
