@@ -39,6 +39,7 @@ type Parameters struct {
 
 // NewEvmStore provide a new EvmStore instance
 func NewEvmStore(params Parameters) (EvmStore, error) {
+	success := false
 	txHashPath := params.Directory + string(filepath.Separator) + "txhash"
 	TxPositionPath := params.Directory + string(filepath.Separator) + "txpos"
 	txsPath := params.Directory + string(filepath.Separator) + "txs"
@@ -60,18 +61,34 @@ func NewEvmStore(params Parameters) (EvmStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			txHashIndex.Close()
+		}
+	}()
 	txPositionStore, err := pagedfile.NewStore[uint64, TxPosition](TxPositionPath, TxPositionSerializer{}, common.PageSize, hashtree.GetNoHashFactory(), poolSize)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			txPositionStore.Close()
+		}
+	}()
 	txsDepot, err := fileDepot.NewDepot[uint64](txsPath, common.Identifier64Serializer{}, hashtree.GetNoHashFactory(), txsGroupSize)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if !success {
+			txsDepot.Close()
+		}
+	}()
 	receiptsDepot, err := fileDepot.NewDepot[uint64](receiptsPath, common.Identifier64Serializer{}, hashtree.GetNoHashFactory(), receiptsGroupSize)
 	if err != nil {
 		return nil, err
 	}
+	success = true
 	return &evmStore{
 		txHashIndex:     txHashIndex,
 		txPositionStore: txPositionStore,
