@@ -270,9 +270,17 @@ func (h ethHasher) encodeEmpty(EmptyNode, NodeManager, NodeSource) ([]byte, erro
 	return emptyStringRlpEncoded, nil
 }
 
+// This pools stores not only the slice, but also its pointer, to reduce calls to runtime.convTslice(),
+// inspired by:
+// https://blog.mike.norgate.xyz/unlocking-go-slice-performance-navigating-sync-pool-for-enhanced-efficiency-7cb63b0b453e
+var branchRlpStreamPool = sync.Pool{New: func() any {
+	s := make([]rlp.Item, 16+1)
+	return &s
+},
+}
+
 func (h ethHasher) encodeBranch(id NodeId, node *BranchNode, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
 	children := node.children
-	items := make([]rlp.Item, len(children)+1)
 
 	// Refresh all child hashes.
 	// TODO: test whether doing this in parallel provides any benefits.
@@ -308,6 +316,10 @@ func (h ethHasher) encodeBranch(id NodeId, node *BranchNode, handle shared.Write
 		}
 	}
 
+	ptr := branchRlpStreamPool.Get().(*[]rlp.Item)
+	defer branchRlpStreamPool.Put(ptr)
+	items := *ptr
+
 	for i, child := range children {
 		if child.IsEmpty() {
 			items[i] = rlp.String{}
@@ -319,26 +331,35 @@ func (h ethHasher) encodeBranch(id NodeId, node *BranchNode, handle shared.Write
 			if err != nil {
 				return nil, err
 			}
-			defer node.Release()
 			encoded, err := h.encode(child, node.Get(), shared.WriteHandle[Node]{}, nil, source)
+			node.Release()
 			if err != nil {
 				return nil, err
 			}
 			items[i] = rlp.Encoded{Data: encoded}
 		} else {
-			items[i] = rlp.String{Str: node.hashes[i][:]}
+			// passing by pointer to hash limits convTslice() calls
+			items[i] = rlp.Hash{Str: &node.hashes[i]}
 		}
 	}
 
 	// There is one 17th entry which would be filled if this node is a terminator. However,
 	// branch nodes are never terminators in State or Storage Tries.
-	items[len(children)] = &rlp.String{}
+	items[len(children)] = rlp.String{}
 
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
+var extensionRlpStreamPool = sync.Pool{New: func() any {
+	s := make([]rlp.Item, 2)
+	return &s
+},
+}
+
 func (h ethHasher) encodeExtension(id NodeId, node *ExtensionNode, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
-	items := make([]rlp.Item, 2)
+	ptr := extensionRlpStreamPool.Get().(*[]rlp.Item)
+	defer extensionRlpStreamPool.Put(ptr)
+	items := *ptr
 
 	numNibbles := node.path.Length()
 	packedNibbles := node.path.GetPackedNibbles()
@@ -387,6 +408,12 @@ func (h ethHasher) encodeExtension(id NodeId, node *ExtensionNode, handle shared
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
+var accountRlpStreamPool = sync.Pool{New: func() any {
+	s := make([]rlp.Item, 4)
+	return &s
+},
+}
+
 func (h *ethHasher) encodeAccount(id NodeId, node *AccountNode, handle shared.WriteHandle[Node], manager NodeManager, source NodeSource) ([]byte, error) {
 	storageRoot := node.storage
 	if manager != nil && node.storageHashDirty {
@@ -400,27 +427,37 @@ func (h *ethHasher) encodeAccount(id NodeId, node *AccountNode, handle shared.Wr
 	}
 
 	// Encode the account information to get the value.
-	info := node.info
-	items := make([]rlp.Item, 4)
-	items[0] = &rlp.Uint64{Value: info.Nonce.ToUint64()}
-	items[1] = &rlp.BigInt{Value: info.Balance.ToBigInt()}
+	ptr := accountRlpStreamPool.Get().(*[]rlp.Item)
+	defer accountRlpStreamPool.Put(ptr)
+	items := *ptr
+
+	items[0] = rlp.Uint64{Value: node.info.Nonce.ToUint64()}
+	items[1] = rlp.BigInt{Value: node.info.Balance.ToBigInt()}
 	if storageRoot.IsEmpty() {
-		items[2] = &rlp.String{Str: emptyNodeEthereumHash[:]}
+		items[2] = rlp.Hash{Str: &emptyNodeEthereumHash}
 	} else {
-		items[2] = &rlp.String{Str: node.storageHash[:]}
+		items[2] = rlp.Hash{Str: &node.storageHash}
 	}
-	items[3] = &rlp.String{Str: info.CodeHash[:]}
+	items[3] = rlp.Hash{Str: &node.info.CodeHash}
 	value := rlp.Encode(rlp.List{Items: items})
 
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = &rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), source)}
-	items[1] = &rlp.String{Str: value}
+	items[0] = rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), source)}
+	items[1] = rlp.String{Str: value}
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
+var valueRlpStreamPool = sync.Pool{New: func() any {
+	s := make([]rlp.Item, 2)
+	return &s
+},
+}
+
 func (h *ethHasher) encodeValue(_ NodeId, node *ValueNode, _ shared.WriteHandle[Node], _ NodeManager, source NodeSource) ([]byte, error) {
-	items := make([]rlp.Item, 2)
+	ptr := valueRlpStreamPool.Get().(*[]rlp.Item)
+	defer valueRlpStreamPool.Put(ptr)
+	items := *ptr
 
 	// The first item is an encoded path fragment.
 	items[0] = &rlp.String{Str: encodeKeyPath(node.key, int(node.pathLength), source)}
