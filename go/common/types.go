@@ -104,6 +104,10 @@ func (a *Key) Compare(b *Key) int {
 	return bytes.Compare(a[:], b[:])
 }
 
+func (a *Hash) Compare(b *Hash) int {
+	return bytes.Compare(a[:], b[:])
+}
+
 type AddressComparator struct{}
 
 func (c AddressComparator) Compare(a, b *Address) int {
@@ -113,6 +117,12 @@ func (c AddressComparator) Compare(a, b *Address) int {
 type KeyComparator struct{}
 
 func (c KeyComparator) Compare(a, b *Key) int {
+	return a.Compare(b)
+}
+
+type HashComparator struct{}
+
+func (c HashComparator) Compare(a, b *Hash) int {
 	return a.Compare(b)
 }
 
@@ -213,26 +223,9 @@ type AddressHasher struct{}
 func (s AddressHasher) Hash(data *Address) uint64 {
 	// enumerate all indexes for the best performance, even a for-loop adds 25% overhead
 	h := uint64(17)
-	h = h*prime + uint64(data[0])
-	h = h*prime + uint64(data[1])
-	h = h*prime + uint64(data[2])
-	h = h*prime + uint64(data[3])
-	h = h*prime + uint64(data[4])
-	h = h*prime + uint64(data[5])
-	h = h*prime + uint64(data[6])
-	h = h*prime + uint64(data[7])
-	h = h*prime + uint64(data[8])
-	h = h*prime + uint64(data[9])
-	h = h*prime + uint64(data[10])
-	h = h*prime + uint64(data[11])
-	h = h*prime + uint64(data[12])
-	h = h*prime + uint64(data[13])
-	h = h*prime + uint64(data[14])
-	h = h*prime + uint64(data[15])
-	h = h*prime + uint64(data[16])
-	h = h*prime + uint64(data[17])
-	h = h*prime + uint64(data[18])
-	h = h*prime + uint64(data[19])
+	h = h*prime + binary.BigEndian.Uint64(data[0:8])
+	h = h*prime + binary.BigEndian.Uint64(data[8:16])
+	h = h*prime + uint64(binary.BigEndian.Uint32(data[16:20]))
 
 	return h
 }
@@ -243,38 +236,10 @@ type KeyHasher struct{}
 func (s KeyHasher) Hash(data *Key) uint64 {
 	// enumerate all indexes for the best performance, even a for-loop adds 25% overhead
 	h := uint64(17)
-	h = h*prime + uint64(data[0])
-	h = h*prime + uint64(data[1])
-	h = h*prime + uint64(data[2])
-	h = h*prime + uint64(data[3])
-	h = h*prime + uint64(data[4])
-	h = h*prime + uint64(data[5])
-	h = h*prime + uint64(data[6])
-	h = h*prime + uint64(data[7])
-	h = h*prime + uint64(data[8])
-	h = h*prime + uint64(data[9])
-	h = h*prime + uint64(data[10])
-	h = h*prime + uint64(data[11])
-	h = h*prime + uint64(data[12])
-	h = h*prime + uint64(data[13])
-	h = h*prime + uint64(data[14])
-	h = h*prime + uint64(data[15])
-	h = h*prime + uint64(data[16])
-	h = h*prime + uint64(data[17])
-	h = h*prime + uint64(data[18])
-	h = h*prime + uint64(data[19])
-	h = h*prime + uint64(data[20])
-	h = h*prime + uint64(data[21])
-	h = h*prime + uint64(data[22])
-	h = h*prime + uint64(data[23])
-	h = h*prime + uint64(data[24])
-	h = h*prime + uint64(data[25])
-	h = h*prime + uint64(data[26])
-	h = h*prime + uint64(data[27])
-	h = h*prime + uint64(data[28])
-	h = h*prime + uint64(data[29])
-	h = h*prime + uint64(data[30])
-	h = h*prime + uint64(data[31])
+	h = h*prime + binary.BigEndian.Uint64(data[0:8])
+	h = h*prime + binary.BigEndian.Uint64(data[8:16])
+	h = h*prime + binary.BigEndian.Uint64(data[16:24])
+	h = h*prime + binary.BigEndian.Uint64(data[24:32])
 
 	return h
 }
@@ -283,6 +248,18 @@ type UInt32Hasher struct{}
 
 func (s UInt32Hasher) Hash(a *uint32) uint64 {
 	return uint64(*a)
+}
+
+type HashHasher struct{}
+
+func (s HashHasher) Hash(data *Hash) uint64 {
+	h := uint64(17)
+	h = h*prime + binary.BigEndian.Uint64(data[0:8])
+	h = h*prime + binary.BigEndian.Uint64(data[8:16])
+	h = h*prime + binary.BigEndian.Uint64(data[16:24])
+	h = h*prime + binary.BigEndian.Uint64(data[24:32])
+
+	return h
 }
 
 func (h Hash) ToBytes() []byte {
