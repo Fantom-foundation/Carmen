@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func getEvmStore(t *testing.T) EvmStore {
+func getEvmStore(t *testing.T, dir string) EvmStore {
 	evmStore, err := NewEvmStore(Parameters{
-		Directory: t.TempDir(),
+		Directory: dir,
 	})
 	if err != nil {
 		t.Fatalf("failed to create evmstore; %v", err)
@@ -17,7 +17,8 @@ func getEvmStore(t *testing.T) EvmStore {
 }
 
 func TestTxPosition(t *testing.T) {
-	store := getEvmStore(t)
+	dir := t.TempDir()
+	store := getEvmStore(t, dir)
 	defer store.Close()
 
 	txHash := common.Hash{0x11, 0x22, 0x33, 0x11, 0x22, 0x33, 0x11, 0x22, 0x33, 0x11, 0x22, 0x33, 0x11, 0x22, 0x33}
@@ -46,12 +47,24 @@ func TestTxPosition(t *testing.T) {
 		t.Fatalf("failed to get tx position; %v", err)
 	}
 	if storedPosition != position {
-		t.Errorf("loaded position does not match")
+		t.Errorf("loaded position does not match (got %v want %v)", storedPosition, position)
+	}
+
+	_ = store.Close()
+	store = getEvmStore(t, dir)
+
+	storedPosition, err = store.GetTxPosition(txHash)
+	if err != nil {
+		t.Fatalf("failed to get tx position; %v", err)
+	}
+	if storedPosition != position {
+		t.Errorf("loaded position does not match after the store reopening (got %v want %v)", storedPosition, position)
 	}
 }
 
 func TestReceipts(t *testing.T) {
-	store := getEvmStore(t)
+	dir := t.TempDir()
+	store := getEvmStore(t, dir)
 	defer store.Close()
 
 	blockNum := uint64(87564)
@@ -75,12 +88,24 @@ func TestReceipts(t *testing.T) {
 		t.Fatalf("failed to get receipts; %v", err)
 	}
 	if !bytes.Equal(storedReceipts, receipts) {
-		t.Errorf("loaded receipts does not match")
+		t.Errorf("loaded receipts does not match (got %v want %v)", storedReceipts, receipts)
+	}
+
+	_ = store.Close()
+	store = getEvmStore(t, dir)
+
+	storedReceipts, err = store.GetRawReceipts(blockNum)
+	if err != nil {
+		t.Fatalf("failed to get receipts; %v", err)
+	}
+	if !bytes.Equal(storedReceipts, receipts) {
+		t.Errorf("loaded receipts does not match after the store reopening (got %v want %v)", storedReceipts, receipts)
 	}
 }
 
 func TestTx(t *testing.T) {
-	store := getEvmStore(t)
+	dir := t.TempDir()
+	store := getEvmStore(t, dir)
 	defer store.Close()
 
 	txHash := common.Hash{0xAB, 0xCD}
@@ -104,6 +129,17 @@ func TestTx(t *testing.T) {
 		t.Fatalf("failed to get tx; %v", err)
 	}
 	if !bytes.Equal(storedTx, tx) {
-		t.Errorf("loaded tx does not match")
+		t.Errorf("loaded tx does not match (got %v want %v)", storedTx, tx)
+	}
+
+	_ = store.Close()
+	store = getEvmStore(t, dir)
+
+	storedTx, err = store.GetTx(txHash)
+	if err != nil {
+		t.Fatalf("failed to get tx; %v", err)
+	}
+	if !bytes.Equal(storedTx, tx) {
+		t.Errorf("loaded tx does not match after the store reopening (got %v want %v)", storedTx, tx)
 	}
 }

@@ -448,7 +448,7 @@ func parseMetadata[I common.Identifier](reader io.Reader, indexSerializer common
 		hash = *(*common.Hash)(data[0:32])
 		numBuckets = int(binary.BigEndian.Uint32(data[32:36]))
 		records = int(binary.BigEndian.Uint32(data[36:40]))
-		lastIndex = indexSerializer.FromBytes(data[40:44])
+		lastIndex = indexSerializer.FromBytes(data[40:])
 	}
 
 	if err == io.EOF {
