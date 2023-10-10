@@ -47,7 +47,7 @@ func TestTxPosition(t *testing.T) {
 		t.Fatalf("failed to get tx position; %v", err)
 	}
 	if storedPosition != position {
-		t.Errorf("loaded position does not match")
+		t.Errorf("loaded position does not match (got %v want %v)", storedPosition, position)
 	}
 
 	_ = store.Close()
@@ -58,7 +58,7 @@ func TestTxPosition(t *testing.T) {
 		t.Fatalf("failed to get tx position; %v", err)
 	}
 	if storedPosition != position {
-		t.Errorf("loaded position does not match after the store reopening")
+		t.Errorf("loaded position does not match after the store reopening (got %v want %v)", storedPosition, position)
 	}
 }
 
@@ -88,7 +88,7 @@ func TestReceipts(t *testing.T) {
 		t.Fatalf("failed to get receipts; %v", err)
 	}
 	if !bytes.Equal(storedReceipts, receipts) {
-		t.Errorf("loaded receipts does not match")
+		t.Errorf("loaded receipts does not match (got %v want %v)", storedReceipts, receipts)
 	}
 
 	_ = store.Close()
@@ -99,7 +99,7 @@ func TestReceipts(t *testing.T) {
 		t.Fatalf("failed to get receipts; %v", err)
 	}
 	if !bytes.Equal(storedReceipts, receipts) {
-		t.Errorf("loaded receipts does not match after the store reopening")
+		t.Errorf("loaded receipts does not match after the store reopening (got %v want %v)", storedReceipts, receipts)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestTx(t *testing.T) {
 		t.Fatalf("failed to get tx; %v", err)
 	}
 	if !bytes.Equal(storedTx, tx) {
-		t.Errorf("loaded tx does not match")
+		t.Errorf("loaded tx does not match (got %v want %v)", storedTx, tx)
 	}
 
 	_ = store.Close()
@@ -140,6 +140,6 @@ func TestTx(t *testing.T) {
 		t.Fatalf("failed to get tx; %v", err)
 	}
 	if !bytes.Equal(storedTx, tx) {
-		t.Errorf("loaded tx does not match after the store reopening")
+		t.Errorf("loaded tx does not match after the store reopening (got %v want %v)", storedTx, tx)
 	}
 }
