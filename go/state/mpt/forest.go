@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"sort"
@@ -28,6 +29,10 @@ const (
 	// modified through destructive updates.
 	Live StorageMode = false
 )
+
+// printWarningDefaultNodeFreezing allows for printing a warning that a node is going to be frozen
+// as a consequence of its flushing to the disk.
+const printWarningDefaultNodeFreezing = false
 
 func (m StorageMode) String() string {
 	switch m {
@@ -566,8 +571,8 @@ func (s *Forest) flushNode(id NodeId, node Node) error {
 	// correctness issues. However, if the node-cache size is sufficiently
 	// large, such cases should be rare. Nevertheless, a warning is
 	// printed here to get informed if this changes in the future.
-	if s.storageMode == Archive && !node.IsFrozen() {
-		//log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
+	if printWarningDefaultNodeFreezing && s.storageMode == Archive && !node.IsFrozen() {
+		log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
 	}
 
 	if id.IsValue() {
