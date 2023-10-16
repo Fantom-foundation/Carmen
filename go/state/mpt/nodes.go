@@ -177,9 +177,16 @@ type Node interface {
 	// full tree-scan (linear in size of the trie).
 	Check(source NodeSource, path []Nibble) error
 
-	// Dumps this node and its induced sub-tree to the console. It is mainly
+	// Dump dumps this node and its sub-trees to the console. It is mainly
 	// intended for debugging and may be very costly for larger instances.
 	Dump(source NodeSource, thisId NodeId, indent string)
+
+	// Visit visits this and all nodes in the respective sub-tries. The
+	// visitor is called by each encountered node, with the proper NodeInfo
+	// set. Visiting aborts if the visitor returns or prune sub-tries as
+	// requested by the visitor. The function returns whether the visiting
+	// process has been aborted and/or an error occurred.
+	Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (abort bool, err error)
 }
 
 // NodeSource is a interface for any object capable of resolving NodeIds into
@@ -304,6 +311,10 @@ func (EmptyNode) Check(NodeSource, []Nibble) error {
 
 func (EmptyNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	fmt.Printf("%s-empty- (ID: %v, Hash: %s)\n", indent, thisId, formatHashForDump(source, thisId))
+}
+
+func (EmptyNode) Visit(_ NodeSource, id NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	return visitor.Visit(EmptyNode{}, NodeInfo{Id: id, Depth: &depth}) == VisitResponseAbort, nil
 }
 
 // ----------------------------------------------------------------------------
@@ -634,6 +645,31 @@ func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
 			fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, child, err)
 		}
 	}
+}
+
+func (b *BranchNode) Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	switch visitor.Visit(b, NodeInfo{Id: thisId, Depth: &depth}) {
+	case VisitResponseAbort:
+		return true, nil
+	case VisitResponsePrune:
+		return false, nil
+	case VisitResponseContinue: /* keep going */
+	}
+	for _, child := range b.children {
+		if child.IsEmpty() {
+			continue
+		}
+
+		if handle, err := source.getNode(child); err == nil {
+			defer handle.Release()
+			if abort, err := handle.Get().Visit(source, child, depth+1, visitor); abort || err != nil {
+				return abort, err
+			}
+		} else {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (n *BranchNode) markChildHashDirty(index byte) {
@@ -1030,6 +1066,22 @@ func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	}
 }
 
+func (n *ExtensionNode) Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	response := visitor.Visit(n, NodeInfo{Id: thisId, Depth: &depth})
+	switch response {
+	case VisitResponseAbort:
+		return true, nil
+	case VisitResponsePrune:
+		return false, nil
+	}
+	if handle, err := source.getNode(n.next); err == nil {
+		defer handle.Release()
+		return handle.Get().Visit(source, n.next, depth+1, visitor)
+	} else {
+		return false, err
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Account Node
 // ----------------------------------------------------------------------------
@@ -1409,6 +1461,25 @@ func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	}
 }
 
+func (n *AccountNode) Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	response := visitor.Visit(n, NodeInfo{Id: thisId, Depth: &depth})
+	switch response {
+	case VisitResponseAbort:
+		return true, nil
+	case VisitResponsePrune:
+		return false, nil
+	}
+	if n.storage.IsEmpty() {
+		return false, nil
+	}
+	if node, err := source.getNode(n.storage); err == nil {
+		defer node.Release()
+		return node.Get().Visit(source, thisId, depth+1, visitor)
+	} else {
+		return false, err
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
@@ -1579,6 +1650,10 @@ func formatHashForDump(source NodeSource, id NodeId) string {
 		return fmt.Sprintf("%v", err)
 	}
 	return fmt.Sprintf("0x%x", hash)
+}
+
+func (n *ValueNode) Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	return visitor.Visit(n, NodeInfo{Id: thisId, Depth: &depth}) == VisitResponseAbort, nil
 }
 
 // ----------------------------------------------------------------------------

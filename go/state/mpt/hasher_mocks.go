@@ -63,3 +63,68 @@ func (mr *MockhasherMockRecorder) updateHashes(root, nodes interface{}) *gomock.
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateHashes", reflect.TypeOf((*Mockhasher)(nil).updateHashes), root, nodes)
 }
+
+// MockkeccakHasher is a mock of keccakHasher interface.
+type MockkeccakHasher struct {
+	ctrl     *gomock.Controller
+	recorder *MockkeccakHasherMockRecorder
+}
+
+// MockkeccakHasherMockRecorder is the mock recorder for MockkeccakHasher.
+type MockkeccakHasherMockRecorder struct {
+	mock *MockkeccakHasher
+}
+
+// NewMockkeccakHasher creates a new mock instance.
+func NewMockkeccakHasher(ctrl *gomock.Controller) *MockkeccakHasher {
+	mock := &MockkeccakHasher{ctrl: ctrl}
+	mock.recorder = &MockkeccakHasherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockkeccakHasher) EXPECT() *MockkeccakHasherMockRecorder {
+	return m.recorder
+}
+
+// Read mocks base method.
+func (m *MockkeccakHasher) Read(out []byte) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Read", out)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Read indicates an expected call of Read.
+func (mr *MockkeccakHasherMockRecorder) Read(out interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockkeccakHasher)(nil).Read), out)
+}
+
+// Reset mocks base method.
+func (m *MockkeccakHasher) Reset() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Reset")
+}
+
+// Reset indicates an expected call of Reset.
+func (mr *MockkeccakHasherMockRecorder) Reset() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockkeccakHasher)(nil).Reset))
+}
+
+// Write mocks base method.
+func (m *MockkeccakHasher) Write(in []byte) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Write", in)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Write indicates an expected call of Write.
+func (mr *MockkeccakHasherMockRecorder) Write(in interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockkeccakHasher)(nil).Write), in)
+}
