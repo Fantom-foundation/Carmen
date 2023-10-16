@@ -10,6 +10,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/golang/snappy"
 	"os"
 	"path/filepath"
 	"sync"
@@ -104,12 +105,12 @@ func (s *evmStore) SetTxPosition(txHash common.Hash, position TxPosition) error 
 
 	idx, err := s.txHashIndex.GetOrAdd(txHash)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed resolve txHash %x; %v", txHash, err)
 	}
 
 	err = s.txPositionStore.Set(idx, position)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed set txPosition for %x; %v", txHash, err)
 	}
 	return nil
 }
@@ -125,9 +126,13 @@ func (s *evmStore) GetTxPosition(txHash common.Hash) (TxPosition, error) {
 		if err == index.ErrNotFound {
 			return TxPosition{}, nil
 		}
-		return TxPosition{}, err
+		return TxPosition{}, fmt.Errorf("failed resolve txHash %x; %v", txHash, err)
 	}
-	return s.txPositionStore.Get(idx)
+	txPosition, err := s.txPositionStore.Get(idx)
+	if err != nil {
+		return TxPosition{}, fmt.Errorf("failed get txPosition for %x; %v", txHash, err)
+	}
+	return txPosition, nil
 }
 
 // SetTx stores non-event transaction.
@@ -140,9 +145,10 @@ func (s *evmStore) SetTx(txHash common.Hash, tx []byte) error {
 		return err
 	}
 
-	err = s.txsDepot.Set(idx, tx)
+	compressed := snappy.Encode(nil, tx)
+	err = s.txsDepot.Set(idx, compressed)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed set non-event tx %x; %v", txHash, err)
 	}
 	return nil
 }
@@ -160,7 +166,18 @@ func (s *evmStore) GetTx(txHash common.Hash) ([]byte, error) {
 		}
 		return nil, err
 	}
-	return s.txsDepot.Get(idx)
+	compressed, err := s.txsDepot.Get(idx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tx by hash %x; %v", txHash, err)
+	}
+	if compressed == nil {
+		return nil, nil
+	}
+	tx, err := snappy.Decode(nil, compressed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress non-event tx %x; %v", txHash, err)
+	}
+	return tx, nil
 }
 
 // SetRawReceipts stores raw transaction receipts for one block.
@@ -168,7 +185,8 @@ func (s *evmStore) SetRawReceipts(block uint64, receipts []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	err := s.receiptsDepot.Set(block, receipts)
+	compressed := snappy.Encode(nil, receipts)
+	err := s.receiptsDepot.Set(block, compressed)
 	if err != nil {
 		return fmt.Errorf("failed to set receipts for block %d; %v", block, err)
 	}
@@ -181,9 +199,16 @@ func (s *evmStore) GetRawReceipts(block uint64) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	receipts, err := s.receiptsDepot.Get(block)
+	compressed, err := s.receiptsDepot.Get(block)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get receipts for block %d; %v", block, err)
+	}
+	if compressed == nil {
+		return nil, nil
+	}
+	receipts, err := snappy.Decode(nil, compressed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress receipts for block %d; %v", block, err)
 	}
 	return receipts, nil
 }
