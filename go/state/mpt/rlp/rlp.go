@@ -87,12 +87,12 @@ func (s String) getEncodedLength() int {
 // to slice, which executes runtime.convTSlice() many times.
 // Especially on ARM architecture it was detected to take considerable runtime.
 type Hash struct {
-	Str *common.Hash
+	Hash *common.Hash
 }
 
 func (s Hash) write(writer *writer) {
 	encodeLength(32, 0x80, writer)
-	writer.Write(s.Str[:])
+	writer.Write(s.Hash[:])
 }
 
 func (s Hash) getEncodedLength() int {

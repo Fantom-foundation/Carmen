@@ -339,7 +339,7 @@ func (h ethHasher) encodeBranch(id NodeId, node *BranchNode, handle shared.Write
 			items[i] = rlp.Encoded{Data: encoded}
 		} else {
 			// passing by pointer to hash limits convTslice() calls
-			items[i] = rlp.Hash{Str: &node.hashes[i]}
+			items[i] = rlp.Hash{Hash: &node.hashes[i]}
 		}
 	}
 
@@ -434,11 +434,11 @@ func (h *ethHasher) encodeAccount(id NodeId, node *AccountNode, handle shared.Wr
 	items[0] = rlp.Uint64{Value: node.info.Nonce.ToUint64()}
 	items[1] = rlp.BigInt{Value: node.info.Balance.ToBigInt()}
 	if storageRoot.IsEmpty() {
-		items[2] = rlp.Hash{Str: &emptyNodeEthereumHash}
+		items[2] = rlp.Hash{Hash: &emptyNodeEthereumHash}
 	} else {
-		items[2] = rlp.Hash{Str: &node.storageHash}
+		items[2] = rlp.Hash{Hash: &node.storageHash}
 	}
-	items[3] = rlp.Hash{Str: &node.info.CodeHash}
+	items[3] = rlp.Hash{Hash: &node.info.CodeHash}
 	value := rlp.Encode(rlp.List{Items: items})
 
 	// Encode the leaf node by combining the partial path with the value.
