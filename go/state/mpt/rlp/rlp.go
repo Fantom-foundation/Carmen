@@ -2,6 +2,7 @@ package rlp
 
 import (
 	"encoding/binary"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/big"
 )
 
@@ -78,6 +79,25 @@ func (s String) getEncodedLength() int {
 		return 1
 	}
 	return l + getEncodedLengthLength(l)
+}
+
+// Hash is a used specifically to hold a pointer to hash.
+// Its usage is similar to rlp.String, but this type should be used for performance reasons.
+// In particular, conversion of common.Hash to rlp.String requires conversion of array
+// to slice, which executes runtime.convTSlice() many times.
+// Especially on ARM architecture it was detected to take considerable runtime.
+type Hash struct {
+	Hash *common.Hash
+}
+
+func (s Hash) write(writer *writer) {
+	encodeLength(32, 0x80, writer)
+	writer.Write(s.Hash[:])
+}
+
+func (s Hash) getEncodedLength() int {
+	// 32 bytes of hash + one byte to store length
+	return 32 + 1
 }
 
 // List composes a list of items into a new item to be serialized.
