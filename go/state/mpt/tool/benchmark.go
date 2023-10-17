@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"github.com/urfave/cli/v2"
 )
 
@@ -18,16 +18,21 @@ var Benchmark = cli.Command{
 	Name:   "benchmark",
 	Usage:  "benchmarks MPT performance by filling data into a fresh instance",
 	Flags: []cli.Flag{
+		&archiveFlag,
 		&numBlocksFlag,
 		&numInsertsPerBlockFlag,
 		&reportIntervalFlag,
 		&tmpDirFlag,
-		&keepMptFlag,
+		&keepStateFlag,
 		&cpuProfileFlag,
 	},
 }
 
 var (
+	archiveFlag = cli.BoolFlag{
+		Name:  "archive",
+		Usage: "enables archive mode",
+	}
 	numBlocksFlag = cli.IntFlag{
 		Name:  "num-blocks",
 		Usage: "the number of blocks to be filled in",
@@ -45,10 +50,10 @@ var (
 	}
 	tmpDirFlag = cli.StringFlag{
 		Name:  "tmp-dir",
-		Usage: "the directory to place the MPT for running benchmarks on",
+		Usage: "the directory to place the state for running benchmarks on",
 	}
-	keepMptFlag = cli.BoolFlag{
-		Name:  "keep-mpt",
+	keepStateFlag = cli.BoolFlag{
+		Name:  "keep-state",
 		Usage: "disables the deletion of temporary data at the end of the benchmark",
 	}
 	cpuProfileFlag = cli.StringFlag{
@@ -67,10 +72,11 @@ func benchmark(context *cli.Context) error {
 	start := time.Now()
 	results, err := runBenchmark(
 		benchmarkParams{
+			archive:            context.Bool(archiveFlag.Name),
 			numBlocks:          context.Int(numBlocksFlag.Name),
 			numInsertsPerBlock: context.Int(numInsertsPerBlockFlag.Name),
 			tmpDir:             tmpDir,
-			keepMpt:            context.Bool(keepMptFlag.Name),
+			keepState:          context.Bool(keepStateFlag.Name),
 			cpuProfilePrefix:   context.String(cpuProfileFlag.Name),
 			reportInterval:     context.Int(reportIntervalFlag.Name),
 		},
@@ -94,10 +100,11 @@ func benchmark(context *cli.Context) error {
 }
 
 type benchmarkParams struct {
+	archive            bool
 	numBlocks          int
 	numInsertsPerBlock int
 	tmpDir             string
-	keepMpt            bool
+	keepState          bool
 	cpuProfilePrefix   string
 	reportInterval     int
 }
@@ -127,35 +134,49 @@ func runBenchmark(
 	}
 	defer stopCpuProfiler()
 
-	// Create the target MPT.
-	path := fmt.Sprintf(params.tmpDir+string(os.PathSeparator)+"mpt_%d", time.Now().Unix())
-	observer("Creating MPT in %s ..", path)
-	if err := os.Mkdir(path, 0700); err != nil {
-		return res, fmt.Errorf("failed to create temporary MPT directory: %v", err)
-	}
-	if params.keepMpt {
-		observer("MPT in %s will not be removed at the end of the run", path)
+	// Create the target state.
+	path := fmt.Sprintf(params.tmpDir+string(os.PathSeparator)+"state_%d", time.Now().Unix())
+
+	if params.archive {
+		observer("Creating state with archive in %s ..", path)
 	} else {
-		observer("MPT in %s will be removed at the end of the run", path)
+		observer("Creating state without archive in %s ..", path)
+	}
+	if err := os.Mkdir(path, 0700); err != nil {
+		return res, fmt.Errorf("failed to create temporary state directory: %v", err)
+	}
+	if params.keepState {
+		observer("state in %s will not be removed at the end of the run", path)
+	} else {
+		observer("state in %s will be removed at the end of the run", path)
 		defer func() {
-			observer("Cleaning up MPT in %s ..", path)
+			observer("Cleaning up state in %s ..", path)
 			if err := os.RemoveAll(path); err != nil {
 				observer("Cleanup failed: %v", err)
 			}
 		}()
 	}
 
-	// Open the MPT to be tested.
-	trie, err := mpt.OpenFileLiveTrie(path, mpt.S5Config)
+	// Open the state to be tested.
+	archive := state.NoArchive
+	if params.archive {
+		archive = state.S5Archive
+	}
+	state, err := state.NewState(state.Parameters{
+		Directory: path,
+		Variant:   state.GoFile,
+		Schema:    5,
+		Archive:   archive,
+	})
 	if err != nil {
 		return res, err
 	}
 	defer func() {
 		start := time.Now()
-		if err := trie.Close(); err != nil {
-			observer("Failed to close MPT: %v", err)
+		if err := state.Close(); err != nil {
+			observer("Failed to close state: %v", err)
 		}
-		observer("Closing MPT took %v", time.Since(start))
+		observer("Closing state took %v", time.Since(start))
 		observer("Final disk usage: %d", getDirectorySize(path))
 	}()
 
@@ -174,23 +195,23 @@ func runBenchmark(
 	numInsertsPerBlock := params.numInsertsPerBlock
 	counter := 0
 	for i := 0; i < numBlocks; i++ {
+		update := common.Update{}
+		update.CreatedAccounts = make([]common.Address, 0, numInsertsPerBlock)
 		for j := 0; j < numInsertsPerBlock; j++ {
 			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
-			err := trie.SetAccountInfo(addr, mpt.AccountInfo{Nonce: common.ToNonce(1)})
-			if err != nil {
-				return res, fmt.Errorf("error inserting new account: %v", err)
-			}
+			update.CreatedAccounts = append(update.CreatedAccounts, addr)
 			counter++
 		}
-		if _, err := trie.GetHash(); err != nil {
-			return res, fmt.Errorf("error computing hash: %v", err)
+		if err := state.Apply(uint64(i), update); err != nil {
+			return res, fmt.Errorf("error applying block %d: %v", i, err)
 		}
+
 		if (i+1)%reportingInterval == 0 {
 			stopCpuProfiler()
 			startReporting := time.Now()
 
 			throughput := float64(reportingInterval*numInsertsPerBlock) / startReporting.Sub(lastReportTime).Seconds()
-			memory := trie.GetMemoryFootprint().Total()
+			memory := state.GetMemoryFootprint().Total()
 			disk := getDirectorySize(path)
 			observer(
 				"Reached block %d, memory %.2f GB, disk %.2f GB, %.2f inserts/second",
