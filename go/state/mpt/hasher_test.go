@@ -297,11 +297,11 @@ func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
 	ctxt.EXPECT().hashKey(gomock.Any()).AnyTimes().DoAndReturn(func(key common.Key) (common.Hash, error) {
-		return keccak256(key[:]), nil
+		return common.Keccak256(key[:]), nil
 	})
 
 	ctxt.EXPECT().hashKey(gomock.Any()).AnyTimes().DoAndReturn(func(k common.Key) common.Hash {
-		return keccak256(k[:])
+		return common.Keccak256(k[:])
 	})
 
 	// This test case reconstructs an issue encountered while hashing the

@@ -1,9 +1,10 @@
 package common
 
 import (
-	"golang.org/x/crypto/sha3"
 	"testing"
 	"unsafe"
+
+	"golang.org/x/crypto/sha3"
 )
 
 func TestHashPassThrough(t *testing.T) {
@@ -32,41 +33,6 @@ func TestHashPassThroughRunParallel(t *testing.T) {
 	}
 }
 
-func TestHasherPool(t *testing.T) {
-	pool := newHasherPool()
-
-	hasher := pool.getHasher()
-
-	// hasher created as new - the pool is empty
-	if len(pool.pool) != 0 {
-		t.Errorf("pool is not empty: %d", len(pool.pool))
-	}
-
-	// hasher returned to the pool
-	pool.returnHasher(hasher)
-
-	if len(pool.pool) != 1 {
-		t.Errorf("pool is empty: %d", len(pool.pool))
-	}
-
-	if pool.pool[0] != hasher {
-		t.Errorf("hasher not the same as the one in the pool")
-	}
-
-	// get again from the pool
-	hasher2 := pool.getHasher()
-
-	if hasher2 != hasher {
-		t.Errorf("hasher not the same as the one in the pool")
-	}
-
-	// hasher returned - the pool is empty
-
-	if len(pool.pool) != 0 {
-		t.Errorf("pool capacity should change: %d", len(pool.pool))
-	}
-}
-
 func TestMemoryFootprint(t *testing.T) {
 	cacheSize := 1000
 	hasher := NewCachedHasher[Address](cacheSize, AddressSerializer{})
@@ -92,13 +58,4 @@ func TestMemoryFootprint(t *testing.T) {
 	if got, want := hasher.GetMemoryFootprint().GetChild("cache").Total(), uintptr(cacheSize)*(unsafe.Sizeof(h)+unsafe.Sizeof(adr)); got < want {
 		t.Errorf("no memory foodprint provided")
 	}
-
-	if hasher.GetMemoryFootprint().GetChild("hashersPool") == nil {
-		t.Errorf("memory footprint missing")
-	}
-
-	if got, want := hasher.GetMemoryFootprint().GetChild("hashersPool").Total(), uintptr(0); got <= want {
-		t.Errorf("no memory foodprint provided")
-	}
-
 }

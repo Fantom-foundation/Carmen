@@ -1,8 +1,6 @@
 package common
 
 import (
-	"golang.org/x/crypto/sha3"
-	"hash"
 	"sync"
 	"unsafe"
 )
@@ -21,7 +19,6 @@ type CachedHasher[T comparable] struct {
 	serializer Serializer[T]
 	cached     bool
 	lock       *sync.Mutex
-	pool       *hasherPool
 }
 
 // NewCachedHasher creates a new hasher, that will use cache of computed hashes sized to the input capacity.
@@ -33,7 +30,6 @@ func NewCachedHasher[T comparable](cacheCapacity int, serializer Serializer[T]) 
 		serializer: serializer,
 		cached:     cacheCapacity > 0,
 		lock:       &sync.Mutex{},
-		pool:       newHasherPool(),
 	}
 }
 
@@ -42,9 +38,7 @@ func NewCachedHasher[T comparable](cacheCapacity int, serializer Serializer[T]) 
 // This method is thread safe.
 func (h *CachedHasher[T]) Hash(t T) Hash {
 	if !h.cached {
-		hasher := h.pool.getHasher()
-		defer h.pool.returnHasher(hasher)
-		return GetHash(hasher, h.serializer.ToBytes(t))
+		return Keccak256(h.serializer.ToBytes(t))
 	}
 
 	h.lock.Lock()
@@ -54,9 +48,7 @@ func (h *CachedHasher[T]) Hash(t T) Hash {
 		return res
 	}
 
-	hasher := h.pool.getHasher()
-	res = GetHash(hasher, h.serializer.ToBytes(t))
-	h.pool.returnHasher(hasher)
+	res = Keccak256(h.serializer.ToBytes(t))
 
 	h.lock.Lock()
 	h.cache.Set(t, res)
@@ -67,54 +59,5 @@ func (h *CachedHasher[T]) Hash(t T) Hash {
 func (h *CachedHasher[T]) GetMemoryFootprint() *MemoryFootprint {
 	mf := NewMemoryFootprint(unsafe.Sizeof(*h))
 	mf.AddChild("cache", h.cache.GetMemoryFootprint(0))
-	mf.AddChild("hashersPool", h.pool.GetMemoryFootprint())
 	return mf
-}
-
-// hasherPool is a synchronised pool of hashers. Whenever a hasher is required
-// it is either returned from the pool, or created as new, if no hasher is available in the pool
-type hasherPool struct {
-	pool []hash.Hash
-	lock *sync.Mutex
-}
-
-func newHasherPool() *hasherPool {
-	return &hasherPool{
-		pool: make([]hash.Hash, 0, 100),
-		lock: &sync.Mutex{},
-	}
-}
-
-// getHasher returns a hasher. The hasher is either from the pool,
-// or created as a new one.
-func (p *hasherPool) getHasher() hash.Hash {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	var hasher hash.Hash
-	if len(p.pool) > 0 {
-		hasher = p.pool[len(p.pool)-1]
-		p.pool = p.pool[0 : len(p.pool)-1]
-	} else {
-		hasher = sha3.NewLegacyKeccak256()
-	}
-
-	return hasher
-}
-
-// returnHasher returns the hasher back to the pool. It is not checked if the method was
-// called at most once for the same hasher. It is up to the caller.
-func (p *hasherPool) returnHasher(hasher hash.Hash) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.pool = append(p.pool, hasher)
-}
-
-func (p *hasherPool) GetMemoryFootprint() *MemoryFootprint {
-	mf := NewMemoryFootprint(unsafe.Sizeof(*p))
-	var h hash.Hash
-	mf.AddChild("cache", NewMemoryFootprint(uintptr(len(p.pool))*unsafe.Sizeof(h)))
-	return mf
-
 }
