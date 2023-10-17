@@ -227,6 +227,21 @@ func (mr *MockNodeMockRecorder) SetValue(manager, thisId, this, key, path, value
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockNode)(nil).SetValue), manager, thisId, this, key, path, value)
 }
 
+// Visit mocks base method.
+func (m *MockNode) Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Visit", source, thisId, depth, visitor)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Visit indicates an expected call of Visit.
+func (mr *MockNodeMockRecorder) Visit(source, thisId, depth, visitor interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Visit", reflect.TypeOf((*MockNode)(nil).Visit), source, thisId, depth, visitor)
+}
+
 // MockNodeSource is a mock of NodeSource interface.
 type MockNodeSource struct {
 	ctrl     *gomock.Controller
@@ -737,6 +752,21 @@ func (m *MockleafNode) SetValue(manager NodeManager, thisId NodeId, this shared.
 func (mr *MockleafNodeMockRecorder) SetValue(manager, thisId, this, key, path, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetValue", reflect.TypeOf((*MockleafNode)(nil).SetValue), manager, thisId, this, key, path, value)
+}
+
+// Visit mocks base method.
+func (m *MockleafNode) Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Visit", source, thisId, depth, visitor)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Visit indicates an expected call of Visit.
+func (mr *MockleafNodeMockRecorder) Visit(source, thisId, depth, visitor interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Visit", reflect.TypeOf((*MockleafNode)(nil).Visit), source, thisId, depth, visitor)
 }
 
 // setPathLength mocks base method.

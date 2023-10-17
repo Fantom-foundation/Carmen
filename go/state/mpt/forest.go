@@ -312,6 +312,16 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 	return err
 }
 
+func (s *Forest) VisitTrie(rootId NodeId, visitor NodeVisitor) error {
+	root, err := s.getNode(rootId)
+	if err != nil {
+		return err
+	}
+	defer root.Release()
+	_, err = root.Get().Visit(s, rootId, 0, visitor)
+	return err
+}
+
 func (s *Forest) updateHashesFor(id NodeId) (common.Hash, error) {
 	return s.hasher.updateHashes(id, s)
 }

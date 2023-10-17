@@ -47,5 +47,6 @@ Todos:
 	- perform lookups iterative instead of recursive
 	- lock only pairs of nodes instead of full path for reads
 	- split locks for Node content updates and hash updates to support hashing while reading
+	- limit re-hashing need by copying known hashes from cloned nodes in archive
 
 */

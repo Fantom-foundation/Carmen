@@ -8,11 +8,21 @@ import (
 )
 
 var Info = cli.Command{
-	Action:    info,
-	Name:      "info",
-	Usage:     "lists information about a Carmen MTP state repository",
+	Action: info,
+	Name:   "info",
+	Usage:  "lists information about a Carmen MTP state repository",
+	Flags: []cli.Flag{
+		&statsFlag,
+	},
 	ArgsUsage: "<director>",
 }
+
+var (
+	statsFlag = cli.BoolFlag{
+		Name:  "stats",
+		Usage: "Compute and print node statistics",
+	}
+)
 
 func info(context *cli.Context) error {
 	// parse the directory argument
@@ -20,6 +30,8 @@ func info(context *cli.Context) error {
 		return fmt.Errorf("missing directory storing state")
 	}
 	dir := context.Args().Get(0)
+
+	withStats := context.Bool(statsFlag.Name)
 
 	// try to obtain information of the contained MPT
 	mptInfo, err := checkMptDirectoryAndGetInfo(dir)
@@ -39,6 +51,16 @@ func info(context *cli.Context) error {
 			return nil
 		} else {
 			fmt.Printf("\tCan be opened:     Yes\n")
+		}
+
+		if withStats {
+			fmt.Printf("\nCollecting Node Statistics ...\n")
+			stats, err := mpt.GetTrieNodeStatistics(trie)
+			if err != nil {
+				return err
+			}
+			fmt.Print("\n--- Node Statistics ---\n")
+			fmt.Println(stats.String())
 		}
 
 		if err := trie.Close(); err != nil {
@@ -65,6 +87,17 @@ func info(context *cli.Context) error {
 		if err := archive.Close(); err != nil {
 			return fmt.Errorf("error closing forest: %v", err)
 		}
+
+		if withStats {
+			fmt.Printf("\nCollecting Node Statistics ...\n")
+			stats, err := mpt.GetForestNodeStatistics(dir, mptInfo.config)
+			if err != nil {
+				return err
+			}
+			fmt.Print("\n--- Node Statistics ---\n")
+			fmt.Println(stats.String())
+		}
+
 	}
 
 	return nil

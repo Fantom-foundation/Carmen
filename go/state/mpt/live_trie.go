@@ -123,6 +123,10 @@ func (s *LiveTrie) GetHash() (common.Hash, error) {
 	return s.forest.updateHashesFor(s.root)
 }
 
+func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
+	return s.forest.VisitTrie(s.root, visitor)
+}
+
 func (s *LiveTrie) Flush() error {
 	// Update hashes to eliminate dirty hashes before flushing.
 	hash, err := s.GetHash()

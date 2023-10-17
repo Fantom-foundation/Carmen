@@ -154,6 +154,35 @@ func TestEmptyNode_Freeze(t *testing.T) {
 	}
 }
 
+func TestEmptyNode_Visit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	id, node := ctxt.Build(Empty{})
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	visitor := NewMockNodeVisitor(ctrl)
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+	depth4 := 4
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth4}).Return(VisitResponseAbort)
+	depth6 := 6
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth6}).Return(VisitResponsePrune)
+
+	if abort, err := handle.Get().Visit(ctxt, EmptyId(), 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+
+	if abort, err := handle.Get().Visit(ctxt, EmptyId(), 4, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+
+	if abort, err := handle.Get().Visit(ctxt, EmptyId(), 6, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Branch Node
 // ----------------------------------------------------------------------------
@@ -977,6 +1006,108 @@ func TestBranchNode_Freeze(t *testing.T) {
 		t.Errorf("node not marked as frozen after call")
 	}
 	handle.Release()
+}
+
+func TestBranchNode_VisitContinue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	node1 := NewMockNode(ctrl)
+	node2 := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Branch{children: Children{
+		1: &Mock{node: node1},
+		8: &Mock{node: node2},
+	}})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	node1.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
+	node2.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestBranchNode_VisitPruned(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	node1 := NewMockNode(ctrl)
+	node2 := NewMockNode(ctrl)
+
+	id, node := ctxt.Build(&Branch{children: Children{
+		1: &Mock{node: node1},
+		8: &Mock{node: node2},
+	}})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	visitor := NewMockNodeVisitor(ctrl)
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponsePrune)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestBranchNode_VisitAbort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	node1 := NewMockNode(ctrl)
+	node2 := NewMockNode(ctrl)
+
+	id, node := ctxt.Build(&Branch{children: Children{
+		1: &Mock{node: node1},
+		8: &Mock{node: node2},
+	}})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	visitor := NewMockNodeVisitor(ctrl)
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseAbort)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestBranchNode_VisitAbortByChild(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	node1 := NewMockNode(ctrl)
+	node2 := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Branch{children: Children{
+		1: &Mock{node: node1},
+		8: &Mock{node: node2},
+	}})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	node1.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
+	node2.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(true, nil) // = aborted
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
 }
 
 // ----------------------------------------------------------------------------
@@ -1980,6 +2111,102 @@ func TestExtensionNode_Freeze(t *testing.T) {
 	}
 }
 
+func TestExtensionNode_VisitContinue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	next := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Extension{
+		path: []Nibble{1, 2, 3},
+		next: &Mock{next},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	next.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestExtensionNode_VisitPrune(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	next := NewMockNode(ctrl)
+
+	id, node := ctxt.Build(&Extension{
+		path: []Nibble{1, 2, 3},
+		next: &Mock{next},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	visitor := NewMockNodeVisitor(ctrl)
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponsePrune)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestExtensionNode_VisitAbort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	next := NewMockNode(ctrl)
+
+	id, node := ctxt.Build(&Extension{
+		path: []Nibble{1, 2, 3},
+		next: &Mock{next},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	visitor := NewMockNodeVisitor(ctrl)
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseAbort)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestExtensionNode_VisitAbortByChild(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	next := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Extension{
+		path: []Nibble{1, 2, 3},
+		next: &Mock{next},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	next.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(true, nil) // = abort
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Account Node
 // ----------------------------------------------------------------------------
@@ -2760,6 +2987,102 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	}
 }
 
+func TestAccountNode_VisitContinue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	storage := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Account{
+		info:    AccountInfo{Nonce: common.Nonce{1}},
+		storage: &Mock{storage},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	storage.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestAccountNode_VisitPrune(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	storage := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Account{
+		info:    AccountInfo{Nonce: common.Nonce{1}},
+		storage: &Mock{storage},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponsePrune)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestAccountNode_VisitAbort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	storage := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Account{
+		info:    AccountInfo{Nonce: common.Nonce{1}},
+		storage: &Mock{storage},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseAbort)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestAccountNode_VisitAbortByChild(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	storage := NewMockNode(ctrl)
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Account{
+		info:    AccountInfo{Nonce: common.Nonce{1}},
+		storage: &Mock{storage},
+	})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	storage.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(true, nil)
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
@@ -3263,6 +3586,37 @@ func TestValueNode_Freeze(t *testing.T) {
 	}
 	if !node.frozen {
 		t.Errorf("node not marked as frozen after call")
+	}
+}
+
+func TestValueNode_Visit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	visitor := NewMockNodeVisitor(ctrl)
+
+	id, node := ctxt.Build(&Value{})
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+
+	depth2 := 2
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+	depth4 := 4
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth4}).Return(VisitResponseAbort)
+	depth6 := 6
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth6}).Return(VisitResponsePrune)
+
+	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got (%v, %v)", abort, err)
+	}
+
+	if abort, err := handle.Get().Visit(ctxt, id, 4, visitor); !abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (true,nil), got (%v, %v)", abort, err)
+	}
+
+	if abort, err := handle.Get().Visit(ctxt, id, 6, visitor); abort || err != nil {
+		t.Errorf("unexpected result of visit, wanted (false,nil), got (%v, %v)", abort, err)
 	}
 }
 

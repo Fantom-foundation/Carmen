@@ -424,39 +424,70 @@ func (s *verificationNodeSource) clearOverride() {
 }
 
 func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error {
+	return s.forNodes(func(_ NodeId, node Node) error { return check(node) }, true, true, true, false)
+}
+
+func (s *verificationNodeSource) forAllNodes(check func(NodeId, Node) error) error {
+	return s.forNodes(check, true, true, true, true)
+}
+
+func (s *verificationNodeSource) forNodes(
+	check func(NodeId, Node) error,
+	branches, extensions, accounts, values bool,
+) error {
 	errs := []error{}
-	for i := s.branchIds.GetLowerBound(); i < s.branchIds.GetUpperBound(); i++ {
-		if s.branchIds.Contains(i) {
-			branch, err := s.branches.Get(i)
-			if err != nil { // with IO errors => stop immediately
-				return err
-			}
-			if err := check(&branch); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-
-	for i := s.extensionIds.GetLowerBound(); i < s.extensionIds.GetUpperBound(); i++ {
-		if s.extensionIds.Contains(i) {
-			extension, err := s.extensions.Get(i)
-			if err != nil { // with IO errors => stop immediately
-				return err
-			}
-			if err := check(&extension); err != nil {
-				errs = append(errs, err)
+	if branches {
+		for i := s.branchIds.GetLowerBound(); i < s.branchIds.GetUpperBound(); i++ {
+			if s.branchIds.Contains(i) {
+				branch, err := s.branches.Get(i)
+				if err != nil { // with IO errors => stop immediately
+					return err
+				}
+				if err := check(BranchId(i), &branch); err != nil {
+					errs = append(errs, err)
+				}
 			}
 		}
 	}
 
-	for i := s.accountIds.GetLowerBound(); i < s.accountIds.GetUpperBound(); i++ {
-		if s.accountIds.Contains(i) {
-			account, err := s.accounts.Get(i)
-			if err != nil { // with IO errors => stop immediately
-				return err
+	if extensions {
+		for i := s.extensionIds.GetLowerBound(); i < s.extensionIds.GetUpperBound(); i++ {
+			if s.extensionIds.Contains(i) {
+				extension, err := s.extensions.Get(i)
+				if err != nil { // with IO errors => stop immediately
+					return err
+				}
+				if err := check(ExtensionId(i), &extension); err != nil {
+					errs = append(errs, err)
+				}
 			}
-			if err := check(&account); err != nil {
-				errs = append(errs, err)
+		}
+	}
+
+	if accounts {
+		for i := s.accountIds.GetLowerBound(); i < s.accountIds.GetUpperBound(); i++ {
+			if s.accountIds.Contains(i) {
+				account, err := s.accounts.Get(i)
+				if err != nil { // with IO errors => stop immediately
+					return err
+				}
+				if err := check(AccountId(i), &account); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+	}
+
+	if values {
+		for i := s.valueIds.GetLowerBound(); i < s.valueIds.GetUpperBound(); i++ {
+			if s.valueIds.Contains(i) {
+				value, err := s.values.Get(i)
+				if err != nil { // with IO errors => stop immediately
+					return err
+				}
+				if err := check(ValueId(i), &value); err != nil {
+					errs = append(errs, err)
+				}
 			}
 		}
 	}
