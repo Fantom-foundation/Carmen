@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"sync"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/rlp"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
@@ -199,7 +197,7 @@ func makeEthereumLikeHasher() hasher {
 
 type ethHasher struct{}
 
-var emptyNodeEthereumHash = keccak256(rlp.Encode(rlp.String{}))
+var emptyNodeEthereumHash = common.Keccak256(rlp.Encode(rlp.String{}))
 
 func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, error) {
 	if id.IsEmpty() {
@@ -218,7 +216,7 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return keccak256(data), nil
+	return common.Keccak256(data), nil
 }
 
 func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
@@ -238,7 +236,7 @@ func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return keccak256(data), nil
+	return common.Keccak256(data), nil
 }
 
 // encode computes the RLP encoding of the given node. If needed, additional nodes are
@@ -659,22 +657,4 @@ func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSour
 		value = value[1:]
 	}
 	return size + len(value) + 1, nil
-}
-
-var keccakHasherPool = sync.Pool{New: func() any { return sha3.NewLegacyKeccak256() }}
-
-func keccak256(data []byte) common.Hash {
-	hasher := keccakHasherPool.Get().(keccakHasher)
-	hasher.Reset()
-	hasher.Write(data)
-	var res common.Hash
-	hasher.Read(res[:])
-	keccakHasherPool.Put(hasher)
-	return res
-}
-
-type keccakHasher interface {
-	Reset()
-	Write(in []byte) (int, error)
-	Read(out []byte) (int, error)
 }

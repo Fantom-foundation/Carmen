@@ -120,7 +120,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
 	// These two addresses have the same first byte when hashed:
 	addr1 := common.Address{0x04}
 	addr2 := common.Address{0x2F}
-	if a, b := keccak256(addr1[:])[0], keccak256(addr2[:])[0]; a != b {
+	if a, b := common.Keccak256(addr1[:])[0], common.Keccak256(addr2[:])[0]; a != b {
 		t.Fatalf("invalid setup, addresses do not have common prefix")
 	}
 
@@ -147,7 +147,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
 	// These two addresses have the same first nibble when hashed:
 	addr1 := common.Address{0x02}
 	addr2 := common.Address{0x07}
-	if a, b := keccak256(addr1[:])[0], keccak256(addr2[:])[0]; (a>>4) != (b>>4) && a == b {
+	if a, b := common.Keccak256(addr1[:])[0], common.Keccak256(addr2[:])[0]; (a>>4) != (b>>4) && a == b {
 		t.Fatalf("invalid setup, addresses do not have single prefix bit prefix")
 	}
 

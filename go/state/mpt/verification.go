@@ -379,11 +379,11 @@ func (s *verificationNodeSource) getHashFor(NodeId) (common.Hash, error) {
 }
 
 func (s *verificationNodeSource) hashKey(key common.Key) common.Hash {
-	return keccak256(key[:])
+	return common.Keccak256(key[:])
 }
 
 func (s *verificationNodeSource) hashAddress(address common.Address) common.Hash {
-	return keccak256(address[:])
+	return common.Keccak256(address[:])
 }
 
 func (s *verificationNodeSource) close() error {
