@@ -7,12 +7,12 @@ import (
 	"os"
 )
 
-// BufferedFile is a wrapper arround an *os.File coordinating seek, read, and
+// BufferedFile is a wrapper around an *os.File coordinating seek, read, and
 // write operations.
 //
 // It tracks the position of the file reader internally to avoid seek operation
-// calls when already positioned at the right location in a file. Especially for
-// sequences of read/write operations targeting consecutiv locations in a file
+// calls when already positioned at the right location in the file. Especially for
+// sequences of read/write operations targeting consecutive locations in a file,
 // this can significantly increase performance by reducing system calls.
 //
 // The wrapper also adds a small write buffer grouping multiple small writes
@@ -62,8 +62,16 @@ func OpenBufferedFile(path string) (*BufferedFile, error) {
 // Write write the given byte data at the given position in the file. The file
 // will be extended in case the target position is beyond the file size.
 func (f *BufferedFile) Write(position int64, src []byte) error {
+	if len(src) == 0 {
+		return nil
+	}
+
 	if len(src) > bufferSize {
-		panic(fmt.Sprintf("writing data > %d bytes not supported so far, got %d", bufferSize, len(src)))
+		return fmt.Errorf(fmt.Sprintf("writing data > %d bytes not supported so far, got %d", bufferSize, len(src)))
+	}
+
+	if position < 0 {
+		return fmt.Errorf("cannot write at negative position: %d", position)
 	}
 
 	// If the data to be written covers multiple buffer blocks the write needs to be
