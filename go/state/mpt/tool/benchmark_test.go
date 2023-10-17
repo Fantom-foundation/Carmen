@@ -7,10 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBenchmark_RunExampleBenchmark(t *testing.T) {
 	dir := t.TempDir()
+	start := time.Now()
 	result, err := runBenchmark(benchmarkParams{
 		numBlocks:          300,
 		numInsertsPerBlock: 10,
@@ -19,16 +21,33 @@ func TestBenchmark_RunExampleBenchmark(t *testing.T) {
 		cpuProfilePrefix:   dir + "/profile.dat",
 		keepMpt:            false,
 	}, func(string, ...any) {})
+	end := time.Now()
 
 	if err != nil {
 		t.Fatalf("failed to run benchmark: %v", err)
 	}
 
-	if got, want := len(result), 3; got != want {
+	limit := end.Sub(start)
+	if result.insertTime < 0 || result.insertTime > limit {
+		t.Errorf("invalid insert time: %v not in interval [0,%v]", result.insertTime, limit)
+	}
+	if result.reportTime < 0 || result.reportTime > limit {
+		t.Errorf("invalid report time: %v not in interval [0,%v]", result.insertTime, limit)
+	}
+	total := result.insertTime + result.reportTime
+	if total < 0 || total > limit {
+		t.Errorf("invalid total time: %v not in interval [0,%v]", result.insertTime, limit)
+	}
+
+	if got, want := result.numInserts, int64(300*10); got != want {
+		t.Fatalf("unexpected number of completed inserts, wanted %d, got %d", want, got)
+	}
+
+	if got, want := len(result.intervals), 3; got != want {
 		t.Fatalf("unexpected size of result, wanted %d, got %d", want, got)
 	}
 
-	for i, cur := range result {
+	for i, cur := range result.intervals {
 		if got, want := cur.endOfBlock, (i+1)*100; got != want {
 			t.Errorf("invalid block in result line %d, wanted %d, got %d", i, want, got)
 		}
