@@ -12,13 +12,17 @@ import (
 // ----------------------------------------------------------------------------
 
 // NodeVisitor defines an interface for any consumer interested in visiting a
-// set of nodes of a Forest. It is intended for facilitating generic trie and
+// set of nodes of a Forest. It is intended for generic trie and
 // forest analysis infrastructure.
 type NodeVisitor interface {
 	// Visit is called for each node. Through the response the visitor can
-	// decide whether more nodes should be visited, the visiting should be
-	// aborted or (in some situations) whether the child nodes of the current
-	// node should be skipped.
+	// decide control the visiting process. It may be
+	//  - continued: keep processing additional nodes
+	//  - aborted: stop processing nodes and end node iteration
+	//  - pruned: skip the child nodes of the current node and continue with
+	//       the next node following the last descendent of the current node
+	// While the first two options are supported in trees and forests, the
+	// last one is only supported on trees.
 	Visit(Node, NodeInfo) VisitResponse
 }
 

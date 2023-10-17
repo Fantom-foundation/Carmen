@@ -181,9 +181,9 @@ type Node interface {
 	// intended for debugging and may be very costly for larger instances.
 	Dump(source NodeSource, thisId NodeId, indent string)
 
-	// Visit visits this and all nodes in the respective sub-tries. The
+	// Visit visits this and all nodes in the respective sub-tree. The
 	// visitor is called by each encountered node, with the proper NodeInfo
-	// set. Visiting aborts if the visitor returns or prune sub-tries as
+	// set. Visiting aborts if the visitor returns or prune sub-tree as
 	// requested by the visitor. The function returns whether the visiting
 	// process has been aborted and/or an error occurred.
 	Visit(source NodeSource, thisId NodeId, depth int, visitor NodeVisitor) (abort bool, err error)
