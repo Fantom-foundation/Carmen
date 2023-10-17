@@ -19,7 +19,7 @@ func TestBenchmark_RunExampleBenchmark(t *testing.T) {
 		tmpDir:             dir,
 		reportInterval:     100,
 		cpuProfilePrefix:   dir + "/profile.dat",
-		keepMpt:            false,
+		keepState:          false,
 	}, func(string, ...any) {})
 	end := time.Now()
 
@@ -73,7 +73,7 @@ func TestBenchmark_RunExampleBenchmark(t *testing.T) {
 	})
 }
 
-func TestBenchmark_KeepMptRetainsMpt(t *testing.T) {
+func TestBenchmark_KeepStateRetainsState(t *testing.T) {
 	dir := t.TempDir()
 	_, err := runBenchmark(benchmarkParams{
 		numBlocks:          300,
@@ -81,7 +81,7 @@ func TestBenchmark_KeepMptRetainsMpt(t *testing.T) {
 		tmpDir:             dir,
 		reportInterval:     100,
 		cpuProfilePrefix:   dir + "/profile.dat",
-		keepMpt:            true,
+		keepState:          true,
 	}, func(string, ...any) {})
 
 	if err != nil {
@@ -90,7 +90,7 @@ func TestBenchmark_KeepMptRetainsMpt(t *testing.T) {
 
 	found := false
 	filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
-		if strings.HasPrefix(info.Name(), "mpt_") {
+		if strings.HasPrefix(info.Name(), "state_") {
 			found = true
 		}
 		return nil
@@ -98,6 +98,41 @@ func TestBenchmark_KeepMptRetainsMpt(t *testing.T) {
 
 	if !found {
 		t.Errorf("temporary MPT was not retained")
+	}
+}
+
+func TestBenchmark_SupportsDifferentModes(t *testing.T) {
+	cases := []bool{false, true}
+
+	for _, mode := range cases {
+		t.Run(fmt.Sprintf("with_archive=%t", mode), func(t *testing.T) {
+			dir := t.TempDir()
+			_, err := runBenchmark(benchmarkParams{
+				archive:            mode,
+				numBlocks:          300,
+				numInsertsPerBlock: 10,
+				tmpDir:             dir,
+				reportInterval:     100,
+				cpuProfilePrefix:   dir + "/profile.dat",
+				keepState:          true,
+			}, func(string, ...any) {})
+
+			if err != nil {
+				t.Fatalf("failed to run benchmark: %v", err)
+			}
+
+			found := false
+			filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
+				if strings.HasPrefix(info.Name(), "archive") {
+					found = true
+				}
+				return nil
+			})
+
+			if found != mode {
+				t.Errorf("unexpected presence of archive, wanted %t, got %t", mode, found)
+			}
+		})
 	}
 }
 
