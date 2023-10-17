@@ -35,7 +35,7 @@ var (
 	}
 	numInsertsPerBlockFlag = cli.IntFlag{
 		Name:  "inserts-per-block",
-		Usage: "the number inserts per block",
+		Usage: "the number of inserts per block",
 		Value: 1_000,
 	}
 	reportIntervalFlag = cli.IntFlag{
@@ -126,11 +126,11 @@ func runBenchmark(
 		return nil, fmt.Errorf("failed to create temporary MPT directory: %v", err)
 	}
 	if params.keepMpt {
-		observer("MPT in %s will not be removed at end of the run", path)
+		observer("MPT in %s will not be removed at the end of the run", path)
 	} else {
-		observer("MPT in %s will be removed at end of the run", path)
+		observer("MPT in %s will be removed at the end of the run", path)
 		defer func() {
-			observer("Cleaning up MPT in in %s ..", path)
+			observer("Cleaning up MPT in %s ..", path)
 			if err := os.RemoveAll(path); err != nil {
 				observer("Cleanup failed: %v", err)
 			}
