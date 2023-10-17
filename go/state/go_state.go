@@ -78,6 +78,12 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	if err != nil {
 		return err
 	}
+
+	// Finish the block by refreshing the hash.
+	if _, err := s.GetHash(); err != nil {
+		return err
+	}
+
 	if s.archive != nil {
 		// If the writer is not yet active, start it.
 		if s.archiveWriter == nil {
