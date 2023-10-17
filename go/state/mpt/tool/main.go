@@ -12,12 +12,14 @@ import (
 
 func main() {
 	app := &cli.App{
-		Name:      "Carmen MPT Toolbox",
+		Name:      "tool",
+		Usage:     "Carmen MPT toolbox",
 		Copyright: "(c) 2022-23 Fantom Foundation",
 		Flags:     []cli.Flag{},
 		Commands: []*cli.Command{
 			&Info,
 			&Verify,
+			&Benchmark,
 		},
 	}
 
