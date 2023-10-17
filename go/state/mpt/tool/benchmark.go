@@ -56,8 +56,6 @@ var (
 		Usage: "sets the target file for storing CPU profiles to",
 		Value: "profile.dat",
 	}
-	// TODO
-	//  - cpu-profiling
 )
 
 func benchmark(context *cli.Context) error {
@@ -87,9 +85,11 @@ func benchmark(context *cli.Context) error {
 	}
 
 	fmt.Printf("block, memory, disk, throughput\n")
-	for _, cur := range results {
+	for _, cur := range results.intervals {
 		fmt.Printf("%d, %d, %d, %.2f\n", cur.endOfBlock, cur.memory, cur.disk, cur.throughput)
 	}
+	fmt.Printf("Overall time: %v (+%v for reporting)\n", results.insertTime, results.reportTime)
+	fmt.Printf("Overall throughput: %.2f inserts/second\n", float64(results.numInserts)/results.insertTime.Seconds())
 	return nil
 }
 
@@ -109,13 +109,21 @@ type benchmarkRecord struct {
 	throughput float64
 }
 
+type benchmarkResult struct {
+	intervals  []benchmarkRecord
+	reportTime time.Duration
+	insertTime time.Duration
+	numInserts int64
+}
+
 func runBenchmark(
 	params benchmarkParams,
 	observer func(string, ...any),
-) ([]benchmarkRecord, error) {
+) (benchmarkResult, error) {
+	res := benchmarkResult{}
 	// Start profiling ...
 	if err := startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, 1)); err != nil {
-		return nil, err
+		return res, err
 	}
 	defer stopCpuProfiler()
 
@@ -123,7 +131,7 @@ func runBenchmark(
 	path := fmt.Sprintf(params.tmpDir+string(os.PathSeparator)+"mpt_%d", time.Now().Unix())
 	observer("Creating MPT in %s ..", path)
 	if err := os.Mkdir(path, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create temporary MPT directory: %v", err)
+		return res, fmt.Errorf("failed to create temporary MPT directory: %v", err)
 	}
 	if params.keepMpt {
 		observer("MPT in %s will not be removed at the end of the run", path)
@@ -140,7 +148,7 @@ func runBenchmark(
 	// Open the MPT to be tested.
 	trie, err := mpt.OpenFileLiveTrie(path, mpt.S5Config)
 	if err != nil {
-		return nil, err
+		return res, err
 	}
 	defer func() {
 		start := time.Now()
@@ -156,7 +164,10 @@ func runBenchmark(
 	lastReportTime := time.Now()
 
 	// Record results.
-	results := make([]benchmarkRecord, 0, params.numBlocks/reportingInterval+1)
+	res.intervals = make([]benchmarkRecord, 0, params.numBlocks/reportingInterval+1)
+
+	benchmarkStart := time.Now()
+	reportingTime := 0 * time.Second
 
 	// Simulate insertions.
 	numBlocks := params.numBlocks
@@ -167,18 +178,18 @@ func runBenchmark(
 			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
 			err := trie.SetAccountInfo(addr, mpt.AccountInfo{Nonce: common.ToNonce(1)})
 			if err != nil {
-				return results, fmt.Errorf("error inserting new account: %v", err)
+				return res, fmt.Errorf("error inserting new account: %v", err)
 			}
 			counter++
 		}
 		if _, err := trie.GetHash(); err != nil {
-			return results, fmt.Errorf("error computing hash: %v", err)
+			return res, fmt.Errorf("error computing hash: %v", err)
 		}
 		if (i+1)%reportingInterval == 0 {
 			stopCpuProfiler()
-			now := time.Now()
+			startReporting := time.Now()
 
-			throughput := float64(reportingInterval*numInsertsPerBlock) / now.Sub(lastReportTime).Seconds()
+			throughput := float64(reportingInterval*numInsertsPerBlock) / startReporting.Sub(lastReportTime).Seconds()
 			memory := trie.GetMemoryFootprint().Total()
 			disk := getDirectorySize(path)
 			observer(
@@ -189,19 +200,27 @@ func runBenchmark(
 				throughput,
 			)
 
-			results = append(results, benchmarkRecord{
+			res.intervals = append(res.intervals, benchmarkRecord{
 				endOfBlock: i + 1,
 				memory:     int64(memory),
 				disk:       disk,
 				throughput: throughput,
 			})
 
-			lastReportTime = time.Now()
+			endReporting := time.Now()
+			reportingTime += endReporting.Sub(startReporting)
+			lastReportTime = endReporting
 			startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, ((i+1)/reportingInterval)+1))
 		}
 	}
 	observer("Finished %.2e blocks with %.2e inserts", float64(numBlocks), float64(numBlocks*numInsertsPerBlock))
-	return results, nil
+
+	benchmarkTime := time.Since(benchmarkStart)
+	res.numInserts = int64(counter)
+	res.insertTime = benchmarkTime - reportingTime
+	res.reportTime = reportingTime
+
+	return res, nil
 }
 
 func startCpuProfiler(filename string) error {
