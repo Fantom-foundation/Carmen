@@ -255,6 +255,7 @@ func (e EmptyNode) SetAccount(manager NodeManager, thisId NodeId, this shared.Wr
 	}
 	defer handle.Release()
 	res := handle.Get().(*AccountNode)
+	res.hashDirty = true
 	res.address = address
 	res.info = info
 	res.pathLength = byte(len(path))
@@ -276,6 +277,7 @@ func (e EmptyNode) SetValue(manager NodeManager, thisId NodeId, this shared.Writ
 	res := handle.Get().(*ValueNode)
 	res.key = key
 	res.value = value
+	res.hashDirty = true
 	res.pathLength = byte(len(path))
 	if err := manager.update(id, handle); err != nil {
 		return 0, false, err
@@ -321,8 +323,8 @@ func (EmptyNode) Check(NodeSource, []Nibble) error {
 	return nil
 }
 
-func (EmptyNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%s-empty- (ID: %v, Hash: %s)\n", indent, thisId, formatHashForDump(source, thisId))
+func (EmptyNode) Dump(_ NodeSource, thisId NodeId, indent string) {
+	fmt.Printf("%s-empty- (ID: %v)\n", indent, thisId)
 }
 
 func (EmptyNode) Visit(_ NodeSource, id NodeId, depth int, visitor NodeVisitor) (bool, error) {
@@ -407,6 +409,7 @@ func (n *BranchNode) setNextNode(
 
 	if newRoot == child {
 		if hasChanged {
+			n.hashDirty = true
 			n.markChildHashDirty(byte(path[0]))
 		}
 		return thisId, hasChanged, nil
@@ -430,6 +433,7 @@ func (n *BranchNode) setNextNode(
 	}
 
 	n.children[path[0]] = newRoot
+	n.hashDirty = true
 	n.markChildHashDirty(byte(path[0]))
 	n.setChildFrozen(byte(path[0]), false)
 
@@ -478,6 +482,7 @@ func (n *BranchNode) setNextNode(
 				}
 
 				extensionNode.path.Prepend(remainingPos)
+				extensionNode.hashDirty = true
 				manager.update(remaining, remainingHandle)
 			} else if remaining.IsBranch() {
 				// An extension needs to replace this branch.
@@ -489,6 +494,7 @@ func (n *BranchNode) setNextNode(
 				extension := handle.Get().(*ExtensionNode)
 				extension.path = SingleStepPath(remainingPos)
 				extension.next = remaining
+				extension.hashDirty = true
 				extension.nextHashDirty = true
 				manager.update(extensionId, handle)
 				newRoot = extensionId
@@ -655,7 +661,7 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sBranch (ID: %v/%t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v):\n", indent, thisId, n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(source, thisId))
+	fmt.Printf("%sBranch (ID: %v/%t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisId, n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
 	for i, child := range n.children {
 		if child.IsEmpty() {
 			continue
@@ -849,11 +855,13 @@ func (n *ExtensionNode) setNextNode(
 				extension := handle.Get().(*ExtensionNode)
 				n.path.AppendAll(&extension.path)
 				n.next = extension.next
+				n.hashDirty = true
 				n.nextHashDirty = true
 				manager.update(thisId, this)
 				manager.release(newRoot)
 			} else if newRoot.IsBranch() {
 				n.next = newRoot
+				n.hashDirty = true
 				n.nextHashDirty = true
 				manager.update(thisId, this)
 			} else {
@@ -882,6 +890,7 @@ func (n *ExtensionNode) setNextNode(
 				return newRoot, !isClone, nil
 			}
 		} else if hasChanged {
+			n.hashDirty = true
 			n.nextHashDirty = true
 		}
 		return thisId, hasChanged, err
@@ -931,6 +940,7 @@ func (n *ExtensionNode) setNextNode(
 		branch.children[n.path.Get(commonPrefixLength)] = thisId
 		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
 		n.path.ShiftLeft(commonPrefixLength + 1)
+		n.hashDirty = true
 		n.nextHashDirty = true
 		thisNodeWasReused = true
 		manager.update(thisId, this)
@@ -958,6 +968,7 @@ func (n *ExtensionNode) setNextNode(
 
 		extension.path = CreatePathFromNibbles(path[0:commonPrefixLength])
 		extension.next = branchId
+		extension.hashDirty = true
 		extension.nextHashDirty = true
 		manager.update(extensionId, extensionHandle)
 		newRoot = extensionId
@@ -1091,7 +1102,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sExtension (ID: %v/%t, Dirty: %t, Embedded: %t, Hash: %v): %v\n", indent, thisId, n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(source, thisId), &n.path)
+	fmt.Printf("%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisId, n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
 	if handle, err := source.getNode(n.next); err == nil {
 		defer handle.Release()
 		handle.Get().Dump(source, n.next, indent+"  ")
@@ -1204,11 +1215,13 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, this shared
 			*newNode = *n
 			newNode.frozen = false
 			newNode.info = info
+			newNode.hashDirty = true
 			manager.update(newId, handle)
 			return newId, false, nil
 		}
 
 		n.info = info
+		n.hashDirty = true
 		manager.update(thisId, this)
 		return thisId, true, nil
 	}
@@ -1227,6 +1240,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, this shared
 	sibling := handle.Get().(*AccountNode)
 	sibling.address = address
 	sibling.info = info
+	sibling.hashDirty = true
 
 	thisPath := AddressToNibblePath(n.address, manager)
 	newRoot, err := splitLeafNode(manager, thisId, thisPath[:], n, this, path, siblingId, sibling, handle)
@@ -1276,6 +1290,7 @@ func splitLeafNode(
 
 		extension.path = CreatePathFromNibbles(siblingPath[0:commonPrefixLength])
 		extension.next = branchId
+		extension.hashDirty = true
 		extension.nextHashDirty = true
 		manager.update(extensionId, handle)
 	}
@@ -1298,6 +1313,7 @@ func splitLeafNode(
 	branch.children[siblingPath[commonPrefixLength]] = siblingId
 	branch.markChildHashDirty(byte(partialPath[commonPrefixLength]))
 	branch.markChildHashDirty(byte(siblingPath[commonPrefixLength]))
+	branch.hashDirty = true
 
 	// Commit the changes to the the branch node.
 	manager.update(branchId, branchHandle)
@@ -1342,15 +1358,19 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, this shared.Wr
 			newNode.frozen = false
 			newNode.storage = root
 			newNode.storageHashDirty = true
+			newNode.hashDirty = true
 			manager.update(newId, newHandle)
 			return newId, false, nil
 		}
 		n.storage = root
 		n.storageHashDirty = true
+		n.hashDirty = true
 		hasChanged = true
 		manager.update(thisId, this)
 	} else if hasChanged {
+		n.hashDirty = true
 		n.storageHashDirty = true
+		manager.update(thisId, this)
 	}
 	return thisId, hasChanged, nil
 }
@@ -1373,6 +1393,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 		newNode.frozen = false
 		newNode.storage = EmptyId()
 		newNode.storageHashDirty = true
+		newNode.hashDirty = true
 		manager.update(newId, newHandle)
 		return newId, false, nil
 	}
@@ -1424,9 +1445,11 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisId NodeId, this sha
 		*newNode = *n
 		newNode.frozen = false
 		newNode.pathLength = length
+		newNode.hashDirty = true
 		return newId, false, manager.update(newId, newHandle)
 	}
 
+	n.hashDirty = true
 	n.pathLength = length
 	return thisId, true, manager.update(thisId, this)
 }
@@ -1494,7 +1517,7 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sAccount (ID: %v/%t/%v, Hash: %v): %v - %v\n", indent, thisId, n.frozen, n.pathLength, formatHashForDump(source, thisId), n.address, n.info)
+	fmt.Printf("%sAccount (ID: %v/%t/%v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisId, n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
 	if n.storage.IsEmpty() {
 		return
 	}
@@ -1584,11 +1607,13 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, this shared.Wri
 			newNode := newHandle.Get().(*ValueNode)
 			newNode.key = n.key
 			newNode.value = value
+			newNode.hashDirty = true
 			newNode.pathLength = n.pathLength
 			manager.update(newId, newHandle)
 			return newId, false, nil
 		}
 		n.value = value
+		n.hashDirty = true
 		manager.update(thisId, this)
 		return thisId, true, nil
 	}
@@ -1607,6 +1632,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisId NodeId, this shared.Wri
 	sibling := siblingHandle.Get().(*ValueNode)
 	sibling.key = key
 	sibling.value = value
+	sibling.hashDirty = true
 
 	thisPath := KeyToNibblePath(n.key, manager)
 	newRootId, err := splitLeafNode(manager, thisId, thisPath[:], n, this, path, siblingId, sibling, siblingHandle)
@@ -1650,10 +1676,12 @@ func (n *ValueNode) setPathLength(manager NodeManager, thisId NodeId, this share
 		newNode := newHandle.Get().(*ValueNode)
 		newNode.key = n.key
 		newNode.value = n.value
+		newNode.hashDirty = true
 		newNode.pathLength = length
 		return newId, false, manager.update(newId, newHandle)
 	}
 
+	n.hashDirty = true
 	n.pathLength = length
 	return thisId, true, manager.update(thisId, this)
 }
@@ -1697,14 +1725,10 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 }
 
 func (n *ValueNode) Dump(source NodeSource, thisId NodeId, indent string) {
-	fmt.Printf("%sValue (ID: %v/%t/%d, Hash: %v): %v - %v\n", indent, thisId, n.frozen, n.pathLength, formatHashForDump(source, thisId), n.key, n.value)
+	fmt.Printf("%sValue (ID: %v/%t/%d, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisId, n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.key, n.value)
 }
 
-func formatHashForDump(source NodeSource, id NodeId) string {
-	hash, err := source.getHashFor(id)
-	if err != nil {
-		return fmt.Sprintf("%v", err)
-	}
+func formatHashForDump(hash common.Hash) string {
 	return fmt.Sprintf("0x%x", hash)
 }
 

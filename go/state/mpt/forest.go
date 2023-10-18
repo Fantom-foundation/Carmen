@@ -22,12 +22,12 @@ import (
 type StorageMode bool
 
 const (
-	// Archive is the mode of an archive or a read-only state on the disk.
+	// Mutable is the mode of an archive or a read-only state on the disk.
 	// All nodes written to disk will be finalized and never updated again.
-	Archive StorageMode = true
-	// Live is the mode of an archive in which the state on the disk can be
+	Immutable StorageMode = true
+	// Immutable is the mode of a LiveDB in which the state on the disk can be
 	// modified through destructive updates.
-	Live StorageMode = false
+	Mutable StorageMode = false
 )
 
 // printWarningDefaultNodeFreezing allows for printing a warning that a node is going to be frozen
@@ -36,10 +36,10 @@ const printWarningDefaultNodeFreezing = false
 
 func (m StorageMode) String() string {
 	switch m {
-	case Archive:
-		return "Archive"
-	case Live:
-		return "Live"
+	case Immutable:
+		return "Immutable"
+	case Mutable:
+		return "Mutable"
 	default:
 		return "?"
 	}
@@ -203,7 +203,7 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 		if want, got := config.Name, meta.Configuration; want != got {
 			return meta, fmt.Errorf("unexpected MPT configuration in directory, wanted %v, got %v", want, got)
 		}
-		if want, got := StorageMode(mode == Archive), StorageMode(meta.Archive); want != got {
+		if want, got := StorageMode(mode == Mutable), StorageMode(meta.Mutable); want != got {
 			return meta, fmt.Errorf("unexpected MPT storage mode in directory, wanted %v, got %v", want, got)
 		}
 		return meta, nil
@@ -212,7 +212,7 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 	// Write metadata to disk to create new forest.
 	meta = ForestMetadata{
 		Configuration: config.Name,
-		Archive:       mode == Archive,
+		Mutable:       mode == Mutable,
 	}
 
 	// Update on-disk meta-data.
@@ -340,7 +340,7 @@ func (s *Forest) hashAddress(address common.Address) common.Hash {
 }
 
 func (f *Forest) Freeze(id NodeId) error {
-	if f.storageMode != Archive {
+	if f.storageMode != Immutable {
 		return fmt.Errorf("node-freezing only supported in archive mode")
 	}
 	root, err := f.getMutableNode(id)
@@ -520,7 +520,7 @@ func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 
 	// Everything that is loaded from an archive is to be considered
 	// frozen, and thus immutable.
-	if s.storageMode == Archive {
+	if s.storageMode == Immutable {
 		node.MarkFrozen()
 	}
 
@@ -582,7 +582,7 @@ func (s *Forest) flushNode(id NodeId, node Node) error {
 	// correctness issues. However, if the node-cache size is sufficiently
 	// large, such cases should be rare. Nevertheless, a warning is
 	// printed here to get informed if this changes in the future.
-	if printWarningDefaultNodeFreezing && s.storageMode == Archive && !node.IsFrozen() {
+	if printWarningDefaultNodeFreezing && s.storageMode == Immutable && !node.IsFrozen() {
 		log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
 	}
 
@@ -729,7 +729,7 @@ func (s writeBufferSink) Write(id NodeId, handle shared.ReadHandle[Node]) error 
 // ForestMetadata is the helper type to read and write metadata from/to the disk.
 type ForestMetadata struct {
 	Configuration string
-	Archive       bool
+	Mutable       bool
 }
 
 // ReadForestMetadata parses the content of the given file if it exists or returns

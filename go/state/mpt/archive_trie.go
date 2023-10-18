@@ -37,7 +37,7 @@ func OpenArchiveTrie(directory string, config MptConfig) (archive.Archive, error
 	if err != nil {
 		return nil, err
 	}
-	forest, err := OpenFileForest(directory, config, Archive)
+	forest, err := OpenFileForest(directory, config, Immutable)
 	if err != nil {
 		return nil, err
 	}

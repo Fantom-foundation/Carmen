@@ -41,9 +41,9 @@ func getMptInfo(dir string) (mptInfo, error) {
 		return res, fmt.Errorf("unknown MPT configuration: %v", meta.Configuration)
 	}
 
-	mode := mpt.Live
-	if meta.Archive {
-		mode = mpt.Archive
+	mode := mpt.Immutable
+	if meta.Mutable {
+		mode = mpt.Mutable
 	}
 
 	return mptInfo{

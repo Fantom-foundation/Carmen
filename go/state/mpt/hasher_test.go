@@ -30,7 +30,8 @@ func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 						0xd: &Account{},
 					},
 				},
-				dirtyHash: true,
+				hashDirty:     true,
+				nextHashDirty: true,
 			})
 
 			hasher := algorithm.createHasher()
@@ -42,6 +43,9 @@ func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
+			if !handle.Get().(*ExtensionNode).hashDirty {
+				t.Errorf("dirty hash flag should not be cleared")
+			}
 			if !handle.Get().(*ExtensionNode).nextHashDirty {
 				t.Errorf("dirty hash flag should not be changed")
 			}
@@ -63,7 +67,8 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 						0xd: &Account{},
 					},
 				},
-				dirtyHash: true,
+				hashDirty:     true,
+				nextHashDirty: true,
 			})
 
 			// The node is updated while being hashed.
@@ -78,6 +83,9 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
+			if handle.Get().(*ExtensionNode).hashDirty {
+				t.Errorf("dirty hash flag should be cleared")
+			}
 			if handle.Get().(*ExtensionNode).nextHashDirty {
 				t.Errorf("node still marked as dirty after updating the hashes")
 			}
@@ -96,7 +104,8 @@ func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 					0x7: &Account{},
 					0xd: &Account{},
 				},
-				dirty: []int{0x7, 0xd},
+				hashDirty: true,
+				dirty:     []int{0x7, 0xd},
 			})
 
 			hasher := algorithm.createHasher()
@@ -108,8 +117,11 @@ func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			// The dirty flag is not touched.
 			handle := node.GetReadHandle()
 			defer handle.Release()
+			if !handle.Get().(*BranchNode).hashDirty {
+				t.Errorf("dirty hash flag should not be cleared")
+			}
 			if handle.Get().(*BranchNode).dirtyHashes != ((1 << 0x7) | (1 << 0xd)) {
-				t.Errorf("dirty hash flags should not be changed")
+				t.Errorf("dirty child hash flags should not be changed")
 			}
 		})
 	}
@@ -126,7 +138,8 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 					0x7: &Account{},
 					0xd: &Account{},
 				},
-				dirty: []int{0x7, 0xd},
+				hashDirty: true,
+				dirty:     []int{0x7, 0xd},
 			})
 
 			// The node is updated while being hashed.
@@ -142,6 +155,9 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
+			if handle.Get().(*BranchNode).hashDirty {
+				t.Errorf("dirty hash flag should be cleared")
+			}
 			if handle.Get().(*BranchNode).dirtyHashes != 0 {
 				t.Errorf("dirty hash flags should be cleared")
 			}
@@ -160,7 +176,8 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 					0x7: &Account{},
 					0xd: &Account{},
 				},
-				dirty: []int{1, 2, 3}, // < all empty children
+				hashDirty: true,
+				dirty:     []int{1, 2, 3}, // < all empty children
 			})
 
 			// the node is not marked to be modified
@@ -174,8 +191,11 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
+			if handle.Get().(*BranchNode).hashDirty {
+				t.Errorf("dirty hash flag should be cleared")
+			}
 			if handle.Get().(*BranchNode).dirtyHashes != 0 {
-				t.Errorf("dirty hash flags should be cleared")
+				t.Errorf("dirty children hash flags should be cleared")
 			}
 		})
 	}
@@ -188,6 +208,7 @@ func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			ctxt := newNodeContext(t, ctrl)
 
 			id, node := ctxt.Build(&Account{
+				hashDirty:        true,
 				storageHashDirty: true,
 			})
 
@@ -202,8 +223,11 @@ func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			// The dirty flag is not changed.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if !handle.Get().(*AccountNode).storageHashDirty {
+			if !handle.Get().(*AccountNode).hashDirty {
 				t.Errorf("dirty hash flags should not be changed")
+			}
+			if !handle.Get().(*AccountNode).storageHashDirty {
+				t.Errorf("dirty storage hash flags should not be changed")
 			}
 		})
 	}
@@ -216,6 +240,7 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			ctxt := newNodeContext(t, ctrl)
 
 			id, node := ctxt.Build(&Account{
+				hashDirty:        true,
 				storageHashDirty: true,
 			})
 
@@ -232,8 +257,11 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
+			if handle.Get().(*AccountNode).hashDirty {
+				t.Errorf("dirty hash flag should be cleared")
+			}
 			if handle.Get().(*AccountNode).storageHashDirty {
-				t.Errorf("dirty hash flags should be cleared")
+				t.Errorf("dirty storage hash flags should be cleared")
 			}
 		})
 	}
@@ -318,8 +346,8 @@ func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 
 	id, branch := ctxt.Build(&Branch{
 		children: Children{
-			0x7: &ValueWithLength{length: 55, key: key, value: v31},
-			0xc: &ValueWithLength{length: 55, value: common.Value{255}},
+			0x7: &Value{length: 55, key: key, value: v31},
+			0xc: &Value{length: 55, value: common.Value{255}},
 		},
 	})
 

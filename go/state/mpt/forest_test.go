@@ -23,7 +23,7 @@ var variants = []struct {
 func TestForest_OpenAndClose(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					forest, err := variant.factory(t.TempDir(), config, mode)
 					if err != nil {
@@ -41,7 +41,7 @@ func TestForest_OpenAndClose(t *testing.T) {
 func TestForest_ClosedAndReOpened(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Immutable, Mutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					directory := t.TempDir()
 
@@ -57,6 +57,10 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 					root, err = forest.SetAccountInfo(root, addr, info)
 					if err != nil {
 						t.Fatalf("failed to set account info: %v", err)
+					}
+
+					if _, err = forest.updateHashesFor(root); err != nil {
+						t.Fatalf("failed to update hash of modified forest: %v", err)
 					}
 
 					if err := forest.Close(); err != nil {
@@ -84,7 +88,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					forest, err := variant.factory(t.TempDir(), config, mode)
 					if err != nil {
@@ -109,6 +113,10 @@ func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 						t.Errorf("empty tree should not contain any info, wanted (%v,%t), got (%v,%t), err %v", info1, true, info, true, err)
 					}
 
+					if _, err := forest.updateHashesFor(root); err != nil {
+						t.Fatalf("failed to update hashes: %v", err)
+					}
+
 					if err := forest.Close(); err != nil {
 						t.Fatalf("failed to close forest: %v", err)
 					}
@@ -121,7 +129,7 @@ func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					forest, err := variant.factory(t.TempDir(), config, mode)
 					if err != nil {
@@ -180,7 +188,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, Live)
+				forest, err := variant.factory(t.TempDir(), config, Mutable)
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -211,6 +219,10 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 				if info, found, err := forest.GetAccountInfo(root1, addr); info != info2 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
+
+				if _, err := forest.updateHashesFor(root2); err != nil {
+					t.Fatalf("failed to update hashes: %v", err)
+				}
 			})
 		}
 	}
@@ -220,7 +232,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, Archive)
+				forest, err := variant.factory(t.TempDir(), config, Immutable)
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -263,6 +275,12 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 				if info, found, err := forest.GetAccountInfo(root2, addr); info != info2 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
+
+				for _, root := range []NodeId{root0, root1, root2} {
+					if _, err := forest.updateHashesFor(root); err != nil {
+						t.Fatalf("failed to update hashes: %v", err)
+					}
+				}
 			})
 		}
 	}
@@ -271,7 +289,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					forest, err := variant.factory(t.TempDir(), config, mode)
 					if err != nil {
@@ -299,7 +317,7 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					const N = 100
 					forest, err := variant.factory(t.TempDir(), config, mode)
@@ -361,7 +379,7 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Live, Archive} {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
 					const N = 100
 					forest, err := variant.factory(t.TempDir(), config, mode)

@@ -79,13 +79,11 @@ func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, 
 	}
 	defer handle.Release()
 
-	// TODO: enable this when dirty flag is properly updated
-	/*
-		hash, dirty := handle.Get().GetHash()
-		if !dirty {
-			return hash, nil
-		}
-	*/
+	// If the hash in the node is up-to-date we can skip re-hashing.
+	hash, dirty := handle.Get().GetHash()
+	if !dirty {
+		return hash, nil
+	}
 
 	hash, err = h.hash(id, handle.Get(), handle, source)
 	if err != nil {
@@ -227,13 +225,12 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 	}
 	node := handle.Get()
 
-	// TODO: enable this when dirty flag is properly updated
-	/*
-		hash, dirty := node.GetHash()
-		if !dirty {
-			return hash, nil
-		}
-	*/
+	// If the hash in the node is up-to-date we can skip re-hashing.
+	hash, dirty := node.GetHash()
+	if !dirty {
+		handle.Release()
+		return hash, nil
+	}
 
 	// Encode the node in RLP and compute its hash.
 	data, err := h.encode(id, node, handle, manager, manager)
@@ -241,7 +238,7 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 		handle.Release()
 		return common.Hash{}, err
 	}
-	hash := common.Keccak256(data)
+	hash = common.Keccak256(data)
 	handle.Get().SetHash(hash)
 	handle.Release()
 	return hash, nil

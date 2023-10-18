@@ -44,7 +44,7 @@ func info(context *cli.Context) error {
 	fmt.Printf("\tMode:              %v\n", mptInfo.mode)
 
 	// attempt to open the MPT
-	if mptInfo.mode == mpt.Live {
+	if mptInfo.mode == mpt.Mutable {
 		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.config)
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)

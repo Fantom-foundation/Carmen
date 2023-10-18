@@ -28,7 +28,7 @@ type LiveTrie struct {
 // creates a LiveTrie instance retaining all information in memory. If the
 // directory is empty, an empty trie is created.
 func OpenInMemoryLiveTrie(directory string, config MptConfig) (*LiveTrie, error) {
-	forest, err := OpenInMemoryForest(directory, config, Live)
+	forest, err := OpenInMemoryForest(directory, config, Mutable)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func OpenInMemoryLiveTrie(directory string, config MptConfig) (*LiveTrie, error)
 // memory, backed by a file-based storage automatically kept in sync. If the
 // directory is empty, an empty trie is created.
 func OpenFileLiveTrie(directory string, config MptConfig) (*LiveTrie, error) {
-	forest, err := OpenFileForest(directory, config, Live)
+	forest, err := OpenFileForest(directory, config, Mutable)
 	if err != nil {
 		return nil, err
 	}
