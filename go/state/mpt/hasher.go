@@ -78,11 +78,20 @@ func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, 
 		return hash, err
 	}
 	defer handle.Release()
+
+	// TODO: enable this when dirty flag is properly updated
+	/*
+		hash, dirty := handle.Get().GetHash()
+		if !dirty {
+			return hash, nil
+		}
+	*/
+
 	hash, err = h.hash(id, handle.Get(), handle, source)
 	if err != nil {
 		return hash, err
 	}
-	setHash(&handle, hash)
+	handle.Get().SetHash(hash)
 	return hash, nil
 }
 
@@ -182,6 +191,9 @@ func (h directHasher) hash(id NodeId, node Node, handle shared.WriteHandle[Node]
 		hasher.Write(node.key[:])
 		hasher.Write(node.value[:])
 
+	case EmptyNode:
+		return common.Hash{}, nil
+
 	default:
 		return hash, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -215,6 +227,14 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 	}
 	node := handle.Get()
 
+	// TODO: enable this when dirty flag is properly updated
+	/*
+		hash, dirty := node.GetHash()
+		if !dirty {
+			return hash, nil
+		}
+	*/
+
 	// Encode the node in RLP and compute its hash.
 	data, err := h.encode(id, node, handle, manager, manager)
 	if err != nil {
@@ -222,7 +242,7 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 		return common.Hash{}, err
 	}
 	hash := common.Keccak256(data)
-	setHash(&handle, hash)
+	handle.Get().SetHash(hash)
 	handle.Release()
 	return hash, nil
 }
@@ -665,25 +685,4 @@ func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSour
 		value = value[1:]
 	}
 	return size + len(value) + 1, nil
-}
-
-func setHash(handle *shared.WriteHandle[Node], hash common.Hash) {
-	switch node := handle.Get().(type) {
-	case EmptyNode:
-		return
-	case *BranchNode:
-		node.hash = hash
-		node.hashDirty = false
-	case *AccountNode:
-		node.hash = hash
-		node.hashDirty = false
-	case *ExtensionNode:
-		node.hash = hash
-		node.hashDirty = false
-	case *ValueNode:
-		node.hash = hash
-		node.hashDirty = false
-	default:
-		panic(fmt.Sprintf("unknown node type %s", reflect.TypeOf(node)))
-	}
 }

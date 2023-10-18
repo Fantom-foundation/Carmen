@@ -159,6 +159,12 @@ type Node interface {
 	// rooted by this node. Only non-frozen nodes can be released.
 	Release(manager NodeManager, thisId NodeId, this shared.WriteHandle[Node]) error
 
+	// GetHash obtains the potentially dirty hash currently retained for this node.
+	GetHash() (hash common.Hash, dirty bool)
+
+	// SetHash updates this nodes hash.
+	SetHash(common.Hash)
+
 	// IsFrozen indicates whether the given node is frozen or not.
 	IsFrozen() bool
 
@@ -293,6 +299,12 @@ func (e EmptyNode) Release(NodeManager, NodeId, shared.WriteHandle[Node]) error 
 	return nil
 }
 
+func (e EmptyNode) GetHash() (common.Hash, bool) {
+	return common.Hash{}, true
+}
+
+func (e EmptyNode) SetHash(common.Hash) { /* ignored */ }
+
 func (e EmptyNode) IsFrozen() bool {
 	return true
 }
@@ -331,7 +343,7 @@ type BranchNode struct {
 	embeddedChildren uint16          // a bit mask marking children as embedded; 0 .. not, 1 .. embedded
 	frozen           bool            // a flag marking the node as immutable
 	frozenChildren   uint16          // a bit mask marking frozen children; not persisted
-	hash             common.Hash     // the hash of this node (may be unused)
+	hash             common.Hash     // the hash of this node (may be dirty)
 	hashDirty        bool            // indicating whether this node's hash is dirty
 }
 
@@ -565,6 +577,15 @@ func (n *BranchNode) Release(manager NodeManager, thisId NodeId, this shared.Wri
 	return manager.release(thisId)
 }
 
+func (n *BranchNode) GetHash() (common.Hash, bool) {
+	return n.hash, n.hashDirty
+}
+
+func (n *BranchNode) SetHash(hash common.Hash) {
+	n.hash = hash
+	n.hashDirty = false
+}
+
 func (n *BranchNode) IsFrozen() bool {
 	return n.frozen
 }
@@ -724,7 +745,7 @@ type ExtensionNode struct {
 	nextHashDirty  bool
 	nextIsEmbedded bool // TODO: include this in encoding; also for the branch node
 	frozen         bool
-	hash           common.Hash // the hash of this node (may be unused)
+	hash           common.Hash // the hash of this node (may be dirty)
 	hashDirty      bool        // indicating whether this node's hash is dirty
 }
 
@@ -1003,6 +1024,15 @@ func (n *ExtensionNode) Release(manager NodeManager, thisId NodeId, this shared.
 	return manager.release(thisId)
 }
 
+func (n *ExtensionNode) GetHash() (common.Hash, bool) {
+	return n.hash, n.hashDirty
+}
+
+func (n *ExtensionNode) SetHash(hash common.Hash) {
+	n.hash = hash
+	n.hashDirty = false
+}
+
 func (n *ExtensionNode) IsFrozen() bool {
 	return n.frozen
 }
@@ -1107,7 +1137,7 @@ type AccountNode struct {
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
-	hash       common.Hash // the hash of this node (may be unused)
+	hash       common.Hash // the hash of this node (may be dirty)
 	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
@@ -1371,6 +1401,15 @@ func (n *AccountNode) Release(manager NodeManager, thisId NodeId, this shared.Wr
 	return manager.release(thisId)
 }
 
+func (n *AccountNode) GetHash() (common.Hash, bool) {
+	return n.hash, n.hashDirty
+}
+
+func (n *AccountNode) SetHash(hash common.Hash) {
+	n.hash = hash
+	n.hashDirty = false
+}
+
 func (n *AccountNode) setPathLength(manager NodeManager, thisId NodeId, this shared.WriteHandle[Node], length byte) (NodeId, bool, error) {
 	if n.pathLength == length {
 		return thisId, false, nil
@@ -1501,7 +1540,7 @@ type ValueNode struct {
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
-	hash       common.Hash // the hash of this node (may be unused)
+	hash       common.Hash // the hash of this node (may be dirty)
 	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
@@ -1587,6 +1626,15 @@ func (n *ValueNode) Release(manager NodeManager, thisId NodeId, this shared.Writ
 		return nil
 	}
 	return manager.release(thisId)
+}
+
+func (n *ValueNode) GetHash() (common.Hash, bool) {
+	return n.hash, n.hashDirty
+}
+
+func (n *ValueNode) SetHash(hash common.Hash) {
+	n.hash = hash
+	n.hashDirty = false
 }
 
 func (n *ValueNode) setPathLength(manager NodeManager, thisId NodeId, this shared.WriteHandle[Node], length byte) (NodeId, bool, error) {
