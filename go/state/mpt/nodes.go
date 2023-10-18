@@ -331,6 +331,8 @@ type BranchNode struct {
 	embeddedChildren uint16          // a bit mask marking children as embedded; 0 .. not, 1 .. embedded
 	frozen           bool            // a flag marking the node as immutable
 	frozenChildren   uint16          // a bit mask marking frozen children; not persisted
+	hash             common.Hash     // the hash of this node (may be unused)
+	hashDirty        bool            // indicating whether this node's hash is dirty
 }
 
 func (n *BranchNode) getNextNodeInBranch(
@@ -722,6 +724,8 @@ type ExtensionNode struct {
 	nextHashDirty  bool
 	nextIsEmbedded bool // TODO: include this in encoding; also for the branch node
 	frozen         bool
+	hash           common.Hash // the hash of this node (may be unused)
+	hashDirty      bool        // indicating whether this node's hash is dirty
 }
 
 func (n *ExtensionNode) getNextNodeInExtension(
@@ -1099,10 +1103,12 @@ type AccountNode struct {
 	storageHash      common.Hash
 	storageHashDirty bool
 	frozen           bool
-	// pathLengh is the number of nibbles of the key (or its hash) not covered
+	// pathLength is the number of nibbles of the key (or its hash) not covered
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
+	hash       common.Hash // the hash of this node (may be unused)
+	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
 func (n *AccountNode) GetAccount(source NodeSource, address common.Address, path []Nibble) (AccountInfo, bool, error) {
@@ -1491,10 +1497,12 @@ type ValueNode struct {
 	key    common.Key
 	value  common.Value
 	frozen bool
-	// pathLengh is the number of nibbles of the key (or its hash) not covered
+	// pathLength is the number of nibbles of the key (or its hash) not covered
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
+	hash       common.Hash // the hash of this node (may be unused)
+	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
 func (n *ValueNode) GetAccount(NodeSource, common.Address, []Nibble) (AccountInfo, bool, error) {
@@ -1660,14 +1668,65 @@ func (n *ValueNode) Visit(source NodeSource, thisId NodeId, depth int, visitor N
 //                               Node Encoders
 // ----------------------------------------------------------------------------
 
-type BranchNodeEncoder struct{}
+// TODO: move encoder to extra file and clean-up definitions
 
-func (BranchNodeEncoder) GetEncodedSize() int {
+type BranchNodeEncoderWithNodeHash struct{}
+
+func (BranchNodeEncoderWithNodeHash) GetEncodedSize() int {
+	encoder := NodeIdEncoder{}
+	return encoder.GetEncodedSize()*16 + common.HashSize + 2
+}
+
+func (BranchNodeEncoderWithNodeHash) Store(dst []byte, node *BranchNode) error {
+	if node.hashDirty {
+		panic("unable to store branch node with dirty hash")
+	}
+	encoder := NodeIdEncoder{}
+	step := encoder.GetEncodedSize()
+	for i := 0; i < 16; i++ {
+		if err := encoder.Store(dst[i*step:], &node.children[i]); err != nil {
+			return err
+		}
+	}
+	dst = dst[step*16:]
+	copy(dst, node.hash[:])
+	dst = dst[common.HashSize:]
+	binary.BigEndian.PutUint16(dst, node.embeddedChildren)
+	return nil
+}
+
+func (BranchNodeEncoderWithNodeHash) Load(src []byte, node *BranchNode) error {
+	encoder := NodeIdEncoder{}
+	step := encoder.GetEncodedSize()
+	for i := 0; i < 16; i++ {
+		if err := encoder.Load(src[i*step:], &node.children[i]); err != nil {
+			return err
+		}
+	}
+	src = src[step*16:]
+	copy(node.hash[:], src)
+	src = src[common.HashSize:]
+	node.embeddedChildren = binary.BigEndian.Uint16(src)
+
+	// The hashes of the child nodes are not stored with the node, so they are
+	// marked as dirty to trigger a re-computation the next time they are used.
+	for i := 0; i < 16; i++ {
+		if !node.children[i].IsEmpty() {
+			node.markChildHashDirty(byte(i))
+		}
+	}
+
+	return nil
+}
+
+type BranchNodeEncoderWithChildHashes struct{}
+
+func (BranchNodeEncoderWithChildHashes) GetEncodedSize() int {
 	encoder := NodeIdEncoder{}
 	return encoder.GetEncodedSize()*16 + common.HashSize*16 + 2
 }
 
-func (BranchNodeEncoder) Store(dst []byte, node *BranchNode) error {
+func (BranchNodeEncoderWithChildHashes) Store(dst []byte, node *BranchNode) error {
 	if node.dirtyHashes != 0 {
 		panic("unable to store branch node with dirty hash")
 	}
@@ -1687,7 +1746,7 @@ func (BranchNodeEncoder) Store(dst []byte, node *BranchNode) error {
 	return nil
 }
 
-func (BranchNodeEncoder) Load(src []byte, node *BranchNode) error {
+func (BranchNodeEncoderWithChildHashes) Load(src []byte, node *BranchNode) error {
 	encoder := NodeIdEncoder{}
 	step := encoder.GetEncodedSize()
 	for i := 0; i < 16; i++ {
@@ -1701,18 +1760,76 @@ func (BranchNodeEncoder) Load(src []byte, node *BranchNode) error {
 		src = src[common.HashSize:]
 	}
 	node.embeddedChildren = binary.BigEndian.Uint16(src)
+
+	// The node's hash is not stored with the node, so it is marked dirty.
+	node.hashDirty = true
+
 	return nil
 }
 
-type ExtensionNodeEncoder struct{}
+type ExtensionNodeEncoderWithNodeHash struct{}
 
-func (ExtensionNodeEncoder) GetEncodedSize() int {
+func (ExtensionNodeEncoderWithNodeHash) GetEncodedSize() int {
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
 	return pathEncoder.GetEncodedSize() + idEncoder.GetEncodedSize() + common.HashSize + 1
 }
 
-func (ExtensionNodeEncoder) Store(dst []byte, value *ExtensionNode) error {
+func (ExtensionNodeEncoderWithNodeHash) Store(dst []byte, value *ExtensionNode) error {
+	if value.hashDirty {
+		panic("unable to store extension node with dirty hash")
+	}
+	pathEncoder := PathEncoder{}
+	idEncoder := NodeIdEncoder{}
+	if err := pathEncoder.Store(dst, &value.path); err != nil {
+		return err
+	}
+	dst = dst[pathEncoder.GetEncodedSize():]
+	if err := idEncoder.Store(dst, &value.next); err != nil {
+		return err
+	}
+	dst = dst[idEncoder.GetEncodedSize():]
+	copy(dst, value.hash[:])
+	dst = dst[common.HashSize:]
+	if value.nextIsEmbedded {
+		dst[0] = 1
+	} else {
+		dst[0] = 0
+	}
+	return nil
+}
+
+func (ExtensionNodeEncoderWithNodeHash) Load(src []byte, node *ExtensionNode) error {
+	pathEncoder := PathEncoder{}
+	idEncoder := NodeIdEncoder{}
+	if err := pathEncoder.Load(src, &node.path); err != nil {
+		return err
+	}
+	src = src[pathEncoder.GetEncodedSize():]
+	if err := idEncoder.Load(src, &node.next); err != nil {
+		return err
+	}
+	src = src[idEncoder.GetEncodedSize():]
+	copy(node.hash[:], src)
+	src = src[common.HashSize:]
+	node.nextIsEmbedded = src[0] != 0
+
+	// The hash of the next node is not stored with the node, so it is marked
+	// as dirty to trigger a re-computation the next time it is accessed.
+	node.nextHashDirty = true
+
+	return nil
+}
+
+type ExtensionNodeEncoderWithChildHash struct{}
+
+func (ExtensionNodeEncoderWithChildHash) GetEncodedSize() int {
+	pathEncoder := PathEncoder{}
+	idEncoder := NodeIdEncoder{}
+	return pathEncoder.GetEncodedSize() + idEncoder.GetEncodedSize() + common.HashSize + 1
+}
+
+func (ExtensionNodeEncoderWithChildHash) Store(dst []byte, value *ExtensionNode) error {
 	if value.nextHashDirty {
 		panic("unable to store extension node with dirty hash")
 	}
@@ -1736,7 +1853,7 @@ func (ExtensionNodeEncoder) Store(dst []byte, value *ExtensionNode) error {
 	return nil
 }
 
-func (ExtensionNodeEncoder) Load(src []byte, node *ExtensionNode) error {
+func (ExtensionNodeEncoderWithChildHash) Load(src []byte, node *ExtensionNode) error {
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
 	if err := pathEncoder.Load(src, &node.path); err != nil {
@@ -1750,19 +1867,78 @@ func (ExtensionNodeEncoder) Load(src []byte, node *ExtensionNode) error {
 	copy(node.nextHash[:], src)
 	src = src[common.HashSize:]
 	node.nextIsEmbedded = src[0] != 0
+
+	// The node's hash is not stored with the node, so it is marked dirty.
+	node.hashDirty = true
+
 	return nil
 }
 
-type AccountNodeEncoder struct{}
+type AccountNodeEncoderWithNodeHash struct{}
 
-func (AccountNodeEncoder) GetEncodedSize() int {
+func (AccountNodeEncoderWithNodeHash) GetEncodedSize() int {
 	return common.AddressSize +
 		AccountInfoEncoder{}.GetEncodedSize() +
 		NodeIdEncoder{}.GetEncodedSize() +
 		common.HashSize
 }
 
-func (AccountNodeEncoder) Store(dst []byte, node *AccountNode) error {
+func (AccountNodeEncoderWithNodeHash) Store(dst []byte, node *AccountNode) error {
+	if node.hashDirty {
+		panic("unable to store account node with dirty hash")
+	}
+	copy(dst, node.address[:])
+	dst = dst[len(node.address):]
+
+	infoEncoder := AccountInfoEncoder{}
+	if err := infoEncoder.Store(dst, &node.info); err != nil {
+		return err
+	}
+	dst = dst[infoEncoder.GetEncodedSize():]
+
+	idEncoder := NodeIdEncoder{}
+	if err := idEncoder.Store(dst, &node.storage); err != nil {
+		return err
+	}
+	dst = dst[idEncoder.GetEncodedSize():]
+	copy(dst[:], node.hash[:])
+	return nil
+}
+
+func (AccountNodeEncoderWithNodeHash) Load(src []byte, node *AccountNode) error {
+	copy(node.address[:], src)
+	src = src[len(node.address):]
+
+	infoEncoder := AccountInfoEncoder{}
+	if err := infoEncoder.Load(src, &node.info); err != nil {
+		return err
+	}
+	src = src[infoEncoder.GetEncodedSize():]
+
+	idEncoder := NodeIdEncoder{}
+	if err := idEncoder.Load(src, &node.storage); err != nil {
+		return err
+	}
+	src = src[idEncoder.GetEncodedSize():]
+	copy(node.hash[:], src)
+
+	// The storage hash is not stored with the node, so it is marked as dirty to
+	// trigger a re-computation the next time it is accessed.
+	node.storageHashDirty = true
+
+	return nil
+}
+
+type AccountNodeEncoderWithChildHash struct{}
+
+func (AccountNodeEncoderWithChildHash) GetEncodedSize() int {
+	return common.AddressSize +
+		AccountInfoEncoder{}.GetEncodedSize() +
+		NodeIdEncoder{}.GetEncodedSize() +
+		common.HashSize
+}
+
+func (AccountNodeEncoderWithChildHash) Store(dst []byte, node *AccountNode) error {
 	if node.storageHashDirty {
 		panic("unable to store account node with dirty hash")
 	}
@@ -1784,7 +1960,7 @@ func (AccountNodeEncoder) Store(dst []byte, node *AccountNode) error {
 	return nil
 }
 
-func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
+func (AccountNodeEncoderWithChildHash) Load(src []byte, node *AccountNode) error {
 	copy(node.address[:], src)
 	src = src[len(node.address):]
 
@@ -1800,65 +1976,126 @@ func (AccountNodeEncoder) Load(src []byte, node *AccountNode) error {
 	}
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.storageHash[:], src)
+
+	// The node's hash is not stored with the node, so it is marked dirty.
+	node.hashDirty = true
+
 	return nil
 }
 
-// AccountNodeWithPathLengthEncoder is the same as the AccountNodeEncoder but
-// also includes the length of the path covered by the leaf node in the output.
-type AccountNodeWithPathLengthEncoder struct{}
+type AccountNodeWithPathLengthEncoderWithNodeHash struct{}
 
-func (AccountNodeWithPathLengthEncoder) GetEncodedSize() int {
-	return AccountNodeEncoder{}.GetEncodedSize() + 1
+func (AccountNodeWithPathLengthEncoderWithNodeHash) GetEncodedSize() int {
+	return AccountNodeEncoderWithNodeHash{}.GetEncodedSize() + 1
 }
 
-func (AccountNodeWithPathLengthEncoder) Store(dst []byte, node *AccountNode) error {
-	AccountNodeEncoder{}.Store(dst, node)
+func (AccountNodeWithPathLengthEncoderWithNodeHash) Store(dst []byte, node *AccountNode) error {
+	AccountNodeEncoderWithNodeHash{}.Store(dst, node)
 	dst[len(dst)-1] = node.pathLength
 	return nil
 }
 
-func (AccountNodeWithPathLengthEncoder) Load(src []byte, node *AccountNode) error {
-	AccountNodeEncoder{}.Load(src, node)
+func (AccountNodeWithPathLengthEncoderWithNodeHash) Load(src []byte, node *AccountNode) error {
+	AccountNodeEncoderWithNodeHash{}.Load(src, node)
 	node.pathLength = src[len(src)-1]
 	return nil
 }
 
-type ValueNodeEncoder struct{}
+type AccountNodeWithPathLengthEncoderWithChildHash struct{}
 
-func (ValueNodeEncoder) GetEncodedSize() int {
+func (AccountNodeWithPathLengthEncoderWithChildHash) GetEncodedSize() int {
+	return AccountNodeEncoderWithChildHash{}.GetEncodedSize() + 1
+}
+
+func (AccountNodeWithPathLengthEncoderWithChildHash) Store(dst []byte, node *AccountNode) error {
+	AccountNodeEncoderWithChildHash{}.Store(dst, node)
+	dst[len(dst)-1] = node.pathLength
+	return nil
+}
+
+func (AccountNodeWithPathLengthEncoderWithChildHash) Load(src []byte, node *AccountNode) error {
+	AccountNodeEncoderWithChildHash{}.Load(src, node)
+	node.pathLength = src[len(src)-1]
+	return nil
+}
+
+type ValueNodeEncoderWithoutNodeHash struct{}
+
+func (ValueNodeEncoderWithoutNodeHash) GetEncodedSize() int {
 	return common.KeySize + common.ValueSize
 }
 
-func (ValueNodeEncoder) Store(dst []byte, node *ValueNode) error {
+func (ValueNodeEncoderWithoutNodeHash) Store(dst []byte, node *ValueNode) error {
 	copy(dst, node.key[:])
 	dst = dst[len(node.key):]
 	copy(dst, node.value[:])
 	return nil
 }
 
-func (ValueNodeEncoder) Load(src []byte, node *ValueNode) error {
+func (ValueNodeEncoderWithoutNodeHash) Load(src []byte, node *ValueNode) error {
 	copy(node.key[:], src)
 	src = src[len(node.key):]
 	copy(node.value[:], src)
+
+	// The node's hash is not stored with the node, so it is marked dirty.
+	node.hashDirty = true
+
 	return nil
 }
 
-// ValueNodeWithPathLengthEncoder is the same as the ValueNodeEncoder but
-// also includes the length of the path covered by the leaf node in the output.
-type ValueNodeWithPathLengthEncoder struct{}
+type ValueNodeEncoderWithNodeHash struct{}
 
-func (ValueNodeWithPathLengthEncoder) GetEncodedSize() int {
-	return ValueNodeEncoder{}.GetEncodedSize() + 1
+func (ValueNodeEncoderWithNodeHash) GetEncodedSize() int {
+	return ValueNodeEncoderWithoutNodeHash{}.GetEncodedSize() + common.HashSize
 }
 
-func (ValueNodeWithPathLengthEncoder) Store(dst []byte, node *ValueNode) error {
-	ValueNodeEncoder{}.Store(dst, node)
+func (ValueNodeEncoderWithNodeHash) Store(dst []byte, node *ValueNode) error {
+	ValueNodeEncoderWithoutNodeHash{}.Store(dst, node)
+	dst = dst[ValueNodeEncoderWithoutNodeHash{}.GetEncodedSize():]
+	copy(dst, node.hash[:])
+	return nil
+}
+
+func (ValueNodeEncoderWithNodeHash) Load(src []byte, node *ValueNode) error {
+	ValueNodeEncoderWithoutNodeHash{}.Load(src, node)
+	src = src[ValueNodeEncoderWithoutNodeHash{}.GetEncodedSize():]
+	copy(node.hash[:], src)
+	node.hashDirty = false
+	return nil
+}
+
+type ValueNodeWithPathLengthEncoderWithoutNodeHash struct{}
+
+func (ValueNodeWithPathLengthEncoderWithoutNodeHash) GetEncodedSize() int {
+	return ValueNodeEncoderWithoutNodeHash{}.GetEncodedSize() + 1
+}
+
+func (ValueNodeWithPathLengthEncoderWithoutNodeHash) Store(dst []byte, node *ValueNode) error {
+	ValueNodeEncoderWithoutNodeHash{}.Store(dst, node)
 	dst[len(dst)-1] = node.pathLength
 	return nil
 }
 
-func (ValueNodeWithPathLengthEncoder) Load(src []byte, node *ValueNode) error {
-	ValueNodeEncoder{}.Load(src, node)
+func (ValueNodeWithPathLengthEncoderWithoutNodeHash) Load(src []byte, node *ValueNode) error {
+	ValueNodeEncoderWithoutNodeHash{}.Load(src, node)
+	node.pathLength = src[len(src)-1]
+	return nil
+}
+
+type ValueNodeWithPathLengthEncoderWithNodeHash struct{}
+
+func (ValueNodeWithPathLengthEncoderWithNodeHash) GetEncodedSize() int {
+	return ValueNodeEncoderWithNodeHash{}.GetEncodedSize() + 1
+}
+
+func (ValueNodeWithPathLengthEncoderWithNodeHash) Store(dst []byte, node *ValueNode) error {
+	ValueNodeEncoderWithNodeHash{}.Store(dst, node)
+	dst[len(dst)-1] = node.pathLength
+	return nil
+}
+
+func (ValueNodeWithPathLengthEncoderWithNodeHash) Load(src []byte, node *ValueNode) error {
+	ValueNodeEncoderWithNodeHash{}.Load(src, node)
 	node.pathLength = src[len(src)-1]
 	return nil
 }

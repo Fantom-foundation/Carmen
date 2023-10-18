@@ -3624,7 +3624,28 @@ func TestValueNode_Visit(t *testing.T) {
 //                               Encoders
 // ----------------------------------------------------------------------------
 
-func TestAccountNodeEncoder(t *testing.T) {
+func TestAccountNodeEncoderWithNodeHash(t *testing.T) {
+	node := AccountNode{
+		info: AccountInfo{
+			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
+			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
+		storage: NodeId(12),
+		hash:    common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+	}
+	encoder := AccountNodeEncoderWithNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := AccountNode{}
+	encoder.Load(buffer, &recovered)
+	node.storageHashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 	node := AccountNode{
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
@@ -3634,54 +3655,73 @@ func TestAccountNodeEncoder(t *testing.T) {
 		storage:     NodeId(12),
 		storageHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
-	encoder := AccountNodeEncoder{}
+	encoder := AccountNodeEncoderWithChildHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := AccountNode{}
 	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
-
-func TestAccountNodeWithPathLengthEncoder(t *testing.T) {
+func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 	node := AccountNode{
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
-		storage:     NodeId(12),
-		pathLength:  14,
-		storageHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		storage:    NodeId(12),
+		pathLength: 14,
+		hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
-	encoder := AccountNodeWithPathLengthEncoder{}
+	encoder := AccountNodeWithPathLengthEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := AccountNode{}
 	encoder.Load(buffer, &recovered)
+	node.storageHashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
 
-func TestBranchNodeEncoder(t *testing.T) {
+func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 	node := BranchNode{
 		children:         [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		hashes:           [16]common.Hash{{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16}},
 		embeddedChildren: 12,
 	}
-	encoder := BranchNodeEncoder{}
+	encoder := BranchNodeEncoderWithChildHashes{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := BranchNode{}
 	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
 
-func TestExtensionNodeEncoder(t *testing.T) {
+func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
+	node := BranchNode{
+		children:         [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		embeddedChildren: 12,
+		hash:             common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+	}
+	encoder := BranchNodeEncoderWithNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := BranchNode{}
+	encoder.Load(buffer, &recovered)
+	node.dirtyHashes = ^uint16(0)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestExtensionNodeEncoderWithChildHash(t *testing.T) {
 	node := ExtensionNode{
 		path: Path{
 			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
@@ -3691,22 +3731,60 @@ func TestExtensionNodeEncoder(t *testing.T) {
 		nextHash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		nextIsEmbedded: true,
 	}
-	encoder := ExtensionNodeEncoder{}
+	encoder := ExtensionNodeEncoderWithChildHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ExtensionNode{}
 	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+func TestExtensionNodeEncoderWithNodeHash(t *testing.T) {
+	node := ExtensionNode{
+		path: Path{
+			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length: 7,
+		},
+		next:           NodeId(12),
+		hash:           common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		nextIsEmbedded: true,
+	}
+	encoder := ExtensionNodeEncoderWithNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ExtensionNode{}
+	encoder.Load(buffer, &recovered)
+	node.nextHashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
 
-func TestValueNodeEncoder(t *testing.T) {
+func TestValueNodeEncoderWithoutNodeHash(t *testing.T) {
 	node := ValueNode{
 		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
-	encoder := ValueNodeEncoder{}
+	encoder := ValueNodeEncoderWithoutNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ValueNode{}
+	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestValueNodeEncoderWithNodeHash(t *testing.T) {
+	node := ValueNode{
+		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		hash:  common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+	}
+	encoder := ValueNodeEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}
@@ -3716,13 +3794,31 @@ func TestValueNodeEncoder(t *testing.T) {
 	}
 }
 
-func TestValueNodeWithPathLengthEncoder(t *testing.T) {
+func TestValueNodeWithPathLengthEncoderWithoutNodeHash(t *testing.T) {
 	node := ValueNode{
 		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		pathLength: 12,
 	}
-	encoder := ValueNodeWithPathLengthEncoder{}
+	encoder := ValueNodeWithPathLengthEncoderWithoutNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ValueNode{}
+	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestValueNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
+	node := ValueNode{
+		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		hash:       common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+		pathLength: 12,
+	}
+	encoder := ValueNodeWithPathLengthEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}
@@ -3738,7 +3834,7 @@ func TestValueNodeWithPathLengthEncoder(t *testing.T) {
 
 // NodeDesc is used to describe the structure of a MPT node for unit tests. It
 // is intended to be used to build convenient, readable test-structures of nodes
-// on which oeprations are to be exercised.
+// on which operations are to be exercised.
 type NodeDesc interface {
 	Build(*nodeContext) (NodeId, *shared.Shared[Node])
 }
@@ -3870,7 +3966,7 @@ type nodeContext struct {
 }
 
 func newNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
-	return newNodeContextWithConfig(t, ctrl, S4Config)
+	return newNodeContextWithConfig(t, ctrl, S4LiveConfig)
 }
 
 func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptConfig) *nodeContext {

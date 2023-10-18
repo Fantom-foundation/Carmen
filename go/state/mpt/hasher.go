@@ -78,7 +78,12 @@ func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, 
 		return hash, err
 	}
 	defer handle.Release()
-	return h.hash(id, handle.Get(), handle, source)
+	hash, err = h.hash(id, handle.Get(), handle, source)
+	if err != nil {
+		return hash, err
+	}
+	setHash(&handle, hash)
+	return hash, nil
 }
 
 // getHash implements the DirectHasher's hashing algorithm.
@@ -212,11 +217,14 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 
 	// Encode the node in RLP and compute its hash.
 	data, err := h.encode(id, node, handle, manager, manager)
-	handle.Release()
 	if err != nil {
+		handle.Release()
 		return common.Hash{}, err
 	}
-	return common.Keccak256(data), nil
+	hash := common.Keccak256(data)
+	setHash(&handle, hash)
+	handle.Release()
+	return hash, nil
 }
 
 func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
@@ -657,4 +665,25 @@ func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSour
 		value = value[1:]
 	}
 	return size + len(value) + 1, nil
+}
+
+func setHash(handle *shared.WriteHandle[Node], hash common.Hash) {
+	switch node := handle.Get().(type) {
+	case EmptyNode:
+		return
+	case *BranchNode:
+		node.hash = hash
+		node.hashDirty = false
+	case *AccountNode:
+		node.hash = hash
+		node.hashDirty = false
+	case *ExtensionNode:
+		node.hash = hash
+		node.hashDirty = false
+	case *ValueNode:
+		node.hash = hash
+		node.hashDirty = false
+	default:
+		panic(fmt.Sprintf("unknown node type %s", reflect.TypeOf(node)))
+	}
 }

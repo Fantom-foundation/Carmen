@@ -56,6 +56,7 @@ type Root struct {
 //
 // Forests are thread safe. Thus, read and write operations may be
 // conducted concurrently.
+// TODO: rename to DAG ... since it is not really a Forest
 type Forest struct {
 	config MptConfig
 
@@ -686,16 +687,33 @@ func getEncoder(config MptConfig) (
 	stock.ValueEncoder[ExtensionNode],
 	stock.ValueEncoder[ValueNode],
 ) {
-	if config.TrackSuffixLengthsInLeafNodes {
-		return AccountNodeWithPathLengthEncoder{},
-			BranchNodeEncoder{},
-			ExtensionNodeEncoder{},
-			ValueNodeWithPathLengthEncoder{}
+	switch config.HashStorageLocation {
+	case HashStoredWithParent:
+		if config.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithChildHash{},
+				BranchNodeEncoderWithChildHashes{},
+				ExtensionNodeEncoderWithChildHash{},
+				ValueNodeWithPathLengthEncoderWithoutNodeHash{}
+		}
+		return AccountNodeEncoderWithChildHash{},
+			BranchNodeEncoderWithChildHashes{},
+			ExtensionNodeEncoderWithChildHash{},
+			ValueNodeEncoderWithoutNodeHash{}
+	case HashStoredWithNode:
+		if config.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithNodeHash{},
+				BranchNodeEncoderWithNodeHash{},
+				ExtensionNodeEncoderWithNodeHash{},
+				ValueNodeWithPathLengthEncoderWithNodeHash{}
+		}
+		return AccountNodeEncoderWithNodeHash{},
+			BranchNodeEncoderWithNodeHash{},
+			ExtensionNodeEncoderWithNodeHash{},
+			ValueNodeEncoderWithNodeHash{}
+	default:
+		panic(fmt.Sprintf("unknown mode: %v", config.HashStorageLocation))
 	}
-	return AccountNodeEncoder{},
-		BranchNodeEncoder{},
-		ExtensionNodeEncoder{},
-		ValueNodeEncoder{}
+
 }
 
 type writeBufferSink struct {

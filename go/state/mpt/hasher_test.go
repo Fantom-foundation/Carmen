@@ -366,7 +366,7 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	nodesSource := NewMockNodeSource(ctrl)
-	nodesSource.EXPECT().getConfig().AnyTimes().Return(S5Config)
+	nodesSource.EXPECT().getConfig().AnyTimes().Return(S5LiveConfig)
 	nodesSource.EXPECT().hashAddress(gomock.Any()).AnyTimes().Return(common.Hash{})
 
 	hasher := makeEthereumLikeHasher().(*ethHasher)
