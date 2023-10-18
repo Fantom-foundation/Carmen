@@ -232,6 +232,9 @@ func (s *fileStock[I, V]) Set(index I, value V) error {
 }
 
 func (s *fileStock[I, V]) Delete(index I) error {
+	if index >= s.numValueSlots || index < 0 {
+		return nil
+	}
 	return s.freelist.Push(index)
 }
 

@@ -207,3 +207,11 @@ func TestFile_DetectsCorruptedFreeList(t *testing.T) {
 		t.Errorf("failed to detect corrupted content of stock")
 	}
 }
+
+func FuzzFileStock_RandomOps(f *testing.F) {
+	open := func(directory string) (stock.Stock[int, int], error) {
+		return OpenStock[int, int](stock.IntEncoder{}, directory)
+	}
+
+	stock.FuzzStock_RandomOps(f, open)
+}

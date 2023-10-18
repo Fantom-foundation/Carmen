@@ -32,3 +32,11 @@ func TestInMemoryMemoryReporting(t *testing.T) {
 		t.Errorf("invalid empty size reported - wanted %d, got %d", want, got)
 	}
 }
+
+func FuzzMemoryStock_RandomOps(f *testing.F) {
+	open := func(directory string) (stock.Stock[int, int], error) {
+		return OpenStock[int, int](stock.IntEncoder{}, directory)
+	}
+
+	stock.FuzzStock_RandomOps(f, open)
+}

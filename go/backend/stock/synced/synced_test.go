@@ -96,3 +96,12 @@ func TestSyncedStock_CanBeAccessedConcurrently(t *testing.T) {
 		})
 	}
 }
+
+func FuzzSyncStock_RandomOps(f *testing.F) {
+	open := func(directory string) (stock.Stock[int, int], error) {
+		nested, err := memory.OpenStock[int, int](stock.IntEncoder{}, directory)
+		return Sync(nested), err
+	}
+
+	stock.FuzzStock_RandomOps(f, open)
+}
