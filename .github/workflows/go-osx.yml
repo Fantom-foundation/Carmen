@@ -20,6 +20,7 @@ jobs:
     runs-on: macos-latest
     env:
       TEST_TMPDIR: "/Users/runner/.cache/bazel"
+      GOMEMLIMIT: "5GiB"
     steps:
     - name: Collect Workflow Telemetry
       uses: runforesight/workflow-telemetry-action@v1

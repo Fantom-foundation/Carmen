@@ -209,8 +209,28 @@ func TestVerification_AccountStorageModificationIsDetected(t *testing.T) {
 	})
 }
 
+func TestVerification_AccountNodeHashModificationIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithNode {
+			return
+		}
+		encoder, _, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+			node.hash[3]++
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Modified node should have been detected")
+		}
+	})
+}
+
 func TestVerification_AccountStorageHashModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithParent {
+			return
+		}
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
@@ -237,8 +257,28 @@ func TestVerification_BranchChildIdModificationIsDetected(t *testing.T) {
 	})
 }
 
+func TestVerification_BranchNodeHashModificationIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithNode {
+			return
+		}
+		_, encoder, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+			node.hash[4]++
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Modified node should have been detected")
+		}
+	})
+}
+
 func TestVerification_BranchChildHashModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithParent {
+			return
+		}
 		_, encoder, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
@@ -284,8 +324,28 @@ func TestVerification_ExtensionNextModificationIsDetected(t *testing.T) {
 	})
 }
 
+func TestVerification_ExtensionNodeHashModificationIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithNode {
+			return
+		}
+		_, _, encoder, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+			node.hash[24]++
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Modified node should have been detected")
+		}
+	})
+}
+
 func TestVerification_ExtensionNextHashModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithParent {
+			return
+		}
 		_, _, encoder, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
@@ -326,6 +386,22 @@ func TestVerification_ValueModificationIsDetected(t *testing.T) {
 	})
 }
 
+func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if config.HashStorageLocation != HashStoredWithNode {
+			return
+		}
+		_, _, _, encoder := getEncoder(config)
+
+		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
+			node.hash[12]++
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Modified node should have been detected")
+		}
+	})
+}
 func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	// Construct an MPT with some embedded nodes. For this we need some keys
 	// with their hashes sharing a long common prefix. The hashes of the
@@ -340,7 +416,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	v1[len(v1)-1] = 1
 
 	dir := t.TempDir()
-	forest, err := OpenFileForest(dir, S5Config, Archive)
+	forest, err := OpenFileForest(dir, S5LiveConfig, Mutable)
 	if err != nil {
 		t.Fatalf("failed to start empty forest: %v", err)
 	}
@@ -373,7 +449,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	}
 
 	// Run the verification for the trie (which includes embedded nodes).
-	if err := VerifyFileForest(dir, S5Config, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
+	if err := VerifyFileForest(dir, S5LiveConfig, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
 		t.Errorf("Unexpected verification error: %v", err)
 	}
 }
@@ -431,7 +507,7 @@ func modifyNode[N any](t *testing.T, directory string, encoder stock.ValueEncode
 
 func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 	const N = 100
-	forest, err := OpenFileForest(dir, config, Archive)
+	forest, err := OpenFileForest(dir, config, Immutable)
 	if err != nil {
 		return nil, err
 	}

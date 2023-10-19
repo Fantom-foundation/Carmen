@@ -107,6 +107,21 @@ func (mr *MockNodeMockRecorder) GetAccount(source, address, path interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccount", reflect.TypeOf((*MockNode)(nil).GetAccount), source, address, path)
 }
 
+// GetHash mocks base method.
+func (m *MockNode) GetHash() (common.Hash, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHash")
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetHash indicates an expected call of GetHash.
+func (mr *MockNodeMockRecorder) GetHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockNode)(nil).GetHash))
+}
+
 // GetSlot mocks base method.
 func (m *MockNode) GetSlot(source NodeSource, address common.Address, path []Nibble, key common.Key) (common.Value, bool, error) {
 	m.ctrl.T.Helper()
@@ -193,6 +208,18 @@ func (m *MockNode) SetAccount(manager NodeManager, thisId NodeId, this shared.Wr
 func (mr *MockNodeMockRecorder) SetAccount(manager, thisId, this, address, path, info interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAccount", reflect.TypeOf((*MockNode)(nil).SetAccount), manager, thisId, this, address, path, info)
+}
+
+// SetHash mocks base method.
+func (m *MockNode) SetHash(arg0 common.Hash) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetHash", arg0)
+}
+
+// SetHash indicates an expected call of SetHash.
+func (mr *MockNodeMockRecorder) SetHash(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHash", reflect.TypeOf((*MockNode)(nil).SetHash), arg0)
 }
 
 // SetSlot mocks base method.
@@ -634,6 +661,21 @@ func (mr *MockleafNodeMockRecorder) GetAccount(source, address, path interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccount", reflect.TypeOf((*MockleafNode)(nil).GetAccount), source, address, path)
 }
 
+// GetHash mocks base method.
+func (m *MockleafNode) GetHash() (common.Hash, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHash")
+	ret0, _ := ret[0].(common.Hash)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetHash indicates an expected call of GetHash.
+func (mr *MockleafNodeMockRecorder) GetHash() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHash", reflect.TypeOf((*MockleafNode)(nil).GetHash))
+}
+
 // GetSlot mocks base method.
 func (m *MockleafNode) GetSlot(source NodeSource, address common.Address, path []Nibble, key common.Key) (common.Value, bool, error) {
 	m.ctrl.T.Helper()
@@ -720,6 +762,18 @@ func (m *MockleafNode) SetAccount(manager NodeManager, thisId NodeId, this share
 func (mr *MockleafNodeMockRecorder) SetAccount(manager, thisId, this, address, path, info interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAccount", reflect.TypeOf((*MockleafNode)(nil).SetAccount), manager, thisId, this, address, path, info)
+}
+
+// SetHash mocks base method.
+func (m *MockleafNode) SetHash(arg0 common.Hash) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetHash", arg0)
+}
+
+// SetHash indicates an expected call of SetHash.
+func (mr *MockleafNodeMockRecorder) SetHash(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHash", reflect.TypeOf((*MockleafNode)(nil).SetHash), arg0)
 }
 
 // SetSlot mocks base method.

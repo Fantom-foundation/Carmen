@@ -15,7 +15,7 @@ import (
 
 func TestS5RootHash_EmptyTrie(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestS5RootHash_EmptyTrie(t *testing.T) {
 
 func TestS5RootHash_SingleAccount(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestS5RootHash_SingleAccount(t *testing.T) {
 
 func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 
 func TestS5RootHash_TwoAccounts(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestS5RootHash_TwoAccounts(t *testing.T) {
 
 func TestS5RootHash_TwoAccountsWithValues(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
 		t.Fatalf("invalid setup, addresses do not have common prefix")
 	}
 
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
 		t.Fatalf("invalid setup, addresses do not have single prefix bit prefix")
 	}
 
-	state, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestS5RootHash_AddressAndKeys(t *testing.T) {
 
 	const N = 100
 
-	trie, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestS5RootHash_Values(t *testing.T) {
 		return res
 	}
 
-	trie, err := OpenGoMemoryState(t.TempDir(), S5Config)
+	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig)
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}

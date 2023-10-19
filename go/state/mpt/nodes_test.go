@@ -42,7 +42,7 @@ func TestEmptyNode_SetAccount(t *testing.T) {
 	id, node := ctxt.Build(Empty{})
 
 	// The state after the insert.
-	afterId, _ := ctxt.Build(&Account{address: addr, info: info})
+	afterId, _ := ctxt.Build(&Account{address: addr, info: info, hashDirty: true})
 
 	// The operation is creating one account node.
 	accountId, _ := ctxt.ExpectCreateAccount()
@@ -75,7 +75,7 @@ func TestEmptyNode_SetAccount_WithLengthTracking(t *testing.T) {
 	id, node := ctxt.Build(Empty{})
 
 	// The state after the insert with the proper length.
-	afterId, _ := ctxt.Build(&Account{address: addr, info: info, pathLength: 33})
+	afterId, _ := ctxt.Build(&Account{address: addr, info: info, pathLength: 33, hashDirty: true})
 
 	// The operation is creating one account node.
 	accountId, _ := ctxt.ExpectCreateAccount()
@@ -283,8 +283,8 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
 			4: &Account{address: common.Address{0x40}, info: info1},
-			8: &Account{address: common.Address{0x81}, info: info2},
-		}, dirty: []int{8}},
+			8: &Account{address: common.Address{0x81}, info: info2, hashDirty: true},
+		}, dirty: []int{8}, hashDirty: true},
 	)
 
 	ctxt.Check(t, id)
@@ -325,8 +325,8 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing
 	afterId, _ := ctxt.Build(
 		&Branch{children: Children{
 			4: &Account{address: common.Address{0x40}, info: info1},
-			8: &Account{address: common.Address{0x81}, info: info2},
-		}, dirty: []int{8}, frozen: []int{4}},
+			8: &Account{address: common.Address{0x81}, info: info2, hashDirty: true},
+		}, dirty: []int{8}, frozen: []int{4}, hashDirty: true},
 	)
 	ctxt.Check(t, afterId)
 
@@ -372,10 +372,10 @@ func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
 
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
-			2: &Account{address: common.Address{0x21}, info: info},
+			2: &Account{address: common.Address{0x21}, info: info, hashDirty: true},
 			4: &Account{address: common.Address{0x40}, info: info},
 			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{2}},
+		}, dirty: []int{2}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -410,10 +410,10 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T)
 	before, _ := ctxt.Clone(id)
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
-			2: &Account{address: common.Address{0x21}, info: info},
+			2: &Account{address: common.Address{0x21}, info: info, hashDirty: true},
 			4: &Account{address: common.Address{0x40}, info: info},
 			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{2}, frozen: []int{4, 8}},
+		}, dirty: []int{2}, frozen: []int{4, 8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -454,10 +454,10 @@ func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
 		&Branch{children: Children{
 			4: &Branch{children: Children{
 				0: &Account{address: common.Address{0x40}, info: info},
-				1: &Account{address: common.Address{0x41}, info: info},
-			}, dirty: []int{0, 1}},
+				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
+			}, dirty: []int{0, 1}, hashDirty: true},
 			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{4}},
+		}, dirty: []int{4}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -495,10 +495,10 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing
 		&Branch{children: Children{
 			4: &Branch{children: Children{
 				0: &Account{address: common.Address{0x40}, info: info},
-				1: &Account{address: common.Address{0x41}, info: info},
-			}, dirty: []int{0, 1}},
+				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
+			}, dirty: []int{0, 1}, hashDirty: true},
 			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{4}, frozen: []int{8}},
+		}, dirty: []int{4}, frozen: []int{8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -541,7 +541,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x20}, info: info},
 			8: &Account{address: common.Address{0x82}, info: info},
-		}, dirty: []int{4}},
+		}, dirty: []int{4}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -581,7 +581,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *test
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x20}, info: info},
 			8: &Account{address: common.Address{0x82}, info: info},
-		}, dirty: []int{4}, frozen: []int{2, 8}},
+		}, dirty: []int{4}, frozen: []int{2, 8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -688,7 +688,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthTracking
 	)
 	ctxt.Check(t, id)
 
-	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40, hashDirty: true})
 	ctxt.Check(t, after)
 
 	accountId, _ := ctxt.Get("A")
@@ -728,7 +728,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthT
 	ctxt.Freeze(id)
 
 	before, _ := ctxt.Clone(id)
-	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40, hashDirty: true})
 	ctxt.Check(t, after)
 
 	// This operation creates a temporary branch node that gets removed again.
@@ -779,6 +779,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 			1: &Account{address: common.Address{0x41, 0x23, 0x10}, info: info},
 			2: &Account{address: common.Address{0x41, 0x23, 0x20}, info: info},
 		}},
+		hashDirty: true,
 	})
 	ctxt.Check(t, after)
 
@@ -830,6 +831,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainin
 			1: &Account{address: common.Address{0x41, 0x23, 0x10}, info: info},
 			2: &Account{address: common.Address{0x41, 0x23, 0x20}, info: info},
 		}, frozen: []int{1, 2}},
+		hashDirty: true,
 	})
 	ctxt.Check(t, after)
 
@@ -878,7 +880,8 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 			1: &Account{address: common.Address{0x41, 0x20}, info: info},
 			2: &Account{address: common.Address{0x42, 0x84}, info: info},
 		}},
-		dirtyHash: true,
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 	ctxt.Check(t, after)
 
@@ -924,7 +927,8 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedBy
 			1: &Account{address: common.Address{0x41, 0x20}, info: info},
 			2: &Account{address: common.Address{0x42, 0x84}, info: info},
 		}, frozen: []int{1, 2}},
-		dirtyHash: true,
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 	ctxt.Check(t, after)
 
@@ -1238,10 +1242,11 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 		&Extension{
 			path: []Nibble{1, 2, 3},
 			next: &Branch{children: Children{
-				5: &Account{address: common.Address{0x12, 0x35}, info: info2},
+				5: &Account{address: common.Address{0x12, 0x35}, info: info2, hashDirty: true},
 				8: &Account{address: common.Address{0x12, 0x38}, info: info2},
-			}, dirty: []int{5}},
-			dirtyHash: true,
+			}, dirty: []int{5}, hashDirty: true},
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 	ctxt.Check(t, after)
@@ -1286,10 +1291,11 @@ func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) 
 		&Extension{
 			path: []Nibble{1, 2, 3},
 			next: &Branch{children: Children{
-				5: &Account{address: common.Address{0x12, 0x35}, info: info2},
+				5: &Account{address: common.Address{0x12, 0x35}, info: info2, hashDirty: true},
 				8: &Account{address: common.Address{0x12, 0x38}, info: info2},
-			}, dirty: []int{5}, frozen: []int{8}},
-			dirtyHash: true,
+			}, dirty: []int{5}, frozen: []int{8}, hashDirty: true},
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 	ctxt.Check(t, after)
@@ -1341,11 +1347,13 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 					}},
-					dirtyHash: true,
+					hashDirty:     true,
+					nextHashDirty: true,
 				},
-				4: &Account{address: common.Address{0x12, 0x40}, info: info},
-			}, dirty: []int{3, 4}},
-			dirtyHash: true,
+				4: &Account{address: common.Address{0x12, 0x40}, info: info, hashDirty: true},
+			}, dirty: []int{3, 4}, hashDirty: true},
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 
@@ -1397,11 +1405,13 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *t
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 					}, frozen: []int{0xA, 0xE}},
-					dirtyHash: true,
+					hashDirty:     true,
+					nextHashDirty: true,
 				},
-				4: &Account{address: common.Address{0x12, 0x40}, info: info},
-			}, dirty: []int{3, 4}},
-			dirtyHash: true,
+				4: &Account{address: common.Address{0x12, 0x40}, info: info, hashDirty: true},
+			}, dirty: []int{3, 4}, hashDirty: true},
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 
@@ -1454,10 +1464,11 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}},
-				dirtyHash: true, // < if the extension node is reused, this would not be needed; but there is no guarantee for that
+				hashDirty:     true,
+				nextHashDirty: true, // < if the extension node is reused, this would not be needed; but there is no guarantee for that
 			},
-			4: &Account{address: common.Address{0x40}, info: info},
-		}, dirty: []int{1, 4}},
+			4: &Account{address: common.Address{0x40}, info: info, hashDirty: true},
+		}, dirty: []int{1, 4}, hashDirty: true},
 	)
 
 	ctxt.Check(t, id)
@@ -1505,10 +1516,11 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T)
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}, frozen: []int{0xA, 0xE}},
-				dirtyHash: true,
+				hashDirty:     true,
+				nextHashDirty: true,
 			},
-			4: &Account{address: common.Address{0x40}, info: info},
-		}, dirty: []int{1, 4}},
+			4: &Account{address: common.Address{0x40}, info: info, hashDirty: true},
+		}, dirty: []int{1, 4}, hashDirty: true},
 	)
 
 	ctxt.Check(t, id)
@@ -1558,9 +1570,10 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}},
-				8: &Account{address: common.Address{0x12, 0x38}, info: info},
-			}, dirty: []int{4, 8}},
-			dirtyHash: true,
+				8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
+			}, dirty: []int{4, 8}, hashDirty: true},
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 
@@ -1609,9 +1622,10 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}, frozen: []int{0xA, 0xE}},
-				8: &Account{address: common.Address{0x12, 0x38}, info: info},
-			}, dirty: []int{4, 8}}, // < TODO: it should be possible to restrict this to {8}
-			dirtyHash: true,
+				8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
+			}, hashDirty: true, dirty: []int{4, 8}}, // < TODO: it should be possible to restrict this to {8}
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 
@@ -1660,8 +1674,8 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 				0xA: &Account{address: common.Address{0x1A}, info: info},
 				0xE: &Account{address: common.Address{0x1E}, info: info},
 			}},
-			2: &Account{address: common.Address{0x20}, info: info},
-		}, dirty: []int{1, 2}}, // < TODO: could be {2}
+			2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
+		}, hashDirty: true, dirty: []int{1, 2}}, // < TODO: could be {2}
 	)
 
 	ctxt.Check(t, id)
@@ -1707,8 +1721,8 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *
 				0xA: &Account{address: common.Address{0x1A}, info: info},
 				0xE: &Account{address: common.Address{0x1E}, info: info},
 			}, frozen: []int{0xA, 0xE}},
-			2: &Account{address: common.Address{0x20}, info: info},
-		}, dirty: []int{1, 2}},
+			2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
+		}, hashDirty: true, dirty: []int{1, 2}},
 	)
 
 	ctxt.Check(t, id)
@@ -1765,7 +1779,8 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 				1: &Account{address: common.Address{0x11, 0x10}, info: info},
 				2: &Account{address: common.Address{0x11, 0x20}, info: info},
 			}},
-			dirtyHash: true,
+			hashDirty:     true,
+			nextHashDirty: true,
 		},
 	)
 
@@ -1824,7 +1839,8 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 				1: &Account{address: common.Address{0x11, 0x10}, info: info},
 				2: &Account{address: common.Address{0x11, 0x20}, info: info},
 			}, frozen: []int{1, 2}},
-			dirtyHash: true, // < could be optimized away ..
+			hashDirty:     true,
+			nextHashDirty: true, // < could be optimized away ..
 		},
 	)
 
@@ -1968,7 +1984,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_WithLen
 		},
 	)
 
-	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40, hashDirty: true})
 
 	ctxt.Check(t, id)
 	ctxt.Check(t, after)
@@ -2020,7 +2036,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_
 	ctxt.Freeze(id)
 
 	before, _ := ctxt.Clone(id)
-	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40, hashDirty: true})
 
 	ctxt.Check(t, before)
 	ctxt.Check(t, id)
@@ -2293,7 +2309,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) 
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
 	id, node := ctxt.Build(&Account{address: addr, info: info1})
-	after, _ := ctxt.Build(&Account{address: addr, info: info2})
+	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
 
 	handle := node.GetWriteHandle()
 	ctxt.EXPECT().update(id, handle).Return(nil)
@@ -2318,7 +2334,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 	before, _ := ctxt.Build(&Account{address: addr, info: info1})
 	id, node := ctxt.Clone(before)
 	ctxt.Freeze(id)
-	after, _ := ctxt.Build(&Account{address: addr, info: info2})
+	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
 
 	ctxt.ExpectCreateAccount()
 
@@ -2400,8 +2416,8 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1},
-		3: &Account{address: addr2, info: info2},
-	}, dirty: []int{2, 3}})
+		3: &Account{address: addr2, info: info2, hashDirty: true},
+	}, dirty: []int{2, 3}, hashDirty: true})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2433,8 +2449,8 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1},
-		3: &Account{address: addr2, info: info2},
-	}, dirty: []int{2, 3}})
+		3: &Account{address: addr2, info: info2, hashDirty: true},
+	}, dirty: []int{2, 3}, hashDirty: true})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2470,9 +2486,10 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
 			0xA: &Account{address: addr1, info: info1},
-			0xB: &Account{address: addr2, info: info2},
-		}, dirty: []int{0xA, 0xB}},
-		dirtyHash: true,
+			0xB: &Account{address: addr2, info: info2, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 
 	// This operation creates one new account, branch, and extension node.
@@ -2508,9 +2525,10 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
 			0xA: &Account{address: addr1, info: info1},
-			0xB: &Account{address: addr2, info: info2},
-		}, dirty: []int{0xA, 0xB}},
-		dirtyHash: true,
+			0xB: &Account{address: addr2, info: info2, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 
 	// This operation creates one new account, branch, and extension node.
@@ -2547,10 +2565,11 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Account{address: addr1, info: info1, pathLength: 36},
-			0xB: &Account{address: addr2, info: info2, pathLength: 36},
-		}, dirty: []int{0xA, 0xB}},
-		dirtyHash: true,
+			0xA: &Account{address: addr1, info: info1, pathLength: 36, hashDirty: true},
+			0xB: &Account{address: addr2, info: info2, pathLength: 36, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 
 	// This operation creates one new account, branch, and extension node.
@@ -2588,10 +2607,11 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Account{address: addr1, info: info1, pathLength: 36},
-			0xB: &Account{address: addr2, info: info2, pathLength: 36},
-		}, dirty: []int{0xA, 0xB}},
-		dirtyHash: true,
+			0xA: &Account{address: addr1, info: info1, pathLength: 36, hashDirty: true},
+			0xB: &Account{address: addr2, info: info2, pathLength: 36, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 
 	// This operation creates two new accounts, one branch, and extension node.
@@ -2774,6 +2794,191 @@ func TestAccountNode_Frozen_SetValue(t *testing.T) {
 	handle.Release()
 }
 
+func TestAccountNode_SetSlot_NonZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x12, 0x3A}
+	info := AccountInfo{Nonce: common.Nonce{1}}
+	key := common.Key{0x21}
+	value := common.Value{1}
+
+	id, node := ctxt.Build(&Account{address: addr, info: info})
+
+	after, _ := ctxt.Build(&Account{
+		address: addr,
+		info:    info,
+		storage: &Value{
+			key:       key,
+			value:     value,
+			length:    64,
+			hashDirty: true,
+		},
+		hashDirty:        true,
+		storageHashDirty: true,
+	})
+
+	// This operation creates one new value node.
+	ctxt.ExpectCreateValue()
+
+	handle := node.GetWriteHandle()
+	ctxt.EXPECT().update(id, handle)
+	path := addressToNibbles(addr)
+	if newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	}
+	handle.Release()
+
+	ctxt.ExpectEqualTries(t, after, id)
+}
+
+func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContextWithConfig(t, ctrl, PathLengthTracking)
+
+	addr := common.Address{0x12, 0x3A}
+	info := AccountInfo{Nonce: common.Nonce{1}}
+	key := common.Key{0x21}
+	value := common.Value{1}
+
+	before, _ := ctxt.Build(&Account{address: addr, info: info})
+
+	id, node := ctxt.Clone(before)
+	ctxt.Freeze(id)
+
+	after, _ := ctxt.Build(&Account{
+		address: addr,
+		info:    info,
+		storage: &Value{
+			key:       key,
+			value:     value,
+			length:    64,
+			hashDirty: true,
+		},
+		hashDirty:        true,
+		storageHashDirty: true,
+	})
+
+	// This operation creates a new account and a value.
+	ctxt.ExpectCreateValue()
+	ctxt.ExpectCreateAccount()
+
+	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
+	newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	handle.Release()
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, after, newRoot)
+}
+
+func TestAccountNode_SetSlot_UpdateOfExistingValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x12, 0x3A}
+	info := AccountInfo{Nonce: common.Nonce{1}}
+	key := common.Key{0x21}
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	id, node := ctxt.Build(&Account{
+		address: addr,
+		info:    info,
+		storage: &Tag{"S", &Value{
+			key:   key,
+			value: value1,
+		}},
+	})
+
+	after, _ := ctxt.Build(&Account{
+		address: addr,
+		info:    info,
+		storage: &Value{
+			key:       key,
+			value:     value2,
+			hashDirty: true,
+		},
+		hashDirty:        true,
+		storageHashDirty: true,
+	})
+
+	handle := node.GetWriteHandle()
+	ctxt.EXPECT().update(id, handle)
+
+	storageId, storage := ctxt.Get("S")
+	tmp := storage.GetWriteHandle()
+	ctxt.EXPECT().update(storageId, tmp)
+	tmp.Release()
+
+	path := addressToNibbles(addr)
+	if newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value2); newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	}
+	handle.Release()
+
+	ctxt.ExpectEqualTries(t, after, id)
+}
+
+func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContextWithConfig(t, ctrl, PathLengthTracking)
+
+	addr := common.Address{0x12, 0x3A}
+	info := AccountInfo{Nonce: common.Nonce{1}}
+	key := common.Key{0x21}
+	value1 := common.Value{1}
+	value2 := common.Value{2}
+
+	before, _ := ctxt.Build(&Account{
+		address: addr,
+		info:    info,
+		storage: &Value{
+			key:   key,
+			value: value1,
+		},
+	})
+
+	id, node := ctxt.Clone(before)
+	ctxt.Freeze(id)
+
+	after, _ := ctxt.Build(&Account{
+		address: addr,
+		info:    info,
+		storage: &Value{
+			key:       key,
+			value:     value2,
+			hashDirty: true,
+		},
+		hashDirty:        true,
+		storageHashDirty: true,
+	})
+
+	// This operation creates a new account and a value.
+	ctxt.ExpectCreateValue()
+	ctxt.ExpectCreateAccount()
+
+	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
+	newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value2)
+	if err != nil {
+		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
+	}
+	handle.Release()
+	if changed {
+		t.Errorf("frozen nodes should never change")
+	}
+
+	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, after, newRoot)
+}
+
 func TestAccountNode_Release(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -2895,7 +3100,7 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 		&Branch{
 			children: Children{
 				0xA: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
-					storage:    &ValueWithLength{key: key, value: value, length: 64},
+					storage:    &Value{key: key, value: value, length: 64},
 					pathLength: 39},
 				0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
 					pathLength: 39},
@@ -2915,18 +3120,20 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 			0xA: &Branch{
 				children: Children{
 					0: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
-						storage:    &ValueWithLength{key: key, value: value, length: 64},
-						pathLength: 38},
+						storage:    &Value{key: key, value: value, length: 64},
+						pathLength: 38, hashDirty: true},
 					0xA: &Account{address: newAddr, info: newInfo,
-						pathLength: 38},
+						pathLength: 38, hashDirty: true},
 				},
-				dirty: []int{0, 0xA},
+				hashDirty: true,
+				dirty:     []int{0, 0xA},
 			},
 			0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
 				pathLength: 39},
 		},
-		dirty:  []int{0xA},
-		frozen: []int{0xB},
+		hashDirty: true,
+		dirty:     []int{0xA},
+		frozen:    []int{0xB},
 	})
 	ctxt.Check(t, after)
 
@@ -3163,7 +3370,7 @@ func TestValueNode_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	path := keyToNibbles(key)
 	value := common.Value{1}
 
-	id, node := ctxt.Build(&Value{key, value})
+	id, node := ctxt.Build(&Value{key: key, value: value})
 	backup, _ := ctxt.Clone(id)
 
 	// Update the value with the same value.
@@ -3183,7 +3390,7 @@ func TestValueNode_Frozen_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	path := keyToNibbles(key)
 	value := common.Value{1}
 
-	id, node := ctxt.Build(&Value{key, value})
+	id, node := ctxt.Build(&Value{key: key, value: value})
 	backup, _ := ctxt.Clone(id)
 	ctxt.Freeze(id)
 
@@ -3207,8 +3414,8 @@ func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	id, node := ctxt.Build(&Value{key, value1})
-	after, _ := ctxt.Build(&Value{key, value2})
+	id, node := ctxt.Build(&Value{key: key, value: value1})
+	after, _ := ctxt.Build(&Value{key: key, value: value2, hashDirty: true})
 
 	handle := node.GetWriteHandle()
 	ctxt.EXPECT().update(id, handle).Return(nil)
@@ -3230,9 +3437,9 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_DifferentValue(t *testing.T) 
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	before, _ := ctxt.Build(&Value{key, value1})
+	before, _ := ctxt.Build(&Value{key: key, value: value1})
 	id, node := ctxt.Clone(before)
-	after, _ := ctxt.Build(&Value{key, value2})
+	after, _ := ctxt.Build(&Value{key: key, value: value2, hashDirty: true})
 
 	ctxt.Freeze(id)
 
@@ -3261,7 +3468,7 @@ func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
-	id, node := ctxt.Build(&Value{key, value1})
+	id, node := ctxt.Build(&Value{key: key, value: value1})
 	after, _ := ctxt.Build(Empty{})
 
 	ctxt.EXPECT().release(id).Return(nil)
@@ -3284,7 +3491,7 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
-	before, _ := ctxt.Build(&Value{key, value1})
+	before, _ := ctxt.Build(&Value{key: key, value: value1})
 	id, node := ctxt.Clone(before)
 	after, _ := ctxt.Build(Empty{})
 
@@ -3313,12 +3520,12 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *test
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	id, node := ctxt.Build(&Value{key1, value1})
+	id, node := ctxt.Build(&Value{key: key1, value: value1})
 
 	after, _ := ctxt.Build(&Branch{children: Children{
-		2: &Value{key1, value1},
-		3: &Value{key2, value2},
-	}, dirty: []int{2, 3}})
+		2: &Value{key: key1, value: value1},
+		3: &Value{key: key2, value: value2, hashDirty: true},
+	}, dirty: []int{2, 3}, hashDirty: true})
 
 	// This operation creates one new value node and a branch.
 	res, _ := ctxt.ExpectCreateBranch()
@@ -3343,15 +3550,15 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	before, _ := ctxt.Build(&Value{key1, value1})
+	before, _ := ctxt.Build(&Value{key: key1, value: value1})
 
 	id, node := ctxt.Clone(before)
 	ctxt.Freeze(id)
 
 	after, _ := ctxt.Build(&Branch{children: Children{
-		2: &Value{key1, value1},
-		3: &Value{key2, value2},
-	}, dirty: []int{2, 3}})
+		2: &Value{key: key1, value: value1},
+		3: &Value{key: key2, value: value2, hashDirty: true},
+	}, dirty: []int{2, 3}, hashDirty: true})
 
 	// This operation creates one new value node and a branch.
 	ctxt.ExpectCreateBranch()
@@ -3381,15 +3588,16 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *te
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	id, node := ctxt.Build(&Value{key1, value1})
+	id, node := ctxt.Build(&Value{key: key1, value: value1})
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Value{key1, value1},
-			0xB: &Value{key2, value2},
-		}, dirty: []int{0xA, 0xB}},
-		dirtyHash: true,
+			0xA: &Value{key: key1, value: value1},
+			0xB: &Value{key: key2, value: value2, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 
 	// This operation creates one new value, branch, and extension node.
@@ -3416,7 +3624,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	before, _ := ctxt.Build(&Value{key1, value1})
+	before, _ := ctxt.Build(&Value{key: key1, value: value1})
 
 	id, node := ctxt.Clone(before)
 	ctxt.Freeze(id)
@@ -3424,10 +3632,11 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Value{key1, value1},
-			0xB: &Value{key2, value2},
-		}, dirty: []int{0xA, 0xB}},
-		dirtyHash: true,
+			0xA: &Value{key: key1, value: value1},
+			0xB: &Value{key: key2, value: value2, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		hashDirty:     true,
+		nextHashDirty: true,
 	})
 
 	// This operation creates one new value, branch, and extension node.
@@ -3459,7 +3668,7 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *testing
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
-	id, node := ctxt.Build(&Value{key1, value1})
+	id, node := ctxt.Build(&Value{key: key1, value: value1})
 	after, _ := ctxt.Clone(id)
 
 	path := keyToNibbles(key2)
@@ -3481,10 +3690,10 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
-	before, _ := ctxt.Build(&Value{key1, value1})
+	before, _ := ctxt.Build(&Value{key: key1, value: value1})
 	id, node := ctxt.Clone(before)
 	ctxt.Freeze(id)
-	after, _ := ctxt.Build(&Value{key1, value1})
+	after, _ := ctxt.Build(&Value{key: key1, value: value1})
 
 	path := keyToNibbles(key2)
 	handle := node.GetWriteHandle()
@@ -3513,7 +3722,7 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t *testi
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
-	id, node := ctxt.Build(&Value{key1, value1})
+	id, node := ctxt.Build(&Value{key: key1, value: value1})
 	after, _ := ctxt.Clone(id)
 
 	path := keyToNibbles(key2)
@@ -3535,10 +3744,10 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t
 	value1 := common.Value{1}
 	value2 := common.Value{}
 
-	before, _ := ctxt.Build(&Value{key1, value1})
+	before, _ := ctxt.Build(&Value{key: key1, value: value1})
 	id, node := ctxt.Clone(before)
 	ctxt.Freeze(id)
-	after, _ := ctxt.Build(&Value{key1, value1})
+	after, _ := ctxt.Build(&Value{key: key1, value: value1})
 
 	path := keyToNibbles(key2)
 	handle := node.GetWriteHandle()
@@ -3624,7 +3833,28 @@ func TestValueNode_Visit(t *testing.T) {
 //                               Encoders
 // ----------------------------------------------------------------------------
 
-func TestAccountNodeEncoder(t *testing.T) {
+func TestAccountNodeEncoderWithNodeHash(t *testing.T) {
+	node := AccountNode{
+		info: AccountInfo{
+			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
+			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
+		storage: NodeId(12),
+		hash:    common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+	}
+	encoder := AccountNodeEncoderWithNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := AccountNode{}
+	encoder.Load(buffer, &recovered)
+	node.storageHashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 	node := AccountNode{
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
@@ -3634,54 +3864,73 @@ func TestAccountNodeEncoder(t *testing.T) {
 		storage:     NodeId(12),
 		storageHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
-	encoder := AccountNodeEncoder{}
+	encoder := AccountNodeEncoderWithChildHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := AccountNode{}
 	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
-
-func TestAccountNodeWithPathLengthEncoder(t *testing.T) {
+func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 	node := AccountNode{
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
-		storage:     NodeId(12),
-		pathLength:  14,
-		storageHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		storage:    NodeId(12),
+		pathLength: 14,
+		hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
-	encoder := AccountNodeWithPathLengthEncoder{}
+	encoder := AccountNodeWithPathLengthEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := AccountNode{}
 	encoder.Load(buffer, &recovered)
+	node.storageHashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
 
-func TestBranchNodeEncoder(t *testing.T) {
+func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 	node := BranchNode{
 		children:         [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		hashes:           [16]common.Hash{{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16}},
 		embeddedChildren: 12,
 	}
-	encoder := BranchNodeEncoder{}
+	encoder := BranchNodeEncoderWithChildHashes{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := BranchNode{}
 	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
 
-func TestExtensionNodeEncoder(t *testing.T) {
+func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
+	node := BranchNode{
+		children:         [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		embeddedChildren: 12,
+		hash:             common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+	}
+	encoder := BranchNodeEncoderWithNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := BranchNode{}
+	encoder.Load(buffer, &recovered)
+	node.dirtyHashes = ^uint16(0)
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestExtensionNodeEncoderWithChildHash(t *testing.T) {
 	node := ExtensionNode{
 		path: Path{
 			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
@@ -3691,22 +3940,60 @@ func TestExtensionNodeEncoder(t *testing.T) {
 		nextHash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		nextIsEmbedded: true,
 	}
-	encoder := ExtensionNodeEncoder{}
+	encoder := ExtensionNodeEncoderWithChildHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ExtensionNode{}
 	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+func TestExtensionNodeEncoderWithNodeHash(t *testing.T) {
+	node := ExtensionNode{
+		path: Path{
+			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			length: 7,
+		},
+		next:           NodeId(12),
+		hash:           common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		nextIsEmbedded: true,
+	}
+	encoder := ExtensionNodeEncoderWithNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ExtensionNode{}
+	encoder.Load(buffer, &recovered)
+	node.nextHashDirty = true
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
 }
 
-func TestValueNodeEncoder(t *testing.T) {
+func TestValueNodeEncoderWithoutNodeHash(t *testing.T) {
 	node := ValueNode{
 		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
-	encoder := ValueNodeEncoder{}
+	encoder := ValueNodeEncoderWithoutNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ValueNode{}
+	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestValueNodeEncoderWithNodeHash(t *testing.T) {
+	node := ValueNode{
+		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		hash:  common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+	}
+	encoder := ValueNodeEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}
@@ -3716,13 +4003,31 @@ func TestValueNodeEncoder(t *testing.T) {
 	}
 }
 
-func TestValueNodeWithPathLengthEncoder(t *testing.T) {
+func TestValueNodeWithPathLengthEncoderWithoutNodeHash(t *testing.T) {
 	node := ValueNode{
 		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		pathLength: 12,
 	}
-	encoder := ValueNodeWithPathLengthEncoder{}
+	encoder := ValueNodeWithPathLengthEncoderWithoutNodeHash{}
+	buffer := make([]byte, encoder.GetEncodedSize())
+	encoder.Store(buffer, &node)
+	recovered := ValueNode{}
+	encoder.Load(buffer, &recovered)
+	node.hashDirty = true
+	if !reflect.DeepEqual(node, recovered) {
+		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
+	}
+}
+
+func TestValueNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
+	node := ValueNode{
+		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		hash:       common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+		pathLength: 12,
+	}
+	encoder := ValueNodeWithPathLengthEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}
@@ -3738,7 +4043,7 @@ func TestValueNodeWithPathLengthEncoder(t *testing.T) {
 
 // NodeDesc is used to describe the structure of a MPT node for unit tests. It
 // is intended to be used to build convenient, readable test-structures of nodes
-// on which oeprations are to be exercised.
+// on which operations are to be exercised.
 type NodeDesc interface {
 	Build(*nodeContext) (NodeId, *shared.Shared[Node])
 }
@@ -3763,6 +4068,7 @@ type Account struct {
 	pathLength       byte
 	storage          NodeDesc
 	storageHashDirty bool
+	hashDirty        bool
 }
 
 func (a *Account) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
@@ -3777,15 +4083,17 @@ func (a *Account) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
 		pathLength:       a.pathLength,
 		storage:          storage,
 		storageHashDirty: a.storageHashDirty,
+		hashDirty:        a.hashDirty,
 	})
 }
 
 type Children map[Nibble]NodeDesc
 
 type Branch struct {
-	children Children
-	dirty    []int
-	frozen   []int
+	children  Children
+	dirty     []int
+	frozen    []int
+	hashDirty bool
 }
 
 func (b *Branch) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
@@ -3801,13 +4109,15 @@ func (b *Branch) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
 	for _, i := range b.frozen {
 		res.setChildFrozen(byte(i), true)
 	}
+	res.hashDirty = b.hashDirty
 	return id, shared.MakeShared[Node](res)
 }
 
 type Extension struct {
-	path      []Nibble
-	next      NodeDesc
-	dirtyHash bool
+	path          []Nibble
+	next          NodeDesc
+	hashDirty     bool
+	nextHashDirty bool
 }
 
 func (e *Extension) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
@@ -3815,7 +4125,8 @@ func (e *Extension) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
 	res := &ExtensionNode{}
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
-	res.nextHashDirty = e.dirtyHash
+	res.hashDirty = e.hashDirty
+	res.nextHashDirty = e.nextHashDirty
 	return id, shared.MakeShared[Node](res)
 }
 
@@ -3831,27 +4142,17 @@ func (t *Tag) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
 }
 
 type Value struct {
-	key   common.Key
-	value common.Value
+	key       common.Key
+	value     common.Value
+	length    byte
+	hashDirty bool
 }
 
 func (v *Value) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
 	return ValueId(ctx.nextIndex()), shared.MakeShared[Node](&ValueNode{
-		key:   v.key,
-		value: v.value,
-	})
-}
-
-type ValueWithLength struct {
-	key    common.Key
-	value  common.Value
-	length byte
-}
-
-func (v *ValueWithLength) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
-	return ValueId(ctx.nextIndex()), shared.MakeShared[Node](&ValueNode{
 		key:        v.key,
 		value:      v.value,
+		hashDirty:  v.hashDirty,
 		pathLength: v.length,
 	})
 }
@@ -3870,7 +4171,7 @@ type nodeContext struct {
 }
 
 func newNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
-	return newNodeContextWithConfig(t, ctrl, S4Config)
+	return newNodeContextWithConfig(t, ctrl, S4LiveConfig)
 }
 
 func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptConfig) *nodeContext {
@@ -4112,6 +4413,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 		if b, ok := b.(*AccountNode); ok {
 			eq := a.address == b.address
 			eq = eq && a.info == b.info
+			eq = eq && a.hashDirty == b.hashDirty
 			eq = eq && a.storageHashDirty == b.storageHashDirty
 			// eq = eq && a.frozen == b.frozen  // < TODO: add support
 			eq = eq && c.equalTries(a.storage, b.storage)
@@ -4131,6 +4433,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 	if a, ok := a.(*ExtensionNode); ok {
 		if b, ok := b.(*ExtensionNode); ok {
 			eq := a.path == b.path
+			eq = eq && a.hashDirty == b.hashDirty
 			eq = eq && a.nextHashDirty == b.nextHashDirty
 			eq = eq && a.frozen == b.frozen
 			eq = eq && c.equalTries(a.next, b.next)
@@ -4146,6 +4449,9 @@ func (c *nodeContext) equal(a, b Node) bool {
 				return false
 			}
 			*/
+			if a.hashDirty != b.hashDirty {
+				return false
+			}
 			if a.dirtyHashes != b.dirtyHashes {
 				return false
 			}
@@ -4166,6 +4472,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 		if b, ok := b.(*ValueNode); ok {
 			eq := a.key == b.key
 			eq = eq && a.value == b.value
+			eq = eq && a.hashDirty == b.hashDirty
 			// eq = eq && a.frozen == b.frozen // TODO: add support
 			if !eq {
 				return false

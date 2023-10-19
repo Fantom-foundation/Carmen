@@ -31,7 +31,7 @@ func verify(context *cli.Context) error {
 	// run forest verification
 	observer := &verificationObserver{}
 
-	if info.mode == mpt.Archive {
+	if info.mode == mpt.Immutable {
 		return mpt.VerifyArchive(dir, info.config, observer)
 	}
 	return mpt.VerifyFileLiveTrie(dir, info.config, observer)

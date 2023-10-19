@@ -78,7 +78,19 @@ func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, 
 		return hash, err
 	}
 	defer handle.Release()
-	return h.hash(id, handle.Get(), handle, source)
+
+	// If the hash in the node is up-to-date we can skip re-hashing.
+	hash, dirty := handle.Get().GetHash()
+	if !dirty {
+		return hash, nil
+	}
+
+	hash, err = h.hash(id, handle.Get(), handle, source)
+	if err != nil {
+		return hash, err
+	}
+	handle.Get().SetHash(hash)
+	return hash, nil
 }
 
 // getHash implements the DirectHasher's hashing algorithm.
@@ -177,6 +189,9 @@ func (h directHasher) hash(id NodeId, node Node, handle shared.WriteHandle[Node]
 		hasher.Write(node.key[:])
 		hasher.Write(node.value[:])
 
+	case EmptyNode:
+		return common.Hash{}, nil
+
 	default:
 		return hash, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -210,13 +225,23 @@ func (h ethHasher) updateHashes(id NodeId, manager NodeManager) (common.Hash, er
 	}
 	node := handle.Get()
 
+	// If the hash in the node is up-to-date we can skip re-hashing.
+	hash, dirty := node.GetHash()
+	if !dirty {
+		handle.Release()
+		return hash, nil
+	}
+
 	// Encode the node in RLP and compute its hash.
 	data, err := h.encode(id, node, handle, manager, manager)
-	handle.Release()
 	if err != nil {
+		handle.Release()
 		return common.Hash{}, err
 	}
-	return common.Keccak256(data), nil
+	hash = common.Keccak256(data)
+	handle.Get().SetHash(hash)
+	handle.Release()
+	return hash, nil
 }
 
 func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {

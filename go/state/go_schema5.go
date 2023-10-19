@@ -23,7 +23,7 @@ func newS5State(params Parameters, state *mpt.MptState) (State, error) {
 }
 
 func newGoMemoryS5State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S5Config)
+	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S5LiveConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func newGoMemoryS5State(params Parameters) (State, error) {
 }
 
 func newGoFileS5State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoFileState(params.Directory, mpt.S5Config)
+	state, err := mpt.OpenGoFileState(params.Directory, mpt.S5LiveConfig)
 	if err != nil {
 		return nil, err
 	}
