@@ -200,6 +200,7 @@ func runBenchmark(
 		for j := 0; j < numInsertsPerBlock; j++ {
 			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
 			update.CreatedAccounts = append(update.CreatedAccounts, addr)
+			update.Nonces = append(update.Nonces, common.NonceUpdate{addr, common.ToNonce(1)})
 			counter++
 		}
 		if err := state.Apply(uint64(i), update); err != nil {
