@@ -1152,6 +1152,14 @@ type AccountNode struct {
 	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
+func (n *AccountNode) Address() common.Address {
+	return n.address
+}
+
+func (n *AccountNode) Info() AccountInfo {
+	return n.info
+}
+
 func (n *AccountNode) GetAccount(source NodeSource, address common.Address, path []Nibble) (AccountInfo, bool, error) {
 	if n.address == address {
 		return n.info, true, nil
@@ -1565,6 +1573,14 @@ type ValueNode struct {
 	pathLength byte
 	hash       common.Hash // the hash of this node (may be dirty)
 	hashDirty  bool        // indicating whether this node's hash is dirty
+}
+
+func (n *ValueNode) Key() common.Key {
+	return n.key
+}
+
+func (n *ValueNode) Value() common.Value {
+	return n.value
 }
 
 func (n *ValueNode) GetAccount(NodeSource, common.Address, []Nibble) (AccountInfo, bool, error) {
