@@ -22,10 +22,10 @@ import (
 type StorageMode bool
 
 const (
-	// Mutable is the mode of an archive or a read-only state on the disk.
+	// Immutable is the mode of an archive or a read-only state on the disk.
 	// All nodes written to disk will be finalized and never updated again.
 	Immutable StorageMode = true
-	// Immutable is the mode of a LiveDB in which the state on the disk can be
+	// Mutable is the mode of a LiveDB in which the state on the disk can be
 	// modified through destructive updates.
 	Mutable StorageMode = false
 )
