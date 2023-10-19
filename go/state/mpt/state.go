@@ -194,6 +194,14 @@ func (s *MptState) GetHash() (hash common.Hash, err error) {
 	return s.trie.GetHash()
 }
 
+func (s *MptState) Visit(visitor NodeVisitor) error {
+	return s.trie.VisitTrie(visitor)
+}
+
+func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
+	return s.code, nil
+}
+
 func (s *MptState) Flush() error {
 	// Flush codes and state trie.
 	return errors.Join(

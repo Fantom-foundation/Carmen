@@ -61,7 +61,7 @@ var S5ArchiveConfig = MptConfig{
 
 var allMptConfigs = []MptConfig{
 	S4LiveConfig, S4ArchiveConfig,
-	S4LiveConfig, S5ArchiveConfig,
+	S5LiveConfig, S5ArchiveConfig,
 }
 
 // GetConfigByName attempts to locate a configuration with the given name.
