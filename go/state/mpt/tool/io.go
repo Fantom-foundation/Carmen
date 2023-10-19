@@ -21,12 +21,12 @@ import (
 //  file  ::= <magic-number> <state-hash> [<code>]* [<entry>]*
 //  code  ::= 'C' <2-byte big-endian code length> <code>
 //  entry ::= 'A' <address> <balance> <nonce> <code-hash>
-//          | 'V' <key> <value>
+//          | 'S' <key> <value>
 //
 // All values belong to the account preceding it. The produced data stream
 // may be further compressed (e.g. using Gzip) to reduce its size.
 
-var mptMagicNumber []byte = []byte("Carmen-S5-live-v01")
+var stateMagicNumber []byte = []byte("Carmen-S5-live-v01")
 
 // Export opens a LiveDB instance retained in the given directory and writes
 // its content to the given output writer. The result contains all the
@@ -50,7 +50,7 @@ func Export(directory string, out io.Writer) error {
 	defer db.Close()
 
 	// Start with the magic number.
-	if _, err := out.Write(mptMagicNumber); err != nil {
+	if _, err := out.Write(stateMagicNumber); err != nil {
 		return err
 	}
 
@@ -80,9 +80,9 @@ func Export(directory string, out io.Writer) error {
 	}
 
 	// Write out all accounts and values.
-	helper := exportVisitor{out: out}
-	if err := db.Visit(&helper); err != nil || helper.err != nil {
-		return fmt.Errorf("failed exporting content: %v", errors.Join(err, helper.err))
+	visitor := exportVisitor{out: out}
+	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
+		return fmt.Errorf("failed exporting content: %v", errors.Join(err, visitor.err))
 	}
 
 	return nil
@@ -90,13 +90,13 @@ func Export(directory string, out io.Writer) error {
 
 // Import creates a fresh StateDB in the given directory and fills it
 // with the content read from the given reader.
-func Import(directory string, in io.Reader) error {
+func Import(directory string, in io.Reader) (err error) {
 
 	// Start by checking the magic number.
-	buffer := make([]byte, len(mptMagicNumber))
+	buffer := make([]byte, len(stateMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
 		return err
-	} else if !bytes.Equal(buffer, mptMagicNumber) {
+	} else if !bytes.Equal(buffer, stateMagicNumber) {
 		return fmt.Errorf("invalid format, wrong magic number")
 	}
 
@@ -105,7 +105,9 @@ func Import(directory string, in io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to create empty state: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
 	var (
 		addr    common.Address
@@ -125,12 +127,14 @@ func Import(directory string, in io.Reader) error {
 
 	// Read the rest and build the state.
 	buffer = buffer[0:1]
-	codes := map[common.Hash][]byte{}
+	codes := map[common.Hash][]byte{
+		common.Keccak256([]byte{}): {},
+	}
 
 	counter := 0
 
 	for {
-		// Update hashes periodically to avoid running out of storage
+		// Update hashes periodically to avoid running out of memory
 		// for nodes with dirty hashes.
 		counter++
 		if (counter % 100_000) == 0 {
@@ -178,10 +182,10 @@ func Import(directory string, in io.Reader) error {
 					return err
 				}
 			} else {
-				return fmt.Errorf("missing code for account %x with hash %x", addr, hash)
+				return fmt.Errorf("missing code with hash %x for account %x", hash[:], addr[:])
 			}
 
-		case 'V':
+		case 'S':
 			if _, err := io.ReadFull(in, key[:]); err != nil {
 				return err
 			}
@@ -240,7 +244,7 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 	case *mpt.ValueNode:
 		key := n.Key()
 		value := n.Value()
-		if _, err := e.out.Write([]byte{byte('V')}); err != nil {
+		if _, err := e.out.Write([]byte{byte('S')}); err != nil {
 			e.err = err
 			return mpt.VisitResponseAbort
 		}
