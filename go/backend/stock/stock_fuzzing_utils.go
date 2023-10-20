@@ -96,7 +96,7 @@ func parseOperations(b []byte) []op {
 	return ops
 }
 
-func FuzzStock_RandomOps(f *testing.F, factory OpenStockFactory) {
+func FuzzStock_RandomOps(f *testing.F, factory OpenStockFactory, shouldClose bool) {
 
 	payload1 := 99
 	payload2 := ^99
@@ -129,7 +129,9 @@ func FuzzStock_RandomOps(f *testing.F, factory OpenStockFactory) {
 		if err != nil {
 			t.Fatalf("failed to open buffered file: %v", err)
 		}
-		defer st.Close()
+		if shouldClose {
+			defer st.Close()
+		}
 
 		ids := make(map[int]bool)
 		values := make(map[int]int)

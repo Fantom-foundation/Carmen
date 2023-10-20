@@ -103,5 +103,5 @@ func FuzzSyncStock_RandomOps(f *testing.F) {
 		return Sync(nested), err
 	}
 
-	stock.FuzzStock_RandomOps(f, open)
+	stock.FuzzStock_RandomOps(f, open, true)
 }

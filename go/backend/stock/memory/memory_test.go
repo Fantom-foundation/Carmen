@@ -38,5 +38,5 @@ func FuzzMemoryStock_RandomOps(f *testing.F) {
 		return OpenStock[int, int](stock.IntEncoder{}, directory)
 	}
 
-	stock.FuzzStock_RandomOps(f, open)
+	stock.FuzzStock_RandomOps(f, open, false)
 }
