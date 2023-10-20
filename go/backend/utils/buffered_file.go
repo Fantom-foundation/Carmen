@@ -133,6 +133,10 @@ func (f *BufferedFile) writeFile(position int64, src []byte) error {
 // If the targeted range is partially or fully beyond the range of the file,
 // uncovered data is zero-padded in the destination slice.
 func (f *BufferedFile) Read(position int64, dst []byte) error {
+	if position < 0 {
+		return fmt.Errorf("cannot read at negative index: %d", position)
+	}
+
 	from, to := position, position+int64(len(dst))
 	bufferFrom, bufferTo := f.bufferOffset, f.bufferOffset+bufferSize
 
