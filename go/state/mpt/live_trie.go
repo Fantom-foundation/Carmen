@@ -119,8 +119,12 @@ func (s *LiveTrie) ClearStorage(addr common.Address) error {
 	return s.forest.ClearStorage(s.root, addr)
 }
 
-func (s *LiveTrie) GetHash() (common.Hash, error) {
+func (s *LiveTrie) UpdateHashes() (common.Hash, map[NodePath]common.Hash, error) {
 	return s.forest.updateHashesFor(s.root)
+}
+
+func (s *LiveTrie) setHashes(hashes map[NodePath]common.Hash) error {
+	return s.forest.setHashesFor(s.root, hashes)
 }
 
 func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
@@ -129,7 +133,7 @@ func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
 
 func (s *LiveTrie) Flush() error {
 	// Update hashes to eliminate dirty hashes before flushing.
-	hash, err := s.GetHash()
+	hash, _, err := s.UpdateHashes()
 	if err != nil {
 		return err
 	}

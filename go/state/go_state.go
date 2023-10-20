@@ -6,6 +6,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -69,8 +70,9 @@ func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) Stat
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 type archiveUpdate = struct {
-	block  uint64
-	update *common.Update // nil to signal a flush
+	block   uint64
+	update  *common.Update // nil to signal a flush
+	changes map[mpt.NodePath]common.Hash
 }
 
 func (s *GoState) Apply(block uint64, update common.Update) error {
@@ -80,7 +82,15 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	}
 
 	// Finish the block by refreshing the hash.
-	if _, err := s.GetHash(); err != nil {
+	// TODO: this here is now an ugly special-case handling for S5; update
+	// interfaces to support this in the general case.
+	var changes map[mpt.NodePath]common.Hash
+	if s5, ok := s.GoSchema.(*goSchema5); ok {
+		_, changes, err = s5.MptState.UpdateHashes()
+		if err != nil {
+			return err
+		}
+	} else if _, err := s.GetHash(); err != nil {
 		return err
 	}
 
@@ -102,7 +112,13 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 						flush <- true
 					} else {
 						// Otherwise, process the update.
-						issue := s.archive.Add(update.block, *update.update)
+						// TODO: remove this S5 special-case hack
+						var issue error
+						if trie, ok := s.archive.(*mpt.ArchiveTrie); ok {
+							issue = trie.AddWithHashes(update.block, *update.update, update.changes)
+						} else {
+							issue = s.archive.Add(update.block, *update.update)
+						}
 						if issue != nil {
 							err <- issue
 						}
@@ -116,8 +132,8 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 			s.archiveWriterError = err
 		}
 
-		// Send the update to the writer to be processessed asynchroniously.
-		s.archiveWriter <- archiveUpdate{block, &update}
+		// Send the update to the writer to be processed asynchronously.
+		s.archiveWriter <- archiveUpdate{block, &update, changes}
 
 		// Drain potential errors, but do not wait for them.
 		var last error
@@ -167,6 +183,10 @@ func (s *GoState) Flush() (lastErr error) {
 }
 
 func (s *GoState) Close() (lastErr error) {
+	if err := s.Flush(); err != nil {
+		return err
+	}
+
 	if err := s.GoSchema.Close(); err != nil {
 		lastErr = err
 	}

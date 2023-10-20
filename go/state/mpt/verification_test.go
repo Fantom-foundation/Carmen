@@ -439,7 +439,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 		t.Fatalf("failed to set value for key2: %v", err)
 	}
 
-	hash, err := forest.updateHashesFor(root)
+	hash, _, err := forest.updateHashesFor(root)
 	if err != nil {
 		t.Fatalf("failed to compute hash for trie: %v", err)
 	}
@@ -529,7 +529,7 @@ func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 		if err != nil {
 			return nil, err
 		}
-		hash, err := forest.updateHashesFor(root)
+		hash, _, err := forest.updateHashesFor(root)
 		if err != nil {
 			return nil, err
 		}

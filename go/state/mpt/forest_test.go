@@ -59,7 +59,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 						t.Fatalf("failed to set account info: %v", err)
 					}
 
-					if _, err = forest.updateHashesFor(root); err != nil {
+					if _, _, err = forest.updateHashesFor(root); err != nil {
 						t.Fatalf("failed to update hash of modified forest: %v", err)
 					}
 
@@ -113,7 +113,7 @@ func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 						t.Errorf("empty tree should not contain any info, wanted (%v,%t), got (%v,%t), err %v", info1, true, info, true, err)
 					}
 
-					if _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(root); err != nil {
 						t.Fatalf("failed to update hashes: %v", err)
 					}
 
@@ -171,7 +171,7 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 						t.Errorf("inconsistent trie: %v", err)
 					}
 
-					if _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(root); err != nil {
 						t.Errorf("failed to update hash for root")
 					}
 
@@ -220,7 +220,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
 
-				if _, err := forest.updateHashesFor(root2); err != nil {
+				if _, _, err := forest.updateHashesFor(root2); err != nil {
 					t.Fatalf("failed to update hashes: %v", err)
 				}
 			})
@@ -277,7 +277,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 				}
 
 				for _, root := range []NodeId{root0, root1, root2} {
-					if _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(root); err != nil {
 						t.Fatalf("failed to update hashes: %v", err)
 					}
 				}
@@ -364,7 +364,7 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 					}
 
 					// Update hashes to avoid writing dirty hashes during close.
-					if _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(root); err != nil {
 						t.Fatalf("failed to get hash for forest content, err %v", err)
 					}
 					if err := forest.Close(); err != nil {
@@ -435,7 +435,7 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 					}
 
 					// Update hashes to avoid writing dirty hashes during close.
-					if _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(root); err != nil {
 						t.Fatalf("failed to get hash for forest content, err %v", err)
 					}
 					if err := forest.Close(); err != nil {

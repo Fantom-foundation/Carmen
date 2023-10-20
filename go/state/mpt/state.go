@@ -191,7 +191,12 @@ func (s *MptState) GetCodeHash(address common.Address) (hash common.Hash, err er
 }
 
 func (s *MptState) GetHash() (hash common.Hash, err error) {
-	return s.trie.GetHash()
+	hash, _, err = s.UpdateHashes()
+	return hash, err
+}
+
+func (s *MptState) UpdateHashes() (hash common.Hash, changes map[NodePath]common.Hash, err error) {
+	return s.trie.UpdateHashes()
 }
 
 func (s *MptState) Flush() error {

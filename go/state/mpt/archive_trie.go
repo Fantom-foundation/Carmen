@@ -70,6 +70,10 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
+	return a.AddWithHashes(block, update, nil)
+}
+
+func (a *ArchiveTrie) AddWithHashes(block uint64, update common.Update, precomputedHashes map[NodePath]common.Hash) error {
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()
 
@@ -81,7 +85,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 
 	// Mark skipped blocks as having no changes.
 	if uint64(len(a.roots)) < block {
-		lastHash, err := a.head.trie.GetHash()
+		lastHash, err := a.head.GetHash()
 		if err != nil {
 			a.rootsMutex.Unlock()
 			return err
@@ -132,7 +136,23 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	}
 
 	// Refresh hashes.
-	hash, err := a.head.GetHash()
+	var err error
+	var hash common.Hash
+	if precomputedHashes == nil {
+		hash, _, err = a.head.trie.UpdateHashes()
+	} else {
+		hash = precomputedHashes[EmptyPath()]
+		err = a.head.trie.setHashes(precomputedHashes)
+
+		/*
+			a.head.trie.Dump()
+
+			if err := a.head.trie.VisitTrie(&noDirtyNodes{}); err != nil {
+				panic(fmt.Sprintf("failed to check that all nodes are clean: %v\n", err))
+			}
+		*/
+
+	}
 	if err != nil {
 		return err
 	}
@@ -143,6 +163,18 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	a.rootsMutex.Unlock()
 	return nil
 }
+
+/*
+type noDirtyNodes struct{}
+
+func (noDirtyNodes) Visit(node Node, info NodeInfo) VisitResponse {
+	_, dirty := node.GetHash()
+	if dirty {
+		panic(fmt.Sprintf("Identified dirty node after update: %v", info.Id))
+	}
+	return VisitResponseContinue
+}
+*/
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
 	a.rootsMutex.Lock()

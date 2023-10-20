@@ -205,11 +205,11 @@ func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 				t.Fatalf("failed to open trie: %v", err)
 			}
 
-			hash1, err := trie1.GetHash()
+			hash1, _, err := trie1.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of empty trie: %v", err)
 			}
-			hash2, err := trie2.GetHash()
+			hash2, _, err := trie2.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of empty trie: %v", err)
 			}
@@ -222,11 +222,11 @@ func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 			trie1.SetAccountInfo(common.Address{1}, info1)
 			trie2.SetAccountInfo(common.Address{2}, info2)
 
-			hash1, err = trie1.GetHash()
+			hash1, _, err = trie1.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of non-empty trie: %v", err)
 			}
-			hash2, err = trie2.GetHash()
+			hash2, _, err = trie2.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of non-empty trie: %v", err)
 			}
@@ -238,11 +238,11 @@ func TestLiveTrie_SameContentProducesSameHash(t *testing.T) {
 			trie1.SetAccountInfo(common.Address{2}, info2)
 			trie2.SetAccountInfo(common.Address{1}, info1)
 
-			hash1, err = trie1.GetHash()
+			hash1, _, err = trie1.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of non-empty trie: %v", err)
 			}
-			hash2, err = trie2.GetHash()
+			hash2, _, err = trie2.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of non-empty trie: %v", err)
 			}
@@ -266,7 +266,7 @@ func TestLiveTrie_ChangeInTrieSubstructureUpdatesHash(t *testing.T) {
 			trie.SetAccountInfo(common.Address{1}, info1)
 			trie.SetAccountInfo(common.Address{2}, info2)
 
-			hash1, err := trie.GetHash()
+			hash1, _, err := trie.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of empty trie: %v", err)
 			}
@@ -275,7 +275,7 @@ func TestLiveTrie_ChangeInTrieSubstructureUpdatesHash(t *testing.T) {
 			// still be updated.
 			trie.SetAccountInfo(common.Address{1}, info2)
 
-			hash2, err := trie.GetHash()
+			hash2, _, err := trie.UpdateHashes()
 			if err != nil {
 				t.Errorf("failed to fetch hash of empty trie: %v", err)
 			}
