@@ -252,10 +252,10 @@ func FuzzBufferedFile_ReadWrite(f *testing.F) {
 type opType byte
 
 const (
-	read opType = iota
-	write
-	flush
-	close
+	opRead opType = iota
+	opWrite
+	opFlush
+	opClose
 )
 
 // op is a pair of opType and position in the file.
@@ -268,7 +268,7 @@ type op struct {
 // using following format: <opType><position>
 func (o *op) serialise() []byte {
 	b := []byte{byte(o.opType)}
-	if o.opType == write || o.opType == read {
+	if o.opType == opWrite || o.opType == opRead {
 		b = binary.BigEndian.AppendUint16(b, uint16(o.pos))
 	}
 	return b
@@ -293,7 +293,7 @@ func parseOperations(b []byte) []op {
 	var closeOrFlushOpCounter, expensiveOpCounter int
 	for len(b) >= 1 {
 		opType := opType(b[0] % 4)
-		if opType == close || opType == flush {
+		if opType == opClose || opType == opFlush {
 			closeOrFlushOpCounter++
 			expensiveOpCounter++
 		} else {
@@ -307,11 +307,11 @@ func parseOperations(b []byte) []op {
 			continue
 		}
 		// do not allow for more han 20 close or flush ops in total.
-		if expensiveOpCounter > 20 && (opType == close || opType == flush) {
+		if expensiveOpCounter > 20 && (opType == opClose || opType == opFlush) {
 			continue
 		}
 		var pos int64
-		if opType == write || opType == read {
+		if opType == opWrite || opType == opRead {
 			if len(b) >= 2 {
 				// cap position to 2bytes not to allocate huge files
 				pos = int64(binary.BigEndian.Uint16(b[0:2]))
@@ -328,15 +328,15 @@ func parseOperations(b []byte) []op {
 func FuzzBufferedFile_RandomOps(f *testing.F) {
 	// generate some adhoc sequences of operations and positions
 	data := [][]op{
-		{op{write, 0}, op{read, 0}, op{close, -1}},
-		{op{write, 100}, op{read, 100}, op{close, -1}, op{read, 100}},
-		{op{write, 5}, op{read, 5}, op{flush, -1}, op{write, 10}, op{read, 10}},
-		{op{write, 5}, op{read, 5}, op{flush, -1}, op{write, 10}, op{read, 10}, op{read, 5}},
-		{op{close, -1}},
-		{op{flush, -1}},
-		{op{read, 50}},
-		{op{write, 50}},
-		{op{write, 50}, op{close, -1}},
+		{op{opWrite, 0}, op{opRead, 0}, op{opClose, -1}},
+		{op{opWrite, 100}, op{opRead, 100}, op{opClose, -1}, op{opRead, 100}},
+		{op{opWrite, 5}, op{opRead, 5}, op{opFlush, -1}, op{opWrite, 10}, op{opRead, 10}},
+		{op{opWrite, 5}, op{opRead, 5}, op{opFlush, -1}, op{opWrite, 10}, op{opRead, 10}, op{opRead, 5}},
+		{op{opClose, -1}},
+		{op{opFlush, -1}},
+		{op{opRead, 50}},
+		{op{opWrite, 50}},
+		{op{opWrite, 50}, op{opClose, -1}},
 	}
 
 	for _, line := range data {
@@ -360,7 +360,7 @@ func FuzzBufferedFile_RandomOps(f *testing.F) {
 		ops := parseOperations(rawData)
 		for _, op := range ops {
 			switch op.opType {
-			case read:
+			case opRead:
 				// generate some payload out of position, which is randomized by the fuzzer already
 				// cap to bufferSize, which is maximal supported size
 				size := op.pos / 10 % bufferSize
@@ -380,7 +380,7 @@ func FuzzBufferedFile_RandomOps(f *testing.F) {
 				if !bytes.Equal(payload, shadowPayload) {
 					t.Errorf("data read from file does not match written data: %x != %x", payload, shadowPayload)
 				}
-			case write:
+			case opWrite:
 				// generate some payload out of position, which is randomized by the fuzzer already
 				// cap to bufferSize, which is maximal supported size
 				size := op.pos / 10 % bufferSize
@@ -403,11 +403,11 @@ func FuzzBufferedFile_RandomOps(f *testing.F) {
 
 				// write the same to the shadow file
 				copy(shadowFile[op.pos:], payload)
-			case flush:
+			case opFlush:
 				if err := file.Flush(); err != nil {
 					t.Errorf("error to flush: %s", err)
 				}
-			case close:
+			case opClose:
 				if err := file.Close(); err != nil {
 					t.Errorf("error to flush: %s", err)
 				}
