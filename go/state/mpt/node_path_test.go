@@ -2,22 +2,10 @@ package mpt
 
 import "testing"
 
-func TestNodePath_IsValidMapKey(t *testing.T) {
-	// this just needs to compile to pass the test
-	var _ map[NodePath]bool
-}
-
-func TestNodePath_DefaultIsInvalid(t *testing.T) {
+func TestNodePath_DefaultIsEmptyPath(t *testing.T) {
 	path := NodePath{}
-	if path.IsValid() {
-		t.Errorf("default value should not be valid")
-	}
-}
-
-func TestNodePath_EmptyPathIsValid(t *testing.T) {
-	path := EmptyPath()
-	if !path.IsValid() {
-		t.Errorf("empty path should not be valid")
+	if want, got := 0, path.Length(); want != got {
+		t.Errorf("default path is not empty, wanted %d, got %d", want, got)
 	}
 }
 
@@ -25,6 +13,26 @@ func TestNodePath_EmptyPathHasLengthZero(t *testing.T) {
 	path := EmptyPath()
 	if got, want := path.Length(), 0; got != want {
 		t.Errorf("unexpected length of empty path, wanted %d, got %d", want, got)
+	}
+}
+
+func TestNodePath_AppendIsNondestructiveUpdate(t *testing.T) {
+	path := EmptyPath()
+
+	p1 := path.Child(1)
+	p12 := p1.Child(2)
+	p13 := p1.Child(3)
+
+	if got, want := p1.String(), "[1]"; got != want {
+		t.Errorf("unexpected path, wanted %s, got %s", want, got)
+	}
+
+	if got, want := p12.String(), "[1,2]"; got != want {
+		t.Errorf("unexpected path, wanted %s, got %s", want, got)
+	}
+
+	if got, want := p13.String(), "[1,3]"; got != want {
+		t.Errorf("unexpected path, wanted %s, got %s", want, got)
 	}
 }
 
@@ -57,26 +65,12 @@ func TestNodePath_StepsCanBeAppended(t *testing.T) {
 	}
 }
 
-func TestNodePath_AppendingBeyondTheMaximumLengthResultsInInvalidPath(t *testing.T) {
-	path := CreateNodePath(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
-	if !path.IsValid() {
-		t.Errorf("failed to create path of maximum length")
-	}
-	if want, got := 14, path.Length(); want != got {
-		t.Errorf("invalid length, wanted %d, got %d", want, got)
-	}
-	next := path.Child(15)
-	if next.IsValid() {
-		t.Error("too long path should be invalid")
-	}
-}
-
 func TestNodePath_ToString(t *testing.T) {
 	tests := []struct {
 		path   NodePath
 		result string
 	}{
-		{NodePath{}, "-invalid-"},
+		{NodePath{}, "[]"},
 		{CreateNodePath(), "[]"},
 		{CreateNodePath(2), "[2]"},
 		{CreateNodePath(2, 7), "[2,7]"},

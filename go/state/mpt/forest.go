@@ -323,11 +323,11 @@ func (s *Forest) VisitTrie(rootId NodeId, visitor NodeVisitor) error {
 	return err
 }
 
-func (s *Forest) updateHashesFor(id NodeId) (common.Hash, map[NodePath]common.Hash, error) {
+func (s *Forest) updateHashesFor(id NodeId) (common.Hash, []nodeHash, error) {
 	return s.hasher.updateHashes(id, s)
 }
 
-func (s *Forest) setHashesFor(id NodeId, hashes map[NodePath]common.Hash) error {
+func (s *Forest) setHashesFor(id NodeId, hashes []nodeHash) error {
 
 	// A utility to navigate to a given node and acquire write access.
 	getNode := func(path NodePath) (shared.WriteHandle[Node], error) {
@@ -368,12 +368,12 @@ func (s *Forest) setHashesFor(id NodeId, hashes map[NodePath]common.Hash) error 
 		return res, err
 	}
 
-	for path, hash := range hashes {
-		write, err := getNode(path)
+	for _, cur := range hashes {
+		write, err := getNode(cur.path)
 		if err != nil {
 			return err
 		}
-		write.Get().SetHash(hash)
+		write.Get().SetHash(cur.hash)
 		write.Release()
 	}
 	return nil
