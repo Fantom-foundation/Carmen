@@ -66,7 +66,7 @@ func TestNodeStatistics_CollectForestStatisticsWorks(t *testing.T) {
 			{Account: common.Address{1}, Key: common.Key{1}, Value: common.Value{1}},
 			{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
 		},
-	})
+	}, nil)
 
 	if err := archive.Close(); err != nil {
 		t.Fatalf("failed to close archive: %v", err)

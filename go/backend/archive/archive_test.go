@@ -104,7 +104,7 @@ func TestAddGet(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x05}, common.Value{0x47}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -121,10 +121,10 @@ func TestAddGet(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x05}, common.Value{0x89}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 5; %v", err)
 			}
-			if err := a.Add(7, common.Update{}); err != nil {
+			if err := a.Add(7, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add block 7; %v", err)
 			}
 
@@ -198,19 +198,19 @@ func TestAccountDeleteCreate(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x05}, common.Value{0x47}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
 			if err := a.Add(5, common.Update{
 				DeletedAccounts: []common.Address{addr1},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 5; %s", err)
 			}
 
 			if err := a.Add(9, common.Update{
 				CreatedAccounts: []common.Address{addr1},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 9; %s", err)
 			}
 
@@ -257,10 +257,10 @@ func TestAccountStatusOnly(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
-			if err := a.Add(2, common.Update{}); err != nil {
+			if err := a.Add(2, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add block 2; %s", err)
 			}
 
@@ -285,7 +285,7 @@ func TestBalanceOnly(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x12}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -293,11 +293,11 @@ func TestBalanceOnly(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x34}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 200; %s", err)
 			}
 
-			if err := a.Add(400, common.Update{}); err != nil {
+			if err := a.Add(400, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add block 400; %s", err)
 			}
 
@@ -323,7 +323,7 @@ func TestStorageOnly(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x37}, common.Value{0x12}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -331,7 +331,7 @@ func TestStorageOnly(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x37}, common.Value{0x34}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 2; %s", err)
 			}
 
@@ -352,7 +352,7 @@ func TestPreventingBlockOverrides(t *testing.T) {
 			a := factory.getArchive(t.TempDir())
 			defer a.Close()
 
-			if err := a.Add(1, common.Update{}); err != nil {
+			if err := a.Add(1, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -361,7 +361,7 @@ func TestPreventingBlockOverrides(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x37}, common.Value{0x12}},
 				},
-			}); err == nil {
+			}, nil); err == nil {
 				t.Errorf("allowed overriding already written block 1")
 			}
 
@@ -381,7 +381,7 @@ func TestPreventingBlockOutOfOrder(t *testing.T) {
 
 			if err := a.Add(2, common.Update{
 				CreatedAccounts: []common.Address{addr1},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 2; %s", err)
 			}
 
@@ -390,7 +390,7 @@ func TestPreventingBlockOutOfOrder(t *testing.T) {
 				Slots: []common.SlotUpdate{
 					{addr1, common.Key{0x37}, common.Value{0x12}},
 				},
-			}); err == nil {
+			}, nil); err == nil {
 				t.Errorf("allowed inserting block 1 while block 2 already exists")
 			}
 
@@ -407,25 +407,25 @@ func TestEmptyBlockHash(t *testing.T) {
 			a := factory.getArchive(t.TempDir())
 			defer a.Close()
 
-			if err := a.Add(0, common.Update{}); err != nil {
+			if err := a.Add(0, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add empty block 0; %v", err)
 			}
 
-			if err := a.Add(1, common.Update{}); err != nil {
+			if err := a.Add(1, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add empty block 1; %v", err)
 			}
 
 			if err := a.Add(2, common.Update{
 				CreatedAccounts: []common.Address{addr1},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 2; %v", err)
 			}
 
-			if err := a.Add(3, common.Update{}); err != nil {
+			if err := a.Add(3, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add empty block 3; %v", err)
 			}
 
-			if err := a.Add(4, common.Update{}); err != nil {
+			if err := a.Add(4, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add empty block 4; %v", err)
 			}
 
@@ -459,7 +459,7 @@ func TestZeroBlock(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x11}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 0; %s", err)
 			}
 
@@ -467,7 +467,7 @@ func TestZeroBlock(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x12}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -493,13 +493,13 @@ func TestTwinProtection(t *testing.T) {
 			a := factory.getArchive(t.TempDir())
 			defer a.Close()
 
-			if err := a.Add(0, common.Update{}); err != nil {
+			if err := a.Add(0, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add empty block 0; %s", err)
 			}
 
 			if err := a.Add(0, common.Update{
 				CreatedAccounts: []common.Address{addr1},
-			}); err == nil {
+			}, nil); err == nil {
 				t.Errorf("second adding of block 0 should have failed but it succeed")
 			}
 
@@ -507,7 +507,7 @@ func TestTwinProtection(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x12}},
 				},
-			}); err != nil {
+			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
 			}
 
@@ -515,7 +515,7 @@ func TestTwinProtection(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{addr1, common.Balance{0x34}},
 				},
-			}); err == nil {
+			}, nil); err == nil {
 				t.Errorf("second adding of block 1 should have failed but it succeed")
 			}
 		})
@@ -534,7 +534,7 @@ func TestBlockHeight(t *testing.T) {
 			}
 
 			// Adding block 0 should turn the archive non-empty.
-			if err := a.Add(0, common.Update{}); err != nil {
+			if err := a.Add(0, common.Update{}, nil); err != nil {
 				t.Fatalf("failed to add empty block 0; %s", err)
 			}
 
@@ -543,7 +543,7 @@ func TestBlockHeight(t *testing.T) {
 			}
 
 			// Adding block 5 should raise the block height accordingly.
-			if err := a.Add(5, common.Update{CreatedAccounts: []common.Address{addr1}}); err != nil {
+			if err := a.Add(5, common.Update{CreatedAccounts: []common.Address{addr1}}, nil); err != nil {
 				t.Fatalf("failed to add block 5; %s", err)
 			}
 

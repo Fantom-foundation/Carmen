@@ -69,11 +69,9 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 	return VerifyFileForest(directory, config, roots, observer)
 }
 
-func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
-	return a.AddWithHashes(block, update, nil)
-}
+func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
+	precomputedHashes, _ := hint.([]nodeHash)
 
-func (a *ArchiveTrie) AddWithHashes(block uint64, update common.Update, precomputedHashes map[NodePath]common.Hash) error {
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()
 
@@ -141,8 +139,19 @@ func (a *ArchiveTrie) AddWithHashes(block uint64, update common.Update, precompu
 	if precomputedHashes == nil {
 		hash, _, err = a.head.trie.UpdateHashes()
 	} else {
-		hash = precomputedHashes[EmptyPath()]
 		err = a.head.trie.setHashes(precomputedHashes)
+
+		// TODO: test empty updates!
+		found := false
+		for _, cur := range precomputedHashes {
+			if cur.path.Length() == 0 {
+				hash = cur.hash
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("missing root hash in list of precomputed hashes")
+		}
 
 		/*
 			a.head.trie.Dump()

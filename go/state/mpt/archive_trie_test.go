@@ -50,13 +50,13 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 				Balances: []common.BalanceUpdate{
 					{Account: addr1, Balance: blc1},
 				},
-			})
+			}, nil)
 
 			archive.Add(3, common.Update{
 				Balances: []common.BalanceUpdate{
 					{Account: addr1, Balance: blc2},
 				},
-			})
+			}, nil)
 
 			want := []common.Balance{blc0, blc1, blc1, blc2}
 			for i, want := range want {
@@ -100,7 +100,7 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
 					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
 				},
-			})
+			}, nil)
 			if err != nil {
 				t.Fatalf("failed to update archive: %v", err)
 			}
@@ -114,7 +114,7 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 					{Account: common.Address{3}, Key: common.Key{2}, Value: common.Value{2}},
 					{Account: common.Address{3}, Key: common.Key{3}, Value: common.Value{1}},
 				},
-			})
+			}, nil)
 			if err != nil {
 				t.Fatalf("failed to update archive: %v", err)
 			}
@@ -150,7 +150,7 @@ func TestArchiveTrie_VerificationOfArchiveWithMissingFileFails(t *testing.T) {
 					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
 					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
 				},
-			})
+			}, nil)
 			if err != nil {
 				t.Fatalf("failed to update archive: %v", err)
 			}
@@ -190,7 +190,7 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{2}},
 					{Account: common.Address{1}, Key: common.Key{3}, Value: common.Value{1}},
 				},
-			})
+			}, nil)
 			if err != nil {
 				t.Fatalf("failed to update archive: %v", err)
 			}

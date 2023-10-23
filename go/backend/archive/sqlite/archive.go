@@ -201,7 +201,7 @@ func (a *Archive) Close() error {
 	return a.db.Close()
 }
 
-func (a *Archive) Add(block uint64, update common.Update) error {
+func (a *Archive) Add(block uint64, update common.Update, _ any) error {
 	tx, err := a.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err

@@ -35,7 +35,7 @@ func (a *Archive) Close() error {
 }
 
 // Add a new update as a new block into the archive. Should be called from a single thread only.
-func (a *Archive) Add(block uint64, update common.Update) error {
+func (a *Archive) Add(block uint64, update common.Update, _ any) error {
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()
 
