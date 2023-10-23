@@ -3107,7 +3107,7 @@ func TestPersistentStateDB(t *testing.T) {
 			continue
 		}
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive {
+			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
 				continue
 			}
 			config := config
@@ -3297,7 +3297,7 @@ func toKey(key uint64) common.Key {
 func TestStateDBArchive(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive {
+			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
 				continue
 			}
 			config := config

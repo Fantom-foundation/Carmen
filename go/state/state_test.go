@@ -51,6 +51,17 @@ func initStates() []namedStateConfig {
 	return res
 }
 
+func isValidArchiveOption(config *namedStateConfig, archiveType ArchiveType) bool {
+	// S4 and S5 configurations must not be mixed.
+	if strings.Contains(config.name, "s4") && archiveType == S5Archive {
+		return false
+	}
+	if strings.Contains(config.name, "s5") && archiveType == S4Archive {
+		return false
+	}
+	return true
+}
+
 func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedStateConfig, s directUpdateState)) {
 	for _, config := range initStates() {
 		config := config
@@ -425,7 +436,10 @@ func TestDeletingAccountsClearsStorage(t *testing.T) {
 // TestArchive inserts data into the state and tries to obtain the history from the archive.
 func TestArchive(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
+		for _, archiveType := range allArchiveTypes {
+			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+				continue
+			}
 			config := config
 			archiveType := archiveType
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
@@ -474,55 +488,55 @@ func TestArchive(t *testing.T) {
 						{address1, common.Key{0x05}, common.Value{0x89}},
 					},
 				}); err != nil {
-					t.Fatalf("failed to add block 2; %s", err)
+					t.Fatalf("failed to add block 2; %v", err)
 				}
 
 				if err := s.Flush(); err != nil {
-					t.Fatalf("failed to flush updates, %s", err)
+					t.Fatalf("failed to flush updates, %v", err)
 				}
 
 				state1, err := s.GetArchiveState(1)
 				if err != nil {
-					t.Fatalf("failed to get state of block 1; %s", err)
+					t.Fatalf("failed to get state of block 1; %v", err)
 				}
 
 				state2, err := s.GetArchiveState(2)
 				if err != nil {
-					t.Fatalf("failed to get state of block 2; %s", err)
+					t.Fatalf("failed to get state of block 2; %v", err)
 				}
 
 				if as, err := state1.Exists(address1); err != nil || as != true {
-					t.Errorf("invalid account state at block 1: %t, %s", as, err)
+					t.Errorf("invalid account state at block 1: %t, %v", as, err)
 				}
 				if as, err := state2.Exists(address1); err != nil || as != true {
-					t.Errorf("invalid account state at block 2: %t, %s", as, err)
+					t.Errorf("invalid account state at block 2: %t, %v", as, err)
 				}
 				if balance, err := state1.GetBalance(address1); err != nil || balance != balance12 {
-					t.Errorf("invalid balance at block 1: %s, %s", balance.ToBigInt(), err)
+					t.Errorf("invalid balance at block 1: %v, %v", balance.ToBigInt(), err)
 				}
 				if balance, err := state2.GetBalance(address1); err != nil || balance != balance34 {
-					t.Errorf("invalid balance at block 2: %s, %s", balance.ToBigInt(), err)
+					t.Errorf("invalid balance at block 2: %v, %v", balance.ToBigInt(), err)
 				}
 				if code, err := state1.GetCode(address1); err != nil || code != nil {
-					t.Errorf("invalid code at block 1: %s, %s", code, err)
+					t.Errorf("invalid code at block 1: %v, %v", code, err)
 				}
 				if code, err := state2.GetCode(address1); err != nil || !bytes.Equal(code, []byte{0x12, 0x23}) {
-					t.Errorf("invalid code at block 2: %s, %s", code, err)
+					t.Errorf("invalid code at block 2: %v, %v", code, err)
 				}
 				if nonce, err := state1.GetNonce(address1); err != nil || nonce != (common.Nonce{}) {
-					t.Errorf("invalid nonce at block 1: %s, %s", nonce, err)
+					t.Errorf("invalid nonce at block 1: %v, %v", nonce, err)
 				}
 				if nonce, err := state2.GetNonce(address1); err != nil || nonce != (common.Nonce{0x54}) {
-					t.Errorf("invalid nonce at block 2: %s, %s", nonce, err)
+					t.Errorf("invalid nonce at block 2: %v, %v", nonce, err)
 				}
 				if value, err := state1.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x47}) {
-					t.Errorf("invalid slot value at block 1: %s, %s", value, err)
+					t.Errorf("invalid slot value at block 1: %v, %v", value, err)
 				}
 				if value, err := state2.GetStorage(address1, common.Key{0x05}); err != nil || value != (common.Value{0x89}) {
-					t.Errorf("invalid slot value at block 2: %s, %s", value, err)
+					t.Errorf("invalid slot value at block 2: %v, %v", value, err)
 				}
 
-				if archiveType != S4Archive {
+				if archiveType != S4Archive && archiveType != S5Archive {
 					hash1, err := state1.GetHash()
 					if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
 						t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
@@ -540,7 +554,10 @@ func TestArchive(t *testing.T) {
 // TestLastArchiveBlock tests obtaining the state at the last (highest) block in the archive.
 func TestLastArchiveBlock(t *testing.T) {
 	for _, config := range initStates() {
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
+		for _, archiveType := range allArchiveTypes {
+			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+				continue
+			}
 			config := config
 			archiveType := archiveType
 
@@ -621,7 +638,10 @@ func TestPersistentState(t *testing.T) {
 		if strings.HasPrefix(config.name, "cpp-memory") || strings.HasPrefix(config.name, "go-Memory") {
 			continue
 		}
-		for _, archiveType := range []ArchiveType{LevelDbArchive, SqliteArchive, S4Archive} {
+		for _, archiveType := range allArchiveTypes {
+			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+				continue
+			}
 			archiveType := archiveType
 			config := config
 			t.Run(fmt.Sprintf("%s-%s", config.name, archiveType), func(t *testing.T) {
