@@ -79,7 +79,7 @@ func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, 
 
 func (h directHasher) updateHashesInternal(
 	id NodeId,
-	source NodeManager,
+	manager NodeManager,
 	path NodePath,
 	hashCollector *nodeHashCollector,
 ) (common.Hash, error) {
@@ -89,7 +89,7 @@ func (h directHasher) updateHashesInternal(
 	}
 
 	// Get write access to the node (hashes may be updated).
-	handle, err := source.getMutableNode(id)
+	handle, err := manager.getMutableNode(id)
 	if err != nil {
 		return hash, err
 	}
@@ -101,7 +101,7 @@ func (h directHasher) updateHashesInternal(
 		return hash, nil
 	}
 
-	hash, err = h.hash(id, handle.Get(), handle, source, path, hashCollector)
+	hash, err = h.hash(id, handle.Get(), handle, manager, path, hashCollector)
 	if err != nil {
 		return hash, err
 	}

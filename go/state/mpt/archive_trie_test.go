@@ -3,6 +3,7 @@ package mpt
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"os"
 	"reflect"
 	"testing"
@@ -64,6 +65,153 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 				if err != nil || got != want {
 					t.Errorf("wrong balance for block %d, got %v, wanted %v, err %v", i, got, want, err)
 				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config)
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer archive.Close()
+
+			addr := common.Address{1}
+			balance := common.Balance{0}
+
+			// Block 1 adds an actual change.
+			err = archive.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr},
+				Balances: []common.BalanceUpdate{
+					{Account: addr, Balance: balance},
+				},
+			}, nil)
+			if err != nil {
+				t.Errorf("failed to add block: %v", err)
+			}
+
+			// Block 2 is skipped.
+
+			// Block 3 is empty, without hints.
+			if err := archive.Add(3, common.Update{}, nil); err != nil {
+				t.Errorf("failed to add block: %v", err)
+			}
+
+			// Block 4 is empty, with hints.
+			if err := archive.Add(4, common.Update{}, []nodeHash{}); err != nil {
+				t.Errorf("failed to add block: %v", err)
+			}
+
+			for i := 0; i < 5; i++ {
+				got, err := archive.GetBalance(uint64(i), addr)
+				if err != nil || got != balance {
+					t.Errorf("wrong balance for block %d, got %v, wanted %v, err %v", i, got, balance, err)
+				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
+	for _, config := range allMptConfigs {
+		if config.HashStorageLocation != HashStoredWithNode {
+			continue
+		}
+		t.Run(config.Name, func(t *testing.T) {
+			live, err := OpenGoMemoryState(t.TempDir(), config)
+			if err != nil {
+				t.Fatalf("failed to open live trie: %v", err)
+			}
+			defer live.Close()
+
+			archiveDir := t.TempDir()
+			archive, err := OpenArchiveTrie(archiveDir, config)
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+			defer archive.Close()
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			blc1 := common.Balance{1}
+			blc2 := common.Balance{2}
+
+			// Block 1
+			err = errors.Join(
+				live.CreateAccount(addr1),
+				live.CreateAccount(addr2),
+				live.SetBalance(addr1, blc1),
+				live.SetBalance(addr2, blc2),
+			)
+			if err != nil {
+				t.Fatalf("failed to update live db: %v", err)
+			}
+			_, hints, err := live.UpdateHash()
+			if err != nil {
+				t.Fatalf("failed to get hash from live db: %v", err)
+			}
+			err = archive.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1, addr2},
+				Balances: []common.BalanceUpdate{
+					{Account: addr1, Balance: blc1},
+					{Account: addr2, Balance: blc2},
+				},
+			}, hints)
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			// Block 2
+			err = live.SetBalance(addr1, blc2)
+			if err != nil {
+				t.Fatalf("failed to update live db: %v", err)
+			}
+			_, hints, err = live.UpdateHash()
+			if err != nil {
+				t.Fatalf("failed to get hash from live db: %v", err)
+			}
+
+			err = archive.Add(2, common.Update{
+				Balances: []common.BalanceUpdate{
+					{Account: addr1, Balance: blc2},
+				},
+			}, hints)
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			// Block 4 -- larger range of data
+			update := common.Update{}
+			for i := 0; i < 100; i++ {
+				addr := common.Address{byte(i + 10)}
+				err = errors.Join(
+					live.CreateAccount(addr),
+					live.SetBalance(addr, blc1),
+				)
+				if err != nil {
+					t.Fatalf("failed to update live db: %v", err)
+				}
+				update.CreatedAccounts = append(update.CreatedAccounts, addr)
+				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1})
+			}
+			_, hints, err = live.UpdateHash()
+			if err != nil {
+				t.Fatalf("failed to get hash from live db: %v", err)
+			}
+			err = archive.Add(4, update, hints)
+			if err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			if err := errors.Join(live.Close(), archive.Close()); err != nil {
+				t.Fatalf("failed to close resources: %v", err)
+			}
+
+			if err := VerifyArchive(archiveDir, config, NilVerificationObserver{}); err != nil {
+				t.Errorf("failed to verify archive: %v", err)
 			}
 		})
 	}

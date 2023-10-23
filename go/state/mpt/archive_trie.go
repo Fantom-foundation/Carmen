@@ -140,27 +140,9 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 		hash, _, err = a.head.trie.UpdateHashes()
 	} else {
 		err = a.head.trie.setHashes(precomputedHashes)
-
-		// TODO: test empty updates!
-		found := false
-		for _, cur := range precomputedHashes {
-			if cur.path.Length() == 0 {
-				hash = cur.hash
-				found = true
-			}
+		if err == nil {
+			hash, err = a.head.GetHash()
 		}
-		if !found {
-			return fmt.Errorf("missing root hash in list of precomputed hashes")
-		}
-
-		/*
-			a.head.trie.Dump()
-
-			if err := a.head.trie.VisitTrie(&noDirtyNodes{}); err != nil {
-				panic(fmt.Sprintf("failed to check that all nodes are clean: %v\n", err))
-			}
-		*/
-
 	}
 	if err != nil {
 		return err
@@ -172,18 +154,6 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	a.rootsMutex.Unlock()
 	return nil
 }
-
-/*
-type noDirtyNodes struct{}
-
-func (noDirtyNodes) Visit(node Node, info NodeInfo) VisitResponse {
-	_, dirty := node.GetHash()
-	if dirty {
-		panic(fmt.Sprintf("Identified dirty node after update: %v", info.Id))
-	}
-	return VisitResponseContinue
-}
-*/
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
 	a.rootsMutex.Lock()
