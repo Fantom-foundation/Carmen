@@ -39,15 +39,15 @@ func (m *MockOperation[T]) EXPECT() *MockOperationMockRecorder[T] {
 }
 
 // Apply mocks base method.
-func (m *MockOperation[T]) Apply(context *T) {
+func (m *MockOperation[T]) Apply(t *testing.T, context *T) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Apply", context)
+	m.ctrl.Call(m, "Apply", t, context)
 }
 
 // Apply indicates an expected call of Apply.
-func (mr *MockOperationMockRecorder[T]) Apply(context any) *gomock.Call {
+func (mr *MockOperationMockRecorder[T]) Apply(t, context any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockOperation[T])(nil).Apply), context)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockOperation[T])(nil).Apply), t, context)
 }
 
 // Serialize mocks base method.
@@ -114,17 +114,17 @@ func (mr *MockCampaignMockRecorder[T]) CreateContext(t any) *gomock.Call {
 }
 
 // Deserialize mocks base method.
-func (m *MockCampaign[T]) Deserialize(arg0 *testing.T, arg1 []byte) []Operation[T] {
+func (m *MockCampaign[T]) Deserialize(arg0 []byte) []Operation[T] {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Deserialize", arg0, arg1)
+	ret := m.ctrl.Call(m, "Deserialize", arg0)
 	ret0, _ := ret[0].([]Operation[T])
 	return ret0
 }
 
 // Deserialize indicates an expected call of Deserialize.
-func (mr *MockCampaignMockRecorder[T]) Deserialize(arg0, arg1 any) *gomock.Call {
+func (mr *MockCampaignMockRecorder[T]) Deserialize(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockCampaign[T])(nil).Deserialize), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockCampaign[T])(nil).Deserialize), arg0)
 }
 
 // Init mocks base method.
