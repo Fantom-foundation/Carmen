@@ -148,13 +148,16 @@ func (s *inMemoryStock[I, V]) Get(index I) (V, error) {
 
 func (s *inMemoryStock[I, V]) Set(index I, value V) error {
 	if index >= I(len(s.values)) || index < 0 {
-		return fmt.Errorf("invalid index")
+		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, I(len(s.values)))
 	}
 	s.values[index] = value
 	return nil
 }
 
 func (s *inMemoryStock[I, V]) Delete(index I) error {
+	if index >= I(len(s.values)) || index < 0 {
+		return nil
+	}
 	s.freeList = append(s.freeList, index)
 	return nil
 }
