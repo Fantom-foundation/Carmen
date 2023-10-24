@@ -10,6 +10,7 @@ package fuzzing
 
 import (
 	reflect "reflect"
+	testing "testing"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -87,43 +88,43 @@ func (m *MockCampaign[T]) EXPECT() *MockCampaignMockRecorder[T] {
 }
 
 // Cleanup mocks base method.
-func (m *MockCampaign[T]) Cleanup(context *T) {
+func (m *MockCampaign[T]) Cleanup(t *testing.T, context *T) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Cleanup", context)
+	m.ctrl.Call(m, "Cleanup", t, context)
 }
 
 // Cleanup indicates an expected call of Cleanup.
-func (mr *MockCampaignMockRecorder[T]) Cleanup(context any) *gomock.Call {
+func (mr *MockCampaignMockRecorder[T]) Cleanup(t, context any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockCampaign[T])(nil).Cleanup), context)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockCampaign[T])(nil).Cleanup), t, context)
 }
 
 // CreateContext mocks base method.
-func (m *MockCampaign[T]) CreateContext() *T {
+func (m *MockCampaign[T]) CreateContext(t *testing.T) *T {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateContext")
+	ret := m.ctrl.Call(m, "CreateContext", t)
 	ret0, _ := ret[0].(*T)
 	return ret0
 }
 
 // CreateContext indicates an expected call of CreateContext.
-func (mr *MockCampaignMockRecorder[T]) CreateContext() *gomock.Call {
+func (mr *MockCampaignMockRecorder[T]) CreateContext(t any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContext", reflect.TypeOf((*MockCampaign[T])(nil).CreateContext))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContext", reflect.TypeOf((*MockCampaign[T])(nil).CreateContext), t)
 }
 
 // Deserialize mocks base method.
-func (m *MockCampaign[T]) Deserialize(arg0 []byte) []Operation[T] {
+func (m *MockCampaign[T]) Deserialize(arg0 *testing.T, arg1 []byte) []Operation[T] {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Deserialize", arg0)
+	ret := m.ctrl.Call(m, "Deserialize", arg0, arg1)
 	ret0, _ := ret[0].([]Operation[T])
 	return ret0
 }
 
 // Deserialize indicates an expected call of Deserialize.
-func (mr *MockCampaignMockRecorder[T]) Deserialize(arg0 any) *gomock.Call {
+func (mr *MockCampaignMockRecorder[T]) Deserialize(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockCampaign[T])(nil).Deserialize), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deserialize", reflect.TypeOf((*MockCampaign[T])(nil).Deserialize), arg0, arg1)
 }
 
 // Init mocks base method.

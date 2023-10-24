@@ -22,15 +22,15 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	campaign.EXPECT().Init().Times(1).Return(chains)
 	// init every loop of the campaign
 	context := &testContext{make([]testOp, 0, 6)}
-	campaign.EXPECT().CreateContext().Times(2).Return(context) // three campaign loops
-	campaign.EXPECT().Deserialize(gomock.Any()).Times(2).DoAndReturn(func(raw []byte) []Operation[testContext] {
+	campaign.EXPECT().CreateContext(t).Times(2).Return(context) // three campaign loops
+	campaign.EXPECT().Deserialize(t, gomock.Any()).Times(2).DoAndReturn(func(t *testing.T, raw []byte) []Operation[testContext] {
 		ops := make([]Operation[testContext], 0, len(raw))
 		for i := 0; i < len(raw); i++ {
 			ops = append(ops, testOp(raw[i]))
 		}
 		return ops
 	})
-	campaign.EXPECT().Cleanup(gomock.Any()).Times(2).Do(func(ctx *testContext) {
+	campaign.EXPECT().Cleanup(t, gomock.Any()).Times(2).Do(func(t *testing.T, ctx *testContext) {
 		ctx.executed = append(ctx.executed, testOp(terminalSymbol))
 		terminalSymbol++
 	})
