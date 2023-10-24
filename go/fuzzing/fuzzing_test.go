@@ -23,7 +23,7 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	// init every loop of the campaign
 	context := &testContext{make([]testOp, 0, 6)}
 	campaign.EXPECT().CreateContext(t).Times(2).Return(context) // two campaign loops
-	campaign.EXPECT().Deserialize(t, gomock.Any()).Times(2).DoAndReturn(func(t *testing.T, raw []byte) []Operation[testContext] {
+	campaign.EXPECT().Deserialize(gomock.Any()).Times(2).DoAndReturn(func(raw []byte) []Operation[testContext] {
 		ops := make([]Operation[testContext], 0, len(raw))
 		for i := 0; i < len(raw); i++ {
 			ops = append(ops, testOp(raw[i]))
@@ -67,7 +67,7 @@ type testContext struct {
 
 type testOp byte
 
-func (op testOp) Apply(c *testContext) {
+func (op testOp) Apply(t *testing.T, c *testContext) {
 	// only accumulate what was executed
 	c.executed = append(c.executed, op)
 }

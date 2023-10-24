@@ -15,7 +15,7 @@ type Operation[T any] interface {
 	// perform a required action to the system under test.
 	// The context passed to this method carries the system under test
 	// and its state. It is state-full to move from one step to another.
-	Apply(context *T)
+	Apply(t *testing.T, context *T)
 
 	// Serialize converts this operation to a byte array to be passed to the fuzzer.
 	// The output format is not defined, but it must be readable by deserialiser
@@ -55,7 +55,7 @@ type Campaign[T any] interface {
 	// The fuzzer loops over these operations
 	// and applies changes defined in them by calling Operation.Apply().
 	// This method is called once for each campaign loop to convert binary representation of Operations.
-	Deserialize(*testing.T, []byte) []Operation[T]
+	Deserialize([]byte) []Operation[T]
 
 	// Cleanup gets the context passed through this campaign and allows for closing and cleaning it.
 	// This method is called once for each campaign loop.
@@ -93,8 +93,8 @@ func Fuzz[T any](f TestingF, c Campaign[T]) {
 
 func fuzz[T any](t *testing.T, c Campaign[T], rawData []byte) {
 	ctx := c.CreateContext(t)
-	for _, op := range c.Deserialize(t, rawData) {
-		op.Apply(ctx)
+	for _, op := range c.Deserialize(rawData) {
+		op.Apply(t, ctx)
 	}
 	c.Cleanup(t, ctx)
 }
