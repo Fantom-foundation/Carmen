@@ -128,8 +128,6 @@ func (s *inMemoryStock[I, V]) New() (I, error) {
 	if lenFreeList > 0 {
 		index = s.freeList[lenFreeList-1]
 		s.freeList = s.freeList[0 : lenFreeList-1]
-		var value V
-		s.values[index] = value
 	} else {
 		var value V
 		s.values = append(s.values, value)
