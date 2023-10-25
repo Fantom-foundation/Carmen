@@ -15,7 +15,7 @@ import (
 type Archive interface {
 
 	// Add adds the changes of the given block to this archive.
-	Add(block uint64, update common.Update) error
+	Add(block uint64, update common.Update, hints any) error
 
 	// GetBlockHeight gets the maximum block height inserted so far. If there
 	// is no block in the archive, the empty flag is set instead.

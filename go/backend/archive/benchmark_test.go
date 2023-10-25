@@ -1,9 +1,10 @@
 package archive_test
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 const (
@@ -24,7 +25,7 @@ func BenchmarkAdding(b *testing.B) {
 			update.AppendCreateAccount(common.Address{i})
 			update.AppendBalanceUpdate(common.Address{i}, common.Balance{i})
 		}
-		if err := a.Add(1, update); err != nil {
+		if err := a.Add(1, update, nil); err != nil {
 			b.Fatalf("failed to add block; %s", err)
 		}
 
@@ -42,7 +43,7 @@ func BenchmarkAdding(b *testing.B) {
 				if err := update.Normalize(); err != nil {
 					b.Fatalf("failed to normalize update; %s", err)
 				}
-				if err := a.Add(block, update); err != nil {
+				if err := a.Add(block, update, nil); err != nil {
 					b.Fatalf("failed to add block; %s", err)
 				}
 				block++

@@ -323,8 +323,20 @@ func (s *Forest) VisitTrie(rootId NodeId, visitor NodeVisitor) error {
 	return err
 }
 
-func (s *Forest) updateHashesFor(id NodeId) (common.Hash, error) {
+func (s *Forest) updateHashesFor(id NodeId) (common.Hash, []nodeHash, error) {
 	return s.hasher.updateHashes(id, s)
+}
+
+func (s *Forest) setHashesFor(id NodeId, hashes []nodeHash) error {
+	for _, cur := range hashes {
+		write, err := s.getMutableNodeByPath(id, cur.path)
+		if err != nil {
+			return err
+		}
+		write.Get().SetHash(cur.hash)
+		write.Release()
+	}
+	return nil
 }
 
 func (s *Forest) getHashFor(id NodeId) (common.Hash, error) {
@@ -543,6 +555,44 @@ func (s *Forest) getMutableNode(id NodeId) (shared.WriteHandle[Node], error) {
 		return shared.WriteHandle[Node]{}, err
 	}
 	return instance.GetWriteHandle(), nil
+}
+
+func (s *Forest) getMutableNodeByPath(root NodeId, path NodePath) (shared.WriteHandle[Node], error) {
+	// Navigate down the trie using read access.
+	next := root
+	last := shared.ReadHandle[Node]{}
+	lastValid := false
+	for i := 0; i < path.Length(); i++ {
+		cur, err := s.getNode(next)
+		if lastValid {
+			last.Release()
+		}
+		if err != nil {
+			return shared.WriteHandle[Node]{}, err
+		}
+		last = cur
+		lastValid = true
+		switch n := cur.Get().(type) {
+		case *BranchNode:
+			next = n.children[path.Get(byte(i))]
+		case *AccountNode:
+			next = n.storage
+		case *ExtensionNode:
+			next = n.next
+		default:
+			if lastValid {
+				last.Release()
+			}
+			return shared.WriteHandle[Node]{}, fmt.Errorf("no node for path: %v", path)
+		}
+	}
+
+	// The last step requires write access.
+	res, err := s.getMutableNode(next)
+	if lastValid {
+		last.Release()
+	}
+	return res, err
 }
 
 func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) {

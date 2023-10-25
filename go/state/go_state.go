@@ -41,6 +41,7 @@ type GoSchema interface {
 	setCode(address common.Address, code []byte) (err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
 	GetHash() (hash common.Hash, err error)
+	UpdateHash() (hash common.Hash, updateHints any, err error)
 	Flush() error
 	Close() error
 	common.MemoryFootprintProvider
@@ -69,8 +70,9 @@ func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) Stat
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 type archiveUpdate = struct {
-	block  uint64
-	update *common.Update // nil to signal a flush
+	block       uint64
+	update      *common.Update // nil to signal a flush
+	updateHints any            // an optional field for passing update hints from the LiveDB to the Archive
 }
 
 func (s *GoState) Apply(block uint64, update common.Update) error {
@@ -80,7 +82,8 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	}
 
 	// Finish the block by refreshing the hash.
-	if _, err := s.GetHash(); err != nil {
+	_, updateHints, err := s.UpdateHash()
+	if err != nil {
 		return err
 	}
 
@@ -102,7 +105,7 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 						flush <- true
 					} else {
 						// Otherwise, process the update.
-						issue := s.archive.Add(update.block, *update.update)
+						issue := s.archive.Add(update.block, *update.update, update.updateHints)
 						if issue != nil {
 							err <- issue
 						}
@@ -116,8 +119,8 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 			s.archiveWriterError = err
 		}
 
-		// Send the update to the writer to be processessed asynchroniously.
-		s.archiveWriter <- archiveUpdate{block, &update}
+		// Send the update to the writer to be processed asynchronously.
+		s.archiveWriter <- archiveUpdate{block, &update, updateHints}
 
 		// Drain potential errors, but do not wait for them.
 		var last error
@@ -167,6 +170,10 @@ func (s *GoState) Flush() (lastErr error) {
 }
 
 func (s *GoState) Close() (lastErr error) {
+	if err := s.Flush(); err != nil {
+		return err
+	}
+
 	if err := s.GoSchema.Close(); err != nil {
 		lastErr = err
 	}

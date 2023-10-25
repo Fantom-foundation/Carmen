@@ -69,7 +69,9 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 	return VerifyFileForest(directory, config, roots, observer)
 }
 
-func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
+func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
+	precomputedHashes, _ := hint.([]nodeHash)
+
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()
 
@@ -81,7 +83,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 
 	// Mark skipped blocks as having no changes.
 	if uint64(len(a.roots)) < block {
-		lastHash, err := a.head.trie.GetHash()
+		lastHash, err := a.head.GetHash()
 		if err != nil {
 			a.rootsMutex.Unlock()
 			return err
@@ -132,7 +134,16 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update) error {
 	}
 
 	// Refresh hashes.
-	hash, err := a.head.GetHash()
+	var err error
+	var hash common.Hash
+	if precomputedHashes == nil {
+		hash, _, err = a.head.trie.UpdateHashes()
+	} else {
+		err = a.head.trie.setHashes(precomputedHashes)
+		if err == nil {
+			hash, err = a.head.GetHash()
+		}
+	}
 	if err != nil {
 		return err
 	}
