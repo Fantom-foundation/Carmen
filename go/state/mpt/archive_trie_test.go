@@ -149,7 +149,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to update live db: %v", err)
 			}
-			_, hints, err := live.UpdateHash()
+			hints, err := live.FinishBlock()
 			if err != nil {
 				t.Fatalf("failed to get hash from live db: %v", err)
 			}
@@ -169,7 +169,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to update live db: %v", err)
 			}
-			_, hints, err = live.UpdateHash()
+			hints, err = live.FinishBlock()
 			if err != nil {
 				t.Fatalf("failed to get hash from live db: %v", err)
 			}
@@ -197,7 +197,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				update.CreatedAccounts = append(update.CreatedAccounts, addr)
 				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1})
 			}
-			_, hints, err = live.UpdateHash()
+			hints, err = live.FinishBlock()
 			if err != nil {
 				t.Fatalf("failed to get hash from live db: %v", err)
 			}

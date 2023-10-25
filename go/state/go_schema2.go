@@ -260,9 +260,9 @@ func (s *GoSchema2) GetHash() (hash common.Hash, err error) {
 	return hash, nil
 }
 
-func (s *GoSchema2) UpdateHash() (hash common.Hash, _ any, err error) {
-	hash, err = s.GetHash()
-	return hash, nil, err
+func (s *GoSchema2) FinishBlock() (_ any, err error) {
+	// Nothing to do.
+	return nil, err
 }
 
 func (s *GoSchema2) Flush() (lastErr error) {
