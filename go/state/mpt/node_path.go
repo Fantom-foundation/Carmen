@@ -4,9 +4,9 @@ import (
 	"strings"
 )
 
-// NodePath is a simple navigation path into a MPT structure that can be used
-// to effectively address nodes by their position. Unlike Path instances,
-// describing the path encoding the key value of some object stored in a MPT,
+// NodePath is a simple navigation path into an MPT structure that can be used
+// to effectively address nodes by their positions. Unlike Path instances,
+// describing the path encoding the key value of some object stored in an MPT,
 // this path merely addresses the navigation paths on a node bases. In
 // particular, it ignores path sections introduced by extension nodes and does
 // not terminate at the account node level.
