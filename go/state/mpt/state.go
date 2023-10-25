@@ -191,12 +191,13 @@ func (s *MptState) GetCodeHash(address common.Address) (hash common.Hash, err er
 }
 
 func (s *MptState) GetHash() (hash common.Hash, err error) {
-	hash, _, err = s.UpdateHash()
+	hash, _, err = s.trie.UpdateHashes()
 	return hash, err
 }
 
-func (s *MptState) UpdateHash() (hash common.Hash, hint any, err error) {
-	return s.trie.UpdateHashes()
+func (s *MptState) FinishBlock() (any, error) {
+	_, hints, err := s.trie.UpdateHashes()
+	return hints, err
 }
 
 func (s *MptState) Visit(visitor NodeVisitor) error {

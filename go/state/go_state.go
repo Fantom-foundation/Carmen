@@ -41,7 +41,7 @@ type GoSchema interface {
 	setCode(address common.Address, code []byte) (err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
 	GetHash() (hash common.Hash, err error)
-	UpdateHash() (hash common.Hash, updateHints any, err error)
+	FinishBlock() (archiveUpdateHints any, err error)
 	Flush() error
 	Close() error
 	common.MemoryFootprintProvider
@@ -82,7 +82,7 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	}
 
 	// Finish the block by refreshing the hash.
-	_, updateHints, err := s.UpdateHash()
+	archiveUpdateHints, err := s.FinishBlock()
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		}
 
 		// Send the update to the writer to be processed asynchronously.
-		s.archiveWriter <- archiveUpdate{block, &update, updateHints}
+		s.archiveWriter <- archiveUpdate{block, &update, archiveUpdateHints}
 
 		// Drain potential errors, but do not wait for them.
 		var last error
