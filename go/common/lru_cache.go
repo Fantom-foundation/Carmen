@@ -103,6 +103,15 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted b
 	return
 }
 
+func (c *Cache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool) {
+	current, present = c.Get(key)
+	if !present {
+		evictedKey, evictedValue, evicted = c.Set(key, val)
+	}
+
+	return current, present, evictedKey, evictedValue, evicted
+}
+
 // Remove deletes the key from the map and returns the deleted value
 func (c *Cache[K, V]) Remove(key K) (original V, exists bool) {
 	item, exists := c.cache[key]

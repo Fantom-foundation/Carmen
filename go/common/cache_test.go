@@ -63,6 +63,60 @@ func TestCacheRemove(t *testing.T) {
 	}
 }
 
+func TestCache_Clear(t *testing.T) {
+	for name, c := range initCaches(3) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			keys := []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000}
+			for _, key := range keys {
+				c.Set(key, key+200)
+			}
+
+			c.Clear()
+
+			for _, key := range keys {
+				if val, exists := c.Get(key); exists {
+					t.Errorf("key should not exist: %d -> %d", key, val)
+				}
+			}
+
+		})
+	}
+}
+
+func TestCache_Iterate(t *testing.T) {
+	for name, c := range initCaches(3) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			expected := map[int]int{
+				1:  100,
+				10: 300,
+				30: 400,
+			}
+
+			for k, v := range expected {
+				c.Set(k, v)
+			}
+
+			data := make(map[int]int)
+			c.Iterate(func(key int, val int) bool {
+				data[key] = val
+				return true
+			})
+
+			if len(data) != len(expected) {
+				t.Errorf("wrong number of keys iterated: %v", data)
+			}
+
+			for k, v := range expected {
+				if got, want := data[k], v; got != want {
+					t.Errorf("wrong value for key: %d -> %d != %d", 1, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestSettingExisting(t *testing.T) {
 	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
@@ -181,8 +235,18 @@ type cache[K any, V any] interface {
 	// Remove deletes the key from the map and returns the deleted value
 	Remove(key K) (original V, exists bool)
 
+	// GetOrSet tries to locate the input key in the cache. IF the key exists, its value is returned.
+	// If the key does not exist, the input value is stored under this key.
+	// When the key is stored in this cache, another key and value may be evicted.
+	// This method returns true if the key was present in the cache. It also returns if another key was evicted due
+	// to inserting this key.
+	GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool)
+
 	// Iterate all cached entries - calls the callback for each key-value pair in the cache
 	Iterate(callback func(K, V) bool)
+
+	// Clear removes all elements from the cahce.
+	Clear()
 }
 
 func initCaches(capacity int) map[string]cache[int, int] {

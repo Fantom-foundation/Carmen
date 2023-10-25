@@ -212,6 +212,17 @@ func (c *NWaysCache[K, V]) Iterate(callback func(K, V) bool) {
 	}
 }
 
+func (c *NWaysCache[K, V]) Clear() {
+	for i := 0; i < int(c.numsets); i += 1 {
+		c.locks[i*PaddingMultiplier].Lock()
+		for j := 0; j < int(c.nways); j++ {
+			var empty nWaysCacheEntry[K, V]
+			c.items[i*int(c.numsets)+j] = empty
+		}
+		c.locks[i*PaddingMultiplier].Unlock()
+	}
+}
+
 // GetMemoryFootprint provides the size of the cache in memory in bytes
 // If V is a pointer type, it needs to provide the size of a referenced value.
 // If the size is different for individual values, use GetDynamicMemoryFootprint instead.
