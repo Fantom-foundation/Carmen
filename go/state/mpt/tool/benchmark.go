@@ -3,8 +3,12 @@ package main
 import (
 	"fmt"
 	"io/fs"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
+	"runtime"
 	"runtime/pprof"
 	"time"
 
@@ -19,6 +23,7 @@ var Benchmark = cli.Command{
 	Usage:  "benchmarks MPT performance by filling data into a fresh instance",
 	Flags: []cli.Flag{
 		&archiveFlag,
+		&diagnosticsFlag,
 		&numBlocksFlag,
 		&numInsertsPerBlockFlag,
 		&reportIntervalFlag,
@@ -32,6 +37,11 @@ var (
 	archiveFlag = cli.BoolFlag{
 		Name:  "archive",
 		Usage: "enables archive mode",
+	}
+	diagnosticsFlag = cli.IntFlag{
+		Name:  "diagnostic-port",
+		Usage: "enable hosting of a realtime diagnostic server by providing a port",
+		Value: 0,
 	}
 	numBlocksFlag = cli.IntFlag{
 		Name:  "num-blocks",
@@ -67,6 +77,18 @@ func benchmark(context *cli.Context) error {
 	tmpDir := context.String(tmpDirFlag.Name)
 	if len(tmpDir) == 0 {
 		tmpDir = os.TempDir()
+	}
+
+	diagnosticPort := context.Int(diagnosticsFlag.Name)
+	if diagnosticPort > 0 && diagnosticPort < (1<<16) {
+		fmt.Printf("Starting diagnostic server at port http://localhost:%d (see https://pkg.go.dev/net/http/pprof#hdr-Usage_examples for usage examples)\n", diagnosticPort)
+		fmt.Printf("Block and mutex sampling rate is set to 100%% for diagnostics, which may impact overall performance\n")
+		go func() {
+			addr := fmt.Sprintf("localhost:%d", diagnosticPort)
+			log.Println(http.ListenAndServe(addr, nil))
+		}()
+		runtime.SetBlockProfileRate(1)
+		runtime.SetMutexProfileFraction(1)
 	}
 
 	start := time.Now()
