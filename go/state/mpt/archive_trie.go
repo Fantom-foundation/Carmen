@@ -195,7 +195,7 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 	if err != nil {
 		return nil, err
 	}
-	return a.head.code[info.CodeHash], nil
+	return a.head.GetCodeForHash(info.CodeHash), nil
 }
 
 func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce common.Nonce, err error) {
