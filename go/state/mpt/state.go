@@ -7,6 +7,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -21,10 +22,11 @@ import (
 // The main role of the MptState is to provide an adapter between a LiveTrie and
 // Carmen's State interface. Also, it retains an index of contract codes.
 type MptState struct {
-	trie     *LiveTrie
-	code     map[common.Hash][]byte
-	codefile string
-	hasher   hash.Hash
+	trie      *LiveTrie
+	code      map[common.Hash][]byte
+	codeMutex sync.Mutex
+	codefile  string
+	hasher    hash.Hash
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
@@ -149,7 +151,17 @@ func (s *MptState) GetCode(address common.Address) (value []byte, err error) {
 	if !exists {
 		return nil, nil
 	}
-	return s.code[info.CodeHash], nil
+	s.codeMutex.Lock()
+	res := s.code[info.CodeHash]
+	s.codeMutex.Unlock()
+	return res, nil
+}
+
+func (s *MptState) GetCodeForHash(hash common.Hash) []byte {
+	s.codeMutex.Lock()
+	res := s.code[hash]
+	s.codeMutex.Unlock()
+	return res
 }
 
 func (s *MptState) GetCodeSize(address common.Address) (size int, err error) {
@@ -178,7 +190,9 @@ func (s *MptState) SetCode(address common.Address, code []byte) (err error) {
 		return nil
 	}
 	info.CodeHash = codeHash
+	s.codeMutex.Lock()
 	s.code[codeHash] = code
+	s.codeMutex.Unlock()
 	return s.trie.SetAccountInfo(address, info)
 }
 
