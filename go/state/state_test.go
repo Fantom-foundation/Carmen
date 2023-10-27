@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"math/big"
@@ -51,17 +52,6 @@ func initStates() []namedStateConfig {
 	return res
 }
 
-func isValidArchiveOption(config *namedStateConfig, archiveType ArchiveType) bool {
-	// S4 and S5 configurations must not be mixed.
-	if strings.Contains(config.name, "s4") && archiveType == S5Archive {
-		return false
-	}
-	if strings.Contains(config.name, "s5") && archiveType == S4Archive {
-		return false
-	}
-	return true
-}
-
 func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedStateConfig, s directUpdateState)) {
 	for _, config := range initStates() {
 		config := config
@@ -69,7 +59,7 @@ func testEachConfiguration(t *testing.T, test func(t *testing.T, config *namedSt
 			t.Parallel()
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				if _, ok := err.(UnsupportedConfiguration); ok {
+				if errors.Is(err, UnsupportedConfiguration) {
 					t.Skipf("unsupported state %s: %v", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s: %v", config.name, err)
@@ -437,7 +427,7 @@ func TestDeletingAccountsClearsStorage(t *testing.T) {
 func TestArchive(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+			if archiveType == NoArchive {
 				continue
 			}
 			config := config
@@ -447,7 +437,7 @@ func TestArchive(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("unsupported state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
@@ -555,7 +545,7 @@ func TestArchive(t *testing.T) {
 func TestLastArchiveBlock(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+			if archiveType == NoArchive {
 				continue
 			}
 			config := config
@@ -569,7 +559,7 @@ func TestLastArchiveBlock(t *testing.T) {
 				}
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("unsupported state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
@@ -639,7 +629,7 @@ func TestPersistentState(t *testing.T) {
 			continue
 		}
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+			if archiveType == NoArchive {
 				continue
 			}
 			archiveType := archiveType
@@ -650,7 +640,7 @@ func TestPersistentState(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("unsupported state %s; %s", t.Name(), err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", t.Name(), err)
@@ -690,7 +680,7 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			original, err := config.createState(t.TempDir())
 			if err != nil {
-				if _, ok := err.(UnsupportedConfiguration); ok {
+				if errors.Is(err, UnsupportedConfiguration) {
 					t.Skipf("unsupported state %s; %s", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s; %s", config.name, err)
@@ -788,7 +778,7 @@ func TestSnapshotCanBeCreatedAndVerified(t *testing.T) {
 		t.Run(config.name, func(t *testing.T) {
 			original, err := config.createState(t.TempDir())
 			if err != nil {
-				if _, ok := err.(UnsupportedConfiguration); ok {
+				if errors.Is(err, UnsupportedConfiguration) {
 					t.Skipf("unsupported state %s; %s", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s; %s", config.name, err)

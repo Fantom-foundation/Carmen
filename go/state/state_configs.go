@@ -113,14 +113,10 @@ type Parameters struct {
 	Archive   ArchiveType
 }
 
-// UnsupportedConfiguration is the type of error returned if unsupported configuration
+// UnsupportedConfiguration is the error returned if unsupported configuration
 // parameters have been specified. The text may contain further details regarding the
 // unsupported feature.
-type UnsupportedConfiguration string
-
-func (u UnsupportedConfiguration) Error() string {
-	return string(u)
-}
+const UnsupportedConfiguration = common.ConstError("unsupported configuration")
 
 // NewState is the public interface fro creating Carmen state instances. If for the
 // given parameters a state can be constructed, the resulting state is returned. If
@@ -145,7 +141,7 @@ func NewState(params Parameters) (State, error) {
 	case CppLevelDb:
 		return newCppLevelDbBasedState(params)
 	default:
-		return nil, UnsupportedConfiguration(fmt.Sprintf("unsupported variant: '%s'", params.Variant))
+		return nil, fmt.Errorf("%w: unknown variant %s", UnsupportedConfiguration, params.Variant)
 	}
 }
 
@@ -252,7 +248,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("the go implementation only supports schemas 1,2,3")
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -429,7 +425,7 @@ func newGoFileState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("the go implementation only supports schemas 1,2,3")
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -602,7 +598,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("the go implementation only supports schemas 1,2,3")
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -731,7 +727,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("the go implementation only supports schemas 1,2,3")
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1,2,3, got %d", UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -860,7 +856,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("the go implementation only supports schemas 1,2,3")
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1,2,3, got %d", UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)

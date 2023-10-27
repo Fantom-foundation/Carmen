@@ -36,7 +36,7 @@ func newCppState(impl C.enum_StateImpl, params Parameters) (State, error) {
 
 	state := C.Carmen_OpenState(C.C_Schema(params.Schema), impl, C.enum_StateImpl(params.Archive), dir, C.int(len(params.Directory)))
 	if state == unsafe.Pointer(nil) {
-		return nil, UnsupportedConfiguration(fmt.Sprintf("failed to create C++ state instance for parameters %v", params))
+		return nil, fmt.Errorf("%w: failed to create C++ state instance for parameters %v", UnsupportedConfiguration, params)
 	}
 
 	return wrapIntoSyncedState(&CppState{
