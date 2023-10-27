@@ -2073,6 +2073,71 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
+func TestExtensionNode_SetSlot_NonExistingAccount_PartialPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			path: []Nibble{1, 2, 3},
+			next: &Branch{children: Children{
+				1: &Account{address: common.Address{0x12, 0x31}, info: info},
+				2: &Account{address: common.Address{0x12, 0x32}, info: info},
+			}},
+		},
+	)
+
+	after, _ := ctxt.Clone(id)
+
+	ctxt.Check(t, id)
+
+	addr := common.Address{0x12}
+	path := addressToNibbles(addr)
+	key := common.Key{}
+	value := common.Value{1}
+	handle := node.GetWriteHandle()
+	if newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, false, newRoot, changed, err)
+	}
+	handle.Release()
+
+	ctxt.ExpectEqualTries(t, after, id)
+}
+
+func TestExtensionNode_Frozen_SetSlot_NonExistingAccount_PartialPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+	info := AccountInfo{Nonce: common.Nonce{1}}
+
+	id, node := ctxt.Build(
+		&Extension{
+			path: []Nibble{1, 2, 3},
+			next: &Branch{children: Children{
+				1: &Account{address: common.Address{0x12, 0x31}, info: info},
+				2: &Account{address: common.Address{0x12, 0x32}, info: info},
+			}},
+		},
+	)
+
+	ctxt.Freeze(id)
+	after, _ := ctxt.Clone(id)
+
+	ctxt.Check(t, id)
+
+	addr := common.Address{0x12}
+	path := addressToNibbles(addr)
+	key := common.Key{}
+	value := common.Value{1}
+	handle := node.GetWriteHandle()
+	if newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value); newRoot != id || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", id, false, newRoot, changed, err)
+	}
+	handle.Release()
+
+	ctxt.ExpectEqualTries(t, after, id)
+}
+
 func TestExtensionNode_Release(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -4302,7 +4367,7 @@ func (c *nodeContext) nextIndex() uint64 {
 func (c *nodeContext) Check(t *testing.T, id NodeId) {
 	handle := c.tryGetNode(t, id)
 	defer handle.Release()
-	if err := handle.Get().Check(c, nil); err != nil {
+	if err := handle.Get().Check(c, id, nil); err != nil {
 		handle.Get().Dump(c, id, "")
 		t.Fatalf("inconsistent node structure encountered:\n%v", err)
 	}

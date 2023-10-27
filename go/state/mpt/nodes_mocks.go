@@ -36,17 +36,17 @@ func (m *MockNode) EXPECT() *MockNodeMockRecorder {
 }
 
 // Check mocks base method.
-func (m *MockNode) Check(source NodeSource, path []Nibble) error {
+func (m *MockNode) Check(source NodeSource, thisId NodeId, path []Nibble) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", source, path)
+	ret := m.ctrl.Call(m, "Check", source, thisId, path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Check indicates an expected call of Check.
-func (mr *MockNodeMockRecorder) Check(source, path interface{}) *gomock.Call {
+func (mr *MockNodeMockRecorder) Check(source, thisId, path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockNode)(nil).Check), source, path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockNode)(nil).Check), source, thisId, path)
 }
 
 // ClearStorage mocks base method.
@@ -590,17 +590,17 @@ func (m *MockleafNode) EXPECT() *MockleafNodeMockRecorder {
 }
 
 // Check mocks base method.
-func (m *MockleafNode) Check(source NodeSource, path []Nibble) error {
+func (m *MockleafNode) Check(source NodeSource, thisId NodeId, path []Nibble) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", source, path)
+	ret := m.ctrl.Call(m, "Check", source, thisId, path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Check indicates an expected call of Check.
-func (mr *MockleafNodeMockRecorder) Check(source, path interface{}) *gomock.Call {
+func (mr *MockleafNodeMockRecorder) Check(source, thisId, path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockleafNode)(nil).Check), source, path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockleafNode)(nil).Check), source, thisId, path)
 }
 
 // ClearStorage mocks base method.
