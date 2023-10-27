@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -204,7 +205,7 @@ func runForEachCppConfig(t *testing.T, test func(*testing.T, directUpdateState))
 			t.Parallel()
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				if _, ok := err.(UnsupportedConfiguration); ok {
+				if errors.Is(err, UnsupportedConfiguration) {
 					t.Skipf("failed to initialize state %s: %v", config.name, err)
 				} else {
 					t.Fatalf("failed to initialize state %s: %v", config.name, err)

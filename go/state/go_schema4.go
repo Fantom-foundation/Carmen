@@ -1,6 +1,9 @@
 package state
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
@@ -13,9 +16,15 @@ type goSchema4 struct {
 }
 
 func newS4State(params Parameters, state *mpt.MptState) (State, error) {
+	if params.Archive == S5Archive {
+		return nil, errors.Join(
+			fmt.Errorf("%w: cannot use archive %v with schema 4", UnsupportedConfiguration, params.Archive),
+			state.Close(),
+		)
+	}
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, state.Close())
 	}
 	return newGoState(&goSchema4{
 		MptState: state,
