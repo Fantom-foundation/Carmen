@@ -366,7 +366,7 @@ func (f *Forest) Freeze(id NodeId) error {
 func (s *Forest) Flush() error {
 	// Get snapshot of set of dirty Node IDs.
 	s.dirtyMutex.Lock()
-	ids := make([]NodeId, len(s.dirty))
+	ids := make([]NodeId, 0, len(s.dirty))
 	for id := range s.dirty {
 		ids = append(ids, id)
 	}
@@ -468,7 +468,7 @@ func (s *Forest) Check(rootId NodeId) error {
 		return err
 	}
 	defer root.Release()
-	return root.Get().Check(s, make([]Nibble, 0, common.AddressSize*2))
+	return root.Get().Check(s, rootId, make([]Nibble, 0, common.AddressSize*2))
 }
 
 // -- NodeManager interface --

@@ -181,7 +181,7 @@ type Node interface {
 	// induced sub-tree. It is mainly intended to validate invariants in unit
 	// tests. It may be very costly for larger instances since it requires a
 	// full tree-scan (linear in size of the trie).
-	Check(source NodeSource, path []Nibble) error
+	Check(source NodeSource, thisId NodeId, path []Nibble) error
 
 	// Dump dumps this node and its sub-trees to the console. It is mainly
 	// intended for debugging and may be very costly for larger instances.
@@ -318,7 +318,7 @@ func (e EmptyNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
 	return nil
 }
 
-func (EmptyNode) Check(NodeSource, []Nibble) error {
+func (EmptyNode) Check(NodeSource, NodeId, []Nibble) error {
 	// No invariants to be checked.
 	return nil
 }
@@ -624,7 +624,7 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 	return nil
 }
 
-func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
+func (n *BranchNode) Check(source NodeSource, thisId NodeId, path []Nibble) error {
 	// Checked invariants:
 	//  - must have 2+ children
 	//  - child trees must be error free
@@ -638,7 +638,7 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 
 		if handle, err := source.getNode(child); err == nil {
 			defer handle.Release()
-			if err := handle.Get().Check(source, append(path, Nibble(i))); err != nil {
+			if err := handle.Get().Check(source, child, append(path, Nibble(i))); err != nil {
 				errs = append(errs, err)
 			}
 		} else {
@@ -650,12 +650,12 @@ func (n *BranchNode) Check(source NodeSource, path []Nibble) error {
 			if err != nil {
 				errs = append(errs, err)
 			} else if got := n.hashes[i]; want != got {
-				errs = append(errs, fmt.Errorf("hash for child %d invalid\nwant: %v\ngot: %v\n", i, want, got))
+				errs = append(errs, fmt.Errorf("in node %v the hash for child %d is invalid\nwant: %v\ngot: %v\n", thisId, i, want, got))
 			}
 		}
 	}
 	if numChildren < 2 {
-		errs = append(errs, fmt.Errorf("insufficient child nodes: %d", numChildren))
+		errs = append(errs, fmt.Errorf("node %v has an insufficient number of child nodes: %d", thisId, numChildren))
 	}
 	return errors.Join(errs...)
 }
@@ -1004,7 +1004,7 @@ func (n *ExtensionNode) SetValue(manager NodeManager, thisId NodeId, this shared
 }
 
 func (n *ExtensionNode) SetSlot(manager NodeManager, thisId NodeId, this shared.WriteHandle[Node], address common.Address, path []Nibble, key common.Key, value common.Value) (NodeId, bool, error) {
-	return n.setNextNode(manager, thisId, this, path, value == (common.Value{}),
+	return n.setNextNode(manager, thisId, this, path, true,
 		func(next NodeId, node shared.WriteHandle[Node], path []Nibble) (NodeId, bool, error) {
 			return node.Get().SetSlot(manager, next, node, address, path, key, value)
 		},
@@ -1065,7 +1065,7 @@ func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
+func (n *ExtensionNode) Check(source NodeSource, thisId NodeId, path []Nibble) error {
 	// Checked invariants:
 	//  - extension path have a length > 0
 	//  - extension can only be followed by a branch
@@ -1073,10 +1073,10 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 	//  - hash of sub-tree is either dirty or correct
 	errs := []error{}
 	if n.path.Length() <= 0 {
-		errs = append(errs, fmt.Errorf("extension path must not be empty"))
+		errs = append(errs, fmt.Errorf("node %v - extension path must not be empty", thisId))
 	}
 	if !n.next.IsBranch() {
-		errs = append(errs, fmt.Errorf("extension path must be followed by a branch"))
+		errs = append(errs, fmt.Errorf("node %v - extension path must be followed by a branch", thisId))
 	}
 	if handle, err := source.getNode(n.next); err == nil {
 		defer handle.Release()
@@ -1084,7 +1084,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 		for i := 0; i < n.path.Length(); i++ {
 			extended = append(extended, n.path.Get(i))
 		}
-		if err := handle.Get().Check(source, extended); err != nil {
+		if err := handle.Get().Check(source, n.next, extended); err != nil {
 			errs = append(errs, err)
 		}
 	} else {
@@ -1095,7 +1095,7 @@ func (n *ExtensionNode) Check(source NodeSource, path []Nibble) error {
 		if err != nil {
 			errs = append(errs, err)
 		} else if want != n.nextHash {
-			errs = append(errs, fmt.Errorf("next node hash invalid\nwant: %v\ngot: %v\n", want, n.nextHash))
+			errs = append(errs, fmt.Errorf("node %v - next node hash invalid\nwant: %v\ngot: %v\n", thisId, want, n.nextHash))
 		}
 	}
 	return errors.Join(errs...)
@@ -1483,7 +1483,7 @@ func (n *AccountNode) Freeze(manager NodeManager, this shared.WriteHandle[Node])
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
+func (n *AccountNode) Check(source NodeSource, thisId NodeId, path []Nibble) error {
 	// Checked invariants:
 	//  - account information must not be empty
 	//  - the account is at a correct position in the trie
@@ -1493,17 +1493,17 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 
 	fullPath := AddressToNibblePath(n.address, source)
 	if !IsPrefixOf(path, fullPath[:]) {
-		errs = append(errs, fmt.Errorf("account node %v located in wrong branch: %v", n.address, path))
+		errs = append(errs, fmt.Errorf("node %v - account node %v located in wrong branch: %v", thisId, n.address, path))
 	}
 
 	if n.info.IsEmpty() {
-		errs = append(errs, fmt.Errorf("account information must not be empty"))
+		errs = append(errs, fmt.Errorf("node %v - account information must not be empty", thisId))
 	}
 
 	if !n.storage.IsEmpty() {
 		if node, err := source.getNode(n.storage); err == nil {
 			defer node.Release()
-			if err := node.Get().Check(source, make([]Nibble, 0, common.KeySize*2)); err != nil {
+			if err := node.Get().Check(source, n.storage, make([]Nibble, 0, common.KeySize*2)); err != nil {
 				errs = append(errs, err)
 			}
 		} else {
@@ -1517,7 +1517,7 @@ func (n *AccountNode) Check(source NodeSource, path []Nibble) error {
 			maxPathLength = 64
 		}
 		if got, want := n.pathLength, byte(maxPathLength-len(path)); got != want {
-			errs = append(errs, fmt.Errorf("invalid path length, wanted %d, got %d", want, got))
+			errs = append(errs, fmt.Errorf("node %v - invalid path length, wanted %d, got %d", thisId, want, got))
 		}
 	}
 
@@ -1715,7 +1715,7 @@ func (n *ValueNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
 	return nil
 }
 
-func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
+func (n *ValueNode) Check(source NodeSource, thisId NodeId, path []Nibble) error {
 	// Checked invariants:
 	//  - value must not be empty
 	//  - values are in the right position of the trie
@@ -1724,16 +1724,16 @@ func (n *ValueNode) Check(source NodeSource, path []Nibble) error {
 
 	fullPath := KeyToNibblePath(n.key, source)
 	if !IsPrefixOf(path, fullPath[:]) {
-		errs = append(errs, fmt.Errorf("value node %v located in wrong branch: %v", n.key, path))
+		errs = append(errs, fmt.Errorf("node %v - value node %v located in wrong branch: %v", thisId, n.key, path))
 	}
 
 	if n.value == (common.Value{}) {
-		errs = append(errs, fmt.Errorf("value slot must not be empty"))
+		errs = append(errs, fmt.Errorf("node %v - value slot must not be empty", thisId))
 	}
 
 	if source.getConfig().TrackSuffixLengthsInLeafNodes {
 		if got, want := n.pathLength, byte(64-len(path)); got != want {
-			errs = append(errs, fmt.Errorf("invalid path length, wanted %d, got %d", want, got))
+			errs = append(errs, fmt.Errorf("node %v - invalid path length, wanted %d, got %d", thisId, want, got))
 		}
 	}
 
