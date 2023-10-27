@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -2891,7 +2892,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("failed to initialize state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
@@ -2923,7 +2924,7 @@ func TestCarmenBulkLoadsCanBeInterleavedWithRegularUpdates(t *testing.T) {
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("failed to initialize state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
@@ -2990,7 +2991,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 				t.Parallel()
 				state, err := config.createState(t.TempDir())
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("failed to initialize state %s: %v", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s: %v", config.name, err)
@@ -3107,7 +3108,7 @@ func TestPersistentStateDB(t *testing.T) {
 			continue
 		}
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+			if archiveType == NoArchive {
 				continue
 			}
 			config := config
@@ -3117,7 +3118,7 @@ func TestPersistentStateDB(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("failed to initialize state %s: %v", t.Name(), err)
 					} else {
 						t.Fatalf("failed to initialize state %s: %v", t.Name(), err)
@@ -3297,7 +3298,7 @@ func toKey(key uint64) common.Key {
 func TestStateDBArchive(t *testing.T) {
 	for _, config := range initStates() {
 		for _, archiveType := range allArchiveTypes {
-			if archiveType == NoArchive || !isValidArchiveOption(&config, archiveType) {
+			if archiveType == NoArchive {
 				continue
 			}
 			config := config
@@ -3307,7 +3308,7 @@ func TestStateDBArchive(t *testing.T) {
 				dir := t.TempDir()
 				s, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("failed to initialize state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
@@ -3372,7 +3373,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 				dir := t.TempDir()
 				state, err := config.createStateWithArchive(dir, archiveType)
 				if err != nil {
-					if _, ok := err.(UnsupportedConfiguration); ok {
+					if errors.Is(err, UnsupportedConfiguration) {
 						t.Skipf("failed to initialize state %s; %s", config.name, err)
 					} else {
 						t.Fatalf("failed to initialize state %s; %s", config.name, err)
