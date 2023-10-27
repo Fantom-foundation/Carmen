@@ -17,7 +17,7 @@ on:
 jobs:
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       GOMEMLIMIT: "5GiB"
     steps:
@@ -27,8 +27,15 @@ jobs:
         comment_on_pr: false
 
     - uses: actions/checkout@v3
-    - uses: egor-tensin/setup-clang@v1
-    - uses: bazelbuild/setup-bazelisk@v2
+
+    - name: Set up clang
+      uses: egor-tensin/setup-clang@v1
+      with:
+        version: 14
+
+    - name: Set up bazel
+      uses: bazelbuild/setup-bazelisk@v2
+
     - name: Mount bazel cache
       uses: actions/cache@v3
       with:
