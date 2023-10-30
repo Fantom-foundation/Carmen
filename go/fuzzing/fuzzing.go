@@ -45,7 +45,7 @@ type Campaign[T any] interface {
 	// CreateContext creates a state full object that holds the system under fuzzing
 	// plus state information that is needed to be hold between each steps of the campaign.
 	// This context is passed to each Operation.Apply() function during the campaign.
-	// This method is called once per each campaign loop. The campaign loop
+	// This method is called once per campaign loop iteration. The campaign loop
 	// is one execution exercising the system under test with Operations derived from the seed
 	// created by Init().
 	CreateContext(t *testing.T) *T
