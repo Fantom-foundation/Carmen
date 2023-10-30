@@ -125,6 +125,20 @@ func (c *NWaysCache[K, V]) Remove(key K) (original V, exists bool) {
 		if c.items[i].used > 0 && c.items[i].key == key {
 			c.items[i].used = 0
 			value := c.items[i].value
+
+			// if we are not at the last position
+			if i < position+c.nways-1 {
+				// swap removed value with the last non-empty entry to avoid holes in the entries
+				// as the method Set() relies on the fact that non-empty positions are consecutive,
+				// followed by empty entries after them.
+				for j := position + c.nways - 1; j > i; j-- {
+					if c.items[j].used > 0 {
+						c.items[i] = c.items[j] // swap
+						c.items[j].used = 0     // free this item
+						break
+					}
+				}
+			}
 			c.locks[setIndex].Unlock()
 			return value, true
 		}
@@ -180,6 +194,22 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 	c.items[oldestIndex].used = c.tickers[setIndex]
 	c.locks[setIndex].Unlock()
 	return current, false, evictedKey, evictedValue, isEvicted
+}
+
+// Iterate calls the callback method for each entry in this cache.
+// This method is locking around the callback, i.e. the client should
+// not hold the method for a long time.
+func (c *NWaysCache[K, V]) Iterate(callback func(K, V) bool) {
+	for i := 0; i < int(c.numsets); i += 1 {
+		c.locks[i*PaddingMultiplier].Lock()
+		for j := 0; j < int(c.nways); j++ {
+			pos := i*int(c.nways) + j
+			if c.items[pos].used > 0 {
+				callback(c.items[pos].key, c.items[pos].value)
+			}
+		}
+		c.locks[i*PaddingMultiplier].Unlock()
+	}
 }
 
 // GetMemoryFootprint provides the size of the cache in memory in bytes
