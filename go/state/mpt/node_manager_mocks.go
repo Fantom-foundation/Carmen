@@ -34,19 +34,31 @@ func (m *MockNodePoolSource) EXPECT() *MockNodePoolSourceMockRecorder {
 	return m.recorder
 }
 
-// getSharedNode mocks base method.
-func (m *MockNodePoolSource) getSharedNode(arg0 NodeId) (*shared.Shared[Node], error) {
+// evict mocks base method.
+func (m *MockNodePoolSource) evict(arg0 NodeId, arg1 *shared.Shared[Node]) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getSharedNode", arg0)
+	m.ctrl.Call(m, "evict", arg0, arg1)
+}
+
+// evict indicates an expected call of evict.
+func (mr *MockNodePoolSourceMockRecorder) evict(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "evict", reflect.TypeOf((*MockNodePoolSource)(nil).evict), arg0, arg1)
+}
+
+// fetch mocks base method.
+func (m *MockNodePoolSource) fetch(arg0 NodeId) (*shared.Shared[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "fetch", arg0)
 	ret0, _ := ret[0].(*shared.Shared[Node])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getSharedNode indicates an expected call of getSharedNode.
-func (mr *MockNodePoolSourceMockRecorder) getSharedNode(arg0 interface{}) *gomock.Call {
+// fetch indicates an expected call of fetch.
+func (mr *MockNodePoolSourceMockRecorder) fetch(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getSharedNode", reflect.TypeOf((*MockNodePoolSource)(nil).getSharedNode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "fetch", reflect.TypeOf((*MockNodePoolSource)(nil).fetch), arg0)
 }
 
 // MockNodePool is a mock of NodePool interface.
@@ -70,6 +82,20 @@ func NewMockNodePool(ctrl *gomock.Controller) *MockNodePool {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockNodePool) EXPECT() *MockNodePoolMockRecorder {
 	return m.recorder
+}
+
+// Add mocks base method.
+func (m *MockNodePool) Add(arg0 NodeId, arg1 *shared.Shared[Node]) NodeReference {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Add", arg0, arg1)
+	ret0, _ := ret[0].(NodeReference)
+	return ret0
+}
+
+// Add indicates an expected call of Add.
+func (mr *MockNodePoolMockRecorder) Add(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockNodePool)(nil).Add), arg0, arg1)
 }
 
 // Size mocks base method.

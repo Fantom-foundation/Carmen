@@ -19,7 +19,7 @@ type LiveTrie struct {
 	// The node structure of the trie.
 	forest *Forest
 	// The root node of the trie.
-	root NodeId
+	root NodeReference
 	// The file name for storing trie metadata.
 	metadatafile string
 }
@@ -59,7 +59,7 @@ func VerifyFileLiveTrie(directory string, config MptConfig, observer Verificatio
 		return nil
 	}
 	return VerifyFileForest(directory, config, []Root{{
-		metadata.RootNode,
+		NewNodeReference(metadata.RootNode),
 		metadata.RootHash,
 	}}, observer)
 }
@@ -75,14 +75,14 @@ func makeTrie(
 		return nil, err
 	}
 	return &LiveTrie{
-		root:         metadata.RootNode,
+		root:         NewNodeReference(metadata.RootNode),
 		metadatafile: metadatafile,
 		forest:       forest,
 	}, nil
 }
 
 // getTrieView creates a live trie based on an existing Forest instance.
-func getTrieView(root NodeId, forest *Forest) *LiveTrie {
+func getTrieView(root NodeReference, forest *Forest) *LiveTrie {
 	return &LiveTrie{
 		root:   root,
 		forest: forest,
