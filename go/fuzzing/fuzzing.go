@@ -34,8 +34,8 @@ type OperationSequence[T any] []Operation[T]
 // to create the context passed through each step of the fuzzing campaign,
 // and finally allows for cleaning-up at the end of the campaign.
 type Campaign[T any] interface {
-	// Init is used for initialisation of the campaign before it starts.
-	// In particular, the set of operation sequences is returned
+	// Init is used for the initialization of the campaign before it starts.
+	// In particular, a set of operation sequences is returned
 	// to be used for seeding the fuzzer.
 	// One OperationSequence is one seed for the fuzzer. Many seeds may be created,
 	// i.e. this method returns an array.
