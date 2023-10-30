@@ -6,7 +6,7 @@ import (
 
 //go:generate mockgen -source fuzzing.go -destination fuzzing_mocks.go -package fuzzing
 
-// Operation represents one step applied to the system under fuzzing campaign.
+// Operation represents one step applied to the system under a fuzzing campaign.
 // Each operation must be serialisable to a byte array, which allows for
 // carrying the operation code and data. This serialised form is used
 // for passing the operation into the fuzzer.
