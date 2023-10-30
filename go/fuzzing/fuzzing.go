@@ -12,7 +12,7 @@ import (
 // for passing the operation into the fuzzer.
 type Operation[T any] interface {
 	// Apply is executed by the fuzzer for each operation to
-	// perform required action to the system under test.
+	// perform a required action to the system under test.
 	// The context passed to this method carries the system under test
 	// and its state. It is state-full to move from one step to another.
 	Apply(context *T)
