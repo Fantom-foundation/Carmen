@@ -69,13 +69,12 @@ type TestingF interface {
 	Fuzz(ff any)
 }
 
-// Fuzz perform fuzzing campaign. It initialises the campaign using the input interface Campaign
-// and forwards to the build-in testing.F behind the TestingF interface.
+// Fuzz performs a fuzzing campaign.
 // The campaign is initialised by calling Campaign.Init to generate chains of operations.
-// These operations are the seed of the campaign. which is then executed in many loops and is multithreaded.
-// Each loop runs a set of operations derived by the fuzzer and converted to operations by Campaign.Deserialize.
+// These operations are the seed of the campaign. which is then executed repeatedly and concurrently.
+// Each execution runs a set of operations derived by the fuzzer and converted to operations by Campaign.Deserialize.
 // The operations manipulate the system under test and update its state using the context
-// from Campaign.CreateContext. Each loop is finalised by calling Campaign.Cleanup().
+// produced by Campaign.CreateContext. Each execution is finalised by calling Campaign.Cleanup().
 func Fuzz[T any](f TestingF, c Campaign[T]) {
 
 	// convert operations to seed.
