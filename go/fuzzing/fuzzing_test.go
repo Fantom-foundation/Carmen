@@ -19,7 +19,7 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	terminalSymbol := byte(0xFA)
 
 	// ini complete test campaign
-	campaign.EXPECT().Init().Times(1).Return(chains)
+	campaign.EXPECT().Init().Return(chains)
 	// init every loop of the campaign
 	context := &testContext{make([]testOp, 0, 6)}
 	campaign.EXPECT().CreateContext(t).Times(2).Return(context) // three campaign loops
