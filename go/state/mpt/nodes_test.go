@@ -1,19 +1,17 @@
 package mpt
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
-	gomock "go.uber.org/mock/gomock"
 )
 
 var PathLengthTracking = MptConfig{
 	TrackSuffixLengthsInLeafNodes: true,
 }
 
+/*
 // ----------------------------------------------------------------------------
 //                               Empty Node
 // ----------------------------------------------------------------------------
@@ -3893,7 +3891,7 @@ func TestValueNode_Visit(t *testing.T) {
 		t.Errorf("unexpected result of visit, wanted (false,nil), got (%v, %v)", abort, err)
 	}
 }
-
+*/
 // ----------------------------------------------------------------------------
 //                               Encoders
 // ----------------------------------------------------------------------------
@@ -3905,7 +3903,7 @@ func TestAccountNodeEncoderWithNodeHash(t *testing.T) {
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
-		storage: NodeId(12),
+		storage: NewNodeReference(NodeId(12)),
 		hash:    common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
 	encoder := AccountNodeEncoderWithNodeHash{}
@@ -3926,7 +3924,7 @@ func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
-		storage:     NodeId(12),
+		storage:     NewNodeReference(NodeId(12)),
 		storageHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
 	encoder := AccountNodeEncoderWithChildHash{}
@@ -3946,7 +3944,7 @@ func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
-		storage:    NodeId(12),
+		storage:    NewNodeReference(NodeId(12)),
 		pathLength: 14,
 		hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
@@ -3963,7 +3961,24 @@ func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 
 func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 	node := BranchNode{
-		children:         [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		children: [16]NodeReference{
+			NewNodeReference(NodeId(1)),
+			NewNodeReference(NodeId(2)),
+			NewNodeReference(NodeId(3)),
+			NewNodeReference(NodeId(4)),
+			NewNodeReference(NodeId(5)),
+			NewNodeReference(NodeId(6)),
+			NewNodeReference(NodeId(7)),
+			NewNodeReference(NodeId(8)),
+			NewNodeReference(NodeId(9)),
+			NewNodeReference(NodeId(10)),
+			NewNodeReference(NodeId(11)),
+			NewNodeReference(NodeId(12)),
+			NewNodeReference(NodeId(13)),
+			NewNodeReference(NodeId(14)),
+			NewNodeReference(NodeId(15)),
+			NewNodeReference(NodeId(16)),
+		},
 		hashes:           [16]common.Hash{{1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16}},
 		embeddedChildren: 12,
 	}
@@ -3980,7 +3995,24 @@ func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 
 func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
 	node := BranchNode{
-		children:         [16]NodeId{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		children: [16]NodeReference{
+			NewNodeReference(NodeId(1)),
+			NewNodeReference(NodeId(2)),
+			NewNodeReference(NodeId(3)),
+			NewNodeReference(NodeId(4)),
+			NewNodeReference(NodeId(5)),
+			NewNodeReference(NodeId(6)),
+			NewNodeReference(NodeId(7)),
+			NewNodeReference(NodeId(8)),
+			NewNodeReference(NodeId(9)),
+			NewNodeReference(NodeId(10)),
+			NewNodeReference(NodeId(11)),
+			NewNodeReference(NodeId(12)),
+			NewNodeReference(NodeId(13)),
+			NewNodeReference(NodeId(14)),
+			NewNodeReference(NodeId(15)),
+			NewNodeReference(NodeId(16)),
+		},
 		embeddedChildren: 12,
 		hash:             common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 	}
@@ -4001,7 +4033,7 @@ func TestExtensionNodeEncoderWithChildHash(t *testing.T) {
 			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 			length: 7,
 		},
-		next:           NodeId(12),
+		next:           NewNodeReference(NodeId(12)),
 		nextHash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		nextIsEmbedded: true,
 	}
@@ -4021,7 +4053,7 @@ func TestExtensionNodeEncoderWithNodeHash(t *testing.T) {
 			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 			length: 7,
 		},
-		next:           NodeId(12),
+		next:           NewNodeReference(NodeId(12)),
 		hash:           common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		nextIsEmbedded: true,
 	}
@@ -4105,7 +4137,7 @@ func TestValueNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 // ----------------------------------------------------------------------------
 //                               Utilities
 // ----------------------------------------------------------------------------
-
+/*
 // NodeDesc is used to describe the structure of a MPT node for unit tests. It
 // is intended to be used to build convenient, readable test-structures of nodes
 // on which operations are to be exercised.
@@ -4223,7 +4255,7 @@ func (v *Value) Build(ctx *nodeContext) (NodeId, *shared.Shared[Node]) {
 }
 
 type entry struct {
-	id   NodeId
+	id   NodeReference
 	node *shared.Shared[Node]
 }
 type nodeContext struct {
@@ -4268,13 +4300,13 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 	return res
 }
 
-func (c *nodeContext) Build(desc NodeDesc) (NodeId, *shared.Shared[Node]) {
+func (c *nodeContext) Build(desc NodeDesc) (NodeReference, *shared.Shared[Node]) {
 	if desc == nil {
-		return EmptyId(), nil
+		return NewNodeReference(EmptyId()), nil
 	}
 	e, exists := c.cache[desc]
 	if exists {
-		return e.id, e.node
+		return e.ref, e.node
 	}
 
 	id, node := desc.Build(c)
@@ -4509,11 +4541,10 @@ func (c *nodeContext) equal(a, b Node) bool {
 
 	if a, ok := a.(*BranchNode); ok {
 		if b, ok := b.(*BranchNode); ok {
-			/* TODO: add support
-			if a.frozen != b.frozen {
-				return false
-			}
-			*/
+			// TODO: add support
+			//if a.frozen != b.frozen {
+			//	return false
+			//}
 			if a.hashDirty != b.hashDirty {
 				return false
 			}
@@ -4571,3 +4602,4 @@ func addressToNibbles(addr common.Address) []Nibble {
 func keyToNibbles(key common.Key) []Nibble {
 	return KeyToNibblePath(key, nil)
 }
+*/

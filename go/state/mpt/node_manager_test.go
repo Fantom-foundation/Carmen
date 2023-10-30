@@ -15,7 +15,7 @@ func TestNodePool_ReferenceLifeCycle(t *testing.T) {
 	id := ValueId(12)
 	ref := NewNodeReference(id)
 
-	source.EXPECT().getSharedNode(id).Return(EmptyNode{}, nil)
+	source.EXPECT().fetch(id).Return(EmptyNode{}, nil)
 
 	if want, got := id, ref.Id(); want != got {
 		t.Errorf("unexpected ID, wanted %v, got %v", want, got)
@@ -37,7 +37,7 @@ func TestNodePool_CapacityIsEnforced(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	source := NewMockNodePoolSource(ctrl)
 
-	source.EXPECT().getSharedNode(gomock.Any()).Times(100).Return(EmptyNode{}, nil)
+	source.EXPECT().fetch(gomock.Any()).Times(100).Return(EmptyNode{}, nil)
 
 	pool := NewNodePool(10, source)
 
