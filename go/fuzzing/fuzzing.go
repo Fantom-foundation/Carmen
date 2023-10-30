@@ -58,7 +58,7 @@ type Campaign[T any] interface {
 	Deserialize(*testing.T, []byte) []Operation[T]
 
 	// Cleanup gets the context passed through this campaign and allows for closing and cleaning it.
-	// This method is called once per each campaign loop. T
+	// This method is called once for each campaign loop.
 	Cleanup(t *testing.T, context *T)
 }
 
