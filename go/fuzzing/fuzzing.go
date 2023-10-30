@@ -54,7 +54,7 @@ type Campaign[T any] interface {
 	// This byte array represents a list of operations that are decoded and returned.
 	// The fuzzer loops over these operations
 	// amd applies changes defined in them by calling Operation.Apply().
-	// This method is called once per each campaign loop to convert binary representation of Operations.
+	// This method is called once for each campaign loop to convert binary representation of Operations.
 	Deserialize(*testing.T, []byte) []Operation[T]
 
 	// Cleanup gets the context passed through this campaign and allows for closing and cleaning it.
