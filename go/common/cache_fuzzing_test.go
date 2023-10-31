@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+// This fuzzer triggers a sequence of random operations to cache implementations.
+// It randomly generates executions against the cache interface using randomly
+// generated keys and values.
+// It uses a shadow data structure, which is a map, that mimics the same operations.
+// The current cache state is compared to the shadow structure to verify its state is correct.
+// The eviction policy of the cache is mimicked to the shadow structure as implemented by the cache,
+// i.e., it is not checked whether the eviction policy is correct.
+
 func FuzzLruCache_RandomOps(f *testing.F) {
 	fn := func() cache[int8, int16] {
 		return NewCache[int8, int16](128)
