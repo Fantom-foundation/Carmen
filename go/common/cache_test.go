@@ -163,7 +163,7 @@ func TestCache_InsertDeleteInsertIterate(t *testing.T) {
 	}
 }
 
-func TestCache_Iterate(t *testing.T) {
+func TestCache_Iterate_FullCache(t *testing.T) {
 	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 			// insert test data
