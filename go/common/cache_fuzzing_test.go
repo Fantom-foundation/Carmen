@@ -214,6 +214,7 @@ func (op *opIterate) Serialize() []byte {
 }
 
 func (op *opIterate) Apply(t *testing.T, c *cacheFuzzingContext) {
+	shadowCopy := make(map[int8]int16, len(c.shadow))
 	c.cache.Iterate(func(key int8, val int16) bool {
 		shadowVal, shadowExists := c.shadow[key]
 		if !shadowExists {
@@ -222,8 +223,25 @@ func (op *opIterate) Apply(t *testing.T, c *cacheFuzzingContext) {
 		if shadowVal != val {
 			t.Errorf("tested and shadow cache diverged: %v != %v", val, shadowVal)
 		}
+
+		if _, exists := shadowCopy[key]; exists {
+			t.Errorf("key visited twice througput the iteration: %d", key)
+		}
+
+		shadowCopy[key] = val
 		return true
 	})
+
+	if got, want := len(shadowCopy), len(c.shadow); got != want {
+		t.Errorf("number of iterated keys does not match the size of shadow cache: %d != %d", got, want)
+	}
+
+	// check all keys were iterated
+	for k := range c.shadow {
+		if _, exists := shadowCopy[k]; !exists {
+			t.Errorf("key was not visited througput the iteration: %d", k)
+		}
+	}
 }
 
 type opClear struct {
