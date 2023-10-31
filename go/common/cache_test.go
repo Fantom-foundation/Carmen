@@ -7,7 +7,7 @@ import (
 )
 
 func TestEmpty(t *testing.T) {
-	for name, c := range initCaches(3) {
+	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 			_, exists := c.Get(1)
 			if exists {
@@ -23,7 +23,7 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestItemExist(t *testing.T) {
-	for name, c := range initCaches(3) {
+	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 
 			c.Set(1, 33)
@@ -41,7 +41,7 @@ func TestItemExist(t *testing.T) {
 }
 
 func TestCacheRemove(t *testing.T) {
-	for name, c := range initCaches(3) {
+	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 
 			c.Set(1, 11)
@@ -64,7 +64,7 @@ func TestCacheRemove(t *testing.T) {
 }
 
 func TestSettingExisting(t *testing.T) {
-	for name, c := range initCaches(3) {
+	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 
 			c.Set(1, 11)
@@ -74,6 +74,66 @@ func TestSettingExisting(t *testing.T) {
 			if !exists || value != 67 {
 				t.Errorf("Item value invalid")
 			}
+		})
+	}
+}
+
+func TestCache_InsertDeleteInsertIterate(t *testing.T) {
+	for name, c := range initCaches(3) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			// this sequence of operations was detected problematic by fuzzing,
+			// respective fuzzing test may be executed as
+			// go test -run=FuzzNWays_RandomOps/4af37c7ba0fc5bd7 in this directory
+			c.Set(1, 12336)
+			c.Set(9, 12336)
+			c.Remove(1)
+			c.Set(9, 12337)
+
+			value, _ := c.Get(9)
+			if got, want := value, 12337; got != want {
+				t.Errorf("values do not match: %d != %d", got, want)
+			}
+
+			c.Iterate(func(key int, value int) bool {
+				if got, want := key, 9; got != want {
+					t.Errorf("keys do not match: %d != %d", got, want)
+				}
+
+				if got, want := value, 12337; got != want {
+					t.Errorf("values do not match: %d: %d != %d", key, got, want)
+				}
+				return true
+			})
+		})
+	}
+}
+
+func TestCache_Iterate(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+			// insert test data
+			expected := make(map[int]int)
+			for i := 0; i < 255; i++ {
+				expected[i] = i * 100
+				evictedKey, _, evicted := c.Set(i, i*100)
+				if evicted {
+					delete(expected, evictedKey)
+				}
+			}
+
+			// test
+			c.Iterate(func(key int, val int) bool {
+				want, exists := expected[key]
+				if !exists {
+					t.Errorf("iterated throught the key that should not exist: %d", key)
+				}
+
+				if want != val {
+					t.Errorf("iterated throught an unexpected value: %d != %d", want, val)
+				}
+				return true
+			})
 		})
 	}
 }
@@ -120,6 +180,9 @@ type cache[K any, V any] interface {
 
 	// Remove deletes the key from the map and returns the deleted value
 	Remove(key K) (original V, exists bool)
+
+	// Iterate all cached entries - calls the callback for each key-value pair in the cache
+	Iterate(callback func(K, V) bool)
 }
 
 func initCaches(capacity int) map[string]cache[int, int] {

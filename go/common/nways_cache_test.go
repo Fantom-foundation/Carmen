@@ -76,6 +76,48 @@ func TestNWaysCache_GetOrSet(t *testing.T) {
 
 }
 
+func TestNWaysCache_Remove_Reinsert_Full_Slot(t *testing.T) {
+	c := NewNWaysCache[int, int](8, 4)
+
+	c.Set(0, 5)
+	c.Set(1, 10)
+	c.Set(2, 20)
+	c.Set(3, 30)
+	c.Set(4, 40)
+	c.Set(5, 50)
+	c.Set(6, 60)
+	c.Set(7, 70)
+
+	c.Remove(5)
+	c.Set(6, 80)
+
+	c.Iterate(func(key int, val int) bool {
+		if key == 5 {
+			t.Errorf("this key should have been removed: %d", key)
+		}
+		if key == 6 && val != 80 {
+			t.Errorf("unexpected value: %d != %d", val, 80)
+		}
+
+		return true
+	})
+
+	c.Set(5, 55)
+	c.Remove(5) // remove at the end of the slot - no swap will happen
+	c.Set(9, 90)
+
+	c.Iterate(func(key int, val int) bool {
+		if key == 5 {
+			t.Errorf("this key should have been removed: %d", key)
+		}
+		if key == 9 && val != 90 {
+			t.Errorf("unexpected value: %d != %d", val, 80)
+		}
+
+		return true
+	})
+}
+
 func TestNWaysLRUEvictedCapacity(t *testing.T) {
 	c := NewNWaysCache[int, int](6, 3)
 
