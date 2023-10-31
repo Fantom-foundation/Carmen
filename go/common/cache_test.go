@@ -63,8 +63,35 @@ func TestCacheRemove(t *testing.T) {
 	}
 }
 
+func TestCache_Clear_FullCache(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+			// insert test data
+			inserted := make(map[int]int)
+			for i := 0; i < 255; i++ {
+				inserted[i] = i * 100
+				c.Set(i, i*100)
+			}
+
+			c.Clear()
+
+			// test
+			for key := range inserted {
+				if _, exists := c.Get(key); exists {
+					t.Errorf("cache should be empty")
+				}
+			}
+
+			c.Iterate(func(key int, val int) bool {
+				t.Errorf("cache should be empty")
+				return true
+			})
+		})
+	}
+}
+
 func TestCache_Clear(t *testing.T) {
-	for name, c := range initCaches(3) {
+	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 
 			keys := []int{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000}
@@ -85,7 +112,7 @@ func TestCache_Clear(t *testing.T) {
 }
 
 func TestCache_Iterate(t *testing.T) {
-	for name, c := range initCaches(3) {
+	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 
 			expected := map[int]int{

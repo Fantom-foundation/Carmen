@@ -217,7 +217,7 @@ func (c *NWaysCache[K, V]) Clear() {
 		c.locks[i*PaddingMultiplier].Lock()
 		for j := 0; j < int(c.nways); j++ {
 			var empty nWaysCacheEntry[K, V]
-			c.items[i*int(c.numsets)+j] = empty
+			c.items[i*int(c.nways)+j] = empty
 		}
 		c.locks[i*PaddingMultiplier].Unlock()
 	}
