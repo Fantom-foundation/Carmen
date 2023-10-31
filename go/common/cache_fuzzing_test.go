@@ -173,13 +173,12 @@ func (op *opGetOrSet) Apply(t *testing.T, c *cacheFuzzingContext) {
 		delete(c.shadow, evictedKey)
 	}
 
+	shadowValue, shadowExists := c.shadow[op.key]
+	if exists != shadowExists {
+		t.Errorf("existence of key does not match witch shadow: %v != %v", shadowExists, exists)
+	}
+
 	if exists {
-		shadowValue, shadowExists := c.shadow[op.key]
-
-		if !shadowExists {
-			t.Errorf("tested and shadow cache diverged: %v != %v", exists, shadowExists)
-		}
-
 		if val != shadowValue {
 			t.Errorf("tested and shadow cache diverged: %v != %v", val, shadowValue)
 		}
@@ -200,16 +199,14 @@ func (op *opRemove) Serialize() []byte {
 
 func (op *opRemove) Apply(t *testing.T, c *cacheFuzzingContext) {
 	val, exists := c.cache.Remove(op.key)
-	if exists {
-		shadowValue, shadowExists := c.shadow[op.key]
+	shadowValue, shadowExists := c.shadow[op.key]
 
-		if !shadowExists {
-			t.Errorf("tested and shadow cache diverged: %v != %v", exists, shadowExists)
-		}
+	if exists != shadowExists {
+		t.Errorf("existence of key does not match witch shadow: %v != %v", shadowExists, exists)
+	}
 
-		if val != shadowValue {
-			t.Errorf("tested and shadow cache diverged: %v != %v", val, shadowValue)
-		}
+	if exists && val != shadowValue {
+		t.Errorf("tested and shadow cache diverged: %v != %v", val, shadowValue)
 	}
 	delete(c.shadow, op.key)
 }
@@ -242,13 +239,6 @@ func (op *opIterate) Apply(t *testing.T, c *cacheFuzzingContext) {
 
 	if got, want := len(shadowCopy), len(c.shadow); got != want {
 		t.Errorf("number of iterated keys does not match the size of shadow cache: %d != %d", got, want)
-	}
-
-	// check all keys were iterated
-	for k := range c.shadow {
-		if _, exists := shadowCopy[k]; !exists {
-			t.Errorf("key was not visited througput the iteration: %d", k)
-		}
 	}
 }
 
