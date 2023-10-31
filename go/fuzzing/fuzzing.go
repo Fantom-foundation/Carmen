@@ -98,3 +98,52 @@ func fuzz[T any](t *testing.T, c Campaign[T], rawData []byte) {
 	}
 	c.Cleanup(t, ctx)
 }
+
+type Serializable interface {
+	Serialize() []byte
+}
+
+// FuzzOp is a default fuzzing Operation, which defines a callback
+// method to implement an action for the operation.
+// Furthermore, it defines initial data of this operation.
+// This seed data is returned by the Serialise method, while the Apply method
+// routes to the defined callback method.
+type FuzzOp[T ~byte, C any, PAYLOAD Serializable] struct {
+	opType T
+	data   PAYLOAD
+	apply  func(data PAYLOAD, t *testing.T, context *C)
+}
+
+// NewOp creates a new fuzzing operation with predefined action amd initial data.
+// It gets identifier of this operation, initial data, fuzzing context, and the callback method
+// executed every time this operation is executed.
+func NewOp[T ~byte, C any, PAYLOAD Serializable](
+	opType T,
+	data PAYLOAD,
+	apply func(data PAYLOAD, t *testing.T, context *C)) *FuzzOp[T, C, PAYLOAD] {
+
+	return &FuzzOp[T, C, PAYLOAD]{
+		opType: opType,
+		data:   data,
+		apply:  apply,
+	}
+}
+
+// Serialize converts this operation to a byte array.
+// It contains identifier of this operation in the first byte, followed
+// by payload in consecutive bytes.
+func (op *FuzzOp[T, C, PAYLOAD]) Serialize() []byte {
+	return append([]byte{byte(op.opType)}, op.data.Serialize()...)
+}
+
+// Apply passes the call to the apply callback method.
+func (op *FuzzOp[T, C, PAYLOAD]) Apply(t *testing.T, c *C) {
+	op.apply(op.data, t, c)
+}
+
+// EmptyPayload is a convenient implementation of empty payload
+type EmptyPayload struct{}
+
+func (p EmptyPayload) Serialize() []byte {
+	return []byte{}
+}

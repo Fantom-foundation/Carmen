@@ -26,15 +26,6 @@ const (
 	flush
 )
 
-// serialise converts the struct to a byte array
-// using following format: <opType><value>
-// The value is exported only for operation push.
-func (o opType) serialise() []byte {
-	b := make([]byte, 1, 5)
-	b[0] = byte(o)
-	return b
-}
-
 type stackFuzzingCampaign struct {
 }
 
@@ -45,17 +36,25 @@ type stackFuzzingContext struct {
 }
 
 func (c *stackFuzzingCampaign) Init() []fuzzing.OperationSequence[stackFuzzingContext] {
-	payload1 := 99
-	payload2 := ^99
+
+	push1 := createOp(push, 99)
+	push2 := createOp(push, ^99)
+
+	popOp := createOp(pop, 0)
+	flushOp := createOp(flush, 0)
+	closeOp := createOp(close, 0)
+	emptyOp := createOp(empty, 0)
+	getAllOp := createOp(getAll, 0)
+	sizeOp := createOp(size, 0)
 
 	// generate some adhoc sequences of operations
 	data := []fuzzing.OperationSequence[stackFuzzingContext]{
-		{&opPush{payload1}, &opPop{}, &opFlush{}, &opClose{}},
-		{&opPush{payload1}, &opPop{}, &opSize{}, &opEmpty{},
-			&opFlush{}, &opClose{}},
-		{&opPush{payload1}, &opPush{payload2}, &opGetAll{}, &opClose{}},
-		{&opPop{}, &opPush{payload2}, &opGetAll{}, &opClose{}},
-		{&opClose{}, &opPush{payload2}, &opGetAll{}},
+		{push1, popOp, flushOp, closeOp},
+		{push1, popOp, sizeOp, emptyOp,
+			flushOp, closeOp},
+		{push1, push2, getAllOp, closeOp},
+		{popOp, push2, getAllOp, closeOp},
+		{closeOp, push2, getAllOp},
 	}
 
 	return data
@@ -81,32 +80,24 @@ func (c *stackFuzzingCampaign) Cleanup(t *testing.T, context *stackFuzzingContex
 	}
 }
 
-type opPush struct {
-	value int
+type intValue int
+
+func (v intValue) Serialize() []byte {
+	b := make([]byte, 0, 4)
+	return binary.BigEndian.AppendUint32(b, uint32(v))
 }
 
-func (op *opPush) Serialize() []byte {
-	b := push.serialise()
-	b = binary.BigEndian.AppendUint32(b, uint32(op.value))
-	return b
-}
+// Definitions of fuzzing operation methods.
 
-func (op *opPush) Apply(t *testing.T, c *stackFuzzingContext) {
-	err := c.stack.Push(op.value)
+var opPush = func(value intValue, t *testing.T, c *stackFuzzingContext) {
+	err := c.stack.Push(int(value))
 	if err != nil {
 		t.Errorf("error to push value: %s", err)
 	}
-	c.shadow.Push(op.value)
+	c.shadow.Push(int(value))
 }
 
-type opPop struct {
-}
-
-func (op *opPop) Serialize() []byte {
-	return pop.serialise()
-}
-
-func (op *opPop) Apply(t *testing.T, c *stackFuzzingContext) {
+var opPop = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if got, err := c.stack.Pop(); err != nil {
 		// error when the shadow is empty is OK state
 		if c.shadow.Empty() && strings.HasPrefix(err.Error(), "cannot pop from empty stack") {
@@ -122,14 +113,7 @@ func (op *opPop) Apply(t *testing.T, c *stackFuzzingContext) {
 	}
 }
 
-type opGetAll struct {
-}
-
-func (op *opGetAll) Serialize() []byte {
-	return getAll.serialise()
-}
-
-func (op *opGetAll) Apply(t *testing.T, c *stackFuzzingContext) {
+var opGetAll = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	got, err := c.stack.GetAll()
 	if err != nil {
 		t.Errorf("error to get all values: %s", err)
@@ -140,40 +124,19 @@ func (op *opGetAll) Apply(t *testing.T, c *stackFuzzingContext) {
 	}
 }
 
-type opSize struct {
-}
-
-func (op *opSize) Serialize() []byte {
-	return size.serialise()
-}
-
-func (op *opSize) Apply(t *testing.T, c *stackFuzzingContext) {
+var opSize = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if got, want := c.stack.Size(), c.shadow.Size(); got != want {
 		t.Errorf("stack does not match expected value: %v != %v", got, want)
 	}
 }
 
-type opEmpty struct {
-}
-
-func (op *opEmpty) Serialize() []byte {
-	return empty.serialise()
-}
-
-func (op *opEmpty) Apply(t *testing.T, c *stackFuzzingContext) {
+var opEmpty = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if got, want := c.stack.Empty(), c.shadow.Empty(); got != want {
 		t.Errorf("stack does not match expected value: %v != %v", got, want)
 	}
 }
 
-type opClose struct {
-}
-
-func (op *opClose) Serialize() []byte {
-	return close.serialise()
-}
-
-func (op *opClose) Apply(t *testing.T, c *stackFuzzingContext) {
+var opClose = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if err := c.stack.Close(); err != nil {
 		t.Errorf("error to flush stack: %s", err)
 	}
@@ -184,14 +147,7 @@ func (op *opClose) Apply(t *testing.T, c *stackFuzzingContext) {
 	c.stack = stack
 }
 
-type opFlush struct {
-}
-
-func (op *opFlush) Serialize() []byte {
-	return flush.serialise()
-}
-
-func (op *opFlush) Apply(t *testing.T, c *stackFuzzingContext) {
+var opFlush = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if err := c.stack.Flush(); err != nil {
 		t.Errorf("error to flush stack: %s", err)
 	}
@@ -231,27 +187,31 @@ func parseOperations(b []byte) []fuzzing.Operation[stackFuzzingContext] {
 				return ops
 			}
 		}
-
-		var op fuzzing.Operation[stackFuzzingContext]
-		switch opType {
-		case push:
-			op = &opPush{value}
-		case pop:
-			op = &opPop{}
-		case getAll:
-			op = &opGetAll{}
-		case size:
-			op = &opSize{}
-		case empty:
-			op = &opSize{}
-		case close:
-			op = &opClose{}
-		case flush:
-			op = &opFlush{}
-		}
-		ops = append(ops, op)
+		ops = append(ops, createOp(opType, value))
 	}
 	return ops
+}
+
+func createOp(t opType, value int) fuzzing.Operation[stackFuzzingContext] {
+	var op fuzzing.Operation[stackFuzzingContext]
+	switch t {
+	case push:
+		op = fuzzing.NewOp(push, intValue(value), opPush)
+	case pop:
+		op = fuzzing.NewOp(pop, fuzzing.EmptyPayload{}, opPop)
+	case getAll:
+		op = fuzzing.NewOp(getAll, fuzzing.EmptyPayload{}, opGetAll)
+	case size:
+		op = fuzzing.NewOp(size, fuzzing.EmptyPayload{}, opSize)
+	case empty:
+		op = fuzzing.NewOp(empty, fuzzing.EmptyPayload{}, opEmpty)
+	case close:
+		op = fuzzing.NewOp(close, fuzzing.EmptyPayload{}, opClose)
+	case flush:
+		op = fuzzing.NewOp(flush, fuzzing.EmptyPayload{}, opFlush)
+	}
+
+	return op
 }
 
 // stack used as a shadow implementation for testing.
