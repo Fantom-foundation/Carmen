@@ -148,26 +148,6 @@ func (p EmptyPayload) Serialize() []byte {
 	return []byte{}
 }
 
-// Payload is a generic payload, with explicitly defined a method
-// to serialize it to a byte array.
-type Payload[T any] struct {
-	Val       T
-	serialize func(val T) []byte
-}
-
-// NewPayload creates a new generic payload typed to the defined type.
-// A method to serialize this type must be provided.
-func NewPayload[T any](val T, serialize func(val T) []byte) Payload[T] {
-	return Payload[T]{
-		val,
-		serialize,
-	}
-}
-
-func (p Payload[T]) Serialize() []byte {
-	return p.serialize(p.Val)
-}
-
 // SerialisedPayload that is a type of payload that is directly represented as a byte array,
 // together with the original value.
 type SerialisedPayload[T any] struct {
@@ -200,13 +180,39 @@ func (r OpsFactoryRegistry[T, C]) register(opType T, fact func(payload any) Oper
 	r[opType] = fact
 }
 
-func (r OpsFactoryRegistry[T, C]) CreateOp(opType T, payload any) Operation[C] {
+func (r OpsFactoryRegistry[T, C]) CreateDataOp(opType T, payload any) Operation[C] {
 	return r[opType](payload)
+}
+
+func (r OpsFactoryRegistry[T, C]) CreateEmptyDataOp(opType T) Operation[C] {
+	return r[opType](nil)
 }
 
 // RegisterOp registers a factory to create a fuzzing operation based for an operation op-code.
 func RegisterOp[T ~byte, C any, D any](registry OpsFactoryRegistry[T, C], opType T, fact func(payload D) Operation[C]) {
 	registry.register(opType, func(payload any) Operation[C] {
-		return fact(payload)
+		return fact(payload.(D))
+	})
+}
+
+// RegisterEmptyDataOp registers a factory to create a fuzzing operation based for an operation op-code.
+// This method registers an operation that has only its opcode, but no payload.
+func RegisterEmptyDataOp[T ~byte, C any](registry OpsFactoryRegistry[T, C], opType T, apply func(opType T, t *testing.T, context *C)) {
+	registry.register(opType, func(payload any) Operation[C] {
+		adapted := func(opType T, _ EmptyPayload, t *testing.T, context *C) {
+			apply(opType, t, context)
+		}
+		return NewOp(opType, EmptyPayload{}, adapted)
+	})
+}
+
+// RegisterDataOp registers a factory to create a fuzzing operation based for an operation op-code.
+// This method registers an operation that has its opcode together with a payload.
+func RegisterDataOp[T ~byte, C any, D any](registry OpsFactoryRegistry[T, C], opType T, serialise func(payload D) []byte, applyOp func(opType T, data D, t *testing.T, context *C)) {
+	registry.register(opType, func(payload any) Operation[C] {
+		adapted := func(opType T, data SerialisedPayload[D], t *testing.T, context *C) {
+			applyOp(opType, data.Val, t, context)
+		}
+		return NewOp(opType, NewSerialisedPayload[D](payload.(D), serialise(payload.(D))), adapted)
 	})
 }

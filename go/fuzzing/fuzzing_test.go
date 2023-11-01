@@ -11,17 +11,35 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	campaign := NewMockCampaign[testContext](ctrl)
 	testingF := NewMockTestingF(ctrl)
 
-	f := func(opType byte, data EmptyPayload, t *testing.T, c *testContext) {
+	noDataF := func(opType byte, t *testing.T, c *testContext) {
 		*c = append(*c, opType)
 	}
 
-	opA := NewOp(byte(0xA), EmptyPayload{}, f)
-	opB := NewOp(byte(0xB), EmptyPayload{}, f)
-	opC := NewOp(byte(0xC), EmptyPayload{}, f)
+	serialise := func(data byte) []byte {
+		return []byte{data}
+	}
 
-	op1 := NewOp(byte(0x1), EmptyPayload{}, f)
-	op2 := NewOp(byte(0x2), EmptyPayload{}, f)
-	op3 := NewOp(byte(0x3), EmptyPayload{}, f)
+	dataF := func(opType byte, data byte, t *testing.T, c *testContext) {
+		*c = append(*c, opType)
+		*c = append(*c, data)
+	}
+
+	registry := NewRegistry[byte, testContext]()
+	RegisterDataOp(registry, 0xA, serialise, dataF)
+	RegisterEmptyDataOp(registry, 0xB, noDataF)
+	RegisterEmptyDataOp(registry, 0xC, noDataF)
+
+	RegisterEmptyDataOp(registry, 0x1, noDataF)
+	RegisterEmptyDataOp(registry, 0x2, noDataF)
+	RegisterEmptyDataOp(registry, 0x3, noDataF)
+
+	opA := registry.CreateDataOp(0xA, byte(0xFF))
+	opB := registry.CreateEmptyDataOp(0xB)
+	opC := registry.CreateEmptyDataOp(0xC)
+
+	op1 := registry.CreateEmptyDataOp(0x1)
+	op2 := registry.CreateEmptyDataOp(0x2)
+	op3 := registry.CreateEmptyDataOp(0x3)
 
 	chain1 := []Operation[testContext]{opA, opB, opC}
 	chain2 := []Operation[testContext]{op1, op2}
@@ -38,7 +56,14 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	campaign.EXPECT().Deserialize(gomock.Any()).Times(2).DoAndReturn(func(raw []byte) []Operation[testContext] {
 		ops := make([]Operation[testContext], 0, len(raw))
 		for i := 0; i < len(raw); i++ {
-			ops = append(ops, NewOp(raw[i], EmptyPayload{}, f))
+			var op Operation[testContext]
+			if raw[i] == 0xA {
+				op = registry.CreateDataOp(raw[i], raw[i+1])
+				i++ // skip beyond the data part
+			} else {
+				op = registry.CreateEmptyDataOp(raw[i])
+			}
+			ops = append(ops, op)
 		}
 		return ops
 	})
@@ -63,8 +88,8 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 
 	// we test that all operations were called, and extended with closing symbol.
 	want := []byte{
-		0xA, 0xB, 0xC, 0x1, 0x2, 0x3, 0xFA, // first loop
-		0xA, 0xB, 0xC, 0x1, 0x2, 0x3, 0xFB, // second loop - different terminal symbol
+		0xA, 0xFF, 0xB, 0xC, 0x1, 0x2, 0x3, 0xFA, // first loop, includes data for opcode 0xA
+		0xA, 0xFF, 0xB, 0xC, 0x1, 0x2, 0x3, 0xFB, // second loop - different terminal symbol
 	}
 	got := context
 

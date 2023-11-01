@@ -10,15 +10,15 @@ import (
 )
 
 func FuzzStack_RandomOps(f *testing.F) {
-	var opPush = func(_ opType, value fuzzing.SerialisedPayload[int], t *testing.T, c *stackFuzzingContext) {
-		err := c.stack.Push(value.Val)
+	var opPush = func(_ opType, value int, t *testing.T, c *stackFuzzingContext) {
+		err := c.stack.Push(value)
 		if err != nil {
 			t.Errorf("error to push value: %s", err)
 		}
-		c.shadow.Push(value.Val)
+		c.shadow.Push(value)
 	}
 
-	var opPop = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+	var opPop = func(_ opType, t *testing.T, c *stackFuzzingContext) {
 		if got, err := c.stack.Pop(); err != nil {
 			// error when the shadow is empty is OK state
 			if c.shadow.Empty() && strings.HasPrefix(err.Error(), "cannot pop from empty stack") {
@@ -34,7 +34,7 @@ func FuzzStack_RandomOps(f *testing.F) {
 		}
 	}
 
-	var opGetAll = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+	var opGetAll = func(_ opType, t *testing.T, c *stackFuzzingContext) {
 		got, err := c.stack.GetAll()
 		if err != nil {
 			t.Errorf("error to get all values: %s", err)
@@ -45,19 +45,19 @@ func FuzzStack_RandomOps(f *testing.F) {
 		}
 	}
 
-	var opSize = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+	var opSize = func(_ opType, t *testing.T, c *stackFuzzingContext) {
 		if got, want := c.stack.Size(), c.shadow.Size(); got != want {
 			t.Errorf("stack does not match expected value: %v != %v", got, want)
 		}
 	}
 
-	var opEmpty = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+	var opEmpty = func(_ opType, t *testing.T, c *stackFuzzingContext) {
 		if got, want := c.stack.Empty(), c.shadow.Empty(); got != want {
 			t.Errorf("stack does not match expected value: %v != %v", got, want)
 		}
 	}
 
-	var opClose = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+	var opClose = func(_ opType, t *testing.T, c *stackFuzzingContext) {
 		if err := c.stack.Close(); err != nil {
 			t.Errorf("error to flush stack: %s", err)
 		}
@@ -68,37 +68,26 @@ func FuzzStack_RandomOps(f *testing.F) {
 		c.stack = stack
 	}
 
-	var opFlush = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+	var opFlush = func(_ opType, t *testing.T, c *stackFuzzingContext) {
 		if err := c.stack.Flush(); err != nil {
 			t.Errorf("error to flush stack: %s", err)
 		}
 	}
 
-	registry := fuzzing.NewRegistry[opType, stackFuzzingContext]()
-	fuzzing.RegisterOp(registry, push, func(payload int) fuzzing.Operation[stackFuzzingContext] {
-		b := binary.BigEndian.AppendUint32(make([]byte, 0, 4), uint32(payload))
-		return fuzzing.NewOp(push, fuzzing.NewSerialisedPayload(payload, b), opPush)
-	})
-	fuzzing.RegisterOp(registry, pop, func(_ any) fuzzing.Operation[stackFuzzingContext] {
-		return fuzzing.NewOp(pop, fuzzing.EmptyPayload{}, opPop)
-	})
-	fuzzing.RegisterOp(registry, getAll, func(_ any) fuzzing.Operation[stackFuzzingContext] {
-		return fuzzing.NewOp(getAll, fuzzing.EmptyPayload{}, opGetAll)
-	})
-	fuzzing.RegisterOp(registry, size, func(_ any) fuzzing.Operation[stackFuzzingContext] {
-		return fuzzing.NewOp(size, fuzzing.EmptyPayload{}, opSize)
-	})
-	fuzzing.RegisterOp(registry, empty, func(_ any) fuzzing.Operation[stackFuzzingContext] {
-		return fuzzing.NewOp(empty, fuzzing.EmptyPayload{}, opEmpty)
-	})
-	fuzzing.RegisterOp(registry, close, func(_ any) fuzzing.Operation[stackFuzzingContext] {
-		return fuzzing.NewOp(close, fuzzing.EmptyPayload{}, opClose)
-	})
-	fuzzing.RegisterOp(registry, flush, func(_ any) fuzzing.Operation[stackFuzzingContext] {
-		return fuzzing.NewOp(flush, fuzzing.EmptyPayload{}, opFlush)
-	})
+	serialise := func(payload int) []byte {
+		return binary.BigEndian.AppendUint32(make([]byte, 0, 4), uint32(payload))
+	}
 
-	fuzzing.Fuzz[stackFuzzingContext](f, &stackFuzzingCampaign{})
+	registry := fuzzing.NewRegistry[opType, stackFuzzingContext]()
+	fuzzing.RegisterDataOp(registry, push, serialise, opPush)
+	fuzzing.RegisterEmptyDataOp(registry, pop, opPop)
+	fuzzing.RegisterEmptyDataOp(registry, getAll, opGetAll)
+	fuzzing.RegisterEmptyDataOp(registry, size, opSize)
+	fuzzing.RegisterEmptyDataOp(registry, empty, opEmpty)
+	fuzzing.RegisterEmptyDataOp(registry, close, opClose)
+	fuzzing.RegisterEmptyDataOp(registry, flush, opFlush)
+
+	fuzzing.Fuzz[stackFuzzingContext](f, &stackFuzzingCampaign{registry: registry})
 }
 
 // opType is operation type to be applied to a stack.
@@ -126,15 +115,15 @@ type stackFuzzingContext struct {
 
 func (c *stackFuzzingCampaign) Init() []fuzzing.OperationSequence[stackFuzzingContext] {
 
-	push1 := c.registry.CreateOp(push, 99)
-	push2 := c.registry.CreateOp(push, ^99)
+	push1 := c.registry.CreateDataOp(push, 99)
+	push2 := c.registry.CreateDataOp(push, ^99)
 
-	popOp := c.registry.CreateOp(pop, 0)
-	flushOp := c.registry.CreateOp(flush, 0)
-	closeOp := c.registry.CreateOp(close, 0)
-	emptyOp := c.registry.CreateOp(empty, 0)
-	getAllOp := c.registry.CreateOp(getAll, 0)
-	sizeOp := c.registry.CreateOp(size, 0)
+	popOp := c.registry.CreateEmptyDataOp(pop)
+	flushOp := c.registry.CreateEmptyDataOp(flush)
+	closeOp := c.registry.CreateEmptyDataOp(close)
+	emptyOp := c.registry.CreateEmptyDataOp(empty)
+	getAllOp := c.registry.CreateEmptyDataOp(getAll)
+	sizeOp := c.registry.CreateEmptyDataOp(size)
 
 	// generate some adhoc sequences of operations
 	data := []fuzzing.OperationSequence[stackFuzzingContext]{
@@ -175,8 +164,8 @@ func (c *stackFuzzingCampaign) Cleanup(t *testing.T, context *stackFuzzingContex
 // Value part is parsed only when the opType equals to push.
 // This method tries to parse as many those tuples as possible, terminating when no more
 // elements are available.
-// This method recognises expensive operations, which is flush, close and getAll, and it caps
-// number of these operations to 20 in total and 3 in a row.
+// This method recognizes expensive operations, which is flush, close and getAll, and it caps
+// the number of these operations to 20 in total and 3 in a row.
 // The fuzzing mechanism requires one campaign does not run more than 1s, which is quickly
 // broken when an expensive operation is triggered extensively.
 func parseOperations(registry fuzzing.OpsFactoryRegistry[opType, stackFuzzingContext], b []byte) []fuzzing.Operation[stackFuzzingContext] {
@@ -194,16 +183,19 @@ func parseOperations(registry fuzzing.OpsFactoryRegistry[opType, stackFuzzingCon
 		} else {
 			expensiveOpRow = 0
 		}
-		var value int
+		var op fuzzing.Operation[stackFuzzingContext]
 		if opType == push {
 			if len(b) >= 4 {
-				value = int(binary.BigEndian.Uint32(b[0:4]))
+				value := int(binary.BigEndian.Uint32(b[0:4]))
 				b = b[4:]
+				op = registry.CreateDataOp(opType, value)
 			} else {
 				return ops
 			}
+		} else {
+			op = registry.CreateEmptyDataOp(opType)
 		}
-		op := registry.CreateOp(opType, value)
+
 		ops = append(ops, op)
 	}
 	return ops
