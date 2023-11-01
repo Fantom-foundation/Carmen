@@ -151,7 +151,7 @@ func (p EmptyPayload) Serialize() []byte {
 // SerialisedPayload that is a type of payload that is directly represented as a byte array,
 // together with the original value.
 type SerialisedPayload[T any] struct {
-	Val        T
+	val        T
 	serialised []byte
 }
 
@@ -159,13 +159,17 @@ type SerialisedPayload[T any] struct {
 // together with the original value.
 func NewSerialisedPayload[T any](payload T, serialised []byte) SerialisedPayload[T] {
 	return SerialisedPayload[T]{
-		Val:        payload,
+		val:        payload,
 		serialised: serialised,
 	}
 }
 
 func (p SerialisedPayload[T]) Serialize() []byte {
 	return p.serialised
+}
+
+func (p SerialisedPayload[T]) Value() T {
+	return p.val
 }
 
 type opRegistration[C any] struct {
@@ -207,6 +211,8 @@ func (r OpsFactoryRegistry[T, C]) CreateNoDataOp(opType T) Operation[C] {
 // It expects opcode of the operation at the first byte followed by payload at next bytes.
 // This method consumes the opcode and the payload from the input array and returns remaining part of the array
 // at its output.
+// Note: this method expects that operations were registered under opcodes using consecutive integers starting from zero
+// (i.e. 0, 1, 2, ...). If this does not hold, the method will not parse the input correctly.
 func (r OpsFactoryRegistry[T, C]) ReadNextOp(raw []byte) (T, Operation[C], []byte) {
 	var op Operation[C]
 	numOps := len(r)
@@ -252,7 +258,7 @@ func RegisterDataOp[T ~byte, C any, D any](
 	reg := opRegistration[C]{
 		func(payload any) Operation[C] {
 			adapted := func(opType T, data SerialisedPayload[D], t *testing.T, context *C) {
-				applyOp(opType, data.Val, t, context)
+				applyOp(opType, data.Value(), t, context)
 			}
 			return NewOp(opType, NewSerialisedPayload[D](payload.(D), serialise(payload.(D))), adapted)
 		},
