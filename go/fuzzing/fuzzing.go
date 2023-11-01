@@ -178,9 +178,9 @@ type opRegistration[C any] struct {
 	opFactory func(payload any) Operation[C]
 
 	// deserialize converts input bytes into payload to be used in the operation.
-	// The method should consume reguired number of bytes from the input and return
-	// the rest as output.
-	deserialize func([]byte) (any, []byte)
+	// The method should consume required number of bytes from the input
+	// and remove them from the array.
+	deserialize func(*[]byte) any
 }
 
 // OpsFactoryRegistry is a convenient implementation allowing the client to register factories
@@ -209,25 +209,25 @@ func (r OpsFactoryRegistry[T, C]) CreateNoDataOp(opType T) Operation[C] {
 
 // ReadNextOp parses the next operation from the input stream.
 // It expects opcode of the operation at the first byte followed by payload at next bytes.
-// This method consumes the opcode and the payload from the input array and returns remaining part of the array
-// at its output.
+// This method consumes the opcode and the payload from the input array and reduces its size by removing
+// bytes from the beginning.
 // Note: this method expects that operations were registered under opcodes using consecutive integers starting from zero
 // (i.e. 0, 1, 2, ...). If this does not hold, the method will not parse the input correctly.
-func (r OpsFactoryRegistry[T, C]) ReadNextOp(raw []byte) (T, Operation[C], []byte) {
+func (r OpsFactoryRegistry[T, C]) ReadNextOp(raw *[]byte) (T, Operation[C]) {
 	var op Operation[C]
 	numOps := len(r)
-	opType := T(raw[0] % byte(numOps))
-	raw = raw[1:]
+	opType := T((*raw)[0] % byte(numOps))
+	*raw = (*raw)[1:]
 	rec := r[opType]
 	if rec.deserialize == nil {
 		op = rec.opFactory(nil)
 	} else {
 		var payload any
-		payload, raw = rec.deserialize(raw)
+		payload = rec.deserialize(raw)
 		op = rec.opFactory(payload)
 	}
 
-	return opType, op, raw
+	return opType, op
 }
 
 // RegisterNoDataOp registers a factory to create a fuzzing operation based for an operation op-code.
@@ -252,7 +252,7 @@ func RegisterDataOp[T ~byte, C any, D any](
 	registry OpsFactoryRegistry[T, C],
 	opType T,
 	serialise func(data D) []byte,
-	deserialize func([]byte) (D, []byte),
+	deserialize func(*[]byte) D,
 	applyOp func(opType T, data D, t *testing.T, context *C)) {
 
 	reg := opRegistration[C]{
@@ -262,7 +262,7 @@ func RegisterDataOp[T ~byte, C any, D any](
 			}
 			return NewOp(opType, NewSerialisedPayload[D](payload.(D), serialise(payload.(D))), adapted)
 		},
-		func(b []byte) (any, []byte) {
+		func(b *[]byte) any {
 			return deserialize(b)
 		},
 	}

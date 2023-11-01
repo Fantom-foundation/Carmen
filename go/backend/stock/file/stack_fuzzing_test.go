@@ -77,11 +77,14 @@ func FuzzStack_RandomOps(f *testing.F) {
 	serialise := func(payload int) []byte {
 		return binary.BigEndian.AppendUint32(make([]byte, 0, 4), uint32(payload))
 	}
-	deserialise := func(b []byte) (int, []byte) {
-		if len(b) >= 4 {
-			return int(binary.BigEndian.Uint32(b[0:4])), b[4:]
+	deserialise := func(b *[]byte) int {
+		if len(*b) >= 4 {
+			res := int(binary.BigEndian.Uint32((*b)[0:4]))
+			*b = (*b)[0:4]
+			return res
 		} else {
-			return 0, b[:]
+			*b = (*b)[:]
+			return 0
 		}
 	}
 
@@ -179,8 +182,7 @@ func parseOperations(registry fuzzing.OpsFactoryRegistry[opType, stackFuzzingCon
 	var ops []fuzzing.Operation[stackFuzzingContext]
 	var expensiveOpTotal, expensiveOpRow int
 	for len(b) >= 1 {
-		opType, op, newB := registry.ReadNextOp(b)
-		b = newB
+		opType, op := registry.ReadNextOp(&b)
 		if opType == flush || opType == close || opType == getAll {
 			expensiveOpRow++
 			expensiveOpTotal++

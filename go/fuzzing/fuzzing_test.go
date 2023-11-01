@@ -18,8 +18,10 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	serialise := func(data byte) []byte {
 		return []byte{data}
 	}
-	deserialise := func(raw []byte) (byte, []byte) {
-		return raw[0], raw[1:]
+	deserialise := func(raw *[]byte) byte {
+		r := (*raw)[0]
+		*raw = (*raw)[1:]
+		return r
 	}
 
 	dataF := func(opType byte, data byte, t *testing.T, c *testContext) {
@@ -59,8 +61,7 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	campaign.EXPECT().Deserialize(gomock.Any()).Times(2).DoAndReturn(func(raw []byte) []Operation[testContext] {
 		ops := make([]Operation[testContext], 0, len(raw))
 		for len(raw) > 0 {
-			var op Operation[testContext]
-			_, op, raw = registry.ReadNextOp(raw)
+			_, op := registry.ReadNextOp(&raw)
 			ops = append(ops, op)
 		}
 		return ops
