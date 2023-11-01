@@ -111,7 +111,7 @@ type Serializable interface {
 type FuzzOp[T ~byte, C any, PAYLOAD Serializable] struct {
 	opType T
 	data   PAYLOAD
-	apply  func(data PAYLOAD, t *testing.T, context *C)
+	apply  func(opType T, data PAYLOAD, t *testing.T, context *C)
 }
 
 // NewOp creates a new fuzzing operation with predefined action amd initial data.
@@ -120,7 +120,7 @@ type FuzzOp[T ~byte, C any, PAYLOAD Serializable] struct {
 func NewOp[T ~byte, C any, PAYLOAD Serializable](
 	opType T,
 	data PAYLOAD,
-	apply func(data PAYLOAD, t *testing.T, context *C)) *FuzzOp[T, C, PAYLOAD] {
+	apply func(opType T, data PAYLOAD, t *testing.T, context *C)) *FuzzOp[T, C, PAYLOAD] {
 
 	return &FuzzOp[T, C, PAYLOAD]{
 		opType: opType,
@@ -138,7 +138,7 @@ func (op *FuzzOp[T, C, PAYLOAD]) Serialize() []byte {
 
 // Apply passes the call to the apply callback method.
 func (op *FuzzOp[T, C, PAYLOAD]) Apply(t *testing.T, c *C) {
-	op.apply(op.data, t, c)
+	op.apply(op.opType, op.data, t, c)
 }
 
 // EmptyPayload is a convenient implementation of empty payload
@@ -146,4 +146,24 @@ type EmptyPayload struct{}
 
 func (p EmptyPayload) Serialize() []byte {
 	return []byte{}
+}
+
+// Payload is a generic payload, with explicitly defined a method
+// to serialize it to a byte array.
+type Payload[T any] struct {
+	Val       T
+	serialize func(val T) []byte
+}
+
+// NewPayload creates a new generic payload typed to the defined type.
+// A method to serialize this type must be provided.
+func NewPayload[T any](val T, serialize func(val T) []byte) Payload[T] {
+	return Payload[T]{
+		val,
+		serialize,
+	}
+}
+
+func (p Payload[T]) Serialize() []byte {
+	return p.serialize(p.Val)
 }

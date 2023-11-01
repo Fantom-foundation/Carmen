@@ -80,24 +80,20 @@ func (c *stackFuzzingCampaign) Cleanup(t *testing.T, context *stackFuzzingContex
 	}
 }
 
-type intValue int
-
-func (v intValue) Serialize() []byte {
+var serializeInt = func(val int) []byte {
 	b := make([]byte, 0, 4)
-	return binary.BigEndian.AppendUint32(b, uint32(v))
+	return binary.BigEndian.AppendUint32(b, uint32(val))
 }
 
-// Definitions of fuzzing operation methods.
-
-var opPush = func(value intValue, t *testing.T, c *stackFuzzingContext) {
-	err := c.stack.Push(int(value))
+var opPush = func(_ opType, value fuzzing.Payload[int], t *testing.T, c *stackFuzzingContext) {
+	err := c.stack.Push(value.Val)
 	if err != nil {
 		t.Errorf("error to push value: %s", err)
 	}
-	c.shadow.Push(int(value))
+	c.shadow.Push(value.Val)
 }
 
-var opPop = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+var opPop = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if got, err := c.stack.Pop(); err != nil {
 		// error when the shadow is empty is OK state
 		if c.shadow.Empty() && strings.HasPrefix(err.Error(), "cannot pop from empty stack") {
@@ -113,7 +109,7 @@ var opPop = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	}
 }
 
-var opGetAll = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+var opGetAll = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	got, err := c.stack.GetAll()
 	if err != nil {
 		t.Errorf("error to get all values: %s", err)
@@ -124,19 +120,19 @@ var opGetAll = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext
 	}
 }
 
-var opSize = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+var opSize = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if got, want := c.stack.Size(), c.shadow.Size(); got != want {
 		t.Errorf("stack does not match expected value: %v != %v", got, want)
 	}
 }
 
-var opEmpty = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+var opEmpty = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if got, want := c.stack.Empty(), c.shadow.Empty(); got != want {
 		t.Errorf("stack does not match expected value: %v != %v", got, want)
 	}
 }
 
-var opClose = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+var opClose = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if err := c.stack.Close(); err != nil {
 		t.Errorf("error to flush stack: %s", err)
 	}
@@ -147,7 +143,7 @@ var opClose = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext)
 	c.stack = stack
 }
 
-var opFlush = func(_ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
+var opFlush = func(_ opType, _ fuzzing.EmptyPayload, t *testing.T, c *stackFuzzingContext) {
 	if err := c.stack.Flush(); err != nil {
 		t.Errorf("error to flush stack: %s", err)
 	}
@@ -196,19 +192,19 @@ func createOp(t opType, value int) fuzzing.Operation[stackFuzzingContext] {
 	var op fuzzing.Operation[stackFuzzingContext]
 	switch t {
 	case push:
-		op = fuzzing.NewOp(push, intValue(value), opPush)
+		op = fuzzing.NewOp(t, fuzzing.NewPayload(value, serializeInt), opPush)
 	case pop:
-		op = fuzzing.NewOp(pop, fuzzing.EmptyPayload{}, opPop)
+		op = fuzzing.NewOp(t, fuzzing.EmptyPayload{}, opPop)
 	case getAll:
-		op = fuzzing.NewOp(getAll, fuzzing.EmptyPayload{}, opGetAll)
+		op = fuzzing.NewOp(t, fuzzing.EmptyPayload{}, opGetAll)
 	case size:
-		op = fuzzing.NewOp(size, fuzzing.EmptyPayload{}, opSize)
+		op = fuzzing.NewOp(t, fuzzing.EmptyPayload{}, opSize)
 	case empty:
-		op = fuzzing.NewOp(empty, fuzzing.EmptyPayload{}, opEmpty)
+		op = fuzzing.NewOp(t, fuzzing.EmptyPayload{}, opEmpty)
 	case close:
-		op = fuzzing.NewOp(close, fuzzing.EmptyPayload{}, opClose)
+		op = fuzzing.NewOp(t, fuzzing.EmptyPayload{}, opClose)
 	case flush:
-		op = fuzzing.NewOp(flush, fuzzing.EmptyPayload{}, opFlush)
+		op = fuzzing.NewOp(t, fuzzing.EmptyPayload{}, opFlush)
 	}
 
 	return op
