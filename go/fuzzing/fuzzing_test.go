@@ -18,6 +18,9 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	serialise := func(data byte) []byte {
 		return []byte{data}
 	}
+	deserialise := func(raw []byte) (byte, []byte) {
+		return raw[0], raw[1:]
+	}
 
 	dataF := func(opType byte, data byte, t *testing.T, c *testContext) {
 		*c = append(*c, opType)
@@ -25,25 +28,25 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	}
 
 	registry := NewRegistry[byte, testContext]()
-	RegisterDataOp(registry, 0xA, serialise, dataF)
-	RegisterEmptyDataOp(registry, 0xB, noDataF)
-	RegisterEmptyDataOp(registry, 0xC, noDataF)
+	RegisterDataOp(registry, 0x0, serialise, deserialise, dataF)
+	RegisterNoDataOp(registry, 0x1, noDataF)
+	RegisterNoDataOp(registry, 0x2, noDataF)
 
-	RegisterEmptyDataOp(registry, 0x1, noDataF)
-	RegisterEmptyDataOp(registry, 0x2, noDataF)
-	RegisterEmptyDataOp(registry, 0x3, noDataF)
+	RegisterNoDataOp(registry, 0x3, noDataF)
+	RegisterNoDataOp(registry, 0x4, noDataF)
+	RegisterNoDataOp(registry, 0x5, noDataF)
 
-	opA := registry.CreateDataOp(0xA, byte(0xFF))
-	opB := registry.CreateEmptyDataOp(0xB)
-	opC := registry.CreateEmptyDataOp(0xC)
+	op1 := registry.CreateDataOp(0x0, byte(0xFF))
+	op2 := registry.CreateNoDataOp(0x1)
+	op3 := registry.CreateNoDataOp(0x2)
 
-	op1 := registry.CreateEmptyDataOp(0x1)
-	op2 := registry.CreateEmptyDataOp(0x2)
-	op3 := registry.CreateEmptyDataOp(0x3)
+	op4 := registry.CreateNoDataOp(0x3)
+	op5 := registry.CreateNoDataOp(0x4)
+	op6 := registry.CreateNoDataOp(0x5)
 
-	chain1 := []Operation[testContext]{opA, opB, opC}
-	chain2 := []Operation[testContext]{op1, op2}
-	chain3 := []Operation[testContext]{op3}
+	chain1 := []Operation[testContext]{op1, op2, op3}
+	chain2 := []Operation[testContext]{op4, op5}
+	chain3 := []Operation[testContext]{op6}
 	chains := []OperationSequence[testContext]{chain1, chain2, chain3}
 
 	terminalSymbol := byte(0xFA)
@@ -55,14 +58,9 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	campaign.EXPECT().CreateContext(t).Times(2).Return(&context) // two campaign loops
 	campaign.EXPECT().Deserialize(gomock.Any()).Times(2).DoAndReturn(func(raw []byte) []Operation[testContext] {
 		ops := make([]Operation[testContext], 0, len(raw))
-		for i := 0; i < len(raw); i++ {
+		for len(raw) > 0 {
 			var op Operation[testContext]
-			if raw[i] == 0xA {
-				op = registry.CreateDataOp(raw[i], raw[i+1])
-				i++ // skip beyond the data part
-			} else {
-				op = registry.CreateEmptyDataOp(raw[i])
-			}
+			_, op, raw = registry.ReadNextOp(raw)
 			ops = append(ops, op)
 		}
 		return ops
@@ -88,8 +86,8 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 
 	// we test that all operations were called, and extended with closing symbol.
 	want := []byte{
-		0xA, 0xFF, 0xB, 0xC, 0x1, 0x2, 0x3, 0xFA, // first loop, includes data for opcode 0xA
-		0xA, 0xFF, 0xB, 0xC, 0x1, 0x2, 0x3, 0xFB, // second loop - different terminal symbol
+		0x0, 0xFF, 0x1, 0x2, 0x3, 0x4, 0x5, 0xFA, // first loop, includes data for opcode 0xA
+		0x0, 0xFF, 0x1, 0x2, 0x3, 0x4, 0x5, 0xFB, // second loop - different terminal symbol
 	}
 	got := context
 

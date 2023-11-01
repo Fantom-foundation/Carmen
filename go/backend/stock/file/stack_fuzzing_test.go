@@ -77,15 +77,22 @@ func FuzzStack_RandomOps(f *testing.F) {
 	serialise := func(payload int) []byte {
 		return binary.BigEndian.AppendUint32(make([]byte, 0, 4), uint32(payload))
 	}
+	deserialise := func(b []byte) (int, []byte) {
+		if len(b) >= 4 {
+			return int(binary.BigEndian.Uint32(b[0:4])), b[4:]
+		} else {
+			return 0, b[:]
+		}
+	}
 
 	registry := fuzzing.NewRegistry[opType, stackFuzzingContext]()
-	fuzzing.RegisterDataOp(registry, push, serialise, opPush)
-	fuzzing.RegisterEmptyDataOp(registry, pop, opPop)
-	fuzzing.RegisterEmptyDataOp(registry, getAll, opGetAll)
-	fuzzing.RegisterEmptyDataOp(registry, size, opSize)
-	fuzzing.RegisterEmptyDataOp(registry, empty, opEmpty)
-	fuzzing.RegisterEmptyDataOp(registry, close, opClose)
-	fuzzing.RegisterEmptyDataOp(registry, flush, opFlush)
+	fuzzing.RegisterDataOp(registry, push, serialise, deserialise, opPush)
+	fuzzing.RegisterNoDataOp(registry, pop, opPop)
+	fuzzing.RegisterNoDataOp(registry, getAll, opGetAll)
+	fuzzing.RegisterNoDataOp(registry, size, opSize)
+	fuzzing.RegisterNoDataOp(registry, empty, opEmpty)
+	fuzzing.RegisterNoDataOp(registry, close, opClose)
+	fuzzing.RegisterNoDataOp(registry, flush, opFlush)
 
 	fuzzing.Fuzz[stackFuzzingContext](f, &stackFuzzingCampaign{registry: registry})
 }
@@ -118,12 +125,12 @@ func (c *stackFuzzingCampaign) Init() []fuzzing.OperationSequence[stackFuzzingCo
 	push1 := c.registry.CreateDataOp(push, 99)
 	push2 := c.registry.CreateDataOp(push, ^99)
 
-	popOp := c.registry.CreateEmptyDataOp(pop)
-	flushOp := c.registry.CreateEmptyDataOp(flush)
-	closeOp := c.registry.CreateEmptyDataOp(close)
-	emptyOp := c.registry.CreateEmptyDataOp(empty)
-	getAllOp := c.registry.CreateEmptyDataOp(getAll)
-	sizeOp := c.registry.CreateEmptyDataOp(size)
+	popOp := c.registry.CreateNoDataOp(pop)
+	flushOp := c.registry.CreateNoDataOp(flush)
+	closeOp := c.registry.CreateNoDataOp(close)
+	emptyOp := c.registry.CreateNoDataOp(empty)
+	getAllOp := c.registry.CreateNoDataOp(getAll)
+	sizeOp := c.registry.CreateNoDataOp(size)
 
 	// generate some adhoc sequences of operations
 	data := []fuzzing.OperationSequence[stackFuzzingContext]{
@@ -172,8 +179,11 @@ func parseOperations(registry fuzzing.OpsFactoryRegistry[opType, stackFuzzingCon
 	var ops []fuzzing.Operation[stackFuzzingContext]
 	var expensiveOpTotal, expensiveOpRow int
 	for len(b) >= 1 {
-		opType := opType(b[0] % 7)
-		b = b[1:]
+		opType, op, newB := registry.ReadNextOp(b)
+		b = newB
+		//if op == nil {
+		//	continue
+		//}
 		if opType == flush || opType == close || opType == getAll {
 			expensiveOpRow++
 			expensiveOpTotal++
@@ -182,18 +192,6 @@ func parseOperations(registry fuzzing.OpsFactoryRegistry[opType, stackFuzzingCon
 			}
 		} else {
 			expensiveOpRow = 0
-		}
-		var op fuzzing.Operation[stackFuzzingContext]
-		if opType == push {
-			if len(b) >= 4 {
-				value := int(binary.BigEndian.Uint32(b[0:4]))
-				b = b[4:]
-				op = registry.CreateDataOp(opType, value)
-			} else {
-				return ops
-			}
-		} else {
-			op = registry.CreateEmptyDataOp(opType)
 		}
 
 		ops = append(ops, op)
