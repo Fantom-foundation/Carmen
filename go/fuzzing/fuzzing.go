@@ -167,3 +167,46 @@ func NewPayload[T any](val T, serialize func(val T) []byte) Payload[T] {
 func (p Payload[T]) Serialize() []byte {
 	return p.serialize(p.Val)
 }
+
+// SerialisedPayload that is a type of payload that is directly represented as a byte array,
+// together with the original value.
+type SerialisedPayload[T any] struct {
+	Val        T
+	serialised []byte
+}
+
+// NewSerialisedPayload creates a SerialisedPayload that is a type of payload that is directly represented as a byte array,
+// together with the original value.
+func NewSerialisedPayload[T any](payload T, serialised []byte) SerialisedPayload[T] {
+	return SerialisedPayload[T]{
+		Val:        payload,
+		serialised: serialised,
+	}
+}
+
+func (p SerialisedPayload[T]) Serialize() []byte {
+	return p.serialised
+}
+
+// OpsFactoryRegistry is a convenient implementation allowing the client to register factories
+// to create fuzzing operations. The instances of operations can be obtained from this registry then.
+type OpsFactoryRegistry[T ~byte, C any] map[T]func(payload any) Operation[C]
+
+func NewRegistry[T ~byte, C any]() OpsFactoryRegistry[T, C] {
+	return make(map[T]func(payload any) Operation[C])
+}
+
+func (r OpsFactoryRegistry[T, C]) register(opType T, fact func(payload any) Operation[C]) {
+	r[opType] = fact
+}
+
+func (r OpsFactoryRegistry[T, C]) CreateOp(opType T, payload any) Operation[C] {
+	return r[opType](payload)
+}
+
+// RegisterOp registers a factory to create a fuzzing operation based for an operation op-code.
+func RegisterOp[T ~byte, C any, D any](registry OpsFactoryRegistry[T, C], opType T, fact func(payload D) Operation[C]) {
+	registry.register(opType, func(payload any) Operation[C] {
+		return fact(payload)
+	})
+}
