@@ -181,9 +181,6 @@ func parseOperations(registry fuzzing.OpsFactoryRegistry[opType, stackFuzzingCon
 	for len(b) >= 1 {
 		opType, op, newB := registry.ReadNextOp(b)
 		b = newB
-		//if op == nil {
-		//	continue
-		//}
 		if opType == flush || opType == close || opType == getAll {
 			expensiveOpRow++
 			expensiveOpTotal++
