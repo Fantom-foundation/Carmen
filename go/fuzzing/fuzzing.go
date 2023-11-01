@@ -169,7 +169,13 @@ func (p SerialisedPayload[T]) Serialize() []byte {
 }
 
 type opRegistration[C any] struct {
-	opFactory   func(payload any) Operation[C]
+	// opFactory creates a new operation filling-in the input payload.
+	// The payload is ignored for operations with no data.
+	opFactory func(payload any) Operation[C]
+
+	// deserialize converts input bytes into payload to be used in the operation.
+	// The method should consume reguired number of bytes from the input and return
+	// the rest as output.
 	deserialize func([]byte) (any, []byte)
 }
 
