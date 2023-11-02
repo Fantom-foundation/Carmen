@@ -44,11 +44,11 @@ var EthereumLikeHashing = hashAlgorithm{
 // computing them as required.
 type hasher interface {
 	// updateHash refreshes the hash of the given node and all nested nodes.
-	updateHashes(root NodeId, nodes NodeManager) (common.Hash, []nodeHash, error)
+	updateHashes(NodeReference, NodeContext, NodeManager) (common.Hash, []nodeHash, error)
 
 	// getHash computes the hash of the node without modifying it. It is used
 	// for debugging, when checking a trie without the intend of modifying it.
-	getHash(NodeId, NodeSource) (common.Hash, error)
+	getHash(NodeReference, NodeContext, NodeSource) (common.Hash, error)
 }
 
 type nodeHash struct {
@@ -71,25 +71,25 @@ type directHasher struct{}
 
 // updateHashes implements the DirectHasher's hashing algorithm to refresh
 // the hashes stored within all nodes reachable from the given node.
-func (h directHasher) updateHashes(id NodeId, source NodeManager) (common.Hash, []nodeHash, error) {
+func (h directHasher) updateHashes(ref NodeReference, _ NodeContext, manager NodeManager) (common.Hash, []nodeHash, error) {
 	hashCollector := &nodeHashCollector{}
-	hash, err := h.updateHashesInternal(id, source, EmptyPath(), hashCollector)
+	hash, err := h.updateHashesInternal(ref, manager, EmptyPath(), hashCollector)
 	return hash, hashCollector.GetHashes(), err
 }
 
 func (h directHasher) updateHashesInternal(
-	id NodeId,
+	ref NodeReference,
 	manager NodeManager,
 	path NodePath,
 	hashCollector *nodeHashCollector,
 ) (common.Hash, error) {
 	hash := common.Hash{}
-	if id.IsEmpty() {
+	if ref.Id().IsEmpty() {
 		return hash, nil
 	}
 
 	// Get write access to the node (hashes may be updated).
-	handle, err := manager.getMutableNode(id)
+	handle, err := ref.GetWriteAccess(manager)
 	if err != nil {
 		return hash, err
 	}
@@ -101,7 +101,7 @@ func (h directHasher) updateHashesInternal(
 		return hash, nil
 	}
 
-	hash, err = h.hash(id, handle.Get(), handle, manager, path, hashCollector)
+	hash, err = h.hash(ref, handle.Get(), handle, manager, path, hashCollector)
 	if err != nil {
 		return hash, err
 	}
@@ -110,19 +110,19 @@ func (h directHasher) updateHashesInternal(
 }
 
 // getHash implements the DirectHasher's hashing algorithm.
-func (h directHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
+func (h directHasher) getHash(ref NodeReference, _ NodeContext, source NodeSource) (common.Hash, error) {
 	hash := common.Hash{}
-	if id.IsEmpty() {
+	if ref.Id().IsEmpty() {
 		return hash, nil
 	}
 
 	// Get read access to the node (no update is conducted).
-	handle, err := source.getNode(id)
+	handle, err := ref.GetReadAccess(source)
 	if err != nil {
 		return hash, err
 	}
 	defer handle.Release()
-	return h.hash(id, handle.Get(), shared.WriteHandle[Node]{}, nil, EmptyPath(), nil)
+	return h.hash(ref, handle.Get(), shared.WriteHandle[Node]{}, nil, EmptyPath(), nil)
 }
 
 // hash is the internal implementation of the direct hasher to compute the hash
@@ -130,7 +130,7 @@ func (h directHasher) getHash(id NodeId, source NodeSource) (common.Hash, error)
 // the hash for the given node is computed, without modifying it, otherwise the
 // hash of all recursively reachable nodes is refreshed.
 func (h directHasher) hash(
-	id NodeId,
+	ref NodeReference,
 	node Node,
 	handle shared.WriteHandle[Node],
 	manager NodeManager,
@@ -152,7 +152,7 @@ func (h directHasher) hash(
 			}
 			node.storageHash = hash
 			node.storageHashDirty = false
-			manager.update(id, handle)
+			manager.MarkDirty(ref, handle)
 		}
 
 		hasher.Write([]byte{'A'})
@@ -178,7 +178,7 @@ func (h directHasher) hash(
 			}
 			node.clearChildHashDirtyFlags()
 			if modified {
-				manager.update(id, handle)
+				manager.MarkDirty(ref, handle)
 			}
 		}
 
@@ -200,7 +200,7 @@ func (h directHasher) hash(
 			}
 			node.nextHash = hash
 			node.nextHashDirty = false
-			manager.update(id, handle)
+			manager.MarkDirty(ref, handle)
 		}
 
 		hasher.Write([]byte{'E'})
@@ -241,25 +241,27 @@ type ethHasher struct{}
 var emptyNodeEthereumHash = common.Keccak256(rlp.Encode(rlp.String{}))
 
 func (h ethHasher) updateHashes(
-	id NodeId,
+	ref NodeReference,
+	context NodeContext,
 	manager NodeManager,
 ) (common.Hash, []nodeHash, error) {
 	hashCollector := &nodeHashCollector{}
-	hash, err := h.updateHashesInternal(id, manager, EmptyPath(), hashCollector)
+	hash, err := h.updateHashesInternal(ref, context, manager, EmptyPath(), hashCollector)
 	return hash, hashCollector.GetHashes(), err
 }
 
 func (h ethHasher) updateHashesInternal(
-	id NodeId,
+	ref NodeReference,
+	context NodeContext,
 	manager NodeManager,
 	path NodePath,
 	hashCollector *nodeHashCollector,
 ) (common.Hash, error) {
-	if id.IsEmpty() {
+	if ref.Id().IsEmpty() {
 		return emptyNodeEthereumHash, nil
 	}
 	// Get write access to the node (hashes may be updated).
-	handle, err := manager.getMutableNode(id)
+	handle, err := ref.GetWriteAccess(manager)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -273,7 +275,7 @@ func (h ethHasher) updateHashesInternal(
 	}
 
 	// Encode the node in RLP and compute its hash.
-	data, err := h.encode(id, node, handle, manager, manager, path, hashCollector)
+	data, err := h.encode(ref, node, handle, context, manager, manager, path, hashCollector)
 	if err != nil {
 		handle.Release()
 		return common.Hash{}, err
@@ -290,19 +292,19 @@ func (h ethHasher) updateHashesInternal(
 	return hash, nil
 }
 
-func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
-	if id.IsEmpty() {
+func (h ethHasher) getHash(ref NodeReference, context NodeContext, source NodeSource) (common.Hash, error) {
+	if ref.Id().IsEmpty() {
 		return emptyNodeEthereumHash, nil
 	}
 	// Get write access to the node (hashes may be updated).
-	handle, err := source.getNode(id)
+	handle, err := ref.GetReadAccess(source)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	node := handle.Get()
 
 	// Encode the node in RLP and compute its hash.
-	data, err := h.encode(id, node, shared.WriteHandle[Node]{}, nil, source, EmptyPath(), nil)
+	data, err := h.encode(ref, node, shared.WriteHandle[Node]{}, context, nil, source, EmptyPath(), nil)
 	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
@@ -317,9 +319,10 @@ func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 // read-only operation accepting the current hashes and embedded flags as the true value
 // even if dirty flags are set. The node and source parameter must not be nil.
 func (h ethHasher) encode(
-	id NodeId,
+	ref NodeReference,
 	node Node,
 	handle shared.WriteHandle[Node],
+	context NodeContext,
 	manager NodeManager,
 	source NodeSource,
 	path NodePath,
@@ -329,13 +332,13 @@ func (h ethHasher) encode(
 	case EmptyNode:
 		return h.encodeEmpty()
 	case *AccountNode:
-		return h.encodeAccount(id, trg, handle, manager, source, path, hashCollector)
+		return h.encodeAccount(ref, trg, handle, context, manager, source, path, hashCollector)
 	case *BranchNode:
-		return h.encodeBranch(id, trg, handle, manager, source, path, hashCollector)
+		return h.encodeBranch(ref, trg, handle, context, manager, source, path, hashCollector)
 	case *ExtensionNode:
-		return h.encodeExtension(id, trg, handle, manager, source, path, hashCollector)
+		return h.encodeExtension(ref, trg, handle, context, manager, source, path, hashCollector)
 	case *ValueNode:
-		return h.encodeValue(id, trg, handle, manager, source, path, hashCollector)
+		return h.encodeValue(ref, trg, handle, context, manager, source, path, hashCollector)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -357,9 +360,10 @@ var branchRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h ethHasher) encodeBranch(
-	id NodeId,
+	ref NodeReference,
 	node *BranchNode,
 	handle shared.WriteHandle[Node],
+	context NodeContext,
 	manager NodeManager,
 	source NodeSource,
 	path NodePath,
@@ -377,7 +381,7 @@ func (h ethHasher) encodeBranch(
 			}
 
 			// check whether the node is embedded and mark as such
-			embedded, err := h.isEmbedded(child, manager, path.Child(Nibble(i)), hashCollector)
+			embedded, err := h.isEmbedded(child, context, manager, path.Child(Nibble(i)), hashCollector)
 			if err != nil {
 				return nil, err
 			}
@@ -385,7 +389,7 @@ func (h ethHasher) encodeBranch(
 
 			// For non-embedded nodes, the hash needs to be refreshed.
 			if !embedded {
-				hash, err := h.updateHashesInternal(child, manager, path.Child(Nibble(i)), hashCollector)
+				hash, err := h.updateHashesInternal(child, context, manager, path.Child(Nibble(i)), hashCollector)
 				if err != nil {
 					return nil, err
 				}
@@ -397,7 +401,7 @@ func (h ethHasher) encodeBranch(
 
 		node.clearChildHashDirtyFlags()
 		if modified {
-			manager.update(id, handle)
+			manager.MarkDirty(ref, handle)
 		}
 	}
 
@@ -412,12 +416,12 @@ func (h ethHasher) encodeBranch(
 		}
 
 		if node.isEmbedded(byte(i)) {
-			node, err := source.getNode(child)
+			node, err := child.GetReadAccess(source)
 			if err != nil {
 				return nil, err
 			}
 			encoded, err := h.encode(
-				child, node.Get(), shared.WriteHandle[Node]{},
+				child, node.Get(), shared.WriteHandle[Node]{}, context,
 				nil, source, path.Child(Nibble(i)), hashCollector,
 			)
 			node.Release()
@@ -445,9 +449,10 @@ var extensionRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h ethHasher) encodeExtension(
-	id NodeId,
+	ref NodeReference,
 	node *ExtensionNode,
 	handle shared.WriteHandle[Node],
+	context NodeContext,
 	manager NodeManager,
 	source NodeSource,
 	path NodePath,
@@ -464,14 +469,14 @@ func (h ethHasher) encodeExtension(
 	if manager != nil && node.nextHashDirty {
 
 		// check whether the node is embedded and mark as such
-		embedded, err := h.isEmbedded(node.next, manager, path.Next(), hashCollector)
+		embedded, err := h.isEmbedded(node.next, context, manager, path.Next(), hashCollector)
 		if err != nil {
 			return nil, err
 		}
 		node.nextIsEmbedded = embedded
 
 		if !embedded {
-			hash, err := h.updateHashesInternal(node.next, manager, path.Next(), hashCollector)
+			hash, err := h.updateHashesInternal(node.next, context, manager, path.Next(), hashCollector)
 			if err != nil {
 				return nil, err
 			}
@@ -479,7 +484,7 @@ func (h ethHasher) encodeExtension(
 		}
 		node.nextHashDirty = false
 
-		manager.update(id, handle)
+		manager.MarkDirty(ref, handle)
 	}
 
 	// TODO: the use of the same encoding as for the branch nodes is
@@ -487,14 +492,14 @@ func (h ethHasher) encodeExtension(
 	// would require to find two keys or address with a very long
 	// common hash prefix.
 	if node.nextIsEmbedded {
-		next, err := source.getNode(node.next)
+		next, err := node.next.GetReadAccess(source)
 		if err != nil {
 			return nil, err
 		}
 		defer next.Release()
 		encoded, err := h.encode(
 			node.next, next.Get(), shared.WriteHandle[Node]{},
-			nil, source, path.Next(), hashCollector)
+			context, nil, source, path.Next(), hashCollector)
 		if err != nil {
 			return nil, err
 		}
@@ -513,9 +518,10 @@ var accountRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h *ethHasher) encodeAccount(
-	id NodeId,
+	ref NodeReference,
 	node *AccountNode,
 	handle shared.WriteHandle[Node],
+	context NodeContext,
 	manager NodeManager,
 	source NodeSource,
 	path NodePath,
@@ -525,13 +531,13 @@ func (h *ethHasher) encodeAccount(
 	if manager != nil && node.storageHashDirty {
 		var err error
 		var storageHash common.Hash
-		storageHash, err = h.updateHashesInternal(storageRoot, manager, path.Next(), hashCollector)
+		storageHash, err = h.updateHashesInternal(storageRoot, context, manager, path.Next(), hashCollector)
 		if err != nil {
 			return nil, err
 		}
 		node.storageHash = storageHash
 		node.storageHashDirty = false
-		manager.update(id, handle)
+		manager.MarkDirty(ref, handle)
 	}
 
 	// Encode the account information to get the value.
@@ -551,7 +557,7 @@ func (h *ethHasher) encodeAccount(
 
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), source)}
+	items[0] = rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), context)}
 	items[1] = rlp.String{Str: value}
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
@@ -563,9 +569,10 @@ var valueRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h *ethHasher) encodeValue(
-	_ NodeId,
+	_ NodeReference,
 	node *ValueNode,
 	_ shared.WriteHandle[Node],
+	context NodeContext,
 	_ NodeManager,
 	source NodeSource,
 	_ NodePath,
@@ -576,7 +583,7 @@ func (h *ethHasher) encodeValue(
 	items := *ptr
 
 	// The first item is an encoded path fragment.
-	items[0] = &rlp.String{Str: encodeKeyPath(node.key, int(node.pathLength), source)}
+	items[0] = &rlp.String{Str: encodeKeyPath(node.key, int(node.pathLength), context)}
 
 	// The second item is the value without leading zeros.
 	value := node.value[:]
@@ -588,13 +595,13 @@ func (h *ethHasher) encodeValue(
 	return rlp.Encode(rlp.List{Items: items}), nil
 }
 
-func encodeKeyPath(key common.Key, numNibbles int, nodes NodeSource) []byte {
-	path := nodes.hashKey(key)
+func encodeKeyPath(key common.Key, numNibbles int, context NodeContext) []byte {
+	path := context.hashKey(key)
 	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
 }
 
-func encodeAddressPath(address common.Address, numNibbles int, nodes NodeSource) []byte {
-	path := nodes.hashAddress(address)
+func encodeAddressPath(address common.Address, numNibbles int, context NodeContext) []byte {
+	path := context.hashAddress(address)
 	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
 }
 
@@ -632,7 +639,8 @@ func getEncodedPartialPathSize(numNibbles int) int {
 // marked dirty, this information is updated. Thus, calls to this function may
 // cause updates to the state of some nodes.
 func (h ethHasher) isEmbedded(
-	id NodeId,
+	ref NodeReference,
+	context NodeContext,
 	manager NodeManager,
 	path NodePath,
 	hashCollector *nodeHashCollector,
@@ -640,7 +648,7 @@ func (h ethHasher) isEmbedded(
 	// TODO: test this function
 
 	// Start by estimating a lower bound for the node size.
-	node, err := manager.getMutableNode(id) // mutable since encoding may update hashes.
+	node, err := ref.GetWriteAccess(manager) // write access since encoding may update hashes.
 	if err != nil {
 		return false, err
 	}
@@ -657,7 +665,7 @@ func (h ethHasher) isEmbedded(
 	}
 
 	// We need to encode it to be certain.
-	encoded, err := h.encode(id, node.Get(), node, manager, manager, path, hashCollector)
+	encoded, err := h.encode(ref, node.Get(), node, context, manager, manager, path, hashCollector)
 	if err != nil {
 		return false, err
 	}
@@ -723,7 +731,7 @@ func getLowerBoundForEncodedSizeBranch(node *BranchNode, limit int, nodes NodeSo
 			continue
 		}
 
-		node, err := nodes.getNode(child)
+		node, err := child.GetReadAccess(nodes)
 		if err != nil {
 			return 0, err
 		}
@@ -748,7 +756,7 @@ func getLowerBoundForEncodedSizeExtension(node *ExtensionNode, limit int, nodes 
 		return sum, nil
 	}
 
-	next, err := nodes.getNode(node.next)
+	next, err := node.next.GetReadAccess(nodes)
 	if err != nil {
 		return 0, err
 	}

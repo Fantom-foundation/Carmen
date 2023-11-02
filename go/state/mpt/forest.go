@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
-	"sort"
-	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -71,13 +68,9 @@ type Forest struct {
 	// mutable, as for the live-db-only case.
 	storageMode StorageMode
 
-	// A pool of nodes enforcing memory capacity limits.
-	nodePool NodePool
-
-	// The set of dirty nodes. Nodes are dirty if there in-memory
-	// state does not match their on-disk content.
-	dirty      map[NodeId]struct{}
-	dirtyMutex sync.Mutex
+	// The manager controlling the life-cycle of nodes and their memory-to-disk
+	// synchronization.
+	nodeManager NodeManager
 
 	// The hasher managing node hashes for this forest.
 	hasher hasher
@@ -85,9 +78,6 @@ type Forest struct {
 	// Cached hashers for keys and addresses (thread safe).
 	keyHasher     *common.CachedHasher[common.Key]
 	addressHasher *common.CachedHasher[common.Address]
-
-	// A buffer for asynchronously writing nodes to files.
-	writeBuffer WriteBuffer
 }
 
 // The number of elements to retain in the node cache.
@@ -242,34 +232,33 @@ func makeForest(
 		accounts:      synced.Sync(accounts),
 		values:        synced.Sync(values),
 		storageMode:   mode,
-		dirty:         map[NodeId]struct{}{},
 		hasher:        config.Hashing.createHasher(),
 		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
 		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
 	}
-	res.nodePool = NewNodePool(cacheCapacity, res)
-	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, 1024)
+	store := forestToNodeStoreAdapter{res}
+	res.nodeManager = NewNodeManager(cacheCapacity, store)
 	return res, nil
 }
 
 func (s *Forest) GetAccountInfo(rootRef NodeReference, addr common.Address) (AccountInfo, bool, error) {
-	handle, err := rootRef.GetReadAccess(s.nodePool)
+	handle, err := rootRef.GetReadAccess(s.nodeManager)
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
 	defer handle.Release()
 	path := AddressToNibblePath(addr, s)
-	return handle.Get().GetAccount(s, addr, path[:])
+	return handle.Get().GetAccount(s, s.nodeManager, addr, path[:])
 }
 
 func (s *Forest) SetAccountInfo(rootRef NodeReference, addr common.Address, info AccountInfo) (NodeReference, error) {
-	root, err := rootRef.GetWriteAccess(s.nodePool)
+	root, err := rootRef.GetWriteAccess(s.nodeManager)
 	if err != nil {
 		return NodeReference{}, err
 	}
 	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	newRoot, _, err := root.Get().SetAccount(s, rootRef, root, addr, path[:], info)
+	newRoot, _, err := root.Get().SetAccount(s, s.nodeManager, rootRef, root, addr, path[:], info)
 	if err != nil {
 		return NodeReference{}, err
 	}
@@ -277,24 +266,24 @@ func (s *Forest) SetAccountInfo(rootRef NodeReference, addr common.Address, info
 }
 
 func (s *Forest) GetValue(rootRef NodeReference, addr common.Address, key common.Key) (common.Value, error) {
-	root, err := rootRef.GetReadAccess(s.nodePool)
+	root, err := rootRef.GetReadAccess(s.nodeManager)
 	if err != nil {
 		return common.Value{}, err
 	}
 	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	value, _, err := root.Get().GetSlot(s, addr, path[:], key)
+	value, _, err := root.Get().GetSlot(s, s.nodeManager, addr, path[:], key)
 	return value, err
 }
 
 func (s *Forest) SetValue(rootRef NodeReference, addr common.Address, key common.Key, value common.Value) (NodeReference, error) {
-	root, err := rootRef.GetWriteAccess(s.nodePool)
+	root, err := rootRef.GetWriteAccess(s.nodeManager)
 	if err != nil {
 		return NodeReference{}, err
 	}
 	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	newRoot, _, err := root.Get().SetSlot(s, rootRef, root, addr, path[:], key, value)
+	newRoot, _, err := root.Get().SetSlot(s, s.nodeManager, rootRef, root, addr, path[:], key, value)
 	if err != nil {
 		return NodeReference{}, err
 	}
@@ -302,28 +291,28 @@ func (s *Forest) SetValue(rootRef NodeReference, addr common.Address, key common
 }
 
 func (s *Forest) ClearStorage(rootRef NodeReference, addr common.Address) error {
-	root, err := rootRef.GetWriteAccess(s.nodePool)
+	root, err := rootRef.GetWriteAccess(s.nodeManager)
 	if err != nil {
 		return err
 	}
 	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	_, _, err = root.Get().ClearStorage(s, rootRef, root, addr, path[:])
+	_, _, err = root.Get().ClearStorage(s, s.nodeManager, rootRef, root, addr, path[:])
 	return err
 }
 
 func (s *Forest) VisitTrie(rootRef NodeReference, visitor NodeVisitor) error {
-	root, err := rootRef.GetReadAccess(s.nodePool)
+	root, err := rootRef.GetReadAccess(s.nodeManager)
 	if err != nil {
 		return err
 	}
 	defer root.Release()
-	_, err = root.Get().Visit(s, rootRef, 0, visitor)
+	_, err = root.Get().Visit(s, s.nodeManager, rootRef, 0, visitor)
 	return err
 }
 
 func (s *Forest) updateHashesFor(ref NodeReference) (common.Hash, []nodeHash, error) {
-	return s.hasher.updateHashes(ref, s)
+	return s.hasher.updateHashes(ref, s, s.nodeManager)
 }
 
 func (s *Forest) setHashesFor(ref NodeReference, hashes []nodeHash) error {
@@ -339,7 +328,7 @@ func (s *Forest) setHashesFor(ref NodeReference, hashes []nodeHash) error {
 }
 
 func (s *Forest) getHashFor(ref NodeReference) (common.Hash, error) {
-	return s.hasher.getHash(ref, s)
+	return s.hasher.getHash(ref, s, s.nodeManager)
 }
 
 func (s *Forest) hashKey(key common.Key) common.Hash {
@@ -354,62 +343,20 @@ func (f *Forest) Freeze(ref NodeReference) error {
 	if f.storageMode != Immutable {
 		return fmt.Errorf("node-freezing only supported in archive mode")
 	}
-	root, err := ref.GetWriteAccess(f.nodePool)
+	root, err := ref.GetWriteAccess(f.nodeManager)
 	if err != nil {
 		return err
 	}
 	defer root.Release()
-	return root.Get().Freeze(f, root)
+	return root.Get().Freeze(f, f.nodeManager, root)
 }
 
 func (s *Forest) Flush() error {
-	// Get snapshot of set of dirty Node IDs.
-	s.dirtyMutex.Lock()
-	ids := make([]NodeId, 0, len(s.dirty))
-	for id := range s.dirty {
-		ids = append(ids, id)
-	}
-	s.dirty = map[NodeId]struct{}{}
-	s.dirtyMutex.Unlock()
-
-	// Flush dirty keys in order (to avoid excessive seeking).
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	var errs = []error{}
-	for _, id := range ids {
-		s.nodeCacheMutex.Lock()
-		node, present := s.nodeCache.Get(id)
-		s.nodeCacheMutex.Unlock()
-		if present {
-			handle := node.GetReadHandle()
-			err := s.flushNode(id, handle.Get())
-			handle.Release()
-			if err != nil {
-				errs = append(errs, err)
-			}
-		} else {
-			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
-		}
-	}
-
-	return errors.Join(
-		errors.Join(errs...),
-		s.writeBuffer.Flush(),
-		s.accounts.Flush(),
-		s.branches.Flush(),
-		s.extensions.Flush(),
-		s.values.Flush(),
-	)
+	return s.nodeManager.Flush()
 }
 
 func (s *Forest) Close() error {
-	return errors.Join(
-		s.Flush(),
-		s.writeBuffer.Close(),
-		s.accounts.Close(),
-		s.branches.Close(),
-		s.extensions.Close(),
-		s.values.Close(),
-	)
+	return s.nodeManager.Close()
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
@@ -419,28 +366,10 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("branches", s.branches.GetMemoryFootprint())
 	mf.AddChild("extensions", s.extensions.GetMemoryFootprint())
 	mf.AddChild("values", s.values.GetMemoryFootprint())
-	s.nodeCacheMutex.Lock()
-	defer s.nodeCacheMutex.Unlock()
-	mf.AddChild("cache", s.nodeCache.GetDynamicMemoryFootprint(func(node *shared.Shared[Node]) uintptr {
-		handle := node.GetReadHandle()
-		defer handle.Release()
-		if _, ok := handle.Get().(*AccountNode); ok {
-			return unsafe.Sizeof(AccountNode{})
-		}
-		if _, ok := handle.Get().(*BranchNode); ok {
-			return unsafe.Sizeof(BranchNode{})
-		}
-		if _, ok := handle.Get().(EmptyNode); ok {
-			return unsafe.Sizeof(EmptyNode{})
-		}
-		if _, ok := handle.Get().(*ExtensionNode); ok {
-			return unsafe.Sizeof(ExtensionNode{})
-		}
-		if _, ok := handle.Get().(*ValueNode); ok {
-			return unsafe.Sizeof(ValueNode{})
-		}
-		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
-	}))
+
+	// TODO: add memory usage of NodeManager
+	mf.AddChild("nodes", common.NewMemoryFootprint(12))
+
 	mf.AddChild("hashedKeysCache", s.keyHasher.GetMemoryFootprint())
 	mf.AddChild("hashedAddressesCache", s.addressHasher.GetMemoryFootprint())
 	return mf
@@ -448,13 +377,13 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
 func (s *Forest) Dump(rootRef NodeReference) {
-	root, err := rootRef.GetReadAccess(s.nodePool)
+	root, err := rootRef.GetReadAccess(s.nodeManager)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
 		return
 	}
 	defer root.Release()
-	root.Get().Dump(s, rootRef, "")
+	root.Get().Dump(s, s.nodeManager, rootRef, "")
 }
 
 // Check verifies internal invariants of the Trie instance. If the trie is
@@ -462,12 +391,12 @@ func (s *Forest) Dump(rootRef NodeReference) {
 // errors are detected, the Trie is to be considered in an invalid state and
 // the behavior of all other operations is undefined.
 func (s *Forest) Check(rootRef NodeReference) error {
-	root, err := rootRef.GetReadAccess(s.nodePool)
+	root, err := rootRef.GetReadAccess(s.nodeManager)
 	if err != nil {
 		return err
 	}
 	defer root.Release()
-	return root.Get().Check(s, rootRef, make([]Nibble, 0, common.AddressSize*2))
+	return root.Get().Check(s, s.nodeManager, rootRef, make([]Nibble, 0, common.AddressSize*2))
 }
 
 // -- NodeManager interface --
@@ -476,69 +405,70 @@ func (s *Forest) getConfig() MptConfig {
 	return s.config
 }
 
-func (s *Forest) fetch(id NodeId) (*shared.Shared[Node], error) {
-	// Check whether the node is in the write buffer.
-	// Note: although Cancel is thread safe, it is important to make sure
-	// that this part is only run by a single thread to avoid one thread
-	// recovering a node from the buffer and another fetching it from the
-	// storage. This synchronization is currently ensured by the
-	// nodeCacheMutex acquired above and held until the end of the function.
-	res, found := s.writeBuffer.Cancel(id)
-	if found {
-		s.addToCacheHoldingCacheMutexLock(id, res)
-		// Since the write was canceled, the fetched node is
-		// still dirty (only dirty nodes are in the buffer).
-		s.dirtyMutex.Lock()
-		s.dirty[id] = struct{}{}
-		s.dirtyMutex.Unlock()
-		return res, nil
-	}
+/*
+	func (s *Forest) fetch(id NodeId) (*shared.Shared[Node], error) {
+		// Check whether the node is in the write buffer.
+		// Note: although Cancel is thread safe, it is important to make sure
+		// that this part is only run by a single thread to avoid one thread
+		// recovering a node from the buffer and another fetching it from the
+		// storage. This synchronization is currently ensured by the
+		// nodeCacheMutex acquired above and held until the end of the function.
+		res, found := s.writeBuffer.Cancel(id)
+		if found {
+			s.addToCacheHoldingCacheMutexLock(id, res)
+			// Since the write was canceled, the fetched node is
+			// still dirty (only dirty nodes are in the buffer).
+			s.dirtyMutex.Lock()
+			s.dirty[id] = struct{}{}
+			s.dirtyMutex.Unlock()
+			return res, nil
+		}
 
-	// Load the node from persistent storage.
-	var node Node
-	var err error
-	if id.IsValue() {
-		value, e := s.values.Get(id.Index())
-		node, err = &value, e
-	} else if id.IsAccount() {
-		value, e := s.accounts.Get(id.Index())
-		node, err = &value, e
-	} else if id.IsBranch() {
-		value, e := s.branches.Get(id.Index())
-		node, err = &value, e
-	} else if id.IsExtension() {
-		value, e := s.extensions.Get(id.Index())
-		node, err = &value, e
-	} else if id.IsEmpty() {
-		node = EmptyNode{}
-	} else {
-		err = fmt.Errorf("unknown node ID: %v", id)
-	}
-	if err != nil {
-		return nil, err
-	}
-	if node == nil {
-		return nil, fmt.Errorf("no node with ID %d in storage", id)
-	}
+		// Load the node from persistent storage.
+		var node Node
+		var err error
+		if id.IsValue() {
+			value, e := s.values.Get(id.Index())
+			node, err = &value, e
+		} else if id.IsAccount() {
+			value, e := s.accounts.Get(id.Index())
+			node, err = &value, e
+		} else if id.IsBranch() {
+			value, e := s.branches.Get(id.Index())
+			node, err = &value, e
+		} else if id.IsExtension() {
+			value, e := s.extensions.Get(id.Index())
+			node, err = &value, e
+		} else if id.IsEmpty() {
+			node = EmptyNode{}
+		} else {
+			err = fmt.Errorf("unknown node ID: %v", id)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if node == nil {
+			return nil, fmt.Errorf("no node with ID %d in storage", id)
+		}
 
-	// Everything that is loaded from an archive is to be considered
-	// frozen, and thus immutable.
-	if s.storageMode == Immutable {
-		node.MarkFrozen()
+		// Everything that is loaded from an archive is to be considered
+		// frozen, and thus immutable.
+		if s.storageMode == Immutable {
+			node.MarkFrozen()
+		}
+
+		instance := shared.MakeShared[Node](node)
+		s.addToCacheHoldingCacheMutexLock(id, instance)
+		return instance, nil
 	}
-
-	instance := shared.MakeShared[Node](node)
-	s.addToCacheHoldingCacheMutexLock(id, instance)
-	return instance, nil
-}
-
+*/
 func (s *Forest) getMutableNodeByPath(root NodeReference, path NodePath) (shared.WriteHandle[Node], error) {
 	// Navigate down the trie using read access.
 	next := root
 	last := shared.ReadHandle[Node]{}
 	lastValid := false
 	for i := 0; i < path.Length(); i++ {
-		cur, err := next.GetReadAccess(s.nodePool)
+		cur, err := next.GetReadAccess(s.nodeManager)
 		if lastValid {
 			last.Release()
 		}
@@ -563,7 +493,7 @@ func (s *Forest) getMutableNodeByPath(root NodeReference, path NodePath) (shared
 	}
 
 	// The last step requires write access.
-	res, err := next.GetWriteAccess(s.nodePool)
+	res, err := next.GetWriteAccess(s.nodeManager)
 	if lastValid {
 		last.Release()
 	}
@@ -571,143 +501,142 @@ func (s *Forest) getMutableNodeByPath(root NodeReference, path NodePath) (shared
 }
 
 /*
-func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) {
-	s.nodeCacheMutex.Lock()
-	defer s.nodeCacheMutex.Unlock()
-	s.addToCacheHoldingCacheMutexLock(id, node)
-}
-
-func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[Node]) {
-	if s.nodeCacheMutex.TryLock() {
-		panic("caller must hold node cache lock")
-	}
-	evictedId, evictedNode, evicted := s.nodeCache.Set(id, node)
-	if !evicted {
-		return
+	func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) {
+		s.nodeCacheMutex.Lock()
+		defer s.nodeCacheMutex.Unlock()
+		s.addToCacheHoldingCacheMutexLock(id, node)
 	}
 
-	// Clean nodes can be ignored, dirty nodes need to be written.
-	s.dirtyMutex.Lock()
-	_, dirty := s.dirty[evictedId]
-	if !dirty {
+	func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[Node]) {
+		if s.nodeCacheMutex.TryLock() {
+			panic("caller must hold node cache lock")
+		}
+		evictedId, evictedNode, evicted := s.nodeCache.Set(id, node)
+		if !evicted {
+			return
+		}
+
+		// Clean nodes can be ignored, dirty nodes need to be written.
+		s.dirtyMutex.Lock()
+		_, dirty := s.dirty[evictedId]
+		if !dirty {
+			s.dirtyMutex.Unlock()
+			return
+		}
+		delete(s.dirty, evictedId)
 		s.dirtyMutex.Unlock()
-		return
-	}
-	delete(s.dirty, evictedId)
-	s.dirtyMutex.Unlock()
 
-	// Enqueue evicted node for asynchronous write to file.
-	s.writeBuffer.Add(evictedId, evictedNode)
-}
-*/
-
-func (s *Forest) flushNode(id NodeId, node Node) error {
-	// Note: flushing nodes in Archive mode will implicitly freeze them,
-	// since after the reload they will be considered frozen. This may
-	// cause temporary states between updates to be accidentally frozen,
-	// leaving unreferenced nodes in the archive, but it is not causing
-	// correctness issues. However, if the node-cache size is sufficiently
-	// large, such cases should be rare. Nevertheless, a warning is
-	// printed here to get informed if this changes in the future.
-	if printWarningDefaultNodeFreezing && s.storageMode == Immutable && !node.IsFrozen() {
-		log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
+		// Enqueue evicted node for asynchronous write to file.
+		s.writeBuffer.Add(evictedId, evictedNode)
 	}
 
-	if id.IsValue() {
-		return s.values.Set(id.Index(), *node.(*ValueNode))
-	} else if id.IsAccount() {
-		return s.accounts.Set(id.Index(), *node.(*AccountNode))
-	} else if id.IsBranch() {
-		return s.branches.Set(id.Index(), *node.(*BranchNode))
-	} else if id.IsExtension() {
-		return s.extensions.Set(id.Index(), *node.(*ExtensionNode))
-	} else if id.IsEmpty() {
+	func (s *Forest) flushNode(id NodeId, node Node) error {
+		// Note: flushing nodes in Archive mode will implicitly freeze them,
+		// since after the reload they will be considered frozen. This may
+		// cause temporary states between updates to be accidentally frozen,
+		// leaving unreferenced nodes in the archive, but it is not causing
+		// correctness issues. However, if the node-cache size is sufficiently
+		// large, such cases should be rare. Nevertheless, a warning is
+		// printed here to get informed if this changes in the future.
+		if printWarningDefaultNodeFreezing && s.storageMode == Immutable && !node.IsFrozen() {
+			log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
+		}
+
+		if id.IsValue() {
+			return s.values.Set(id.Index(), *node.(*ValueNode))
+		} else if id.IsAccount() {
+			return s.accounts.Set(id.Index(), *node.(*AccountNode))
+		} else if id.IsBranch() {
+			return s.branches.Set(id.Index(), *node.(*BranchNode))
+		} else if id.IsExtension() {
+			return s.extensions.Set(id.Index(), *node.(*ExtensionNode))
+		} else if id.IsEmpty() {
+			return nil
+		} else {
+			return fmt.Errorf("unknown node ID: %v", id)
+		}
+	}
+
+	func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error) {
+		i, err := s.accounts.New()
+		if err != nil {
+			return NodeReference{}, shared.WriteHandle[Node]{}, err
+		}
+		id := AccountId(i)
+		node := new(AccountNode)
+		instance := shared.MakeShared[Node](node)
+		ref := s.nodeManager.Add(id, instance)
+		return ref, instance.GetWriteHandle(), err
+	}
+
+	func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error) {
+		i, err := s.branches.New()
+		if err != nil {
+			return NodeReference{}, shared.WriteHandle[Node]{}, err
+		}
+		id := BranchId(i)
+		node := new(BranchNode)
+		instance := shared.MakeShared[Node](node)
+		ref := s.nodePool.Add(id, instance)
+		return ref, instance.GetWriteHandle(), err
+	}
+
+	func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], error) {
+		i, err := s.extensions.New()
+		if err != nil {
+			return NodeReference{}, shared.WriteHandle[Node]{}, err
+		}
+		id := ExtensionId(i)
+		node := new(ExtensionNode)
+		instance := shared.MakeShared[Node](node)
+		ref := s.nodePool.Add(id, instance)
+		return ref, instance.GetWriteHandle(), err
+	}
+
+	func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) {
+		i, err := s.values.New()
+		if err != nil {
+			return NodeReference{}, shared.WriteHandle[Node]{}, err
+		}
+		id := ValueId(i)
+		node := new(ValueNode)
+		instance := shared.MakeShared[Node](node)
+		ref := s.nodePool.Add(id, instance)
+		return ref, instance.GetWriteHandle(), err
+	}
+
+	func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
+		// all needed here is to register the modified node as dirty
+		s.dirtyMutex.Lock()
+		s.dirty[id] = struct{}{}
+		s.dirtyMutex.Unlock()
 		return nil
-	} else {
-		return fmt.Errorf("unknown node ID: %v", id)
 	}
-}
 
-func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error) {
-	i, err := s.accounts.New()
-	if err != nil {
-		return NodeReference{}, shared.WriteHandle[Node]{}, err
+	func (s *Forest) release(id NodeId) error {
+		s.nodeCacheMutex.Lock()
+		s.nodeCache.Remove(id)
+		s.nodeCacheMutex.Unlock()
+
+		s.dirtyMutex.Lock()
+		delete(s.dirty, id)
+		s.dirtyMutex.Unlock()
+
+		if id.IsAccount() {
+			return s.accounts.Delete(id.Index())
+		}
+		if id.IsBranch() {
+			return s.branches.Delete(id.Index())
+		}
+		if id.IsExtension() {
+			return s.extensions.Delete(id.Index())
+		}
+		if id.IsValue() {
+			return s.values.Delete(id.Index())
+		}
+		return fmt.Errorf("unable to release node %v", id)
 	}
-	id := AccountId(i)
-	node := new(AccountNode)
-	instance := shared.MakeShared[Node](node)
-	ref := s.nodePool.Add(id, instance)
-	return ref, instance.GetWriteHandle(), err
-}
-
-func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error) {
-	i, err := s.branches.New()
-	if err != nil {
-		return NodeReference{}, shared.WriteHandle[Node]{}, err
-	}
-	id := BranchId(i)
-	node := new(BranchNode)
-	instance := shared.MakeShared[Node](node)
-	ref := s.nodePool.Add(id, instance)
-	return ref, instance.GetWriteHandle(), err
-}
-
-func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], error) {
-	i, err := s.extensions.New()
-	if err != nil {
-		return NodeReference{}, shared.WriteHandle[Node]{}, err
-	}
-	id := ExtensionId(i)
-	node := new(ExtensionNode)
-	instance := shared.MakeShared[Node](node)
-	ref := s.nodePool.Add(id, instance)
-	return ref, instance.GetWriteHandle(), err
-}
-
-func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) {
-	i, err := s.values.New()
-	if err != nil {
-		return NodeReference{}, shared.WriteHandle[Node]{}, err
-	}
-	id := ValueId(i)
-	node := new(ValueNode)
-	instance := shared.MakeShared[Node](node)
-	ref := s.nodePool.Add(id, instance)
-	return ref, instance.GetWriteHandle(), err
-}
-
-func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
-	// all needed here is to register the modified node as dirty
-	s.dirtyMutex.Lock()
-	s.dirty[id] = struct{}{}
-	s.dirtyMutex.Unlock()
-	return nil
-}
-
-func (s *Forest) release(id NodeId) error {
-	s.nodeCacheMutex.Lock()
-	s.nodeCache.Remove(id)
-	s.nodeCacheMutex.Unlock()
-
-	s.dirtyMutex.Lock()
-	delete(s.dirty, id)
-	s.dirtyMutex.Unlock()
-
-	if id.IsAccount() {
-		return s.accounts.Delete(id.Index())
-	}
-	if id.IsBranch() {
-		return s.branches.Delete(id.Index())
-	}
-	if id.IsExtension() {
-		return s.extensions.Delete(id.Index())
-	}
-	if id.IsValue() {
-		return s.values.Delete(id.Index())
-	}
-	return fmt.Errorf("unable to release node %v", id)
-}
-
+*/
 func getEncoder(config MptConfig) (
 	stock.ValueEncoder[AccountNode],
 	stock.ValueEncoder[BranchNode],
@@ -743,6 +672,7 @@ func getEncoder(config MptConfig) (
 
 }
 
+/*
 type writeBufferSink struct {
 	forest *Forest
 }
@@ -750,6 +680,7 @@ type writeBufferSink struct {
 func (s writeBufferSink) Write(id NodeId, handle shared.ReadHandle[Node]) error {
 	return s.forest.flushNode(id, handle.Get())
 }
+*/
 
 // -- Forest metadata --
 
@@ -779,4 +710,128 @@ func ReadForestMetadata(filename string) (ForestMetadata, bool, error) {
 		return meta, false, err
 	}
 	return meta, true, nil
+}
+
+// -- Forest Adapters --
+
+// TODO: move ownership of stocks to this class.
+type forestToNodeStoreAdapter struct {
+	forest *Forest
+}
+
+func (a forestToNodeStoreAdapter) Load(id NodeId) (Node, error) {
+	// Load the node from persistent storage.
+	var node Node
+	var err error
+	if id.IsValue() {
+		value, e := a.forest.values.Get(id.Index())
+		node, err = &value, e
+	} else if id.IsAccount() {
+		value, e := a.forest.accounts.Get(id.Index())
+		node, err = &value, e
+	} else if id.IsBranch() {
+		value, e := a.forest.branches.Get(id.Index())
+		node, err = &value, e
+	} else if id.IsExtension() {
+		value, e := a.forest.extensions.Get(id.Index())
+		node, err = &value, e
+	} else if id.IsEmpty() {
+		node = EmptyNode{}
+	} else {
+		err = fmt.Errorf("unknown node ID: %v", id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if node == nil {
+		return nil, fmt.Errorf("no node with ID %d in storage", id)
+	}
+
+	// Everything that is loaded from an archive is to be considered
+	// frozen, and thus immutable.
+	if a.forest.storageMode == Immutable {
+		node.MarkFrozen()
+	}
+	return node, nil
+}
+
+func (a forestToNodeStoreAdapter) Store(id NodeId, node Node) error {
+	// Note: flushing nodes in Archive mode will implicitly freeze them,
+	// since after the reload they will be considered frozen. This may
+	// cause temporary states between updates to be accidentally frozen,
+	// leaving unreferenced nodes in the archive, but it is not causing
+	// correctness issues. However, if the node-cache size is sufficiently
+	// large, such cases should be rare. Nevertheless, a warning is
+	// printed here to get informed if this changes in the future.
+	if printWarningDefaultNodeFreezing && a.forest.storageMode == Immutable && !node.IsFrozen() {
+		log.Printf("WARNING: non-frozen node flushed to disk causing implicit freeze")
+	}
+
+	if id.IsValue() {
+		return a.forest.values.Set(id.Index(), *node.(*ValueNode))
+	} else if id.IsAccount() {
+		return a.forest.accounts.Set(id.Index(), *node.(*AccountNode))
+	} else if id.IsBranch() {
+		return a.forest.branches.Set(id.Index(), *node.(*BranchNode))
+	} else if id.IsExtension() {
+		return a.forest.extensions.Set(id.Index(), *node.(*ExtensionNode))
+	} else if id.IsEmpty() {
+		return nil
+	} else {
+		return fmt.Errorf("unknown node ID: %v", id)
+	}
+}
+
+func (a forestToNodeStoreAdapter) GetFreshAccountId() (NodeId, error) {
+	i, err := a.forest.accounts.New()
+	return AccountId(i), err
+}
+
+func (a forestToNodeStoreAdapter) GetFreshBranchId() (NodeId, error) {
+	i, err := a.forest.branches.New()
+	return BranchId(i), err
+}
+
+func (a forestToNodeStoreAdapter) GetFreshExtensionId() (NodeId, error) {
+	i, err := a.forest.extensions.New()
+	return ExtensionId(i), err
+}
+
+func (a forestToNodeStoreAdapter) GetFreshValueId() (NodeId, error) {
+	i, err := a.forest.values.New()
+	return ValueId(i), err
+}
+
+func (a forestToNodeStoreAdapter) Release(id NodeId) error {
+	if id.IsAccount() {
+		return a.forest.accounts.Delete(id.Index())
+	}
+	if id.IsBranch() {
+		return a.forest.branches.Delete(id.Index())
+	}
+	if id.IsExtension() {
+		return a.forest.extensions.Delete(id.Index())
+	}
+	if id.IsValue() {
+		return a.forest.values.Delete(id.Index())
+	}
+	return fmt.Errorf("unable to release node %v", id)
+}
+
+func (a forestToNodeStoreAdapter) Flush() error {
+	return errors.Join(
+		a.forest.accounts.Flush(),
+		a.forest.branches.Flush(),
+		a.forest.extensions.Flush(),
+		a.forest.values.Flush(),
+	)
+}
+
+func (a forestToNodeStoreAdapter) Close() error {
+	return errors.Join(
+		a.forest.accounts.Close(),
+		a.forest.branches.Close(),
+		a.forest.extensions.Close(),
+		a.forest.values.Close(),
+	)
 }

@@ -65,6 +65,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
+	context := newVerificationNodeContext(config)
 	source, err := openVerificationNodeSource(directory, config)
 	if err != nil {
 		return err
@@ -85,7 +86,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	// Check that roots are valid.
 	errs := []error{}
 	for _, root := range roots {
-		if err := checkId(root.nodeId); err != nil {
+		if err := checkId(root.nodeRef.Id()); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -96,13 +97,13 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = source.forAllInnerNodes(func(node Node) error {
 		switch n := node.(type) {
 		case *AccountNode:
-			return checkId(n.storage)
+			return checkId(n.storage.Id())
 		case *ExtensionNode:
-			return checkId(n.next)
+			return checkId(n.next.Id())
 		case *BranchNode:
 			errs := []error{}
 			for i := 0; i < len(n.children); i++ {
-				if err := checkId(n.children[i]); err != nil {
+				if err := checkId(n.children[i].Id()); err != nil {
 					errs = append(errs, err)
 				}
 			}
@@ -121,7 +122,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		overrideId := ValueId((^uint64(0)) >> 2)
 		source.setNodeOverride(overrideId, node)
 		defer source.clearOverride()
-		return hasher.getHash(overrideId, source)
+		return hasher.getHash(NewNodeReference(overrideId), context, source)
 	}
 	emptyNodeHash, err := hash(EmptyNode{})
 	if err != nil {
@@ -129,12 +130,12 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	err = verifyHashes(
-		"account", source, source.accounts, source.accountIds, emptyNodeHash, roots, observer,
+		"account", context, source, source.accounts, source.accountIds, emptyNodeHash, roots, observer,
 		func(node *AccountNode) (common.Hash, error) { return hash(node) },
 		func(id NodeId) bool { return id.IsAccount() },
 		func(i uint64) NodeId { return AccountId(i) },
 		func(node *AccountNode, hashes map[NodeId]common.Hash) {
-			node.storageHash = hashes[node.storage]
+			node.storageHash = hashes[node.storage.Id()]
 			node.storageHashDirty = false
 		},
 	)
@@ -143,14 +144,14 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	err = verifyHashes(
-		"branch", source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
+		"branch", context, source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
 		func(node *BranchNode) (common.Hash, error) { return hash(node) },
 		func(id NodeId) bool { return id.IsBranch() },
 		func(i uint64) NodeId { return BranchId(i) },
 		func(node *BranchNode, hashes map[NodeId]common.Hash) {
 			for i := 0; i < 16; i++ {
-				if id := node.children[i]; !node.isEmbedded(byte(i)) && !id.IsEmpty() {
-					node.hashes[i] = hashes[id]
+				if ref := node.children[i]; !node.isEmbedded(byte(i)) && !ref.IsEmpty() {
+					node.hashes[i] = hashes[ref.Id()]
 				}
 			}
 			node.dirtyHashes = 0
@@ -161,12 +162,12 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	err = verifyHashes(
-		"extension", source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
+		"extension", context, source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
 		func(node *ExtensionNode) (common.Hash, error) { return hash(node) },
 		func(id NodeId) bool { return id.IsExtension() },
 		func(i uint64) NodeId { return ExtensionId(i) },
 		func(node *ExtensionNode, hashes map[NodeId]common.Hash) {
-			node.nextHash = hashes[node.next]
+			node.nextHash = hashes[node.next.Id()]
 			node.nextHashDirty = false
 		},
 	)
@@ -175,7 +176,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	err = verifyHashes(
-		"value", source, source.values, source.valueIds, emptyNodeHash, roots, observer,
+		"value", context, source, source.values, source.valueIds, emptyNodeHash, roots, observer,
 		func(node *ValueNode) (common.Hash, error) { return hash(node) },
 		func(id NodeId) bool { return id.IsValue() },
 		func(i uint64) NodeId { return ValueId(i) },
@@ -190,6 +191,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 
 func verifyHashes[N any](
 	name string,
+	context NodeContext,
 	source *verificationNodeSource,
 	stock stock.Stock[uint64, N],
 	ids stock.IndexSet[uint64],
@@ -201,7 +203,7 @@ func verifyHashes[N any](
 	toNodeId func(uint64) NodeId,
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash),
 ) error {
-	mode := source.getConfig().HashStorageLocation
+	mode := context.getConfig().HashStorageLocation
 	switch mode {
 	case HashStoredWithNode:
 		return verifyHashesStoredWithNodes(name, source, stock, ids, roots, observer, hash, hashOfEmptyNode, toNodeId, fillInChildrenHashes)
@@ -245,10 +247,10 @@ func verifyHashesStoredWithNodes[N any](
 	// Check hashes of roots.
 	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
 	for _, root := range roots {
-		want := hashes[root.nodeId]
+		want := hashes[root.nodeRef.Id()]
 		got := root.hash
 		if want != got {
-			return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.nodeId, want, got)
+			return fmt.Errorf("inconsistent hash for root node %v, hash stored in node %v, hash stored for root %v", root.nodeRef.Id(), want, got)
 		}
 	}
 
@@ -336,11 +338,11 @@ func verifyHashesStoredWithParents[N any](
 		if hash == want {
 			return nil
 		}
-		return fmt.Errorf("inconsistent hash for node %v, want %v, got %v", id, want, hash)
+		return fmt.Errorf("inconsistent hash for root node %v, recomputed %v, stored %v", id, want, hash)
 	}
 
 	for _, root := range roots {
-		if err := checkNodeHash(root.nodeId, root.hash); err != nil {
+		if err := checkNodeHash(root.nodeRef.Id(), root.hash); err != nil {
 			return err
 		}
 	}
@@ -349,10 +351,10 @@ func verifyHashesStoredWithParents[N any](
 	checkContainedHashes := func(node Node) error {
 		switch n := node.(type) {
 		case *AccountNode:
-			return checkNodeHash(n.storage, n.storageHash)
+			return checkNodeHash(n.storage.Id(), n.storageHash)
 		case *ExtensionNode:
 			if !n.nextIsEmbedded {
-				return checkNodeHash(n.next, n.nextHash)
+				return checkNodeHash(n.next.Id(), n.nextHash)
 			}
 			return nil
 		case *BranchNode:
@@ -360,7 +362,7 @@ func verifyHashesStoredWithParents[N any](
 				errs := []error{}
 				for i := 0; i < len(n.children); i++ {
 					if !n.isEmbedded(byte(i)) {
-						if err := checkNodeHash(n.children[i], n.hashes[i]); err != nil {
+						if err := checkNodeHash(n.children[i].Id(), n.hashes[i]); err != nil {
 							errs = append(errs, err)
 						}
 					}
@@ -378,9 +380,31 @@ func verifyHashesStoredWithParents[N any](
 	return nil
 }
 
-type verificationNodeSource struct {
+type verificationNodeContext struct {
 	config MptConfig
+}
 
+func newVerificationNodeContext(config MptConfig) NodeContext {
+	return &verificationNodeContext{config: config}
+}
+
+func (c *verificationNodeContext) getConfig() MptConfig {
+	return c.config
+}
+
+func (*verificationNodeContext) getHashFor(NodeReference) (common.Hash, error) {
+	panic("hash resolution not supported")
+}
+
+func (*verificationNodeContext) hashKey(key common.Key) common.Hash {
+	return common.Keccak256(key[:])
+}
+
+func (*verificationNodeContext) hashAddress(address common.Address) common.Hash {
+	return common.Keccak256(address[:])
+}
+
+type verificationNodeSource struct {
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
 	extensions stock.Stock[uint64, ExtensionNode]
@@ -455,7 +479,6 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	}
 	success = true
 	return &verificationNodeSource{
-		config:       config,
 		accounts:     accounts,
 		branches:     branches,
 		extensions:   extensions,
@@ -467,11 +490,7 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	}, nil
 }
 
-func (s *verificationNodeSource) getConfig() MptConfig {
-	return s.config
-}
-
-func (s *verificationNodeSource) getNode(id NodeId) (shared.ReadHandle[Node], error) {
+func (s *verificationNodeSource) load(id NodeId) (*shared.Shared[Node], error) {
 	var node Node
 	var err error
 	if s.overwriteId == id && s.overwriteNode != nil {
@@ -492,22 +511,21 @@ func (s *verificationNodeSource) getNode(id NodeId) (shared.ReadHandle[Node], er
 		node, err = &value, e
 	}
 	if err != nil {
-		return shared.ReadHandle[Node]{}, err
+		return nil, err
 	}
-	shared := shared.MakeShared[Node](node)
-	return shared.GetReadHandle(), nil
+	return shared.MakeShared[Node](node), nil
 }
 
-func (s *verificationNodeSource) getHashFor(NodeId) (common.Hash, error) {
-	panic("hash resolution not supported")
+func (s *verificationNodeSource) getOwner(id NodeId) lockedOwner {
+	owner := &nodeOwner{
+		id:    id,
+		valid: true,
+	}
+	return owner.lock()
 }
 
-func (s *verificationNodeSource) hashKey(key common.Key) common.Hash {
-	return common.Keccak256(key[:])
-}
-
-func (s *verificationNodeSource) hashAddress(address common.Address) common.Hash {
-	return common.Keccak256(address[:])
+func (s *verificationNodeSource) touch(lockedOwner) {
+	// ignored
 }
 
 func (s *verificationNodeSource) close() error {
