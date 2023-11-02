@@ -591,9 +591,9 @@ func (mr *MockdirectUpdateStateMockRecorder) Restore(data interface{}) *gomock.C
 }
 
 // createAccount mocks base method.
-func (m *MockdirectUpdateState) createAccount(address common.Address) error {
+func (m *MockdirectUpdateState) CreateAccount(address common.Address) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "createAccount", address)
+	ret := m.ctrl.Call(m, "CreateAccount", address)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -601,13 +601,13 @@ func (m *MockdirectUpdateState) createAccount(address common.Address) error {
 // createAccount indicates an expected call of createAccount.
 func (mr *MockdirectUpdateStateMockRecorder) createAccount(address interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "createAccount", reflect.TypeOf((*MockdirectUpdateState)(nil).createAccount), address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockdirectUpdateState)(nil).CreateAccount), address)
 }
 
 // deleteAccount mocks base method.
-func (m *MockdirectUpdateState) deleteAccount(address common.Address) error {
+func (m *MockdirectUpdateState) DeleteAccount(address common.Address) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "deleteAccount", address)
+	ret := m.ctrl.Call(m, "DeleteAccount", address)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -615,13 +615,13 @@ func (m *MockdirectUpdateState) deleteAccount(address common.Address) error {
 // deleteAccount indicates an expected call of deleteAccount.
 func (mr *MockdirectUpdateStateMockRecorder) deleteAccount(address interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "deleteAccount", reflect.TypeOf((*MockdirectUpdateState)(nil).deleteAccount), address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAccount", reflect.TypeOf((*MockdirectUpdateState)(nil).DeleteAccount), address)
 }
 
 // setBalance mocks base method.
-func (m *MockdirectUpdateState) setBalance(address common.Address, balance common.Balance) error {
+func (m *MockdirectUpdateState) SetBalance(address common.Address, balance common.Balance) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "setBalance", address, balance)
+	ret := m.ctrl.Call(m, "SetBalance", address, balance)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -629,13 +629,13 @@ func (m *MockdirectUpdateState) setBalance(address common.Address, balance commo
 // setBalance indicates an expected call of setBalance.
 func (mr *MockdirectUpdateStateMockRecorder) setBalance(address, balance interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setBalance", reflect.TypeOf((*MockdirectUpdateState)(nil).setBalance), address, balance)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalance", reflect.TypeOf((*MockdirectUpdateState)(nil).SetBalance), address, balance)
 }
 
 // setCode mocks base method.
-func (m *MockdirectUpdateState) setCode(address common.Address, code []byte) error {
+func (m *MockdirectUpdateState) SetCode(address common.Address, code []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "setCode", address, code)
+	ret := m.ctrl.Call(m, "SetCode", address, code)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -643,13 +643,13 @@ func (m *MockdirectUpdateState) setCode(address common.Address, code []byte) err
 // setCode indicates an expected call of setCode.
 func (mr *MockdirectUpdateStateMockRecorder) setCode(address, code interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setCode", reflect.TypeOf((*MockdirectUpdateState)(nil).setCode), address, code)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCode", reflect.TypeOf((*MockdirectUpdateState)(nil).SetCode), address, code)
 }
 
 // setNonce mocks base method.
-func (m *MockdirectUpdateState) setNonce(address common.Address, nonce common.Nonce) error {
+func (m *MockdirectUpdateState) SetNonce(address common.Address, nonce common.Nonce) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "setNonce", address, nonce)
+	ret := m.ctrl.Call(m, "SetNonce", address, nonce)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -657,13 +657,13 @@ func (m *MockdirectUpdateState) setNonce(address common.Address, nonce common.No
 // setNonce indicates an expected call of setNonce.
 func (mr *MockdirectUpdateStateMockRecorder) setNonce(address, nonce interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setNonce", reflect.TypeOf((*MockdirectUpdateState)(nil).setNonce), address, nonce)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNonce", reflect.TypeOf((*MockdirectUpdateState)(nil).SetNonce), address, nonce)
 }
 
 // setStorage mocks base method.
-func (m *MockdirectUpdateState) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (m *MockdirectUpdateState) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "setStorage", address, key, value)
+	ret := m.ctrl.Call(m, "SetStorage", address, key, value)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -671,5 +671,5 @@ func (m *MockdirectUpdateState) setStorage(address common.Address, key common.Ke
 // setStorage indicates an expected call of setStorage.
 func (mr *MockdirectUpdateStateMockRecorder) setStorage(address, key, value interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setStorage", reflect.TypeOf((*MockdirectUpdateState)(nil).setStorage), address, key, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockdirectUpdateState)(nil).SetStorage), address, key, value)
 }

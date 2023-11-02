@@ -14,9 +14,9 @@ type syncedState struct {
 	mu    sync.Mutex
 }
 
-// wrapIntoSyncedState wraps the given state into a synchronizied state
+// WrapIntoSyncedState wraps the given state into a synchronizied state
 // ensuring mutual exclusive access to the underlying state.
-func wrapIntoSyncedState(state directUpdateState) directUpdateState {
+func WrapIntoSyncedState(state directUpdateState) State {
 	if _, ok := state.(*syncedState); ok {
 		return state
 	}
@@ -133,38 +133,38 @@ func (s *syncedState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVeri
 	return s.state.GetSnapshotVerifier(metadata)
 }
 
-func (s *syncedState) createAccount(address common.Address) error {
+func (s *syncedState) CreateAccount(address common.Address) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.createAccount(address)
+	return s.state.CreateAccount(address)
 }
 
-func (s *syncedState) deleteAccount(address common.Address) error {
+func (s *syncedState) DeleteAccount(address common.Address) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.deleteAccount(address)
+	return s.state.DeleteAccount(address)
 }
 
-func (s *syncedState) setBalance(address common.Address, balance common.Balance) error {
+func (s *syncedState) SetBalance(address common.Address, balance common.Balance) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.setBalance(address, balance)
+	return s.state.SetBalance(address, balance)
 }
 
-func (s *syncedState) setNonce(address common.Address, nonce common.Nonce) error {
+func (s *syncedState) SetNonce(address common.Address, nonce common.Nonce) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.setNonce(address, nonce)
+	return s.state.SetNonce(address, nonce)
 }
 
-func (s *syncedState) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (s *syncedState) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.setStorage(address, key, value)
+	return s.state.SetStorage(address, key, value)
 }
 
-func (s *syncedState) setCode(address common.Address, code []byte) error {
+func (s *syncedState) SetCode(address common.Address, code []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state.setCode(address, code)
+	return s.state.SetCode(address, code)
 }

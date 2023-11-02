@@ -35,7 +35,7 @@ type GoSchema2 struct {
 	hasher          hash.Hash
 }
 
-func (s *GoSchema2) createAccount(address common.Address) (err error) {
+func (s *GoSchema2) CreateAccount(address common.Address) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
@@ -59,7 +59,7 @@ func (s *GoSchema2) Exists(address common.Address) (bool, error) {
 	return state == common.Exists, err
 }
 
-func (s *GoSchema2) deleteAccount(address common.Address) error {
+func (s *GoSchema2) DeleteAccount(address common.Address) error {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
@@ -98,7 +98,7 @@ func (s *GoSchema2) GetBalance(address common.Address) (balance common.Balance, 
 	return s.balancesStore.Get(idx)
 }
 
-func (s *GoSchema2) setBalance(address common.Address, balance common.Balance) (err error) {
+func (s *GoSchema2) SetBalance(address common.Address, balance common.Balance) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
@@ -117,7 +117,7 @@ func (s *GoSchema2) GetNonce(address common.Address) (nonce common.Nonce, err er
 	return s.noncesStore.Get(idx)
 }
 
-func (s *GoSchema2) setNonce(address common.Address, nonce common.Nonce) (err error) {
+func (s *GoSchema2) SetNonce(address common.Address, nonce common.Nonce) (err error) {
 	idx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return
@@ -143,7 +143,7 @@ func (s *GoSchema2) GetStorage(address common.Address, key common.Key) (value co
 	return s.valuesStore.Get(slotIdx)
 }
 
-func (s *GoSchema2) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (s *GoSchema2) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	addressIdx, err := s.addressIndex.GetOrAdd(address)
 	if err != nil {
 		return err
@@ -186,7 +186,7 @@ func (s *GoSchema2) GetCodeSize(address common.Address) (size int, err error) {
 	return s.codesDepot.GetSize(idx)
 }
 
-func (s *GoSchema2) setCode(address common.Address, code []byte) (err error) {
+func (s *GoSchema2) SetCode(address common.Address, code []byte) (err error) {
 	var codeHash common.Hash
 	if code != nil { // codeHash is zero for empty code
 		if s.hasher == nil {

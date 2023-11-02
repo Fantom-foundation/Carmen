@@ -91,10 +91,11 @@ const (
 )
 
 func GetAllVariants() []Variant {
-	return []Variant{
-		GoMemory, GoFile, GoFileNoCache, GoLevelDb, GoLevelDbNoCache,
-		CppMemory, CppFile, CppLevelDb,
+	variants := make([]Variant, 0, len(variantRegistry))
+	for variant := range variantRegistry {
+		variants = append(variants, variant)
 	}
+	return variants
 }
 
 type StateSchema uint8
@@ -118,31 +119,33 @@ type Parameters struct {
 // unsupported feature.
 const UnsupportedConfiguration = common.ConstError("unsupported configuration")
 
-// NewState is the public interface fro creating Carmen state instances. If for the
+type StateFactory func(params Parameters) (State, error)
+
+var variantRegistry map[Variant]StateFactory
+
+func init() {
+	variantRegistry = make(map[Variant]StateFactory)
+	RegisterVariantFactory(GoMemory, newGoMemoryState)
+	RegisterVariantFactory(GoFileNoCache, newGoFileState)
+	RegisterVariantFactory(GoFile, newGoCachedFileState)
+	RegisterVariantFactory(GoLevelDbNoCache, newGoLeveLIndexAndStoreState)
+	RegisterVariantFactory(GoLevelDb, newGoCachedLeveLIndexAndStoreState)
+}
+
+func RegisterVariantFactory(variant Variant, factory StateFactory) {
+	variantRegistry[variant] = factory
+}
+
+// NewState is the public interface for creating Carmen state instances. If for the
 // given parameters a state can be constructed, the resulting state is returned. If
 // construction fails, an error is reported. If the requested configuration is not
 // supported, the error is an UnsupportedConfiguration error.
 func NewState(params Parameters) (State, error) {
-	switch params.Variant {
-	case GoMemory:
-		return newGoMemoryState(params)
-	case GoFileNoCache:
-		return newGoFileState(params)
-	case GoFile:
-		return newGoCachedFileState(params)
-	case GoLevelDbNoCache:
-		return newGoLeveLIndexAndStoreState(params)
-	case GoLevelDb:
-		return newGoCachedLeveLIndexAndStoreState(params)
-	case CppMemory:
-		return newCppInMemoryState(params)
-	case CppFile:
-		return newCppFileBasedState(params)
-	case CppLevelDb:
-		return newCppLevelDbBasedState(params)
-	default:
+	factory, found := variantRegistry[params.Variant]
+	if !found {
 		return nil, fmt.Errorf("%w: unknown variant %s", UnsupportedConfiguration, params.Variant)
 	}
+	return factory(params)
 }
 
 // newGoMemoryState creates in memory implementation
