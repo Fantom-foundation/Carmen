@@ -230,7 +230,7 @@ func (r OpsFactoryRegistry[T, C]) ReadNextOp(raw *[]byte) (T, Operation[C]) {
 	return opType, op
 }
 
-// RegisterNoDataOp registers a factory to create a fuzzing operation based for an operation op-code.
+// RegisterNoDataOp registers a factory that creates a fuzzing operation.
 // This method registers an operation that has only its opcode, but no payload.
 func RegisterNoDataOp[T ~byte, C any](registry OpsFactoryRegistry[T, C], opType T, apply func(opType T, t *testing.T, context *C)) {
 	reg := opRegistration[C]{
@@ -245,7 +245,7 @@ func RegisterNoDataOp[T ~byte, C any](registry OpsFactoryRegistry[T, C], opType 
 	registry.register(opType, reg)
 }
 
-// RegisterDataOp registers a factory to create a fuzzing operation for an operation op-code.
+// RegisterDataOp registers a factory that creates a fuzzing operation.
 // This method registers an operation that has its opcode together with a payload.
 // It furthermore registers two factories to serialize and deserialize payload of this operation to/from a byte array.
 func RegisterDataOp[T ~byte, C any, D any](
