@@ -247,7 +247,7 @@ func RegisterNoDataOp[T ~byte, C any](registry OpsFactoryRegistry[T, C], opType 
 
 // RegisterDataOp registers a factory that creates a fuzzing operation.
 // This method registers an operation that has its opcode together with a payload.
-// It furthermore registers two factories to serialize and deserialize payload of this operation to/from a byte array.
+// It furthermore registers two callbacks to serialize and deserialize payload of this operation to/from a byte array.
 func RegisterDataOp[T ~byte, C any, D any](
 	registry OpsFactoryRegistry[T, C],
 	opType T,
