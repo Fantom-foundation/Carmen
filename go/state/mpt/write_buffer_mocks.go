@@ -125,3 +125,38 @@ func (mr *MockNodeSinkMockRecorder) Write(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockNodeSink)(nil).Write), arg0, arg1)
 }
+
+// MockWriteBufferObserver is a mock of WriteBufferObserver interface.
+type MockWriteBufferObserver struct {
+	ctrl     *gomock.Controller
+	recorder *MockWriteBufferObserverMockRecorder
+}
+
+// MockWriteBufferObserverMockRecorder is the mock recorder for MockWriteBufferObserver.
+type MockWriteBufferObserverMockRecorder struct {
+	mock *MockWriteBufferObserver
+}
+
+// NewMockWriteBufferObserver creates a new mock instance.
+func NewMockWriteBufferObserver(ctrl *gomock.Controller) *MockWriteBufferObserver {
+	mock := &MockWriteBufferObserver{ctrl: ctrl}
+	mock.recorder = &MockWriteBufferObserverMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockWriteBufferObserver) EXPECT() *MockWriteBufferObserverMockRecorder {
+	return m.recorder
+}
+
+// AfterNodeWritten mocks base method.
+func (m *MockWriteBufferObserver) AfterNodeWritten(arg0 NodeId, arg1 shared.ReadHandle[Node]) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AfterNodeWritten", arg0, arg1)
+}
+
+// AfterNodeWritten indicates an expected call of AfterNodeWritten.
+func (mr *MockWriteBufferObserverMockRecorder) AfterNodeWritten(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AfterNodeWritten", reflect.TypeOf((*MockWriteBufferObserver)(nil).AfterNodeWritten), arg0, arg1)
+}

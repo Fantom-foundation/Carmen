@@ -53,7 +53,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 					addr := common.Address{1}
 					info := AccountInfo{Nonce: common.Nonce{12}}
 
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					root, err = forest.SetAccountInfo(root, addr, info)
 					if err != nil {
 						t.Fatalf("failed to set account info: %v", err)
@@ -72,6 +72,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 						t.Fatalf("failed to re-open forest: %v", err)
 					}
 
+					root = NewNodeReference(root.Id()) // remove reference to old nodes
 					if got, found, err := reopened.GetAccountInfo(root, addr); info != got || !found || err != nil {
 						t.Fatalf("reopened forest does not contain expected value, wanted %v, got %v, found %t, err %v", info, got, found, err)
 					}
@@ -99,7 +100,7 @@ func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 					info0 := AccountInfo{}
 					info1 := AccountInfo{Nonce: common.Nonce{12}}
 
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					if info, found, err := forest.GetAccountInfo(root, addr); info != info0 || found || err != nil {
 						t.Errorf("empty tree should not contain any info, wanted (%v,%t), got (%v,%t), err %v", info0, false, info, true, err)
 					}
@@ -143,13 +144,13 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 					value1 := common.Value{1}
 
 					// Initially, the value is zero.
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					if value, err := forest.GetValue(root, addr, key); value != value0 || err != nil {
 						t.Errorf("empty tree should not contain any info, wanted %v, got %v, err %v", value0, value, err)
 					}
 
 					// Setting it without an account does not have an effect.
-					if newRoot, err := forest.SetValue(root, addr, key, value1); newRoot != root || err != nil {
+					if newRoot, err := forest.SetValue(root, addr, key, value1); newRoot.Id() != root.Id() || err != nil {
 						t.Errorf("setting a value without an account should not change the root, wanted %v, got %v, err %v", root, newRoot, err)
 					}
 
@@ -199,7 +200,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 				info2 := AccountInfo{Nonce: common.Nonce{14}}
 
 				// Initially, the value is zero.
-				root0 := EmptyId()
+				root0 := NewNodeReference(EmptyId())
 
 				// Update the account info in two steps.
 				root1, err := forest.SetAccountInfo(root0, addr, info1)
@@ -243,7 +244,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 				info2 := AccountInfo{Nonce: common.Nonce{14}}
 
 				// Initially, the value is zero.
-				root0 := EmptyId()
+				root0 := NewNodeReference(EmptyId())
 				if err := forest.Freeze(root0); err != nil {
 					t.Errorf("failed to freeze root0: %v", err)
 				}
@@ -276,7 +277,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
 
-				for _, root := range []NodeId{root0, root1, root2} {
+				for _, root := range []NodeReference{root0, root1, root2} {
 					if _, _, err := forest.updateHashesFor(root); err != nil {
 						t.Fatalf("failed to update hashes: %v", err)
 					}
@@ -301,7 +302,7 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 						t.Errorf("memory footprint not provided")
 					}
 
-					for _, memChild := range []string{"accounts", "branches", "extensions", "values", "cache",
+					for _, memChild := range []string{"accounts", "branches", "extensions", "values", "nodes",
 						"hashedKeysCache", "hashedAddressesCache"} {
 
 						if forest.GetMemoryFootprint().GetChild(memChild) == nil {
@@ -327,7 +328,7 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 					defer forest.Close()
 
 					// Fill in some data (sequentially).
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					for i := 0; i < N; i++ {
 						root, err = forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
 						if err != nil {
@@ -388,7 +389,7 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 					}
 
 					// Fill in some data (sequentially).
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					for i := 0; i < N; i++ {
 						root, err = forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
 						if err != nil {

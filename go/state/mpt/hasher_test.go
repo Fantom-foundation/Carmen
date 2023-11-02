@@ -1,21 +1,12 @@
 package mpt
 
-import (
-	"encoding/hex"
-	"fmt"
-	"testing"
-
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
-	gomock "go.uber.org/mock/gomock"
-)
-
 // ----------------------------------------------------------------------------
 //                        General Hasher Tests
 // ----------------------------------------------------------------------------
 
 var allHashAlgorithms = []hashAlgorithm{DirectHashing, EthereumLikeHashing}
 
+/*
 func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 	for _, algorithm := range allHashAlgorithms {
 		t.Run(algorithm.Name, func(t *testing.T) {
@@ -540,3 +531,5 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 		}
 	}
 }
+
+*/

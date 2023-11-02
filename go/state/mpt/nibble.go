@@ -6,7 +6,7 @@ import "github.com/Fantom-foundation/Carmen/go/common"
 // used to navigate in the MPT structure.
 type Nibble byte
 
-// Rune converts a Nibble in a hexa-decimal rune (0-9a-f).
+// Rune converts a Nibble in a hexadecimal rune (0-9a-f).
 func (n Nibble) Rune() rune {
 	if n < 10 {
 		return rune('0' + n)
@@ -17,17 +17,17 @@ func (n Nibble) Rune() rune {
 	}
 }
 
-// String converts a Nibble in a hexa-decimal stirng (0-9a-f).
+// String converts a Nibble in a hexadecimal string (0-9a-f).
 func (n Nibble) String() string {
 	return string(n.Rune())
 }
 
 // AddressToNibblePath converts the given path into a slice of Nibbles. Optionally, the
 // path is hashed before being converted. The path is hashed when hashing is enabled in configuration.
-func AddressToNibblePath(address common.Address, source NodeSource) []Nibble {
+func AddressToNibblePath(address common.Address, context NodeContext) []Nibble {
 	var path []byte
-	if source != nil && source.getConfig().UseHashedPaths {
-		hash := source.hashAddress(address)
+	if context != nil && context.getConfig().UseHashedPaths {
+		hash := context.hashAddress(address)
 		path = hash[:]
 	} else {
 		path = address[:]
@@ -40,10 +40,10 @@ func AddressToNibblePath(address common.Address, source NodeSource) []Nibble {
 
 // KeyToNibblePath converts the given path into a slice of Nibbles. Optionally, the
 // path is hashed before being converted. The path is hashed when hashing is enabled in configuration.
-func KeyToNibblePath(key common.Key, source NodeSource) []Nibble {
+func KeyToNibblePath(key common.Key, context NodeContext) []Nibble {
 	var path []byte
-	if source != nil && source.getConfig().UseHashedPaths {
-		hash := source.hashKey(key)
+	if context != nil && context.getConfig().UseHashedPaths {
+		hash := context.hashKey(key)
 		path = hash[:]
 	} else {
 		path = key[:]

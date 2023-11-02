@@ -112,8 +112,8 @@ func TestVerification_ModifiedRootIsDetected(t *testing.T) {
 
 		root := EmptyId()
 		for i := 0; i < len(roots); i++ {
-			if roots[i].nodeId.IsBranch() {
-				root = roots[i].nodeId
+			if roots[i].nodeRef.IsBranch() {
+				root = roots[i].nodeRef.Id()
 				break
 			}
 		}
@@ -200,7 +200,7 @@ func TestVerification_AccountStorageModificationIsDetected(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.storage = ValueId(123456789) // invalid in test forest
+			node.storage = NewNodeReference(ValueId(123456789)) // invalid in test forest
 		})
 
 		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -248,7 +248,7 @@ func TestVerification_BranchChildIdModificationIsDetected(t *testing.T) {
 		_, encoder, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
-			node.children[8] = ValueId(123456789) // does not exist in test forest
+			node.children[8] = NewNodeReference(ValueId(123456789)) // does not exist in test forest
 		})
 
 		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -315,7 +315,7 @@ func TestVerification_ExtensionNextModificationIsDetected(t *testing.T) {
 		_, _, encoder, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
-			node.next = BranchId(123456789)
+			node.next = NewNodeReference(BranchId(123456789))
 		})
 
 		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -421,7 +421,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 		t.Fatalf("failed to start empty forest: %v", err)
 	}
 
-	root := EmptyId()
+	root := NewNodeReference(EmptyId())
 
 	addr := common.Address{}
 	root, err = forest.SetAccountInfo(root, addr, AccountInfo{Nonce: common.ToNonce(1)})
@@ -512,7 +512,7 @@ func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 		return nil, err
 	}
 
-	root := EmptyId()
+	root := NewNodeReference(EmptyId())
 	for i := 0; i < N; i++ {
 		addr := common.Address{byte(i)}
 		root, err = forest.SetAccountInfo(root, addr, AccountInfo{Nonce: common.ToNonce(1)})
@@ -534,8 +534,8 @@ func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 			return nil, err
 		}
 		roots = append(roots, Root{
-			nodeId: root,
-			hash:   hash,
+			nodeRef: root,
+			hash:    hash,
 		})
 	}
 

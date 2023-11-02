@@ -140,7 +140,7 @@ func (s *LiveTrie) Flush() error {
 
 	// Update on-disk meta-data.
 	metadata, err := json.Marshal(metadata{
-		RootNode: s.root,
+		RootNode: s.root.Id(),
 		RootHash: hash,
 	})
 	if err != nil {
