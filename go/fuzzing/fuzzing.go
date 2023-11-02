@@ -148,14 +148,14 @@ func (p EmptyPayload) Serialize() []byte {
 	return []byte{}
 }
 
-// SerialisedPayload that is a type of payload that is directly represented as a byte array,
+// SerialisedPayload is a type of payload that is directly represented as a byte array,
 // together with the original value.
 type SerialisedPayload[T any] struct {
 	val        T
 	serialised []byte
 }
 
-// NewSerialisedPayload creates a SerialisedPayload that is a type of payload that is directly represented as a byte array,
+// NewSerialisedPayload creates a SerialisedPayload that is a type of payload directly represented as a byte array,
 // together with the original value.
 func NewSerialisedPayload[T any](payload T, serialised []byte) SerialisedPayload[T] {
 	return SerialisedPayload[T]{
