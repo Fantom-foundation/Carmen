@@ -35,11 +35,12 @@ func (m *MockNodeSource) EXPECT() *MockNodeSourceMockRecorder {
 }
 
 // getOwner mocks base method.
-func (m *MockNodeSource) getOwner(arg0 NodeId) lockedOwner {
+func (m *MockNodeSource) getOwner(arg0 NodeId) (*nodeOwner, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "getOwner", arg0)
-	ret0, _ := ret[0].(lockedOwner)
-	return ret0
+	ret0, _ := ret[0].(*nodeOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // getOwner indicates an expected call of getOwner.
@@ -48,23 +49,8 @@ func (mr *MockNodeSourceMockRecorder) getOwner(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getOwner", reflect.TypeOf((*MockNodeSource)(nil).getOwner), arg0)
 }
 
-// load mocks base method.
-func (m *MockNodeSource) load(arg0 NodeId) (*shared.Shared[Node], error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "load", arg0)
-	ret0, _ := ret[0].(*shared.Shared[Node])
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// load indicates an expected call of load.
-func (mr *MockNodeSourceMockRecorder) load(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "load", reflect.TypeOf((*MockNodeSource)(nil).load), arg0)
-}
-
 // touch mocks base method.
-func (m *MockNodeSource) touch(arg0 lockedOwner) {
+func (m *MockNodeSource) touch(arg0 *nodeOwner) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "touch", arg0)
 }
@@ -231,11 +217,12 @@ func (mr *MockNodeManagerMockRecorder) Size() *gomock.Call {
 }
 
 // getOwner mocks base method.
-func (m *MockNodeManager) getOwner(arg0 NodeId) lockedOwner {
+func (m *MockNodeManager) getOwner(arg0 NodeId) (*nodeOwner, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "getOwner", arg0)
-	ret0, _ := ret[0].(lockedOwner)
-	return ret0
+	ret0, _ := ret[0].(*nodeOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // getOwner indicates an expected call of getOwner.
@@ -244,23 +231,8 @@ func (mr *MockNodeManagerMockRecorder) getOwner(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getOwner", reflect.TypeOf((*MockNodeManager)(nil).getOwner), arg0)
 }
 
-// load mocks base method.
-func (m *MockNodeManager) load(arg0 NodeId) (*shared.Shared[Node], error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "load", arg0)
-	ret0, _ := ret[0].(*shared.Shared[Node])
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// load indicates an expected call of load.
-func (mr *MockNodeManagerMockRecorder) load(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "load", reflect.TypeOf((*MockNodeManager)(nil).load), arg0)
-}
-
 // touch mocks base method.
-func (m *MockNodeManager) touch(arg0 lockedOwner) {
+func (m *MockNodeManager) touch(arg0 *nodeOwner) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "touch", arg0)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
@@ -13,9 +14,8 @@ import (
 
 type NodeSource interface {
 	// Internal interfaces for NodeReferences to interact with the manager.
-	load(NodeId) (*shared.Shared[Node], error)
-	getOwner(NodeId) lockedOwner
-	touch(lockedOwner)
+	getOwner(NodeId) (*nodeOwner, error)
+	touch(*nodeOwner)
 }
 
 // NodeManager are responsible of managing the live-cycle of node instances of
@@ -92,11 +92,10 @@ func NewNodeManager(capacity int, store NodeStore) NodeManager {
 	// By default a node owner for the empty node is added to each manager.
 	// This way, the LRU list is never empty, simplifying the code for
 	// manipulating the LRU list of node owners.
-	emptyNodeOwner := &nodeOwner{
-		valid: true,
-		id:    EmptyId(),
-		node:  shared.MakeShared[Node](EmptyNode{}),
-	}
+	emptyNodeOwner := newNodeOwner(
+		EmptyId(),
+		shared.MakeShared[Node](EmptyNode{}),
+	)
 
 	// The index for all valid owners. Owners are valid while being listed
 	// in the LRU list. Once evicted and moved to the output buffer, owners
@@ -159,18 +158,13 @@ func (m *nodeManager) CreateValue() (NodeReference, shared.WriteHandle[Node], er
 }
 
 func (m *nodeManager) createNode(id NodeId, node Node) (NodeReference, shared.WriteHandle[Node], error) {
-	owner := &nodeOwner{
-		valid: true,
-		id:    id,
-		node:  shared.MakeShared[Node](node),
-	}
-	handle := owner.node.GetWriteHandle()
-	lockedOwner := owner.lock()
+	shared := shared.MakeShared[Node](node)
+	owner := newNodeOwner(id, shared)
+	handle := shared.GetWriteHandle()
 	m.indexMutex.Lock()
 	m.index[id] = owner
 	m.indexMutex.Unlock()
-	m.addToLruList(lockedOwner)
-	lockedOwner.unlock()
+	m.addToLruList(owner)
 	return NodeReference{
 		NodeId: id,
 		owner:  owner,
@@ -178,9 +172,8 @@ func (m *nodeManager) createNode(id NodeId, node Node) (NodeReference, shared.Wr
 }
 
 func (m *nodeManager) MarkDirty(ref NodeReference, _ shared.WriteHandle[Node]) {
-	locked := ref.owner.lock()
-	locked.dirty = true
-	locked.unlock()
+	// The reference owner should always be set if a write handle on the node is valid.
+	ref.owner.markDirty()
 }
 
 func (m *nodeManager) Release(ref NodeReference) error {
@@ -198,9 +191,7 @@ func (m *nodeManager) Release(ref NodeReference) error {
 	}
 	m.indexMutex.Unlock()
 
-	locked := owner.lock()
-	locked.dropNode()
-	locked.unlock()
+	owner.dropNode()
 
 	// Remove the owner from the LRU list.
 	m.listMutex.Lock()
@@ -243,11 +234,14 @@ func (m *nodeManager) Flush() error {
 	// Get exclusive access to each individual owner and send dirty instances
 	// to the write buffer to be written to the store.
 	for _, entry := range entries {
-		locked := entry.owner.lock()
-		if locked.valid && locked.dirty {
-			m.writeBuffer.Add(locked.id, locked.node)
+		handle, success := entry.owner.getReadAccessWithoutTouch(m)
+		if !success {
+			continue
 		}
-		locked.unlock()
+		if entry.owner.isDirty() {
+			m.writeBuffer.Add(entry.owner.id, entry.owner.node.Load())
+		}
+		handle.Release()
 	}
 
 	return errors.Join(
@@ -271,31 +265,35 @@ func (a nodeStoreToSinkAdapter) Write(id NodeId, handle shared.ReadHandle[Node])
 	return a.Store(id, handle.Get())
 }
 
-func (m *nodeManager) addToLruList(owner lockedOwner) {
+func (m *nodeManager) addToLruList(owner *nodeOwner) {
 	m.listMutex.Lock()
 	defer m.listMutex.Unlock()
 
 	// If needed, remove an element from the pool.
 	if m.size >= m.capacity {
 
-		locked := m.tail.lock()
-
-		if !locked.valid {
-			fmt.Printf("found invalid owner for id %v in LRU list\n", locked.id)
+		last := m.tail
+		if !last.isValid() {
+			fmt.Printf("found invalid owner for id %v in LRU list\n", last.id)
 		}
 
-		if locked.isDirty() {
+		handle, success := last.getReadAccessWithoutTouch(m)
+		if !success {
+			panic("acquiring read handle for valid owner should never fail")
+		}
+		if last.isDirty() {
 			// Dirty nodes need to be moved from the LRU list to the write buffer.
-			m.writeBuffer.Add(locked.id, locked.node)
+			m.writeBuffer.Add(last.id, last.node.Load())
 		}
+
 		// To evict the node, the reference in the owner is dropped and the owner
 		// is marked to be invalid. References to the owner will refresh the owner
 		// as need.
 		m.indexMutex.Lock()
-		delete(m.index, locked.id)
+		delete(m.index, last.id)
 		m.indexMutex.Unlock()
-		locked.dropNode()
-		locked.unlock()
+		last.dropNode()
+		handle.Release()
 
 		m.tail = m.tail.pred
 		m.tail.succ = nil // TODO: consider removing this line for efficiency
@@ -305,18 +303,11 @@ func (m *nodeManager) addToLruList(owner lockedOwner) {
 
 	owner.pred = nil // TODO: consider removing this line for efficiency
 	owner.succ = m.head
-	m.head.pred = owner.nodeOwner
-	m.head = owner.nodeOwner
+	m.head.pred = owner
+	m.head = owner
 }
 
 func (m *nodeManager) load(id NodeId) (*shared.Shared[Node], error) {
-
-	// If the node is in the write buffer, cancel the write and bring it back
-	// to be owned by an nodeOwner in the LRU list.
-	if node, found := m.writeBuffer.Cancel(id); found {
-		return node, nil
-	}
-
 	// If the requested node is not in-transit it is in the store.
 	node, err := m.store.Load(id)
 	if err != nil {
@@ -325,41 +316,64 @@ func (m *nodeManager) load(id NodeId) (*shared.Shared[Node], error) {
 	return shared.MakeShared[Node](node), nil
 }
 
-func (m *nodeManager) getOwner(id NodeId) lockedOwner {
+func (m *nodeManager) getOwner(id NodeId) (*nodeOwner, error) {
+	// start by checking the index
 	m.indexMutex.Lock()
 	if owner, found := m.index[id]; found {
-		res := owner.lock()
-		m.touch(res)
 		m.indexMutex.Unlock()
-		return res
+		return owner, nil
 	}
-	owner := &nodeOwner{
-		valid: true,
-		id:    id,
+
+	// If not in the index, check the write buffer. If it is there, cancel
+	// the write and bring it back to be owned by a new nodeOwner instance.
+	if node, found := m.writeBuffer.Cancel(id); found {
+		owner := newNodeOwner(id, node)
+		m.index[id] = owner
+		// TODO: think hard whether the index lock needs to be hold while adding to the LRU list
+		m.indexMutex.Unlock()
+		m.addToLruList(owner)
+		return owner, nil
+	}
+	// Do not block the index while doing IO.
+	m.indexMutex.Unlock()
+
+	// Load the node data and create a new owner.
+	node, err := m.load(id)
+	if err != nil {
+		return nil, err
+	}
+	owner := newNodeOwner(id, node)
+
+	// Check that no concurrent process has loaded the same node in the meanwhile.
+	m.indexMutex.Lock()
+	if other, found := m.index[id]; found {
+		owner.dropNode()
+		m.indexMutex.Unlock()
+		return other, nil
 	}
 	m.index[id] = owner
-	res := owner.lock()
+	// TODO: think hard whether the index should be locked while modifying the LRU list
 	m.indexMutex.Unlock()
-	m.addToLruList(res)
-	return res
+	m.addToLruList(owner)
+	return owner, nil
 }
 
-func (m *nodeManager) touch(owner lockedOwner) {
+func (m *nodeManager) touch(owner *nodeOwner) {
 	// TODO: remove before commit.
-	if !owner.valid {
+	if !owner.isValid() {
 		panic("should never touch invalid owner!")
 	}
 
 	m.listMutex.Lock()
 
 	// If the node is the current head there is nothing to do.
-	if m.head == owner.nodeOwner {
+	if m.head == owner {
 		m.listMutex.Unlock()
 		return
 	}
 
 	// Remove node from current position.
-	if m.tail == owner.nodeOwner {
+	if m.tail == owner {
 		m.tail = owner.pred
 		m.tail.succ = nil // TODO: consider removing this line for efficiency
 	} else {
@@ -370,8 +384,8 @@ func (m *nodeManager) touch(owner lockedOwner) {
 	// Insert node at head position.
 	owner.pred = nil // TODO: consider removing this line for efficiency
 	owner.succ = m.head
-	m.head.pred = owner.nodeOwner
-	m.head = owner.nodeOwner
+	m.head.pred = owner
+	m.head = owner
 
 	m.listMutex.Unlock()
 }
@@ -395,37 +409,42 @@ func (r *NodeReference) Id() NodeId {
 // TODO: introduce two different types for the NodeManager -- one to gain read access, another to get write access
 
 func (r *NodeReference) GetReadAccess(source NodeSource) (shared.ReadHandle[Node], error) {
-	owner := r.getLockedOwner(source)
-	res, err := owner.getReadAccess(r.NodeId, source)
-	owner.unlock()
-	return res, err
+	for {
+		owner, err := r.getOwner(source)
+		if err != nil {
+			return shared.ReadHandle[Node]{}, err
+		}
+		if handle, success := owner.getReadAccess(source); success {
+			return handle, nil
+		}
+	}
 }
 
 func (r *NodeReference) GetWriteAccess(manager NodeManager) (shared.WriteHandle[Node], error) {
-	owner := r.getLockedOwner(manager)
-	res, err := owner.getWriteAccess(r.NodeId, manager)
-	owner.unlock()
-	return res, err
+	for {
+		owner, err := r.getOwner(manager)
+		if err != nil {
+			return shared.WriteHandle[Node]{}, err
+		}
+		if handle, success := owner.getWriteAccess(manager); success {
+			return handle, nil
+		}
+	}
 }
 
-func (r *NodeReference) getLockedOwner(source NodeSource) lockedOwner {
+func (r *NodeReference) getOwner(source NodeSource) (*nodeOwner, error) {
 	// check cached owner first
-	if r.owner != nil {
-		locked := r.owner.lock()
-
-		// Only consider cached owner if it is still valid.
-		if locked.isValid() {
-			return locked
-		}
-
-		// Otherwise unlock the owner and refresh it with the code below.
-		locked.unlock()
+	if r.owner != nil && r.owner.isValid() {
+		return r.owner, nil
 	}
 
 	// Get the owner for this node from the manager and cache it in the reference.
-	owner := source.getOwner(r.NodeId)
-	r.owner = owner.nodeOwner
-	return owner
+	res, err := source.getOwner(r.NodeId)
+	if err != nil {
+		return nil, err
+	}
+	r.owner = res
+	return res, nil
 }
 
 // ------------------------------ Node Owner ----------------------------------
@@ -448,85 +467,81 @@ func (r *NodeReference) getLockedOwner(source NodeSource) lockedOwner {
 // Owners can only progress to successor phases, never back. Each transition must
 // happen while the owner node is locked.
 type nodeOwner struct {
-	// mutex is to synchronize concurrent access to nodeOwners. Since owners may be
-	// accessed concurrently, this lock is used to synchronize between those. It is
-	// also used to provide exclusive access to the pool when it is necessary to
-	// discard a node.
-	mutex sync.Mutex
-
-	id    NodeId               // the ID of the owned node
-	node  *shared.Shared[Node] // the owned node, may be nil if it was not yet loaded from the disk.
-	valid bool                 // if not valid, this owner should be ignored since it is no longer in its pool's registry.
-	dirty bool                 // the owned node's state is different to the on-disk version
+	id    NodeId                              // the ID of the owned node, never to be changed
+	node  atomic.Pointer[shared.Shared[Node]] // the owned node, may be initially set and updated once to nil
+	dirty atomic.Bool                         // the owned node's state is different to the on-disk version
 
 	// synchronized by the pool's list mutex
 	pred *nodeOwner
 	succ *nodeOwner
 }
 
-func (o *nodeOwner) lock() lockedOwner {
-	o.mutex.Lock()
-	return lockedOwner{o}
+func newNodeOwner(id NodeId, node *shared.Shared[Node]) *nodeOwner {
+	res := &nodeOwner{id: id}
+	res.node.Store(node)
+	return res
 }
 
-// lockedOwner is a reference to a owner for which the current thread is holding
-// the respective lock. Since the lock needs to be acquired, held, and released
-// in a non-trivial way in the NodePool implementation, this type is added to
-// to make sure that operations on nodeOwners that depend on holding the lock are
-// only conducted when the lock is actually held.
-type lockedOwner struct {
-	*nodeOwner
+func (o *nodeOwner) isValid() bool {
+	return o.node.Load() != nil
 }
 
-func (o *lockedOwner) unlock() *nodeOwner {
-	o.mutex.Unlock()
-	return o.nodeOwner
+func (o *nodeOwner) isDirty() bool {
+	return o.dirty.Load()
 }
 
-func (o *lockedOwner) isValid() bool {
-	return o.valid
+func (o *nodeOwner) markDirty() {
+	o.dirty.Store(true)
 }
 
-func (o *lockedOwner) isDirty() bool {
-	return o.dirty
-}
-
-func (o *lockedOwner) getSharedNode(id NodeId, source NodeSource) (*shared.Shared[Node], error) {
-	source.touch(*o)
-	// If the node is present, it can be returned directly.
-	res := o.node
-	if res != nil {
-		return res, nil
+func (o *nodeOwner) getReadAccessWithoutTouch(source NodeSource) (handle shared.ReadHandle[Node], success bool) {
+	// Get the reference to the node.
+	shared := o.node.Load()
+	if shared == nil {
+		return handle, false
 	}
-	// Otherwise it needs to be fetched.
-	node, err := source.load(id)
-	if err != nil {
-		return nil, err
+
+	// Acquire read access to the shared node.
+	res := shared.GetReadHandle()
+
+	// Check that this owner has not become invalid in the meanwhile.
+	if o.node.Load() != shared {
+		res.Release()
+		return handle, false
 	}
-	o.node = node
-	return node, err
+	return res, true
 }
 
-func (o *lockedOwner) getReadAccess(id NodeId, source NodeSource) (shared.ReadHandle[Node], error) {
-	node, err := o.getSharedNode(id, source)
-	if err != nil {
-		return shared.ReadHandle[Node]{}, err
+func (o *nodeOwner) getReadAccess(source NodeSource) (handle shared.ReadHandle[Node], success bool) {
+	res, success := o.getReadAccessWithoutTouch(source)
+	if success {
+		// Track the successful access in the LRU list.
+		source.touch(o)
 	}
-	return node.GetReadHandle(), nil
+	return res, success
 }
 
-func (o *lockedOwner) getWriteAccess(id NodeId, manager NodeManager) (shared.WriteHandle[Node], error) {
-	node, err := o.getSharedNode(id, manager)
-	if err != nil {
-		return shared.WriteHandle[Node]{}, err
+func (o *nodeOwner) getWriteAccess(manager NodeManager) (handle shared.WriteHandle[Node], success bool) {
+	// Get the reference to the node.
+	shared := o.node.Load()
+	if shared == nil {
+		return handle, false
 	}
-	return node.GetWriteHandle(), nil
+
+	// Acquire write access to the shared node.
+	res := shared.GetWriteHandle()
+
+	// Check that this owner has not become invalid in the meanwhile.
+	if o.node.Load() != shared {
+		res.Release()
+		return handle, false
+	}
+
+	// Track the successful access in the LRU list.
+	manager.touch(o)
+	return res, true
 }
 
-func (o *lockedOwner) dropNode() {
-	if o.node == nil {
-		return
-	}
-	o.node = nil
-	o.valid = false
+func (o *nodeOwner) dropNode() {
+	o.node.Store(nil)
 }

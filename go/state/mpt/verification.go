@@ -516,15 +516,15 @@ func (s *verificationNodeSource) load(id NodeId) (*shared.Shared[Node], error) {
 	return shared.MakeShared[Node](node), nil
 }
 
-func (s *verificationNodeSource) getOwner(id NodeId) lockedOwner {
-	owner := &nodeOwner{
-		id:    id,
-		valid: true,
+func (s *verificationNodeSource) getOwner(id NodeId) (*nodeOwner, error) {
+	shared, err := s.load(id)
+	if err != nil {
+		return nil, err
 	}
-	return owner.lock()
+	return newNodeOwner(id, shared), nil
 }
 
-func (s *verificationNodeSource) touch(lockedOwner) {
+func (s *verificationNodeSource) touch(*nodeOwner) {
 	// ignored
 }
 

@@ -35,24 +35,24 @@ func (m *Mockhasher) EXPECT() *MockhasherMockRecorder {
 }
 
 // getHash mocks base method.
-func (m *Mockhasher) getHash(arg0 NodeId, arg1 NodeSource) (common.Hash, error) {
+func (m *Mockhasher) getHash(arg0 NodeReference, arg1 NodeContext, arg2 NodeSource) (common.Hash, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getHash", arg0, arg1)
+	ret := m.ctrl.Call(m, "getHash", arg0, arg1, arg2)
 	ret0, _ := ret[0].(common.Hash)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // getHash indicates an expected call of getHash.
-func (mr *MockhasherMockRecorder) getHash(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockhasherMockRecorder) getHash(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHash", reflect.TypeOf((*Mockhasher)(nil).getHash), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHash", reflect.TypeOf((*Mockhasher)(nil).getHash), arg0, arg1, arg2)
 }
 
 // updateHashes mocks base method.
-func (m *Mockhasher) updateHashes(root NodeId, nodes NodeManager) (common.Hash, []nodeHash, error) {
+func (m *Mockhasher) updateHashes(arg0 NodeReference, arg1 NodeContext, arg2 NodeManager) (common.Hash, []nodeHash, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "updateHashes", root, nodes)
+	ret := m.ctrl.Call(m, "updateHashes", arg0, arg1, arg2)
 	ret0, _ := ret[0].(common.Hash)
 	ret1, _ := ret[1].([]nodeHash)
 	ret2, _ := ret[2].(error)
@@ -60,7 +60,7 @@ func (m *Mockhasher) updateHashes(root NodeId, nodes NodeManager) (common.Hash, 
 }
 
 // updateHashes indicates an expected call of updateHashes.
-func (mr *MockhasherMockRecorder) updateHashes(root, nodes interface{}) *gomock.Call {
+func (mr *MockhasherMockRecorder) updateHashes(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateHashes", reflect.TypeOf((*Mockhasher)(nil).updateHashes), root, nodes)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateHashes", reflect.TypeOf((*Mockhasher)(nil).updateHashes), arg0, arg1, arg2)
 }
