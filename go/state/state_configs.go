@@ -118,10 +118,9 @@ const UnsupportedConfiguration = common.ConstError("unsupported configuration")
 
 type StateFactory func(params Parameters) (State, error)
 
-var variantRegistry map[Variant]StateFactory
+var variantRegistry = make(map[Variant]StateFactory)
 
 func init() {
-	variantRegistry = make(map[Variant]StateFactory)
 	RegisterVariantFactory(GoMemory, newGoMemoryState)
 	RegisterVariantFactory(GoFileNoCache, newGoFileState)
 	RegisterVariantFactory(GoFile, newGoCachedFileState)
@@ -130,6 +129,9 @@ func init() {
 }
 
 func RegisterVariantFactory(variant Variant, factory StateFactory) {
+	if _, exists := variantRegistry[variant]; exists {
+		panic(fmt.Errorf("variant %s already registered", variant))
+	}
 	variantRegistry[variant] = factory
 }
 
