@@ -15,6 +15,12 @@ pipeline {
             }
         }
 
+        stage('Parallelism Test') {
+            steps {
+                sh 'cd go/backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
+            }
+        }
+
         stage('Fuzzing') {
             parallel {
                 stage('Fuzzing NWays Cache') {
