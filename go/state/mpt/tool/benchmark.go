@@ -193,7 +193,11 @@ func runBenchmark(
 	if err != nil {
 		return res, err
 	}
+	success := false
 	defer func() {
+		if !success {
+			return
+		}
 		start := time.Now()
 		if err := state.Close(); err != nil {
 			observer("Failed to close state: %v", err)
@@ -264,6 +268,7 @@ func runBenchmark(
 	res.insertTime = benchmarkTime - reportingTime
 	res.reportTime = reportingTime
 
+	success = true
 	return res, nil
 }
 
