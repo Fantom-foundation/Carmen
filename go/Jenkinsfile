@@ -21,6 +21,7 @@ pipeline {
                 sh 'cd go/backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
                 sh 'cd go/common && go test ./... -race -run TestNWaysCache_Concurrent_ReadsWrites'
                 sh 'cd go/common && go test ./... -race -run TestNWaysCache_Concurrent_Sequence'
+                sh 'cd go/common && go test ./... -race -run TestHash_PassThrough_Parallel'
             }
         }
 

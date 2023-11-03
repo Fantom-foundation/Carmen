@@ -19,7 +19,7 @@ func TestHashPassThrough(t *testing.T) {
 	}
 }
 
-func TestHashPassThroughRunParallel(t *testing.T) {
+func TestHash_PassThrough_Parallel(t *testing.T) {
 	cacheSize := 100
 	hasher := NewCachedHasher[Address](cacheSize, AddressSerializer{})
 	for i := 0; i < 10_000*cacheSize; i++ {
