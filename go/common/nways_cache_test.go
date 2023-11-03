@@ -239,7 +239,7 @@ func TestNWaysCacheSetGetRandomKeysVariousConfigurations(t *testing.T) {
 	}
 }
 
-func TestNWaysLRUConcurrentWrites(t *testing.T) {
+func TestNWaysCache_Concurrent_ReadsWrites(t *testing.T) {
 	loops := 10_000
 	c := NewNWaysCache[int, int](1024, 16)
 
@@ -279,4 +279,42 @@ func TestNWaysLRUConcurrentWrites(t *testing.T) {
 			}
 		}(key)
 	}
+}
+
+func TestNWaysCache_Concurrent_Sequence(t *testing.T) {
+	loops := 10_000
+	c := NewNWaysCache[int, int](1024, 16)
+
+	var wg sync.WaitGroup
+	for i := 0; i < loops; i++ {
+		wg.Add(1)
+		go func(key, val int) {
+			defer wg.Done()
+			c.Set(key, val)
+			// value does not have to exist, because it could have been evicted by another thread.
+			// i.e. check only if the value exists
+			if got, exists := c.Get(key); exists && val != got {
+				t.Errorf("value inserted into cache does not match: %d != %d", got, val)
+			}
+
+			if got, present, _, _, _ := c.GetOrSet(key, val); present && val != got {
+				t.Errorf("value inserted into cache does not match: %d != %d", got, val)
+			}
+
+			c.Remove(key)
+			if _, exists := c.Get(key); exists {
+				t.Errorf("removed value should not exist")
+			}
+
+			c.Iterate(func(gotKey int, value int) bool {
+				if key == gotKey {
+					t.Errorf("removed value should not exist")
+				}
+				return true
+			})
+		}(i, i*1000)
+	}
+
+	wg.Wait()
+
 }
