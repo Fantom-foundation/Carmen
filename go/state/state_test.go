@@ -20,34 +20,32 @@ import (
 type namedStateConfig struct {
 	name    string
 	schema  StateSchema
-	factory func(params Parameters) (directUpdateState, error)
+	variant Variant
 }
 
 func (c *namedStateConfig) createState(directory string) (directUpdateState, error) {
-	return c.factory(Parameters{Directory: directory, Schema: c.schema})
+	st, err := NewState(Parameters{Directory: directory, Variant: c.variant, Schema: c.schema})
+	if err != nil {
+		return nil, err
+	}
+	return st.(directUpdateState), nil
 }
 
 func (c *namedStateConfig) createStateWithArchive(directory string, archiveType ArchiveType) (directUpdateState, error) {
-	return c.factory(Parameters{Directory: directory, Archive: archiveType, Schema: c.schema})
-}
-
-func castToDirectUpdateState(factory func(params Parameters) (State, error)) func(params Parameters) (directUpdateState, error) {
-	return func(params Parameters) (directUpdateState, error) {
-		state, err := factory(params)
-		if err != nil {
-			return nil, err
-		}
-		return state.(directUpdateState), nil
+	st, err := NewState(Parameters{Directory: directory, Variant: c.variant, Schema: c.schema, Archive: archiveType})
+	if err != nil {
+		return nil, err
 	}
+	return st.(directUpdateState), nil
 }
 
 func initStates() []namedStateConfig {
 	var res []namedStateConfig
 	for _, s := range initCppStates() {
-		res = append(res, namedStateConfig{name: fmt.Sprintf("cpp-%s/s%d", s.name, s.schema), schema: s.schema, factory: s.factory})
+		res = append(res, namedStateConfig{name: fmt.Sprintf("cpp-%s/s%d", s.name, s.schema), schema: s.schema, variant: s.variant})
 	}
 	for _, s := range initGoStates() {
-		res = append(res, namedStateConfig{name: fmt.Sprintf("go-%s/s%d", s.name, s.schema), schema: s.schema, factory: s.factory})
+		res = append(res, namedStateConfig{name: fmt.Sprintf("go-%s/s%d", s.name, s.schema), schema: s.schema, variant: s.variant})
 	}
 	return res
 }
@@ -79,7 +77,7 @@ func getReferenceStateFor(params Parameters) (State, error) {
 	if params.Schema == 5 {
 		return newGoMemoryS5State(params)
 	}
-	return newCppInMemoryState(params)
+	return newGoMemoryState(params)
 }
 
 func testHashAfterModification(t *testing.T, mod func(s directUpdateState)) {
@@ -118,81 +116,81 @@ func TestEmptyHash(t *testing.T) {
 
 func TestAddressHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.createAccount(address1)
+		s.CreateAccount(address1)
 	})
 }
 
 func TestMultipleAddressHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.createAccount(address1)
-		s.createAccount(address2)
-		s.createAccount(address3)
+		s.CreateAccount(address1)
+		s.CreateAccount(address2)
+		s.CreateAccount(address3)
 	})
 }
 
 func TestDeletedAddressHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.createAccount(address1)
-		s.createAccount(address2)
-		s.createAccount(address3)
-		s.deleteAccount(address1)
-		s.deleteAccount(address2)
+		s.CreateAccount(address1)
+		s.CreateAccount(address2)
+		s.CreateAccount(address3)
+		s.DeleteAccount(address1)
+		s.DeleteAccount(address2)
 	})
 }
 
 func TestStorageHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setStorage(address1, key2, val3)
+		s.SetStorage(address1, key2, val3)
 	})
 }
 
 func TestMultipleStorageHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setStorage(address1, key2, val3)
-		s.setStorage(address2, key3, val1)
-		s.setStorage(address3, key1, val2)
+		s.SetStorage(address1, key2, val3)
+		s.SetStorage(address2, key3, val1)
+		s.SetStorage(address3, key1, val2)
 	})
 }
 
 func TestBalanceUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setBalance(address1, balance1)
+		s.SetBalance(address1, balance1)
 	})
 }
 
 func TestMultipleBalanceUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setBalance(address1, balance1)
-		s.setBalance(address2, balance2)
-		s.setBalance(address3, balance3)
+		s.SetBalance(address1, balance1)
+		s.SetBalance(address2, balance2)
+		s.SetBalance(address3, balance3)
 	})
 }
 
 func TestNonceUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setNonce(address1, nonce1)
+		s.SetNonce(address1, nonce1)
 	})
 }
 
 func TestMultipleNonceUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setNonce(address1, nonce1)
-		s.setNonce(address2, nonce2)
-		s.setNonce(address3, nonce3)
+		s.SetNonce(address1, nonce1)
+		s.SetNonce(address2, nonce2)
+		s.SetNonce(address3, nonce3)
 	})
 }
 
 func TestCodeUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setCode(address1, []byte{1})
+		s.SetCode(address1, []byte{1})
 	})
 }
 
 func TestMultipleCodeUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
-		s.setCode(address1, []byte{1})
-		s.setCode(address2, []byte{1, 2})
-		s.setCode(address3, []byte{1, 2, 3})
+		s.SetCode(address1, []byte{1})
+		s.SetCode(address2, []byte{1, 2})
+		s.SetCode(address3, []byte{1, 2, 3})
 	})
 }
 
@@ -200,17 +198,17 @@ func TestLargeStateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s directUpdateState) {
 		for i := 0; i < 100; i++ {
 			address := common.Address{byte(i)}
-			s.createAccount(address)
+			s.CreateAccount(address)
 			for j := 0; j < 100; j++ {
 				key := common.Key{byte(j)}
-				s.setStorage(address, key, common.Value{byte(i), 0, 0, byte(j)})
+				s.SetStorage(address, key, common.Value{byte(i), 0, 0, byte(j)})
 			}
 			if i%21 == 0 {
-				s.deleteAccount(address)
+				s.DeleteAccount(address)
 			}
-			s.setBalance(address, common.Balance{byte(i)})
-			s.setNonce(address, common.Nonce{byte(i + 1)})
-			s.setCode(address, []byte{byte(i), byte(i * 2), byte(i*3 + 2)})
+			s.SetBalance(address, common.Balance{byte(i)})
+			s.SetNonce(address, common.Nonce{byte(i + 1)})
+			s.SetCode(address, []byte{byte(i), byte(i * 2), byte(i*3 + 2)})
 		}
 	})
 }
@@ -250,7 +248,7 @@ func TestCodeCanBeUpdated(t *testing.T) {
 
 		// Set the code to a new value.
 		code1 := []byte{0, 1, 2, 3, 4}
-		if err := s.setCode(address1, code1); err != nil {
+		if err := s.SetCode(address1, code1); err != nil {
 			t.Fatalf("failed to update code: %v", err)
 		}
 		code, err = s.GetCode(address1)
@@ -267,7 +265,7 @@ func TestCodeCanBeUpdated(t *testing.T) {
 
 		// Update code again should be fine.
 		code2 := []byte{5, 4, 3, 2, 1}
-		if err := s.setCode(address1, code2); err != nil {
+		if err := s.SetCode(address1, code2); err != nil {
 			t.Fatalf("failed to update code: %v", err)
 		}
 		code, err = s.GetCode(address1)
@@ -298,7 +296,7 @@ func TestCodeHashesMatchCodes(t *testing.T) {
 		}
 
 		// Creating an account should not change this.
-		s.createAccount(address1)
+		s.CreateAccount(address1)
 		hash, err = s.GetCodeHash(address1)
 		if err != nil {
 			t.Fatalf("error fetching code hash: %v", err)
@@ -310,7 +308,7 @@ func TestCodeHashesMatchCodes(t *testing.T) {
 		// Update code to non-empty code updates hash accordingly.
 		code := []byte{1, 2, 3, 4}
 		hashOfTestCode := common.GetKeccak256Hash(code)
-		s.setCode(address1, code)
+		s.SetCode(address1, code)
 		hash, err = s.GetCodeHash(address1)
 		if err != nil {
 			t.Fatalf("error fetching code hash: %v", err)
@@ -320,7 +318,7 @@ func TestCodeHashesMatchCodes(t *testing.T) {
 		}
 
 		// Reset code to empty code updates hash accordingly.
-		s.setCode(address1, []byte{})
+		s.SetCode(address1, []byte{})
 		hash, err = s.GetCodeHash(address1)
 		if err != nil {
 			t.Fatalf("error fetching code hash: %v", err)
@@ -333,10 +331,10 @@ func TestCodeHashesMatchCodes(t *testing.T) {
 
 func TestDeleteNotExistingAccount(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
-		if err := s.createAccount(address1); err != nil {
+		if err := s.CreateAccount(address1); err != nil {
 			t.Fatalf("Error: %s", err)
 		}
-		if err := s.deleteAccount(address2); err != nil { // deleting never-existed account
+		if err := s.DeleteAccount(address2); err != nil { // deleting never-existed account
 			t.Fatalf("Error: %s", err)
 		}
 
@@ -352,7 +350,7 @@ func TestDeleteNotExistingAccount(t *testing.T) {
 func TestCreatingAccountClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
-		if err := s.createAccount(address1); err != nil {
+		if err := s.CreateAccount(address1); err != nil {
 			t.Errorf("failed to create account: %v", err)
 		}
 
@@ -364,7 +362,7 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 			t.Errorf("storage slot are initially not zero")
 		}
 
-		if err = s.setStorage(address1, key1, val1); err != nil {
+		if err = s.SetStorage(address1, key1, val1); err != nil {
 			t.Errorf("failed to update storage slot: %v", err)
 		}
 
@@ -376,7 +374,7 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 			t.Errorf("storage slot update did not take effect")
 		}
 
-		if err := s.createAccount(address1); err != nil {
+		if err := s.CreateAccount(address1); err != nil {
 			t.Fatalf("Error: %s", err)
 		}
 
@@ -393,11 +391,11 @@ func TestCreatingAccountClearsStorage(t *testing.T) {
 func TestDeletingAccountsClearsStorage(t *testing.T) {
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s directUpdateState) {
 		zero := common.Value{}
-		if err := s.createAccount(address1); err != nil {
+		if err := s.CreateAccount(address1); err != nil {
 			t.Errorf("failed to create account: %v", err)
 		}
 
-		if err := s.setStorage(address1, key1, val1); err != nil {
+		if err := s.SetStorage(address1, key1, val1); err != nil {
 			t.Errorf("failed to update storage slot: %v", err)
 		}
 
@@ -409,7 +407,7 @@ func TestDeletingAccountsClearsStorage(t *testing.T) {
 			t.Errorf("storage slot update did not take effect")
 		}
 
-		if err := s.deleteAccount(address1); err != nil {
+		if err := s.DeleteAccount(address1); err != nil {
 			t.Fatalf("Error: %s", err)
 		}
 
@@ -669,10 +667,10 @@ func TestPersistentState(t *testing.T) {
 }
 
 func fillStateForSnapshotting(state directUpdateState) {
-	state.setBalance(address1, common.Balance{12})
-	state.setNonce(address2, common.Nonce{14})
-	state.setCode(address3, []byte{0, 8, 15})
-	state.setStorage(address1, key1, val1)
+	state.SetBalance(address1, common.Balance{12})
+	state.SetNonce(address2, common.Nonce{14})
+	state.SetCode(address3, []byte{0, 8, 15})
+	state.SetStorage(address1, key1, val1)
 }
 
 func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {

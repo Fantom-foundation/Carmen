@@ -19,7 +19,7 @@ func TestAccountsAreInitiallyUnknown(t *testing.T) {
 
 func TestAccountsCanBeCreated(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
-		state.createAccount(address1)
+		state.CreateAccount(address1)
 		account_state, _ := state.Exists(address1)
 		if account_state != true {
 			t.Errorf("Created account does not exist, got %v", account_state)
@@ -29,8 +29,8 @@ func TestAccountsCanBeCreated(t *testing.T) {
 
 func TestAccountsCanBeDeleted(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
-		state.createAccount(address1)
-		state.deleteAccount(address1)
+		state.CreateAccount(address1)
+		state.DeleteAccount(address1)
 		account_state, _ := state.Exists(address1)
 		if account_state != false {
 			t.Errorf("Deleted account is not deleted, got %v", account_state)
@@ -52,7 +52,7 @@ func TestReadUninitializedBalance(t *testing.T) {
 
 func TestWriteAndReadBalance(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
-		err := state.setBalance(address1, balance1)
+		err := state.SetBalance(address1, balance1)
 		if err != nil {
 			t.Fatalf("Error updating balance: %v", err)
 		}
@@ -80,7 +80,7 @@ func TestReadUninitializedNonce(t *testing.T) {
 
 func TestWriteAndReadNonce(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
-		err := state.setNonce(address1, nonce1)
+		err := state.SetNonce(address1, nonce1)
 		if err != nil {
 			t.Fatalf("Error updating nonce: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestReadUninitializedSlot(t *testing.T) {
 
 func TestWriteAndReadSlot(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
-		err := state.setStorage(address1, key1, val1)
+		err := state.SetStorage(address1, key1, val1)
 		if err != nil {
 			t.Fatalf("Error updating storage: %v", err)
 		}
@@ -145,7 +145,7 @@ func getTestCodes() [][]byte {
 func TestSetAndGetCode(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		for _, code := range getTestCodes() {
-			err := state.setCode(address1, code)
+			err := state.SetCode(address1, code)
 			if err != nil {
 				t.Fatalf("Error setting code: %v", err)
 			}
@@ -170,7 +170,7 @@ func TestSetAndGetCode(t *testing.T) {
 func TestSetAndGetCodeHash(t *testing.T) {
 	runForEachCppConfig(t, func(t *testing.T, state directUpdateState) {
 		for _, code := range getTestCodes() {
-			err := state.setCode(address1, code)
+			err := state.SetCode(address1, code)
 			if err != nil {
 				t.Fatalf("Error setting code: %v", err)
 			}
@@ -190,9 +190,9 @@ func initCppStates() []namedStateConfig {
 	list := []namedStateConfig{}
 	for _, s := range GetAllSchemas() {
 		list = append(list, []namedStateConfig{
-			{"memory", s, castToDirectUpdateState(newCppInMemoryState)},
-			{"file", s, castToDirectUpdateState(newCppFileBasedState)},
-			{"leveldb", s, castToDirectUpdateState(newCppLevelDbBasedState)},
+			{"memory", s, "cpp-memory"},
+			{"file", s, "cpp-file"},
+			{"leveldb", s, "cpp-ldb"},
 		}...)
 	}
 	return list

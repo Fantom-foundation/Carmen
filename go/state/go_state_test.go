@@ -36,25 +36,25 @@ var (
 
 func initGoStates() []namedStateConfig {
 	return []namedStateConfig{
-		{"Memory 1", 1, castToDirectUpdateState(newGoMemoryState)},
-		{"Memory 2", 2, castToDirectUpdateState(newGoMemoryState)},
-		{"Memory 3", 3, castToDirectUpdateState(newGoMemoryState)},
-		{"Memory 4", 4, castToDirectUpdateState(newGoMemoryS4State)},
-		{"Memory 5", 5, castToDirectUpdateState(newGoMemoryS5State)},
-		{"File Index and Store 1", 1, castToDirectUpdateState(newGoFileState)},
-		{"File Index and Store 2", 2, castToDirectUpdateState(newGoFileState)},
-		{"File Index and Store 3", 3, castToDirectUpdateState(newGoFileState)},
-		{"File 4", 4, castToDirectUpdateState(newGoFileS4State)},
-		{"File 5", 5, castToDirectUpdateState(newGoFileS5State)},
-		{"Cached File Index and Store 1", 1, castToDirectUpdateState(newGoCachedFileState)},
-		{"Cached File Index and Store 2", 2, castToDirectUpdateState(newGoCachedFileState)},
-		{"Cached File Index and Store 3", 3, castToDirectUpdateState(newGoCachedFileState)},
-		{"LevelDB Index and Store 1", 1, castToDirectUpdateState(newGoLeveLIndexAndStoreState)},
-		{"LevelDB Index and Store 2", 2, castToDirectUpdateState(newGoLeveLIndexAndStoreState)},
-		{"LevelDB Index and Store 3", 3, castToDirectUpdateState(newGoLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 1", 1, castToDirectUpdateState(newGoCachedLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 2", 2, castToDirectUpdateState(newGoCachedLeveLIndexAndStoreState)},
-		{"Cached LevelDB Index and Store 3", 3, castToDirectUpdateState(newGoCachedLeveLIndexAndStoreState)},
+		{"Memory 1", 1, GoMemory},
+		{"Memory 2", 2, GoMemory},
+		{"Memory 3", 3, GoMemory},
+		{"Memory 4", 4, GoMemory},
+		{"Memory 5", 5, GoMemory},
+		{"File Index and Store 1", 1, GoFileNoCache},
+		{"File Index and Store 2", 2, GoFileNoCache},
+		{"File Index and Store 3", 3, GoFileNoCache},
+		{"File 4", 4, GoFileNoCache},
+		{"File 5", 5, GoFileNoCache},
+		{"Cached File Index and Store 1", 1, GoFile},
+		{"Cached File Index and Store 2", 2, GoFile},
+		{"Cached File Index and Store 3", 3, GoFile},
+		{"LevelDB Index and Store 1", 1, GoLevelDbNoCache},
+		{"LevelDB Index and Store 2", 2, GoLevelDbNoCache},
+		{"LevelDB Index and Store 3", 3, GoLevelDbNoCache},
+		{"Cached LevelDB Index and Store 1", 1, GoLevelDb},
+		{"Cached LevelDB Index and Store 2", 2, GoLevelDb},
+		{"Cached LevelDB Index and Store 3", 3, GoLevelDb},
 	}
 }
 
@@ -105,19 +105,19 @@ func TestBasicOperations(t *testing.T) {
 			defer state.Close()
 
 			// fill-in values
-			if err := state.createAccount(address1); err != nil {
+			if err := state.CreateAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setNonce(address1, common.Nonce{123}); err != nil {
+			if err := state.SetNonce(address1, common.Nonce{123}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setBalance(address2, common.Balance{45}); err != nil {
+			if err := state.SetBalance(address2, common.Balance{45}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setStorage(address1, key1, common.Value{67}); err != nil {
+			if err := state.SetStorage(address1, key1, common.Value{67}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
+			if err := state.SetCode(address1, []byte{0x12, 0x34}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 
@@ -142,7 +142,7 @@ func TestBasicOperations(t *testing.T) {
 			}
 
 			// delete account
-			if err := state.deleteAccount(address1); err != nil {
+			if err := state.DeleteAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 			if val, err := state.Exists(address1); err != nil || val != false {
@@ -167,16 +167,16 @@ func TestDeletingAccounts(t *testing.T) {
 			defer state.Close()
 
 			// fill-in values
-			if err := state.createAccount(address1); err != nil {
+			if err := state.CreateAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setNonce(address1, common.Nonce{123}); err != nil {
+			if err := state.SetNonce(address1, common.Nonce{123}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setBalance(address2, common.Balance{45}); err != nil {
+			if err := state.SetBalance(address2, common.Balance{45}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
-			if err := state.setCode(address1, []byte{0x12, 0x34}); err != nil {
+			if err := state.SetCode(address1, []byte{0x12, 0x34}); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 
@@ -186,7 +186,7 @@ func TestDeletingAccounts(t *testing.T) {
 			}
 
 			// delete account
-			if err := state.deleteAccount(address1); err != nil {
+			if err := state.DeleteAccount(address1); err != nil {
 				t.Errorf("Error: %s", err)
 			}
 			if val, err := state.Exists(address1); err != nil || val != false {
@@ -206,22 +206,22 @@ func TestMoreInserts(t *testing.T) {
 			defer state.Close()
 
 			// create accounts since setting values to non-existing accounts may be ignored
-			state.setNonce(address1, common.ToNonce(12))
-			state.setNonce(address2, common.ToNonce(12))
-			state.setNonce(address3, common.ToNonce(12))
+			state.SetNonce(address1, common.ToNonce(12))
+			state.SetNonce(address2, common.ToNonce(12))
+			state.SetNonce(address3, common.ToNonce(12))
 
 			// insert more combinations, so we do not have only zero-indexes everywhere
-			_ = state.setStorage(address1, key1, val1)
-			_ = state.setStorage(address1, key2, val2)
-			_ = state.setStorage(address1, key3, val3)
+			_ = state.SetStorage(address1, key1, val1)
+			_ = state.SetStorage(address1, key2, val2)
+			_ = state.SetStorage(address1, key3, val3)
 
-			_ = state.setStorage(address2, key1, val1)
-			_ = state.setStorage(address2, key2, val2)
-			_ = state.setStorage(address2, key3, val3)
+			_ = state.SetStorage(address2, key1, val1)
+			_ = state.SetStorage(address2, key2, val2)
+			_ = state.SetStorage(address2, key3, val3)
 
-			_ = state.setStorage(address3, key1, val1)
-			_ = state.setStorage(address3, key2, val2)
-			_ = state.setStorage(address3, key3, val3)
+			_ = state.SetStorage(address3, key1, val1)
+			_ = state.SetStorage(address3, key2, val2)
+			_ = state.SetStorage(address3, key3, val3)
 
 			if val, err := state.GetStorage(address1, key3); err != nil || val != val3 {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
@@ -248,11 +248,11 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 			code1 := []byte{1, 2, 3}
 
 			// create an account and set some of its properties
-			state.createAccount(address1)
-			state.setBalance(address1, balance1)
-			state.setNonce(address1, nonce1)
-			state.setCode(address1, code1)
-			state.setStorage(address1, key1, val1)
+			state.CreateAccount(address1)
+			state.SetBalance(address1, balance1)
+			state.SetNonce(address1, nonce1)
+			state.SetCode(address1, code1)
+			state.SetStorage(address1, key1, val1)
 
 			if exists, err := state.Exists(address1); !exists || err != nil {
 				t.Errorf("account does not exist, err %v", err)
@@ -275,7 +275,7 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 			}
 
 			// re-creating the account preserves everything but the state.
-			state.createAccount(address1)
+			state.CreateAccount(address1)
 
 			if exists, err := state.Exists(address1); !exists || err != nil {
 				t.Errorf("account should still exist, err %v", err)
@@ -312,13 +312,13 @@ func TestHashing(t *testing.T) {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
 
-			_ = state.createAccount(address1)
+			_ = state.CreateAccount(address1)
 			hash1, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
 
-			_ = state.setStorage(address1, key1, val1)
+			_ = state.SetStorage(address1, key1, val1)
 			hash2, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
@@ -327,7 +327,7 @@ func TestHashing(t *testing.T) {
 				t.Errorf("hash of changed state not changed")
 			}
 
-			_ = state.setBalance(address1, balance1)
+			_ = state.SetBalance(address1, balance1)
 			hash3, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
@@ -340,7 +340,7 @@ func TestHashing(t *testing.T) {
 				t.Errorf("hash of changed state not changed")
 			}
 
-			_ = state.setCode(address1, []byte{0x12, 0x34, 0x56, 0x78})
+			_ = state.SetCode(address1, []byte{0x12, 0x34, 0x56, 0x78})
 			hash4, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
@@ -392,9 +392,9 @@ func TestFailingStore(t *testing.T) {
 	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
 	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
 
-	_ = goSchema.setBalance(address1, common.Balance{})
-	_ = goSchema.setNonce(address1, common.Nonce{})
-	_ = goSchema.setStorage(address1, key1, common.Value{})
+	_ = goSchema.SetBalance(address1, common.Balance{})
+	_ = goSchema.SetNonce(address1, common.Nonce{})
+	_ = goSchema.SetStorage(address1, key1, common.Value{})
 
 	_, err = state.GetBalance(address1)
 	if err != testingErr {

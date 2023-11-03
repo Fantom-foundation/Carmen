@@ -1,11 +1,11 @@
-package state
+package cppstate
 
-//go:generate sh ../lib/build_libcarmen.sh
+//go:generate sh ../../lib/build_libcarmen.sh
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../cpp
-#cgo LDFLAGS: -L${SRCDIR}/../lib -lcarmen
-#cgo LDFLAGS: -Wl,-rpath,${SRCDIR}/../lib
+#cgo CFLAGS: -I${SRCDIR}/../../../cpp
+#cgo LDFLAGS: -L${SRCDIR}/../../lib -lcarmen
+#cgo LDFLAGS: -Wl,-rpath,${SRCDIR}/../../lib
 #include <stdlib.h>
 #include "state/c_state.h"
 */
@@ -13,11 +13,24 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
+
+const (
+	CppMemory  state.Variant = "cpp-memory"
+	CppFile                  = "cpp-file"
+	CppLevelDb               = "cpp-ldb"
+)
+
+func init() {
+	state.RegisterVariantFactory(CppMemory, newCppInMemoryState)
+	state.RegisterVariantFactory(CppFile, newCppFileBasedState)
+	state.RegisterVariantFactory(CppLevelDb, newCppLevelDbBasedState)
+}
 
 const CodeCacheSize = 8_000 // ~ 200 MiB of memory for go-side code cache
 const CodeMaxSize = 25000   // Contract limit is 24577
@@ -30,34 +43,34 @@ type CppState struct {
 	codeCache *common.Cache[common.Address, []byte]
 }
 
-func newCppState(impl C.enum_StateImpl, params Parameters) (State, error) {
+func newCppState(impl C.enum_StateImpl, params state.Parameters) (state.State, error) {
 	dir := C.CString(params.Directory)
 	defer C.free(unsafe.Pointer(dir))
 
-	state := C.Carmen_OpenState(C.C_Schema(params.Schema), impl, C.enum_StateImpl(params.Archive), dir, C.int(len(params.Directory)))
-	if state == unsafe.Pointer(nil) {
-		return nil, fmt.Errorf("%w: failed to create C++ state instance for parameters %v", UnsupportedConfiguration, params)
+	st := C.Carmen_OpenState(C.C_Schema(params.Schema), impl, C.enum_StateImpl(params.Archive), dir, C.int(len(params.Directory)))
+	if st == unsafe.Pointer(nil) {
+		return nil, fmt.Errorf("%w: failed to create C++ state instance for parameters %v", state.UnsupportedConfiguration, params)
 	}
 
-	return wrapIntoSyncedState(&CppState{
-		state:     state,
+	return state.WrapIntoSyncedState(&CppState{
+		state:     st,
 		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
 	}), nil
 }
 
-func newCppInMemoryState(params Parameters) (State, error) {
+func newCppInMemoryState(params state.Parameters) (state.State, error) {
 	return newCppState(C.kState_Memory, params)
 }
 
-func newCppFileBasedState(params Parameters) (State, error) {
+func newCppFileBasedState(params state.Parameters) (state.State, error) {
 	return newCppState(C.kState_File, params)
 }
 
-func newCppLevelDbBasedState(params Parameters) (State, error) {
+func newCppLevelDbBasedState(params state.Parameters) (state.State, error) {
 	return newCppState(C.kState_LevelDb, params)
 }
 
-func (cs *CppState) createAccount(address common.Address) error {
+func (cs *CppState) CreateAccount(address common.Address) error {
 	update := common.Update{}
 	update.AppendCreateAccount(address)
 	return cs.Apply(0, update)
@@ -69,7 +82,7 @@ func (cs *CppState) Exists(address common.Address) (bool, error) {
 	return res == common.Exists, nil
 }
 
-func (cs *CppState) deleteAccount(address common.Address) error {
+func (cs *CppState) DeleteAccount(address common.Address) error {
 	update := common.Update{}
 	update.AppendDeleteAccount(address)
 	return cs.Apply(0, update)
@@ -81,7 +94,7 @@ func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
 	return balance, nil
 }
 
-func (cs *CppState) setBalance(address common.Address, balance common.Balance) error {
+func (cs *CppState) SetBalance(address common.Address, balance common.Balance) error {
 	update := common.Update{}
 	update.AppendBalanceUpdate(address, balance)
 	return cs.Apply(0, update)
@@ -93,7 +106,7 @@ func (cs *CppState) GetNonce(address common.Address) (common.Nonce, error) {
 	return nonce, nil
 }
 
-func (cs *CppState) setNonce(address common.Address, nonce common.Nonce) error {
+func (cs *CppState) SetNonce(address common.Address, nonce common.Nonce) error {
 	update := common.Update{}
 	update.AppendNonceUpdate(address, nonce)
 	return cs.Apply(0, update)
@@ -105,7 +118,7 @@ func (cs *CppState) GetStorage(address common.Address, key common.Key) (common.V
 	return value, nil
 }
 
-func (cs *CppState) setStorage(address common.Address, key common.Key, value common.Value) error {
+func (cs *CppState) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	update := common.Update{}
 	update.AppendSlotUpdate(address, key, value)
 	return cs.Apply(0, update)
@@ -134,7 +147,7 @@ func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 	return code, nil
 }
 
-func (cs *CppState) setCode(address common.Address, code []byte) error {
+func (cs *CppState) SetCode(address common.Address, code []byte) error {
 	update := common.Update{}
 	update.AppendCodeUpdate(address, code)
 	return cs.Apply(0, update)
@@ -231,7 +244,7 @@ func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 	return res
 }
 
-func (cs *CppState) GetArchiveState(block uint64) (State, error) {
+func (cs *CppState) GetArchiveState(block uint64) (state.State, error) {
 	return &CppState{
 		state:     C.Carmen_GetArchiveState(cs.state, C.uint64_t(block)),
 		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),

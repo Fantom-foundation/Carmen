@@ -27,18 +27,18 @@ type GoState struct {
 }
 
 type GoSchema interface {
-	createAccount(address common.Address) (err error)
+	CreateAccount(address common.Address) (err error)
 	Exists(address common.Address) (bool, error)
-	deleteAccount(address common.Address) error
+	DeleteAccount(address common.Address) error
 	GetBalance(address common.Address) (balance common.Balance, err error)
-	setBalance(address common.Address, balance common.Balance) (err error)
+	SetBalance(address common.Address, balance common.Balance) (err error)
 	GetNonce(address common.Address) (nonce common.Nonce, err error)
-	setNonce(address common.Address, nonce common.Nonce) (err error)
+	SetNonce(address common.Address, nonce common.Nonce) (err error)
 	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
-	setStorage(address common.Address, key common.Key, value common.Value) error
+	SetStorage(address common.Address, key common.Key, value common.Value) error
 	GetCode(address common.Address) (value []byte, err error)
 	GetCodeSize(address common.Address) (size int, err error)
-	setCode(address common.Address, code []byte) (err error)
+	SetCode(address common.Address, code []byte) (err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
 	GetHash() (hash common.Hash, err error)
 	FinishBlock() (archiveUpdateHints any, err error)
@@ -56,7 +56,7 @@ type GoSchema interface {
 }
 
 func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) State {
-	return wrapIntoSyncedState(&GoState{
+	return WrapIntoSyncedState(&GoState{
 		schema,
 		cleanup,
 		archive,
