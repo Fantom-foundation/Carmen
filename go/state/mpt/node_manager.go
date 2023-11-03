@@ -2,6 +2,7 @@ package mpt
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -183,16 +184,42 @@ func (m *nodeManager) MarkDirty(ref NodeReference, _ shared.WriteHandle[Node]) {
 }
 
 func (m *nodeManager) Release(ref NodeReference) error {
+	// TODO: think through the locking in this function.
 	id := ref.Id()
+	if id.IsEmpty() {
+		return nil
+	}
 	m.writeBuffer.Cancel(id)
+
 	m.indexMutex.Lock()
-	if owner, found := m.index[id]; found {
-		locked := owner.lock()
-		locked.dropNode()
-		locked.unlock()
+	owner, found := m.index[id]
+	if found {
 		delete(m.index, id)
 	}
 	m.indexMutex.Unlock()
+
+	locked := owner.lock()
+	locked.dropNode()
+	locked.unlock()
+
+	// Remove the owner from the LRU list.
+	m.listMutex.Lock()
+	m.size--
+	if m.size == 0 {
+		panic("LRU should never get empty")
+	}
+	if m.head == owner {
+		m.head = owner.succ
+		m.head.pred = nil
+	} else if m.tail == owner {
+		m.tail = m.tail.pred
+		m.tail.succ = nil
+	} else {
+		owner.pred.succ = owner.succ
+		owner.succ.pred = owner.pred
+	}
+	m.listMutex.Unlock()
+
 	return m.store.Release(id)
 }
 
@@ -246,20 +273,28 @@ func (a nodeStoreToSinkAdapter) Write(id NodeId, handle shared.ReadHandle[Node])
 
 func (m *nodeManager) addToLruList(owner lockedOwner) {
 	m.listMutex.Lock()
+	defer m.listMutex.Unlock()
 
 	// If needed, remove an element from the pool.
 	if m.size >= m.capacity {
 
 		locked := m.tail.lock()
-		if locked.dirty {
+
+		if !locked.valid {
+			fmt.Printf("found invalid owner for id %v in LRU list\n", locked.id)
+		}
+
+		if locked.isDirty() {
 			// Dirty nodes need to be moved from the LRU list to the write buffer.
 			m.writeBuffer.Add(locked.id, locked.node)
 		}
 		// To evict the node, the reference in the owner is dropped and the owner
 		// is marked to be invalid. References to the owner will refresh the owner
 		// as need.
-		locked.dropNode()
+		m.indexMutex.Lock()
 		delete(m.index, locked.id)
+		m.indexMutex.Unlock()
+		locked.dropNode()
 		locked.unlock()
 
 		m.tail = m.tail.pred
@@ -272,7 +307,6 @@ func (m *nodeManager) addToLruList(owner lockedOwner) {
 	owner.succ = m.head
 	m.head.pred = owner.nodeOwner
 	m.head = owner.nodeOwner
-	m.listMutex.Unlock()
 }
 
 func (m *nodeManager) load(id NodeId) (*shared.Shared[Node], error) {
