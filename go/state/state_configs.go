@@ -85,9 +85,6 @@ const (
 	GoFileNoCache            = "go-file-nocache"
 	GoLevelDb                = "go-ldb"
 	GoLevelDbNoCache         = "go-ldb-nocache"
-	CppMemory                = "cpp-memory"
-	CppFile                  = "cpp-file"
-	CppLevelDb               = "cpp-ldb"
 )
 
 func GetAllVariants() []Variant {

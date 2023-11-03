@@ -190,9 +190,9 @@ func initCppStates() []namedStateConfig {
 	list := []namedStateConfig{}
 	for _, s := range GetAllSchemas() {
 		list = append(list, []namedStateConfig{
-			{"memory", s, CppMemory},
-			{"file", s, CppFile},
-			{"leveldb", s, CppLevelDb},
+			{"memory", s, "cpp-memory"},
+			{"file", s, "cpp-file"},
+			{"leveldb", s, "cpp-ldb"},
 		}...)
 	}
 	return list

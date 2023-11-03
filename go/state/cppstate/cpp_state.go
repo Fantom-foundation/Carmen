@@ -20,10 +20,16 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+const (
+	CppMemory  state.Variant = "cpp-memory"
+	CppFile                  = "cpp-file"
+	CppLevelDb               = "cpp-ldb"
+)
+
 func init() {
-	state.RegisterVariantFactory(state.CppMemory, newCppInMemoryState)
-	state.RegisterVariantFactory(state.CppFile, newCppFileBasedState)
-	state.RegisterVariantFactory(state.CppLevelDb, newCppLevelDbBasedState)
+	state.RegisterVariantFactory(CppMemory, newCppInMemoryState)
+	state.RegisterVariantFactory(CppFile, newCppFileBasedState)
+	state.RegisterVariantFactory(CppLevelDb, newCppLevelDbBasedState)
 }
 
 const CodeCacheSize = 8_000 // ~ 200 MiB of memory for go-side code cache
