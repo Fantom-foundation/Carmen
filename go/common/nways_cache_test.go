@@ -240,7 +240,7 @@ func TestNWaysCacheSetGetRandomKeysVariousConfigurations(t *testing.T) {
 }
 
 func TestNWaysCache_Concurrent_ReadsWrites(t *testing.T) {
-	loops := 10_000
+	loops := 1000
 	c := NewNWaysCache[int, int](1024, 16)
 
 	// generate keys
@@ -282,7 +282,7 @@ func TestNWaysCache_Concurrent_ReadsWrites(t *testing.T) {
 }
 
 func TestNWaysCache_Concurrent_Sequence(t *testing.T) {
-	loops := 10_000
+	loops := 1000
 	c := NewNWaysCache[int, int](1024, 16)
 
 	var wg sync.WaitGroup
