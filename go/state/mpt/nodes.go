@@ -327,7 +327,7 @@ func (n *BranchNode) getNextNodeInBranch(
 	source NodeSource,
 	path []Nibble,
 ) (shared.ReadHandle[Node], []Nibble, error) {
-	next := n.children[path[0]]
+	next := &n.children[path[0]]
 	node, err := next.GetReadAccess(source)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, nil, err
@@ -371,18 +371,18 @@ func (n *BranchNode) setNextNode(
 	createSubTree func(NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
 ) (NodeReference, bool, error) {
 	// Forward call to child node.
-	child := n.children[path[0]]
+	child := &n.children[path[0]]
 	node, err := child.GetWriteAccess(manager)
 	if err != nil {
 		return NodeReference{}, false, err
 	}
 	defer node.Release()
-	newRoot, hasChanged, err := createSubTree(child, node, path[1:])
+	newRoot, hasChanged, err := createSubTree(*child, node, path[1:])
 	if err != nil {
 		return NodeReference{}, false, err
 	}
 
-	if newRoot == child {
+	if newRoot == *child {
 		if hasChanged {
 			n.hashDirty = true
 			n.markChildHashDirty(byte(path[0]))
