@@ -14,7 +14,7 @@ import (
 
 type NodeSource interface {
 	GetReadAccess(*NodeReference) (shared.ReadHandle[Node], error)
-	Touch(*NodeReference) error
+	Touch(NodeReference) error
 
 	// Internal interface for NodeReferences.
 	getOwner(NodeId) (*nodeOwner, error)
@@ -37,8 +37,8 @@ type NodeManager interface {
 	CreateValue() (NodeReference, shared.WriteHandle[Node], error)
 
 	GetWriteAccess(*NodeReference) (shared.WriteHandle[Node], error)
-	MarkDirty(*NodeReference, shared.WriteHandle[Node])
-	Release(*NodeReference) error
+	MarkDirty(NodeReference, shared.WriteHandle[Node])
+	Release(NodeReference) error
 
 	Flush() error
 	Close() error
@@ -174,16 +174,23 @@ func (m *nodeManager) createNode(id NodeId, node Node) (NodeReference, shared.Wr
 	}, handle, nil
 }
 
-func (m *nodeManager) Touch(ref *NodeReference) error {
-	owner, err := ref.getOwner(m)
-	if err != nil {
-		return err
-	}
+// TODO: remove error result
+func (m *nodeManager) Touch(ref NodeReference) error {
 
-	// TODO: remove before commit.
-	if !owner.isValid() {
-		panic("should never touch invalid owner!")
-	}
+	owner := ref.owner
+	/*
+		owner, err := ref.getOwner(m)
+		if err != nil {
+			return err
+		}
+	*/
+
+	/*
+		// TODO: remove before commit.
+		if !owner.isValid() {
+			panic("should never touch invalid owner!")
+		}
+	*/
 
 	m.listMutex.Lock()
 
@@ -236,12 +243,12 @@ func (m *nodeManager) GetWriteAccess(ref *NodeReference) (shared.WriteHandle[Nod
 	}
 }
 
-func (m *nodeManager) MarkDirty(ref *NodeReference, _ shared.WriteHandle[Node]) {
+func (m *nodeManager) MarkDirty(ref NodeReference, _ shared.WriteHandle[Node]) {
 	// The reference owner should always be set if a write handle on the node is valid.
 	ref.owner.markDirty()
 }
 
-func (m *nodeManager) Release(ref *NodeReference) error {
+func (m *nodeManager) Release(ref NodeReference) error {
 	// TODO: think through the locking in this function.
 	id := ref.Id()
 	if id.IsEmpty() {
@@ -289,7 +296,9 @@ func (m *nodeManager) Flush() error {
 	m.indexMutex.Lock()
 	entries := make([]entry, 0, len(m.index))
 	for id, owner := range m.index {
-		entries = append(entries, entry{id, owner})
+		if owner.isDirty() {
+			entries = append(entries, entry{id, owner})
+		}
 	}
 	m.indexMutex.Unlock()
 
@@ -303,9 +312,8 @@ func (m *nodeManager) Flush() error {
 		if !success {
 			continue
 		}
-		if entry.owner.isDirty() {
-			m.writeBuffer.Add(entry.owner.id, entry.owner.node.Load())
-		}
+		m.writeBuffer.Add(entry.owner.id, entry.owner.node.Load())
+		entry.owner.markClean()
 		handle.Release()
 	}
 
@@ -342,25 +350,21 @@ func (m *nodeManager) addToLruList(owner *nodeOwner) {
 			fmt.Printf("found invalid owner for id %v in LRU list\n", last.id)
 		}
 
-		if !last.id.IsEmpty() {
-			handle, success := last.getReadAccess(m)
-			if !success {
-				panic("acquiring read handle for valid owner should never fail")
-			}
-			if last.isDirty() {
-				// Dirty nodes need to be moved from the LRU list to the write buffer.
-				m.writeBuffer.Add(last.id, last.node.Load())
-			}
-
-			// To evict the node, the reference in the owner is dropped and the owner
-			// is marked to be invalid. References to the owner will refresh the owner
-			// as need.
-			m.indexMutex.Lock()
-			delete(m.index, last.id)
-			m.indexMutex.Unlock()
-			last.dropNode()
-			handle.Release()
+		// Dirty nodes need to be moved from the LRU list to the write buffer.
+		// FIXME: another thread may currently modify the node and mark it dirty
+		// at the end of the modification; this would be missed, corrupting the
+		// database by missing a flush;
+		if last.isDirty() {
+			m.writeBuffer.Add(last.id, last.node.Load())
 		}
+
+		// To evict the node, the reference in the owner is dropped and the owner
+		// is marked to be invalid. References to the owner will refresh the owner
+		// as need.
+		m.indexMutex.Lock()
+		delete(m.index, last.id)
+		m.indexMutex.Unlock()
+		last.dropNode()
 
 		m.tail = m.tail.pred
 		m.tail.succ = nil // TODO: consider removing this line for efficiency
@@ -395,6 +399,7 @@ func (m *nodeManager) getOwner(id NodeId) (*nodeOwner, error) {
 	// the write and bring it back to be owned by a new nodeOwner instance.
 	if node, found := m.writeBuffer.Cancel(id); found {
 		owner := newNodeOwner(id, node)
+		owner.markDirty()
 		m.index[id] = owner
 		// TODO: think hard whether the index lock needs to be hold while adding to the LRU list
 		m.indexMutex.Unlock()
@@ -501,6 +506,10 @@ func (o *nodeOwner) isDirty() bool {
 
 func (o *nodeOwner) markDirty() {
 	o.dirty.Store(true)
+}
+
+func (o *nodeOwner) markClean() {
+	o.dirty.Store(false)
 }
 
 func (o *nodeOwner) getReadAccess(source NodeSource) (handle shared.ReadHandle[Node], success bool) {

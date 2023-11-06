@@ -152,7 +152,7 @@ func (h directHasher) hash(
 			}
 			node.storageHash = hash
 			node.storageHashDirty = false
-			manager.MarkDirty(&ref, handle)
+			manager.MarkDirty(ref, handle)
 		}
 
 		hasher.Write([]byte{'A'})
@@ -178,7 +178,7 @@ func (h directHasher) hash(
 			}
 			node.clearChildHashDirtyFlags()
 			if modified {
-				manager.MarkDirty(&ref, handle)
+				manager.MarkDirty(ref, handle)
 			}
 		}
 
@@ -200,7 +200,7 @@ func (h directHasher) hash(
 			}
 			node.nextHash = hash
 			node.nextHashDirty = false
-			manager.MarkDirty(&ref, handle)
+			manager.MarkDirty(ref, handle)
 		}
 
 		hasher.Write([]byte{'E'})
@@ -401,7 +401,7 @@ func (h ethHasher) encodeBranch(
 
 		node.clearChildHashDirtyFlags()
 		if modified {
-			manager.MarkDirty(&ref, handle)
+			manager.MarkDirty(ref, handle)
 		}
 	}
 
@@ -484,7 +484,7 @@ func (h ethHasher) encodeExtension(
 		}
 		node.nextHashDirty = false
 
-		manager.MarkDirty(&ref, handle)
+		manager.MarkDirty(ref, handle)
 	}
 
 	// TODO: the use of the same encoding as for the branch nodes is
@@ -537,7 +537,7 @@ func (h *ethHasher) encodeAccount(
 		}
 		node.storageHash = storageHash
 		node.storageHashDirty = false
-		manager.MarkDirty(&ref, handle)
+		manager.MarkDirty(ref, handle)
 	}
 
 	// Encode the account information to get the value.

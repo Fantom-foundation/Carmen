@@ -490,7 +490,7 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	}, nil
 }
 
-func (s *verificationNodeSource) Touch(*NodeReference) error {
+func (s *verificationNodeSource) Touch(NodeReference) error {
 	// ignored
 	return nil
 }

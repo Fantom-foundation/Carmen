@@ -4622,6 +4622,10 @@ type refTo struct {
 }
 
 func (m refTo) Matches(value any) bool {
+	val, ok := value.(NodeReference)
+	if ok {
+		return val.Id() == m.id
+	}
 	ref, ok := value.(*NodeReference)
 	return ok && ref.Id() == m.id
 }

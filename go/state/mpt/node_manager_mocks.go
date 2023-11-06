@@ -50,7 +50,7 @@ func (mr *MockNodeSourceMockRecorder) GetReadAccess(arg0 interface{}) *gomock.Ca
 }
 
 // Touch mocks base method.
-func (m *MockNodeSource) Touch(arg0 *NodeReference) error {
+func (m *MockNodeSource) Touch(arg0 NodeReference) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Touch", arg0)
 	ret0, _ := ret[0].(error)
@@ -224,7 +224,7 @@ func (mr *MockNodeManagerMockRecorder) GetWriteAccess(arg0 interface{}) *gomock.
 }
 
 // MarkDirty mocks base method.
-func (m *MockNodeManager) MarkDirty(arg0 *NodeReference, arg1 shared.WriteHandle[Node]) {
+func (m *MockNodeManager) MarkDirty(arg0 NodeReference, arg1 shared.WriteHandle[Node]) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "MarkDirty", arg0, arg1)
 }
@@ -236,7 +236,7 @@ func (mr *MockNodeManagerMockRecorder) MarkDirty(arg0, arg1 interface{}) *gomock
 }
 
 // Release mocks base method.
-func (m *MockNodeManager) Release(arg0 *NodeReference) error {
+func (m *MockNodeManager) Release(arg0 NodeReference) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Release", arg0)
 	ret0, _ := ret[0].(error)
@@ -264,7 +264,7 @@ func (mr *MockNodeManagerMockRecorder) Size() *gomock.Call {
 }
 
 // Touch mocks base method.
-func (m *MockNodeManager) Touch(arg0 *NodeReference) error {
+func (m *MockNodeManager) Touch(arg0 NodeReference) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Touch", arg0)
 	ret0, _ := ret[0].(error)

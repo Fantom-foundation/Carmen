@@ -57,7 +57,7 @@ func TestNodeManager_CapacityIsEnforced(t *testing.T) {
 
 		indexSize := len(manager.(*nodeManager).index)
 		if indexSize != size {
-			t.Fatalf("manager size and index size do not match, pool size is %d and index size is %d", size, indexSize)
+			t.Errorf("manager size and index size do not match, pool size is %d and index size is %d", size, indexSize)
 		}
 	}
 }
