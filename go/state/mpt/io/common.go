@@ -1,4 +1,4 @@
-package main
+package io
 
 import (
 	"fmt"
@@ -7,25 +7,25 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
-type mptInfo struct {
-	config mpt.MptConfig
-	mode   mpt.StorageMode
+type MptInfo struct {
+	Config mpt.MptConfig
+	Mode   mpt.StorageMode
 }
 
-func checkMptDirectoryAndGetInfo(dir string) (mptInfo, error) {
+func CheckMptDirectoryAndGetInfo(dir string) (MptInfo, error) {
 	// check that the provided repository is a directory
 	if stat, err := os.Stat(dir); err != nil {
-		return mptInfo{}, fmt.Errorf("no such directory: %v", dir)
+		return MptInfo{}, fmt.Errorf("no such directory: %v", dir)
 	} else if !stat.IsDir() {
-		return mptInfo{}, fmt.Errorf("%v is not a directory", dir)
+		return MptInfo{}, fmt.Errorf("%v is not a directory", dir)
 	}
 
 	// try to obtain information of the contained MPT
 	return getMptInfo(dir)
 }
 
-func getMptInfo(dir string) (mptInfo, error) {
-	var res mptInfo
+func getMptInfo(dir string) (MptInfo, error) {
+	var res MptInfo
 	meta, present, err := mpt.ReadForestMetadata(dir + "/forest.json")
 	if err != nil {
 		return res, err
@@ -46,8 +46,8 @@ func getMptInfo(dir string) (mptInfo, error) {
 		mode = mpt.Mutable
 	}
 
-	return mptInfo{
-		config: config,
-		mode:   mode,
+	return MptInfo{
+		Config: config,
+		Mode:   mode,
 	}, nil
 }

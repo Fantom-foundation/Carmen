@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	mptIo "github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 	"io"
 	"os"
 
@@ -38,7 +39,7 @@ func doImport(context *cli.Context) error {
 		return err
 	}
 	return errors.Join(
-		Import(dir, in),
+		mptIo.Import(dir, in),
 		file.Close(),
 	)
 }

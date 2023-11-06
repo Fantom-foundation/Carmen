@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 	"os"
 
 	"github.com/urfave/cli/v2"
@@ -31,7 +32,7 @@ func doExport(context *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 	return errors.Join(
-		Export(dir, out),
+		io.Export(dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
