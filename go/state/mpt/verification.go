@@ -490,6 +490,19 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	}, nil
 }
 
+func (s *verificationNodeSource) Touch(*NodeReference) error {
+	// ignored
+	return nil
+}
+
+func (s *verificationNodeSource) GetReadAccess(ref *NodeReference) (shared.ReadHandle[Node], error) {
+	owner, err := ref.getOwner(s)
+	if err != nil {
+		return shared.ReadHandle[Node]{}, err
+	}
+	return owner.node.Load().GetReadHandle(), nil
+}
+
 func (s *verificationNodeSource) load(id NodeId) (*shared.Shared[Node], error) {
 	var node Node
 	var err error
@@ -522,10 +535,6 @@ func (s *verificationNodeSource) getOwner(id NodeId) (*nodeOwner, error) {
 		return nil, err
 	}
 	return newNodeOwner(id, shared), nil
-}
-
-func (s *verificationNodeSource) touch(*nodeOwner) {
-	// ignored
 }
 
 func (s *verificationNodeSource) close() error {

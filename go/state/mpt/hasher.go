@@ -89,7 +89,7 @@ func (h directHasher) updateHashesInternal(
 	}
 
 	// Get write access to the node (hashes may be updated).
-	handle, err := ref.GetWriteAccess(manager)
+	handle, err := manager.GetWriteAccess(&ref)
 	if err != nil {
 		return hash, err
 	}
@@ -117,7 +117,7 @@ func (h directHasher) getHash(ref NodeReference, _ NodeContext, source NodeSourc
 	}
 
 	// Get read access to the node (no update is conducted).
-	handle, err := ref.GetReadAccess(source)
+	handle, err := source.GetReadAccess(&ref)
 	if err != nil {
 		return hash, err
 	}
@@ -152,7 +152,7 @@ func (h directHasher) hash(
 			}
 			node.storageHash = hash
 			node.storageHashDirty = false
-			manager.MarkDirty(ref, handle)
+			manager.MarkDirty(&ref, handle)
 		}
 
 		hasher.Write([]byte{'A'})
@@ -178,7 +178,7 @@ func (h directHasher) hash(
 			}
 			node.clearChildHashDirtyFlags()
 			if modified {
-				manager.MarkDirty(ref, handle)
+				manager.MarkDirty(&ref, handle)
 			}
 		}
 
@@ -200,7 +200,7 @@ func (h directHasher) hash(
 			}
 			node.nextHash = hash
 			node.nextHashDirty = false
-			manager.MarkDirty(ref, handle)
+			manager.MarkDirty(&ref, handle)
 		}
 
 		hasher.Write([]byte{'E'})
@@ -261,7 +261,7 @@ func (h ethHasher) updateHashesInternal(
 		return emptyNodeEthereumHash, nil
 	}
 	// Get write access to the node (hashes may be updated).
-	handle, err := ref.GetWriteAccess(manager)
+	handle, err := manager.GetWriteAccess(&ref)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -297,7 +297,7 @@ func (h ethHasher) getHash(ref NodeReference, context NodeContext, source NodeSo
 		return emptyNodeEthereumHash, nil
 	}
 	// Get write access to the node (hashes may be updated).
-	handle, err := ref.GetReadAccess(source)
+	handle, err := source.GetReadAccess(&ref)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -401,7 +401,7 @@ func (h ethHasher) encodeBranch(
 
 		node.clearChildHashDirtyFlags()
 		if modified {
-			manager.MarkDirty(ref, handle)
+			manager.MarkDirty(&ref, handle)
 		}
 	}
 
@@ -416,7 +416,7 @@ func (h ethHasher) encodeBranch(
 		}
 
 		if node.isEmbedded(byte(i)) {
-			node, err := child.GetReadAccess(source)
+			node, err := source.GetReadAccess(&child)
 			if err != nil {
 				return nil, err
 			}
@@ -484,7 +484,7 @@ func (h ethHasher) encodeExtension(
 		}
 		node.nextHashDirty = false
 
-		manager.MarkDirty(ref, handle)
+		manager.MarkDirty(&ref, handle)
 	}
 
 	// TODO: the use of the same encoding as for the branch nodes is
@@ -492,7 +492,7 @@ func (h ethHasher) encodeExtension(
 	// would require to find two keys or address with a very long
 	// common hash prefix.
 	if node.nextIsEmbedded {
-		next, err := node.next.GetReadAccess(source)
+		next, err := source.GetReadAccess(&node.next)
 		if err != nil {
 			return nil, err
 		}
@@ -537,7 +537,7 @@ func (h *ethHasher) encodeAccount(
 		}
 		node.storageHash = storageHash
 		node.storageHashDirty = false
-		manager.MarkDirty(ref, handle)
+		manager.MarkDirty(&ref, handle)
 	}
 
 	// Encode the account information to get the value.
@@ -648,7 +648,7 @@ func (h ethHasher) isEmbedded(
 	// TODO: test this function
 
 	// Start by estimating a lower bound for the node size.
-	node, err := ref.GetWriteAccess(manager) // write access since encoding may update hashes.
+	node, err := manager.GetWriteAccess(&ref) // write access since encoding may update hashes.
 	if err != nil {
 		return false, err
 	}
@@ -731,7 +731,7 @@ func getLowerBoundForEncodedSizeBranch(node *BranchNode, limit int, nodes NodeSo
 			continue
 		}
 
-		node, err := child.GetReadAccess(nodes)
+		node, err := nodes.GetReadAccess(&child)
 		if err != nil {
 			return 0, err
 		}
@@ -756,7 +756,7 @@ func getLowerBoundForEncodedSizeExtension(node *ExtensionNode, limit int, nodes 
 		return sum, nil
 	}
 
-	next, err := node.next.GetReadAccess(nodes)
+	next, err := nodes.GetReadAccess(&node.next)
 	if err != nil {
 		return 0, err
 	}

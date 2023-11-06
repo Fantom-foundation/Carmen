@@ -242,7 +242,7 @@ func makeForest(
 }
 
 func (s *Forest) GetAccountInfo(rootRef NodeReference, addr common.Address) (AccountInfo, bool, error) {
-	handle, err := rootRef.GetReadAccess(s.nodeManager)
+	handle, err := s.nodeManager.GetReadAccess(&rootRef)
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
@@ -252,7 +252,7 @@ func (s *Forest) GetAccountInfo(rootRef NodeReference, addr common.Address) (Acc
 }
 
 func (s *Forest) SetAccountInfo(rootRef NodeReference, addr common.Address, info AccountInfo) (NodeReference, error) {
-	root, err := rootRef.GetWriteAccess(s.nodeManager)
+	root, err := s.nodeManager.GetWriteAccess(&rootRef)
 	if err != nil {
 		return NodeReference{}, err
 	}
@@ -266,7 +266,7 @@ func (s *Forest) SetAccountInfo(rootRef NodeReference, addr common.Address, info
 }
 
 func (s *Forest) GetValue(rootRef NodeReference, addr common.Address, key common.Key) (common.Value, error) {
-	root, err := rootRef.GetReadAccess(s.nodeManager)
+	root, err := s.nodeManager.GetReadAccess(&rootRef)
 	if err != nil {
 		return common.Value{}, err
 	}
@@ -277,7 +277,7 @@ func (s *Forest) GetValue(rootRef NodeReference, addr common.Address, key common
 }
 
 func (s *Forest) SetValue(rootRef NodeReference, addr common.Address, key common.Key, value common.Value) (NodeReference, error) {
-	root, err := rootRef.GetWriteAccess(s.nodeManager)
+	root, err := s.nodeManager.GetWriteAccess(&rootRef)
 	if err != nil {
 		return NodeReference{}, err
 	}
@@ -291,7 +291,7 @@ func (s *Forest) SetValue(rootRef NodeReference, addr common.Address, key common
 }
 
 func (s *Forest) ClearStorage(rootRef NodeReference, addr common.Address) error {
-	root, err := rootRef.GetWriteAccess(s.nodeManager)
+	root, err := s.nodeManager.GetWriteAccess(&rootRef)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func (s *Forest) ClearStorage(rootRef NodeReference, addr common.Address) error 
 }
 
 func (s *Forest) VisitTrie(rootRef NodeReference, visitor NodeVisitor) error {
-	root, err := rootRef.GetReadAccess(s.nodeManager)
+	root, err := s.nodeManager.GetReadAccess(&rootRef)
 	if err != nil {
 		return err
 	}
@@ -343,7 +343,7 @@ func (f *Forest) Freeze(ref NodeReference) error {
 	if f.storageMode != Immutable {
 		return fmt.Errorf("node-freezing only supported in archive mode")
 	}
-	root, err := ref.GetWriteAccess(f.nodeManager)
+	root, err := f.nodeManager.GetWriteAccess(&ref)
 	if err != nil {
 		return err
 	}
@@ -377,7 +377,7 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
 func (s *Forest) Dump(rootRef NodeReference) {
-	root, err := rootRef.GetReadAccess(s.nodeManager)
+	root, err := s.nodeManager.GetReadAccess(&rootRef)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
 		return
@@ -391,7 +391,7 @@ func (s *Forest) Dump(rootRef NodeReference) {
 // errors are detected, the Trie is to be considered in an invalid state and
 // the behavior of all other operations is undefined.
 func (s *Forest) Check(rootRef NodeReference) error {
-	root, err := rootRef.GetReadAccess(s.nodeManager)
+	root, err := s.nodeManager.GetReadAccess(&rootRef)
 	if err != nil {
 		return err
 	}
@@ -468,7 +468,7 @@ func (s *Forest) getMutableNodeByPath(root NodeReference, path NodePath) (shared
 	last := shared.ReadHandle[Node]{}
 	lastValid := false
 	for i := 0; i < path.Length(); i++ {
-		cur, err := next.GetReadAccess(s.nodeManager)
+		cur, err := s.nodeManager.GetReadAccess(&next)
 		if lastValid {
 			last.Release()
 		}
@@ -493,7 +493,7 @@ func (s *Forest) getMutableNodeByPath(root NodeReference, path NodePath) (shared
 	}
 
 	// The last step requires write access.
-	res, err := next.GetWriteAccess(s.nodeManager)
+	res, err := s.nodeManager.GetWriteAccess(&next)
 	if lastValid {
 		last.Release()
 	}

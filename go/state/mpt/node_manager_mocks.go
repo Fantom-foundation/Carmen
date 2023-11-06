@@ -34,6 +34,35 @@ func (m *MockNodeSource) EXPECT() *MockNodeSourceMockRecorder {
 	return m.recorder
 }
 
+// GetReadAccess mocks base method.
+func (m *MockNodeSource) GetReadAccess(arg0 *NodeReference) (shared.ReadHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReadAccess", arg0)
+	ret0, _ := ret[0].(shared.ReadHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReadAccess indicates an expected call of GetReadAccess.
+func (mr *MockNodeSourceMockRecorder) GetReadAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReadAccess", reflect.TypeOf((*MockNodeSource)(nil).GetReadAccess), arg0)
+}
+
+// Touch mocks base method.
+func (m *MockNodeSource) Touch(arg0 *NodeReference) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Touch", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Touch indicates an expected call of Touch.
+func (mr *MockNodeSourceMockRecorder) Touch(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Touch", reflect.TypeOf((*MockNodeSource)(nil).Touch), arg0)
+}
+
 // getOwner mocks base method.
 func (m *MockNodeSource) getOwner(arg0 NodeId) (*nodeOwner, error) {
 	m.ctrl.T.Helper()
@@ -47,18 +76,6 @@ func (m *MockNodeSource) getOwner(arg0 NodeId) (*nodeOwner, error) {
 func (mr *MockNodeSourceMockRecorder) getOwner(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getOwner", reflect.TypeOf((*MockNodeSource)(nil).getOwner), arg0)
-}
-
-// touch mocks base method.
-func (m *MockNodeSource) touch(arg0 *nodeOwner) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "touch", arg0)
-}
-
-// touch indicates an expected call of touch.
-func (mr *MockNodeSourceMockRecorder) touch(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "touch", reflect.TypeOf((*MockNodeSource)(nil).touch), arg0)
 }
 
 // MockNodeManager is a mock of NodeManager interface.
@@ -176,8 +193,38 @@ func (mr *MockNodeManagerMockRecorder) Flush() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockNodeManager)(nil).Flush))
 }
 
+// GetReadAccess mocks base method.
+func (m *MockNodeManager) GetReadAccess(arg0 *NodeReference) (shared.ReadHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReadAccess", arg0)
+	ret0, _ := ret[0].(shared.ReadHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReadAccess indicates an expected call of GetReadAccess.
+func (mr *MockNodeManagerMockRecorder) GetReadAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReadAccess", reflect.TypeOf((*MockNodeManager)(nil).GetReadAccess), arg0)
+}
+
+// GetWriteAccess mocks base method.
+func (m *MockNodeManager) GetWriteAccess(arg0 *NodeReference) (shared.WriteHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetWriteAccess", arg0)
+	ret0, _ := ret[0].(shared.WriteHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetWriteAccess indicates an expected call of GetWriteAccess.
+func (mr *MockNodeManagerMockRecorder) GetWriteAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetWriteAccess", reflect.TypeOf((*MockNodeManager)(nil).GetWriteAccess), arg0)
+}
+
 // MarkDirty mocks base method.
-func (m *MockNodeManager) MarkDirty(arg0 NodeReference, arg1 shared.WriteHandle[Node]) {
+func (m *MockNodeManager) MarkDirty(arg0 *NodeReference, arg1 shared.WriteHandle[Node]) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "MarkDirty", arg0, arg1)
 }
@@ -189,7 +236,7 @@ func (mr *MockNodeManagerMockRecorder) MarkDirty(arg0, arg1 interface{}) *gomock
 }
 
 // Release mocks base method.
-func (m *MockNodeManager) Release(arg0 NodeReference) error {
+func (m *MockNodeManager) Release(arg0 *NodeReference) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Release", arg0)
 	ret0, _ := ret[0].(error)
@@ -216,6 +263,20 @@ func (mr *MockNodeManagerMockRecorder) Size() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Size", reflect.TypeOf((*MockNodeManager)(nil).Size))
 }
 
+// Touch mocks base method.
+func (m *MockNodeManager) Touch(arg0 *NodeReference) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Touch", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Touch indicates an expected call of Touch.
+func (mr *MockNodeManagerMockRecorder) Touch(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Touch", reflect.TypeOf((*MockNodeManager)(nil).Touch), arg0)
+}
+
 // getOwner mocks base method.
 func (m *MockNodeManager) getOwner(arg0 NodeId) (*nodeOwner, error) {
 	m.ctrl.T.Helper()
@@ -229,18 +290,6 @@ func (m *MockNodeManager) getOwner(arg0 NodeId) (*nodeOwner, error) {
 func (mr *MockNodeManagerMockRecorder) getOwner(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getOwner", reflect.TypeOf((*MockNodeManager)(nil).getOwner), arg0)
-}
-
-// touch mocks base method.
-func (m *MockNodeManager) touch(arg0 *nodeOwner) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "touch", arg0)
-}
-
-// touch indicates an expected call of touch.
-func (mr *MockNodeManagerMockRecorder) touch(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "touch", reflect.TypeOf((*MockNodeManager)(nil).touch), arg0)
 }
 
 // MockNodeStore is a mock of NodeStore interface.

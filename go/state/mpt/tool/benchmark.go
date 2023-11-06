@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
@@ -78,6 +79,16 @@ func benchmark(context *cli.Context) error {
 	if len(tmpDir) == 0 {
 		tmpDir = os.TempDir()
 	}
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for range c {
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+			fmt.Printf("signal: interrupt")
+			os.Exit(1)
+		}
+	}()
 
 	diagnosticPort := context.Int(diagnosticsFlag.Name)
 	if diagnosticPort > 0 && diagnosticPort < (1<<16) {

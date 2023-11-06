@@ -26,7 +26,7 @@ func TestNodeManager_ReferenceLifeCycle(t *testing.T) {
 		t.Errorf("unexpected ID, wanted %v, got %v", want, got)
 	}
 
-	read, err := ref.GetReadAccess(manager)
+	read, err := manager.GetReadAccess(&ref)
 	if err != nil {
 		t.Errorf("failed to get read access: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestNodeManager_CapacityIsEnforced(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		id := ValueId(uint64(i))
 		ref := NewNodeReference(id)
-		read, err := ref.GetReadAccess(manager)
+		read, err := manager.GetReadAccess(&ref)
 		if err != nil {
 			t.Errorf("failed to get read access: %v", err)
 		}

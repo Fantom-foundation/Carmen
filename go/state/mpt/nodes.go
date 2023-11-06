@@ -237,7 +237,7 @@ func (e EmptyNode) SetAccount(_ NodeContext, manager NodeManager, thisRef NodeRe
 	res.address = address
 	res.info = info
 	res.pathLength = byte(len(path))
-	manager.MarkDirty(ref, handle)
+	manager.MarkDirty(&ref, handle)
 	return ref, true, nil
 }
 
@@ -255,7 +255,7 @@ func (e EmptyNode) SetValue(_ NodeContext, manager NodeManager, thisRef NodeRefe
 	res.value = value
 	res.hashDirty = true
 	res.pathLength = byte(len(path))
-	manager.MarkDirty(ref, handle)
+	manager.MarkDirty(&ref, handle)
 	return ref, true, nil
 }
 
@@ -328,7 +328,7 @@ func (n *BranchNode) getNextNodeInBranch(
 	path []Nibble,
 ) (shared.ReadHandle[Node], []Nibble, error) {
 	next := &n.children[path[0]]
-	node, err := next.GetReadAccess(source)
+	node, err := source.GetReadAccess(next)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, nil, err
 	}
@@ -372,7 +372,7 @@ func (n *BranchNode) setNextNode(
 ) (NodeReference, bool, error) {
 	// Forward call to child node.
 	child := &n.children[path[0]]
-	node, err := child.GetWriteAccess(manager)
+	node, err := manager.GetWriteAccess(child)
 	if err != nil {
 		return NodeReference{}, false, err
 	}
@@ -382,7 +382,7 @@ func (n *BranchNode) setNextNode(
 		return NodeReference{}, false, err
 	}
 
-	if newRoot == *child {
+	if newRoot.Id() == child.Id() {
 		if hasChanged {
 			n.hashDirty = true
 			n.markChildHashDirty(byte(path[0]))
@@ -407,13 +407,14 @@ func (n *BranchNode) setNextNode(
 		isClone = true
 	}
 
+	wasEmpty := child.IsEmpty()
 	n.children[path[0]] = newRoot
 	n.hashDirty = true
 	n.markChildHashDirty(byte(path[0]))
 	n.setChildFrozen(byte(path[0]), false)
 
 	// If a branch got removed, check that there are enough children left.
-	if !child.IsEmpty() && newRoot.IsEmpty() {
+	if !wasEmpty && newRoot.IsEmpty() {
 		count := 0
 		var remainingPos Nibble
 		var remaining NodeReference
@@ -432,7 +433,7 @@ func (n *BranchNode) setNextNode(
 			// This branch became obsolete and needs to be removed.
 			if remaining.IsExtension() {
 				// The present extension can be extended.
-				extension, err := remaining.GetWriteAccess(manager)
+				extension, err := manager.GetWriteAccess(&remaining)
 				if err != nil {
 					return NodeReference{}, false, err
 				}
@@ -458,7 +459,7 @@ func (n *BranchNode) setNextNode(
 
 				extensionNode.path.Prepend(remainingPos)
 				extensionNode.hashDirty = true
-				manager.MarkDirty(remaining, remainingHandle)
+				manager.MarkDirty(&remaining, remainingHandle)
 			} else if remaining.IsBranch() {
 				// An extension needs to replace this branch.
 				extensionId, handle, err := manager.CreateExtension()
@@ -471,12 +472,12 @@ func (n *BranchNode) setNextNode(
 				extension.next = remaining
 				extension.hashDirty = true
 				extension.nextHashDirty = true
-				manager.MarkDirty(extensionId, handle)
+				manager.MarkDirty(&extensionId, handle)
 				newRoot = extensionId
 			} else if context.getConfig().TrackSuffixLengthsInLeafNodes {
 				// If suffix lengths need to be tracked, leaf nodes require an update.
 				if remaining.IsAccount() {
-					handle, err := remaining.GetWriteAccess(manager)
+					handle, err := manager.GetWriteAccess(&remaining)
 					if err != nil {
 						return NodeReference{}, false, err
 					}
@@ -486,7 +487,7 @@ func (n *BranchNode) setNextNode(
 						return NodeReference{}, false, err
 					}
 				} else if remaining.IsValue() {
-					handle, err := remaining.GetWriteAccess(manager)
+					handle, err := manager.GetWriteAccess(&remaining)
 					if err != nil {
 						return NodeReference{}, false, err
 					}
@@ -497,16 +498,17 @@ func (n *BranchNode) setNextNode(
 					}
 				}
 			}
-			manager.Release(thisRef)
+			manager.Release(&thisRef)
 			return newRoot, !isClone, nil
 		}
 	}
 
-	manager.MarkDirty(thisRef, this)
+	manager.MarkDirty(&thisRef, this)
 	return thisRef, !isClone, err
 }
 
 func (n *BranchNode) SetAccount(context NodeContext, manager NodeManager, thisRef NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
+	manager.Touch(&thisRef)
 	return n.setNextNode(context, manager, thisRef, this, path,
 		func(next NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().SetAccount(context, manager, next, node, address, path, info)
@@ -544,7 +546,7 @@ func (n *BranchNode) Release(context NodeContext, manager NodeManager, thisRef N
 	}
 	for _, cur := range n.children {
 		if !cur.IsEmpty() {
-			handle, err := cur.GetWriteAccess(manager)
+			handle, err := manager.GetWriteAccess(&cur)
 			if err != nil {
 				return err
 			}
@@ -555,7 +557,7 @@ func (n *BranchNode) Release(context NodeContext, manager NodeManager, thisRef N
 			}
 		}
 	}
-	return manager.Release(thisRef)
+	return manager.Release(&thisRef)
 }
 
 func (n *BranchNode) GetHash() (common.Hash, bool) {
@@ -585,7 +587,7 @@ func (n *BranchNode) Freeze(context NodeContext, manager NodeManager, this share
 		if n.children[i].IsEmpty() || n.isChildFrozen(byte(i)) {
 			continue
 		}
-		handle, err := n.children[i].GetWriteAccess(manager)
+		handle, err := manager.GetWriteAccess(&n.children[i])
 		if err != nil {
 			return err
 		}
@@ -611,7 +613,7 @@ func (n *BranchNode) Check(context NodeContext, source NodeSource, thisRef NodeR
 		}
 		numChildren++
 
-		if handle, err := child.GetReadAccess(source); err == nil {
+		if handle, err := source.GetReadAccess(&child); err == nil {
 			defer handle.Release()
 			if err := handle.Get().Check(context, source, child, append(path, Nibble(i))); err != nil {
 				errs = append(errs, err)
@@ -642,7 +644,7 @@ func (n *BranchNode) Dump(context NodeContext, source NodeSource, thisRef NodeRe
 			continue
 		}
 
-		if handle, err := child.GetReadAccess(source); err == nil {
+		if handle, err := source.GetReadAccess(&child); err == nil {
 			defer handle.Release()
 			handle.Get().Dump(context, source, child, fmt.Sprintf("%s  %v ", indent, Nibble(i)))
 		} else {
@@ -664,7 +666,7 @@ func (b *BranchNode) Visit(context NodeContext, source NodeSource, thisRef NodeR
 			continue
 		}
 
-		if handle, err := child.GetReadAccess(source); err == nil {
+		if handle, err := source.GetReadAccess(&child); err == nil {
 			defer handle.Release()
 			if abort, err := handle.Get().Visit(context, source, child, depth+1, visitor); abort || err != nil {
 				return abort, err
@@ -739,7 +741,7 @@ func (n *ExtensionNode) getNextNodeInExtension(
 		shared := shared.MakeShared[Node](EmptyNode{})
 		return shared.GetReadHandle(), nil, nil
 	}
-	handle, err := n.next.GetReadAccess(source)
+	handle, err := source.GetReadAccess(&n.next)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, nil, err
 	}
@@ -784,7 +786,7 @@ func (n *ExtensionNode) setNextNode(
 ) (NodeReference, bool, error) {
 	// Check whether the updates targets the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
-		handle, err := n.next.GetWriteAccess(manager)
+		handle, err := manager.GetWriteAccess(&n.next)
 		if err != nil {
 			return NodeReference{}, false, err
 		}
@@ -798,7 +800,7 @@ func (n *ExtensionNode) setNextNode(
 			if n.frozen {
 				return NewNodeReference(EmptyId()), false, nil
 			}
-			manager.Release(thisRef)
+			manager.Release(&thisRef)
 			return newRoot, true, nil
 		}
 
@@ -824,7 +826,7 @@ func (n *ExtensionNode) setNextNode(
 
 			if newRoot.IsExtension() {
 				// If the new next is an extension, merge it into this extension.
-				handle, err := newRoot.GetWriteAccess(manager)
+				handle, err := manager.GetWriteAccess(&newRoot)
 				if err != nil {
 					return NodeReference{}, false, err
 				}
@@ -834,20 +836,20 @@ func (n *ExtensionNode) setNextNode(
 				n.next = extension.next
 				n.hashDirty = true
 				n.nextHashDirty = true
-				manager.MarkDirty(thisRef, this)
-				manager.Release(newRoot)
+				manager.MarkDirty(&thisRef, this)
+				manager.Release(&newRoot)
 			} else if newRoot.IsBranch() {
 				n.next = newRoot
 				n.hashDirty = true
 				n.nextHashDirty = true
-				manager.MarkDirty(thisRef, this)
+				manager.MarkDirty(&thisRef, this)
 			} else {
 				// If the next node is anything but a branch or extension, remove this extension.
-				manager.Release(thisRef)
+				manager.Release(&thisRef)
 
 				// Grow path length of next nodes if tracking of length is enabled.
 				if context.getConfig().TrackSuffixLengthsInLeafNodes {
-					root, err := newRoot.GetWriteAccess(manager)
+					root, err := manager.GetWriteAccess(&newRoot)
 					if err != nil {
 						return NodeReference{}, false, err
 					}
@@ -920,7 +922,7 @@ func (n *ExtensionNode) setNextNode(
 		n.hashDirty = true
 		n.nextHashDirty = true
 		thisNodeWasReused = true
-		manager.MarkDirty(thisRef, this)
+		manager.MarkDirty(&thisRef, this)
 	} else {
 		branch.children[n.path.Get(commonPrefixLength)] = n.next
 		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
@@ -947,13 +949,13 @@ func (n *ExtensionNode) setNextNode(
 		extension.next = branchId
 		extension.hashDirty = true
 		extension.nextHashDirty = true
-		manager.MarkDirty(extensionRef, extensionHandle)
+		manager.MarkDirty(&extensionRef, extensionHandle)
 		newRoot = extensionRef
 	}
 
 	// If this node was not needed any more, we can discard it.
 	if !thisNodeWasReused {
-		manager.Release(thisRef)
+		manager.Release(&thisRef)
 	}
 
 	// Continue insertion of new account at new branch level.
@@ -965,6 +967,7 @@ func (n *ExtensionNode) setNextNode(
 }
 
 func (n *ExtensionNode) SetAccount(context NodeContext, manager NodeManager, thisRef NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
+	manager.Touch(&thisRef)
 	return n.setNextNode(context, manager, thisRef, this, path, info.IsEmpty(),
 		func(next NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().SetAccount(context, manager, next, node, address, path, info)
@@ -1000,7 +1003,7 @@ func (n *ExtensionNode) Release(context NodeContext, manager NodeManager, thisRe
 	if n.frozen {
 		return nil
 	}
-	handle, err := n.next.GetWriteAccess(manager)
+	handle, err := manager.GetWriteAccess(&n.next)
 	if err != nil {
 		return err
 	}
@@ -1009,7 +1012,7 @@ func (n *ExtensionNode) Release(context NodeContext, manager NodeManager, thisRe
 	if err != nil {
 		return err
 	}
-	return manager.Release(thisRef)
+	return manager.Release(&thisRef)
 }
 
 func (n *ExtensionNode) GetHash() (common.Hash, bool) {
@@ -1034,7 +1037,7 @@ func (n *ExtensionNode) Freeze(context NodeContext, manager NodeManager, this sh
 		return nil
 	}
 	n.frozen = true
-	handle, err := n.next.GetWriteAccess(manager)
+	handle, err := manager.GetWriteAccess(&n.next)
 	if err != nil {
 		return err
 	}
@@ -1055,7 +1058,7 @@ func (n *ExtensionNode) Check(context NodeContext, source NodeSource, thisRef No
 	if !n.next.IsBranch() {
 		errs = append(errs, fmt.Errorf("node %v - extension path must be followed by a branch", thisRef.Id()))
 	}
-	if handle, err := n.next.GetReadAccess(source); err == nil {
+	if handle, err := source.GetReadAccess(&n.next); err == nil {
 		defer handle.Release()
 		extended := path
 		for i := 0; i < n.path.Length(); i++ {
@@ -1080,7 +1083,7 @@ func (n *ExtensionNode) Check(context NodeContext, source NodeSource, thisRef No
 
 func (n *ExtensionNode) Dump(context NodeContext, source NodeSource, thisRef NodeReference, indent string) {
 	fmt.Printf("%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisRef.Id(), n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
-	if handle, err := n.next.GetReadAccess(source); err == nil {
+	if handle, err := source.GetReadAccess(&n.next); err == nil {
 		defer handle.Release()
 		handle.Get().Dump(context, source, n.next, indent+"  ")
 	} else {
@@ -1096,7 +1099,7 @@ func (n *ExtensionNode) Visit(context NodeContext, source NodeSource, thisRef No
 	case VisitResponsePrune:
 		return false, nil
 	}
-	if handle, err := n.next.GetReadAccess(source); err == nil {
+	if handle, err := source.GetReadAccess(&n.next); err == nil {
 		defer handle.Release()
 		return handle.Get().Visit(context, source, n.next, depth+1, visitor)
 	} else {
@@ -1153,7 +1156,7 @@ func (n *AccountNode) GetSlot(context NodeContext, source NodeSource, address co
 		return common.Value{}, false, nil
 	}
 	subPath := KeyToNibblePath(key, context)
-	root, err := n.storage.GetReadAccess(source)
+	root, err := source.GetReadAccess(&n.storage)
 	if err != nil {
 		return common.Value{}, false, err
 	}
@@ -1162,6 +1165,7 @@ func (n *AccountNode) GetSlot(context NodeContext, source NodeSource, address co
 }
 
 func (n *AccountNode) SetAccount(context NodeContext, manager NodeManager, thisRef NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
+	manager.Touch(&thisRef)
 	// Check whether this is the correct account.
 	if n.address == address {
 		if info == n.info {
@@ -1174,7 +1178,7 @@ func (n *AccountNode) SetAccount(context NodeContext, manager NodeManager, thisR
 			}
 			// Recursively release the entire state DB.
 			// TODO: consider performing this asynchronously.
-			root, err := n.storage.GetWriteAccess(manager)
+			root, err := manager.GetWriteAccess(&n.storage)
 			if err != nil {
 				return NodeReference{}, false, err
 			}
@@ -1184,7 +1188,7 @@ func (n *AccountNode) SetAccount(context NodeContext, manager NodeManager, thisR
 				return NodeReference{}, false, err
 			}
 			// Release this account node and remove it from the trie.
-			manager.Release(thisRef)
+			manager.Release(&thisRef)
 			return NewNodeReference(EmptyId()), true, nil
 		}
 
@@ -1201,13 +1205,13 @@ func (n *AccountNode) SetAccount(context NodeContext, manager NodeManager, thisR
 			newNode.frozen = false
 			newNode.info = info
 			newNode.hashDirty = true
-			manager.MarkDirty(newRef, handle)
+			manager.MarkDirty(&newRef, handle)
 			return newRef, false, nil
 		}
 
 		n.info = info
 		n.hashDirty = true
-		manager.MarkDirty(thisRef, this)
+		manager.MarkDirty(&thisRef, this)
 		return thisRef, true, nil
 	}
 
@@ -1278,7 +1282,7 @@ func splitLeafNode(
 		extension.next = branchId
 		extension.hashDirty = true
 		extension.nextHashDirty = true
-		manager.MarkDirty(extensionId, handle)
+		manager.MarkDirty(&extensionId, handle)
 	}
 
 	// If enabled, keep track of the suffix length of leaf values.
@@ -1291,7 +1295,7 @@ func splitLeafNode(
 		}
 	} else {
 		// Commit the changes to the sibling.
-		manager.MarkDirty(siblingRef, siblingHandle)
+		manager.MarkDirty(&siblingRef, siblingHandle)
 	}
 
 	// Add this node and the new sibling node to the branch node.
@@ -1302,7 +1306,7 @@ func splitLeafNode(
 	branch.hashDirty = true
 
 	// Commit the changes to the the branch node.
-	manager.MarkDirty(branchId, branchHandle)
+	manager.MarkDirty(&branchId, branchHandle)
 
 	return newRoot, nil
 }
@@ -1320,7 +1324,7 @@ func (n *AccountNode) SetSlot(context NodeContext, manager NodeManager, thisRef 
 	}
 
 	// Continue from here with a value insertion.
-	handle, err := n.storage.GetWriteAccess(manager)
+	handle, err := manager.GetWriteAccess(&n.storage)
 	if err != nil {
 		return NodeReference{}, false, err
 	}
@@ -1345,18 +1349,18 @@ func (n *AccountNode) SetSlot(context NodeContext, manager NodeManager, thisRef 
 			newNode.storage = root
 			newNode.storageHashDirty = true
 			newNode.hashDirty = true
-			manager.MarkDirty(newRef, newHandle)
+			manager.MarkDirty(&newRef, newHandle)
 			return newRef, false, nil
 		}
 		n.storage = root
 		n.storageHashDirty = true
 		n.hashDirty = true
 		hasChanged = true
-		manager.MarkDirty(thisRef, this)
+		manager.MarkDirty(&thisRef, this)
 	} else if hasChanged {
 		n.hashDirty = true
 		n.storageHashDirty = true
-		manager.MarkDirty(thisRef, this)
+		manager.MarkDirty(&thisRef, this)
 	}
 	return thisRef, hasChanged, nil
 }
@@ -1380,11 +1384,11 @@ func (n *AccountNode) ClearStorage(context NodeContext, manager NodeManager, thi
 		newNode.storage = NewNodeReference(EmptyId())
 		newNode.storageHashDirty = true
 		newNode.hashDirty = true
-		manager.MarkDirty(newRef, newHandle)
+		manager.MarkDirty(&newRef, newHandle)
 		return newRef, false, nil
 	}
 
-	rootHandle, err := n.storage.GetWriteAccess(manager)
+	rootHandle, err := manager.GetWriteAccess(&n.storage)
 	if err != nil {
 		return thisRef, false, err
 	}
@@ -1402,14 +1406,14 @@ func (n *AccountNode) Release(context NodeContext, manager NodeManager, thisRef 
 	}
 	if !n.storage.IsEmpty() {
 		// TODO: test the recursive release of storage space
-		handle, err := n.storage.GetWriteAccess(manager)
+		handle, err := manager.GetWriteAccess(&n.storage)
 		if err != nil {
 			return err
 		}
 		handle.Get().Release(context, manager, n.storage, handle)
 		handle.Release()
 	}
-	return manager.Release(thisRef)
+	return manager.Release(&thisRef)
 }
 
 func (n *AccountNode) GetHash() (common.Hash, bool) {
@@ -1436,13 +1440,13 @@ func (n *AccountNode) setPathLength(context NodeContext, manager NodeManager, th
 		newNode.frozen = false
 		newNode.pathLength = length
 		newNode.hashDirty = true
-		manager.MarkDirty(newId, newHandle)
+		manager.MarkDirty(&newId, newHandle)
 		return newId, false, nil
 	}
 
 	n.hashDirty = true
 	n.pathLength = length
-	manager.MarkDirty(thisRef, this)
+	manager.MarkDirty(&thisRef, this)
 	return thisRef, true, nil
 }
 
@@ -1459,7 +1463,7 @@ func (n *AccountNode) Freeze(context NodeContext, manager NodeManager, this shar
 		return nil
 	}
 	n.frozen = true
-	handle, err := n.storage.GetWriteAccess(manager)
+	handle, err := manager.GetWriteAccess(&n.storage)
 	if err != nil {
 		return err
 	}
@@ -1485,7 +1489,7 @@ func (n *AccountNode) Check(context NodeContext, source NodeSource, thisRef Node
 	}
 
 	if !n.storage.IsEmpty() {
-		if node, err := n.storage.GetReadAccess(source); err == nil {
+		if node, err := source.GetReadAccess(&n.storage); err == nil {
 			defer node.Release()
 			if err := node.Get().Check(context, source, n.storage, make([]Nibble, 0, common.KeySize*2)); err != nil {
 				errs = append(errs, err)
@@ -1513,7 +1517,7 @@ func (n *AccountNode) Dump(context NodeContext, source NodeSource, thisRef NodeR
 	if n.storage.IsEmpty() {
 		return
 	}
-	if node, err := n.storage.GetReadAccess(source); err == nil {
+	if node, err := source.GetReadAccess(&n.storage); err == nil {
 		defer node.Release()
 		node.Get().Dump(context, source, n.storage, indent+"  ")
 	} else {
@@ -1532,7 +1536,7 @@ func (n *AccountNode) Visit(context NodeContext, source NodeSource, thisRef Node
 	if n.storage.IsEmpty() {
 		return false, nil
 	}
-	if node, err := n.storage.GetReadAccess(source); err == nil {
+	if node, err := source.GetReadAccess(&n.storage); err == nil {
 		defer node.Release()
 		return node.Get().Visit(context, source, thisRef, depth+1, visitor)
 	} else {
@@ -1594,7 +1598,7 @@ func (n *ValueNode) SetValue(context NodeContext, manager NodeManager, thisRef N
 		}
 		if value == (common.Value{}) {
 			if !n.frozen {
-				manager.Release(thisRef)
+				manager.Release(&thisRef)
 			}
 			return NewNodeReference(EmptyId()), !n.frozen, nil
 		}
@@ -1609,12 +1613,12 @@ func (n *ValueNode) SetValue(context NodeContext, manager NodeManager, thisRef N
 			newNode.value = value
 			newNode.hashDirty = true
 			newNode.pathLength = n.pathLength
-			manager.MarkDirty(newRef, newHandle)
+			manager.MarkDirty(&newRef, newHandle)
 			return newRef, false, nil
 		}
 		n.value = value
 		n.hashDirty = true
-		manager.MarkDirty(thisRef, this)
+		manager.MarkDirty(&thisRef, this)
 		return thisRef, true, nil
 	}
 
@@ -1651,7 +1655,7 @@ func (n *ValueNode) Release(_ NodeContext, manager NodeManager, thisRef NodeRefe
 	if n.frozen {
 		return nil
 	}
-	return manager.Release(thisRef)
+	return manager.Release(&thisRef)
 }
 
 func (n *ValueNode) GetHash() (common.Hash, bool) {
@@ -1678,13 +1682,13 @@ func (n *ValueNode) setPathLength(context NodeContext, manager NodeManager, this
 		newNode.value = n.value
 		newNode.hashDirty = true
 		newNode.pathLength = length
-		manager.MarkDirty(newId, newHandle)
+		manager.MarkDirty(&newId, newHandle)
 		return newId, false, nil
 	}
 
 	n.hashDirty = true
 	n.pathLength = length
-	manager.MarkDirty(thisRef, this)
+	manager.MarkDirty(&thisRef, this)
 	return thisRef, true, nil
 }
 
