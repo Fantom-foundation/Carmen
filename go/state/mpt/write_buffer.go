@@ -4,6 +4,7 @@ package mpt
 
 import (
 	"errors"
+	"runtime"
 	"sort"
 	"sync"
 
@@ -82,6 +83,8 @@ func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
 	}
 
 	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		defer close(done)
 		defer close(flushDone)
 		counter := 0
