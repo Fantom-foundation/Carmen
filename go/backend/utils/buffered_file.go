@@ -146,9 +146,7 @@ func (f *BufferedFile) Read(position int64, dst []byte) error {
 
 	// Read data from buffer if covered.
 	if bufferFrom <= from && to <= bufferTo {
-		if n := copy(dst, f.buffer[int(from-bufferFrom):]); n != len(dst) {
-			panic(fmt.Sprintf("failed to copy enough bytes, wanted %d, got %d", len(dst), n))
-		}
+		copy(dst, f.buffer[int(from-bufferFrom):])
 		return nil
 	}
 
