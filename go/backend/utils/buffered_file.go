@@ -20,7 +20,7 @@ import (
 // Thus, when writing to the buffer, subsequent reads will see the data in the
 // buffer, although it has not yet been written to the file.
 type BufferedFile struct {
-	file         *os.File         // the file handle to represent
+	file         osFile           // the file handle to represent
 	filesize     int64            // the current size of the file
 	position     int64            // the current position in the file
 	buffer       [bufferSize]byte // a buffer for write operations
@@ -36,7 +36,11 @@ func OpenBufferedFile(path string) (*BufferedFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	stats, err := os.Stat(path)
+	return openBufferedFile(f)
+}
+
+func openBufferedFile(f osFile) (*BufferedFile, error) {
+	stats, err := f.Stat()
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -142,9 +146,7 @@ func (f *BufferedFile) Read(position int64, dst []byte) error {
 
 	// Read data from buffer if covered.
 	if bufferFrom <= from && to <= bufferTo {
-		if n := copy(dst, f.buffer[int(from-bufferFrom):]); n != len(dst) {
-			panic(fmt.Sprintf("failed to copy enough bytes, wanted %d, got %d", len(dst), n))
-		}
+		copy(dst, f.buffer[int(from-bufferFrom):])
 		return nil
 	}
 
