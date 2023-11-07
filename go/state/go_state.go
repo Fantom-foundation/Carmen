@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -96,6 +97,8 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 			err := make(chan error, 10)
 
 			go func() {
+				runtime.LockOSThread()
+				defer runtime.UnlockOSThread()
 				defer close(flush)
 				defer close(done)
 				// Process all incoming updates, no not stop on errors.

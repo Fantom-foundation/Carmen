@@ -149,6 +149,9 @@ func runBenchmark(
 	params benchmarkParams,
 	observer func(string, ...any),
 ) (benchmarkResult, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	res := benchmarkResult{}
 	// Start profiling ...
 	if err := startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, 1)); err != nil {
