@@ -23,6 +23,12 @@ pipeline {
 
         stage('Fuzzing') {
             parallel {
+                stage('FastMap') {
+                    agent {label 'short'}
+                    steps {
+                        sh 'cd go && go test ./common -fuzztime 3m -fuzz=FuzzMapOperations'
+                    }
+                }
                 stage('Fuzzing NWays Cache') {
                     agent {label 'short'}
                     steps {
