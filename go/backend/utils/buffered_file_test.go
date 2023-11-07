@@ -40,7 +40,7 @@ func TestBufferedFile_Open_TooSmallFile(t *testing.T) {
 
 func TestBufferedFile_FileStatsFailing(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 
 	var info os.FileInfo
 	err := fmt.Errorf("cannot get file stat")
@@ -58,7 +58,7 @@ func TestBufferedFile_Open_ReadFailing(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	err := fmt.Errorf("cannot read file")
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).Return(0, err)
@@ -75,7 +75,7 @@ func TestBufferedFile_ReadBeyondSize(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
 
@@ -100,7 +100,7 @@ func TestBufferedFile_ReadPartlyBeyondSize(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(2 * bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).Times(2).Return(bufferSize, nil)
 
@@ -132,7 +132,7 @@ func TestBufferedFile_ReadPartlyBeyondSizeFails(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(2 * bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	var count int
 	f.EXPECT().Read(gomock.Any()).Times(2).DoAndReturn(func([]byte) (int, error) {
@@ -164,7 +164,7 @@ func TestBufferedFile_ReadSplit(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(2 * bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).Times(2).Return(bufferSize, nil)
 
@@ -196,7 +196,7 @@ func TestBufferedFile_Write_SeekFailing(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
 	err := fmt.Errorf("cannot seek file")
@@ -218,7 +218,7 @@ func TestBufferedFile_Write_SeekWrongPosition(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
 	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(999), nil) // wrong position
@@ -239,7 +239,7 @@ func TestBufferedFile_Write_Failing(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
 	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), nil)
@@ -262,7 +262,7 @@ func TestBufferedFile_Write_FailingDueToRead(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(10 * bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
 	// second time it will seek to an unexpected position, causing the failure
@@ -285,7 +285,7 @@ func TestBufferedFile_Write_FailingNumOfWrites(t *testing.T) {
 	info := NewMockFileInfo(ctrl)
 	info.EXPECT().Size().Return(int64(bufferSize))
 
-	f := NewMockOsFile(ctrl)
+	f := NewMockosFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
 	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), nil)

@@ -17,31 +17,31 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockOsFile is a mock of OsFile interface.
-type MockOsFile struct {
+// MockosFile is a mock of osFile interface.
+type MockosFile struct {
 	ctrl     *gomock.Controller
-	recorder *MockOsFileMockRecorder
+	recorder *MockosFileMockRecorder
 }
 
-// MockOsFileMockRecorder is the mock recorder for MockOsFile.
-type MockOsFileMockRecorder struct {
-	mock *MockOsFile
+// MockosFileMockRecorder is the mock recorder for MockosFile.
+type MockosFileMockRecorder struct {
+	mock *MockosFile
 }
 
-// NewMockOsFile creates a new mock instance.
-func NewMockOsFile(ctrl *gomock.Controller) *MockOsFile {
-	mock := &MockOsFile{ctrl: ctrl}
-	mock.recorder = &MockOsFileMockRecorder{mock}
+// NewMockosFile creates a new mock instance.
+func NewMockosFile(ctrl *gomock.Controller) *MockosFile {
+	mock := &MockosFile{ctrl: ctrl}
+	mock.recorder = &MockosFileMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOsFile) EXPECT() *MockOsFileMockRecorder {
+func (m *MockosFile) EXPECT() *MockosFileMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockOsFile) Close() error {
+func (m *MockosFile) Close() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close")
 	ret0, _ := ret[0].(error)
@@ -49,13 +49,13 @@ func (m *MockOsFile) Close() error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockOsFileMockRecorder) Close() *gomock.Call {
+func (mr *MockosFileMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockOsFile)(nil).Close))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockosFile)(nil).Close))
 }
 
 // Read mocks base method.
-func (m *MockOsFile) Read(p []byte) (int, error) {
+func (m *MockosFile) Read(p []byte) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Read", p)
 	ret0, _ := ret[0].(int)
@@ -64,13 +64,13 @@ func (m *MockOsFile) Read(p []byte) (int, error) {
 }
 
 // Read indicates an expected call of Read.
-func (mr *MockOsFileMockRecorder) Read(p any) *gomock.Call {
+func (mr *MockosFileMockRecorder) Read(p any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockOsFile)(nil).Read), p)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockosFile)(nil).Read), p)
 }
 
 // Seek mocks base method.
-func (m *MockOsFile) Seek(offset int64, whence int) (int64, error) {
+func (m *MockosFile) Seek(offset int64, whence int) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Seek", offset, whence)
 	ret0, _ := ret[0].(int64)
@@ -79,13 +79,13 @@ func (m *MockOsFile) Seek(offset int64, whence int) (int64, error) {
 }
 
 // Seek indicates an expected call of Seek.
-func (mr *MockOsFileMockRecorder) Seek(offset, whence any) *gomock.Call {
+func (mr *MockosFileMockRecorder) Seek(offset, whence any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Seek", reflect.TypeOf((*MockOsFile)(nil).Seek), offset, whence)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Seek", reflect.TypeOf((*MockosFile)(nil).Seek), offset, whence)
 }
 
 // Stat mocks base method.
-func (m *MockOsFile) Stat() (os.FileInfo, error) {
+func (m *MockosFile) Stat() (os.FileInfo, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stat")
 	ret0, _ := ret[0].(os.FileInfo)
@@ -94,13 +94,13 @@ func (m *MockOsFile) Stat() (os.FileInfo, error) {
 }
 
 // Stat indicates an expected call of Stat.
-func (mr *MockOsFileMockRecorder) Stat() *gomock.Call {
+func (mr *MockosFileMockRecorder) Stat() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockOsFile)(nil).Stat))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockosFile)(nil).Stat))
 }
 
 // Sync mocks base method.
-func (m *MockOsFile) Sync() error {
+func (m *MockosFile) Sync() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sync")
 	ret0, _ := ret[0].(error)
@@ -108,13 +108,13 @@ func (m *MockOsFile) Sync() error {
 }
 
 // Sync indicates an expected call of Sync.
-func (mr *MockOsFileMockRecorder) Sync() *gomock.Call {
+func (mr *MockosFileMockRecorder) Sync() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockOsFile)(nil).Sync))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockosFile)(nil).Sync))
 }
 
 // Write mocks base method.
-func (m *MockOsFile) Write(b []byte) (int, error) {
+func (m *MockosFile) Write(b []byte) (int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Write", b)
 	ret0, _ := ret[0].(int)
@@ -123,9 +123,9 @@ func (m *MockOsFile) Write(b []byte) (int, error) {
 }
 
 // Write indicates an expected call of Write.
-func (mr *MockOsFileMockRecorder) Write(b any) *gomock.Call {
+func (mr *MockosFileMockRecorder) Write(b any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockOsFile)(nil).Write), b)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockosFile)(nil).Write), b)
 }
 
 // MockFileInfo is a mock of FileInfo interface.
