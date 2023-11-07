@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 	"github.com/urfave/cli/v2"
@@ -34,18 +35,18 @@ func info(context *cli.Context) error {
 	withStats := context.Bool(statsFlag.Name)
 
 	// try to obtain information of the contained MPT
-	mptInfo, err := checkMptDirectoryAndGetInfo(dir)
+	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Directory contains an MPT State with the following properties:\n")
-	fmt.Printf("\tMPT Configuration: %v\n", mptInfo.config.Name)
-	fmt.Printf("\tMode:              %v\n", mptInfo.mode)
+	fmt.Printf("\tMPT Configuration: %v\n", mptInfo.Config.Name)
+	fmt.Printf("\tMode:              %v\n", mptInfo.Mode)
 
 	// attempt to open the MPT
-	if mptInfo.mode == mpt.Mutable {
-		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.config)
+	if mptInfo.Mode == mpt.Mutable {
+		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.Config)
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil
@@ -67,7 +68,7 @@ func info(context *cli.Context) error {
 			return fmt.Errorf("error closing forest: %v", err)
 		}
 	} else {
-		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.config)
+		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config)
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil
@@ -90,7 +91,7 @@ func info(context *cli.Context) error {
 
 		if withStats {
 			fmt.Printf("\nCollecting Node Statistics ...\n")
-			stats, err := mpt.GetForestNodeStatistics(dir, mptInfo.config)
+			stats, err := mpt.GetForestNodeStatistics(dir, mptInfo.Config)
 			if err != nil {
 				return err
 			}

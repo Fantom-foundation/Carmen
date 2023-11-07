@@ -1,4 +1,4 @@
-package main
+package io
 
 import (
 	"bytes"
@@ -34,16 +34,16 @@ var stateMagicNumber []byte = []byte("Carmen-S5-live-v01")
 // state of the LiveDB.
 func Export(directory string, out io.Writer) error {
 
-	info, err := checkMptDirectoryAndGetInfo(directory)
+	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
 	}
 
-	if info.config.Name != mpt.S5LiveConfig.Name {
-		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.mode)
+	if info.Config.Name != mpt.S5LiveConfig.Name {
+		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.Mode)
 	}
 
-	db, err := mpt.OpenGoFileState(directory, info.config)
+	db, err := mpt.OpenGoFileState(directory, info.Config)
 	if err != nil {
 		return fmt.Errorf("failed to open LiveDB: %v", err)
 	}

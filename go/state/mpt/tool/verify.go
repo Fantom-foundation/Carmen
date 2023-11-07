@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
@@ -23,7 +24,7 @@ func verify(context *cli.Context) error {
 	dir := context.Args().Get(0)
 
 	// try to obtain information of the contained MPT
-	info, err := checkMptDirectoryAndGetInfo(dir)
+	info, err := io.CheckMptDirectoryAndGetInfo(dir)
 	if err != nil {
 		return err
 	}
@@ -31,10 +32,10 @@ func verify(context *cli.Context) error {
 	// run forest verification
 	observer := &verificationObserver{}
 
-	if info.mode == mpt.Immutable {
-		return mpt.VerifyArchive(dir, info.config, observer)
+	if info.Mode == mpt.Immutable {
+		return mpt.VerifyArchive(dir, info.Config, observer)
 	}
-	return mpt.VerifyFileLiveTrie(dir, info.config, observer)
+	return mpt.VerifyFileLiveTrie(dir, info.Config, observer)
 }
 
 type verificationObserver struct {
