@@ -1,8 +1,12 @@
 package state
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"runtime"
+	"runtime/trace"
+	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -19,6 +23,13 @@ type GoState struct {
 	GoSchema
 	cleanup []func()
 	archive archive.Archive
+
+	// Interaction with asynchronous hash worker.
+	hashWorker          chan<- stateUpdate
+	hashWorkerFlushDone <-chan bool
+	hashWorkerDone      <-chan bool
+	hashWorkerError     <-chan error
+	hashUpdateMutex     sync.Mutex
 
 	// Channels are only present if archive is enabled.
 	archiveWriter          chan<- archiveUpdate
@@ -57,30 +68,95 @@ type GoSchema interface {
 }
 
 func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) State {
-	return WrapIntoSyncedState(&GoState{
-		schema,
-		cleanup,
-		archive,
-		nil,
-		nil,
-		nil,
-		nil,
-	})
+
+	hashWorkerJobs := make(chan stateUpdate, 10)
+	hashWorkerFlushDone := make(chan bool)
+	hashWorkerDone := make(chan bool)
+	hashWorkerError := make(chan error, 10)
+
+	res := &GoState{
+		GoSchema:            schema,
+		cleanup:             cleanup,
+		archive:             archive,
+		hashWorker:          hashWorkerJobs,
+		hashWorkerFlushDone: hashWorkerFlushDone,
+		hashWorkerDone:      hashWorkerDone,
+		hashWorkerError:     hashWorkerError,
+	}
+
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		defer close(hashWorkerFlushDone)
+		defer close(hashWorkerError)
+		defer close(hashWorkerDone)
+		for update := range hashWorkerJobs {
+			if update.update == nil {
+				hashWorkerFlushDone <- true
+				continue
+			} else if err := res.updateHash(update); err != nil {
+				hashWorkerError <- err
+			}
+			res.hashUpdateMutex.Unlock()
+		}
+	}()
+
+	return WrapIntoSyncedState(res)
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
-type archiveUpdate = struct {
-	block       uint64
-	update      *common.Update // nil to signal a flush
-	updateHints any            // an optional field for passing update hints from the LiveDB to the Archive
-}
-
 func (s *GoState) Apply(block uint64, update common.Update) error {
-	err := applyUpdate(s, update)
-	if err != nil {
+
+	region := trace.StartRegion(context.Background(), "apply")
+	defer region.End()
+
+	trace.Log(context.Background(), "apply", "begin")
+
+	// Wait for hash worker to be ready. This lock is unlocked by
+	// the hash worker whenever the update scheduled at the end of
+	// this function is completed.
+	s.hashUpdateMutex.Lock()
+
+	trace.Log(context.Background(), "apply", "update")
+
+	// Check for errors encountered during the last hashing.
+	if err := s.collectHashWorkerErrors(); err != nil {
 		return err
 	}
+
+	// Apply the update to the state.
+	if err := applyUpdate(s, update); err != nil {
+		return err
+	}
+
+	trace.Log(context.Background(), "apply", "signal")
+
+	// Signal hash worker to start hashing the new block.
+	s.hashWorker <- stateUpdate{block: block, update: &update}
+
+	trace.Log(context.Background(), "apply", "end")
+
+	return nil
+}
+
+func (s *GoState) GetHash() (hash common.Hash, err error) {
+	s.hashUpdateMutex.Lock()
+	defer s.hashUpdateMutex.Unlock()
+	return s.GoSchema.GetHash()
+}
+
+type stateUpdate = struct {
+	block  uint64
+	update *common.Update // nil to signal a flush
+}
+
+type archiveUpdate = struct {
+	stateUpdate
+	updateHints any // an optional field for passing update hints from the LiveDB to the Archive
+}
+
+func (s *GoState) updateHash(update stateUpdate) error {
 
 	// Finish the block by refreshing the hash.
 	archiveUpdateHints, err := s.FinishBlock()
@@ -123,7 +199,7 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		}
 
 		// Send the update to the writer to be processed asynchronously.
-		s.archiveWriter <- archiveUpdate{block, &update, archiveUpdateHints}
+		s.archiveWriter <- archiveUpdate{update, archiveUpdateHints}
 
 		// Drain potential errors, but do not wait for them.
 		var last error
@@ -145,6 +221,20 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	return nil
 }
 
+func (s *GoState) collectHashWorkerErrors() error {
+	errs := []error{}
+loop:
+	for {
+		select {
+		case err := <-s.hashWorkerError:
+			errs = append(errs, err)
+		default:
+			break loop
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
 func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(0)
@@ -156,9 +246,19 @@ func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *GoState) Flush() (lastErr error) {
-	err := s.GoSchema.Flush()
-	if err != nil {
-		lastErr = err
+
+	// Flush the hash worker.
+	s.hashWorker <- stateUpdate{}
+	<-s.hashWorkerFlushDone
+
+	var errs []error
+	if err := s.collectHashWorkerErrors(); err != nil {
+		errs = append(errs, err)
+	}
+
+	// Flush the database.
+	if err := s.GoSchema.Flush(); err != nil {
+		errs = append(errs, err)
 	}
 
 	// Flush the archive.
@@ -169,13 +269,17 @@ func (s *GoState) Flush() (lastErr error) {
 		<-s.archiveWriterFlushDone
 	}
 
-	return lastErr
+	return errors.Join(errs...)
 }
 
 func (s *GoState) Close() (lastErr error) {
 	if err := s.Flush(); err != nil {
 		return err
 	}
+
+	// Shut down hash worker.
+	close(s.hashWorker)
+	<-s.hashWorkerDone
 
 	if err := s.GoSchema.Close(); err != nil {
 		lastErr = err
