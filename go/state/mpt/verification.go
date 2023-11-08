@@ -471,7 +471,7 @@ func (s *verificationNodeSource) getConfig() MptConfig {
 	return s.config
 }
 
-func (s *verificationNodeSource) getNode(id NodeId) (shared.ReadHandle[Node], error) {
+func (s *verificationNodeSource) getShared(id NodeId) (*shared.Shared[Node], error) {
 	var node Node
 	var err error
 	if s.overwriteId == id && s.overwriteNode != nil {
@@ -492,10 +492,25 @@ func (s *verificationNodeSource) getNode(id NodeId) (shared.ReadHandle[Node], er
 		node, err = &value, e
 	}
 	if err != nil {
+		return nil, err
+	}
+	return shared.MakeShared[Node](node), nil
+}
+
+func (s *verificationNodeSource) getReadAccess(id NodeId) (shared.ReadHandle[Node], error) {
+	node, err := s.getShared(id)
+	if err != nil {
 		return shared.ReadHandle[Node]{}, err
 	}
-	shared := shared.MakeShared[Node](node)
-	return shared.GetReadHandle(), nil
+	return node.GetReadHandle(), nil
+}
+
+func (s *verificationNodeSource) getViewAccess(id NodeId) (shared.ViewHandle[Node], error) {
+	node, err := s.getShared(id)
+	if err != nil {
+		return shared.ViewHandle[Node]{}, err
+	}
+	return node.GetViewHandle(), nil
 }
 
 func (s *verificationNodeSource) getHashFor(NodeId) (common.Hash, error) {

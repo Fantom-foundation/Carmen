@@ -39,7 +39,7 @@ type WriteBuffer interface {
 // NodeSink defines an interface for where WriteBuffers are able to write
 // node information to.
 type NodeSink interface {
-	Write(NodeId, shared.ReadHandle[Node]) error
+	Write(NodeId, shared.ViewHandle[Node]) error
 }
 
 func MakeWriteBuffer(sink NodeSink) WriteBuffer {
@@ -191,7 +191,7 @@ func (b *writeBuffer) emptyBuffer() {
 
 		// Lock read access on the node before unlocking the buffer to avoid
 		// another thread to cancel the write and gain write access in-between.
-		handle := node.GetReadHandle()
+		handle := node.GetViewHandle()
 		b.bufferMutex.Unlock()
 
 		if err := b.sink.Write(id, handle); err != nil {

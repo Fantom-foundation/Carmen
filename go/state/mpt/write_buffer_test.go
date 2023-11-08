@@ -29,9 +29,9 @@ func TestWriteBuffer_CanFlushASingleElement(t *testing.T) {
 
 	id := ValueId(12)
 	node := shared.MakeShared[Node](EmptyNode{})
-	read := node.GetReadHandle()
-	sink.EXPECT().Write(id, read)
-	read.Release()
+	view := node.GetViewHandle()
+	sink.EXPECT().Write(id, view)
+	view.Release()
 
 	buffer := MakeWriteBuffer(sink)
 	defer buffer.Close()
@@ -113,7 +113,7 @@ func TestWriteBuffer_AllQueuedEntriesArePresentUntilWritten(t *testing.T) {
 
 	written := map[NodeId]bool{}
 
-	sink.EXPECT().Write(gomock.Any(), gomock.Any()).AnyTimes().Do(func(id NodeId, _ shared.ReadHandle[Node]) {
+	sink.EXPECT().Write(gomock.Any(), gomock.Any()).AnyTimes().Do(func(id NodeId, _ shared.ViewHandle[Node]) {
 		// Check that everything that was enqueued and is not yet written is still present.
 		enqueuedLock.Lock()
 		for id := range enqueued {
@@ -150,13 +150,13 @@ func TestWriteBuffer_CheckThatLockedNodesAreWaitedFor(t *testing.T) {
 	value1 := shared.MakeShared[Node](EmptyNode{})
 	value2 := shared.MakeShared[Node](EmptyNode{})
 
-	read1 := value1.GetReadHandle()
-	sink.EXPECT().Write(id1, read1)
-	read1.Release()
+	view1 := value1.GetViewHandle()
+	sink.EXPECT().Write(id1, view1)
+	view1.Release()
 
-	read2 := value2.GetReadHandle()
-	sink.EXPECT().Write(id2, read2)
-	read2.Release()
+	view2 := value2.GetViewHandle()
+	sink.EXPECT().Write(id2, view2)
+	view2.Release()
 
 	buffer := makeWriteBuffer(sink, 100)
 	defer buffer.Close()
@@ -186,10 +186,10 @@ func TestWriteBuffer_AFailedFlushIsReported(t *testing.T) {
 
 	id := ValueId(12)
 	node := shared.MakeShared[Node](EmptyNode{})
-	read := node.GetReadHandle()
+	view := node.GetViewHandle()
 	err := fmt.Errorf("TestError")
-	sink.EXPECT().Write(id, read).Return(err)
-	read.Release()
+	sink.EXPECT().Write(id, view).Return(err)
+	view.Release()
 
 	buffer := MakeWriteBuffer(sink)
 	defer buffer.Close()
