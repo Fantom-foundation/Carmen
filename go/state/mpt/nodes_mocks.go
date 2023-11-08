@@ -321,19 +321,34 @@ func (mr *MockNodeSourceMockRecorder) getHashFor(arg0 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHashFor", reflect.TypeOf((*MockNodeSource)(nil).getHashFor), arg0)
 }
 
-// getNode mocks base method.
-func (m *MockNodeSource) getNode(arg0 NodeId) (shared.ReadHandle[Node], error) {
+// getReadAccess mocks base method.
+func (m *MockNodeSource) getReadAccess(arg0 NodeId) (shared.ReadHandle[Node], error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getNode", arg0)
+	ret := m.ctrl.Call(m, "getReadAccess", arg0)
 	ret0, _ := ret[0].(shared.ReadHandle[Node])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getNode indicates an expected call of getNode.
-func (mr *MockNodeSourceMockRecorder) getNode(arg0 interface{}) *gomock.Call {
+// getReadAccess indicates an expected call of getReadAccess.
+func (mr *MockNodeSourceMockRecorder) getReadAccess(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeSource)(nil).getNode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getReadAccess", reflect.TypeOf((*MockNodeSource)(nil).getReadAccess), arg0)
+}
+
+// getViewAccess mocks base method.
+func (m *MockNodeSource) getViewAccess(arg0 NodeId) (shared.ViewHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getViewAccess", arg0)
+	ret0, _ := ret[0].(shared.ViewHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getViewAccess indicates an expected call of getViewAccess.
+func (mr *MockNodeSourceMockRecorder) getViewAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getViewAccess", reflect.TypeOf((*MockNodeSource)(nil).getViewAccess), arg0)
 }
 
 // hashAddress mocks base method.
@@ -465,6 +480,21 @@ func (mr *MockNodeManagerMockRecorder) getConfig() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getConfig", reflect.TypeOf((*MockNodeManager)(nil).getConfig))
 }
 
+// getHashAccess mocks base method.
+func (m *MockNodeManager) getHashAccess(arg0 NodeId) (shared.HashHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getHashAccess", arg0)
+	ret0, _ := ret[0].(shared.HashHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getHashAccess indicates an expected call of getHashAccess.
+func (mr *MockNodeManagerMockRecorder) getHashAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHashAccess", reflect.TypeOf((*MockNodeManager)(nil).getHashAccess), arg0)
+}
+
 // getHashFor mocks base method.
 func (m *MockNodeManager) getHashFor(arg0 NodeId) (common.Hash, error) {
 	m.ctrl.T.Helper()
@@ -480,34 +510,49 @@ func (mr *MockNodeManagerMockRecorder) getHashFor(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHashFor", reflect.TypeOf((*MockNodeManager)(nil).getHashFor), arg0)
 }
 
-// getMutableNode mocks base method.
-func (m *MockNodeManager) getMutableNode(arg0 NodeId) (shared.WriteHandle[Node], error) {
+// getReadAccess mocks base method.
+func (m *MockNodeManager) getReadAccess(arg0 NodeId) (shared.ReadHandle[Node], error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getMutableNode", arg0)
-	ret0, _ := ret[0].(shared.WriteHandle[Node])
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// getMutableNode indicates an expected call of getMutableNode.
-func (mr *MockNodeManagerMockRecorder) getMutableNode(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getMutableNode", reflect.TypeOf((*MockNodeManager)(nil).getMutableNode), arg0)
-}
-
-// getNode mocks base method.
-func (m *MockNodeManager) getNode(arg0 NodeId) (shared.ReadHandle[Node], error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getNode", arg0)
+	ret := m.ctrl.Call(m, "getReadAccess", arg0)
 	ret0, _ := ret[0].(shared.ReadHandle[Node])
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getNode indicates an expected call of getNode.
-func (mr *MockNodeManagerMockRecorder) getNode(arg0 interface{}) *gomock.Call {
+// getReadAccess indicates an expected call of getReadAccess.
+func (mr *MockNodeManagerMockRecorder) getReadAccess(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getNode", reflect.TypeOf((*MockNodeManager)(nil).getNode), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getReadAccess", reflect.TypeOf((*MockNodeManager)(nil).getReadAccess), arg0)
+}
+
+// getViewAccess mocks base method.
+func (m *MockNodeManager) getViewAccess(arg0 NodeId) (shared.ViewHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getViewAccess", arg0)
+	ret0, _ := ret[0].(shared.ViewHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getViewAccess indicates an expected call of getViewAccess.
+func (mr *MockNodeManagerMockRecorder) getViewAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getViewAccess", reflect.TypeOf((*MockNodeManager)(nil).getViewAccess), arg0)
+}
+
+// getWriteAccess mocks base method.
+func (m *MockNodeManager) getWriteAccess(arg0 NodeId) (shared.WriteHandle[Node], error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "getWriteAccess", arg0)
+	ret0, _ := ret[0].(shared.WriteHandle[Node])
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// getWriteAccess indicates an expected call of getWriteAccess.
+func (mr *MockNodeManagerMockRecorder) getWriteAccess(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getWriteAccess", reflect.TypeOf((*MockNodeManager)(nil).getWriteAccess), arg0)
 }
 
 // hashAddress mocks base method.
@@ -564,6 +609,20 @@ func (m *MockNodeManager) update(arg0 NodeId, arg1 shared.WriteHandle[Node]) err
 func (mr *MockNodeManagerMockRecorder) update(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "update", reflect.TypeOf((*MockNodeManager)(nil).update), arg0, arg1)
+}
+
+// updateHash mocks base method.
+func (m *MockNodeManager) updateHash(arg0 NodeId, arg1 shared.HashHandle[Node]) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "updateHash", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// updateHash indicates an expected call of updateHash.
+func (mr *MockNodeManagerMockRecorder) updateHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateHash", reflect.TypeOf((*MockNodeManager)(nil).updateHash), arg0, arg1)
 }
 
 // MockleafNode is a mock of leafNode interface.

@@ -6,59 +6,145 @@ import (
 )
 
 // The shared package provides generic utility classes for synchronizing access
-// to shared objects. When accessing shared objects, users have to define
-// whether the access requires shared access (read-only) or exclusive access.
-// Furthermore, users have to mark the end of their access to allow potentially
-// waiting users to gain access.
+// to shared hashed objects. Shared hashed objects are expected to contain
+// two sets of fields, content fields and hash fields. Content fields contain
+// object relevant information while hash fields are derived from content
+// fields.
+//
+// When accessing shared objects, users have to define what level of access is
+// required. Four levels are supported:
+//  - read access: grants users to read content fields of the object
+//  - view access: grants users to read content and hash fields
+//  - hash access: grants users to read content and write hash fields
+//  - write access: grants write permission to content and hash fields
+//
+// The following table describes the interaction of the various locking modes:
+//
+//             want\held  |  None  | Read | View | Hash | Write
+//           -------------+--------+------+------+------+-------
+//               Read     |    +   |   +  |   +  |   +  |   -
+//               View     |    +   |   +  |   +  |   -  |   -
+//               Hash     |    +   |   +  |   -  |   -  |   -
+//               Write    |    +   |   -  |   -  |   -  |   -
+//
+// where + means that a request for the targeted permission would be granted
+// while - means that the request is blocked or rejected.
 
 // Shared is a wrapper type for a value of type T controlling access to it.
 type Shared[T any] struct {
-	value T
-	mu    sync.RWMutex
+	value        T
+	contentMutex sync.RWMutex
+	hashMutex    sync.RWMutex
 }
 
 // MakeShared creates a new shared object and initializes it with the given value.
 func MakeShared[T any](value T) *Shared[T] {
 	return &Shared[T]{
-		value: value,
-		mu:    sync.RWMutex{},
+		value:        value,
+		contentMutex: sync.RWMutex{},
+		hashMutex:    sync.RWMutex{},
 	}
 }
 
-// TryGetReadHandle tries to get read-only access to the shared value. If
+// TryGetReadHandle tries to get read access to the shared value's content. If
 // successful, indicated by the second return value, shared access to the object
-// is granted until the provided ReadHandle is released again. Other readers
-// may as well gain access concurrently. However, the implementation gurantees
-// that no write accesses are granted at the same time.
-// NOTE: if the operation is sucessful the provided handle needs to be released.
+// is granted until the provided ReadHandle is released again. Other readers,
+// viewers, or hashers may as well gain access concurrently. However, the
+// implementation guarantees that no write accesses are granted at the same time.
+// NOTE: if the operation is successful the provided handle needs to be released.
 func (p *Shared[T]) TryGetReadHandle() (ReadHandle[T], bool) {
-	succ := p.mu.TryRLock()
+	succ := p.contentMutex.TryRLock()
 	if succ {
-		return ReadHandle[T]{p}, true
+		return ReadHandle[T]{handle[T]{p}}, true
 	}
 	return ReadHandle[T]{}, false
 }
 
-// GetReadHandle blocks until read-only access to the shared value can be
+// GetReadHandle blocks until read access to the shared value's content can be
 // granted. Once granted, other threads may have concurrent access to the shared
-// value. However, the implementation gurantees that no write accesses are granted
+// value. However, the implementation guarantees that no write accesses are granted
 // at the same time.
 // NOTE: this operation blocks until access can be granted. The resulting handle
 // must be released once access is no longer needed.
 func (p *Shared[T]) GetReadHandle() ReadHandle[T] {
-	p.mu.RLock()
-	return ReadHandle[T]{p}
+	p.contentMutex.RLock()
+	return ReadHandle[T]{handle[T]{p}}
+}
+
+// TryGetViewHandle tries to get read access to the shared value's content and
+// hash data. If successful, indicated by the second return value, view access
+// to the object is granted until the provided ViewHandle is released again.
+// Other readers and viewers may as well gain access concurrently. However, the
+// implementation guarantees that no hash or write accesses are granted at the
+// same time.
+// NOTE: if the operation is successful the provided handle needs to be released.
+func (p *Shared[T]) TryGetViewHandle() (ViewHandle[T], bool) {
+	succ := p.contentMutex.TryRLock()
+	if !succ {
+		return ViewHandle[T]{}, false
+	}
+	succ = p.hashMutex.TryRLock()
+	if !succ {
+		p.contentMutex.RUnlock()
+		return ViewHandle[T]{}, false
+	}
+	return ViewHandle[T]{handle[T]{p}}, true
+}
+
+// GetViewHandle blocks until read access to the shared value's content and hash
+// data can be granted. Once granted, other threads may have concurrent access to
+// the shared value. However, the implementation guarantees that no hash or write
+// accesses are granted at the same time.
+// NOTE: this operation blocks until access can be granted. The resulting handle
+// must be released once access is no longer needed.
+func (p *Shared[T]) GetViewHandle() ViewHandle[T] {
+	p.contentMutex.RLock()
+	p.hashMutex.RLock()
+	return ViewHandle[T]{handle[T]{p}}
+}
+
+// TryGetHashHandle tries to get read access to the shared value's content and
+// write access to the object's hash data. If successful, indicated by the
+// second return value, hash access to the object is granted until the provided
+// HashHandle is released again. Other readers may as well gain access
+// concurrently. However, the implementation guarantees that no view, hash or
+// write accesses are granted at the same time.
+// NOTE: if the operation is successful the provided handle needs to be released.
+func (p *Shared[T]) TryGetHashHandle() (HashHandle[T], bool) {
+	succ := p.contentMutex.TryRLock()
+	if !succ {
+		return HashHandle[T]{}, false
+	}
+	succ = p.hashMutex.TryLock()
+	if !succ {
+		p.contentMutex.RUnlock()
+		return HashHandle[T]{}, false
+	}
+	return HashHandle[T]{handle[T]{p}}, true
+}
+
+// GetHashHandle blocks until read access to the shared value's content and
+// write access to the value's hash data can be granted. Once granted, other
+// threads may have concurrent read access to the shared value. However, the
+// implementation guarantees that no view, hash or write accesses are granted
+// at the same time.
+// NOTE: this operation blocks until access can be granted. The resulting handle
+// must be released once access is no longer needed.
+func (p *Shared[T]) GetHashHandle() HashHandle[T] {
+	p.contentMutex.RLock()
+	p.hashMutex.Lock()
+	return HashHandle[T]{handle[T]{p}}
 }
 
 // TryGetWriteHandle tries to get exclusive write access to the shared value. If
-// successful, indicated by the second return value, exculsive access to the object
+// successful, indicated by the second return value, exclusive access to the object
 // is granted until the provided WriteHandle is released again. Until then no other
 // readers or writers have access to the shared object.
-// NOTE: if the operation is sucessful the provided handle needs to be released.
+// NOTE: if the operation is successful the provided handle needs to be released.
 func (p *Shared[T]) TryGetWriteHandle() (WriteHandle[T], bool) {
-	succ := p.mu.TryLock()
+	succ := p.contentMutex.TryLock()
 	if succ {
-		return WriteHandle[T]{p}, true
+		return WriteHandle[T]{handle[T]{p}}, true
 	}
 	return WriteHandle[T]{}, false
 }
@@ -69,8 +155,24 @@ func (p *Shared[T]) TryGetWriteHandle() (WriteHandle[T], bool) {
 // NOTE: this operation blocks until access can be granted. The resulting handle
 // must be released once access is no longer needed.
 func (p *Shared[T]) GetWriteHandle() WriteHandle[T] {
-	p.mu.Lock()
-	return WriteHandle[T]{p}
+	p.contentMutex.Lock()
+	return WriteHandle[T]{handle[T]{p}}
+}
+
+type handle[T any] struct {
+	shared *Shared[T]
+}
+
+// Valid returns true if this handle represents an active access permission to
+// an underlying shared object, false otherwise. Default initialized handles
+// are invalid.
+func (h *handle[T]) Valid() bool {
+	return h.shared != nil
+}
+
+// Get returns the underlying shared value. Must only be called on valid handles.
+func (h *handle[T]) Get() T {
+	return h.shared.value
 }
 
 // ReadHandle represents shared read-access to a shared value of type T. While
@@ -79,19 +181,7 @@ func (p *Shared[T]) GetWriteHandle() WriteHandle[T] {
 // To gain read access to a shared value call the Shared value's GetReadHandle()
 // or TryGetReadHandle() functions.
 type ReadHandle[T any] struct {
-	shared *Shared[T]
-}
-
-// Valid returns true if this handle is representing an active read-only access
-// to an underlying shared object, false otherwise. Default initialized handles
-// are invalid.
-func (h *ReadHandle[T]) Valid() bool {
-	return h.shared != nil
-}
-
-// Get returns the underlying shared value. Must only be called on valid handles.
-func (h *ReadHandle[T]) Get() T {
-	return h.shared.value
+	handle[T]
 }
 
 // Release abandons the access permission on the underlying shared object, allowing
@@ -99,7 +189,7 @@ func (h *ReadHandle[T]) Get() T {
 // instances to avoid dead-lock situations. After the handle has been released,
 // the handle becomes invalid.
 func (h *ReadHandle[T]) Release() {
-	h.shared.mu.RUnlock()
+	h.shared.contentMutex.RUnlock()
 	h.shared = nil
 }
 
@@ -107,24 +197,61 @@ func (h *ReadHandle[T]) String() string {
 	return fmt.Sprintf("ReadHandle(%p)", h.shared)
 }
 
-// WriteHandle represents exculsive write access to a shared value of type T. While
+// ViewHandle represents shared read-access to the content and hashes of a shared
+// value of type T. While the view handle is valid no exclusive write access to
+// the shared value's content is granted. However, other read or view permissions
+// may be granted.
+// To gain view access to a shared value call the Shared value's GetViewHandle()
+// or TryGetViewHandle() functions.
+type ViewHandle[T any] struct {
+	handle[T]
+}
+
+// Release abandons the access permission on the underlying shared object, allowing
+// other operations to gain access. It must be called eventually on all valid
+// instances to avoid dead-lock situations. After the handle has been released,
+// the handle becomes invalid.
+func (h *ViewHandle[T]) Release() {
+	h.shared.contentMutex.RUnlock()
+	h.shared.hashMutex.RUnlock()
+	h.shared = nil
+}
+
+func (h *ViewHandle[T]) String() string {
+	return fmt.Sprintf("ViewHandle(%p)", h.shared)
+}
+
+// HashHandle represents shared read-access to the content and exclusive write
+// access to hashes of a shared value of type T. While the hash handle is valid
+// no read access to the shared values hash data nor exclusive write access to
+// the shared value's content is granted. However, read permissions may be
+// granted concurrently.
+// To gain hash access to a shared value call the Shared value's GetHashHandle()
+// or TryGetHashHandle() functions.
+type HashHandle[T any] struct {
+	handle[T]
+}
+
+// Release abandons the access permission on the underlying shared object, allowing
+// other operations to gain access. It must be called eventually on all valid
+// instances to avoid dead-lock situations. After the handle has been released,
+// the handle becomes invalid.
+func (h *HashHandle[T]) Release() {
+	h.shared.contentMutex.RUnlock()
+	h.shared.hashMutex.Unlock()
+	h.shared = nil
+}
+
+func (h *HashHandle[T]) String() string {
+	return fmt.Sprintf("HashHandle(%p)", h.shared)
+}
+
+// WriteHandle represents exclusive write access to a shared value of type T. While
 // the write handle is valid no other access to the shared value is granted.
 // To gain write access to a shared value call the Shared value's GetWriteHandle()
 // or TryGetWriteHandle() functions.
 type WriteHandle[T any] struct {
-	shared *Shared[T]
-}
-
-// Valid returns true if this handle is representing an active read-only access
-// to an underlying shared object, false otherwise. Default initialized handles
-// are invalid.
-func (h *WriteHandle[T]) Valid() bool {
-	return h.shared != nil
-}
-
-// Get returns the underlying shared value. Must only be called on valid handles.
-func (h *WriteHandle[T]) Get() T {
-	return h.shared.value
+	handle[T]
 }
 
 // Ref returns a pointer to the shared value. Must only be called on valid handles.
@@ -142,7 +269,7 @@ func (h *WriteHandle[T]) Set(value T) {
 // instances to avoid dead-lock situations. After the handle has been released,
 // the handle becomes invalid.
 func (h *WriteHandle[T]) Release() {
-	h.shared.mu.Unlock()
+	h.shared.contentMutex.Unlock()
 	h.shared = nil
 }
 

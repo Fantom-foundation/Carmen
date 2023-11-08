@@ -254,7 +254,7 @@ func makeForest(
 }
 
 func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo, bool, error) {
-	handle, err := s.getNode(rootId)
+	handle, err := s.getReadAccess(rootId)
 	if err != nil {
 		return AccountInfo{}, false, err
 	}
@@ -264,7 +264,7 @@ func (s *Forest) GetAccountInfo(rootId NodeId, addr common.Address) (AccountInfo
 }
 
 func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info AccountInfo) (NodeId, error) {
-	root, err := s.getMutableNode(rootId)
+	root, err := s.getWriteAccess(rootId)
 	if err != nil {
 		return NodeId(0), err
 	}
@@ -278,7 +278,7 @@ func (s *Forest) SetAccountInfo(rootId NodeId, addr common.Address, info Account
 }
 
 func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (common.Value, error) {
-	root, err := s.getNode(rootId)
+	root, err := s.getReadAccess(rootId)
 	if err != nil {
 		return common.Value{}, err
 	}
@@ -289,7 +289,7 @@ func (s *Forest) GetValue(rootId NodeId, addr common.Address, key common.Key) (c
 }
 
 func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, value common.Value) (NodeId, error) {
-	root, err := s.getMutableNode(rootId)
+	root, err := s.getWriteAccess(rootId)
 	if err != nil {
 		return NodeId(0), err
 	}
@@ -303,7 +303,7 @@ func (s *Forest) SetValue(rootId NodeId, addr common.Address, key common.Key, va
 }
 
 func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
-	root, err := s.getMutableNode(rootId)
+	root, err := s.getWriteAccess(rootId)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (s *Forest) ClearStorage(rootId NodeId, addr common.Address) error {
 }
 
 func (s *Forest) VisitTrie(rootId NodeId, visitor NodeVisitor) error {
-	root, err := s.getNode(rootId)
+	root, err := s.getViewAccess(rootId)
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func (f *Forest) Freeze(id NodeId) error {
 	if f.storageMode != Immutable {
 		return fmt.Errorf("node-freezing only supported in archive mode")
 	}
-	root, err := f.getMutableNode(id)
+	root, err := f.getWriteAccess(id)
 	if err != nil {
 		return err
 	}
@@ -449,7 +449,7 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
 func (s *Forest) Dump(rootId NodeId) {
-	root, err := s.getNode(rootId)
+	root, err := s.getViewAccess(rootId)
 	if err != nil {
 		fmt.Printf("Failed to fetch root: %v", err)
 		return
@@ -463,7 +463,7 @@ func (s *Forest) Dump(rootId NodeId) {
 // errors are detected, the Trie is to be considered in an invalid state and
 // the behavior of all other operations is undefined.
 func (s *Forest) Check(rootId NodeId) error {
-	root, err := s.getNode(rootId)
+	root, err := s.getViewAccess(rootId)
 	if err != nil {
 		return err
 	}
@@ -541,7 +541,7 @@ func (s *Forest) getSharedNode(id NodeId) (*shared.Shared[Node], error) {
 	return instance, nil
 }
 
-func (s *Forest) getNode(id NodeId) (shared.ReadHandle[Node], error) {
+func (s *Forest) getReadAccess(id NodeId) (shared.ReadHandle[Node], error) {
 	instance, err := s.getSharedNode(id)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, err
@@ -549,7 +549,23 @@ func (s *Forest) getNode(id NodeId) (shared.ReadHandle[Node], error) {
 	return instance.GetReadHandle(), nil
 }
 
-func (s *Forest) getMutableNode(id NodeId) (shared.WriteHandle[Node], error) {
+func (s *Forest) getViewAccess(id NodeId) (shared.ViewHandle[Node], error) {
+	instance, err := s.getSharedNode(id)
+	if err != nil {
+		return shared.ViewHandle[Node]{}, err
+	}
+	return instance.GetViewHandle(), nil
+}
+
+func (s *Forest) getHashAccess(id NodeId) (shared.HashHandle[Node], error) {
+	instance, err := s.getSharedNode(id)
+	if err != nil {
+		return shared.HashHandle[Node]{}, err
+	}
+	return instance.GetHashHandle(), nil
+}
+
+func (s *Forest) getWriteAccess(id NodeId) (shared.WriteHandle[Node], error) {
 	instance, err := s.getSharedNode(id)
 	if err != nil {
 		return shared.WriteHandle[Node]{}, err
@@ -563,7 +579,7 @@ func (s *Forest) getMutableNodeByPath(root NodeId, path NodePath) (shared.WriteH
 	last := shared.ReadHandle[Node]{}
 	lastValid := false
 	for i := 0; i < path.Length(); i++ {
-		cur, err := s.getNode(next)
+		cur, err := s.getReadAccess(next)
 		if lastValid {
 			last.Release()
 		}
@@ -588,7 +604,7 @@ func (s *Forest) getMutableNodeByPath(root NodeId, path NodePath) (shared.WriteH
 	}
 
 	// The last step requires write access.
-	res, err := s.getMutableNode(next)
+	res, err := s.getWriteAccess(next)
 	if lastValid {
 		last.Release()
 	}
@@ -707,6 +723,14 @@ func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
 	return nil
 }
 
+func (s *Forest) updateHash(id NodeId, node shared.HashHandle[Node]) error {
+	// all needed here is to register the modified node as dirty
+	s.dirtyMutex.Lock()
+	s.dirty[id] = struct{}{}
+	s.dirtyMutex.Unlock()
+	return nil
+}
+
 func (s *Forest) release(id NodeId) error {
 	s.nodeCacheMutex.Lock()
 	s.nodeCache.Remove(id)
@@ -770,7 +794,7 @@ type writeBufferSink struct {
 	forest *Forest
 }
 
-func (s writeBufferSink) Write(id NodeId, handle shared.ReadHandle[Node]) error {
+func (s writeBufferSink) Write(id NodeId, handle shared.ViewHandle[Node]) error {
 	return s.forest.flushNode(id, handle.Get())
 }
 
