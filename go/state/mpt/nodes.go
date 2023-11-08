@@ -201,7 +201,8 @@ type Node interface {
 // storage. It also serves as a central source for trie configuration flags.
 type NodeSource interface {
 	getConfig() MptConfig
-	getNode(NodeId) (shared.ReadHandle[Node], error)
+	getReadAccess(NodeId) (shared.ReadHandle[Node], error)
+	getViewAccess(NodeId) (shared.ViewHandle[Node], error)
 	getHashFor(NodeId) (common.Hash, error)
 	hashKey(common.Key) common.Hash
 	hashAddress(address common.Address) common.Hash
@@ -212,7 +213,8 @@ type NodeSource interface {
 type NodeManager interface {
 	NodeSource
 
-	getMutableNode(NodeId) (shared.WriteHandle[Node], error)
+	getHashAccess(NodeId) (shared.HashHandle[Node], error)
+	getWriteAccess(NodeId) (shared.WriteHandle[Node], error)
 
 	createAccount() (NodeId, shared.WriteHandle[Node], error)
 	createBranch() (NodeId, shared.WriteHandle[Node], error)
@@ -220,6 +222,7 @@ type NodeManager interface {
 	createValue() (NodeId, shared.WriteHandle[Node], error)
 
 	update(NodeId, shared.WriteHandle[Node]) error
+	updateHash(NodeId, shared.HashHandle[Node]) error
 
 	release(NodeId) error
 }
@@ -354,7 +357,7 @@ func (n *BranchNode) getNextNodeInBranch(
 	path []Nibble,
 ) (shared.ReadHandle[Node], []Nibble, error) {
 	next := n.children[path[0]]
-	node, err := source.getNode(next)
+	node, err := source.getReadAccess(next)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, nil, err
 	}
@@ -397,7 +400,7 @@ func (n *BranchNode) setNextNode(
 ) (NodeId, bool, error) {
 	// Forward call to child node.
 	child := n.children[path[0]]
-	node, err := manager.getMutableNode(child)
+	node, err := manager.getWriteAccess(child)
 	if err != nil {
 		return 0, false, err
 	}
@@ -457,7 +460,7 @@ func (n *BranchNode) setNextNode(
 			// This branch became obsolete and needs to be removed.
 			if remaining.IsExtension() {
 				// The present extension can be extended.
-				extension, err := manager.getMutableNode(remaining)
+				extension, err := manager.getWriteAccess(remaining)
 				if err != nil {
 					return 0, false, err
 				}
@@ -501,7 +504,7 @@ func (n *BranchNode) setNextNode(
 			} else if manager.getConfig().TrackSuffixLengthsInLeafNodes {
 				// If suffix lengths need to be tracked, leaf nodes require an update.
 				if remaining.IsAccount() {
-					handle, err := manager.getMutableNode(remaining)
+					handle, err := manager.getWriteAccess(remaining)
 					if err != nil {
 						return 0, false, err
 					}
@@ -511,7 +514,7 @@ func (n *BranchNode) setNextNode(
 						return 0, false, err
 					}
 				} else if remaining.IsValue() {
-					handle, err := manager.getMutableNode(remaining)
+					handle, err := manager.getWriteAccess(remaining)
 					if err != nil {
 						return 0, false, err
 					}
@@ -569,7 +572,7 @@ func (n *BranchNode) Release(manager NodeManager, thisId NodeId, this shared.Wri
 	}
 	for _, cur := range n.children {
 		if !cur.IsEmpty() {
-			handle, err := manager.getMutableNode(cur)
+			handle, err := manager.getWriteAccess(cur)
 			if err != nil {
 				return err
 			}
@@ -610,7 +613,7 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 		if n.children[i].IsEmpty() || n.isChildFrozen(byte(i)) {
 			continue
 		}
-		handle, err := manager.getMutableNode(n.children[i])
+		handle, err := manager.getWriteAccess(n.children[i])
 		if err != nil {
 			return err
 		}
@@ -636,7 +639,7 @@ func (n *BranchNode) Check(source NodeSource, thisId NodeId, path []Nibble) erro
 		}
 		numChildren++
 
-		if handle, err := source.getNode(child); err == nil {
+		if handle, err := source.getViewAccess(child); err == nil {
 			defer handle.Release()
 			if err := handle.Get().Check(source, child, append(path, Nibble(i))); err != nil {
 				errs = append(errs, err)
@@ -667,7 +670,7 @@ func (n *BranchNode) Dump(source NodeSource, thisId NodeId, indent string) {
 			continue
 		}
 
-		if handle, err := source.getNode(child); err == nil {
+		if handle, err := source.getViewAccess(child); err == nil {
 			defer handle.Release()
 			handle.Get().Dump(source, child, fmt.Sprintf("%s  %v ", indent, Nibble(i)))
 		} else {
@@ -689,7 +692,7 @@ func (b *BranchNode) Visit(source NodeSource, thisId NodeId, depth int, visitor 
 			continue
 		}
 
-		if handle, err := source.getNode(child); err == nil {
+		if handle, err := source.getViewAccess(child); err == nil {
 			defer handle.Release()
 			if abort, err := handle.Get().Visit(source, child, depth+1, visitor); abort || err != nil {
 				return abort, err
@@ -763,7 +766,7 @@ func (n *ExtensionNode) getNextNodeInExtension(
 		shared := shared.MakeShared[Node](EmptyNode{})
 		return shared.GetReadHandle(), nil, nil
 	}
-	handle, err := source.getNode(n.next)
+	handle, err := source.getReadAccess(n.next)
 	if err != nil {
 		return shared.ReadHandle[Node]{}, nil, err
 	}
@@ -807,7 +810,7 @@ func (n *ExtensionNode) setNextNode(
 ) (NodeId, bool, error) {
 	// Check whether the updates targets the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
-		handle, err := manager.getMutableNode(n.next)
+		handle, err := manager.getWriteAccess(n.next)
 		if err != nil {
 			return 0, false, err
 		}
@@ -847,7 +850,7 @@ func (n *ExtensionNode) setNextNode(
 
 			if newRoot.IsExtension() {
 				// If the new next is an extension, merge it into this extension.
-				handle, err := manager.getMutableNode(newRoot)
+				handle, err := manager.getWriteAccess(newRoot)
 				if err != nil {
 					return 0, false, err
 				}
@@ -870,7 +873,7 @@ func (n *ExtensionNode) setNextNode(
 
 				// Grow path length of next nodes if tracking of length is enabled.
 				if manager.getConfig().TrackSuffixLengthsInLeafNodes {
-					root, err := manager.getMutableNode(newRoot)
+					root, err := manager.getWriteAccess(newRoot)
 					if err != nil {
 						return 0, false, err
 					}
@@ -1023,7 +1026,7 @@ func (n *ExtensionNode) Release(manager NodeManager, thisId NodeId, this shared.
 	if n.frozen {
 		return nil
 	}
-	handle, err := manager.getMutableNode(n.next)
+	handle, err := manager.getWriteAccess(n.next)
 	if err != nil {
 		return err
 	}
@@ -1057,7 +1060,7 @@ func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node
 		return nil
 	}
 	n.frozen = true
-	handle, err := manager.getMutableNode(n.next)
+	handle, err := manager.getWriteAccess(n.next)
 	if err != nil {
 		return err
 	}
@@ -1078,7 +1081,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisId NodeId, path []Nibble) e
 	if !n.next.IsBranch() {
 		errs = append(errs, fmt.Errorf("node %v - extension path must be followed by a branch", thisId))
 	}
-	if handle, err := source.getNode(n.next); err == nil {
+	if handle, err := source.getViewAccess(n.next); err == nil {
 		defer handle.Release()
 		extended := path
 		for i := 0; i < n.path.Length(); i++ {
@@ -1103,7 +1106,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisId NodeId, path []Nibble) e
 
 func (n *ExtensionNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	fmt.Printf("%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisId, n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
-	if handle, err := source.getNode(n.next); err == nil {
+	if handle, err := source.getViewAccess(n.next); err == nil {
 		defer handle.Release()
 		handle.Get().Dump(source, n.next, indent+"  ")
 	} else {
@@ -1119,7 +1122,7 @@ func (n *ExtensionNode) Visit(source NodeSource, thisId NodeId, depth int, visit
 	case VisitResponsePrune:
 		return false, nil
 	}
-	if handle, err := source.getNode(n.next); err == nil {
+	if handle, err := source.getViewAccess(n.next); err == nil {
 		defer handle.Release()
 		return handle.Get().Visit(source, n.next, depth+1, visitor)
 	} else {
@@ -1176,7 +1179,7 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 		return common.Value{}, false, nil
 	}
 	subPath := KeyToNibblePath(key, source)
-	root, err := source.getNode(n.storage)
+	root, err := source.getReadAccess(n.storage)
 	if err != nil {
 		return common.Value{}, false, err
 	}
@@ -1197,7 +1200,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisId NodeId, this shared
 			}
 			// Recursively release the entire state DB.
 			// TODO: consider performing this asynchronously.
-			root, err := manager.getMutableNode(n.storage)
+			root, err := manager.getWriteAccess(n.storage)
 			if err != nil {
 				return 0, false, err
 			}
@@ -1342,7 +1345,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisId NodeId, this shared.Wr
 	}
 
 	// Continue from here with a value insertion.
-	handle, err := manager.getMutableNode(n.storage)
+	handle, err := manager.getWriteAccess(n.storage)
 	if err != nil {
 		return 0, false, err
 	}
@@ -1406,7 +1409,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 		return newId, false, nil
 	}
 
-	rootHandle, err := manager.getMutableNode(n.storage)
+	rootHandle, err := manager.getWriteAccess(n.storage)
 	if err != nil {
 		return thisId, false, err
 	}
@@ -1475,7 +1478,7 @@ func (n *AccountNode) Freeze(manager NodeManager, this shared.WriteHandle[Node])
 		return nil
 	}
 	n.frozen = true
-	handle, err := manager.getMutableNode(n.storage)
+	handle, err := manager.getWriteAccess(n.storage)
 	if err != nil {
 		return err
 	}
@@ -1501,7 +1504,7 @@ func (n *AccountNode) Check(source NodeSource, thisId NodeId, path []Nibble) err
 	}
 
 	if !n.storage.IsEmpty() {
-		if node, err := source.getNode(n.storage); err == nil {
+		if node, err := source.getViewAccess(n.storage); err == nil {
 			defer node.Release()
 			if err := node.Get().Check(source, n.storage, make([]Nibble, 0, common.KeySize*2)); err != nil {
 				errs = append(errs, err)
@@ -1529,7 +1532,7 @@ func (n *AccountNode) Dump(source NodeSource, thisId NodeId, indent string) {
 	if n.storage.IsEmpty() {
 		return
 	}
-	if node, err := source.getNode(n.storage); err == nil {
+	if node, err := source.getViewAccess(n.storage); err == nil {
 		defer node.Release()
 		node.Get().Dump(source, n.storage, indent+"  ")
 	} else {
@@ -1548,7 +1551,7 @@ func (n *AccountNode) Visit(source NodeSource, thisId NodeId, depth int, visitor
 	if n.storage.IsEmpty() {
 		return false, nil
 	}
-	if node, err := source.getNode(n.storage); err == nil {
+	if node, err := source.getViewAccess(n.storage); err == nil {
 		defer node.Release()
 		return node.Get().Visit(source, thisId, depth+1, visitor)
 	} else {

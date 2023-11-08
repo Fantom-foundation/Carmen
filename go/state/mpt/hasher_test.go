@@ -72,7 +72,7 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().update(id, gomock.Any())
+			ctxt.EXPECT().updateHash(id, gomock.Any())
 
 			hasher := algorithm.createHasher()
 			_, _, err := hasher.updateHashes(id, ctxt)
@@ -143,7 +143,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().update(id, gomock.Any())
+			ctxt.EXPECT().updateHash(id, gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(2)
 
 			hasher := algorithm.createHasher()
@@ -245,7 +245,7 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().update(id, gomock.Any())
+			ctxt.EXPECT().updateHash(id, gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
 
 			hasher := algorithm.createHasher()
@@ -403,7 +403,7 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(AccountId(1), test, shared.WriteHandle[Node]{}, nil, nodesSource, EmptyPath(), nil)
+		encoded, err := hasher.encode(AccountId(1), test, shared.HashHandle[Node]{}, nil, nodesSource, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -425,10 +425,10 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
 	nodeManager := NewMockNodeManager(ctrl)
-	nodeManager.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	nodeManager.EXPECT().getViewAccess(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return smallValue.GetReadHandle(), nil
 	})
-	nodeManager.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	nodeManager.EXPECT().getViewAccess(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return bigValue.GetReadHandle(), nil
 	})
 	nodeManager.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
@@ -446,7 +446,7 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(BranchId(1), test, shared.WriteHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		encoded, err := hasher.encode(BranchId(1), test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -468,11 +468,11 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
 	nodeManager := NewMockNodeManager(ctrl)
-	nodeManager.EXPECT().getNode(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
-		return smallValue.GetReadHandle(), nil
+	nodeManager.EXPECT().getViewAccess(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ViewHandle[Node], error) {
+		return smallValue.GetViewHandle(), nil
 	})
-	nodeManager.EXPECT().getNode(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
-		return bigValue.GetReadHandle(), nil
+	nodeManager.EXPECT().getViewAccess(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ViewHandle[Node], error) {
+		return bigValue.GetViewHandle(), nil
 	})
 
 	nodeManager.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
@@ -494,7 +494,7 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(ExtensionId(1), test, shared.WriteHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		encoded, err := hasher.encode(ExtensionId(1), test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -531,7 +531,7 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(ValueId(1), test, shared.WriteHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		encoded, err := hasher.encode(ValueId(1), test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}

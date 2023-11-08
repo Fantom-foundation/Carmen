@@ -293,7 +293,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	// The account node that is targeted should marked to be updated.
 	readHandle := node.GetReadHandle()
 	branch := readHandle.Get().(*BranchNode)
-	account, _ := ctxt.getMutableNode(branch.children[8])
+	account, _ := ctxt.getWriteAccess(branch.children[8])
 	ctxt.EXPECT().update(branch.children[8], account)
 	account.Release()
 	readHandle.Release()
@@ -3139,7 +3139,7 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 	}
 
 	// check value is gone for the new root
-	newHandle, _ := ctxt.getNode(newRoot)
+	newHandle, _ := ctxt.getReadAccess(newRoot)
 	defer newHandle.Release()
 	if val, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); val != newValue || !exists {
 		t.Errorf("value for key %v should not exist", key)
@@ -3252,7 +3252,7 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	}
 
 	// check value is gone for the new root
-	newHandle, _ := ctxt.getNode(newRoot)
+	newHandle, _ := ctxt.getReadAccess(newRoot)
 	defer newHandle.Release()
 	if _, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); exists {
 		t.Errorf("value for key %v should not exist", key)
@@ -4278,10 +4278,16 @@ func (c *nodeContext) Build(desc NodeDesc) (NodeId, *shared.Shared[Node]) {
 	}
 
 	id, node := desc.Build(c)
-	c.EXPECT().getNode(id).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	c.EXPECT().getReadAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return node.GetReadHandle(), nil
 	})
-	c.EXPECT().getMutableNode(id).AnyTimes().DoAndReturn(func(NodeId) (shared.WriteHandle[Node], error) {
+	c.EXPECT().getViewAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.ViewHandle[Node], error) {
+		return node.GetViewHandle(), nil
+	})
+	c.EXPECT().getHashAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.HashHandle[Node], error) {
+		return node.GetHashHandle(), nil
+	})
+	c.EXPECT().getWriteAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.WriteHandle[Node], error) {
 		return node.GetWriteHandle(), nil
 	})
 	c.index[id] = entry{id, node}
@@ -4374,7 +4380,7 @@ func (c *nodeContext) Check(t *testing.T, id NodeId) {
 }
 
 func (c *nodeContext) Freeze(id NodeId) {
-	handle, _ := c.getMutableNode(id)
+	handle, _ := c.getWriteAccess(id)
 	defer handle.Release()
 	handle.Get().Freeze(c, handle)
 }
@@ -4416,13 +4422,19 @@ func (c *nodeContext) Clone(id NodeId) (NodeId, *shared.Shared[Node]) {
 		return EmptyId(), c.index[id].node
 	}
 
-	handle, _ := c.getNode(id)
+	handle, _ := c.getReadAccess(id)
 	defer handle.Release()
 	id, res := c.cloneInternal(handle.Get())
-	c.EXPECT().getNode(id).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
+	c.EXPECT().getReadAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.ReadHandle[Node], error) {
 		return res.GetReadHandle(), nil
 	})
-	c.EXPECT().getMutableNode(id).AnyTimes().DoAndReturn(func(NodeId) (shared.WriteHandle[Node], error) {
+	c.EXPECT().getViewAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.ViewHandle[Node], error) {
+		return res.GetViewHandle(), nil
+	})
+	c.EXPECT().getHashAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.HashHandle[Node], error) {
+		return res.GetHashHandle(), nil
+	})
+	c.EXPECT().getWriteAccess(id).AnyTimes().DoAndReturn(func(NodeId) (shared.WriteHandle[Node], error) {
 		return res.GetWriteHandle(), nil
 	})
 	c.index[id] = entry{id, res}
@@ -4557,8 +4569,8 @@ func (c *nodeContext) equal(a, b Node) bool {
 }
 
 func (c *nodeContext) equalTries(a, b NodeId) bool {
-	nodeA, _ := c.getNode(a)
-	nodeB, _ := c.getNode(b)
+	nodeA, _ := c.getReadAccess(a)
+	nodeB, _ := c.getReadAccess(b)
 	defer nodeA.Release()
 	defer nodeB.Release()
 	return c.equal(nodeA.Get(), nodeB.Get())

@@ -184,6 +184,53 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 	}
 }
 
+func TestForest_TreesCanBeHashedAndNavigatedInParallel(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for _, mode := range []StorageMode{Mutable, Immutable} {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, mode)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					addr := common.Address{1}
+					info := AccountInfo{Nonce: common.Nonce{12}}
+					key := common.Key{12}
+					value := common.Value{1}
+
+					root := EmptyId()
+					root, err = forest.SetAccountInfo(root, addr, info)
+					if err != nil {
+						t.Fatalf("failed to create an account: %v", err)
+					}
+
+					if root, err = forest.SetValue(root, addr, key, value); err != nil {
+						t.Errorf("setting a value failed: %v", err)
+					}
+
+					// Acquire read access on the forest root.
+					read, err := forest.getReadAccess(root)
+					if err != nil {
+						t.Fatalf("failed to acquire read access on the root node")
+					}
+
+					// While holding read access on the root, hashing should be supported.
+					if _, _, err := forest.updateHashesFor(root); err != nil {
+						t.Errorf("failed to update hash for root")
+					}
+
+					read.Release()
+
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {

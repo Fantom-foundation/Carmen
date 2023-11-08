@@ -113,7 +113,7 @@ func (m *MockNodeSink) EXPECT() *MockNodeSinkMockRecorder {
 }
 
 // Write mocks base method.
-func (m *MockNodeSink) Write(arg0 NodeId, arg1 shared.ReadHandle[Node]) error {
+func (m *MockNodeSink) Write(arg0 NodeId, arg1 shared.ViewHandle[Node]) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Write", arg0, arg1)
 	ret0, _ := ret[0].(error)
