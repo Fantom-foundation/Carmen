@@ -13,11 +13,11 @@ import (
 var configs = []stock.NamedStockFactory{
 	{
 		ImplementationName: "syncedMemory",
-		Open:               openMemoryStock,
+		Open:               openSyncedMemoryStock,
 	},
 	{
 		ImplementationName: "syncedFile",
-		Open:               openFileStock,
+		Open:               openSyncedFileStock,
 	},
 }
 
@@ -27,7 +27,7 @@ func TestSyncedStock(t *testing.T) {
 	}
 }
 
-func openMemoryStock(t *testing.T, directory string) (stock.Stock[int, int], error) {
+func openSyncedMemoryStock(t *testing.T, directory string) (stock.Stock[int, int], error) {
 	nested, err := memory.OpenStock[int, int](stock.IntEncoder{}, directory)
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func openMemoryStock(t *testing.T, directory string) (stock.Stock[int, int], err
 	return Sync(nested), nil
 }
 
-func openFileStock(t *testing.T, directory string) (stock.Stock[int, int], error) {
+func openSyncedFileStock(t *testing.T, directory string) (stock.Stock[int, int], error) {
 	nested, err := file.OpenStock[int, int](stock.IntEncoder{}, directory)
 	if err != nil {
 		return nil, err
@@ -94,6 +94,19 @@ func TestSyncedStock_CanBeAccessedConcurrently(t *testing.T) {
 		t.Run(config.ImplementationName, func(t *testing.T) {
 			testCanBeAccessedConcurrently(t, config)
 		})
+	}
+}
+
+func TestSyncedStock_WrapAlreadySynced(t *testing.T) {
+	stock, err := openSyncedMemoryStock(t, t.TempDir())
+	if err != nil {
+		t.Fatalf("cannot create stock: %s", stock)
+	}
+
+	wrapped := Sync(stock)
+
+	if wrapped != stock {
+		t.Errorf("wrapped stock does not match original one")
 	}
 }
 

@@ -1,7 +1,9 @@
 package file
 
 import (
+	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"io"
 	"os"
 	"unsafe"
@@ -16,27 +18,31 @@ const stackBufferSize = 1_024
 
 // fileBasedStack is a file-backed stack of integer values.
 type fileBasedStack[I stock.Index] struct {
-	file         *os.File
+	file         utils.OsFile
 	size         int
 	buffer       []I
 	bufferOffset int
 }
 
 func openFileBasedStack[I stock.Index](filename string) (*fileBasedStack[I], error) {
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, err
+	}
+
+	return initFileBasedStack[I](file)
+}
+
+func initFileBasedStack[I stock.Index](file utils.OsFile) (*fileBasedStack[I], error) {
 	// Check whether there is an existing stack file.
 	size := 0
 	valueSize := int(unsafe.Sizeof(I(0)))
-	if stats, err := os.Stat(filename); err == nil {
+	if stats, err := file.Stat(); err == nil {
 		fileSize := stats.Size()
 		if fileSize%int64(valueSize) != 0 {
 			return nil, fmt.Errorf("invalid stack file size")
 		}
 		size = int(fileSize) / valueSize
-	}
-
-	file, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return nil, err
 	}
 
 	// Load tailing batch of elements if file is not empty.
@@ -175,10 +181,7 @@ func (s *fileBasedStack[I]) Flush() error {
 }
 
 func (s *fileBasedStack[I]) Close() error {
-	if err := s.Flush(); err != nil {
-		return err
-	}
-	return s.file.Close()
+	return errors.Join(s.Flush(), s.file.Close())
 }
 
 func (s *fileBasedStack[I]) GetMemoryFootprint() *common.MemoryFootprint {

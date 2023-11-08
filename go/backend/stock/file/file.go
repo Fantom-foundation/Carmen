@@ -15,7 +15,7 @@ import (
 type fileStock[I stock.Index, V any] struct {
 	directory       string
 	encoder         stock.ValueEncoder[V]
-	values          *utils.BufferedFile
+	values          utils.SeekableFile
 	freelist        *fileBasedStack[I]
 	numValueSlots   I
 	numValuesInFile int64
@@ -26,13 +26,22 @@ type fileStock[I stock.Index, V any] struct {
 // created and an empty directory is a valid target to be initialized as an
 // empty stock.
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
+	return openStock[I, V](encoder, directory)
+}
+
+func openStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (*fileStock[I, V], error) {
+	return openVerifyStock[I, V](encoder, directory, verifyStockInternal[I, V])
+}
+
+// openVerifyStock opens the stock the same as its public counterpart. This method allows for injecting a custom method to verify the stock.
+func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string, verify func(encoder stock.ValueEncoder[V], directory string) (metadata, error)) (*fileStock[I, V], error) {
 	// Create the directory if needed.
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return nil, err
 	}
 
 	// Verify the content of the stock and get its metadata.
-	meta, err := verifyStockInternal[I, V](encoder, directory)
+	meta, err := verify(encoder, directory)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +100,12 @@ func verifyStockInternal[I stock.Index, V any](encoder stock.ValueEncoder[V], di
 		}
 	}
 
+	return verifyStockFilesInternal[I](encoder, metafile, valuefile, freelistfile)
+}
+
+func verifyStockFilesInternal[I stock.Index, V any](encoder stock.ValueEncoder[V], metafile, valuefile, freelistfile string) (metadata, error) {
+	var meta metadata
+
 	// Attempt to parse the meta-data.
 	data, err := os.ReadFile(metafile)
 	if err != nil {
@@ -125,36 +140,51 @@ func verifyStockInternal[I stock.Index, V any](encoder stock.ValueEncoder[V], di
 		}
 	}
 
+	// check stack file
+	freelist, err := os.OpenFile(freelistfile, os.O_RDWR, 0644)
+	if err != nil {
+		return meta, err
+	}
+	defer freelist.Close()
+	if err := verifyStackInternal[I](meta, freelist); err != nil {
+		return meta, err
+	}
+
+	return meta, nil
+}
+
+func verifyStackInternal[I stock.Index](meta metadata, freelistfile utils.OsFile) error {
 	// Check size of the free-list file.
 	{
-		stats, err := os.Stat(freelistfile)
+		indexSize := int(unsafe.Sizeof(I(0)))
+		stats, err := freelistfile.Stat()
 		if err != nil {
-			return meta, err
+			return err
 		}
 		if got, want := stats.Size(), int64(meta.FreeListLength*indexSize); got != want {
-			return meta, fmt.Errorf("invalid free-list file size, got %d, wanted %d", got, want)
+			return fmt.Errorf("invalid free-list file size, got %d, wanted %d", got, want)
 		}
 	}
 
 	// Check the content of the free-list file.
 	{
-		stack, err := openFileBasedStack[I](freelistfile)
+		stack, err := initFileBasedStack[I](freelistfile)
 		if err != nil {
-			return meta, err
+			return err
 		}
 		defer stack.Close()
 		list, err := stack.GetAll()
 		if err != nil {
-			return meta, err
+			return err
 		}
 		for _, entry := range list {
 			if entry < 0 || entry >= I(meta.ValueListLength) {
-				return meta, fmt.Errorf("invalid value in free list: %d not in range [%d,%d)", entry, 0, meta.ValueListLength)
+				return fmt.Errorf("invalid value in free list: %d not in range [%d,%d)", entry, 0, meta.ValueListLength)
 			}
 		}
 	}
 
-	return meta, nil
+	return nil
 }
 
 func getFileNames(directory string) (metafile string, valuefile string, freelistfile string) {
@@ -212,7 +242,9 @@ func (s *fileStock[I, V]) Set(index I, value V) error {
 	// Encode the value to be written.
 	valueSize := s.encoder.GetEncodedSize()
 	buffer := make([]byte, valueSize)
-	s.encoder.Store(buffer, &value)
+	if err := s.encoder.Store(buffer, &value); err != nil {
+		return err
+	}
 
 	// If the new data is beyond the end of the current file and empty, we can skip
 	// the write operation.
@@ -268,15 +300,15 @@ func (s *fileStock[I, V]) Flush() error {
 		FreeListLength:  s.freelist.Size(),
 		NumValuesInFile: s.numValuesInFile,
 	})
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
-		return err
+	if err == nil {
+		if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
+			return err
+		}
 	}
 
 	// Flush freelist and value file.
 	return errors.Join(
+		err,
 		s.values.Flush(),
 		s.freelist.Flush(),
 	)
