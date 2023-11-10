@@ -22,7 +22,7 @@ func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Extension{
+			ref, node := ctxt.Build(&Extension{
 				path: []Nibble{0x8, 0xe, 0xf},
 				next: &Branch{
 					children: Children{
@@ -35,7 +35,7 @@ func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			})
 
 			hasher := algorithm.createHasher()
-			_, err := hasher.getHash(id, ctxt)
+			_, err := hasher.getHash(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -59,7 +59,7 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Extension{
+			ref, node := ctxt.Build(&Extension{
 				path: []Nibble{0x8, 0xe, 0xf},
 				next: &Branch{
 					children: Children{
@@ -72,10 +72,10 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(id, gomock.Any())
+			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
 
 			hasher := algorithm.createHasher()
-			_, _, err := hasher.updateHashes(id, ctxt)
+			_, _, err := hasher.updateHashes(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -99,7 +99,7 @@ func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Branch{
+			ref, node := ctxt.Build(&Branch{
 				children: Children{
 					0x7: &Account{},
 					0xd: &Account{},
@@ -109,7 +109,7 @@ func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			})
 
 			hasher := algorithm.createHasher()
-			_, err := hasher.getHash(id, ctxt)
+			_, err := hasher.getHash(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -133,7 +133,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Branch{
+			ref, node := ctxt.Build(&Branch{
 				children: Children{
 					0x7: &Account{},
 					0xd: &Account{},
@@ -143,11 +143,11 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(id, gomock.Any())
+			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(2)
 
 			hasher := algorithm.createHasher()
-			_, _, err := hasher.updateHashes(id, ctxt)
+			_, _, err := hasher.updateHashes(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -171,7 +171,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Branch{
+			ref, node := ctxt.Build(&Branch{
 				children: Children{
 					0x7: &Account{},
 					0xd: &Account{},
@@ -183,7 +183,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 			// the node is not marked to be modified
 
 			hasher := algorithm.createHasher()
-			_, _, err := hasher.updateHashes(id, ctxt)
+			_, _, err := hasher.updateHashes(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -207,7 +207,7 @@ func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Account{
+			ref, node := ctxt.Build(&Account{
 				hashDirty:        true,
 				storageHashDirty: true,
 			})
@@ -215,7 +215,7 @@ func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
 
 			hasher := algorithm.createHasher()
-			_, err := hasher.getHash(id, ctxt)
+			_, err := hasher.getHash(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -239,17 +239,17 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			ctxt := newNodeContext(t, ctrl)
 
-			id, node := ctxt.Build(&Account{
+			ref, node := ctxt.Build(&Account{
 				hashDirty:        true,
 				storageHashDirty: true,
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(id, gomock.Any())
+			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
 
 			hasher := algorithm.createHasher()
-			_, _, err := hasher.updateHashes(id, ctxt)
+			_, _, err := hasher.updateHashes(&ref, ctxt)
 			if err != nil {
 				t.Fatalf("error computing hash: %v", err)
 			}
@@ -276,7 +276,8 @@ func TestEthereumLikeHasher_EmptyNode(t *testing.T) {
 	nodes := NewMockNodeManager(ctrl)
 	hasher := makeEthereumLikeHasher()
 
-	hash, err := hasher.getHash(EmptyId(), nodes)
+	ref := NewNodeReference(EmptyId())
+	hash, err := hasher.getHash(&ref, nodes)
 	if err != nil {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
@@ -294,7 +295,7 @@ func TestEthereumLikeHasher_ExtensionNode_KnownHash(t *testing.T) {
 	// state tree of block 25399 of the Fantom main-net.
 
 	hasher := makeEthereumLikeHasher()
-	id, node := ctxt.Build(&Extension{
+	ref, node := ctxt.Build(&Extension{
 		path: []Nibble{0x8, 0xe, 0xf},
 		next: &Branch{
 			children: Children{
@@ -310,7 +311,7 @@ func TestEthereumLikeHasher_ExtensionNode_KnownHash(t *testing.T) {
 	ext.nextHashDirty = false
 	handle.Release()
 
-	hash, err := hasher.getHash(id, ctxt)
+	hash, err := hasher.getHash(&ref, ctxt)
 	if err != nil {
 		t.Fatalf("error computing hash: %v", err)
 	}
@@ -344,7 +345,7 @@ func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 
 	hasher := makeEthereumLikeHasher()
 
-	id, branch := ctxt.Build(&Branch{
+	ref, branch := ctxt.Build(&Branch{
 		children: Children{
 			0x7: &Value{length: 55, key: key, value: v31},
 			0xc: &Value{length: 55, value: common.Value{255}},
@@ -357,7 +358,7 @@ func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 	node.hashes[0xc] = common.HashFromString("e7f1b1dc5bd6a8aa153134ddae4d2bf64a80ad1205355f385c5879a622a73612")
 	handle.Release()
 
-	hash, err := hasher.getHash(id, ctxt)
+	hash, err := hasher.getHash(&ref, ctxt)
 	if err != nil {
 		t.Fatalf("error computing hash: %v", err)
 	}
@@ -385,7 +386,7 @@ func TestEthereumLikeHasher_GetLowerBoundForEmptyNode(t *testing.T) {
 func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 	tests := []*AccountNode{
 		(&AccountNode{}),
-		(&AccountNode{storage: BranchId(12)}),
+		(&AccountNode{storage: NewNodeReference(BranchId(12))}),
 		(&AccountNode{info: AccountInfo{Nonce: common.Nonce{1, 2, 3}}}),
 		(&AccountNode{info: AccountInfo{Balance: common.Balance{1, 2, 3}}}),
 		(&AccountNode{info: AccountInfo{CodeHash: common.Hash{1, 2, 3, 4}}}),
@@ -403,7 +404,8 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(AccountId(1), test, shared.HashHandle[Node]{}, nil, nodesSource, EmptyPath(), nil)
+		accountRef := NewNodeReference(AccountId(1))
+		encoded, err := hasher.encode(&accountRef, test, shared.HashHandle[Node]{}, nil, nodesSource, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -416,8 +418,8 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	smallChild := ValueId(12) // A node that can be encoded in less than 32 bytes
-	bigChild := ValueId(14)   // A node that can requires more than 32 bytes
+	smallChild := NewNodeReference(ValueId(12)) // A node that can be encoded in less than 32 bytes
+	bigChild := NewNodeReference(ValueId(14))   // A node that can requires more than 32 bytes
 
 	one := common.Value{}
 	one[len(one)-1] = 1
@@ -435,9 +437,9 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 
 	tests := []*BranchNode{
 		(&BranchNode{}),
-		(&BranchNode{children: [16]NodeId{smallChild}}),
-		(&BranchNode{children: [16]NodeId{smallChild, smallChild}}),
-		(&BranchNode{children: [16]NodeId{bigChild}}),
+		(&BranchNode{children: [16]NodeReference{smallChild}}),
+		(&BranchNode{children: [16]NodeReference{smallChild, smallChild}}),
+		(&BranchNode{children: [16]NodeReference{bigChild}}),
 	}
 
 	hasher := makeEthereumLikeHasher().(*ethHasher)
@@ -446,7 +448,8 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(BranchId(1), test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		branchRef := NewNodeReference(BranchId(1))
+		encoded, err := hasher.encode(&branchRef, test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -459,8 +462,8 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	smallChild := ValueId(12) // A node that can be encoded in less than 32 bytes
-	bigChild := ValueId(14)   // A node that can requires more than 32 bytes
+	smallChild := NewNodeReference(ValueId(12)) // A node that can be encoded in less than 32 bytes
+	bigChild := NewNodeReference(ValueId(14))   // A node that can requires more than 32 bytes
 
 	one := common.Value{}
 	one[len(one)-1] = 1
@@ -468,10 +471,10 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 	bigValue := shared.MakeShared[Node](&ValueNode{pathLength: 64, value: one})
 
 	nodeManager := NewMockNodeManager(ctrl)
-	nodeManager.EXPECT().getViewAccess(smallChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ViewHandle[Node], error) {
+	nodeManager.EXPECT().getViewAccess(RefTo(smallChild.Id())).AnyTimes().DoAndReturn(func(*NodeReference) (shared.ViewHandle[Node], error) {
 		return smallValue.GetViewHandle(), nil
 	})
-	nodeManager.EXPECT().getViewAccess(bigChild).AnyTimes().DoAndReturn(func(NodeId) (shared.ViewHandle[Node], error) {
+	nodeManager.EXPECT().getViewAccess(RefTo(bigChild.Id())).AnyTimes().DoAndReturn(func(*NodeReference) (shared.ViewHandle[Node], error) {
 		return bigValue.GetViewHandle(), nil
 	})
 
@@ -494,7 +497,8 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(ExtensionId(1), test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		extensionRef := NewNodeReference(ExtensionId(1))
+		encoded, err := hasher.encode(&extensionRef, test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -531,7 +535,8 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(ValueId(1), test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		valueRef := NewNodeReference(ValueId(1))
+		encoded, err := hasher.encode(&valueRef, test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}

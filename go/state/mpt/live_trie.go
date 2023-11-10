@@ -19,7 +19,7 @@ type LiveTrie struct {
 	// The node structure of the trie.
 	forest *Forest
 	// The root node of the trie.
-	root NodeId
+	root NodeReference
 	// The file name for storing trie metadata.
 	metadatafile string
 }
@@ -59,7 +59,7 @@ func VerifyFileLiveTrie(directory string, config MptConfig, observer Verificatio
 		return nil
 	}
 	return VerifyFileForest(directory, config, []Root{{
-		metadata.RootNode,
+		NewNodeReference(metadata.RootNode),
 		metadata.RootHash,
 	}}, observer)
 }
@@ -75,14 +75,14 @@ func makeTrie(
 		return nil, err
 	}
 	return &LiveTrie{
-		root:         metadata.RootNode,
+		root:         NewNodeReference(metadata.RootNode),
 		metadatafile: metadatafile,
 		forest:       forest,
 	}, nil
 }
 
 // getTrieView creates a live trie based on an existing Forest instance.
-func getTrieView(root NodeId, forest *Forest) *LiveTrie {
+func getTrieView(root NodeReference, forest *Forest) *LiveTrie {
 	return &LiveTrie{
 		root:   root,
 		forest: forest,
@@ -90,11 +90,11 @@ func getTrieView(root NodeId, forest *Forest) *LiveTrie {
 }
 
 func (s *LiveTrie) GetAccountInfo(addr common.Address) (AccountInfo, bool, error) {
-	return s.forest.GetAccountInfo(s.root, addr)
+	return s.forest.GetAccountInfo(&s.root, addr)
 }
 
 func (s *LiveTrie) SetAccountInfo(addr common.Address, info AccountInfo) error {
-	newRoot, err := s.forest.SetAccountInfo(s.root, addr, info)
+	newRoot, err := s.forest.SetAccountInfo(&s.root, addr, info)
 	if err != nil {
 		return err
 	}
@@ -103,11 +103,11 @@ func (s *LiveTrie) SetAccountInfo(addr common.Address, info AccountInfo) error {
 }
 
 func (s *LiveTrie) GetValue(addr common.Address, key common.Key) (common.Value, error) {
-	return s.forest.GetValue(s.root, addr, key)
+	return s.forest.GetValue(&s.root, addr, key)
 }
 
 func (s *LiveTrie) SetValue(addr common.Address, key common.Key, value common.Value) error {
-	newRoot, err := s.forest.SetValue(s.root, addr, key, value)
+	newRoot, err := s.forest.SetValue(&s.root, addr, key, value)
 	if err != nil {
 		return err
 	}
@@ -116,19 +116,19 @@ func (s *LiveTrie) SetValue(addr common.Address, key common.Key, value common.Va
 }
 
 func (s *LiveTrie) ClearStorage(addr common.Address) error {
-	return s.forest.ClearStorage(s.root, addr)
+	return s.forest.ClearStorage(&s.root, addr)
 }
 
 func (s *LiveTrie) UpdateHashes() (common.Hash, []nodeHash, error) {
-	return s.forest.updateHashesFor(s.root)
+	return s.forest.updateHashesFor(&s.root)
 }
 
 func (s *LiveTrie) setHashes(hashes []nodeHash) error {
-	return s.forest.setHashesFor(s.root, hashes)
+	return s.forest.setHashesFor(&s.root, hashes)
 }
 
 func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
-	return s.forest.VisitTrie(s.root, visitor)
+	return s.forest.VisitTrie(&s.root, visitor)
 }
 
 func (s *LiveTrie) Flush() error {
@@ -140,7 +140,7 @@ func (s *LiveTrie) Flush() error {
 
 	// Update on-disk meta-data.
 	metadata, err := json.Marshal(metadata{
-		RootNode: s.root,
+		RootNode: s.root.Id(),
 		RootHash: hash,
 	})
 	if err != nil {
@@ -169,15 +169,15 @@ func (s *LiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
 func (s *LiveTrie) Dump() {
-	s.forest.Dump(s.root)
+	s.forest.Dump(&s.root)
 }
 
 // Check verifies internal invariants of the Trie instance. If the trie is
 // self-consistent, nil is returned and the Trie is read to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and
-// the behaviour of all other operations is undefined.
+// the behavior of all other operations is undefined.
 func (s *LiveTrie) Check() error {
-	return s.forest.Check(s.root)
+	return s.forest.Check(&s.root)
 }
 
 // -- LiveTrie metadata --

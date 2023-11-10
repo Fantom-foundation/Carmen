@@ -129,7 +129,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 
 	// Freeze new state.
 	trie := a.head.trie
-	if err := trie.forest.Freeze(trie.root); err != nil {
+	if err := trie.forest.Freeze(&trie.root); err != nil {
 		return err
 	}
 
@@ -248,7 +248,7 @@ func (a *ArchiveTrie) Dump() {
 	defer a.rootsMutex.Unlock()
 	for i, root := range a.roots {
 		fmt.Printf("\nBlock %d: %x\n", i, root.hash)
-		view := getTrieView(root.nodeId, a.head.trie.forest)
+		view := getTrieView(root.nodeRef, a.head.trie.forest)
 		view.Dump()
 		fmt.Printf("\n")
 	}
@@ -277,7 +277,7 @@ func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 		a.rootsMutex.Unlock()
 		return nil, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	rootId := a.roots[block].nodeId
+	rootId := a.roots[block].nodeRef
 	a.rootsMutex.Unlock()
 	return getTrieView(rootId, a.head.trie.forest), nil
 }
@@ -316,7 +316,7 @@ func loadRootsFrom(reader io.Reader) ([]Root, error) {
 		}
 
 		id := NodeId(binary.BigEndian.Uint32(id[:]))
-		res = append(res, Root{id, hash})
+		res = append(res, Root{NewNodeReference(id), hash})
 	}
 }
 
@@ -340,7 +340,7 @@ func storeRootsTo(writer io.Writer, roots []Root) error {
 	// Simple file format: [<node-id>]*
 	var buffer [4]byte
 	for _, root := range roots {
-		binary.BigEndian.PutUint32(buffer[:], uint32(root.nodeId))
+		binary.BigEndian.PutUint32(buffer[:], uint32(root.nodeRef.Id()))
 		if _, err := writer.Write(buffer[:]); err != nil {
 			return err
 		}
