@@ -1,11 +1,13 @@
 package mpt
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"runtime/trace"
 	"sort"
 	"sync"
 	"unsafe"
@@ -454,8 +456,14 @@ func (s *Forest) getConfig() MptConfig {
 }
 
 func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error) {
+	region := trace.StartRegion(context.Background(), "getSharedNode")
+	defer region.End()
+
+	// Start by checking the node cache.
+	trace.Log(context.Background(), "getSharedNode", "begin")
 	res, found := s.nodeCache.Get(ref)
 	if found {
+		trace.Log(context.Background(), "getSharedNode", "foundInCache")
 		return res, nil
 	}
 
@@ -468,6 +476,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
+		trace.Log(context.Background(), "getSharedNode", "foundInWriteBuffer")
 		masterCopy, _ := s.addToCache(id, res)
 		if masterCopy != res {
 			panic("failed to reinstate element from write buffer")
@@ -517,6 +526,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 
 	// if the has been a concurrent fetch, use the other value
 	instance, _ := s.addToCache(id, shared.MakeShared[Node](node))
+	trace.Log(context.Background(), "getSharedNode", "loadedFromDisk")
 	return instance, nil
 }
 
