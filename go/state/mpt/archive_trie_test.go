@@ -355,8 +355,8 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 
 	roots := []Root{
-		{ValueId(12), common.Hash{12}},
-		{ValueId(14), common.Hash{14}},
+		{NewNodeReference(ValueId(12)), common.Hash{12}},
+		{NewNodeReference(ValueId(14)), common.Hash{14}},
 	}
 
 	var b bytes.Buffer

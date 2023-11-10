@@ -53,13 +53,13 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 					addr := common.Address{1}
 					info := AccountInfo{Nonce: common.Nonce{12}}
 
-					root := EmptyId()
-					root, err = forest.SetAccountInfo(root, addr, info)
+					root := NewNodeReference(EmptyId())
+					root, err = forest.SetAccountInfo(&root, addr, info)
 					if err != nil {
 						t.Fatalf("failed to set account info: %v", err)
 					}
 
-					if _, _, err = forest.updateHashesFor(root); err != nil {
+					if _, _, err = forest.updateHashesFor(&root); err != nil {
 						t.Fatalf("failed to update hash of modified forest: %v", err)
 					}
 
@@ -72,7 +72,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 						t.Fatalf("failed to re-open forest: %v", err)
 					}
 
-					if got, found, err := reopened.GetAccountInfo(root, addr); info != got || !found || err != nil {
+					if got, found, err := reopened.GetAccountInfo(&root, addr); info != got || !found || err != nil {
 						t.Fatalf("reopened forest does not contain expected value, wanted %v, got %v, found %t, err %v", info, got, found, err)
 					}
 
@@ -99,21 +99,21 @@ func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 					info0 := AccountInfo{}
 					info1 := AccountInfo{Nonce: common.Nonce{12}}
 
-					root := EmptyId()
-					if info, found, err := forest.GetAccountInfo(root, addr); info != info0 || found || err != nil {
+					root := NewNodeReference(EmptyId())
+					if info, found, err := forest.GetAccountInfo(&root, addr); info != info0 || found || err != nil {
 						t.Errorf("empty tree should not contain any info, wanted (%v,%t), got (%v,%t), err %v", info0, false, info, true, err)
 					}
 
-					root, err = forest.SetAccountInfo(root, addr, info1)
+					root, err = forest.SetAccountInfo(&root, addr, info1)
 					if err != nil {
 						t.Fatalf("failed to set account info: %v", err)
 					}
 
-					if info, found, err := forest.GetAccountInfo(root, addr); info != info1 || !found || err != nil {
+					if info, found, err := forest.GetAccountInfo(&root, addr); info != info1 || !found || err != nil {
 						t.Errorf("empty tree should not contain any info, wanted (%v,%t), got (%v,%t), err %v", info1, true, info, true, err)
 					}
 
-					if _, _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
 						t.Fatalf("failed to update hashes: %v", err)
 					}
 
@@ -143,35 +143,35 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 					value1 := common.Value{1}
 
 					// Initially, the value is zero.
-					root := EmptyId()
-					if value, err := forest.GetValue(root, addr, key); value != value0 || err != nil {
+					root := NewNodeReference(EmptyId())
+					if value, err := forest.GetValue(&root, addr, key); value != value0 || err != nil {
 						t.Errorf("empty tree should not contain any info, wanted %v, got %v, err %v", value0, value, err)
 					}
 
 					// Setting it without an account does not have an effect.
-					if newRoot, err := forest.SetValue(root, addr, key, value1); newRoot != root || err != nil {
+					if newRoot, err := forest.SetValue(&root, addr, key, value1); newRoot != root || err != nil {
 						t.Errorf("setting a value without an account should not change the root, wanted %v, got %v, err %v", root, newRoot, err)
 					}
 
 					// Setting the value of an existing account should have an effect.
-					root, err = forest.SetAccountInfo(root, addr, info)
+					root, err = forest.SetAccountInfo(&root, addr, info)
 					if err != nil {
 						t.Fatalf("failed to create an account: %v", err)
 					}
 
-					if root, err = forest.SetValue(root, addr, key, value1); err != nil {
+					if root, err = forest.SetValue(&root, addr, key, value1); err != nil {
 						t.Errorf("setting a value failed: %v", err)
 					}
 
-					if value, err := forest.GetValue(root, addr, key); value != value1 || err != nil {
+					if value, err := forest.GetValue(&root, addr, key); value != value1 || err != nil {
 						t.Errorf("value should be contained now, wanted %v, got %v, err %v", value1, value, err)
 					}
 
-					if err := forest.Check(root); err != nil {
+					if err := forest.Check(&root); err != nil {
 						t.Errorf("inconsistent trie: %v", err)
 					}
 
-					if _, _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
 						t.Errorf("failed to update hash for root")
 					}
 
@@ -199,24 +199,24 @@ func TestForest_TreesCanBeHashedAndNavigatedInParallel(t *testing.T) {
 					key := common.Key{12}
 					value := common.Value{1}
 
-					root := EmptyId()
-					root, err = forest.SetAccountInfo(root, addr, info)
+					root := NewNodeReference(EmptyId())
+					root, err = forest.SetAccountInfo(&root, addr, info)
 					if err != nil {
 						t.Fatalf("failed to create an account: %v", err)
 					}
 
-					if root, err = forest.SetValue(root, addr, key, value); err != nil {
+					if root, err = forest.SetValue(&root, addr, key, value); err != nil {
 						t.Errorf("setting a value failed: %v", err)
 					}
 
 					// Acquire read access on the forest root.
-					read, err := forest.getReadAccess(root)
+					read, err := forest.getReadAccess(&root)
 					if err != nil {
 						t.Fatalf("failed to acquire read access on the root node")
 					}
 
 					// While holding read access on the root, hashing should be supported.
-					if _, _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
 						t.Errorf("failed to update hash for root")
 					}
 
@@ -246,15 +246,15 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 				info2 := AccountInfo{Nonce: common.Nonce{14}}
 
 				// Initially, the value is zero.
-				root0 := EmptyId()
+				root0 := NewNodeReference(EmptyId())
 
 				// Update the account info in two steps.
-				root1, err := forest.SetAccountInfo(root0, addr, info1)
+				root1, err := forest.SetAccountInfo(&root0, addr, info1)
 				if err != nil {
 					t.Fatalf("failed to create an account: %v", err)
 				}
 
-				root2, err := forest.SetAccountInfo(root1, addr, info2)
+				root2, err := forest.SetAccountInfo(&root1, addr, info2)
 				if err != nil {
 					t.Fatalf("failed to create an account: %v", err)
 				}
@@ -263,11 +263,11 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 				if root1 != root2 {
 					t.Errorf("expected same root, got %v and %v", root1, root2)
 				}
-				if info, found, err := forest.GetAccountInfo(root1, addr); info != info2 || !found || err != nil {
+				if info, found, err := forest.GetAccountInfo(&root1, addr); info != info2 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
 
-				if _, _, err := forest.updateHashesFor(root2); err != nil {
+				if _, _, err := forest.updateHashesFor(&root2); err != nil {
 					t.Fatalf("failed to update hashes: %v", err)
 				}
 			})
@@ -290,41 +290,41 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 				info2 := AccountInfo{Nonce: common.Nonce{14}}
 
 				// Initially, the value is zero.
-				root0 := EmptyId()
-				if err := forest.Freeze(root0); err != nil {
+				root0 := NewNodeReference(EmptyId())
+				if err := forest.Freeze(&root0); err != nil {
 					t.Errorf("failed to freeze root0: %v", err)
 				}
 
 				// Update the account info in two steps.
-				root1, err := forest.SetAccountInfo(root0, addr, info1)
+				root1, err := forest.SetAccountInfo(&root0, addr, info1)
 				if err != nil {
 					t.Fatalf("failed to create an account: %v", err)
 				}
-				if err := forest.Freeze(root1); err != nil {
+				if err := forest.Freeze(&root1); err != nil {
 					t.Errorf("failed to freeze root1: %v", err)
 				}
 
-				root2, err := forest.SetAccountInfo(root1, addr, info2)
+				root2, err := forest.SetAccountInfo(&root1, addr, info2)
 				if err != nil {
 					t.Fatalf("failed to create an account: %v", err)
 				}
-				if err := forest.Freeze(root2); err != nil {
+				if err := forest.Freeze(&root2); err != nil {
 					t.Errorf("failed to freeze root2: %v", err)
 				}
 
 				// All versions should still be accessible.
-				if info, found, err := forest.GetAccountInfo(root1, addr); info != info1 || !found || err != nil {
+				if info, found, err := forest.GetAccountInfo(&root1, addr); info != info1 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info1, info, found, err)
 				}
-				if info, found, err := forest.GetAccountInfo(root1, addr); info != info1 || !found || err != nil {
+				if info, found, err := forest.GetAccountInfo(&root1, addr); info != info1 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info1, info, found, err)
 				}
-				if info, found, err := forest.GetAccountInfo(root2, addr); info != info2 || !found || err != nil {
+				if info, found, err := forest.GetAccountInfo(&root2, addr); info != info2 || !found || err != nil {
 					t.Errorf("invalid version information, wanted %v, got %v, found %t, err %v", info2, info, found, err)
 				}
 
-				for _, root := range []NodeId{root0, root1, root2} {
-					if _, _, err := forest.updateHashesFor(root); err != nil {
+				for _, root := range []NodeReference{root0, root1, root2} {
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
 						t.Fatalf("failed to update hashes: %v", err)
 					}
 				}
@@ -374,9 +374,9 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 					defer forest.Close()
 
 					// Fill in some data (sequentially).
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					for i := 0; i < N; i++ {
-						root, err = forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
+						root, err = forest.SetAccountInfo(&root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
 						if err != nil {
 							t.Fatalf("failed to insert account %d: %v", i, err)
 						}
@@ -390,7 +390,7 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 						go func() {
 							defer wg.Done()
 							for i := 0; i < N; i++ {
-								info, _, err := forest.GetAccountInfo(root, common.Address{byte(i)})
+								info, _, err := forest.GetAccountInfo(&root, common.Address{byte(i)})
 								if err != nil {
 									errors[i] = err
 									return
@@ -411,7 +411,7 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 					}
 
 					// Update hashes to avoid writing dirty hashes during close.
-					if _, _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
 						t.Fatalf("failed to get hash for forest content, err %v", err)
 					}
 					if err := forest.Close(); err != nil {
@@ -435,9 +435,9 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 					}
 
 					// Fill in some data (sequentially).
-					root := EmptyId()
+					root := NewNodeReference(EmptyId())
 					for i := 0; i < N; i++ {
-						root, err = forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
+						root, err = forest.SetAccountInfo(&root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 1))})
 						if err != nil {
 							t.Fatalf("failed to insert account %d: %v", i, err)
 						}
@@ -451,7 +451,7 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 						go func() {
 							defer wg.Done()
 							for i := 0; i < N; i++ {
-								_, err := forest.SetAccountInfo(root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 2))})
+								_, err := forest.SetAccountInfo(&root, common.Address{byte(i)}, AccountInfo{Nonce: common.ToNonce(uint64(i + 2))})
 								if err != nil {
 									errors[i] = err
 									return
@@ -469,7 +469,7 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 
 					// Check that the resulting nonce is i + 2
 					for i := 0; i < N; i++ {
-						info, exits, err := forest.GetAccountInfo(root, common.Address{byte(i)})
+						info, exits, err := forest.GetAccountInfo(&root, common.Address{byte(i)})
 						if err != nil {
 							t.Fatalf("failed to read account %d: %v", i, err)
 						}
@@ -482,7 +482,7 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 					}
 
 					// Update hashes to avoid writing dirty hashes during close.
-					if _, _, err := forest.updateHashesFor(root); err != nil {
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
 						t.Fatalf("failed to get hash for forest content, err %v", err)
 					}
 					if err := forest.Close(); err != nil {

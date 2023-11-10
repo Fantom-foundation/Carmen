@@ -1,27 +1,41 @@
 package mpt
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
 
 type NodeReference struct {
 	id  NodeId
-	pos ownerPosition
+	pos uint32
 	tag uint64
 }
 
 func NewNodeReference(id NodeId) NodeReference {
-	return NodeReference{id: id, pos: unknownPosition}
+	return NodeReference{id: id, pos: uint32(unknownPosition)}
 }
 
 func (r *NodeReference) Id() NodeId {
 	return r.id
 }
 
-type NodeCache struct {
+func (r *NodeReference) String() string {
+	return r.id.String()
+}
+
+type NodeCache interface {
+	Get(r *NodeReference) (*shared.Shared[Node], bool)
+	GetOrSet(NodeId, *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool)
+	Touch(r *NodeReference)
+	GetMemoryFootprint() *common.MemoryFootprint
+}
+
+type nodeCache struct {
 	owners     []nodeOwner
 	capacity   ownerPosition
 	index      map[NodeId]ownerPosition
@@ -31,42 +45,61 @@ type NodeCache struct {
 	mutex      sync.Mutex // for everything in the cache
 }
 
-func NewNodeCache(capacity int) *NodeCache {
+func NewNodeCache(capacity int) NodeCache {
+	return newNodeCache(capacity)
+	/*
+		return &shadowNodeCache{
+			prime:  newNodeCache(capacity),
+			shadow: &simpleNodeCache{index: map[NodeId]*shared.Shared[Node]{}},
+		}
+	*/
+}
+
+func newNodeCache(capacity int) NodeCache {
 	if capacity < 1 {
 		capacity = 1
 	}
-	return &NodeCache{
+	return &nodeCache{
 		owners:   make([]nodeOwner, capacity),
 		capacity: ownerPosition(capacity),
 		index:    make(map[NodeId]ownerPosition, capacity),
 	}
 }
 
-func (c *NodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
+func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
+	pos := atomic.LoadUint32(&r.pos)
+	tag := atomic.LoadUint64(&r.tag)
 	for {
 		// Resolve the owner position if needed.
-		if r.pos >= c.capacity {
+		if ownerPosition(pos) >= c.capacity {
 			c.mutex.Lock()
-			pos, found := c.index[r.id]
+			position, found := c.index[r.id]
 			if !found {
 				c.mutex.Unlock()
 				return nil, false
 			}
-			r.pos = pos
-			r.tag = c.owners[pos].tag.Load()
+			pos = uint32(position)
+			tag = c.owners[pos].tag.Load()
+			atomic.StoreUint32(&r.pos, uint32(position))
+			atomic.StoreUint64(&r.tag, tag)
 			c.mutex.Unlock()
 		}
 		// Fetch the owner and check the tag.
-		owner := &c.owners[r.pos]
+		owner := &c.owners[pos]
 		res := owner.node
-		if owner.tag.Load() == r.tag {
+		id := owner.id
+		if owner.tag.Load() == tag {
+			// TODO: remove this
+			if id != r.id {
+				panic(fmt.Sprintf("reference resolution for node %v failed, got %v", r.id, id))
+			}
 			return res, true
 		}
-		r.pos = unknownPosition
+		pos = uint32(unknownPosition)
 	}
 }
 
-func (c *NodeCache) GetOrSet(
+func (c *nodeCache) GetOrSet(
 	id NodeId,
 	node *shared.Shared[Node],
 ) (
@@ -121,30 +154,39 @@ func (c *NodeCache) GetOrSet(
 	return node, false, evictedId, evictedNode, evicted
 }
 
-func (c *NodeCache) Touch(r *NodeReference) {
-	if r.pos >= c.capacity {
+func (c *nodeCache) Touch(r *NodeReference) {
+	pos := ownerPosition(atomic.LoadUint32(&r.pos))
+	if pos >= c.capacity {
 		return
 	}
-	target := &c.owners[r.pos]
+	target := &c.owners[pos]
 	c.mutex.Lock()
-	if c.head == r.pos {
+	if c.head == pos {
 		c.mutex.Unlock()
 		return
 	}
-	if c.tail == r.pos {
+	if c.tail == pos {
 		c.tail = target.priv
 	}
 
 	c.owners[target.priv].next = target.next
 	c.owners[target.next].priv = target.priv
 
-	c.owners[c.head].priv = r.pos
+	c.owners[c.head].priv = pos
 	target.next = c.head
-	c.head = r.pos
+	c.head = pos
 	c.mutex.Unlock()
 }
 
-func (c *NodeCache) getIdsInReverseEvictionOrder() []NodeId {
+func (c *nodeCache) GetMemoryFootprint() *common.MemoryFootprint {
+	mf := common.NewMemoryFootprint(unsafe.Sizeof(*c))
+	mf.AddChild("owners", common.NewMemoryFootprint(unsafe.Sizeof(nodeOwner{})*uintptr(len(c.owners))))
+	mf.AddChild("index", common.NewMemoryFootprint((unsafe.Sizeof(ownerPosition(0))+unsafe.Sizeof(NodeId(0)))*uintptr(len(c.index))))
+	// TODO: add size of owned nodes
+	return mf
+}
+
+func (c *nodeCache) getIdsInReverseEvictionOrder() []NodeId {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	res := make([]NodeId, 0, c.capacity)
@@ -168,3 +210,57 @@ type nodeOwner struct {
 type ownerPosition uint32
 
 const unknownPosition = ownerPosition(0xFFFFFFFF)
+
+type shadowNodeCache struct {
+	prime, shadow NodeCache
+}
+
+func (s *shadowNodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
+	av, af := s.prime.Get(r)
+	bv, bf := s.shadow.Get(r)
+	if av != bv || af != bf {
+		panic(fmt.Sprintf("inconsistent cache, wanted %p,%t, got %p,%t", bv, bf, av, af))
+	}
+	return av, af
+}
+
+func (s *shadowNodeCache) GetOrSet(id NodeId, value *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool) {
+	av, af, ei, ev, e := s.prime.GetOrSet(id, value)
+	bv, bf, _, _, _ := s.shadow.GetOrSet(id, value)
+	if av != bv || af != bf {
+		panic(fmt.Sprintf("inconsistent cache, wanted %p,%t, got %p,%t", bv, bf, av, af))
+	}
+	return av, af, ei, ev, e
+}
+
+func (s *shadowNodeCache) Touch(r *NodeReference) {
+	s.prime.Touch(r)
+	s.shadow.Touch(r)
+}
+
+func (s *shadowNodeCache) GetMemoryFootprint() *common.MemoryFootprint {
+	return nil
+}
+
+type simpleNodeCache struct {
+	index map[NodeId]*shared.Shared[Node]
+}
+
+func (s *simpleNodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
+	res, found := s.index[r.Id()]
+	return res, found
+}
+
+func (s *simpleNodeCache) GetOrSet(id NodeId, value *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool) {
+	if cur, found := s.index[id]; found {
+		return cur, true, NodeId(0), nil, false
+	}
+	s.index[id] = value
+	return value, false, NodeId(0), nil, false
+}
+
+func (s *simpleNodeCache) Touch(r *NodeReference) {
+}
+func (s *simpleNodeCache) GetMemoryFootprint() *common.MemoryFootprint {
+	return nil
+}

@@ -142,13 +142,13 @@ func InitializeArchive(directory string, in io.Reader, block uint64) (err error)
 	roots := make([]mpt.Root, block+1)
 	for i := uint64(0); i < block; i++ {
 		roots[i] = mpt.Root{
-			NodeId: mpt.EmptyId(),
-			Hash:   mpt.EmptyNodeEthereumHash,
+			NodeRef: mpt.NewNodeReference(mpt.EmptyId()),
+			Hash:    mpt.EmptyNodeEthereumHash,
 		}
 	}
 	roots[block] = mpt.Root{
-		NodeId: root,
-		Hash:   hash,
+		NodeRef: mpt.NewNodeReference(root),
+		Hash:    hash,
 	}
 	if err := mpt.StoreRoots(directory+string(os.PathSeparator)+"roots.dat", roots); err != nil {
 		return err
