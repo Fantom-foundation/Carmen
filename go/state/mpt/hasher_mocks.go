@@ -35,7 +35,7 @@ func (m *Mockhasher) EXPECT() *MockhasherMockRecorder {
 }
 
 // getHash mocks base method.
-func (m *Mockhasher) getHash(arg0 NodeId, arg1 NodeSource) (common.Hash, error) {
+func (m *Mockhasher) getHash(arg0 *NodeReference, arg1 NodeSource) (common.Hash, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "getHash", arg0, arg1)
 	ret0, _ := ret[0].(common.Hash)
@@ -50,7 +50,7 @@ func (mr *MockhasherMockRecorder) getHash(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // updateHashes mocks base method.
-func (m *Mockhasher) updateHashes(root NodeId, nodes NodeManager) (common.Hash, []nodeHash, error) {
+func (m *Mockhasher) updateHashes(root *NodeReference, nodes NodeManager) (common.Hash, []nodeHash, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "updateHashes", root, nodes)
 	ret0, _ := ret[0].(common.Hash)
