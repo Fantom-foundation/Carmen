@@ -76,7 +76,7 @@ func (c *cacheFuzzingCampaign) Init() []fuzzing.OperationSequence[cacheFuzzingCo
 	return data
 }
 
-func (c *cacheFuzzingCampaign) CreateContext(t *testing.T) *cacheFuzzingContext {
+func (c *cacheFuzzingCampaign) CreateContext(_ fuzzing.TestingT) *cacheFuzzingContext {
 	cache := c.initCache()
 	shadow := make(map[int8]int16)
 	return &cacheFuzzingContext{cache, shadow}
@@ -86,7 +86,7 @@ func (c *cacheFuzzingCampaign) Deserialize(rawData []byte) []fuzzing.Operation[c
 	return parseOperations(rawData)
 }
 
-func (c *cacheFuzzingCampaign) Cleanup(*testing.T, *cacheFuzzingContext) {
+func (c *cacheFuzzingCampaign) Cleanup(fuzzing.TestingT, *cacheFuzzingContext) {
 	// no clean-up
 }
 
@@ -105,7 +105,7 @@ func (op *opGet) Serialize() []byte {
 	return b
 }
 
-func (op *opGet) Apply(t *testing.T, c *cacheFuzzingContext) {
+func (op *opGet) Apply(t fuzzing.TestingT, c *cacheFuzzingContext) {
 	val, exists := c.cache.Get(op.key)
 	shadowValue, shadowExists := c.shadow[op.key]
 
@@ -130,7 +130,7 @@ func (op *opSet) Serialize() []byte {
 	return b
 }
 
-func (op *opSet) Apply(t *testing.T, c *cacheFuzzingContext) {
+func (op *opSet) Apply(t fuzzing.TestingT, c *cacheFuzzingContext) {
 	evictedKey, evictedValue, evicted := c.cache.Set(op.key, op.value)
 	if evicted {
 		shadowVal, shadowExists := c.shadow[evictedKey]
@@ -159,7 +159,7 @@ func (op *opGetOrSet) Serialize() []byte {
 	return b
 }
 
-func (op *opGetOrSet) Apply(t *testing.T, c *cacheFuzzingContext) {
+func (op *opGetOrSet) Apply(t fuzzing.TestingT, c *cacheFuzzingContext) {
 	val, exists, evictedKey, evictedValue, evicted := c.cache.GetOrSet(op.key, op.value)
 	if evicted {
 		shadowVal, shadowExists := c.shadow[evictedKey]
@@ -197,7 +197,7 @@ func (op *opRemove) Serialize() []byte {
 	return b
 }
 
-func (op *opRemove) Apply(t *testing.T, c *cacheFuzzingContext) {
+func (op *opRemove) Apply(t fuzzing.TestingT, c *cacheFuzzingContext) {
 	val, exists := c.cache.Remove(op.key)
 	shadowValue, shadowExists := c.shadow[op.key]
 
@@ -218,7 +218,7 @@ func (op *opIterate) Serialize() []byte {
 	return iterate.serialise()
 }
 
-func (op *opIterate) Apply(t *testing.T, c *cacheFuzzingContext) {
+func (op *opIterate) Apply(t fuzzing.TestingT, c *cacheFuzzingContext) {
 	shadowCopy := make(map[int8]int16, len(c.shadow))
 	c.cache.Iterate(func(key int8, val int16) bool {
 		shadowVal, shadowExists := c.shadow[key]
@@ -249,7 +249,7 @@ func (op *opClear) Serialize() []byte {
 	return clear_.serialise()
 }
 
-func (op *opClear) Apply(t *testing.T, c *cacheFuzzingContext) {
+func (op *opClear) Apply(_ fuzzing.TestingT, c *cacheFuzzingContext) {
 	c.cache.Clear()
 	c.shadow = map[int8]int16{}
 }

@@ -142,7 +142,7 @@ func (op *opRead) Serialize() []byte {
 	return binary.BigEndian.AppendUint16(read.serialize(), uint16(op.pos))
 }
 
-func (op *opRead) Apply(t *testing.T, c *buffFileFuzzContext) {
+func (op *opRead) Apply(t fuzzing.TestingT, c *buffFileFuzzContext) {
 	// generate some payload from the position, which is randomized by the fuzzer already
 	// cap to bufferSize, which is maximal supported size
 	size := op.pos / 10 % bufferSize
@@ -172,7 +172,7 @@ func (op *opWrite) Serialize() []byte {
 	return binary.BigEndian.AppendUint16(write.serialize(), uint16(op.pos))
 }
 
-func (op *opWrite) Apply(t *testing.T, c *buffFileFuzzContext) {
+func (op *opWrite) Apply(t fuzzing.TestingT, c *buffFileFuzzContext) {
 	// generate some payload from the position, which is randomized by the fuzzer already
 	// cap to bufferSize, which is maximal supported size
 	size := op.pos / 10 % bufferSize
@@ -204,7 +204,7 @@ func (op *opFlush) Serialize() []byte {
 	return flush.serialize()
 }
 
-func (op *opFlush) Apply(t *testing.T, c *buffFileFuzzContext) {
+func (op *opFlush) Apply(t fuzzing.TestingT, c *buffFileFuzzContext) {
 	if err := c.file.Flush(); err != nil {
 		t.Errorf("error to flush: %s", err)
 	}
@@ -217,7 +217,7 @@ func (op *opClose) Serialize() []byte {
 	return close.serialize()
 }
 
-func (op *opClose) Apply(t *testing.T, c *buffFileFuzzContext) {
+func (op *opClose) Apply(t fuzzing.TestingT, c *buffFileFuzzContext) {
 	if err := c.file.Close(); err != nil {
 		t.Errorf("error to flush: %s", err)
 	}
@@ -256,7 +256,7 @@ func (c *buffFileFuzzCampaign) Init() []fuzzing.OperationSequence[buffFileFuzzCo
 	return data
 }
 
-func (c *buffFileFuzzCampaign) CreateContext(t *testing.T) *buffFileFuzzContext {
+func (c *buffFileFuzzCampaign) CreateContext(t fuzzing.TestingT) *buffFileFuzzContext {
 	path := t.TempDir() + "/test.dat"
 	file, err := OpenBufferedFile(path)
 	if err != nil {
@@ -270,7 +270,7 @@ func (c *buffFileFuzzCampaign) Deserialize(rawData []byte) []fuzzing.Operation[b
 	return parseOperations(rawData)
 }
 
-func (c *buffFileFuzzCampaign) Cleanup(t *testing.T, context *buffFileFuzzContext) {
+func (c *buffFileFuzzCampaign) Cleanup(t fuzzing.TestingT, context *buffFileFuzzContext) {
 	if err := context.file.Close(); err != nil {
 		t.Fatalf("cannot close file: %s", err)
 	}

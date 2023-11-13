@@ -10,7 +10,6 @@ package fuzzing
 
 import (
 	reflect "reflect"
-	testing "testing"
 
 	gomock "go.uber.org/mock/gomock"
 )
@@ -39,7 +38,7 @@ func (m *MockOperation[T]) EXPECT() *MockOperationMockRecorder[T] {
 }
 
 // Apply mocks base method.
-func (m *MockOperation[T]) Apply(t *testing.T, context *T) {
+func (m *MockOperation[T]) Apply(t TestingT, context *T) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Apply", t, context)
 }
@@ -88,7 +87,7 @@ func (m *MockCampaign[T]) EXPECT() *MockCampaignMockRecorder[T] {
 }
 
 // Cleanup mocks base method.
-func (m *MockCampaign[T]) Cleanup(t *testing.T, context *T) {
+func (m *MockCampaign[T]) Cleanup(t TestingT, context *T) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Cleanup", t, context)
 }
@@ -100,7 +99,7 @@ func (mr *MockCampaignMockRecorder[T]) Cleanup(t, context any) *gomock.Call {
 }
 
 // CreateContext mocks base method.
-func (m *MockCampaign[T]) CreateContext(t *testing.T) *T {
+func (m *MockCampaign[T]) CreateContext(t TestingT) *T {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateContext", t)
 	ret0, _ := ret[0].(*T)
@@ -190,4 +189,112 @@ func (m *MockTestingF) Fuzz(ff any) {
 func (mr *MockTestingFMockRecorder) Fuzz(ff any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fuzz", reflect.TypeOf((*MockTestingF)(nil).Fuzz), ff)
+}
+
+// MockTestingT is a mock of TestingT interface.
+type MockTestingT struct {
+	ctrl     *gomock.Controller
+	recorder *MockTestingTMockRecorder
+}
+
+// MockTestingTMockRecorder is the mock recorder for MockTestingT.
+type MockTestingTMockRecorder struct {
+	mock *MockTestingT
+}
+
+// NewMockTestingT creates a new mock instance.
+func NewMockTestingT(ctrl *gomock.Controller) *MockTestingT {
+	mock := &MockTestingT{ctrl: ctrl}
+	mock.recorder = &MockTestingTMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTestingT) EXPECT() *MockTestingTMockRecorder {
+	return m.recorder
+}
+
+// Errorf mocks base method.
+func (m *MockTestingT) Errorf(format string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{format}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Errorf", varargs...)
+}
+
+// Errorf indicates an expected call of Errorf.
+func (mr *MockTestingTMockRecorder) Errorf(format any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{format}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Errorf", reflect.TypeOf((*MockTestingT)(nil).Errorf), varargs...)
+}
+
+// Fatalf mocks base method.
+func (m *MockTestingT) Fatalf(format string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{format}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Fatalf", varargs...)
+}
+
+// Fatalf indicates an expected call of Fatalf.
+func (mr *MockTestingTMockRecorder) Fatalf(format any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{format}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fatalf", reflect.TypeOf((*MockTestingT)(nil).Fatalf), varargs...)
+}
+
+// TempDir mocks base method.
+func (m *MockTestingT) TempDir() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TempDir")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// TempDir indicates an expected call of TempDir.
+func (mr *MockTestingTMockRecorder) TempDir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TempDir", reflect.TypeOf((*MockTestingT)(nil).TempDir))
+}
+
+// MockSerializable is a mock of Serializable interface.
+type MockSerializable struct {
+	ctrl     *gomock.Controller
+	recorder *MockSerializableMockRecorder
+}
+
+// MockSerializableMockRecorder is the mock recorder for MockSerializable.
+type MockSerializableMockRecorder struct {
+	mock *MockSerializable
+}
+
+// NewMockSerializable creates a new mock instance.
+func NewMockSerializable(ctrl *gomock.Controller) *MockSerializable {
+	mock := &MockSerializable{ctrl: ctrl}
+	mock.recorder = &MockSerializableMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSerializable) EXPECT() *MockSerializableMockRecorder {
+	return m.recorder
+}
+
+// Serialize mocks base method.
+func (m *MockSerializable) Serialize() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Serialize")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Serialize indicates an expected call of Serialize.
+func (mr *MockSerializableMockRecorder) Serialize() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serialize", reflect.TypeOf((*MockSerializable)(nil).Serialize))
 }
