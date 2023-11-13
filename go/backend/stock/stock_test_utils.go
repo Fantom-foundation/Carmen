@@ -49,6 +49,7 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("CanBeClosed", wrap(testCanBeClosed))
 	t.Run("CanBeClosedAndReopened", wrap(testCanBeClosedAndReopened))
 	t.Run("GetIdsProducesAllIdsInTheStock", wrap(testGetIdsProducesAllIdsInTheStock))
+	t.Run("GetDeleteIndexOutOfRange", wrap(testDeleteIndexOutOfRange))
 }
 
 func testNewCreatesFreshIndexValues(t *testing.T, factory NamedStockFactory) {
@@ -367,5 +368,21 @@ func testGetIdsProducesAllIdsInTheStock(t *testing.T, factory NamedStockFactory)
 			}
 			break
 		}
+	}
+}
+
+func testDeleteIndexOutOfRange(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create empty stock: %v", err)
+	}
+	defer stock.Close()
+
+	if err := stock.Delete(-1); err != nil {
+		t.Errorf("deleting negative index should be no-op")
+	}
+
+	if err := stock.Delete(1); err != nil {
+		t.Errorf("deleting index above range should be no-op")
 	}
 }
