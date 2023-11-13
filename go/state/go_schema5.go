@@ -10,10 +10,10 @@ import (
 // goSchema5 implements a state utilizes an MPT based data structure that
 // produces the same hashes as Ethereum's MPT implementation.
 type goSchema5 struct {
-	*mpt.MptState
+	mpt.MptState
 }
 
-func newS5State(params Parameters, state *mpt.MptState) (State, error) {
+func newS5State(params Parameters, state mpt.MptState) (State, error) {
 	if params.Archive == S4Archive {
 		return nil, errors.Join(
 			fmt.Errorf("%w: cannot use archive %v with schema 5", UnsupportedConfiguration, params.Archive),
@@ -38,7 +38,8 @@ func newGoMemoryS5State(params Parameters) (State, error) {
 }
 
 func newGoFileS5State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoFileState(params.Directory, mpt.S5LiveConfig)
+	//state, err := mpt.OpenGoFileState(params.Directory, mpt.S5LiveConfig)
+	state, err := mpt.OpenBufferedMptState(params.Directory, mpt.S5LiveConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -98,12 +98,12 @@ func TestS5RootHash_TwoAccountsWithValues(t *testing.T) {
 	}
 	balance, _ := common.ToBalance(big.NewInt(12))
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
-	state.trie.SetValue(common.Address{1}, common.Key{1}, common.Value{0, 0, 1})
-	state.trie.SetValue(common.Address{1}, common.Key{2}, common.Value{2})
+	state.SetStorage(common.Address{1}, common.Key{1}, common.Value{0, 0, 1})
+	state.SetStorage(common.Address{1}, common.Key{2}, common.Value{2})
 
 	state.SetBalance(common.Address{2}, balance)
-	state.trie.SetValue(common.Address{2}, common.Key{1}, common.Value{0, 0, 1})
-	state.trie.SetValue(common.Address{2}, common.Key{2}, common.Value{2})
+	state.SetStorage(common.Address{2}, common.Key{1}, common.Value{0, 0, 1})
+	state.SetStorage(common.Address{2}, common.Key{2}, common.Value{2})
 	hash, err := state.GetHash()
 	if err != nil {
 		t.Fatalf("failed to get hash for empty state: %v", err)

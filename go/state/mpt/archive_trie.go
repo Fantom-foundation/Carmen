@@ -24,7 +24,7 @@ import (
 // Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
-	head       *MptState  // the current head-state
+	head       *mptState  // the current head-state
 	roots      []Root     // the roots of individual blocks indexed by block height
 	rootsMutex sync.Mutex // protecting access to the roots list
 	rootFile   string     // the file storing the list of roots

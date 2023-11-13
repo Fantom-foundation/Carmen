@@ -10,10 +10,10 @@ import (
 // goSchema4 implements a state utilizes an MPT based data structure. However, it is
 // not binary compatible with the Ethereum variant of an MPT.
 type goSchema4 struct {
-	*mpt.MptState
+	mpt.MptState
 }
 
-func newS4State(params Parameters, state *mpt.MptState) (State, error) {
+func newS4State(params Parameters, state mpt.MptState) (State, error) {
 	if params.Archive == S5Archive {
 		return nil, errors.Join(
 			fmt.Errorf("%w: cannot use archive %v with schema 4", UnsupportedConfiguration, params.Archive),

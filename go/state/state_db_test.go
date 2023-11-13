@@ -3074,7 +3074,7 @@ func testCarmenStateDbHashAfterModification(t *testing.T, mod func(s StateDB)) {
 				stateDb.EndTransaction()
 				stateDb.EndBlock(1)
 				if got := stateDb.GetHash(); want[config.schema] != got {
-					t.Errorf("Invalid hash, wanted %v, got %v", want, got)
+					t.Errorf("Invalid hash, wanted %v, got %v", want[config.schema], got)
 				}
 			})
 		}
