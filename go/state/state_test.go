@@ -79,13 +79,13 @@ func testHashAfterModification(t *testing.T, mod func(s State)) {
 		if err != nil {
 			t.Fatalf("failed to create reference state: %v", err)
 		}
-		defer ref.Close()
 		mod(ref)
 		hash, err := ref.GetHash()
 		if err != nil {
 			t.Fatalf("failed to get hash of reference state: %v", err)
 		}
 		want[s] = hash
+		ref.Close()
 	}
 
 	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, state State) {

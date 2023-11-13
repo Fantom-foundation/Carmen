@@ -444,7 +444,7 @@ func (s *Forest) Check(rootRef *NodeReference) error {
 		return err
 	}
 	defer root.Release()
-	return root.Get().Check(s, rootRef, make([]Nibble, 0, common.AddressSize*2))
+	return root.Get().Check(s, rootRef, make([]Nibble, 0, common.AddressSize*2), nil)
 }
 
 // -- NodeManager interface --
@@ -468,7 +468,10 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
-		s.addToCache(id, res)
+		masterCopy, _ := s.addToCache(id, res)
+		if masterCopy != res {
+			panic("failed to reinstate element from write buffer")
+		}
 		// Since the write was canceled, the fetched node is
 		// still dirty (only dirty nodes are in the buffer).
 		// FIXME: this is not thread safe, by now the node may already
@@ -513,7 +516,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	}
 
 	// if the has been a concurrent fetch, use the other value
-	instance := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, _ := s.addToCache(id, shared.MakeShared[Node](node))
 	return instance, nil
 }
 
@@ -592,10 +595,10 @@ func (s *Forest) getMutableNodeByPath(root *NodeReference, path NodePath) (share
 	return res, err
 }
 
-func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) *shared.Shared[Node] {
-	current, _, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(id, node)
+func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(id, node)
 	if !evicted {
-		return current
+		return current, present
 	}
 
 	// Clean nodes can be ignored, dirty nodes need to be written.
@@ -603,14 +606,14 @@ func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) *shared.Shared
 	_, dirty := s.dirty[evictedId]
 	if !dirty {
 		s.dirtyMutex.Unlock()
-		return current
+		return current, present
 	}
 	delete(s.dirty, evictedId)
 	s.dirtyMutex.Unlock()
 
 	// Enqueue evicted node for asynchronous write to file.
 	s.writeBuffer.Add(evictedId, evictedNode)
-	return current
+	return current, present
 }
 
 func (s *Forest) flushNode(id NodeId, node Node) error {
@@ -647,7 +650,12 @@ func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error
 	}
 	id := AccountId(i)
 	node := new(AccountNode)
-	instance := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	if present {
+		write := instance.GetWriteHandle()
+		*write.Get().(*AccountNode) = *node
+		write.Release()
+	}
 	return NewNodeReference(id), instance.GetWriteHandle(), err
 }
 
@@ -658,7 +666,12 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	}
 	id := BranchId(i)
 	node := new(BranchNode)
-	instance := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	if present {
+		write := instance.GetWriteHandle()
+		*write.Get().(*BranchNode) = *node
+		write.Release()
+	}
 	return NewNodeReference(id), instance.GetWriteHandle(), err
 }
 
@@ -669,7 +682,12 @@ func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], err
 	}
 	id := ExtensionId(i)
 	node := new(ExtensionNode)
-	instance := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	if present {
+		write := instance.GetWriteHandle()
+		*write.Get().(*ExtensionNode) = *node
+		write.Release()
+	}
 	return NewNodeReference(id), instance.GetWriteHandle(), err
 }
 
@@ -680,7 +698,12 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	}
 	id := ValueId(i)
 	node := new(ValueNode)
-	instance := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	if present {
+		write := instance.GetWriteHandle()
+		*write.Get().(*ValueNode) = *node
+		write.Release()
+	}
 	return NewNodeReference(id), instance.GetWriteHandle(), err
 }
 
