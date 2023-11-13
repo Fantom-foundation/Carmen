@@ -46,6 +46,7 @@ type nodeCache struct {
 }
 
 func NewNodeCache(capacity int) NodeCache {
+	//return &simpleNodeCache{index: map[NodeId]*shared.Shared[Node]{}}
 	return newNodeCache(capacity)
 	/*
 		return &shadowNodeCache{
@@ -179,6 +180,8 @@ func (c *nodeCache) Touch(r *NodeReference) {
 }
 
 func (c *nodeCache) GetMemoryFootprint() *common.MemoryFootprint {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*c))
 	mf.AddChild("owners", common.NewMemoryFootprint(unsafe.Sizeof(nodeOwner{})*uintptr(len(c.owners))))
 	mf.AddChild("index", common.NewMemoryFootprint((unsafe.Sizeof(ownerPosition(0))+unsafe.Sizeof(NodeId(0)))*uintptr(len(c.index))))

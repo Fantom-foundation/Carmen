@@ -2166,7 +2166,6 @@ func TestExtensionNode_Release(t *testing.T) {
 	handle.Release()
 }
 
-/*
 func TestExtensionNode_Freeze(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -2200,7 +2199,7 @@ func TestExtensionNode_VisitContinue(t *testing.T) {
 	next := NewMockNode(ctrl)
 	visitor := NewMockNodeVisitor(ctrl)
 
-	id, node := ctxt.Build(&Extension{
+	ref, node := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Mock{next},
 	})
@@ -2211,9 +2210,9 @@ func TestExtensionNode_VisitContinue(t *testing.T) {
 	next.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
 
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponseContinue)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -2224,7 +2223,7 @@ func TestExtensionNode_VisitPrune(t *testing.T) {
 
 	next := NewMockNode(ctrl)
 
-	id, node := ctxt.Build(&Extension{
+	ref, node := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Mock{next},
 	})
@@ -2234,9 +2233,9 @@ func TestExtensionNode_VisitPrune(t *testing.T) {
 
 	visitor := NewMockNodeVisitor(ctrl)
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponsePrune)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponsePrune)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -2247,7 +2246,7 @@ func TestExtensionNode_VisitAbort(t *testing.T) {
 
 	next := NewMockNode(ctrl)
 
-	id, node := ctxt.Build(&Extension{
+	ref, node := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Mock{next},
 	})
@@ -2257,9 +2256,9 @@ func TestExtensionNode_VisitAbort(t *testing.T) {
 
 	visitor := NewMockNodeVisitor(ctrl)
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseAbort)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponseAbort)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); !abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -2271,7 +2270,7 @@ func TestExtensionNode_VisitAbortByChild(t *testing.T) {
 	next := NewMockNode(ctrl)
 	visitor := NewMockNodeVisitor(ctrl)
 
-	id, node := ctxt.Build(&Extension{
+	ref, node := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Mock{next},
 	})
@@ -2282,9 +2281,9 @@ func TestExtensionNode_VisitAbortByChild(t *testing.T) {
 	next.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(true, nil) // = abort
 
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponseContinue)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); !abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -2322,16 +2321,16 @@ func TestAccountNode_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
 	path := addressToNibbles(addr)
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
-	id, node := ctxt.Build(&Account{address: addr, info: info})
-	backupId, _ := ctxt.Clone(id)
+	ref, node := ctxt.Build(&Account{address: addr, info: info})
+	backupId, _ := ctxt.Clone(ref)
 
 	// Update the account information with the same information.
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr, path[:], info); newRoot != id || changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, false, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info); newRoot != ref || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, false, newRoot, changed, err)
 	}
 	handle.Release()
-	ctxt.ExpectEqualTries(t, backupId, id)
+	ctxt.ExpectEqualTries(t, backupId, ref)
 }
 
 func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
@@ -2343,13 +2342,13 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info})
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 	after, _ := ctxt.Build(&Account{address: addr, info: info})
 
 	// Update the account information with the same information.
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr, path[:], info)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2357,11 +2356,11 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T
 	if changed {
 		t.Errorf("frozen nodes should never change")
 	}
-	if newRoot != id {
+	if newRoot != ref {
 		t.Errorf("update should return existing node")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2374,18 +2373,18 @@ func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) 
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
-	id, node := ctxt.Build(&Account{address: addr, info: info1})
+	ref, node := ctxt.Build(&Account{address: addr, info: info1})
 	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(id, handle).Return(nil)
+	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
 
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr, path[:], info2); newRoot != id || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); newRoot != ref || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, after, id)
+	ctxt.ExpectEqualTries(t, after, ref)
 }
 
 func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) {
@@ -2398,14 +2397,14 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info1})
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
 
 	ctxt.ExpectCreateAccount()
 
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2414,7 +2413,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2427,18 +2426,18 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{}
 
-	id, node := ctxt.Build(&Account{address: addr, info: info1})
+	ref, node := ctxt.Build(&Account{address: addr, info: info1})
 	after, _ := ctxt.Build(Empty{})
 
-	ctxt.EXPECT().release(id).Return(nil)
+	ctxt.EXPECT().release(ref.Id()).Return(nil)
 
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr, path[:], info2); !newRoot.IsEmpty() || !changed || err != nil {
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); !newRoot.Id().IsEmpty() || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), true, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, after, EmptyId())
+	ctxt.ExpectEqualTries(t, after, NewNodeReference(EmptyId()))
 }
 
 func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
@@ -2451,12 +2450,12 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T
 	info2 := AccountInfo{}
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info1})
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 	after, _ := ctxt.Build(Empty{})
 
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2465,7 +2464,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2478,7 +2477,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
-	id, node := ctxt.Build(&Account{address: addr1, info: info1})
+	ref, node := ctxt.Build(&Account{address: addr1, info: info1})
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1},
@@ -2491,7 +2490,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 	handle.Release()
@@ -2510,8 +2509,8 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1},
@@ -2524,7 +2523,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2533,7 +2532,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2546,7 +2545,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
-	id, node := ctxt.Build(&Account{address: addr1, info: info1})
+	ref, node := ctxt.Build(&Account{address: addr1, info: info1})
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
@@ -2565,7 +2564,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 	handle.Release()
@@ -2584,8 +2583,8 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
@@ -2604,7 +2603,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2613,7 +2612,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2626,7 +2625,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
-	id, node := ctxt.Build(&Account{address: addr1, info: info1, pathLength: 40})
+	ref, node := ctxt.Build(&Account{address: addr1, info: info1, pathLength: 40})
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
@@ -2645,10 +2644,10 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 
 	// Also the old node is to be updated, since its length changed.
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(id, handle).Return(nil)
+	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
 
 	path := addressToNibbles(addr2)
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
 	handle.Release()
@@ -2667,8 +2666,8 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1, pathLength: 40})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
@@ -2688,7 +2687,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2697,7 +2696,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2710,17 +2709,17 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{}
 
-	id, node := ctxt.Build(&Account{address: addr1, info: info1})
-	after, _ := ctxt.Clone(id)
+	ref, node := ctxt.Build(&Account{address: addr1, info: info1})
+	after, _ := ctxt.Clone(ref)
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2); newRoot != id || changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, false, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != ref || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, false, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, after, id)
+	ctxt.ExpectEqualTries(t, after, ref)
 }
 
 func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroInfo(t *testing.T) {
@@ -2734,14 +2733,14 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroI
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2749,11 +2748,11 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroI
 	if changed {
 		t.Errorf("frozen nodes should never change")
 	}
-	if newRoot != id {
+	if newRoot != ref {
 		t.Errorf("update should return existing node")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2766,17 +2765,17 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{}
 
-	id, node := ctxt.Build(&Account{address: addr1, info: info1})
-	after, _ := ctxt.Clone(id)
+	ref, node := ctxt.Build(&Account{address: addr1, info: info1})
+	after, _ := ctxt.Clone(ref)
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2); newRoot != id || changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, false, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != ref || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, false, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, after, id)
+	ctxt.ExpectEqualTries(t, after, ref)
 }
 
 func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_ZeroInfo(t *testing.T) {
@@ -2790,14 +2789,14 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Zer
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, addr2, path[:], info2)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2)
 	handle.Release()
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
@@ -2805,11 +2804,11 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Zer
 	if changed {
 		t.Errorf("frozen nodes should never change")
 	}
-	if newRoot != id {
+	if newRoot != ref {
 		t.Errorf("update should return existing node")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2834,10 +2833,10 @@ func TestAccountNode_SetValue(t *testing.T) {
 	path := keyToNibbles(key)
 	value := common.Value{1}
 
-	id := AccountId(12)
+	ref := NewNodeReference(AccountId(12))
 	node := &AccountNode{}
 
-	if _, _, err := node.SetValue(ctxt, id, shared.WriteHandle[Node]{}, key, path[:], value); err == nil {
+	if _, _, err := node.SetValue(ctxt, &ref, shared.WriteHandle[Node]{}, key, path[:], value); err == nil {
 		t.Fatalf("SetValue call should always return an error")
 	}
 }
@@ -2850,11 +2849,11 @@ func TestAccountNode_Frozen_SetValue(t *testing.T) {
 	path := keyToNibbles(key)
 	value := common.Value{1}
 
-	id, node := ctxt.Build(&Account{})
-	ctxt.Freeze(id)
+	ref, node := ctxt.Build(&Account{})
+	ctxt.Freeze(ref)
 
 	handle := node.GetWriteHandle()
-	if _, _, err := handle.Get().SetValue(ctxt, id, handle, key, path[:], value); err == nil {
+	if _, _, err := handle.Get().SetValue(ctxt, &ref, handle, key, path[:], value); err == nil {
 		t.Fatalf("SetValue call should always return an error")
 	}
 	handle.Release()
@@ -2869,7 +2868,7 @@ func TestAccountNode_SetSlot_NonZeroValue(t *testing.T) {
 	key := common.Key{0x21}
 	value := common.Value{1}
 
-	id, node := ctxt.Build(&Account{address: addr, info: info})
+	ref, node := ctxt.Build(&Account{address: addr, info: info})
 
 	after, _ := ctxt.Build(&Account{
 		address: addr,
@@ -2888,14 +2887,14 @@ func TestAccountNode_SetSlot_NonZeroValue(t *testing.T) {
 	ctxt.ExpectCreateValue()
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(id, handle)
+	ctxt.EXPECT().update(ref.Id(), handle)
 	path := addressToNibbles(addr)
-	if newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value); newRoot != id || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value); newRoot != ref || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, after, id)
+	ctxt.ExpectEqualTries(t, after, ref)
 }
 
 func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
@@ -2909,8 +2908,8 @@ func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Account{
 		address: addr,
@@ -2931,7 +2930,7 @@ func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
 
 	path := addressToNibbles(addr)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value)
+	newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -2940,7 +2939,7 @@ func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -2954,7 +2953,7 @@ func TestAccountNode_SetSlot_UpdateOfExistingValue(t *testing.T) {
 	value1 := common.Value{1}
 	value2 := common.Value{2}
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		address: addr,
 		info:    info,
 		storage: &Tag{"S", &Value{
@@ -2976,20 +2975,20 @@ func TestAccountNode_SetSlot_UpdateOfExistingValue(t *testing.T) {
 	})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(id, handle)
+	ctxt.EXPECT().update(ref.Id(), handle)
 
-	storageId, storage := ctxt.Get("S")
+	storageRef, storage := ctxt.Get("S")
 	tmp := storage.GetWriteHandle()
-	ctxt.EXPECT().update(storageId, tmp)
+	ctxt.EXPECT().update(storageRef.Id(), tmp)
 	tmp.Release()
 
 	path := addressToNibbles(addr)
-	if newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value2); newRoot != id || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", id, true, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value2); newRoot != ref || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, after, id)
+	ctxt.ExpectEqualTries(t, after, ref)
 }
 
 func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
@@ -3011,8 +3010,8 @@ func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
 		},
 	})
 
-	id, node := ctxt.Clone(before)
-	ctxt.Freeze(id)
+	ref, node := ctxt.Clone(before)
+	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Account{
 		address: addr,
@@ -3032,7 +3031,7 @@ func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
 
 	path := addressToNibbles(addr)
 	handle := node.GetWriteHandle()
-	newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, value2)
+	newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value2)
 	if err != nil {
 		t.Fatalf("failed to SetAccount on AccountNode: %v", err)
 	}
@@ -3041,7 +3040,7 @@ func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
 		t.Errorf("frozen nodes should never change")
 	}
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -3049,12 +3048,12 @@ func TestAccountNode_Release(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
 
-	id, node := ctxt.Build(&Account{})
+	ref, node := ctxt.Build(&Account{})
 
-	ctxt.EXPECT().release(id).Return(nil)
+	ctxt.EXPECT().release(ref.Id()).Return(nil)
 	handle := node.GetWriteHandle()
 	defer handle.Release()
-	if err := handle.Get().Release(ctxt, id, handle); err != nil {
+	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
 	}
 }
@@ -3064,16 +3063,16 @@ func TestAccountNode_ReleaseStateTrie(t *testing.T) {
 	ctxt := newNodeContext(t, ctrl)
 
 	storage, _ := ctxt.Build(&Value{})
-	id, node := ctxt.Build(&Account{})
+	ref, node := ctxt.Build(&Account{})
 
 	handle := node.GetWriteHandle()
 	defer handle.Release()
 	handle.Get().(*AccountNode).storage = storage
 
-	ctxt.EXPECT().release(id).Return(nil)
-	ctxt.EXPECT().release(storage).Return(nil)
+	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(storage.Id()).Return(nil)
 
-	if err := handle.Get().Release(ctxt, id, handle); err != nil {
+	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
 	}
 }
@@ -3114,12 +3113,12 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 
 	newValue := common.Value{2}
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		address: addr,
 		info:    AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
 		storage: &Value{key: key, value: value},
 	})
-	ctxt.Freeze(id)
+	ctxt.Freeze(ref)
 
 	// A new account and value is expected to be created.
 	newId, _ := ctxt.ExpectCreateAccount()
@@ -3129,7 +3128,7 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 	defer handle.Release()
 
 	path := keyToNibbles(key)
-	newRoot, changed, err := handle.Get().SetSlot(ctxt, id, handle, addr, path[:], key, newValue)
+	newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, newValue)
 	if newRoot != newId || changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", newId, false, newRoot, changed, err)
 	}
@@ -3140,7 +3139,7 @@ func TestAccountNode_Frozen_SetSlot_WithExistingSlotValue(t *testing.T) {
 	}
 
 	// check value is gone for the new root
-	newHandle, _ := ctxt.getReadAccess(newRoot)
+	newHandle, _ := ctxt.getReadAccess(&newRoot)
 	defer newHandle.Release()
 	if val, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); val != newValue || !exists {
 		t.Errorf("value for key %v should not exist", key)
@@ -3162,7 +3161,7 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 	key := common.Key{0x12}
 	value := common.Value{1}
 
-	id, node := ctxt.Build(
+	ref, node := ctxt.Build(
 		&Branch{
 			children: Children{
 				0xA: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
@@ -3173,10 +3172,10 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 			},
 		})
 
-	ctxt.Check(t, id)
-	ctxt.Freeze(id)
+	ctxt.Check(t, ref)
+	ctxt.Freeze(ref)
 
-	before, _ := ctxt.Clone(id)
+	before, _ := ctxt.Clone(ref)
 
 	newInfo := AccountInfo{common.Nonce{1}, common.Balance{100}, common.Hash{0xAA}}
 	newAddr := common.Address{0xAA, 0xB}
@@ -3211,13 +3210,13 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 	handle := node.GetWriteHandle()
 	path := addressToNibbles(newAddr)
 	// This creates a new account on the path of a frozen account
-	newRoot, changed, err := handle.Get().SetAccount(ctxt, id, handle, newAddr, path, newInfo)
+	newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, newAddr, path, newInfo)
 	if newRoot != newId || changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", newId, false, newRoot, changed, err)
 	}
 	handle.Release()
 
-	ctxt.ExpectEqualTries(t, before, id)
+	ctxt.ExpectEqualTries(t, before, ref)
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
@@ -3229,12 +3228,12 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	key := common.Key{0x12, 0x3A}
 	value := common.Value{1}
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		address: addr,
 		info:    AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
 		storage: &Value{key: key, value: value},
 	})
-	ctxt.Freeze(id)
+	ctxt.Freeze(ref)
 
 	newId, _ := ctxt.ExpectCreateAccount() // new account will be created
 
@@ -3242,7 +3241,7 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	defer handle.Release()
 
 	path := keyToNibbles(key)
-	newRoot, changed, err := handle.Get().ClearStorage(ctxt, id, handle, addr, path[:])
+	newRoot, changed, err := handle.Get().ClearStorage(ctxt, &ref, handle, addr, path[:])
 	if newRoot != newId || changed || err != nil {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", newId, false, newRoot, changed, err)
 	}
@@ -3253,7 +3252,7 @@ func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	}
 
 	// check value is gone for the new root
-	newHandle, _ := ctxt.getReadAccess(newRoot)
+	newHandle, _ := ctxt.getReadAccess(&newRoot)
 	defer newHandle.Release()
 	if _, exists, _ := newHandle.Get().GetSlot(ctxt, addr, path[:], key); exists {
 		t.Errorf("value for key %v should not exist", key)
@@ -3267,7 +3266,7 @@ func TestAccountNode_VisitContinue(t *testing.T) {
 	storage := NewMockNode(ctrl)
 	visitor := NewMockNodeVisitor(ctrl)
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		info:    AccountInfo{Nonce: common.Nonce{1}},
 		storage: &Mock{storage},
 	})
@@ -3278,9 +3277,9 @@ func TestAccountNode_VisitContinue(t *testing.T) {
 	storage.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(false, nil)
 
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponseContinue)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -3292,7 +3291,7 @@ func TestAccountNode_VisitPrune(t *testing.T) {
 	storage := NewMockNode(ctrl)
 	visitor := NewMockNodeVisitor(ctrl)
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		info:    AccountInfo{Nonce: common.Nonce{1}},
 		storage: &Mock{storage},
 	})
@@ -3301,9 +3300,9 @@ func TestAccountNode_VisitPrune(t *testing.T) {
 	defer handle.Release()
 
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponsePrune)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponsePrune)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -3315,7 +3314,7 @@ func TestAccountNode_VisitAbort(t *testing.T) {
 	storage := NewMockNode(ctrl)
 	visitor := NewMockNodeVisitor(ctrl)
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		info:    AccountInfo{Nonce: common.Nonce{1}},
 		storage: &Mock{storage},
 	})
@@ -3324,9 +3323,9 @@ func TestAccountNode_VisitAbort(t *testing.T) {
 	defer handle.Release()
 
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseAbort)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponseAbort)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); !abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
 	}
 }
@@ -3338,7 +3337,7 @@ func TestAccountNode_VisitAbortByChild(t *testing.T) {
 	storage := NewMockNode(ctrl)
 	visitor := NewMockNodeVisitor(ctrl)
 
-	id, node := ctxt.Build(&Account{
+	ref, node := ctxt.Build(&Account{
 		info:    AccountInfo{Nonce: common.Nonce{1}},
 		storage: &Mock{storage},
 	})
@@ -3349,13 +3348,13 @@ func TestAccountNode_VisitAbortByChild(t *testing.T) {
 	storage.EXPECT().Visit(gomock.Any(), gomock.Any(), 3, visitor).Return(true, nil)
 
 	depth2 := 2
-	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: id, Depth: &depth2}).Return(VisitResponseContinue)
+	visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Depth: &depth2}).Return(VisitResponseContinue)
 
-	if abort, err := handle.Get().Visit(ctxt, id, 2, visitor); !abort || err != nil {
+	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); !abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
 	}
 }
-*/
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
@@ -4284,6 +4283,7 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 	}
 	res.EXPECT().getConfig().AnyTimes().Return(config)
 	res.EXPECT().getHashFor(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
+	res.EXPECT().touch(gomock.Any()).AnyTimes()  // TODO: restrict usage
 
 	// The empty node is always present.
 	res.Build(Empty{})
@@ -4408,7 +4408,7 @@ func (c *nodeContext) nextIndex() uint64 {
 func (c *nodeContext) Check(t *testing.T, ref NodeReference) {
 	handle := c.tryGetNode(t, ref.Id())
 	defer handle.Release()
-	if err := handle.Get().Check(c, &ref, nil); err != nil {
+	if err := handle.Get().Check(c, &ref, nil, nil); err != nil {
 		handle.Get().Dump(c, &ref, "")
 		t.Fatalf("inconsistent node structure encountered:\n%v", err)
 	}

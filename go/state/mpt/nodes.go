@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
@@ -181,7 +182,7 @@ type Node interface {
 	// induced sub-tree. It is mainly intended to validate invariants in unit
 	// tests. It may be very costly for larger instances since it requires a
 	// full tree-scan (linear in size of the trie).
-	Check(source NodeSource, thisRef *NodeReference, path []Nibble) error
+	Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error
 
 	// Dump dumps this node and its sub-trees to the console. It is mainly
 	// intended for debugging and may be very costly for larger instances.
@@ -322,7 +323,7 @@ func (e EmptyNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
 	return nil
 }
 
-func (EmptyNode) Check(NodeSource, *NodeReference, []Nibble) error {
+func (EmptyNode) Check(NodeSource, *NodeReference, []Nibble, []NodeId) error {
 	// No invariants to be checked.
 	return nil
 }
@@ -399,6 +400,7 @@ func (n *BranchNode) setNextNode(
 	path []Nibble,
 	createSubTree func(*NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
 ) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	// Forward call to child node.
 	child := &n.children[path[0]]
 	node, err := manager.getWriteAccess(child)
@@ -629,10 +631,15 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 	return nil
 }
 
-func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
+func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
 	// Checked invariants:
+	//  - no loop in trie
 	//  - must have 2+ children
 	//  - child trees must be error free
+	if slices.Contains(ancestors, thisRef.Id()) {
+		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
+	}
+	ancestors = append(ancestors, thisRef.Id())
 	numChildren := 0
 	errs := []error{}
 	for i, child := range n.children {
@@ -643,7 +650,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nib
 
 		if handle, err := source.getViewAccess(&child); err == nil {
 			defer handle.Release()
-			if err := handle.Get().Check(source, &child, append(path, Nibble(i))); err != nil {
+			if err := handle.Get().Check(source, &child, append(path, Nibble(i)), ancestors); err != nil {
 				errs = append(errs, err)
 			}
 		} else {
@@ -810,6 +817,7 @@ func (n *ExtensionNode) setNextNode(
 	valueIsEmpty bool,
 	createSubTree func(*NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
 ) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	// Check whether the updates targets the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
 		handle, err := manager.getWriteAccess(&n.next)
@@ -1070,12 +1078,16 @@ func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
+func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
 	// Checked invariants:
 	//  - extension path have a length > 0
 	//  - extension can only be followed by a branch
 	//  - sub-trie is correct
 	//  - hash of sub-tree is either dirty or correct
+	if slices.Contains(ancestors, thisRef.Id()) {
+		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
+	}
+	ancestors = append(ancestors, thisRef.Id())
 	errs := []error{}
 	if n.path.Length() <= 0 {
 		errs = append(errs, fmt.Errorf("node %v - extension path must not be empty", thisRef.Id()))
@@ -1089,7 +1101,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []
 		for i := 0; i < n.path.Length(); i++ {
 			extended = append(extended, n.path.Get(i))
 		}
-		if err := handle.Get().Check(source, &n.next, extended); err != nil {
+		if err := handle.Get().Check(source, &n.next, extended, ancestors); err != nil {
 			errs = append(errs, err)
 		}
 	} else {
@@ -1190,6 +1202,7 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 }
 
 func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	// Check whether this is the correct account.
 	if n.address == address {
 		if info == n.info {
@@ -1489,12 +1502,16 @@ func (n *AccountNode) Freeze(manager NodeManager, this shared.WriteHandle[Node])
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
+func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
 	// Checked invariants:
 	//  - account information must not be empty
 	//  - the account is at a correct position in the trie
 	//  - state sub-trie is correct
 	//  - path length
+	if slices.Contains(ancestors, thisRef.Id()) {
+		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
+	}
+	ancestors = append(ancestors, thisRef.Id())
 	errs := []error{}
 
 	fullPath := AddressToNibblePath(n.address, source)
@@ -1509,7 +1526,7 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 	if !n.storage.Id().IsEmpty() {
 		if node, err := source.getViewAccess(&n.storage); err == nil {
 			defer node.Release()
-			if err := node.Get().Check(source, &n.storage, make([]Nibble, 0, common.KeySize*2)); err != nil {
+			if err := node.Get().Check(source, &n.storage, make([]Nibble, 0, common.KeySize*2), ancestors); err != nil {
 				errs = append(errs, err)
 			}
 		} else {
@@ -1609,6 +1626,7 @@ func (n *ValueNode) SetAccount(NodeManager, *NodeReference, shared.WriteHandle[N
 }
 
 func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], key common.Key, path []Nibble, value common.Value) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	// Check whether this is the correct value node.
 	if n.key == key {
 		if value == n.value {
@@ -1721,11 +1739,15 @@ func (n *ValueNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
 	return nil
 }
 
-func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
+func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
 	// Checked invariants:
 	//  - value must not be empty
 	//  - values are in the right position of the trie
 	//  - the path length is correct (if enabled to be tracked)
+	if slices.Contains(ancestors, thisRef.Id()) {
+		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
+	}
+	ancestors = append(ancestors, thisRef.Id())
 	errs := []error{}
 
 	fullPath := KeyToNibblePath(n.key, source)
