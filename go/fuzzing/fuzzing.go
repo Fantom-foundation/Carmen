@@ -69,12 +69,29 @@ type TestingF interface {
 	Fuzz(ff any)
 }
 
-// TestingT inherits the testing.TB interface.
+// TestingT integrates methods of the testing.TB interface.
 // It is provided for interoperability between a build-in testing infrastructure
 // and custom extensions such as the fuzzing framework.
 // In particular, it allows for easy mocking and injection of alternative implementations.
 type TestingT interface {
-	testing.TB
+	Cleanup(func())
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fail()
+	FailNow()
+	Failed() bool
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+	Helper()
+	Log(args ...any)
+	Logf(format string, args ...any)
+	Name() string
+	Setenv(key, value string)
+	Skip(args ...any)
+	SkipNow()
+	Skipf(format string, args ...any)
+	Skipped() bool
+	TempDir() string
 }
 
 // Fuzz performs a fuzzing campaign.
