@@ -344,15 +344,15 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 					}
 					defer forest.Close()
 
-					if forest.GetMemoryFootprint().Total() <= uintptr(0) {
+					footprint := forest.GetMemoryFootprint()
+					if footprint.Total() <= uintptr(0) {
 						t.Errorf("memory footprint not provided")
 					}
 
 					for _, memChild := range []string{"accounts", "branches", "extensions", "values", "cache",
 						"hashedKeysCache", "hashedAddressesCache"} {
-
-						if forest.GetMemoryFootprint().GetChild(memChild) == nil {
-							t.Errorf("memory footprint not provided: %v", memChild)
+						if footprint.GetChild(memChild) == nil {
+							t.Errorf("memory footprint not provided: %v\ngot: %v", memChild, footprint)
 						}
 					}
 				})
