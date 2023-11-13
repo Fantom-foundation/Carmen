@@ -84,9 +84,9 @@ func EncodeIndex[I Index](index I, trg []byte) {
 	case 4:
 		binary.BigEndian.PutUint32(trg, uint32(index))
 	case 8:
-		binary.BigEndian.PutUint64(trg, uint64(index))
+		fallthrough
 	default:
-		panic("unsupported index type encountered")
+		binary.BigEndian.PutUint64(trg, uint64(index))
 	}
 }
 
@@ -101,9 +101,9 @@ func DecodeIndex[I Index](src []byte) I {
 	case 4:
 		return I(binary.BigEndian.Uint32(src))
 	case 8:
-		return I(binary.BigEndian.Uint64(src))
+		fallthrough
 	default:
-		panic("unsupported index type encountered")
+		return I(binary.BigEndian.Uint64(src))
 	}
 }
 
