@@ -14,11 +14,12 @@ const (
 	HashTreeFactor = 32
 )
 
-// GoState manages dependencies to other interfaces to build this service
+// GoState combines a LiveDB and optional Archive implementation into a common
+// Carmen State implementation.
 type GoState struct {
-	GoSchema
-	cleanup []func()
+	live    LiveDB
 	archive archive.Archive
+	cleanup []func()
 
 	// Channels are only present if archive is enabled.
 	archiveWriter          chan<- archiveUpdate
@@ -27,44 +28,34 @@ type GoState struct {
 	archiveWriterError     <-chan error
 }
 
-type GoSchema interface {
-	CreateAccount(address common.Address) (err error)
+type LiveDB interface {
 	Exists(address common.Address) (bool, error)
-	DeleteAccount(address common.Address) error
 	GetBalance(address common.Address) (balance common.Balance, err error)
-	SetBalance(address common.Address, balance common.Balance) (err error)
 	GetNonce(address common.Address) (nonce common.Nonce, err error)
-	SetNonce(address common.Address, nonce common.Nonce) (err error)
 	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
-	SetStorage(address common.Address, key common.Key, value common.Value) error
 	GetCode(address common.Address) (value []byte, err error)
 	GetCodeSize(address common.Address) (size int, err error)
-	SetCode(address common.Address, code []byte) (err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
 	GetHash() (hash common.Hash, err error)
-	FinishBlock() (archiveUpdateHints any, err error)
+	Apply(block uint64, update common.Update) (archiveUpdateHints any, err error)
 	Flush() error
 	Close() error
 	common.MemoryFootprintProvider
 
 	// getSnapshotableComponents lists all components required to back-up or restore
 	// for snapshotting this schema. Returns nil if snapshotting is not supported.
-	getSnapshotableComponents() []backend.Snapshotable
+	GetSnapshotableComponents() []backend.Snapshotable
 
 	// Called after synching to a new state, requisting the schema to update cached
 	// values or tables not covered by the snapshot synchronization.
-	runPostRestoreTasks() error
+	RunPostRestoreTasks() error
 }
 
-func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) State {
+func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) State {
 	return WrapIntoSyncedState(&GoState{
-		schema,
-		cleanup,
-		archive,
-		nil,
-		nil,
-		nil,
-		nil,
+		live:    live,
+		archive: archive,
+		cleanup: cleanup,
 	})
 }
 
@@ -76,14 +67,41 @@ type archiveUpdate = struct {
 	updateHints any            // an optional field for passing update hints from the LiveDB to the Archive
 }
 
-func (s *GoState) Apply(block uint64, update common.Update) error {
-	err := applyUpdate(s, update)
-	if err != nil {
-		return err
-	}
+func (s *GoState) Exists(address common.Address) (bool, error) {
+	return s.live.Exists(address)
+}
 
-	// Finish the block by refreshing the hash.
-	archiveUpdateHints, err := s.FinishBlock()
+func (s *GoState) GetBalance(address common.Address) (common.Balance, error) {
+	return s.live.GetBalance(address)
+}
+
+func (s *GoState) GetNonce(address common.Address) (common.Nonce, error) {
+	return s.live.GetNonce(address)
+}
+
+func (s *GoState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
+	return s.live.GetStorage(address, key)
+}
+
+func (s *GoState) GetCode(address common.Address) ([]byte, error) {
+	return s.live.GetCode(address)
+}
+
+func (s *GoState) GetCodeSize(address common.Address) (int, error) {
+	return s.live.GetCodeSize(address)
+}
+
+func (s *GoState) GetCodeHash(address common.Address) (common.Hash, error) {
+	return s.live.GetCodeHash(address)
+}
+
+func (s *GoState) GetHash() (common.Hash, error) {
+	return s.live.GetHash()
+}
+
+func (s *GoState) Apply(block uint64, update common.Update) error {
+	// Apply the changes to the LiveDB.
+	archiveUpdateHints, err := s.live.Apply(block, update)
 	if err != nil {
 		return err
 	}
@@ -148,7 +166,7 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
 func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(0)
-	mf.AddChild("GoSchema", s.GoSchema.GetMemoryFootprint())
+	mf.AddChild("live", s.live.GetMemoryFootprint())
 	if s.archive != nil {
 		mf.AddChild("archive", s.archive.GetMemoryFootprint())
 	}
@@ -156,7 +174,7 @@ func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *GoState) Flush() (lastErr error) {
-	err := s.GoSchema.Flush()
+	err := s.live.Flush()
 	if err != nil {
 		lastErr = err
 	}
@@ -177,7 +195,7 @@ func (s *GoState) Close() (lastErr error) {
 		return err
 	}
 
-	if err := s.GoSchema.Close(); err != nil {
+	if err := s.live.Close(); err != nil {
 		lastErr = err
 	}
 
@@ -239,7 +257,7 @@ func (s *GoState) GetArchiveBlockHeight() (uint64, bool, error) {
 }
 
 func (s *GoState) GetProof() (backend.Proof, error) {
-	components := s.GoSchema.getSnapshotableComponents()
+	components := s.live.GetSnapshotableComponents()
 	if components == nil {
 		return nil, backend.ErrSnapshotNotSupported
 	}
@@ -255,7 +273,7 @@ func (s *GoState) GetProof() (backend.Proof, error) {
 }
 
 func (s *GoState) CreateSnapshot() (backend.Snapshot, error) {
-	components := s.GoSchema.getSnapshotableComponents()
+	components := s.live.GetSnapshotableComponents()
 	if components == nil {
 		return nil, backend.ErrSnapshotNotSupported
 	}
@@ -271,7 +289,7 @@ func (s *GoState) CreateSnapshot() (backend.Snapshot, error) {
 }
 
 func (s *GoState) Restore(data backend.SnapshotData) error {
-	components := s.GoSchema.getSnapshotableComponents()
+	components := s.live.GetSnapshotableComponents()
 	if components == nil {
 		return backend.ErrSnapshotNotSupported
 	}
@@ -287,11 +305,11 @@ func (s *GoState) Restore(data backend.SnapshotData) error {
 			return err
 		}
 	}
-	return s.GoSchema.runPostRestoreTasks()
+	return s.live.RunPostRestoreTasks()
 }
 
 func (s *GoState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier, error) {
-	components := s.GoSchema.getSnapshotableComponents()
+	components := s.live.GetSnapshotableComponents()
 	if components == nil {
 		return nil, backend.ErrSnapshotNotSupported
 	}

@@ -3220,6 +3220,41 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
+func TestAccountNode_ClearStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0xAA}
+	key := common.Key{0x12, 0x3A}
+	value := common.Value{1}
+
+	id, node := ctxt.Build(&Account{
+		address: addr,
+		info:    AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+		storage: &Tag{"A", &Value{key: key, value: value}},
+	})
+
+	after, _ := ctxt.Build(&Account{
+		address:          addr,
+		info:             AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+		hashDirty:        true,
+		storageHashDirty: true,
+	})
+
+	storage, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(storage)
+
+	handle := node.GetWriteHandle()
+	path := keyToNibbles(key)
+	newRoot, changed, err := handle.Get().ClearStorage(ctxt, id, handle, addr, path[:])
+	if newRoot != id || !changed || err != nil {
+		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", id, true, newRoot, changed, err)
+	}
+	handle.Release()
+
+	ctxt.ExpectEqualTries(t, after, id)
+}
+
 func TestAccountNode_Frozen_ClearStorage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)

@@ -209,7 +209,10 @@ func (s *MptState) GetHash() (hash common.Hash, err error) {
 	return hash, err
 }
 
-func (s *MptState) FinishBlock() (any, error) {
+func (s *MptState) Apply(block uint64, update common.Update) (archiveUpdateHints any, err error) {
+	if err := update.ApplyTo(s); err != nil {
+		return nil, err
+	}
 	_, hints, err := s.trie.UpdateHashes()
 	return hints, err
 }

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Fantom-foundation/Carmen/go/backend"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
@@ -45,36 +43,4 @@ func newGoFileS5State(params Parameters) (State, error) {
 		return nil, err
 	}
 	return newS5State(params, state)
-}
-
-func (s *goSchema5) createAccount(address common.Address) error {
-	return s.CreateAccount(address)
-}
-
-func (s *goSchema5) deleteAccount(address common.Address) error {
-	return s.DeleteAccount(address)
-}
-
-func (s *goSchema5) setBalance(address common.Address, balance common.Balance) error {
-	return s.SetBalance(address, balance)
-}
-
-func (s *goSchema5) setNonce(address common.Address, nonce common.Nonce) error {
-	return s.SetNonce(address, nonce)
-}
-
-func (s *goSchema5) setStorage(address common.Address, key common.Key, value common.Value) error {
-	return s.SetStorage(address, key, value)
-}
-
-func (s *goSchema5) setCode(address common.Address, code []byte) error {
-	return s.SetCode(address, code)
-}
-
-func (s *goSchema5) getSnapshotableComponents() []backend.Snapshotable {
-	return s.GetSnapshotableComponents()
-}
-
-func (s *goSchema5) runPostRestoreTasks() error {
-	return s.RunPostRestoreTasks()
 }

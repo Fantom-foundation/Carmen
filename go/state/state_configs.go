@@ -182,7 +182,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	var schema GoSchema
+	var live LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdx32Serializer{})
@@ -193,7 +193,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
 
-		schema = &GoSchema1{
+		live = &GoSchema1{
 			addressIndex,
 			keyIndex,
 			slotIndex,
@@ -214,7 +214,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapmem.NewMultiMap[uint32, uint32]()
 
-		schema = &GoSchema2{
+		live = &GoSchema2{
 			addressIndex,
 			slotIndex,
 			accountsStore,
@@ -237,7 +237,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 			return nil, err
 		}
 
-		schema = &GoSchema3{
+		live = &GoSchema3{
 			addressIndex,
 			slotIndex,
 			accountsStore,
@@ -258,7 +258,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := newGoState(schema, arch, []func(){archiveCleanup})
+	state := newGoState(live, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -335,7 +335,7 @@ func newGoFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	var schema GoSchema
+	var live LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdx32Serializer{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
@@ -356,7 +356,7 @@ func newGoFileState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
-		schema = &GoSchema1{
+		live = &GoSchema1{
 			addressIndex,
 			keyIndex,
 			slotIndex,
@@ -384,7 +384,7 @@ func newGoFileState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
-		schema = &GoSchema2{
+		live = &GoSchema2{
 			addressIndex,
 			slotIndex,
 			accountsStore,
@@ -414,7 +414,7 @@ func newGoFileState(params Parameters) (State, error) {
 			return nil, err
 		}
 
-		schema = &GoSchema3{
+		live = &GoSchema3{
 			addressIndex,
 			slotIndex,
 			accountsStore,
@@ -435,7 +435,7 @@ func newGoFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := newGoState(schema, arch, []func(){archiveCleanup})
+	state := newGoState(live, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -512,7 +512,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	var schema GoSchema
+	var live LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdx32Serializer{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
@@ -533,7 +533,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
-		schema = &GoSchema1{
+		live = &GoSchema1{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
@@ -557,7 +557,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapbtree.NewMultiMap[uint32, uint32](common.Identifier32Serializer{}, common.Identifier32Serializer{}, common.Uint32Comparator{}, common.Uint32Comparator{})
 
-		schema = &GoSchema2{
+		live = &GoSchema2{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
@@ -587,7 +587,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 			return nil, err
 		}
 
-		schema = &GoSchema3{
+		live = &GoSchema3{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
@@ -608,7 +608,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := newGoState(schema, arch, []func(){archiveCleanup})
+	state := newGoState(live, arch, []func(){archiveCleanup})
 	return state, nil
 }
 
@@ -649,7 +649,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	var schema GoSchema
+	var live LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
@@ -666,7 +666,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-		schema = &GoSchema1{
+		live = &GoSchema1{
 			addressIndex,
 			keyIndex,
 			slotIndex,
@@ -690,7 +690,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-		schema = &GoSchema2{
+		live = &GoSchema2{
 			addressIndex,
 			slotIndex,
 			accountsStore,
@@ -716,7 +716,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 			return nil, err
 		}
 
-		schema = &GoSchema3{
+		live = &GoSchema3{
 			addressIndex,
 			slotIndex,
 			accountsStore,
@@ -737,7 +737,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := newGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
+	state := newGoState(live, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 
@@ -778,7 +778,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	var schema GoSchema
+	var live LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
@@ -795,7 +795,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-		schema = &GoSchema1{
+		live = &GoSchema1{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.Key, uint32](keyIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.SlotIdx[uint32], uint32](slotIndex, CacheCapacity),
@@ -819,7 +819,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		}
 		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
-		schema = &GoSchema2{
+		live = &GoSchema2{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
@@ -845,7 +845,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 			return nil, err
 		}
 
-		schema = &GoSchema3{
+		live = &GoSchema3{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
 			cachedIndex.NewIndex[common.SlotIdxKey[uint32], uint32](slotIndex, CacheCapacity),
 			cachedStore.NewStore[uint32, common.AccountState](accountsStore, CacheCapacity),
@@ -866,7 +866,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 		return nil, err
 	}
 
-	state := newGoState(schema, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
+	state := newGoState(live, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 	return state, nil
 }
 

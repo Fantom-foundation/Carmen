@@ -117,6 +117,69 @@ func (u *Update) Normalize() error {
 	return nil
 }
 
+// ApplyTo applies this update to the provided target in a standardized
+// order: delete accounts, create accounts, set balances, set nonces,
+// set codes, and set storage values. It is intended to be utilized by
+// state implementations to simplify the processing of updates.
+func (u *Update) ApplyTo(s UpdateTarget) error {
+	for _, addr := range u.DeletedAccounts {
+		if err := s.DeleteAccount(addr); err != nil {
+			return err
+		}
+	}
+	for _, addr := range u.CreatedAccounts {
+		if err := s.CreateAccount(addr); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.Balances {
+		if err := s.SetBalance(change.Account, change.Balance); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.Nonces {
+		if err := s.SetNonce(change.Account, change.Nonce); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.Codes {
+		if err := s.SetCode(change.Account, change.Code); err != nil {
+			return err
+		}
+	}
+	for _, change := range u.Slots {
+		if err := s.SetStorage(change.Account, change.Key, change.Value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateTarget is an interface for State implementations offering individual
+// implementations of mutation functions instead of a single Apply function.
+// It is intended to be the parameter type of the ApplyUpdate function above
+// and to be utilized by implementations to avoid the need of duplicating
+// the implementation of LiveDB's Apply function.
+type UpdateTarget interface {
+	// CreateAccount creates a new account with the given address.
+	CreateAccount(address Address) error
+
+	// DeleteAccount deletes the account with the given address.
+	DeleteAccount(address Address) error
+
+	// SetBalance provides balance for the input account address.
+	SetBalance(address Address, balance Balance) error
+
+	// SetNonce updates nonce of the account for the  input account address.
+	SetNonce(address Address, nonce Nonce) error
+
+	// SetStorage updates the memory slot for the account address (i.e. the contract) and the memory location key.
+	SetStorage(address Address, key Key, value Value) error
+
+	// SetCode updates code of the contract for the input contract address.
+	SetCode(address Address, code []byte) error
+}
+
 const updateEncodingVersion byte = 0
 
 func UpdateFromBytes(data []byte) (Update, error) {
