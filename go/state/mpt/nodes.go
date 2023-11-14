@@ -1415,6 +1415,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisId NodeId, this shar
 	err = rootHandle.Get().Release(manager, n.storage, rootHandle)
 	n.storage = EmptyId()
 	n.storageHashDirty = true
+	n.hashDirty = true
 	return thisId, true, err
 }
 

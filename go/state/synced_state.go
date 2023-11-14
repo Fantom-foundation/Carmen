@@ -7,16 +7,16 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-// syncedState wraps a state implemententation with a lock restricting the
+// syncedState wraps a state implementation with a lock restricting the
 // number of concurrent access to one for the underlying state.
 type syncedState struct {
-	state directUpdateState
+	state State
 	mu    sync.Mutex
 }
 
-// WrapIntoSyncedState wraps the given state into a synchronizied state
+// WrapIntoSyncedState wraps the given state into a synchronized state
 // ensuring mutual exclusive access to the underlying state.
-func WrapIntoSyncedState(state directUpdateState) State {
+func WrapIntoSyncedState(state State) State {
 	if _, ok := state.(*syncedState); ok {
 		return state
 	}
@@ -131,40 +131,4 @@ func (s *syncedState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVeri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state.GetSnapshotVerifier(metadata)
-}
-
-func (s *syncedState) CreateAccount(address common.Address) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.CreateAccount(address)
-}
-
-func (s *syncedState) DeleteAccount(address common.Address) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.DeleteAccount(address)
-}
-
-func (s *syncedState) SetBalance(address common.Address, balance common.Balance) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.SetBalance(address, balance)
-}
-
-func (s *syncedState) SetNonce(address common.Address, nonce common.Nonce) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.SetNonce(address, nonce)
-}
-
-func (s *syncedState) SetStorage(address common.Address, key common.Key, value common.Value) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.SetStorage(address, key, value)
-}
-
-func (s *syncedState) SetCode(address common.Address, code []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.state.SetCode(address, code)
 }

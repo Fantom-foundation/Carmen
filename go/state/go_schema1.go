@@ -274,9 +274,8 @@ func (s *GoSchema1) GetHash() (hash common.Hash, err error) {
 	return hash, nil
 }
 
-func (s *GoSchema1) FinishBlock() (_ any, err error) {
-	// Nothing to do.
-	return nil, err
+func (s *GoSchema1) Apply(block uint64, update common.Update) (archiveUpdateHints any, err error) {
+	return nil, update.ApplyTo(s)
 }
 
 func (s *GoSchema1) Flush() (lastErr error) {
@@ -325,11 +324,11 @@ func (s *GoSchema1) Close() (lastErr error) {
 	return lastErr
 }
 
-func (s *GoSchema1) getSnapshotableComponents() []backend.Snapshotable {
+func (s *GoSchema1) GetSnapshotableComponents() []backend.Snapshotable {
 	return nil // = snapshotting not supported
 }
 
-func (s *GoSchema1) runPostRestoreTasks() error {
+func (s *GoSchema1) RunPostRestoreTasks() error {
 	return backend.ErrSnapshotNotSupported
 }
 

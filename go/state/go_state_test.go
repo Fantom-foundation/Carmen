@@ -105,19 +105,14 @@ func TestBasicOperations(t *testing.T) {
 			defer state.Close()
 
 			// fill-in values
-			if err := state.CreateAccount(address1); err != nil {
-				t.Errorf("Error: %s", err)
-			}
-			if err := state.SetNonce(address1, common.Nonce{123}); err != nil {
-				t.Errorf("Error: %s", err)
-			}
-			if err := state.SetBalance(address2, common.Balance{45}); err != nil {
-				t.Errorf("Error: %s", err)
-			}
-			if err := state.SetStorage(address1, key1, common.Value{67}); err != nil {
-				t.Errorf("Error: %s", err)
-			}
-			if err := state.SetCode(address1, []byte{0x12, 0x34}); err != nil {
+			err = state.Apply(12, common.Update{
+				CreatedAccounts: []common.Address{address1},
+				Nonces:          []common.NonceUpdate{{Account: address1, Nonce: common.Nonce{123}}},
+				Balances:        []common.BalanceUpdate{{Account: address2, Balance: common.Balance{45}}},
+				Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: common.Value{67}}},
+				Codes:           []common.CodeUpdate{{Account: address1, Code: []byte{0x12, 0x34}}},
+			})
+			if err != nil {
 				t.Errorf("Error: %s", err)
 			}
 
@@ -142,7 +137,8 @@ func TestBasicOperations(t *testing.T) {
 			}
 
 			// delete account
-			if err := state.DeleteAccount(address1); err != nil {
+			err = state.Apply(14, common.Update{DeletedAccounts: []common.Address{address1}})
+			if err != nil {
 				t.Errorf("Error: %s", err)
 			}
 			if val, err := state.Exists(address1); err != nil || val != false {
@@ -167,17 +163,14 @@ func TestDeletingAccounts(t *testing.T) {
 			defer state.Close()
 
 			// fill-in values
-			if err := state.CreateAccount(address1); err != nil {
-				t.Errorf("Error: %s", err)
+			update := common.Update{
+				CreatedAccounts: []common.Address{address1},
+				Nonces:          []common.NonceUpdate{{Account: address1, Nonce: common.Nonce{123}}},
+				Balances:        []common.BalanceUpdate{{Account: address2, Balance: common.Balance{45}}},
+				Codes:           []common.CodeUpdate{{Account: address1, Code: []byte{0x12, 0x34}}},
 			}
-			if err := state.SetNonce(address1, common.Nonce{123}); err != nil {
-				t.Errorf("Error: %s", err)
-			}
-			if err := state.SetBalance(address2, common.Balance{45}); err != nil {
-				t.Errorf("Error: %s", err)
-			}
-			if err := state.SetCode(address1, []byte{0x12, 0x34}); err != nil {
-				t.Errorf("Error: %s", err)
+			if err := state.Apply(1, update); err != nil {
+				t.Errorf("failed to update state: %v", err)
 			}
 
 			// fetch values
@@ -186,8 +179,11 @@ func TestDeletingAccounts(t *testing.T) {
 			}
 
 			// delete account
-			if err := state.DeleteAccount(address1); err != nil {
-				t.Errorf("Error: %s", err)
+			update = common.Update{
+				DeletedAccounts: []common.Address{address1},
+			}
+			if err := state.Apply(2, update); err != nil {
+				t.Errorf("failed to apply update: %v", err)
 			}
 			if val, err := state.Exists(address1); err != nil || val != false {
 				t.Errorf("Deleted account is not deleted: Val: %t, Err: %s", val, err)
@@ -205,23 +201,32 @@ func TestMoreInserts(t *testing.T) {
 			}
 			defer state.Close()
 
-			// create accounts since setting values to non-existing accounts may be ignored
-			state.SetNonce(address1, common.ToNonce(12))
-			state.SetNonce(address2, common.ToNonce(12))
-			state.SetNonce(address3, common.ToNonce(12))
+			update := common.Update{
+				// create accounts since setting values to non-existing accounts may be ignored
+				Nonces: []common.NonceUpdate{
+					{Account: address1, Nonce: common.ToNonce(12)},
+					{Account: address2, Nonce: common.ToNonce(12)},
+					{Account: address3, Nonce: common.ToNonce(12)},
+				},
+				// insert more combinations, so we do not have only zero-indexes everywhere
+				Slots: []common.SlotUpdate{
+					{Account: address1, Key: key1, Value: val1},
+					{Account: address1, Key: key2, Value: val2},
+					{Account: address1, Key: key3, Value: val3},
 
-			// insert more combinations, so we do not have only zero-indexes everywhere
-			_ = state.SetStorage(address1, key1, val1)
-			_ = state.SetStorage(address1, key2, val2)
-			_ = state.SetStorage(address1, key3, val3)
+					{Account: address2, Key: key1, Value: val1},
+					{Account: address2, Key: key2, Value: val2},
+					{Account: address2, Key: key3, Value: val3},
 
-			_ = state.SetStorage(address2, key1, val1)
-			_ = state.SetStorage(address2, key2, val2)
-			_ = state.SetStorage(address2, key3, val3)
+					{Account: address3, Key: key1, Value: val1},
+					{Account: address3, Key: key2, Value: val2},
+					{Account: address3, Key: key3, Value: val3},
+				},
+			}
 
-			_ = state.SetStorage(address3, key1, val1)
-			_ = state.SetStorage(address3, key2, val2)
-			_ = state.SetStorage(address3, key3, val3)
+			if err := state.Apply(1, update); err != nil {
+				t.Errorf("failed to update state: %v", err)
+			}
 
 			if val, err := state.GetStorage(address1, key3); err != nil || val != val3 {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
@@ -248,11 +253,16 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 			code1 := []byte{1, 2, 3}
 
 			// create an account and set some of its properties
-			state.CreateAccount(address1)
-			state.SetBalance(address1, balance1)
-			state.SetNonce(address1, nonce1)
-			state.SetCode(address1, code1)
-			state.SetStorage(address1, key1, val1)
+			update := common.Update{
+				CreatedAccounts: []common.Address{address1},
+				Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance1}},
+				Nonces:          []common.NonceUpdate{{Account: address1, Nonce: nonce1}},
+				Codes:           []common.CodeUpdate{{Account: address1, Code: code1}},
+				Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
+			}
+			if err := state.Apply(1, update); err != nil {
+				t.Errorf("failed to update state: %v", err)
+			}
 
 			if exists, err := state.Exists(address1); !exists || err != nil {
 				t.Errorf("account does not exist, err %v", err)
@@ -275,7 +285,9 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 			}
 
 			// re-creating the account preserves everything but the state.
-			state.CreateAccount(address1)
+			if err := state.Apply(2, common.Update{CreatedAccounts: []common.Address{address1}}); err != nil {
+				t.Errorf("failed to recreate account: %v", err)
+			}
 
 			if exists, err := state.Exists(address1); !exists || err != nil {
 				t.Errorf("account should still exist, err %v", err)
@@ -312,13 +324,13 @@ func TestHashing(t *testing.T) {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
 
-			_ = state.CreateAccount(address1)
+			state.Apply(1, common.Update{CreatedAccounts: []common.Address{address1}})
 			hash1, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
 			}
 
-			_ = state.SetStorage(address1, key1, val1)
+			state.Apply(2, common.Update{Slots: []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}}})
 			hash2, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
@@ -327,7 +339,7 @@ func TestHashing(t *testing.T) {
 				t.Errorf("hash of changed state not changed")
 			}
 
-			_ = state.SetBalance(address1, balance1)
+			state.Apply(3, common.Update{Balances: []common.BalanceUpdate{{Account: address1, Balance: balance1}}})
 			hash3, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
@@ -340,7 +352,7 @@ func TestHashing(t *testing.T) {
 				t.Errorf("hash of changed state not changed")
 			}
 
-			_ = state.SetCode(address1, []byte{0x12, 0x34, 0x56, 0x78})
+			state.Apply(4, common.Update{Codes: []common.CodeUpdate{{Account: address1, Code: []byte{0x12, 0x34, 0x56, 0x78}}}})
 			hash4, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)
@@ -387,7 +399,7 @@ func TestFailingStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goSchema := state.(*syncedState).state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema := state.(*syncedState).state.(*GoState).live.(*GoSchema1)
 	goSchema.balancesStore = failingStore[uint32, common.Balance]{goSchema.balancesStore}
 	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
 	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
@@ -417,7 +429,7 @@ func TestFailingIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goSchema := state.(*syncedState).state.(*GoState).GoSchema.(*GoSchema1)
+	goSchema := state.(*syncedState).state.(*GoState).live.(*GoSchema1)
 	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
 	_, err = state.GetBalance(address1)

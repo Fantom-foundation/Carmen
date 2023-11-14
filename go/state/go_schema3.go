@@ -266,9 +266,8 @@ func (s *GoSchema3) GetHash() (hash common.Hash, err error) {
 	return hash, nil
 }
 
-func (s *GoSchema3) FinishBlock() (_ any, err error) {
-	// Nothing to do.
-	return nil, err
+func (s *GoSchema3) Apply(block uint64, update common.Update) (archiveUpdateHints any, err error) {
+	return nil, update.ApplyTo(s)
 }
 
 func (s *GoSchema3) Flush() (lastErr error) {
@@ -315,7 +314,7 @@ func (s *GoSchema3) Close() (lastErr error) {
 	return lastErr
 }
 
-func (s *GoSchema3) getSnapshotableComponents() []backend.Snapshotable {
+func (s *GoSchema3) GetSnapshotableComponents() []backend.Snapshotable {
 	return []backend.Snapshotable{
 		s.addressIndex,
 		s.slotIndex,
@@ -328,7 +327,7 @@ func (s *GoSchema3) getSnapshotableComponents() []backend.Snapshotable {
 	}
 }
 
-func (s *GoSchema3) runPostRestoreTasks() error {
+func (s *GoSchema3) RunPostRestoreTasks() error {
 	// To complete the syncing, the hashes of codes need to be updated.
 	if s.hasher == nil {
 		s.hasher = sha3.NewLegacyKeccak256()

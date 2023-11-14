@@ -140,51 +140,38 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			blc2 := common.Balance{2}
 
 			// Block 1
-			err = errors.Join(
-				live.CreateAccount(addr1),
-				live.CreateAccount(addr2),
-				live.SetBalance(addr1, blc1),
-				live.SetBalance(addr2, blc2),
-			)
-			if err != nil {
-				t.Fatalf("failed to update live db: %v", err)
-			}
-			hints, err := live.FinishBlock()
-			if err != nil {
-				t.Fatalf("failed to get hash from live db: %v", err)
-			}
-			err = archive.Add(1, common.Update{
+			update := common.Update{
 				CreatedAccounts: []common.Address{addr1, addr2},
 				Balances: []common.BalanceUpdate{
 					{Account: addr1, Balance: blc1},
 					{Account: addr2, Balance: blc2},
 				},
-			}, hints)
+			}
+			hints, err := live.Apply(1, update)
+			if err != nil {
+				t.Fatalf("failed to update live db: %v", err)
+			}
+			err = archive.Add(1, update, hints)
 			if err != nil {
 				t.Fatalf("failed to update archive: %v", err)
 			}
 
 			// Block 2
-			err = live.SetBalance(addr1, blc2)
+			update = common.Update{
+				Balances: []common.BalanceUpdate{{Account: addr1, Balance: blc2}},
+			}
+			hints, err = live.Apply(2, update)
 			if err != nil {
 				t.Fatalf("failed to update live db: %v", err)
 			}
-			hints, err = live.FinishBlock()
-			if err != nil {
-				t.Fatalf("failed to get hash from live db: %v", err)
-			}
 
-			err = archive.Add(2, common.Update{
-				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc2},
-				},
-			}, hints)
+			err = archive.Add(2, update, hints)
 			if err != nil {
 				t.Fatalf("failed to update archive: %v", err)
 			}
 
 			// Block 4 -- larger range of data
-			update := common.Update{}
+			update = common.Update{}
 			for i := 0; i < 100; i++ {
 				addr := common.Address{byte(i + 10)}
 				err = errors.Join(
@@ -197,9 +184,9 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				update.CreatedAccounts = append(update.CreatedAccounts, addr)
 				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1})
 			}
-			hints, err = live.FinishBlock()
+			hints, err = live.Apply(4, update)
 			if err != nil {
-				t.Fatalf("failed to get hash from live db: %v", err)
+				t.Fatalf("failed to update live db: %v", err)
 			}
 			err = archive.Add(4, update, hints)
 			if err != nil {
