@@ -1,0 +1,98 @@
+pipeline {
+    agent {label 'short'}
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                stash 'source'
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'cd go && go build ./...'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'cd go && go test ./...'
+            }
+        }
+
+        stage('Parallelism Test') {
+            steps {
+                sh 'cd go/backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
+            }
+        }
+
+        stage('Fuzzing') {
+            parallel {
+                stage('FastMap') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./common -fuzztime 3m -fuzz=FuzzMapOperations'
+                    }
+                }
+                stage('Fuzzing NWays Cache') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./common/ -fuzztime 3m -fuzz FuzzLruCache_RandomOps'
+                    }
+                }
+                stage('Fuzzing LRU Cache') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./common/ -fuzztime 3m -fuzz FuzzNWays_RandomOps'
+                    }
+                }
+                stage('Fuzzing Buffered File') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./backend/utils -fuzztime 3m -fuzz FuzzBufferedFile_RandomOps'
+                    }
+                }
+                stage('Fuzzing Buffered Fil - data') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./backend/utils -fuzztime 3m -fuzz FuzzBufferedFile_ReadWrite'
+                    }
+                }
+                stage('Fuzzing Stack') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./backend/stock/file -fuzztime 3m -fuzz FuzzStack_RandomOps'
+                    }
+                }                
+                stage('Fuzzing Stock - file') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./backend/stock/file -fuzztime 3m -fuzz FuzzFileStock_RandomOps'
+                    }
+                }                  
+                stage('Fuzzing Stock - memory') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./backend/stock/memory -fuzztime 3m -fuzz FuzzMemoryStock_RandomOps'
+                    }
+                }  
+                stage('Fuzzing Stock - synced') {
+                    agent {label 'short'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./backend/stock/memory -fuzztime 3m -fuzz FuzzSyncStock_RandomOps'
+                    }
+                } 
+            }
+        }
+    }
+}
