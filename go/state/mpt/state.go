@@ -2,6 +2,7 @@ package mpt
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"slices"
+	"sort"
 	"sync"
 	"time"
 	"unsafe"
@@ -364,6 +367,22 @@ func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
 // ---------- memory state ----------
 
 func OpenBufferedMptState(directory string, config MptConfig) (MptState, error) {
+
+	// Load all data ...
+	start := time.Now()
+	fmt.Printf("Loading state into memory ...\n")
+	/*
+		collector := accountCollector{}
+		if err := trie.VisitTrie(&collector); err != nil {
+			return nil, errors.Join(err, trie.Close())
+		}
+	*/
+	accounts, err := loadAccounts(directory, config)
+	fmt.Printf("Loading finished, took %v\n", time.Since(start))
+	if err != nil {
+		return nil, err
+	}
+
 	trie, err := OpenFileLiveTrie(directory, config)
 	if err != nil {
 		return nil, err
@@ -377,15 +396,6 @@ func OpenBufferedMptState(directory string, config MptConfig) (MptState, error) 
 	if err != nil {
 		return nil, errors.Join(err, base.Close())
 	}
-
-	// Load all data ...
-	start := time.Now()
-	fmt.Printf("Loading state into memory ...\n")
-	collector := accountCollector{}
-	if err := trie.VisitTrie(&collector); err != nil {
-		return nil, errors.Join(err, trie.Close())
-	}
-	fmt.Printf("Loading finished, took %v\n", time.Since(start))
 
 	codes := map[common.Hash][]byte{}
 	for hash, code := range stateCodes {
@@ -422,7 +432,7 @@ func OpenBufferedMptState(directory string, config MptConfig) (MptState, error) 
 	// Combine data and backend data structure.
 	return &memoryState{
 		state:    base,
-		accounts: collector.accounts,
+		accounts: accounts,
 		codes:    codes,
 		updates:  updates,
 		errors:   errors,
@@ -645,4 +655,108 @@ func (c *accountCollector) Visit(node Node, _ NodeInfo) VisitResponse {
 		c.currentValues[cur.key] = cur.value
 	}
 	return VisitResponseContinue
+}
+
+func loadAccounts(directory string, config MptConfig) (map[common.Address]account, error) {
+	source, err := openVerificationNodeSource(directory, config)
+	if err != nil {
+		return nil, err
+	}
+
+	type entry struct {
+		address common.Address
+		info    AccountInfo
+		store   NodeId
+	}
+
+	links := []link{}
+	entries := []entry{}
+	values := []slot{}
+
+	// Load all data in a disk-friendly way.
+	start := time.Now()
+	fmt.Printf("Loading data ...\n")
+	source.forAllNodes(func(id NodeId, node Node) error {
+		switch cur := node.(type) {
+		case *BranchNode:
+			for i := 0; i < 16; i++ {
+				if next := cur.children[i]; !next.IsEmpty() {
+					links = append(links, link{id, next})
+				}
+			}
+		case *ExtensionNode:
+			links = append(links, link{id, cur.next})
+		case *AccountNode:
+			if cur.storage.IsEmpty() {
+				links = append(links, link{id, cur.storage})
+			}
+			entries = append(entries, entry{cur.address, cur.info, cur.storage})
+		case *ValueNode:
+			values = append(values, slot{id, cur.key, cur.value})
+		}
+		return nil
+	})
+	fmt.Printf("Loading took %v\n", time.Since(start))
+
+	start = time.Now()
+	fmt.Printf("Sorting data ...\n")
+	sort.Slice(links, func(i, j int) bool {
+		return links[i].from < links[j].from || (links[i].from == links[j].from && links[i].to < links[j].to)
+	})
+	sort.Slice(values, func(i, j int) bool {
+		return values[i].id < values[j].id
+	})
+	fmt.Printf("Sorting took %v\n", time.Since(start))
+
+	start = time.Now()
+	fmt.Printf("Resolving data ...\n")
+	res := map[common.Address]account{}
+	for _, entry := range entries {
+		account := account{info: entry.info}
+		if !entry.store.IsEmpty() {
+			account.storage = map[common.Key]common.Value{}
+			err := visitAllSlots(entry.store, links, values, func(slot *slot) {
+				account.storage[slot.key] = slot.value
+			})
+			if err != nil {
+				return nil, errors.Join(err, source.close())
+			}
+		}
+		res[entry.address] = account
+	}
+	fmt.Printf("Resolution took %v\n", time.Since(start))
+
+	return res, source.close()
+}
+
+func visitAllSlots(root NodeId, links []link, slots []slot, consume func(*slot)) error {
+	if root.IsValue() {
+		pos, found := slices.BinarySearchFunc(slots, slot{id: root}, func(i, j slot) int {
+			return cmp.Compare(i.id, j.id)
+		})
+		if !found {
+			return fmt.Errorf("missing value node %v", root)
+		}
+		consume(&slots[pos])
+		return nil
+	}
+	from, _ := slices.BinarySearchFunc(links, link{root, EmptyId()}, func(i, j link) int {
+		return cmp.Compare(i.from, j.from)
+	})
+	for i := from; i < len(links) && links[i].from == root; i++ {
+		if err := visitAllSlots(links[i].to, links, slots, consume); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type link struct {
+	from, to NodeId
+}
+
+type slot struct {
+	id    NodeId
+	key   common.Key
+	value common.Value
 }

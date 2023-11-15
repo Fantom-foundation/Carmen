@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
@@ -81,5 +82,51 @@ func TestReadCodes(t *testing.T) {
 
 	if code, exists := res[h3]; !exists || !bytes.Equal(code, code3) {
 		t.Errorf("bytes do not match: %x != %x", code, code1)
+	}
+}
+
+const exampleState = "/tmp/state_db_carmen_go-file_5000000"
+
+func TestMemoryState_Visit(t *testing.T) {
+	path := exampleState
+
+	state, err := OpenFileLiveTrie(path, S5LiveConfig)
+	if err != nil {
+		t.Fatalf("failed to open state: %v", err)
+	}
+
+	collector := accountCollector{}
+	state.VisitTrie(&collector)
+	state.Close()
+}
+
+func TestMemoryState_FastLoad(t *testing.T) {
+	path := exampleState
+
+	_, err := loadAccounts(path, S5LiveConfig)
+	if err != nil {
+		t.Fatalf("failed to load data: %v", err)
+	}
+}
+
+func TestMemoryState_LoadedStateIsIdentical(t *testing.T) {
+	path := exampleState
+
+	state, err := OpenFileLiveTrie(path, S5LiveConfig)
+	if err != nil {
+		t.Fatalf("failed to open state: %v", err)
+	}
+
+	collector := accountCollector{}
+	state.VisitTrie(&collector)
+	state.Close()
+
+	res2, err := loadAccounts(path, S5LiveConfig)
+	if err != nil {
+		t.Fatalf("failed to load data: %v", err)
+	}
+
+	if !reflect.DeepEqual(collector.accounts, res2) {
+		t.Errorf("loaded data is not identical")
 	}
 }
