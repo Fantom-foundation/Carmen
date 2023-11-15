@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -89,6 +89,9 @@ type Forest struct {
 
 	// A buffer for asynchronously writing nodes to files.
 	writeBuffer WriteBuffer
+
+	// The total size of the maintained nodes in bytes.
+	nodesMemorySize atomic.Uint64
 }
 
 // The number of elements to retain in the node cache.
@@ -421,30 +424,28 @@ func (s *Forest) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("extensions", s.extensions.GetMemoryFootprint())
 	mf.AddChild("values", s.values.GetMemoryFootprint())
 	s.nodeCacheMutex.Lock()
-	defer s.nodeCacheMutex.Unlock()
-	mf.AddChild("cache", s.nodeCache.GetDynamicMemoryFootprint(func(node *shared.Shared[Node]) uintptr {
-		handle := node.GetReadHandle()
-		defer handle.Release()
-		if _, ok := handle.Get().(*AccountNode); ok {
-			return unsafe.Sizeof(AccountNode{})
-		}
-		if _, ok := handle.Get().(*BranchNode); ok {
-			return unsafe.Sizeof(BranchNode{})
-		}
-		if _, ok := handle.Get().(EmptyNode); ok {
-			return unsafe.Sizeof(EmptyNode{})
-		}
-		if _, ok := handle.Get().(*ExtensionNode); ok {
-			return unsafe.Sizeof(ExtensionNode{})
-		}
-		if _, ok := handle.Get().(*ValueNode); ok {
-			return unsafe.Sizeof(ValueNode{})
-		}
-		panic(fmt.Sprintf("unexpected node type: %v", reflect.TypeOf(node)))
-	}))
+	mf.AddChild("cache", s.nodeCache.GetMemoryFootprint(0))
+	s.nodeCacheMutex.Unlock()
+	mf.AddChild("nodes", common.NewMemoryFootprint(uintptr(s.nodesMemorySize.Load())))
 	mf.AddChild("hashedKeysCache", s.keyHasher.GetMemoryFootprint())
 	mf.AddChild("hashedAddressesCache", s.addressHasher.GetMemoryFootprint())
 	return mf
+}
+
+func getSizeOfNode(id NodeId) uint64 {
+	if id.IsBranch() {
+		return uint64(unsafe.Sizeof(BranchNode{}))
+	}
+	if id.IsValue() {
+		return uint64(unsafe.Sizeof(ValueNode{}))
+	}
+	if id.IsAccount() {
+		return uint64(unsafe.Sizeof(AccountNode{}))
+	}
+	if id.IsExtension() {
+		return uint64(unsafe.Sizeof(ExtensionNode{}))
+	}
+	return 0
 }
 
 // Dump prints the content of the Trie to the console. Mainly intended for debugging.
@@ -605,10 +606,12 @@ func (s *Forest) addToCacheHoldingCacheMutexLock(id NodeId, node *shared.Shared[
 	if s.nodeCacheMutex.TryLock() {
 		panic("caller must hold node cache lock")
 	}
+	s.nodesMemorySize.Add(getSizeOfNode(id))
 	evictedId, evictedNode, evicted := s.nodeCache.Set(id, node)
 	if !evicted {
 		return
 	}
+	s.nodesMemorySize.Add(-getSizeOfNode(evictedId))
 
 	// Clean nodes can be ignored, dirty nodes need to be written.
 	s.dirtyMutex.Lock()
@@ -709,8 +712,12 @@ func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
 
 func (s *Forest) release(id NodeId) error {
 	s.nodeCacheMutex.Lock()
-	s.nodeCache.Remove(id)
+	_, existed := s.nodeCache.Remove(id)
 	s.nodeCacheMutex.Unlock()
+
+	if existed {
+		s.nodesMemorySize.Add(-getSizeOfNode(id))
+	}
 
 	s.dirtyMutex.Lock()
 	delete(s.dirty, id)

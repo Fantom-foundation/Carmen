@@ -603,7 +603,6 @@ func (s *memoryState) GetMemoryFootprint() *common.MemoryFootprint {
 		size += uintptr(len(code))
 	}
 	mf.AddChild("codes", common.NewMemoryFootprint(size))
-
 	return mf
 }
 
