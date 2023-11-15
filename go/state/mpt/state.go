@@ -719,9 +719,9 @@ func loadAccounts(directory string, config MptConfig) (map[common.Address]accoun
 	var wg sync.WaitGroup
 	wg.Add(N)
 	pos := atomic.Uint64{}
-	for i := 0; i < 8; i++ {
+	for i := 0; i < N; i++ {
 		go func() {
-			wg.Done()
+			defer wg.Done()
 			next := pos.Add(1)
 			for next <= uint64(len(entries)) {
 				entry := entries[next-1]
