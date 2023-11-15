@@ -8,6 +8,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 	"unsafe"
@@ -398,6 +399,8 @@ func OpenBufferedMptState(directory string, config MptConfig) (MptState, error) 
 	done := make(chan bool)
 
 	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
 		defer close(errors)
 		defer close(sync)
 		defer close(done)
