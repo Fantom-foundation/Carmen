@@ -7,6 +7,13 @@ import (
 	"testing"
 )
 
+func TestUpdateEmpty(t *testing.T) {
+	update := Update{}
+	if !update.IsEmpty() {
+		t.Errorf("update should be empty")
+	}
+}
+
 func TestUpdateEmptyUpdateCheckReportsNoErrors(t *testing.T) {
 	update := Update{}
 	if err := update.Check(); err != nil {

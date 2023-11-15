@@ -10,13 +10,13 @@ import (
 // Depot wraps a Depot with a cache.
 type Depot[I common.Identifier] struct {
 	depot     depot.Depot[I]
-	cache     *common.Cache[I, []byte]
-	sizeCache *common.Cache[I, int]
+	cache     *common.LruCache[I, []byte]
+	sizeCache *common.LruCache[I, int]
 }
 
 // NewDepot constructs a new Depot instance, caching access to the wrapped Depot.
 func NewDepot[I common.Identifier](wrapped depot.Depot[I], cacheCapacity int, sizeCacheCapacity int) *Depot[I] {
-	return &Depot[I]{wrapped, common.NewCache[I, []byte](cacheCapacity), common.NewCache[I, int](sizeCacheCapacity)}
+	return &Depot[I]{wrapped, common.NewLruCache[I, []byte](cacheCapacity), common.NewLruCache[I, int](sizeCacheCapacity)}
 }
 
 func (m *Depot[I]) Set(id I, value []byte) (err error) {

@@ -1,10 +1,8 @@
 package common
 
 import (
-	"fmt"
 	"math"
 	"sync"
-	"sync/atomic"
 	"unsafe"
 
 	"golang.org/x/exp/constraints"
@@ -30,12 +28,9 @@ type NWaysCache[K constraints.Integer, V any] struct {
 	nways   uint         // number of ways
 	numsets uint         // number of sets: nways * numsets -> capacity rounded up
 	tickers []uint64
-
-	misses atomic.Uint64
-	hits   atomic.Uint64
 }
 
-// NewNWaysCache creates a new N-ways Cache with the configured capacity and number of ways.
+// NewNWaysCache creates a new N-ways LruCache with the configured capacity and number of ways.
 // Note that actual capacity will be aligned to multiplies of ways.
 func NewNWaysCache[K constraints.Integer, V any](capacity, ways int) *NWaysCache[K, V] {
 	numsets := int(math.Ceil(float64(capacity) / float64(ways)))
@@ -59,18 +54,12 @@ func (c *NWaysCache[K, V]) Get(key K) (V, bool) {
 	for i := position; i < position+c.nways; i++ {
 		if c.items[i].used > 0 && c.items[i].key == key {
 			c.items[i].used = c.tickers[setIndex]
-			if MissHitMeasuring {
-				c.hits.Add(1)
-			}
 			value := c.items[i].value
 			c.locks[setIndex].Unlock()
 			return value, true
 		}
 	}
 
-	if MissHitMeasuring {
-		c.misses.Add(1)
-	}
 	c.locks[setIndex].Unlock()
 	var v V
 	return v, false
@@ -168,9 +157,6 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 		// key found in a non-empty location -> return its value.
 		if c.items[i].used > 0 && c.items[i].key == key {
 			c.items[i].used = c.tickers[setIndex]
-			if MissHitMeasuring {
-				c.hits.Add(1)
-			}
 			value := c.items[i].value
 			c.locks[setIndex].Unlock()
 			return value, true, evictedKey, evictedValue, false
@@ -179,10 +165,6 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 			oldest = c.items[i].used
 			oldestIndex = i
 		}
-	}
-
-	if MissHitMeasuring {
-		c.misses.Add(1)
 	}
 
 	// evict the oldest used key
@@ -200,12 +182,21 @@ func (c *NWaysCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evic
 // This method is locking around the callback, i.e. the client should
 // not hold the method for a long time.
 func (c *NWaysCache[K, V]) Iterate(callback func(K, V) bool) {
+	c.IterateMutable(func(k K, v *V) bool {
+		return callback(k, *v)
+	})
+}
+
+func (c *NWaysCache[K, V]) IterateMutable(callback func(K, *V) bool) {
 	for i := 0; i < int(c.numsets); i += 1 {
 		c.locks[i*PaddingMultiplier].Lock()
 		for j := 0; j < int(c.nways); j++ {
 			pos := i*int(c.nways) + j
 			if c.items[pos].used > 0 {
-				callback(c.items[pos].key, c.items[pos].value)
+				if !callback(c.items[pos].key, &c.items[pos].value) {
+					c.locks[i*PaddingMultiplier].Unlock()
+					return
+				}
 			}
 		}
 		c.locks[i*PaddingMultiplier].Unlock()
@@ -231,9 +222,6 @@ func (c *NWaysCache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *Memo
 	entrySize := unsafe.Sizeof(entry[K, V]{})
 	capacity := c.numsets * c.nways
 	mf := NewMemoryFootprint(selfSize + uintptr(capacity)*(entrySize+referencedValueSize))
-	if MissHitMeasuring {
-		mf.SetNote(c.getHitRatioReport())
-	}
 	return mf
 }
 
@@ -251,17 +239,7 @@ func (c *NWaysCache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) u
 		}
 	}
 	mf := NewMemoryFootprint(selfSize + size)
-	if MissHitMeasuring {
-		mf.SetNote(c.getHitRatioReport())
-	}
 	return mf
-}
-
-func (c *NWaysCache[K, V]) getHitRatioReport() string {
-	hits := c.hits.Load()
-	misses := c.misses.Load()
-	hitRatio := float32(hits) / float32(hits+misses)
-	return fmt.Sprintf("(n-way, size: %d, misses: %d, hits: %d, hitRatio: %f)", len(c.items), misses, hits, hitRatio)
 }
 
 type nWaysCacheEntry[K constraints.Integer, V any] struct {

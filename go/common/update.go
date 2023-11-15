@@ -89,31 +89,27 @@ func (u *Update) AppendSlotUpdate(addr Address, key Key, value Value) {
 
 // Normalize sorts all updates and removes duplicates.
 func (u *Update) Normalize() error {
-	var err error
-	u.DeletedAccounts, err = sortAndMakeUnique(u.DeletedAccounts, accountLess, accountEqual)
-	if err != nil {
-		return err
+
+	u.DeletedAccounts = sortUnique(u.DeletedAccounts, accountLess, accountEqual)
+	u.CreatedAccounts = sortUnique(u.CreatedAccounts, accountLess, accountEqual)
+	u.Balances = sortUnique(u.Balances, balanceLess, balanceEqual)
+	u.Codes = sortUnique(u.Codes, codeLess, codeEqual)
+	u.Nonces = sortUnique(u.Nonces, nonceLess, nonceEqual)
+	u.Slots = sortUnique(u.Slots, slotLess, slotEqual)
+
+	if !isSortedAndUnique(u.Balances, balanceLess) {
+		return fmt.Errorf("balances are not unique: %v", u.Balances)
 	}
-	u.CreatedAccounts, err = sortAndMakeUnique(u.CreatedAccounts, accountLess, accountEqual)
-	if err != nil {
-		return err
+	if !isSortedAndUnique(u.Codes, codeLess) {
+		return fmt.Errorf("balances are not unique: %v", u.Codes)
 	}
-	u.Balances, err = sortAndMakeUnique(u.Balances, balanceLess, balanceEqual)
-	if err != nil {
-		return err
+	if !isSortedAndUnique(u.Nonces, nonceLess) {
+		return fmt.Errorf("balances are not unique: %v", u.Nonces)
 	}
-	u.Codes, err = sortAndMakeUnique(u.Codes, codeLess, codeEqual)
-	if err != nil {
-		return err
+	if !isSortedAndUnique(u.Slots, slotLess) {
+		return fmt.Errorf("balances are not unique: %v", u.Slots)
 	}
-	u.Nonces, err = sortAndMakeUnique(u.Nonces, nonceLess, nonceEqual)
-	if err != nil {
-		return err
-	}
-	u.Slots, err = sortAndMakeUnique(u.Slots, slotLess, slotEqual)
-	if err != nil {
-		return err
-	}
+
 	return nil
 }
 
@@ -441,10 +437,6 @@ func slotEqual(a, b *SlotUpdate) bool {
 	return *a == *b
 }
 
-func (*Update) GetHash() Hash {
-	return Hash{} // TODO
-}
-
 type BalanceUpdate struct {
 	Account Address
 	Balance Balance
@@ -466,27 +458,6 @@ type SlotUpdate struct {
 	Value   Value
 }
 
-func sortAndMakeUnique[T any](list []T, less func(a, b *T) bool, equal func(a, b *T) bool) ([]T, error) {
-	if len(list) <= 1 {
-		return list, nil
-	}
-	sort.Slice(list, func(i, j int) bool { return less(&list[i], &list[j]) })
-	res := make([]T, 0, len(list))
-	res = append(res, list[0])
-	for i := 1; i < len(list); i++ {
-		end := &res[len(res)-1]
-		if less(end, &list[i]) {
-			res = append(res, list[i])
-		} else if equal(end, &list[i]) {
-			// skip duplicates
-		} else {
-			// Same key, but different values => this needs to fail
-			return nil, fmt.Errorf("Unable to resolve duplicate element: %v and %v", *end, list[i])
-		}
-	}
-	return res, nil
-}
-
 func isSortedAndUnique[T any](list []T, less func(a, b *T) bool) bool {
 	for i := 0; i < len(list)-1; i++ {
 		if !less(&list[i], &list[i+1]) {
@@ -494,4 +465,28 @@ func isSortedAndUnique[T any](list []T, less func(a, b *T) bool) bool {
 		}
 	}
 	return true
+}
+
+// sortUnique sorts an input array and removes duplicities.
+// The resulting array is returned.
+// The first callback function is used to compare items of the array to sort them.
+// The callback should return true if a < b.
+// The other callback function is used to compare values of the sorted array to remove duplicities.
+// Since two distinct functions are provided, sorting and equality check can be done partly differently.
+// For instance, a balance update is sorted by the address only, but duplicates are removed using both the address
+// and the balance.
+func sortUnique[T any](list []T, less func(a, b *T) bool, equal func(a, b *T) bool) []T {
+	if len(list) <= 1 {
+		return list
+	}
+	sort.Slice(list, func(i, j int) bool { return less(&list[i], &list[j]) })
+	j := 0
+	for i := 1; i < len(list); i++ {
+		if !equal(&list[j], &list[i]) {
+			j++
+			list[j] = list[i]
+		}
+	}
+
+	return list[:j+1]
 }

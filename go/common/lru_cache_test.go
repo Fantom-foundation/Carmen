@@ -5,7 +5,7 @@ import (
 )
 
 func TestLruExceedCapacity(t *testing.T) {
-	c := NewCache[int, int](3)
+	c := NewLruCache[int, int](3)
 
 	c.Set(1, 11)
 	c.Set(2, 22)
@@ -32,7 +32,7 @@ func TestLruExceedCapacity(t *testing.T) {
 
 // TestLRUOrder test correct ordering of the keys
 func TestLRUOrder(t *testing.T) {
-	c := NewCache[int, int](3)
+	c := NewLruCache[int, int](3)
 
 	c.Set(1, 11)
 	c.Set(2, 22)
@@ -64,28 +64,8 @@ func TestLRUOrder(t *testing.T) {
 	}
 }
 
-func TestHitRatio(t *testing.T) {
-	if !MissHitMeasuring {
-		t.Skip("MissHitMeasuring is disabled - skipping the test")
-	}
-
-	c := NewCache[int, int](3)
-	c.Set(1, 11)
-	c.Set(2, 22)
-
-	c.Get(1) // hit
-	c.Get(8) // miss
-	c.Get(2) // hit
-	c.Get(9) // miss
-
-	report := c.getHitRatioReport()
-	if report != "(misses: 2, hits: 2, hitRatio: 0.500000)" {
-		t.Errorf("unexpected memory footprint report: %s", report)
-	}
-}
-
 func TestLRUCache_GetOrSet(t *testing.T) {
-	c := NewCache[int, int](4)
+	c := NewLruCache[int, int](4)
 
 	if _, present, _, _, evicted := c.GetOrSet(1, 11); present || evicted {
 		t.Errorf("value should be neither present nor evicted")
@@ -109,4 +89,12 @@ func TestLRUCache_GetOrSet(t *testing.T) {
 		t.Errorf("value should be evicted: %d != 9", current)
 	}
 
+}
+
+func TestCache_Entry_String(t *testing.T) {
+	e := entry[int, int]{10, 20, nil, nil}
+
+	if got, want := e.String(), "Entry: 10 -> 20"; got != want {
+		t.Errorf("provided string does not match: %s != %s", got, want)
+	}
 }

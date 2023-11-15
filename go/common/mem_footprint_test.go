@@ -24,6 +24,41 @@ func TestMemoryFootprintIsFormatable(t *testing.T) {
 	expectSubstr(t, print, "10.2 MB ./right")
 }
 
+func TestMemoryFootprintContainsNote(t *testing.T) {
+	fp := NewMemoryFootprint(12)
+	fp.SetNote("Hello")
+
+	if !strings.Contains(fp.String(), "Hello") {
+		t.Errorf("note not printed")
+	}
+}
+
+func TestMemoryFootprintValue(t *testing.T) {
+	fp := NewMemoryFootprint(12)
+
+	if got, want := fp.Value(), 12; got != uintptr(want) {
+		t.Errorf("value does not match: %d != %d", got, want)
+	}
+}
+
+func TestMemoryFootprint_Recursive(t *testing.T) {
+	fp := NewMemoryFootprint(12)
+	fp.AddChild("x", fp)
+
+	if got, want := fp.Total(), 12; got != uintptr(want) {
+		t.Errorf("value does not match: %d != %d", got, want)
+	}
+}
+
+func TestMemoryFootprint_ChildNil(t *testing.T) {
+	fp := NewMemoryFootprint(12)
+	fp.AddChild("x", nil)
+
+	if got, want := fp.Total(), 12; got != uintptr(want) {
+		t.Errorf("value does not match: %d != %d", got, want)
+	}
+}
+
 func TestMemoryFootprintPrintsComponentsInOrder(t *testing.T) {
 	fp := NewMemoryFootprint(4)
 	fp.AddChild("b", NewMemoryFootprint(5))

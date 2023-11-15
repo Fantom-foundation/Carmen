@@ -2,8 +2,10 @@ package common
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
+	"unsafe"
 )
 
 func TestEmpty(t *testing.T) {
@@ -58,6 +60,36 @@ func TestCacheRemove(t *testing.T) {
 
 			if actual, exists := c.Get(4); !exists {
 				t.Errorf("Item not present: %v", actual)
+			}
+		})
+	}
+}
+
+func Test_HitMissRatio_Report(t *testing.T) {
+	for name, underlying := range initCaches(3) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+			c := NewMissHitTrackingCache(underlying)
+			c.Set(1, 11)
+			c.Set(2, 22)
+
+			c.Get(1) // hit
+			c.Get(8) // miss
+			c.Get(2) // hit
+			c.Get(9) // miss
+
+			report := c.getHitRatioReport()
+			if !strings.HasSuffix(report, "(misses: 2, hits: 2, hitRatio: 0.500000)") {
+				t.Errorf("unexpected memory footprint report: %s", report)
+			}
+		})
+	}
+}
+
+func TestCache_Remove_NonExisting(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+			if removed, exists := c.Remove(1); exists || removed != 0 {
+				t.Errorf("item removed: %v", removed)
 			}
 		})
 	}
@@ -144,6 +176,115 @@ func TestCache_Iterate(t *testing.T) {
 	}
 }
 
+func TestCache_IterateMutable(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			expected := map[int]int{
+				1:  100,
+				10: 300,
+				30: 400,
+			}
+
+			for k, v := range expected {
+				c.Set(k, v)
+			}
+
+			c.IterateMutable(func(key int, val *int) bool {
+				*val = *val * 10 // modify each value
+				return true
+			})
+
+			var counter int
+			c.Iterate(func(key int, val int) bool {
+				counter++
+				if _, exists := expected[key]; !exists {
+					t.Errorf("key was not inserted: %d", key)
+				}
+				if got, want := expected[key]*10, val; got != want {
+					t.Errorf("wrong value for key: %d -> %d != %d", 1, got, want)
+				}
+				return true
+			})
+
+			if got, want := len(expected), counter; got != want {
+				t.Errorf("wrong number of iterations: %d != %d", got, want)
+			}
+		})
+	}
+}
+
+func TestCache_IterateMutable_Terminated(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			expected := map[int]int{
+				1:  100,
+				10: 300,
+				30: 400,
+			}
+
+			for k, v := range expected {
+				c.Set(k, v)
+			}
+
+			var modifiedKey int
+			c.IterateMutable(func(key int, val *int) bool {
+				modifiedKey = key
+				*val = *val * 10 // modify each value
+				return false     // terminate
+			})
+
+			c.Iterate(func(key int, val int) bool {
+				if _, exists := expected[key]; !exists {
+					t.Errorf("key was not inserted: %d", key)
+				}
+				multiplier := 1
+				if key == modifiedKey {
+					multiplier = 10
+				}
+				if got, want := expected[key]*multiplier, val; got != want {
+					t.Errorf("wrong value for key: %d -> %d != %d", 1, got, want)
+				}
+				return true
+			})
+		})
+	}
+}
+
+func TestCache_Iterate_Terminated(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			expected := map[int]int{
+				1:  100,
+				10: 300,
+				30: 400,
+			}
+
+			for k, v := range expected {
+				c.Set(k, v)
+			}
+
+			data := make(map[int]int)
+			c.Iterate(func(key int, val int) bool {
+				data[key] = val
+				return false // terminate after one iteration
+			})
+
+			if got, want := len(data), 1; got != want {
+				t.Errorf("wrong number of keys iterated: %v", data)
+			}
+
+			for k, v := range data {
+				if got, want := v, expected[k]; got != want {
+					t.Errorf("wrong value for key: %d -> %d != %d", 1, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestSettingExisting(t *testing.T) {
 	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
@@ -186,6 +327,40 @@ func TestCache_InsertDeleteInsertIterate(t *testing.T) {
 				}
 				return true
 			})
+		})
+	}
+}
+
+func TestCache_GetMemoryFootprint(t *testing.T) {
+	for name, c := range initCaches(3) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			c.Set(1, 12336)
+			c.Set(9, 12336)
+
+			var v int
+			size := unsafe.Sizeof(v)
+			fp := c.GetMemoryFootprint(size)
+			if fp.value <= 0 {
+				t.Errorf("wrong size provided: %d", fp.value)
+			}
+		})
+	}
+}
+
+func TestCache_DynamicMemoryFootprint(t *testing.T) {
+	for name, c := range initCaches(3) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			c.Set(1, 12336)
+			c.Set(9, 12336)
+
+			fp := c.GetDynamicMemoryFootprint(func(v int) uintptr {
+				return unsafe.Sizeof(v)
+			})
+			if fp.value <= 0 {
+				t.Errorf("wrong size provided: %d", fp.value)
+			}
 		})
 	}
 }
@@ -242,62 +417,48 @@ func ExamplePrintNumberOfEvictions() {
 		}
 	}
 	for name, count := range evictions {
-		fmt.Printf("Cache: %s, evictions: %2.2f%%\n", name, float32(count)/float32(N)*100)
+		fmt.Printf("LruCache: %s, evictions: %2.2f%%\n", name, float32(count)/float32(N)*100)
 	}
 }
 
-// Cache implements a memory overlay for the key-value pair.
-// The keys can be set and obtained from the cache. The keys
-// accumulate in the cache until the cache is full, i.e. it reaches its capacity.
-// When this happens, a new key causes eviction of another key.
-type cache[K any, V any] interface {
-	// Get returns a value from the cache or false. If the value exists, its number of use is updated
-	Get(key K) (V, bool)
-	// Set associates a key to the cache.
-	// If the key is already present, the value is updated and the key marked as
-	// used. If the value is not present, a new entry is added to this
-	// cache. This causes another entry to be removed if the cache size is exceeded.
-	Set(key K, val V) (evictedKey K, evictedValue V, evicted bool)
-
-	// Remove deletes the key from the map and returns the deleted value
-	Remove(key K) (original V, exists bool)
-
-	// GetOrSet tries to locate the input key in the cache. IF the key exists, its value is returned.
-	// If the key does not exist, the input value is stored under this key.
-	// When the key is stored in this cache, another key and value may be evicted.
-	// This method returns true if the key was present in the cache. It also returns if another key was evicted due
-	// to inserting this key.
-	GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool)
-
-	// Iterate all cached entries - calls the callback for each key-value pair in the cache
-	Iterate(callback func(K, V) bool)
-
-	// Clear removes all elements from the cahce.
-	Clear()
-}
-
-func initCaches(capacity int) map[string]cache[int, int] {
-	return map[string]cache[int, int]{
-		"lruCache":        NewCache[int, int](capacity),
-		"synced lruCache": NewSyncedCache[int, int](NewCache[int, int](capacity)),
-		"2-ways Cache":    NewNWaysCache[int, int](capacity, 2),
-		"4-ways Cache":    NewNWaysCache[int, int](capacity, 4),
-		"8-ways Cache":    NewNWaysCache[int, int](capacity, 8),
-		"16-ways Cache":   NewNWaysCache[int, int](capacity, 16),
-		"32-ways Cache":   NewNWaysCache[int, int](capacity, 32),
+func initCaches(capacity int) map[string]Cache[int, int] {
+	return map[string]Cache[int, int]{
+		"lruCache":           NewLruCache[int, int](capacity),
+		"missHit LruCache":   NewMissHitTrackingCache[int, int](NewLruCache[int, int](capacity)),
+		"missHit NWaysCache": NewMissHitTrackingCache[int, int](NewNWaysCache[int, int](capacity, 2)),
+		"synced lruCache":    NewSyncedCache[int, int](NewLruCache[int, int](capacity)),
+		"2-ways LruCache":    NewNWaysCache[int, int](capacity, 2),
+		"4-ways LruCache":    NewNWaysCache[int, int](capacity, 4),
+		"8-ways LruCache":    NewNWaysCache[int, int](capacity, 8),
+		"16-ways LruCache":   NewNWaysCache[int, int](capacity, 16),
+		"32-ways LruCache":   NewNWaysCache[int, int](capacity, 32),
 	}
 }
 
 type SyncedCache[K any, V any] struct {
-	cache[K, V]
-	lock sync.Mutex
+	cache Cache[K, V]
+	lock  sync.Mutex
 }
 
-func NewSyncedCache[K any, V any](wrapped cache[K, V]) *SyncedCache[K, V] {
+func NewSyncedCache[K any, V any](wrapped Cache[K, V]) *SyncedCache[K, V] {
 	return &SyncedCache[K, V]{
 		cache: wrapped,
 		lock:  sync.Mutex{},
 	}
+}
+
+func (c *SyncedCache[K, V]) Iterate(callback func(K, V) bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.cache.Iterate(callback)
+}
+
+func (c *SyncedCache[K, V]) IterateMutable(callback func(K, *V) bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.cache.IterateMutable(callback)
 }
 
 func (c *SyncedCache[K, V]) Get(key K) (V, bool) {
@@ -314,9 +475,37 @@ func (c *SyncedCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evi
 	return c.cache.Set(key, val)
 }
 
+func (c *SyncedCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.cache.GetOrSet(key, val)
+}
+
 func (c *SyncedCache[K, V]) Remove(key K) (original V, exists bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	return c.cache.Remove(key)
+}
+
+func (c *SyncedCache[K, V]) Clear() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.cache.Clear()
+}
+
+func (c *SyncedCache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.cache.GetMemoryFootprint(referencedValueSize)
+}
+
+func (c *SyncedCache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintptr) *MemoryFootprint {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.cache.GetDynamicMemoryFootprint(valueSizeProvider)
 }

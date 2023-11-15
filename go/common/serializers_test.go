@@ -3,6 +3,8 @@ package common_test
 import (
 	"bytes"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"golang.org/x/exp/rand"
+	"slices"
 	"testing"
 )
 
@@ -101,5 +103,99 @@ func TestSlotReincValueSerializer(t *testing.T) {
 	}
 	if !bytes.Equal(b, b3) {
 		t.Errorf("Conversion fails")
+	}
+}
+
+func TestSerializers(t *testing.T) {
+	loops := rand.Intn(10_000)
+
+	t.Run("TestSerializers_Address", func(t *testing.T) {
+		var a common.Address
+		const size = 20
+		for i := 1; i < loops; i++ {
+			a[i%size]++
+		}
+		testSerializer[common.Address](t, a, size, common.AddressSerializer{})
+	})
+
+	t.Run("TestSerializers_Key", func(t *testing.T) {
+		var a common.Key
+		const size = 32
+		for i := 1; i < loops; i++ {
+			a[i%size]++
+		}
+		testSerializer[common.Key](t, a, size, common.KeySerializer{})
+	})
+
+	t.Run("TestSerializers_Value", func(t *testing.T) {
+		var a common.Value
+		const size = 32
+		for i := 1; i < loops; i++ {
+			a[i%size]++
+		}
+		testSerializer[common.Value](t, a, size, common.ValueSerializer{})
+	})
+
+	t.Run("TestSerializers_Hash", func(t *testing.T) {
+		var a common.Hash
+		const size = 32
+		for i := 1; i < loops; i++ {
+			a[i%size]++
+		}
+		testSerializer[common.Hash](t, a, size, common.HashSerializer{})
+	})
+
+	t.Run("TestSerializers_AccountState", func(t *testing.T) {
+		var a common.AccountState = 253
+		testSerializer[common.AccountState](t, a, 1, common.AccountStateSerializer{})
+	})
+
+	t.Run("TestSerializers_Balance", func(t *testing.T) {
+		var a common.Balance
+		const size = 16
+		for i := 1; i < loops; i++ {
+			a[i%size]++
+		}
+		testSerializer[common.Balance](t, a, size, common.BalanceSerializer{})
+	})
+
+	t.Run("TestSerializers_Nonce", func(t *testing.T) {
+		var a common.Nonce
+		const size = 8
+		for i := 1; i < loops; i++ {
+			a[i%size]++
+		}
+		testSerializer[common.Nonce](t, a, size, common.NonceSerializer{})
+	})
+
+	t.Run("TestSerializers_Identifier32", func(t *testing.T) {
+		var a = uint32(loops)
+		const size = 4
+		testSerializer[uint32](t, a, size, common.Identifier32Serializer{})
+	})
+
+	t.Run("TestSerializers_Identifier64", func(t *testing.T) {
+		var a = uint64(loops)
+		const size = 8
+		testSerializer[uint64](t, a, size, common.Identifier64Serializer{})
+	})
+
+}
+
+func testSerializer[T comparable](t *testing.T, val T, size int, serializer common.Serializer[T]) {
+	serialized := serializer.ToBytes(val)
+
+	if got, want := serializer.FromBytes(serialized), val; got != want {
+		t.Errorf("recovered value do not match: %v != %v", got, want)
+	}
+
+	got := make([]byte, size)
+	serializer.CopyBytes(val, got)
+	if !slices.Equal(got, serialized) {
+		t.Errorf("recovered value do not match: %v != %v", got, serialized)
+	}
+
+	if got, want := serializer.Size(), size; got != want {
+		t.Errorf("sizes do not match: %v != %v", got, want)
 	}
 }

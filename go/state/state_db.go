@@ -178,7 +178,7 @@ type stateDB struct {
 	writtenSlots map[*slotValue]bool
 
 	// A non-transactional local cache of stored storage values.
-	storedDataCache *common.Cache[slotId, storedDataCacheValue]
+	storedDataCache *common.LruCache[slotId, storedDataCacheValue]
 
 	// A non-transactional reincarnation counter for accounts. This is used to efficiently invalidate data in
 	// the storedDataCache upon account deletion. The maintained values are internal information only.
@@ -372,7 +372,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
-		storedDataCache:   common.NewCache[slotId, storedDataCacheValue](storedDataCacheCapacity),
+		storedDataCache:   common.NewLruCache[slotId, storedDataCacheValue](storedDataCacheCapacity),
 		reincarnation:     map[common.Address]uint64{},
 		codes:             map[common.Address]*codeValue{},
 		refund:            0,

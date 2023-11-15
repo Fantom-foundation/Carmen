@@ -458,10 +458,7 @@ func TestGetMemoryFootprint(t *testing.T) {
 			defer state.Close()
 
 			memoryFootprint := state.GetMemoryFootprint()
-			str, err := memoryFootprint.ToString("state")
-			if err != nil {
-				t.Fatalf("failed to get state memory footprint; %s", err)
-			}
+			str := memoryFootprint.ToString("state")
 			if config.schema <= 3 && !strings.Contains(str, "hashTree") {
 				t.Errorf("memory footprint string does not contain any hashTree")
 			}

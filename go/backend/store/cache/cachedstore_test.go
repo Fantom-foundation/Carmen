@@ -30,7 +30,7 @@ func TestStoreCacheFilled(t *testing.T) {
 
 	// default value is cached
 	if _, exists := store.cache.Get(0); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 
 	// fill in next store elements
@@ -43,13 +43,13 @@ func TestStoreCacheFilled(t *testing.T) {
 
 	// and check the cache
 	if _, exists := store.cache.Get(0); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 	if _, exists := store.cache.Get(1); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 	if _, exists := store.cache.Get(2); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 }
 
@@ -74,16 +74,16 @@ func TestStoreCacheEviction(t *testing.T) {
 
 	// and check the cache - first one is evicted
 	if _, exists := store.cache.Get(0); exists {
-		t.Errorf("Cache item must be evicted")
+		t.Errorf("LruCache item must be evicted")
 	}
 	if _, exists := store.cache.Get(1); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 	if _, exists := store.cache.Get(2); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 	if _, exists := store.cache.Get(3); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 
 	// but the item is in the store - it will go back to the cache
@@ -93,15 +93,15 @@ func TestStoreCacheEviction(t *testing.T) {
 
 	// first value went back to the cache
 	if _, exists := store.cache.Get(0); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 	if _, exists := store.cache.Get(1); exists {
-		t.Errorf("Cache item must be evicted")
+		t.Errorf("LruCache item must be evicted")
 	}
 	if _, exists := store.cache.Get(2); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 	if _, exists := store.cache.Get(3); !exists {
-		t.Errorf("Cache must be filled")
+		t.Errorf("LruCache must be filled")
 	}
 }
