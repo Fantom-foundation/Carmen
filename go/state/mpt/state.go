@@ -13,6 +13,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -710,20 +711,40 @@ func loadAccounts(directory string, config MptConfig) (map[common.Address]accoun
 
 	start = time.Now()
 	fmt.Printf("Resolving data ...\n")
+
+	var mutex sync.Mutex
 	res := map[common.Address]account{}
-	for _, entry := range entries {
-		account := account{info: entry.info}
-		if !entry.store.IsEmpty() {
-			account.storage = map[common.Key]common.Value{}
-			err := visitAllSlots(entry.store, links, values, func(slot *slot) {
-				account.storage[slot.key] = slot.value
-			})
-			if err != nil {
-				return nil, errors.Join(err, source.close())
+
+	const N = 8
+	var wg sync.WaitGroup
+	wg.Add(N)
+	pos := atomic.Uint64{}
+	for i := 0; i < 8; i++ {
+		go func() {
+			wg.Done()
+			next := pos.Add(1)
+			for next <= uint64(len(entries)) {
+				entry := entries[next-1]
+				account := account{info: entry.info}
+				if !entry.store.IsEmpty() {
+					account.storage = map[common.Key]common.Value{}
+					err := visitAllSlots(entry.store, links, values, func(slot *slot) {
+						account.storage[slot.key] = slot.value
+					})
+					if err != nil {
+						// TODO: handle data
+						fmt.Printf("Error loading data: %v", err)
+					}
+				}
+				mutex.Lock()
+				res[entry.address] = account
+				mutex.Unlock()
+
+				next = pos.Add(1)
 			}
-		}
-		res[entry.address] = account
+		}()
 	}
+	wg.Wait()
 	fmt.Printf("Resolution took %v\n", time.Since(start))
 
 	return res, source.close()
