@@ -72,7 +72,7 @@ type directHasher struct{}
 // updateHashes implements the DirectHasher's hashing algorithm to refresh
 // the hashes stored within all nodes reachable from the given node.
 func (h directHasher) updateHashes(ref *NodeReference, source NodeManager) (common.Hash, []nodeHash, error) {
-	hashCollector := &nodeHashCollector{}
+	hashCollector := &nodeHashCollector{hashes: make([]nodeHash, 0, 2048)}
 	hash, err := h.updateHashesInternal(ref, source, EmptyPath(), hashCollector)
 	return hash, hashCollector.GetHashes(), err
 }
@@ -238,7 +238,7 @@ func (h ethHasher) updateHashes(
 	ref *NodeReference,
 	manager NodeManager,
 ) (common.Hash, []nodeHash, error) {
-	hashCollector := &nodeHashCollector{}
+	hashCollector := &nodeHashCollector{hashes: make([]nodeHash, 0, 4096)}
 	hash, err := h.updateHashesInternal(ref, manager, hashCollector)
 	return hash, hashCollector.GetHashes(), err
 }
@@ -265,6 +265,7 @@ func (h ethHasher) updateHashesInternal(
 
 	var err error
 	var hash common.Hash
+	data := make([]byte, 0, 1024)
 	tasks = append(tasks, task{node: ref, path: EmptyPath()})
 	for len(tasks) > 0 {
 		cur := tasks[len(tasks)-1]
@@ -381,7 +382,7 @@ func (h ethHasher) updateHashesInternal(
 				embedded[cur.node.Id()] = true
 			} else {
 				// Encode the node using RLP and compute its hash.
-				data, e := h.encode(cur.node, node, cur.handle, manager)
+				data, e := h.encode(node, manager, data)
 				if e != nil {
 					cur.handle.Release()
 					err = e
@@ -422,7 +423,8 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 	node := handle.Get()
 
 	// Encode the node in RLP and compute its hash.
-	data, err := h.encode(ref, node, shared.HashHandle[Node]{}, source)
+	data := make([]byte, 0, 1024)
+	data, err = h.encode(node, source, data)
 	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
@@ -443,28 +445,34 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 // read-only operation accepting the current hashes and embedded flags as the true value
 // even if dirty flags are set. The node and source parameter must not be nil.
 func (h ethHasher) encode(
-	ref *NodeReference,
 	node Node,
-	handle shared.HashHandle[Node],
 	source NodeSource,
+	target []byte,
 ) ([]byte, error) {
 	switch trg := node.(type) {
 	case EmptyNode:
 		return h.encodeEmpty()
 	case *AccountNode:
-		return h.encodeAccount(ref, trg, handle, source)
+		return h.encodeAccount(trg, source, target)
 	case *BranchNode:
-		return h.encodeBranch(ref, trg, handle, source)
+		return h.encodeBranch(trg, source, target)
 	case *ExtensionNode:
-		return h.encodeExtension(ref, trg, handle, source)
+		return h.encodeExtension(trg, source, target)
 	case *ValueNode:
-		return h.encodeValue(ref, trg, handle, source)
+		return h.encodeValue(trg, source, target)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
 }
 
 var emptyStringRlpEncoded = rlp.Encode(rlp.String{})
+
+// rlpEncodingBufferPool is a pool for temporary buffers required to encode RLP fragments.
+var rlpEncodingBufferPool = sync.Pool{New: func() any {
+	s := make([]byte, 0, 1024)
+	return &s
+},
+}
 
 func (h ethHasher) encodeEmpty() ([]byte, error) {
 	return emptyStringRlpEncoded, nil
@@ -480,29 +488,29 @@ var branchRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h ethHasher) encodeBranch(
-	ref *NodeReference,
 	node *BranchNode,
-	handle shared.HashHandle[Node],
 	source NodeSource,
+	target []byte,
 ) ([]byte, error) {
-	children := node.children
+	children := &node.children
 
 	ptr := branchRlpStreamPool.Get().(*[]rlp.Item)
-	defer branchRlpStreamPool.Put(ptr)
 	items := *ptr
 
-	for i, child := range children {
+	for i := 0; i < len(children); i++ {
+		child := &children[i]
 		if child.Id().IsEmpty() {
 			items[i] = rlp.String{}
 			continue
 		}
 
 		if node.isEmbedded(byte(i)) {
-			node, err := source.getViewAccess(&child)
+			node, err := source.getViewAccess(child)
 			if err != nil {
 				return nil, err
 			}
-			encoded, err := h.encode(&child, node.Get(), shared.HashHandle[Node]{}, source)
+			var encoded = make([]byte, 0, 1024)
+			encoded, err = h.encode(node.Get(), source, encoded)
 			node.Release()
 			if err != nil {
 				return nil, err
@@ -518,7 +526,9 @@ func (h ethHasher) encodeBranch(
 	// branch nodes are never terminators in State or Storage Tries.
 	items[len(children)] = rlp.String{}
 
-	return rlp.Encode(rlp.List{Items: items}), nil
+	res := rlp.EncodeInto(target[0:0], rlp.List{Items: items})
+	branchRlpStreamPool.Put(ptr)
+	return res, nil
 }
 
 var extensionRlpStreamPool = sync.Pool{New: func() any {
@@ -528,10 +538,9 @@ var extensionRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h ethHasher) encodeExtension(
-	ref *NodeReference,
 	node *ExtensionNode,
-	handle shared.HashHandle[Node],
 	source NodeSource,
+	target []byte,
 ) ([]byte, error) {
 	ptr := extensionRlpStreamPool.Get().(*[]rlp.Item)
 	defer extensionRlpStreamPool.Put(ptr)
@@ -539,7 +548,11 @@ func (h ethHasher) encodeExtension(
 
 	numNibbles := node.path.Length()
 	packedNibbles := node.path.GetPackedNibbles()
-	items[0] = &rlp.String{Str: encodePartialPath(packedNibbles, numNibbles, false)}
+
+	pathBufferPtr := rlpEncodingBufferPool.Get().(*[]byte)
+	pathBuffer := *pathBufferPtr
+
+	items[0] = &rlp.String{Str: encodePartialPath(packedNibbles, numNibbles, false, pathBuffer)}
 
 	// TODO: the use of the same encoding as for the branch nodes is
 	// done for symmetry, but there is no unit test for this yet; it
@@ -551,8 +564,8 @@ func (h ethHasher) encodeExtension(
 			return nil, err
 		}
 		defer next.Release()
-		encoded, err := h.encode(
-			&node.next, next.Get(), shared.HashHandle[Node]{}, source)
+		encoded := make([]byte, 0, 1024)
+		encoded, err = h.encode(next.Get(), source, encoded)
 		if err != nil {
 			return nil, err
 		}
@@ -561,7 +574,12 @@ func (h ethHasher) encodeExtension(
 		items[1] = rlp.String{Str: node.nextHash[:]}
 	}
 
-	return rlp.Encode(rlp.List{Items: items}), nil
+	res := rlp.EncodeInto(target[0:0], rlp.List{Items: items})
+
+	*pathBufferPtr = pathBuffer
+	rlpEncodingBufferPool.Put(pathBufferPtr)
+
+	return res, nil
 }
 
 var accountRlpStreamPool = sync.Pool{New: func() any {
@@ -571,16 +589,14 @@ var accountRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h *ethHasher) encodeAccount(
-	ref *NodeReference,
 	node *AccountNode,
-	handle shared.HashHandle[Node],
 	source NodeSource,
+	target []byte,
 ) ([]byte, error) {
 	storageRoot := &node.storage
 
 	// Encode the account information to get the value.
 	ptr := accountRlpStreamPool.Get().(*[]rlp.Item)
-	defer accountRlpStreamPool.Put(ptr)
 	items := *ptr
 
 	items[0] = rlp.Uint64{Value: node.info.Nonce.ToUint64()}
@@ -591,13 +607,29 @@ func (h *ethHasher) encodeAccount(
 		items[2] = rlp.Hash{Hash: &node.storageHash}
 	}
 	items[3] = rlp.Hash{Hash: &node.info.CodeHash}
-	value := rlp.Encode(rlp.List{Items: items})
+
+	addressBufferPtr := rlpEncodingBufferPool.Get().(*[]byte)
+	addressBuffer := *addressBufferPtr
+
+	contentBufferPtr := rlpEncodingBufferPool.Get().(*[]byte)
+	contentBuffer := *contentBufferPtr
+
+	contentBuffer = rlp.EncodeInto(contentBuffer[0:0], rlp.List{Items: items})
 
 	// Encode the leaf node by combining the partial path with the value.
 	items = items[0:2]
-	items[0] = rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), source)}
-	items[1] = rlp.String{Str: value}
-	return rlp.Encode(rlp.List{Items: items}), nil
+	items[0] = rlp.String{Str: encodeAddressPath(node.address, int(node.pathLength), source, addressBuffer)}
+	items[1] = rlp.String{Str: contentBuffer}
+	res := rlp.EncodeInto(target[0:0], rlp.List{Items: items})
+
+	*addressBufferPtr = addressBuffer
+	rlpEncodingBufferPool.Put(addressBufferPtr)
+
+	*contentBufferPtr = contentBuffer
+	rlpEncodingBufferPool.Put(contentBufferPtr)
+
+	accountRlpStreamPool.Put(ptr)
+	return res, nil
 }
 
 var valueRlpStreamPool = sync.Pool{New: func() any {
@@ -607,47 +639,59 @@ var valueRlpStreamPool = sync.Pool{New: func() any {
 }
 
 func (h *ethHasher) encodeValue(
-	_ *NodeReference,
 	node *ValueNode,
-	_ shared.HashHandle[Node],
 	source NodeSource,
+	target []byte,
 ) ([]byte, error) {
 	ptr := valueRlpStreamPool.Get().(*[]rlp.Item)
 	defer valueRlpStreamPool.Put(ptr)
 	items := *ptr
 
 	// The first item is an encoded path fragment.
-	items[0] = &rlp.String{Str: encodeKeyPath(node.key, int(node.pathLength), source)}
+	encodedPathPtr := rlpEncodingBufferPool.Get().(*[]byte)
+	encodedPath := *encodedPathPtr
+	items[0] = &rlp.String{Str: encodeKeyPath(node.key, int(node.pathLength), source, encodedPath)}
 
 	// The second item is the value without leading zeros.
 	value := node.value[:]
 	for len(value) > 0 && value[0] == 0 {
 		value = value[1:]
 	}
-	items[1] = &rlp.String{Str: rlp.Encode(&rlp.String{Str: value[:]})}
 
-	return rlp.Encode(rlp.List{Items: items}), nil
+	encodedValuePtr := rlpEncodingBufferPool.Get().(*[]byte)
+	encodedValue := *encodedValuePtr
+	encodedValue = rlp.EncodeInto(encodedValue[0:0], &rlp.String{Str: value[:]})
+	items[1] = &rlp.String{Str: encodedValue}
+
+	res := rlp.EncodeInto(target[0:0], rlp.List{Items: items})
+
+	*encodedPathPtr = encodedPath
+	rlpEncodingBufferPool.Put(encodedPathPtr)
+	*encodedValuePtr = encodedValue
+	rlpEncodingBufferPool.Put(encodedValuePtr)
+	return res, nil
 }
 
-func encodeKeyPath(key common.Key, numNibbles int, nodes NodeSource) []byte {
+func encodeKeyPath(key common.Key, numNibbles int, nodes NodeSource, target []byte) []byte {
 	path := nodes.hashKey(key)
-	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
+	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true, target)
 }
 
-func encodeAddressPath(address common.Address, numNibbles int, nodes NodeSource) []byte {
+func encodeAddressPath(address common.Address, numNibbles int, nodes NodeSource, target []byte) []byte {
 	path := nodes.hashAddress(address)
-	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true)
+	return encodePartialPath(path[32-(numNibbles/2+numNibbles%2):], numNibbles, true, target)
 }
 
 // Requires packedNibbles to include nibbles as [0a bc de] or [ab cd ef]
-func encodePartialPath(packedNibbles []byte, numNibbles int, targetsValue bool) []byte {
+func encodePartialPath(packedNibbles []byte, numNibbles int, targetsValue bool, target []byte) []byte {
 	// Path encoding derived from Ethereum.
 	// see https://github.com/ethereum/go-ethereum/blob/v1.12.0/trie/encoding.go#L37
 	oddLength := numNibbles%2 == 1
-	compact := make([]byte, getEncodedPartialPathSize(numNibbles))
+	compact := target[0:getEncodedPartialPathSize(numNibbles)]
 
 	// The high nibble of the first byte encodes the 'is-value' mark
 	// and whether the length is even or odd.
+	compact[0] = 0
 	if targetsValue {
 		compact[0] |= 1 << 5
 	}
@@ -691,7 +735,8 @@ func (h ethHasher) isEmbedded(
 	}
 
 	// We need to encode it to be certain.
-	encoded, err := h.encode(ref, handle.Get(), handle, source)
+	var encoded = make([]byte, 0, 1024)
+	encoded, err = h.encode(handle.Get(), source, encoded)
 	if err != nil {
 		return false, err
 	}
