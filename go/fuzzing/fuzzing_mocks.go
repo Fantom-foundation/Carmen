@@ -214,6 +214,34 @@ func (m *MockTestingT) EXPECT() *MockTestingTMockRecorder {
 	return m.recorder
 }
 
+// Cleanup mocks base method.
+func (m *MockTestingT) Cleanup(arg0 func()) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Cleanup", arg0)
+}
+
+// Cleanup indicates an expected call of Cleanup.
+func (mr *MockTestingTMockRecorder) Cleanup(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cleanup", reflect.TypeOf((*MockTestingT)(nil).Cleanup), arg0)
+}
+
+// Error mocks base method.
+func (m *MockTestingT) Error(args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Error", varargs...)
+}
+
+// Error indicates an expected call of Error.
+func (mr *MockTestingTMockRecorder) Error(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Error", reflect.TypeOf((*MockTestingT)(nil).Error), args...)
+}
+
 // Errorf mocks base method.
 func (m *MockTestingT) Errorf(format string, args ...any) {
 	m.ctrl.T.Helper()
@@ -231,6 +259,60 @@ func (mr *MockTestingTMockRecorder) Errorf(format any, args ...any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Errorf", reflect.TypeOf((*MockTestingT)(nil).Errorf), varargs...)
 }
 
+// Fail mocks base method.
+func (m *MockTestingT) Fail() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Fail")
+}
+
+// Fail indicates an expected call of Fail.
+func (mr *MockTestingTMockRecorder) Fail() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fail", reflect.TypeOf((*MockTestingT)(nil).Fail))
+}
+
+// FailNow mocks base method.
+func (m *MockTestingT) FailNow() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "FailNow")
+}
+
+// FailNow indicates an expected call of FailNow.
+func (mr *MockTestingTMockRecorder) FailNow() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailNow", reflect.TypeOf((*MockTestingT)(nil).FailNow))
+}
+
+// Failed mocks base method.
+func (m *MockTestingT) Failed() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Failed")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Failed indicates an expected call of Failed.
+func (mr *MockTestingTMockRecorder) Failed() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Failed", reflect.TypeOf((*MockTestingT)(nil).Failed))
+}
+
+// Fatal mocks base method.
+func (m *MockTestingT) Fatal(args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Fatal", varargs...)
+}
+
+// Fatal indicates an expected call of Fatal.
+func (mr *MockTestingTMockRecorder) Fatal(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fatal", reflect.TypeOf((*MockTestingT)(nil).Fatal), args...)
+}
+
 // Fatalf mocks base method.
 func (m *MockTestingT) Fatalf(format string, args ...any) {
 	m.ctrl.T.Helper()
@@ -246,6 +328,136 @@ func (mr *MockTestingTMockRecorder) Fatalf(format any, args ...any) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{format}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fatalf", reflect.TypeOf((*MockTestingT)(nil).Fatalf), varargs...)
+}
+
+// Helper mocks base method.
+func (m *MockTestingT) Helper() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Helper")
+}
+
+// Helper indicates an expected call of Helper.
+func (mr *MockTestingTMockRecorder) Helper() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Helper", reflect.TypeOf((*MockTestingT)(nil).Helper))
+}
+
+// Log mocks base method.
+func (m *MockTestingT) Log(args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Log", varargs...)
+}
+
+// Log indicates an expected call of Log.
+func (mr *MockTestingTMockRecorder) Log(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Log", reflect.TypeOf((*MockTestingT)(nil).Log), args...)
+}
+
+// Logf mocks base method.
+func (m *MockTestingT) Logf(format string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{format}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Logf", varargs...)
+}
+
+// Logf indicates an expected call of Logf.
+func (mr *MockTestingTMockRecorder) Logf(format any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{format}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logf", reflect.TypeOf((*MockTestingT)(nil).Logf), varargs...)
+}
+
+// Name mocks base method.
+func (m *MockTestingT) Name() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Name")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Name indicates an expected call of Name.
+func (mr *MockTestingTMockRecorder) Name() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockTestingT)(nil).Name))
+}
+
+// Setenv mocks base method.
+func (m *MockTestingT) Setenv(key, value string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Setenv", key, value)
+}
+
+// Setenv indicates an expected call of Setenv.
+func (mr *MockTestingTMockRecorder) Setenv(key, value any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Setenv", reflect.TypeOf((*MockTestingT)(nil).Setenv), key, value)
+}
+
+// Skip mocks base method.
+func (m *MockTestingT) Skip(args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Skip", varargs...)
+}
+
+// Skip indicates an expected call of Skip.
+func (mr *MockTestingTMockRecorder) Skip(args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Skip", reflect.TypeOf((*MockTestingT)(nil).Skip), args...)
+}
+
+// SkipNow mocks base method.
+func (m *MockTestingT) SkipNow() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SkipNow")
+}
+
+// SkipNow indicates an expected call of SkipNow.
+func (mr *MockTestingTMockRecorder) SkipNow() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SkipNow", reflect.TypeOf((*MockTestingT)(nil).SkipNow))
+}
+
+// Skipf mocks base method.
+func (m *MockTestingT) Skipf(format string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{format}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Skipf", varargs...)
+}
+
+// Skipf indicates an expected call of Skipf.
+func (mr *MockTestingTMockRecorder) Skipf(format any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{format}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Skipf", reflect.TypeOf((*MockTestingT)(nil).Skipf), varargs...)
+}
+
+// Skipped mocks base method.
+func (m *MockTestingT) Skipped() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Skipped")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Skipped indicates an expected call of Skipped.
+func (mr *MockTestingTMockRecorder) Skipped() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Skipped", reflect.TypeOf((*MockTestingT)(nil).Skipped))
 }
 
 // TempDir mocks base method.
