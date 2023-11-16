@@ -180,7 +180,10 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 				dirty:     []int{1, 2, 3}, // < all empty children
 			})
 
-			// the node is not marked to be modified
+			// Only the branch node is signaled to be updated.
+			hashHandle, _ := ctxt.getHashAccess(&ref)
+			ctxt.EXPECT().updateHash(ref.Id(), hashHandle)
+			hashHandle.Release()
 
 			hasher := algorithm.createHasher()
 			_, _, err := hasher.updateHashes(&ref, ctxt)
@@ -405,7 +408,7 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
 		accountRef := NewNodeReference(AccountId(1))
-		encoded, err := hasher.encode(&accountRef, test, shared.HashHandle[Node]{}, nil, nodesSource, EmptyPath(), nil)
+		encoded, err := hasher.encode(&accountRef, test, shared.HashHandle[Node]{}, nodesSource)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -449,7 +452,7 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
 		branchRef := NewNodeReference(BranchId(1))
-		encoded, err := hasher.encode(&branchRef, test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		encoded, err := hasher.encode(&branchRef, test, shared.HashHandle[Node]{}, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -498,7 +501,7 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
 		extensionRef := NewNodeReference(ExtensionId(1))
-		encoded, err := hasher.encode(&extensionRef, test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		encoded, err := hasher.encode(&extensionRef, test, shared.HashHandle[Node]{}, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -536,7 +539,7 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
 		valueRef := NewNodeReference(ValueId(1))
-		encoded, err := hasher.encode(&valueRef, test, shared.HashHandle[Node]{}, nil, nodeManager, EmptyPath(), nil)
+		encoded, err := hasher.encode(&valueRef, test, shared.HashHandle[Node]{}, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
