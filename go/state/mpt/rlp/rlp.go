@@ -2,8 +2,9 @@ package rlp
 
 import (
 	"encoding/binary"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/big"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // The definition of the RLP encoding can be found here:
@@ -23,7 +24,7 @@ import (
 // Item is an interface for everything that can be RLP encoded by this package.
 type Item interface {
 	// write writes the RLP encoding of this item to the given writer.
-	write(*writer)
+	write(writer) writer
 
 	// getEncodedLength computes the encoded length of this item in bytes.
 	getEncodedLength() int
@@ -31,23 +32,24 @@ type Item interface {
 
 // Encode is a convenience function for serializing an item structure.
 func Encode(item Item) []byte {
-	length := item.getEncodedLength()
-	writer := writer(make([]byte, 0, length))
-	item.write(&writer)
-	return writer
+	return EncodeInto(make([]byte, 0, 1024), item)
+}
+
+func EncodeInto(dst []byte, item Item) []byte {
+	writer := writer(dst)
+	return item.write(writer)
 }
 
 // writer is a specialized writer for this package writing encoded RLP
 // content in a pre-allocated buffer.
 type writer []byte
 
-func (w *writer) Write(data []byte) {
-	*w = append(*w, data...)
+func (w writer) Write(data []byte) writer {
+	return append(w, data...)
 }
 
-func (w *writer) WriteByte(c byte) error {
-	*w = append(*w, c)
-	return nil
+func (w writer) WriteByte(c byte) writer {
+	return append(w, c)
 }
 
 // ----------------------------------------------------------------------------
@@ -60,17 +62,16 @@ type String struct {
 	Str []byte
 }
 
-func (s String) write(writer *writer) {
+func (s String) write(writer writer) writer {
 	l := len(s.Str)
 	// Single-element strings are encoded as a single byte if the
 	// value is small enough.
 	if l == 1 && s.Str[0] < 0x80 {
-		writer.Write(s.Str)
-		return
+		return writer.Write(s.Str)
 	}
 	// For the rest, the length is encoded, followed by the string itself.
-	encodeLength(l, 0x80, writer)
-	writer.Write(s.Str)
+	writer = encodeLength(l, 0x80, writer)
+	return writer.Write(s.Str)
 }
 
 func (s String) getEncodedLength() int {
@@ -90,9 +91,9 @@ type Hash struct {
 	Hash *common.Hash
 }
 
-func (s Hash) write(writer *writer) {
-	encodeLength(32, 0x80, writer)
-	writer.Write(s.Hash[:])
+func (s Hash) write(writer writer) writer {
+	writer = encodeLength(32, 0x80, writer)
+	return writer.Write(s.Hash[:])
 }
 
 func (s Hash) getEncodedLength() int {
@@ -105,15 +106,16 @@ type List struct {
 	Items []Item
 }
 
-func (l List) write(writer *writer) {
+func (l List) write(writer writer) writer {
 	length := 0
-	for _, item := range l.Items {
-		length += item.getEncodedLength()
+	for i := 0; i < len(l.Items); i++ {
+		length += l.Items[i].getEncodedLength()
 	}
-	encodeLength(length, 0xc0, writer)
-	for _, item := range l.Items {
-		item.write(writer)
+	writer = encodeLength(length, 0xc0, writer)
+	for i := 0; i < len(l.Items); i++ {
+		writer = l.Items[i].write(writer)
 	}
+	return writer
 }
 
 func (s List) getEncodedLength() int {
@@ -126,16 +128,16 @@ func (s List) getEncodedLength() int {
 
 // encodeLength is utility function used by String and List structures to
 // encode the length of the string or list in the output stream.
-func encodeLength(length int, offset byte, writer *writer) {
+func encodeLength(length int, offset byte, writer writer) writer {
 	if length < 56 {
-		writer.WriteByte(offset + byte(length))
-		return
+		return writer.WriteByte(offset + byte(length))
 	}
 	numBytesForLength := getNumBytes(uint64(length))
-	writer.WriteByte(offset + 55 + numBytesForLength)
+	writer = writer.WriteByte(offset + 55 + numBytesForLength)
 	for i := byte(0); i < numBytesForLength; i++ {
-		writer.WriteByte(byte(length >> (8 * (numBytesForLength - i - 1))))
+		writer = writer.WriteByte(byte(length >> (8 * (numBytesForLength - i - 1))))
 	}
+	return writer
 }
 
 // getNumBytes computes the minimum number of bytes required to represent
@@ -163,8 +165,8 @@ type Encoded struct {
 	Data []byte
 }
 
-func (e Encoded) write(writer *writer) {
-	writer.Write(e.Data)
+func (e Encoded) write(writer writer) writer {
+	return writer.Write(e.Data)
 }
 
 func (e Encoded) getEncodedLength() int {
@@ -182,18 +184,17 @@ type Uint64 struct {
 	Value uint64
 }
 
-func (u Uint64) write(writer *writer) {
+func (u Uint64) write(writer writer) writer {
 	// Uint64 values are encoded using their non-zero big-endian encoding suffix.
 	if u.Value == 0 {
-		writer.WriteByte(0x80)
-		return
+		return writer.WriteByte(0x80)
 	}
 	var buffer = make([]byte, 8)
 	binary.BigEndian.PutUint64(buffer, u.Value)
 	for buffer[0] == 0 {
 		buffer = buffer[1:]
 	}
-	String{Str: buffer}.write(writer)
+	return String{Str: buffer}.write(writer)
 }
 
 func (u Uint64) getEncodedLength() int {
@@ -204,19 +205,18 @@ func (u Uint64) getEncodedLength() int {
 }
 
 // BigInt is an Item encoding big.Int values into RLP by interpreting them
-// as a string of bytes. The encoding schema is implemented anologous to the
+// as a string of bytes. The encoding schema is implemented analogous to the
 // Uint64 encoder above.
 type BigInt struct {
 	Value *big.Int
 }
 
-func (i BigInt) write(writer *writer) {
+func (i BigInt) write(writer writer) writer {
 	// Based on: https://github.com/ethereum/go-ethereum/blob/v1.12.0/rlp/encbuffer.go#L152
 	// Values that fit in 64 bit are encoded using the uint64 encoder.
 	bitlen := i.Value.BitLen()
 	if bitlen <= 64 {
-		Uint64{Value: i.Value.Uint64()}.write(writer)
-		return
+		return Uint64{Value: i.Value.Uint64()}.write(writer)
 	}
 	// Integer is larger than 64 bits, encode from BigInt's Bits()
 	// using big-endian order.
@@ -231,8 +231,8 @@ func (i BigInt) write(writer *writer) {
 			d >>= 8
 		}
 	}
-	encodeLength(length, 0x80, writer)
-	writer.Write(buffer)
+	writer = encodeLength(length, 0x80, writer)
+	return writer.Write(buffer)
 }
 
 func (i BigInt) getEncodedLength() int {
