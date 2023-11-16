@@ -106,6 +106,7 @@ func (h directHasher) updateHashesInternal(
 		return hash, err
 	}
 	handle.Get().SetHash(hash)
+	manager.updateHash(ref.Id(), handle)
 	return hash, nil
 }
 
@@ -152,7 +153,6 @@ func (h directHasher) hash(
 			}
 			node.storageHash = hash
 			node.storageHashDirty = false
-			manager.updateHash(ref.Id(), handle)
 		}
 
 		hasher.Write([]byte{'A'})
@@ -165,7 +165,6 @@ func (h directHasher) hash(
 	case *BranchNode:
 		// TODO: compute sub-tree hashes in parallel
 		if manager != nil {
-			modified := false
 			for i, child := range node.children {
 				if !child.Id().IsEmpty() && node.isChildHashDirty(byte(i)) {
 					hash, err := h.updateHashesInternal(&child, manager, path.Child(Nibble(i)), hashCollector)
@@ -173,13 +172,9 @@ func (h directHasher) hash(
 						return hash, err
 					}
 					node.hashes[byte(i)] = hash
-					modified = true
 				}
 			}
 			node.clearChildHashDirtyFlags()
-			if modified {
-				manager.updateHash(ref.Id(), handle)
-			}
 		}
 
 		hasher.Write([]byte{'B'})
@@ -200,7 +195,6 @@ func (h directHasher) hash(
 			}
 			node.nextHash = hash
 			node.nextHashDirty = false
-			manager.updateHash(ref.Id(), handle)
 		}
 
 		hasher.Write([]byte{'E'})
@@ -245,8 +239,160 @@ func (h ethHasher) updateHashes(
 	manager NodeManager,
 ) (common.Hash, []nodeHash, error) {
 	hashCollector := &nodeHashCollector{}
-	hash, err := h.updateHashesInternal(ref, manager, EmptyPath(), hashCollector)
+	hash, err := h.updateHashesInternal2(ref, manager, EmptyPath(), hashCollector)
 	return hash, hashCollector.GetHashes(), err
+}
+
+func (h ethHasher) updateHashesInternal2(
+	ref *NodeReference,
+	manager NodeManager,
+	_ NodePath,
+	hashCollector *nodeHashCollector,
+) (common.Hash, error) {
+	if ref.Id().IsEmpty() {
+		return emptyNodeEthereumHash, nil
+	}
+
+	type task struct {
+		node   *NodeReference
+		handle shared.HashHandle[Node]
+		step   int
+		path   NodePath
+	}
+
+	tasks := make([]task, 0, 128)
+
+	var err error
+	var hash common.Hash
+	tasks = append(tasks, task{node: ref, path: EmptyPath()})
+	for len(tasks) > 0 {
+		cur := tasks[len(tasks)-1]
+		tasks = tasks[0 : len(tasks)-1]
+
+		if cur.step == 0 {
+			// Get write access to the node (hashes may be updated).
+			handle, e := manager.getHashAccess(cur.node)
+			if e != nil {
+				err = e
+				break
+			}
+			node := handle.Get()
+
+			// If the hash in the node is up-to-date we can skip re-hashing.
+			dirty := false
+			hash, dirty = node.GetHash()
+			if !dirty {
+				handle.Release()
+				continue
+			}
+
+			// The node's hash needs to be refreshed. To do so, schedule
+			// the re-hashing of all children with dirty hashes followed
+			// by a second pass of this node. Note: the task list is a
+			// last-in-first-out stack.
+			tasks = append(tasks, task{cur.node, handle, 1, cur.path})
+
+			switch node := node.(type) {
+			case *BranchNode:
+				for i := 0; i < len(node.children); i++ {
+					// TODO: support node embedding
+					if !node.children[i].Id().IsEmpty() && node.isChildHashDirty(byte(i)) {
+						tasks = append(tasks, task{node: &node.children[i], path: cur.path.Child(Nibble(i))})
+					}
+				}
+			case *ExtensionNode:
+				if node.nextHashDirty {
+					tasks = append(tasks, task{node: &node.next, path: cur.path.Next()})
+				}
+			case *AccountNode:
+				if node.storageHashDirty {
+					if node.storage.Id().IsEmpty() {
+						node.storageHash = emptyNodeEthereumHash
+						node.storageHashDirty = false
+					} else {
+						tasks = append(tasks, task{node: &node.storage, path: cur.path.Next()})
+					}
+				}
+			}
+		} else {
+			// At this point the hashes of all children are up-to-date.
+			// They can now be transferred to the parents.
+			node := cur.handle.Get()
+			switch cur := node.(type) {
+			case *BranchNode:
+				for i := 0; i < len(cur.children); i++ {
+					if cur.isChildHashDirty(byte(i)) {
+						handle, e := manager.getViewAccess(&cur.children[i])
+						if e != nil {
+							err = e
+							break
+						}
+						hash, dirty := handle.Get().GetHash()
+						if dirty {
+							fmt.Printf("WARNING: detected dirty child\n")
+						}
+						cur.hashes[i] = hash
+						handle.Release()
+					}
+				}
+				cur.clearChildHashDirtyFlags()
+			case *ExtensionNode:
+				handle, e := manager.getViewAccess(&cur.next)
+				if e != nil {
+					err = e
+					break
+				}
+				hash, dirty := handle.Get().GetHash()
+				if dirty {
+					fmt.Printf("WARNING: detected dirty child\n")
+				}
+				cur.nextHash = hash
+				handle.Release()
+				cur.nextHashDirty = false
+			case *AccountNode:
+				if !cur.storage.Id().IsEmpty() {
+					handle, e := manager.getViewAccess(&cur.storage)
+					if e != nil {
+						err = e
+						break
+					}
+					hash, dirty := handle.Get().GetHash()
+					if dirty {
+						fmt.Printf("WARNING: detected dirty child\n")
+					}
+					cur.storageHash = hash
+					handle.Release()
+					cur.storageHashDirty = false
+				}
+			}
+
+			// Encode the node in RLP and compute its hash.
+			data, e := h.encode(cur.node, node, cur.handle, manager, manager, cur.path, hashCollector)
+			if e != nil {
+				cur.handle.Release()
+				err = e
+				break
+			}
+			hash = common.Keccak256(data)
+
+			node.SetHash(hash)
+			manager.updateHash(cur.node.Id(), cur.handle)
+
+			if hashCollector != nil {
+				hashCollector.Add(cur.path, hash)
+			}
+
+			cur.handle.Release()
+		}
+	}
+
+	for i := 0; i < len(tasks); i++ {
+		if tasks[i].handle.Valid() {
+			tasks[i].handle.Release()
+		}
+	}
+
+	return hash, err
 }
 
 func (h ethHasher) updateHashesInternal(
@@ -294,7 +440,7 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 	if ref.Id().IsEmpty() {
 		return emptyNodeEthereumHash, nil
 	}
-	// Get write access to the node (hashes may be updated).
+	// Get read access to the node (hashes may not be updated).
 	handle, err := source.getViewAccess(ref)
 	if err != nil {
 		return common.Hash{}, err

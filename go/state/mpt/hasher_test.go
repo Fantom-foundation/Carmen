@@ -180,7 +180,10 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 				dirty:     []int{1, 2, 3}, // < all empty children
 			})
 
-			// the node is not marked to be modified
+			// Only the branch node is signaled to be updated.
+			hashHandle, _ := ctxt.getHashAccess(&ref)
+			ctxt.EXPECT().updateHash(ref.Id(), hashHandle)
+			hashHandle.Release()
 
 			hasher := algorithm.createHasher()
 			_, _, err := hasher.updateHashes(&ref, ctxt)
