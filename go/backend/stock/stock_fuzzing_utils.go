@@ -4,10 +4,9 @@ import (
 	"encoding/binary"
 	"github.com/Fantom-foundation/Carmen/go/fuzzing"
 	"strings"
-	"testing"
 )
 
-func FuzzStockRandomOps(f *testing.F, factory OpenStockFactory, shouldClose bool) {
+func FuzzStockRandomOps(f fuzzing.TestingF, factory OpenStockFactory, shouldClose bool) {
 	fuzzing.Fuzz[stockFuzzContext](f, &stockFuzzCampaign{shouldClose, factory})
 }
 
@@ -43,7 +42,7 @@ func (op *opSet) Serialize() []byte {
 	return b
 }
 
-func (op *opSet) Apply(t *testing.T, c *stockFuzzContext) {
+func (op *opSet) Apply(t fuzzing.TestingT, c *stockFuzzContext) {
 	if err := c.stock.Set(op.index, op.value); err != nil {
 		_, wasGenerated := c.ids[op.index]
 		if !wasGenerated && strings.HasPrefix(err.Error(), "index out of range") {
@@ -66,7 +65,7 @@ func (op *opGet) Serialize() []byte {
 	return binary.BigEndian.AppendUint16(get.serialize(), uint16(op.index))
 }
 
-func (op *opGet) Apply(t *testing.T, c *stockFuzzContext) {
+func (op *opGet) Apply(t fuzzing.TestingT, c *stockFuzzContext) {
 	val, err := c.stock.Get(op.index)
 	if err != nil {
 		t.Errorf("cannot get: %d -> %d, err: %s", op.index, val, err)
@@ -84,7 +83,7 @@ func (op *opDeleteId) Serialize() []byte {
 	return binary.BigEndian.AppendUint16(deleteId.serialize(), uint16(op.index))
 }
 
-func (op *opDeleteId) Apply(t *testing.T, c *stockFuzzContext) {
+func (op *opDeleteId) Apply(t fuzzing.TestingT, c *stockFuzzContext) {
 	// allow for deleting only IDs that were generated
 	// - this is on purpose not checked in stock implementation.
 	if _, exists := c.ids[op.index]; exists {
@@ -103,7 +102,7 @@ func (op *opGetIds) Serialize() []byte {
 	return getIds.serialize()
 }
 
-func (op *opGetIds) Apply(t *testing.T, c *stockFuzzContext) {
+func (op *opGetIds) Apply(t fuzzing.TestingT, c *stockFuzzContext) {
 	set, err := c.stock.GetIds()
 	if err != nil {
 		t.Errorf("cannot get Ids: %s", err)
@@ -122,7 +121,7 @@ func (op *opNewId) Serialize() []byte {
 	return newId.serialize()
 }
 
-func (op *opNewId) Apply(t *testing.T, c *stockFuzzContext) {
+func (op *opNewId) Apply(t fuzzing.TestingT, c *stockFuzzContext) {
 	id, err := c.stock.New()
 	if err != nil {
 		t.Errorf("error to generate new ID: %s", err)
@@ -169,7 +168,7 @@ func (c *stockFuzzCampaign) Init() []fuzzing.OperationSequence[stockFuzzContext]
 	return data
 }
 
-func (c *stockFuzzCampaign) CreateContext(t *testing.T) *stockFuzzContext {
+func (c *stockFuzzCampaign) CreateContext(t fuzzing.TestingT) *stockFuzzContext {
 	path := t.TempDir() + "/test.dat"
 	st, err := c.factory(path)
 	if err != nil {
@@ -186,7 +185,7 @@ func (c *stockFuzzCampaign) Deserialize(rawData []byte) []fuzzing.Operation[stoc
 	return parseOperations(rawData)
 }
 
-func (c *stockFuzzCampaign) Cleanup(t *testing.T, context *stockFuzzContext) {
+func (c *stockFuzzCampaign) Cleanup(t fuzzing.TestingT, context *stockFuzzContext) {
 	if c.shouldClose {
 		if err := context.stock.Close(); err != nil {
 			t.Fatalf("cannot close file: %s", err)

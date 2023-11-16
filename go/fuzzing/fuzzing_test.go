@@ -11,7 +11,7 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	campaign := NewMockCampaign[testContext](ctrl)
 	testingF := NewMockTestingF(ctrl)
 
-	noDataF := func(opType byte, t *testing.T, c *testContext) {
+	noDataF := func(opType byte, t TestingT, c *testContext) {
 		*c = append(*c, opType)
 	}
 
@@ -24,7 +24,7 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 		return r
 	}
 
-	dataF := func(opType byte, data byte, t *testing.T, c *testContext) {
+	dataF := func(opType byte, data byte, t TestingT, c *testContext) {
 		*c = append(*c, opType)
 		*c = append(*c, data)
 	}

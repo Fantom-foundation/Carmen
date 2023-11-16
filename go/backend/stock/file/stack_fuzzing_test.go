@@ -10,7 +10,7 @@ import (
 )
 
 func FuzzStack_RandomOps(f *testing.F) {
-	var opPush = func(_ opType, value int, t *testing.T, c *stackFuzzingContext) {
+	var opPush = func(_ opType, value int, t fuzzing.TestingT, c *stackFuzzingContext) {
 		err := c.stack.Push(value)
 		if err != nil {
 			t.Errorf("error to push value: %s", err)
@@ -18,7 +18,7 @@ func FuzzStack_RandomOps(f *testing.F) {
 		c.shadow.Push(value)
 	}
 
-	var opPop = func(_ opType, t *testing.T, c *stackFuzzingContext) {
+	var opPop = func(_ opType, t fuzzing.TestingT, c *stackFuzzingContext) {
 		if got, err := c.stack.Pop(); err != nil {
 			// error when the shadow is empty is OK state
 			if c.shadow.Empty() && strings.HasPrefix(err.Error(), "cannot pop from empty stack") {
@@ -34,7 +34,7 @@ func FuzzStack_RandomOps(f *testing.F) {
 		}
 	}
 
-	var opGetAll = func(_ opType, t *testing.T, c *stackFuzzingContext) {
+	var opGetAll = func(_ opType, t fuzzing.TestingT, c *stackFuzzingContext) {
 		got, err := c.stack.GetAll()
 		if err != nil {
 			t.Errorf("error to get all values: %s", err)
@@ -45,19 +45,19 @@ func FuzzStack_RandomOps(f *testing.F) {
 		}
 	}
 
-	var opSize = func(_ opType, t *testing.T, c *stackFuzzingContext) {
+	var opSize = func(_ opType, t fuzzing.TestingT, c *stackFuzzingContext) {
 		if got, want := c.stack.Size(), c.shadow.Size(); got != want {
 			t.Errorf("stack does not match expected value: %v != %v", got, want)
 		}
 	}
 
-	var opEmpty = func(_ opType, t *testing.T, c *stackFuzzingContext) {
+	var opEmpty = func(_ opType, t fuzzing.TestingT, c *stackFuzzingContext) {
 		if got, want := c.stack.Empty(), c.shadow.Empty(); got != want {
 			t.Errorf("stack does not match expected value: %v != %v", got, want)
 		}
 	}
 
-	var opClose = func(_ opType, t *testing.T, c *stackFuzzingContext) {
+	var opClose = func(_ opType, t fuzzing.TestingT, c *stackFuzzingContext) {
 		if err := c.stack.Close(); err != nil {
 			t.Errorf("error to flush stack: %s", err)
 		}
@@ -68,7 +68,7 @@ func FuzzStack_RandomOps(f *testing.F) {
 		c.stack = stack
 	}
 
-	var opFlush = func(_ opType, t *testing.T, c *stackFuzzingContext) {
+	var opFlush = func(_ opType, t fuzzing.TestingT, c *stackFuzzingContext) {
 		if err := c.stack.Flush(); err != nil {
 			t.Errorf("error to flush stack: %s", err)
 		}
@@ -148,7 +148,7 @@ func (c *stackFuzzingCampaign) Init() []fuzzing.OperationSequence[stackFuzzingCo
 	return data
 }
 
-func (c *stackFuzzingCampaign) CreateContext(t *testing.T) *stackFuzzingContext {
+func (c *stackFuzzingCampaign) CreateContext(t fuzzing.TestingT) *stackFuzzingContext {
 	path := t.TempDir() + "/test.dat"
 	fileStack, err := openFileBasedStack[int](path)
 	if err != nil {
@@ -162,7 +162,7 @@ func (c *stackFuzzingCampaign) Deserialize(rawData []byte) []fuzzing.Operation[s
 	return parseOperations(c.registry, rawData)
 }
 
-func (c *stackFuzzingCampaign) Cleanup(t *testing.T, context *stackFuzzingContext) {
+func (c *stackFuzzingCampaign) Cleanup(t fuzzing.TestingT, context *stackFuzzingContext) {
 	if err := context.stack.Close(); err != nil {
 		t.Fatalf("cannot close file: %s", err)
 	}
