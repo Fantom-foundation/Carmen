@@ -122,6 +122,9 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	hasher := config.Hashing.createHasher()
 	hash := func(node Node) (common.Hash, error) {
 		overrideId := ValueId((^uint64(0)) >> 2)
+		if _, ok := node.(EmptyNode); ok {
+			overrideId = EmptyId()
+		}
 		source.setNodeOverride(overrideId, node)
 		defer source.clearOverride()
 		return hasher.getHash(overrideId, source)
