@@ -238,7 +238,7 @@ func makeEthereumLikeHasher() hasher {
 
 type ethHasher struct{}
 
-var emptyNodeEthereumHash = common.Keccak256(rlp.Encode(rlp.String{}))
+var EmptyNodeEthereumHash = common.Keccak256(rlp.Encode(rlp.String{}))
 
 func (h ethHasher) updateHashes(
 	id NodeId,
@@ -256,7 +256,7 @@ func (h ethHasher) updateHashesInternal(
 	hashCollector *nodeHashCollector,
 ) (common.Hash, error) {
 	if id.IsEmpty() {
-		return emptyNodeEthereumHash, nil
+		return EmptyNodeEthereumHash, nil
 	}
 	// Get write access to the node (hashes may be updated).
 	handle, err := manager.getMutableNode(id)
@@ -292,7 +292,7 @@ func (h ethHasher) updateHashesInternal(
 
 func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 	if id.IsEmpty() {
-		return emptyNodeEthereumHash, nil
+		return EmptyNodeEthereumHash, nil
 	}
 	// Get write access to the node (hashes may be updated).
 	handle, err := source.getNode(id)
@@ -542,7 +542,7 @@ func (h *ethHasher) encodeAccount(
 	items[0] = rlp.Uint64{Value: node.info.Nonce.ToUint64()}
 	items[1] = rlp.BigInt{Value: node.info.Balance.ToBigInt()}
 	if storageRoot.IsEmpty() {
-		items[2] = rlp.Hash{Hash: &emptyNodeEthereumHash}
+		items[2] = rlp.Hash{Hash: &EmptyNodeEthereumHash}
 	} else {
 		items[2] = rlp.Hash{Hash: &node.storageHash}
 	}

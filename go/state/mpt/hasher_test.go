@@ -281,7 +281,7 @@ func TestEthereumLikeHasher_EmptyNode(t *testing.T) {
 		t.Fatalf("failed to hash empty node: %v", err)
 	}
 
-	if got, want := hash, emptyNodeEthereumHash; got != want {
+	if got, want := hash, EmptyNodeEthereumHash; got != want {
 		t.Errorf("invalid hash of empty node, wanted %v, got %v", got, want)
 	}
 }

@@ -229,7 +229,7 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 		a.rootsMutex.Unlock()
 		return common.Hash{}, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	res := a.roots[block].hash
+	res := a.roots[block].Hash
 	a.rootsMutex.Unlock()
 	return res, nil
 }
@@ -247,8 +247,8 @@ func (a *ArchiveTrie) Dump() {
 	a.rootsMutex.Lock()
 	defer a.rootsMutex.Unlock()
 	for i, root := range a.roots {
-		fmt.Printf("\nBlock %d: %x\n", i, root.hash)
-		view := getTrieView(root.nodeId, a.head.trie.forest)
+		fmt.Printf("\nBlock %d: %x\n", i, root.Hash)
+		view := getTrieView(root.NodeId, a.head.trie.forest)
 		view.Dump()
 		fmt.Printf("\n")
 	}
@@ -259,7 +259,7 @@ func (a *ArchiveTrie) Flush() error {
 	defer a.rootsMutex.Unlock()
 	return errors.Join(
 		a.head.Flush(),
-		storeRoots(a.rootFile, a.roots),
+		StoreRoots(a.rootFile, a.roots),
 	)
 }
 
@@ -277,7 +277,7 @@ func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 		a.rootsMutex.Unlock()
 		return nil, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	rootId := a.roots[block].nodeId
+	rootId := a.roots[block].NodeId
 	a.rootsMutex.Unlock()
 	return getTrieView(rootId, a.head.trie.forest), nil
 }
@@ -320,7 +320,7 @@ func loadRootsFrom(reader io.Reader) ([]Root, error) {
 	}
 }
 
-func storeRoots(filename string, roots []Root) error {
+func StoreRoots(filename string, roots []Root) error {
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -337,14 +337,14 @@ func storeRoots(filename string, roots []Root) error {
 }
 
 func storeRootsTo(writer io.Writer, roots []Root) error {
-	// Simple file format: [<node-id>]*
+	// Simple file format: [<node-id><state-hash>]*
 	var buffer [4]byte
 	for _, root := range roots {
-		binary.BigEndian.PutUint32(buffer[:], uint32(root.nodeId))
+		binary.BigEndian.PutUint32(buffer[:], uint32(root.NodeId))
 		if _, err := writer.Write(buffer[:]); err != nil {
 			return err
 		}
-		if _, err := writer.Write(root.hash[:]); err != nil {
+		if _, err := writer.Write(root.Hash[:]); err != nil {
 			return err
 		}
 	}

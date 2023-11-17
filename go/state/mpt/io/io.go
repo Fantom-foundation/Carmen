@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
@@ -18,7 +20,8 @@ import (
 //
 // Format:
 //
-//  file  ::= <magic-number> <state-hash> [<code>]* [<entry>]*
+//  file  ::= <magic-number> <version> [<hash>]+ [<code>]* [<entry>]*
+//  hash  ::= 'H' <1-byte hash type identifier> <state-hash>
 //  code  ::= 'C' <2-byte big-endian code length> <code>
 //  entry ::= 'A' <address> <balance> <nonce> <code-hash>
 //          | 'S' <key> <value>
@@ -26,7 +29,18 @@ import (
 // All values belong to the account preceding it. The produced data stream
 // may be further compressed (e.g. using Gzip) to reduce its size.
 
-var stateMagicNumber []byte = []byte("Carmen-S5-live-v01")
+var stateMagicNumber []byte = []byte("Fantom-World-State")
+
+const formatVersion = byte(1)
+
+type HashType byte
+
+// So far there is only one hash type supported, the Ethereum hash. But for
+// future situations we might want to support different hash types, like the
+// S4 hash definition. Thus this enum is introduced as a placeholder.
+const (
+	EthereumHash = HashType(0)
+)
 
 // Export opens a LiveDB instance retained in the given directory and writes
 // its content to the given output writer. The result contains all the
@@ -54,9 +68,17 @@ func Export(directory string, out io.Writer) error {
 		return err
 	}
 
+	// Add a version number.
+	if _, err := out.Write([]byte{formatVersion}); err != nil {
+		return err
+	}
+
 	// Continue with the full state hash.
 	hash, err := db.GetHash()
 	if err != nil {
+		return err
+	}
+	if _, err := out.Write([]byte{byte('H'), byte(EthereumHash)}); err != nil {
 		return err
 	}
 	if _, err := out.Write(hash[:]); err != nil {
@@ -88,22 +110,72 @@ func Export(directory string, out io.Writer) error {
 	return nil
 }
 
-// Import creates a fresh StateDB in the given directory and fills it
+// ImportLiveDb creates a fresh StateDB in the given directory and fills it
 // with the content read from the given reader.
-func Import(directory string, in io.Reader) (err error) {
+func ImportLiveDb(directory string, in io.Reader) error {
+	_, _, err := runImport(directory, in, mpt.S5LiveConfig)
+	return err
+}
 
+// InitializeArchive creates a fresh Archive in the given directory containing
+// the state read from the input stream at the given block. All states before
+// the given block are empty.
+func InitializeArchive(directory string, in io.Reader, block uint64) (err error) {
+	// The import creates a live-DB state that initializes the Archive.
+	root, hash, err := runImport(directory, in, mpt.S5ArchiveConfig)
+	if err != nil {
+		return err
+	}
+
+	// Seal the data by marking the content as immutable.
+	forestFile := directory + string(os.PathSeparator) + "forest.json"
+	metaData, err := os.ReadFile(forestFile)
+	if err != nil {
+		return err
+	}
+	metaData = []byte(strings.Replace(string(metaData), "\"Mutable\":true", "\"Mutable\":false", 1))
+	if err := os.WriteFile(forestFile, metaData, 0600); err != nil {
+		return err
+	}
+
+	// Create a root file listing block roots.
+	roots := make([]mpt.Root, block+1)
+	for i := uint64(0); i < block; i++ {
+		roots[i] = mpt.Root{
+			NodeId: mpt.EmptyId(),
+			Hash:   mpt.EmptyNodeEthereumHash,
+		}
+	}
+	roots[block] = mpt.Root{
+		NodeId: root,
+		Hash:   hash,
+	}
+	if err := mpt.StoreRoots(directory+string(os.PathSeparator)+"roots.dat", roots); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.NodeId, hash common.Hash, err error) {
 	// Start by checking the magic number.
 	buffer := make([]byte, len(stateMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
-		return err
+		return root, hash, err
 	} else if !bytes.Equal(buffer, stateMagicNumber) {
-		return fmt.Errorf("invalid format, wrong magic number")
+		return root, hash, fmt.Errorf("invalid format, wrong magic number")
+	}
+
+	// Check the version number.
+	if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
+		return root, hash, err
+	} else if buffer[0] != formatVersion {
+		return root, hash, fmt.Errorf("invalid format, unsupported version")
 	}
 
 	// Create a state.
-	db, err := mpt.OpenGoFileState(directory, mpt.S5LiveConfig)
+	db, err := mpt.OpenGoFileState(directory, config)
 	if err != nil {
-		return fmt.Errorf("failed to create empty state: %v", err)
+		return root, hash, fmt.Errorf("failed to create empty state: %v", err)
 	}
 	defer func() {
 		err = errors.Join(err, db.Close())
@@ -115,15 +187,8 @@ func Import(directory string, in io.Reader) (err error) {
 		value   common.Value
 		balance common.Balance
 		nonce   common.Nonce
-		hash    common.Hash
 	)
 	length := []byte{0, 0}
-
-	// Fetch the state hash
-	var stateHash common.Hash
-	if _, err := io.ReadFull(in, stateHash[:]); err != nil {
-		return err
-	}
 
 	// Read the rest and build the state.
 	buffer = buffer[0:1]
@@ -133,78 +198,96 @@ func Import(directory string, in io.Reader) (err error) {
 
 	counter := 0
 
+	hashFound := false
+	var stateHash common.Hash
 	for {
 		// Update hashes periodically to avoid running out of memory
 		// for nodes with dirty hashes.
 		counter++
 		if (counter % 100_000) == 0 {
 			if _, err := db.GetHash(); err != nil {
-				return fmt.Errorf("failed to update hashes: %v", err)
+				return root, hash, fmt.Errorf("failed to update hashes: %v", err)
 			}
 		}
 
 		if _, err := io.ReadFull(in, buffer); err != nil {
 			if err == io.EOF {
+				if !hashFound {
+					return root, hash, fmt.Errorf("file does not contain a compatible state hash")
+				}
 				// Check the final hash.
 				hash, err := db.GetHash()
 				if err != nil {
-					return err
+					return root, hash, err
 				}
 				if stateHash != hash {
-					return fmt.Errorf("failed to reproduce valid state, hashes do not match")
+					return root, hash, fmt.Errorf("failed to reproduce valid state, hashes do not match")
 				}
-				return nil
+				return db.GetRootId(), hash, nil
 			}
-			return err
+			return root, hash, err
 		}
 		switch buffer[0] {
 		case 'A':
 			if _, err := io.ReadFull(in, addr[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			if err := db.SetBalance(addr, balance); err != nil {
-				return err
+				return root, hash, err
 			}
 			if _, err := io.ReadFull(in, nonce[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			if err := db.SetNonce(addr, nonce); err != nil {
-				return err
+				return root, hash, err
 			}
 			if _, err := io.ReadFull(in, hash[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			if code, found := codes[hash]; found {
 				if err := db.SetCode(addr, code); err != nil {
-					return err
+					return root, hash, err
 				}
 			} else {
-				return fmt.Errorf("missing code with hash %x for account %x", hash[:], addr[:])
+				return root, hash, fmt.Errorf("missing code with hash %x for account %x", hash[:], addr[:])
 			}
 
 		case 'S':
 			if _, err := io.ReadFull(in, key[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			if _, err := io.ReadFull(in, value[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			if err := db.SetStorage(addr, key, value); err != nil {
-				return err
+				return root, hash, err
 			}
 
 		case 'C':
 			if _, err := io.ReadFull(in, length[:]); err != nil {
-				return err
+				return root, hash, err
 			}
 			code := make([]byte, binary.BigEndian.Uint16(length))
 			if _, err := io.ReadFull(in, code); err != nil {
-				return err
+				return root, hash, err
 			}
 			codes[common.Keccak256(code)] = code
+		case 'H':
+			if _, err := io.ReadFull(in, buffer); err != nil {
+				return root, hash, err
+			}
+			hashType := HashType(buffer[0])
+			hash := common.Hash{}
+			if _, err := io.ReadFull(in, hash[:]); err != nil {
+				return root, hash, err
+			}
+			if hashType == EthereumHash {
+				stateHash = hash
+				hashFound = true
+			}
 		}
 	}
 }
