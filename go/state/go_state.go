@@ -94,8 +94,14 @@ func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) Stat
 			if update.update == nil {
 				hashWorkerFlushDone <- true
 				continue
-			} else if err := res.updateHash(update); err != nil {
-				hashWorkerError <- err
+			} else {
+				_, task := trace.NewTask(update.context, "hash")
+				err := res.updateHash(update)
+				task.End()
+				update.task.End()
+				if err != nil {
+					hashWorkerError <- err
+				}
 			}
 			res.hashUpdateMutex.Unlock()
 		}
@@ -107,6 +113,8 @@ func newGoState(schema GoSchema, archive archive.Archive, cleanup []func()) Stat
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 func (s *GoState) Apply(block uint64, update common.Update) error {
+
+	ctxt, task := trace.NewTask(context.Background(), "apply")
 
 	region := trace.StartRegion(context.Background(), "apply")
 	defer region.End()
@@ -126,14 +134,17 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	}
 
 	// Apply the update to the state.
-	if err := applyUpdate(s, update); err != nil {
+	_, updateTask := trace.NewTask(ctxt, "update")
+	err := applyUpdate(s, update)
+	updateTask.End()
+	if err != nil {
 		return err
 	}
 
 	trace.Log(context.Background(), "apply", "signal")
 
 	// Signal hash worker to start hashing the new block.
-	s.hashWorker <- stateUpdate{block: block, update: &update}
+	s.hashWorker <- stateUpdate{context: ctxt, task: task, block: block, update: &update}
 
 	trace.Log(context.Background(), "apply", "end")
 
@@ -147,8 +158,10 @@ func (s *GoState) GetHash() (hash common.Hash, err error) {
 }
 
 type stateUpdate = struct {
-	block  uint64
-	update *common.Update // nil to signal a flush
+	context context.Context
+	task    *trace.Task
+	block   uint64
+	update  *common.Update // nil to signal a flush
 }
 
 type archiveUpdate = struct {
