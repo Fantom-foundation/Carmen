@@ -307,6 +307,12 @@ func (h ethHasher) getHash(id NodeId, source NodeSource) (common.Hash, error) {
 	if err != nil {
 		return common.Hash{}, err
 	}
+
+	// The hash for embedded nodes is 0.
+	if len(data) < 32 {
+		return common.Hash{}, nil
+	}
+
 	return common.Keccak256(data), nil
 }
 
