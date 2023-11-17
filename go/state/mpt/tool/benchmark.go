@@ -245,14 +245,14 @@ func runBenchmark(
 	)
 	for i := 0; i < numBlocks; i++ {
 		for j := 0; j < numReadsPerBlock; j++ {
-			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
+			addr := common.Address{byte(counter), byte(counter >> 8), byte(counter >> 16), byte(counter >> 24)}
 			state.GetBalance(addr)
 			counter++
 		}
 		update := common.Update{}
 		update.CreatedAccounts = make([]common.Address, 0, numInsertsPerBlock)
 		for j := 0; j < numInsertsPerBlock; j++ {
-			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
+			addr := common.Address{byte(counter), byte(counter >> 8), byte(counter >> 16), byte(counter >> 24)}
 			update.CreatedAccounts = append(update.CreatedAccounts, addr)
 			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: addr, Nonce: common.ToNonce(1)})
 			counter++

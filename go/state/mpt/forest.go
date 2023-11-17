@@ -82,8 +82,8 @@ type Forest struct {
 	hasher hasher
 
 	// Cached hashers for keys and addresses (thread safe).
-	keyHasher     *common.CachedHasher[common.Key]
-	addressHasher *common.CachedHasher[common.Address]
+	keyHasher     CachedHasher[common.Key]
+	addressHasher CachedHasher[common.Address]
 
 	// A buffer for asynchronously writing nodes to files.
 	writeBuffer WriteBuffer
@@ -244,8 +244,8 @@ func makeForest(
 		nodeCache:     NewNodeCache(cacheCapacity),
 		dirty:         map[NodeId]struct{}{},
 		hasher:        config.Hashing.createHasher(),
-		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),
-		addressHasher: common.NewCachedHasher[common.Address](hashesCacheCapacity, common.AddressSerializer{}),
+		keyHasher:     NewKeyHasher(),
+		addressHasher: NewAddressHasher(),
 	}
 	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, 1024)
 	return res, nil
@@ -342,11 +342,13 @@ func (s *Forest) getHashFor(ref *NodeReference) (common.Hash, error) {
 }
 
 func (s *Forest) hashKey(key common.Key) common.Hash {
-	return s.keyHasher.Hash(key)
+	hash, _ := s.keyHasher.Hash(key)
+	return hash
 }
 
 func (s *Forest) hashAddress(address common.Address) common.Hash {
-	return s.addressHasher.Hash(address)
+	hash, _ := s.addressHasher.Hash(address)
+	return hash
 }
 
 func (f *Forest) Freeze(ref *NodeReference) error {
