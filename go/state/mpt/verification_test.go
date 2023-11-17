@@ -112,8 +112,8 @@ func TestVerification_ModifiedRootIsDetected(t *testing.T) {
 
 		root := EmptyId()
 		for i := 0; i < len(roots); i++ {
-			if roots[i].nodeId.IsBranch() {
-				root = roots[i].nodeId
+			if roots[i].NodeId.IsBranch() {
+				root = roots[i].NodeId
 				break
 			}
 		}
@@ -534,8 +534,8 @@ func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 			return nil, err
 		}
 		roots = append(roots, Root{
-			nodeId: root,
-			hash:   hash,
+			NodeId: root,
+			Hash:   hash,
 		})
 	}
 

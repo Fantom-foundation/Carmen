@@ -9,7 +9,82 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
-func TestIO_ExportAndImport(t *testing.T) {
+func TestIO_ExportAndImportAsLiveDb(t *testing.T) {
+	genesis, hash := exportExampleState(t)
+
+	buffer := bytes.NewBuffer(genesis)
+	targetDir := t.TempDir()
+	if err := ImportLiveDb(targetDir, buffer); err != nil {
+		t.Fatalf("failed to import DB: %v", err)
+	}
+
+	if err := mpt.VerifyFileLiveTrie(targetDir, mpt.S5LiveConfig, nil); err != nil {
+		t.Fatalf("verification of imported DB failed: %v", err)
+	}
+
+	db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig)
+	if err != nil {
+		t.Fatalf("failed to open recovered DB: %v", err)
+	}
+	defer db.Close()
+
+	if exists, err := db.Exists(common.Address{1}); err != nil || !exists {
+		t.Fatalf("restored DB does not contain account 1")
+	}
+	if exists, err := db.Exists(common.Address{2}); err != nil || !exists {
+		t.Fatalf("restored DB does not contain account 2")
+	}
+
+	if got, err := db.GetHash(); err != nil || got != hash {
+		t.Fatalf("restored DB failed to reproduce same hash\nwanted %x\n   got %x\n   err %v", hash, got, err)
+	}
+}
+
+func TestIO_ExportAndImportAsArchive(t *testing.T) {
+	genesis, hash := exportExampleState(t)
+
+	buffer := bytes.NewBuffer(genesis)
+	targetDir := t.TempDir()
+	genesisBlock := uint64(12)
+	if err := InitializeArchive(targetDir, buffer, genesisBlock); err != nil {
+		t.Fatalf("failed to import DB: %v", err)
+	}
+
+	if err := mpt.VerifyArchive(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
+		t.Fatalf("verification of imported DB failed: %v", err)
+	}
+
+	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig)
+	if err != nil {
+		t.Fatalf("failed to open recovered DB: %v", err)
+	}
+	defer db.Close()
+
+	height, empty, err := db.GetBlockHeight()
+	if err != nil || empty || height != genesisBlock {
+		t.Fatalf("invalid block height, wanted %d, got %d, empty %t, err %v", genesisBlock, height, empty, err)
+	}
+
+	if exists, err := db.Exists(genesisBlock, common.Address{1}); err != nil || !exists {
+		t.Fatalf("restored DB does not contain account 1")
+	}
+	if exists, err := db.Exists(genesisBlock, common.Address{2}); err != nil || !exists {
+		t.Fatalf("restored DB does not contain account 2")
+	}
+
+	if got, err := db.GetHash(genesisBlock); err != nil || got != hash {
+		t.Fatalf("restored DB failed to reproduce same hash\nwanted %x\n   got %x\n   err %v", hash, got, err)
+	}
+
+	for i := uint64(0); i < genesisBlock; i++ {
+		if got, err := db.GetHash(i); err != nil || got != mpt.EmptyNodeEthereumHash {
+			t.Fatalf("invalid hash for pre-genesis block %d\nwanted %x\n   got %x\n   err %v", i, mpt.EmptyNodeEthereumHash, got, err)
+		}
+	}
+}
+
+func exportExampleState(t *testing.T) ([]byte, common.Hash) {
+	t.Helper()
 	sourceDir := t.TempDir()
 
 	// Create a small LiveDB.
@@ -55,25 +130,5 @@ func TestIO_ExportAndImport(t *testing.T) {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
-	targetDir := t.TempDir()
-	if err := Import(targetDir, &buffer); err != nil {
-		t.Fatalf("failed to import DB: %v", err)
-	}
-
-	db, err = mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig)
-	if err != nil {
-		t.Fatalf("failed to open recovered DB: %v", err)
-	}
-	defer db.Close()
-
-	if exists, err := db.Exists(addr1); err != nil || !exists {
-		t.Fatalf("restored DB does not contain account 1")
-	}
-	if exists, err := db.Exists(addr2); err != nil || !exists {
-		t.Fatalf("restored DB does not contain account 2")
-	}
-
-	if got, err := db.GetHash(); err != nil || got != hash {
-		t.Fatalf("restored DB failed to reproduce same hash\nwanted %x\n   got %x\n   err %v", hash, got, err)
-	}
+	return buffer.Bytes(), hash
 }

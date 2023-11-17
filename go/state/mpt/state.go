@@ -32,7 +32,7 @@ type MptState struct {
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
-	codefile := directory + "/codes.json"
+	codefile := directory + "/codes.dat"
 	codes, err := readCodes(codefile)
 	if err != nil {
 		return nil, err
@@ -202,6 +202,10 @@ func (s *MptState) GetCodeHash(address common.Address) (hash common.Hash, err er
 		return emptyCodeHash, err
 	}
 	return info.CodeHash, nil
+}
+
+func (s *MptState) GetRootId() NodeId {
+	return s.trie.root
 }
 
 func (s *MptState) GetHash() (hash common.Hash, err error) {

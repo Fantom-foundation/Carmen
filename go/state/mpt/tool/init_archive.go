@@ -13,14 +13,24 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-var ImportCmd = cli.Command{
-	Action:    doImport,
-	Name:      "import",
-	Usage:     "imports a LiveDB instance from a file",
-	ArgsUsage: "<source-file> <live-db target director>",
+var InitArchive = cli.Command{
+	Action:    doArchiveInit,
+	Name:      "init-archive",
+	Usage:     "initializes an Archive instance from a file",
+	ArgsUsage: "<source-file> <archive target director>",
+	Flags: []cli.Flag{
+		&blockHeightFlag,
+	},
 }
 
-func doImport(context *cli.Context) error {
+var (
+	blockHeightFlag = cli.Uint64Flag{
+		Name:  "block-height",
+		Usage: "the block height the input file is describing",
+	}
+)
+
+func doArchiveInit(context *cli.Context) error {
 	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing source file and/or target directory parameter")
 	}
@@ -31,6 +41,8 @@ func doImport(context *cli.Context) error {
 		return fmt.Errorf("error creating output directory: %v", err)
 	}
 
+	height := context.Uint64(blockHeightFlag.Name)
+
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -40,7 +52,7 @@ func doImport(context *cli.Context) error {
 		return err
 	}
 	return errors.Join(
-		mptIo.ImportLiveDb(dir, in),
+		mptIo.InitializeArchive(dir, in, height),
 		file.Close(),
 	)
 }

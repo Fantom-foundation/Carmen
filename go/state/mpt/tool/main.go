@@ -20,6 +20,7 @@ func main() {
 			&ExportCmd,
 			&ImportCmd,
 			&Info,
+			&InitArchive,
 			&Verify,
 			&Benchmark,
 		},

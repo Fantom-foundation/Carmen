@@ -35,6 +35,9 @@ func (NilVerificationObserver) EndVerification(res error) {}
 //   - all referenced nodes are present
 //   - all hashes are consistent
 func VerifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+	if observer == nil {
+		observer = NilVerificationObserver{}
+	}
 	observer.StartVerification()
 	defer func() {
 		if r := recover(); r != nil {
@@ -85,7 +88,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	// Check that roots are valid.
 	errs := []error{}
 	for _, root := range roots {
-		if err := checkId(root.nodeId); err != nil {
+		if err := checkId(root.NodeId); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -245,10 +248,10 @@ func verifyHashesStoredWithNodes[N any](
 	// Check hashes of roots.
 	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
 	for _, root := range roots {
-		want := hashes[root.nodeId]
-		got := root.hash
+		want := hashes[root.NodeId]
+		got := root.Hash
 		if want != got {
-			return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.nodeId, want, got)
+			return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeId, want, got)
 		}
 	}
 
@@ -340,7 +343,7 @@ func verifyHashesStoredWithParents[N any](
 	}
 
 	for _, root := range roots {
-		if err := checkNodeHash(root.nodeId, root.hash); err != nil {
+		if err := checkNodeHash(root.NodeId, root.Hash); err != nil {
 			return err
 		}
 	}

@@ -47,8 +47,8 @@ func (m StorageMode) String() string {
 
 // Root is used to identify and verify root nodes of trees in forests.
 type Root struct {
-	nodeId NodeId
-	hash   common.Hash
+	NodeId NodeId
+	Hash   common.Hash
 }
 
 // Forest is a utility node managing nodes for one or more Tries.
