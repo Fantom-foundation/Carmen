@@ -18,6 +18,8 @@ const (
 	HashTreeFactor = 32
 )
 
+var OperationContext context.Context = context.Background()
+
 // GoState manages dependencies to other interfaces to build this service
 type GoState struct {
 	GoSchema
@@ -114,19 +116,19 @@ var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 func (s *GoState) Apply(block uint64, update common.Update) error {
 
-	ctxt, task := trace.NewTask(context.Background(), "apply")
+	ctxt, task := trace.NewTask(OperationContext, "apply")
 
-	region := trace.StartRegion(context.Background(), "apply")
+	region := trace.StartRegion(ctxt, "apply")
 	defer region.End()
 
-	trace.Log(context.Background(), "apply", "begin")
+	trace.Log(ctxt, "apply", "begin")
 
 	// Wait for hash worker to be ready. This lock is unlocked by
 	// the hash worker whenever the update scheduled at the end of
 	// this function is completed.
 	s.hashUpdateMutex.Lock()
 
-	trace.Log(context.Background(), "apply", "update")
+	trace.Log(ctxt, "apply", "update")
 
 	// Check for errors encountered during the last hashing.
 	if err := s.collectHashWorkerErrors(); err != nil {
@@ -141,12 +143,12 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		return err
 	}
 
-	trace.Log(context.Background(), "apply", "signal")
+	trace.Log(ctxt, "apply", "signal")
 
 	// Signal hash worker to start hashing the new block.
 	s.hashWorker <- stateUpdate{context: ctxt, task: task, block: block, update: &update}
 
-	trace.Log(context.Background(), "apply", "end")
+	trace.Log(ctxt, "apply", "end")
 
 	return nil
 }
