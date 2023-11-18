@@ -387,6 +387,95 @@ union ethash_hash256 carmen_keccak256(const void *in, size_t size) noexcept {
   return hash;
 }
 
+static inline ALWAYS_INLINE union ethash_hash256
+keccak_20(const uint64_t a, const uint64_t b, const uint32_t c) {
+  static const size_t word_size = sizeof(uint64_t);
+  const size_t bits = 256;
+  const size_t hash_size = bits / 8;
+  const size_t block_size = (1600 - bits * 2) / 8;
+
+  size_t i;
+  uint64_t *state_iter;
+  uint64_t last_word = 0;
+  uint8_t *last_word_iter = (uint8_t *)&last_word;
+  size_t size = 20;
+
+  uint64_t state[25] = {0};
+
+  state_iter = state;
+
+  *state_iter = a;
+  ++state_iter;
+  *state_iter = b;
+  ++state_iter;
+
+  last_word = (uint64_t)(c) | (((uint64_t)(0x01)) << 32);
+  *state_iter ^= to_le64(last_word);
+
+  state[(block_size / word_size) - 1] ^= 0x8000000000000000;
+
+  keccakf1600_best(state);
+
+  union ethash_hash256 res;
+  res.word64s[0] = state[0];
+  res.word64s[1] = state[1];
+  res.word64s[2] = state[2];
+  res.word64s[3] = state[3];
+  return res;
+}
+
+union ethash_hash256 carmen_keccak256_20byte(const uint64_t a, const uint64_t b,
+                                             const uint32_t c) noexcept {
+  return keccak_20(a, b, c);
+}
+
+static inline ALWAYS_INLINE union ethash_hash256 keccak_32(const uint64_t a,
+                                                           const uint64_t b,
+                                                           const uint64_t c,
+                                                           const uint64_t d) {
+  static const size_t word_size = sizeof(uint64_t);
+  const size_t hash_size = 256 / 8;
+  const size_t block_size = (1600 - 256 * 2) / 8;
+
+  size_t i;
+  uint64_t *state_iter;
+  uint64_t last_word = 0;
+  uint8_t *last_word_iter = (uint8_t *)&last_word;
+
+  uint64_t state[25] = {0};
+
+  state_iter = state;
+
+  *state_iter = a;
+  ++state_iter;
+  *state_iter = b;
+  ++state_iter;
+  *state_iter = c;
+  ++state_iter;
+  *state_iter = d;
+  ++state_iter;
+
+  last_word = 0x01;
+  *state_iter ^= to_le64(last_word);
+
+  state[(block_size / word_size) - 1] ^= 0x8000000000000000;
+
+  keccakf1600_best(state);
+
+  union ethash_hash256 res;
+  res.word64s[0] = state[0];
+  res.word64s[1] = state[1];
+  res.word64s[2] = state[2];
+  res.word64s[3] = state[3];
+  return res;
+}
+
+union ethash_hash256 carmen_keccak256_32byte(const uint64_t a, const uint64_t b,
+                                             const uint64_t c,
+                                             const uint64_t d) noexcept {
+  return keccak_32(a, b, c, d);
+}
+
 #ifdef __cplusplus
 }
 #endif
