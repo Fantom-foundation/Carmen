@@ -453,6 +453,10 @@ func (s *Forest) getConfig() MptConfig {
 	return s.config
 }
 
+func (s *Forest) touch(ref *NodeReference) {
+	s.nodeCache.Touch(ref)
+}
+
 func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error) {
 	res, found := s.nodeCache.Get(ref)
 	if found {
@@ -515,46 +519,86 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 		node.MarkFrozen()
 	}
 
-	// if the has been a concurrent fetch, use the other value
+	// if there has been a concurrent fetch, use the other value
 	instance, _ := s.addToCache(id, shared.MakeShared[Node](node))
 	return instance, nil
 }
 
-func (s *Forest) getReadAccess(ref *NodeReference) (shared.ReadHandle[Node], error) {
-	// FIXME: the instance may be invalid before the read handle is acquired!
-	instance, err := s.getSharedNode(ref)
+func getAccess[H any](
+	f *Forest,
+	ref *NodeReference,
+	getAccess func(*shared.Shared[Node]) H,
+	release func(H),
+	def H,
+) (H, error) {
+	instance, err := f.getSharedNode(ref)
 	if err != nil {
-		return shared.ReadHandle[Node]{}, err
+		return def, err
 	}
-	return instance.GetReadHandle(), nil
+	for {
+		// Obtain needed access and make sure the instance access was obtained
+		// for is still valid (by re-fetching the instance and check that it
+		// has not changed). This is not super efficient, and may be improved
+		// in the future by merging this functionality into called operations.
+		res := getAccess(instance)
+		if actual, err := f.getSharedNode(ref); err == nil && actual == instance {
+			return res, nil
+		} else if err != nil {
+			release(res)
+			return def, err
+		} else {
+			release(res)
+			instance = actual
+		}
+	}
 }
 
-func (s *Forest) touch(ref *NodeReference) {
-	s.nodeCache.Touch(ref)
+func (s *Forest) getReadAccess(ref *NodeReference) (shared.ReadHandle[Node], error) {
+	return getAccess(s, ref,
+		func(s *shared.Shared[Node]) shared.ReadHandle[Node] {
+			return s.GetReadHandle()
+		},
+		func(p shared.ReadHandle[Node]) {
+			p.Release()
+		},
+		shared.ReadHandle[Node]{},
+	)
 }
 
 func (s *Forest) getViewAccess(ref *NodeReference) (shared.ViewHandle[Node], error) {
-	instance, err := s.getSharedNode(ref)
-	if err != nil {
-		return shared.ViewHandle[Node]{}, err
-	}
-	return instance.GetViewHandle(), nil
+	return getAccess(s, ref,
+		func(s *shared.Shared[Node]) shared.ViewHandle[Node] {
+			return s.GetViewHandle()
+		},
+		func(p shared.ViewHandle[Node]) {
+			p.Release()
+		},
+		shared.ViewHandle[Node]{},
+	)
 }
 
 func (s *Forest) getHashAccess(ref *NodeReference) (shared.HashHandle[Node], error) {
-	instance, err := s.getSharedNode(ref)
-	if err != nil {
-		return shared.HashHandle[Node]{}, err
-	}
-	return instance.GetHashHandle(), nil
+	return getAccess(s, ref,
+		func(s *shared.Shared[Node]) shared.HashHandle[Node] {
+			return s.GetHashHandle()
+		},
+		func(p shared.HashHandle[Node]) {
+			p.Release()
+		},
+		shared.HashHandle[Node]{},
+	)
 }
 
 func (s *Forest) getWriteAccess(ref *NodeReference) (shared.WriteHandle[Node], error) {
-	instance, err := s.getSharedNode(ref)
-	if err != nil {
-		return shared.WriteHandle[Node]{}, err
-	}
-	return instance.GetWriteHandle(), nil
+	return getAccess(s, ref,
+		func(s *shared.Shared[Node]) shared.WriteHandle[Node] {
+			return s.GetWriteHandle()
+		},
+		func(p shared.WriteHandle[Node]) {
+			p.Release()
+		},
+		shared.WriteHandle[Node]{},
+	)
 }
 
 func (s *Forest) getMutableNodeByPath(root *NodeReference, path NodePath) (shared.WriteHandle[Node], error) {
