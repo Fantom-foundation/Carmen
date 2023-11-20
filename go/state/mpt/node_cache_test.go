@@ -1,6 +1,12 @@
 package mpt
 
-/*
+import (
+	"fmt"
+	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
+)
+
 func TestNodeCache_ElementsCanBeStoredAndRetrieved(t *testing.T) {
 	cache := NewNodeCache(10)
 
@@ -145,4 +151,3 @@ func TestNodeCache_TouchChangesOrder(t *testing.T) {
 	}
 
 }
-*/
