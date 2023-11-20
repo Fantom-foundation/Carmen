@@ -987,16 +987,17 @@ func (n *ExtensionNode) setNextNode(
 		newRoot = extensionRef
 	}
 
-	// If this node was not needed any more, we can discard it.
-	if !thisNodeWasReused {
-		manager.release(thisRef.Id())
-	}
-
 	// Continue insertion of new account at new branch level.
 	_, _, err = createSubTree(&branchRef, branchHandle, path[commonPrefixLength:])
 	if err != nil {
 		return NodeReference{}, false, err
 	}
+
+	// If this node was not needed any more, we can discard it.
+	if !thisNodeWasReused {
+		manager.release(thisRef.Id())
+	}
+
 	return newRoot, !isClone, nil
 }
 
