@@ -46,17 +46,10 @@ type nodeCache struct {
 }
 
 func NewNodeCache(capacity int) NodeCache {
-	//return &simpleNodeCache{index: map[NodeId]*shared.Shared[Node]{}}
 	return newNodeCache(capacity)
-	/*
-		return &shadowNodeCache{
-			prime:  newNodeCache(capacity),
-			shadow: &simpleNodeCache{index: map[NodeId]*shared.Shared[Node]{}},
-		}
-	*/
 }
 
-func newNodeCache(capacity int) NodeCache {
+func newNodeCache(capacity int) *nodeCache {
 	if capacity < 1 {
 		capacity = 1
 	}
@@ -81,7 +74,7 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 			}
 			pos = uint32(position)
 			tag = c.owners[pos].tag.Load()
-			atomic.StoreUint32(&r.pos, uint32(position))
+			atomic.StoreUint32(&r.pos, pos)
 			atomic.StoreUint64(&r.tag, tag)
 			c.mutex.Unlock()
 		}
@@ -213,57 +206,3 @@ type nodeOwner struct {
 type ownerPosition uint32
 
 const unknownPosition = ownerPosition(0xFFFFFFFF)
-
-type shadowNodeCache struct {
-	prime, shadow NodeCache
-}
-
-func (s *shadowNodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
-	av, af := s.prime.Get(r)
-	bv, bf := s.shadow.Get(r)
-	if av != bv || af != bf {
-		panic(fmt.Sprintf("inconsistent cache, wanted %p,%t, got %p,%t", bv, bf, av, af))
-	}
-	return av, af
-}
-
-func (s *shadowNodeCache) GetOrSet(id NodeId, value *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool) {
-	av, af, ei, ev, e := s.prime.GetOrSet(id, value)
-	bv, bf, _, _, _ := s.shadow.GetOrSet(id, value)
-	if av != bv || af != bf {
-		panic(fmt.Sprintf("inconsistent cache, wanted %p,%t, got %p,%t", bv, bf, av, af))
-	}
-	return av, af, ei, ev, e
-}
-
-func (s *shadowNodeCache) Touch(r *NodeReference) {
-	s.prime.Touch(r)
-	s.shadow.Touch(r)
-}
-
-func (s *shadowNodeCache) GetMemoryFootprint() *common.MemoryFootprint {
-	return nil
-}
-
-type simpleNodeCache struct {
-	index map[NodeId]*shared.Shared[Node]
-}
-
-func (s *simpleNodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
-	res, found := s.index[r.Id()]
-	return res, found
-}
-
-func (s *simpleNodeCache) GetOrSet(id NodeId, value *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool) {
-	if cur, found := s.index[id]; found {
-		return cur, true, NodeId(0), nil, false
-	}
-	s.index[id] = value
-	return value, false, NodeId(0), nil, false
-}
-
-func (s *simpleNodeCache) Touch(r *NodeReference) {
-}
-func (s *simpleNodeCache) GetMemoryFootprint() *common.MemoryFootprint {
-	return nil
-}
