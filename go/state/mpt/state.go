@@ -715,7 +715,7 @@ func loadAccounts(directory string, config MptConfig) (map[common.Address]accoun
 	var mutex sync.Mutex
 	res := map[common.Address]account{}
 
-	const N = 8
+	var N = runtime.NumCPU()
 	var wg sync.WaitGroup
 	wg.Add(N)
 	pos := atomic.Uint64{}
