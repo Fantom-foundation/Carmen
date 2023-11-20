@@ -407,8 +407,8 @@ func (n *BranchNode) setNextNode(
 	if err != nil {
 		return NodeReference{}, false, err
 	}
-	defer node.Release()
 	newRoot, hasChanged, err := createSubTree(child, node, path[1:])
+	node.Release()
 	if err != nil {
 		return NodeReference{}, false, err
 	}
@@ -512,8 +512,8 @@ func (n *BranchNode) setNextNode(
 					if err != nil {
 						return NodeReference{}, false, err
 					}
-					defer handle.Release()
 					newRoot, _, err = handle.Get().(*AccountNode).setPathLength(manager, &remaining, handle, byte(len(path)))
+					handle.Release()
 					if err != nil {
 						return NodeReference{}, false, err
 					}
@@ -522,8 +522,8 @@ func (n *BranchNode) setNextNode(
 					if err != nil {
 						return NodeReference{}, false, err
 					}
-					defer handle.Release()
 					newRoot, _, err = handle.Get().(*ValueNode).setPathLength(manager, &remaining, handle, byte(len(path)))
+					handle.Release()
 					if err != nil {
 						return NodeReference{}, false, err
 					}
@@ -580,8 +580,8 @@ func (n *BranchNode) Release(manager NodeManager, thisRef *NodeReference, this s
 			if err != nil {
 				return err
 			}
-			defer handle.Release()
 			err = handle.Get().Release(manager, &cur, handle)
+			handle.Release()
 			if err != nil {
 				return err
 			}
@@ -887,7 +887,6 @@ func (n *ExtensionNode) setNextNode(
 					if err != nil {
 						return NodeReference{}, false, err
 					}
-					defer root.Release()
 					if newRoot.Id().IsAccount() {
 						newRoot, _, err = root.Get().(*AccountNode).setPathLength(manager, &newRoot, root, byte(len(path)))
 					} else if newRoot.Id().IsValue() {
@@ -895,6 +894,7 @@ func (n *ExtensionNode) setNextNode(
 					} else {
 						panic(fmt.Sprintf("unsupported new next node type: %v", newRoot))
 					}
+					root.Release()
 					if err != nil {
 						return NodeReference{}, false, err
 					}
