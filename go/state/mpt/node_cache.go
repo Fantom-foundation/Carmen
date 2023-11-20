@@ -30,7 +30,7 @@ func (r *NodeReference) String() string {
 
 type NodeCache interface {
 	Get(r *NodeReference) (*shared.Shared[Node], bool)
-	GetOrSet(NodeId, *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool)
+	GetOrSet(*NodeReference, *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool)
 	Touch(r *NodeReference)
 	GetMemoryFootprint() *common.MemoryFootprint
 }
@@ -94,7 +94,7 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 }
 
 func (c *nodeCache) GetOrSet(
-	id NodeId,
+	ref *NodeReference,
 	node *shared.Shared[Node],
 ) (
 	current *shared.Shared[Node],
@@ -105,8 +105,10 @@ func (c *nodeCache) GetOrSet(
 ) {
 	c.mutex.Lock()
 	// Lookup element - if present, we are done.
-	if pos, found := c.index[id]; found {
+	if pos, found := c.index[ref.id]; found {
 		c.mutex.Unlock()
+		atomic.StoreUint32(&ref.pos, uint32(pos))
+		atomic.StoreUint64(&ref.tag, c.owners[pos].tag.Load())
 		return c.owners[pos].node, true, NodeId(0), nil, false
 	}
 
@@ -135,7 +137,7 @@ func (c *nodeCache) GetOrSet(
 	// update the owner to own the new ID and node
 	c.tagCounter++
 	target.tag.Store(c.tagCounter)
-	target.id = id
+	target.id = ref.Id()
 	target.node = node
 
 	// Move new owner to head of the LRU list.
@@ -143,8 +145,10 @@ func (c *nodeCache) GetOrSet(
 	c.owners[c.head].priv = pos
 	c.head = pos
 
-	c.index[id] = pos
+	c.index[ref.Id()] = pos
 	c.mutex.Unlock()
+	atomic.StoreUint32(&ref.pos, uint32(pos))
+	atomic.StoreUint64(&ref.tag, c.owners[pos].tag.Load())
 	return node, false, evictedId, evictedNode, evicted
 }
 

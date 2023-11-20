@@ -16,7 +16,7 @@ func TestNodeCache_ElementsCanBeStoredAndRetrieved(t *testing.T) {
 	}
 
 	node := shared.MakeShared[Node](EmptyNode{})
-	if _, present, _, _, evicted := cache.GetOrSet(ref.Id(), node); present || evicted {
+	if _, present, _, _, evicted := cache.GetOrSet(&ref, node); present || evicted {
 		t.Errorf("insertion failed, present %t, evicted %t", present, evicted)
 	}
 
@@ -53,7 +53,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, _, _, evicted := cache.GetOrSet(ref1.Id(), node1); present || evicted {
+	if _, present, _, _, evicted := cache.GetOrSet(&ref1, node1); present || evicted {
 		t.Errorf("insertion failed, present %t, evicted %t", present, evicted)
 	}
 
@@ -61,7 +61,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, _, _, evicted := cache.GetOrSet(ref2.Id(), node2); present || evicted {
+	if _, present, _, _, evicted := cache.GetOrSet(&ref2, node2); present || evicted {
 		t.Errorf("insertion failed, present %t, evicted %t", present, evicted)
 	}
 
@@ -69,7 +69,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, _, _, evicted := cache.GetOrSet(ref3.Id(), node3); present || evicted {
+	if _, present, _, _, evicted := cache.GetOrSet(&ref3, node3); present || evicted {
 		t.Errorf("insertion failed, present %t, evicted %t", present, evicted)
 	}
 
@@ -77,7 +77,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(ref4.Id(), node4); present || !evicted || evictedId != ref1.Id() || evictedNode != node1 {
+	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(&ref4, node4); present || !evicted || evictedId != ref1.Id() || evictedNode != node1 {
 		t.Errorf("insertion failed, present %t, evicted %t, evictedId %v, evicted node %p", present, evicted, evictedId, evictedNode)
 	}
 
@@ -85,7 +85,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(ref5.Id(), node5); present || !evicted || evictedId != ref2.Id() || evictedNode != node2 {
+	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(&ref5, node5); present || !evicted || evictedId != ref2.Id() || evictedNode != node2 {
 		t.Errorf("insertion failed, present %t, evicted %t, evictedId %v, evicted node %p", present, evicted, evictedId, evictedNode)
 	}
 
@@ -93,7 +93,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(ref1.Id(), node1); present || !evicted || evictedId != ref3.Id() || evictedNode != node3 {
+	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(&ref1, node1); present || !evicted || evictedId != ref3.Id() || evictedNode != node3 {
 		t.Errorf("insertion failed, present %t, evicted %t, evictedId %v, evicted node %p", present, evicted, evictedId, evictedNode)
 	}
 
@@ -101,7 +101,7 @@ func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(ref2.Id(), node2); present || !evicted || evictedId != ref4.Id() || evictedNode != node4 {
+	if _, present, evictedId, evictedNode, evicted := cache.GetOrSet(&ref2, node2); present || !evicted || evictedId != ref4.Id() || evictedNode != node4 {
 		t.Errorf("insertion failed, present %t, evicted %t, evictedId %v, evicted node %p", present, evicted, evictedId, evictedNode)
 	}
 
@@ -121,9 +121,9 @@ func TestNodeCache_TouchChangesOrder(t *testing.T) {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
 
-	cache.GetOrSet(ref1.Id(), nil)
-	cache.GetOrSet(ref2.Id(), nil)
-	cache.GetOrSet(ref3.Id(), nil)
+	cache.GetOrSet(&ref1, nil)
+	cache.GetOrSet(&ref2, nil)
+	cache.GetOrSet(&ref3, nil)
 	cache.Get(&ref1)
 	cache.Get(&ref2)
 	cache.Get(&ref3)
