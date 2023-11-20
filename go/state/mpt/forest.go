@@ -472,7 +472,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
-		masterCopy, _ := s.addToCache(id, res)
+		masterCopy, _ := s.addToCache(ref, res)
 		if masterCopy != res {
 			panic("failed to reinstate element from write buffer")
 		}
@@ -520,7 +520,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	}
 
 	// if there has been a concurrent fetch, use the other value
-	instance, _ := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, _ := s.addToCache(ref, shared.MakeShared[Node](node))
 	return instance, nil
 }
 
@@ -639,8 +639,8 @@ func (s *Forest) getMutableNodeByPath(root *NodeReference, path NodePath) (share
 	return res, err
 }
 
-func (s *Forest) addToCache(id NodeId, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
-	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(id, node)
+func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(ref, node)
 	if !evicted {
 		return current, present
 	}
@@ -692,15 +692,15 @@ func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error
 	if err != nil {
 		return NodeReference{}, shared.WriteHandle[Node]{}, err
 	}
-	id := AccountId(i)
+	ref := NewNodeReference(AccountId(i))
 	node := new(AccountNode)
-	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
 		*write.Get().(*AccountNode) = *node
 		write.Release()
 	}
-	return NewNodeReference(id), instance.GetWriteHandle(), err
+	return ref, instance.GetWriteHandle(), err
 }
 
 func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error) {
@@ -708,15 +708,15 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	if err != nil {
 		return NodeReference{}, shared.WriteHandle[Node]{}, err
 	}
-	id := BranchId(i)
+	ref := NewNodeReference(BranchId(i))
 	node := new(BranchNode)
-	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
 		*write.Get().(*BranchNode) = *node
 		write.Release()
 	}
-	return NewNodeReference(id), instance.GetWriteHandle(), err
+	return ref, instance.GetWriteHandle(), err
 }
 
 func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], error) {
@@ -724,15 +724,15 @@ func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], err
 	if err != nil {
 		return NodeReference{}, shared.WriteHandle[Node]{}, err
 	}
-	id := ExtensionId(i)
+	ref := NewNodeReference(ExtensionId(i))
 	node := new(ExtensionNode)
-	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
 		*write.Get().(*ExtensionNode) = *node
 		write.Release()
 	}
-	return NewNodeReference(id), instance.GetWriteHandle(), err
+	return ref, instance.GetWriteHandle(), err
 }
 
 func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) {
@@ -740,15 +740,15 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	if err != nil {
 		return NodeReference{}, shared.WriteHandle[Node]{}, err
 	}
-	id := ValueId(i)
+	ref := NewNodeReference(ValueId(i))
 	node := new(ValueNode)
-	instance, present := s.addToCache(id, shared.MakeShared[Node](node))
+	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
 		*write.Get().(*ValueNode) = *node
 		write.Release()
 	}
-	return NewNodeReference(id), instance.GetWriteHandle(), err
+	return ref, instance.GetWriteHandle(), err
 }
 
 func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
