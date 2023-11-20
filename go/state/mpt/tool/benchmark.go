@@ -25,6 +25,7 @@ var Benchmark = cli.Command{
 		&archiveFlag,
 		&diagnosticsFlag,
 		&numBlocksFlag,
+		&numReadsPerBlockFlag,
 		&numInsertsPerBlockFlag,
 		&reportIntervalFlag,
 		&tmpDirFlag,
@@ -47,6 +48,11 @@ var (
 		Name:  "num-blocks",
 		Usage: "the number of blocks to be filled in",
 		Value: 10_000,
+	}
+	numReadsPerBlockFlag = cli.IntFlag{
+		Name:  "reads-per-block",
+		Usage: "the number of reads per block",
+		Value: 0,
 	}
 	numInsertsPerBlockFlag = cli.IntFlag{
 		Name:  "inserts-per-block",
@@ -96,6 +102,7 @@ func benchmark(context *cli.Context) error {
 		benchmarkParams{
 			archive:            context.Bool(archiveFlag.Name),
 			numBlocks:          context.Int(numBlocksFlag.Name),
+			numReadsPerBlock:   context.Int(numReadsPerBlockFlag.Name),
 			numInsertsPerBlock: context.Int(numInsertsPerBlockFlag.Name),
 			tmpDir:             tmpDir,
 			keepState:          context.Bool(keepStateFlag.Name),
@@ -124,6 +131,7 @@ func benchmark(context *cli.Context) error {
 type benchmarkParams struct {
 	archive            bool
 	numBlocks          int
+	numReadsPerBlock   int
 	numInsertsPerBlock int
 	tmpDir             string
 	keepState          bool
@@ -217,15 +225,25 @@ func runBenchmark(
 
 	// Simulate insertions.
 	numBlocks := params.numBlocks
+	numReadsPerBlock := params.numReadsPerBlock
 	numInsertsPerBlock := params.numInsertsPerBlock
 	counter := 0
+	observer(
+		"Simulating %d blocks with %d reads and %d inserts each",
+		numBlocks, numReadsPerBlock, numInsertsPerBlock,
+	)
 	for i := 0; i < numBlocks; i++ {
+		for j := 0; j < numReadsPerBlock; j++ {
+			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
+			state.GetBalance(addr)
+			counter++
+		}
 		update := common.Update{}
 		update.CreatedAccounts = make([]common.Address, 0, numInsertsPerBlock)
 		for j := 0; j < numInsertsPerBlock; j++ {
 			addr := common.Address{byte(counter >> 24), byte(counter >> 16), byte(counter >> 8), byte(counter)}
 			update.CreatedAccounts = append(update.CreatedAccounts, addr)
-			update.Nonces = append(update.Nonces, common.NonceUpdate{addr, common.ToNonce(1)})
+			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: addr, Nonce: common.ToNonce(1)})
 			counter++
 		}
 		if err := state.Apply(uint64(i), update); err != nil {
@@ -260,7 +278,12 @@ func runBenchmark(
 			startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, ((i+1)/reportingInterval)+1))
 		}
 	}
-	observer("Finished %.2e blocks with %.2e inserts", float64(numBlocks), float64(numBlocks*numInsertsPerBlock))
+	observer(
+		"Finished %.2e blocks with %.2e reads and %.2e inserts",
+		float64(numBlocks),
+		float64(numBlocks*numReadsPerBlock),
+		float64(numBlocks*numInsertsPerBlock),
+	)
 
 	benchmarkTime := time.Since(benchmarkStart)
 	res.numInserts = int64(counter)
