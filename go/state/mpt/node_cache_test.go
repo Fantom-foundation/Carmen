@@ -34,6 +34,25 @@ func TestNodeCache_ElementsCanBeStoredAndRetrieved(t *testing.T) {
 	}
 }
 
+func TestNodeCache_GetOrSetReturnsCurrent(t *testing.T) {
+	cache := NewNodeCache(10)
+
+	ref := NewNodeReference(EmptyId())
+	if _, found := cache.Get(&ref); found {
+		t.Errorf("empty cache should not contain any element, found %v", ref)
+	}
+
+	node1 := shared.MakeShared[Node](EmptyNode{})
+	if res, present, _, _, evicted := cache.GetOrSet(&ref, node1); present || evicted || res != node1 {
+		t.Errorf("insertion failed, present %t, evicted %t, wanted %p, got %p", present, evicted, node1, res)
+	}
+
+	node2 := shared.MakeShared[Node](EmptyNode{})
+	if res, present, _, _, evicted := cache.GetOrSet(&ref, node2); !present || evicted || res != node1 {
+		t.Errorf("insertion failed, present %t, evicted %t, wanted %p, got %p", present, evicted, node1, res)
+	}
+}
+
 func TestNodeCache_ElementsAreRetainedInLruOrder(t *testing.T) {
 	cache := NewNodeCache(3).(*nodeCache)
 
