@@ -353,7 +353,7 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 	for _, config := range allMptConfigs {
 		config := config
 		t.Run(config.Name, func(t *testing.T) {
-			//t.Parallel()
+			t.Parallel()
 			const N = 500
 
 			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config)
@@ -370,6 +370,7 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 				t.Fatalf("failed to insert account: %v", err)
 			}
 			if err := trie.Check(); err != nil {
+				trie.Dump()
 				t.Fatalf("trie inconsistent after account insert:\n%v", err)
 			}
 
@@ -378,6 +379,7 @@ func TestLiveTrie_InsertLotsOfValues(t *testing.T) {
 					t.Fatalf("failed to insert value: %v", err)
 				}
 				if err := trie.Check(); err != nil {
+					trie.Dump()
 					t.Fatalf("trie inconsistent after value insert:\n%v", err)
 				}
 			}
