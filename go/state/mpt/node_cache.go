@@ -10,12 +10,22 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
 
+// NodeReference is used to address a node within an MPT. The node is
+// identified by a NodeId and may either be in memory or on disk. In
+// combination with a NodeCache, a reference can be used to resolve and
+// access nodes while navigating an MPT instance. Internally, references
+// cache information enabling efficient access to nodes.
+// NOTE: NodeReferences must be consistently used with a single NodeCache
+// instance. Mixing references to nodes in different caches can lead to
+// failures and corrupted content.
 type NodeReference struct {
-	id  NodeId
-	pos uint32
-	tag uint64
+	id  NodeId // the ID of the referenced node
+	pos uint32 // the position of the node within the cache
+	tag uint64 // a tag used to invalidate references on cache changes
 }
 
+// NewNodeReference creates a new node reference pointing to the addressed
+// Node.
 func NewNodeReference(id NodeId) NodeReference {
 	return NodeReference{id: id, pos: uint32(unknownPosition)}
 }
@@ -28,21 +38,51 @@ func (r *NodeReference) String() string {
 	return r.id.String()
 }
 
+// NodeCache is managing the life cycle of nodes in memory and limits the
+// overall memory usage of nodes retained. Nodes can be accessed through
+// NodeReferences. All accesses are thread safe.
 type NodeCache interface {
-	Get(r *NodeReference) (*shared.Shared[Node], bool)
-	GetOrSet(*NodeReference, *shared.Shared[Node]) (*shared.Shared[Node], bool, NodeId, *shared.Shared[Node], bool)
+	// Get tries to resolve the given node reference, returning the
+	// corresponding node or nil if not found.
+	Get(r *NodeReference) (node *shared.Shared[Node], found bool)
+
+	// GetOrSet attempts to bind a new node to a given reference. If a node is
+	// already bound to the referenced ID, the present value is returned.
+	// Otherwise the provided node is registered in the cache and returned.
+	// If the insertion causes a node to be evicted, the evicted node's ID,
+	// the node itself, and a boolean flag indicating the eviction is returned.
+	GetOrSet(*NodeReference, *shared.Shared[Node]) (
+		after *shared.Shared[Node],
+		present bool,
+		evictedId NodeId,
+		evictedNode *shared.Shared[Node],
+		evicted bool,
+	)
+
+	// Touch signals the cache that the given node has been used. This signals
+	// are used by implementation to manage the eviction order of elements.
 	Touch(r *NodeReference)
+
+	// GetMemoryFootprint produces a summary of the overall memory usage of
+	// this cache, including the size of all owned node instances.
 	GetMemoryFootprint() *common.MemoryFootprint
 }
 
+// nodeCache implements the NodeCache interface using a fixed capacity cache
+// of nodes and an LRU policy for evicting nodes.
+//
+// Internally, this implementation maintains a list of node-owners, each
+// equipped with a tag to indicate mutations. Node references retain the
+// position of referenced nodes in the list of owners and the tag. When
+// resolving a node through a reference, the position and tag enable a direct,
+// lock free lookup of the targeted node.
 type nodeCache struct {
-	owners     []nodeOwner
-	capacity   ownerPosition
-	index      map[NodeId]ownerPosition
-	tagCounter uint64
-	head       ownerPosition
-	tail       ownerPosition
-	mutex      sync.Mutex // for everything in the cache
+	owners     []nodeOwner              // fixed length list of all owned nodes
+	index      map[NodeId]ownerPosition // an index on the owned nodes
+	tagCounter uint64                   // a counter to generate fresh tags
+	head       ownerPosition            // head of the LRU list of owners
+	tail       ownerPosition            // tail of the LRU list of owners
+	mutex      sync.Mutex               // for everything except the owner list
 }
 
 func NewNodeCache(capacity int) NodeCache {
@@ -54,9 +94,8 @@ func newNodeCache(capacity int) *nodeCache {
 		capacity = 1
 	}
 	return &nodeCache{
-		owners:   make([]nodeOwner, capacity),
-		capacity: ownerPosition(capacity),
-		index:    make(map[NodeId]ownerPosition, capacity),
+		owners: make([]nodeOwner, capacity),
+		index:  make(map[NodeId]ownerPosition, capacity),
 	}
 }
 
@@ -65,7 +104,7 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 	tag := atomic.LoadUint64(&r.tag)
 	for {
 		// Resolve the owner position if needed.
-		if ownerPosition(pos) >= c.capacity {
+		if pos >= uint32(len(c.owners)) {
 			c.mutex.Lock()
 			position, found := c.index[r.id]
 			if !found {
@@ -115,7 +154,7 @@ func (c *nodeCache) GetOrSet(
 	// If not present, the capacity needs to be checked.
 	var pos ownerPosition
 	var target *nodeOwner
-	if len(c.index) >= int(c.capacity) {
+	if len(c.index) >= len(c.owners) {
 		// an element needs to be evicted
 		pos = c.tail
 
@@ -154,7 +193,7 @@ func (c *nodeCache) GetOrSet(
 
 func (c *nodeCache) Touch(r *NodeReference) {
 	pos := ownerPosition(atomic.LoadUint32(&r.pos))
-	if pos >= c.capacity {
+	if uint32(pos) >= uint32(len(c.owners)) {
 		return
 	}
 	target := &c.owners[pos]
@@ -182,14 +221,41 @@ func (c *nodeCache) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*c))
 	mf.AddChild("owners", common.NewMemoryFootprint(unsafe.Sizeof(nodeOwner{})*uintptr(len(c.owners))))
 	mf.AddChild("index", common.NewMemoryFootprint((unsafe.Sizeof(ownerPosition(0))+unsafe.Sizeof(NodeId(0)))*uintptr(len(c.index))))
-	// TODO: add size of owned nodes
+
+	emptySize := unsafe.Sizeof(EmptyNode{})
+	branchSize := unsafe.Sizeof(BranchNode{})
+	extensionSize := unsafe.Sizeof(ExtensionNode{})
+	accountSize := unsafe.Sizeof(AccountNode{})
+	valueSize := unsafe.Sizeof(ValueNode{})
+
+	size := uintptr(0)
+	for i := 0; i < len(c.owners); i++ {
+		cur := &c.owners[i]
+		if cur.node == nil {
+			continue
+		}
+		id := cur.id
+		if id.IsEmpty() {
+			size += emptySize
+		} else if id.IsBranch() {
+			size += branchSize
+		} else if id.IsValue() {
+			size += valueSize
+		} else if id.IsAccount() {
+			size += accountSize
+		} else if id.IsExtension() {
+			size += extensionSize
+		}
+
+	}
+	mf.AddChild("nodes", common.NewMemoryFootprint(size))
 	return mf
 }
 
 func (c *nodeCache) getIdsInReverseEvictionOrder() []NodeId {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	res := make([]NodeId, 0, c.capacity)
+	res := make([]NodeId, 0, len(c.owners))
 	for cur := c.head; cur != c.tail; cur = c.owners[cur].next {
 		res = append(res, c.owners[cur].id)
 	}
@@ -199,12 +265,15 @@ func (c *nodeCache) getIdsInReverseEvictionOrder() []NodeId {
 	return res
 }
 
+// nodeOwner is a single entry of the node cache. It servers two roles:
+// - provide synchronized access to an owned node
+// - be an element of a LRU list to manage eviction order
 type nodeOwner struct {
-	tag  atomic.Uint64
-	id   NodeId
-	node *shared.Shared[Node]
-	priv ownerPosition
-	next ownerPosition
+	tag  atomic.Uint64        // a tag vor versioning the owned node
+	id   NodeId               // the ID of the owned node
+	node *shared.Shared[Node] // the owned node
+	priv ownerPosition        // predecessor in the LRU list
+	next ownerPosition        // successor in the LRU list
 }
 
 type ownerPosition uint32
