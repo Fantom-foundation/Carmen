@@ -372,7 +372,10 @@ func (m *Depot[I]) Flush() error {
 
 // Close the store
 func (m *Depot[I]) Close() error {
-	return m.Flush()
+	return errors.Join(
+		m.Flush(),
+		m.offsetsFile.Close(),
+		m.contentsFile.Close())
 }
 
 func (m *Depot[I]) ReleasePreviousSnapshot() {
