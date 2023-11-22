@@ -1,7 +1,6 @@
 package mpt
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -63,9 +62,10 @@ type NodeCache interface {
 	// are used by implementation to manage the eviction order of elements.
 	Touch(r *NodeReference)
 
-	// GetMemoryFootprint produces a summary of the overall memory usage of
-	// this cache, including the size of all owned node instances.
-	GetMemoryFootprint() *common.MemoryFootprint
+	// MemoryFootprintProvider is embedded to require implementations to
+	// produces a summary of the overall memory usage of this cache, including
+	// the size of all owned node instances.
+	common.MemoryFootprintProvider
 }
 
 // nodeCache implements the NodeCache interface using a fixed capacity cache
@@ -100,6 +100,14 @@ func newNodeCache(capacity int) *nodeCache {
 }
 
 func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
+	// Node references cache the position of the owner retaining the referenced
+	// node such that lookups are reduced to simple array lookups. However, at
+	// any time the cache may chose to evict an element and replace it with
+	// another. To do so, the owner at the corresponding position is simply
+	// updated. To allow node references to identify situations in which the
+	// referenced node got evicted, an additional tag is stored. This tag is
+	// incremented every time an owner is recycled, allowing references to
+	// identify modifications.
 	pos := atomic.LoadUint32(&r.pos)
 	tag := atomic.LoadUint64(&r.tag)
 	for {
@@ -120,14 +128,12 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 		// Fetch the owner and check the tag.
 		owner := &c.owners[pos]
 		res := owner.node
-		id := owner.id
+		// Check that the tag is still correct and the fetched result is valid.
 		if owner.tag.Load() == tag {
-			// TODO: remove this
-			if id != r.id {
-				panic(fmt.Sprintf("reference resolution for node %v failed, got %v", r.id, id))
-			}
 			return res, true
 		}
+		// If the tag has changed the position is out-dated and the true owner
+		// needs to be resolved through the index.
 		pos = uint32(unknownPosition)
 	}
 }
@@ -160,7 +166,7 @@ func (c *nodeCache) GetOrSet(
 
 		target = &c.owners[pos]
 		delete(c.index, target.id)
-		c.tail = target.priv
+		c.tail = target.prev
 
 		// remember the evicted node
 		evictedId = target.id
@@ -181,7 +187,7 @@ func (c *nodeCache) GetOrSet(
 
 	// Move new owner to head of the LRU list.
 	target.next = c.head
-	c.owners[c.head].priv = pos
+	c.owners[c.head].prev = pos
 	c.head = pos
 
 	c.index[ref.Id()] = pos
@@ -192,8 +198,14 @@ func (c *nodeCache) GetOrSet(
 }
 
 func (c *nodeCache) Touch(r *NodeReference) {
+	// During a touch we need to update the double-linked list
+	// formed by owners such that the referenced node is at the
+	// head position.
 	pos := ownerPosition(atomic.LoadUint32(&r.pos))
 	if uint32(pos) >= uint32(len(c.owners)) {
+		// In this reference does not point to a valid owner; the
+		// reference is not extra resolved to perform a touch, and
+		// thus the operation can stop here.
 		return
 	}
 	target := &c.owners[pos]
@@ -203,13 +215,13 @@ func (c *nodeCache) Touch(r *NodeReference) {
 		return
 	}
 	if c.tail == pos {
-		c.tail = target.priv
+		c.tail = target.prev
 	}
 
-	c.owners[target.priv].next = target.next
-	c.owners[target.next].priv = target.priv
+	c.owners[target.prev].next = target.next
+	c.owners[target.next].prev = target.prev
 
-	c.owners[c.head].priv = pos
+	c.owners[c.head].prev = pos
 	target.next = c.head
 	c.head = pos
 	c.mutex.Unlock()
@@ -272,7 +284,7 @@ type nodeOwner struct {
 	tag  atomic.Uint64        // a tag vor versioning the owned node
 	id   NodeId               // the ID of the owned node
 	node *shared.Shared[Node] // the owned node
-	priv ownerPosition        // predecessor in the LRU list
+	prev ownerPosition        // predecessor in the LRU list
 	next ownerPosition        // successor in the LRU list
 }
 
