@@ -10,6 +10,7 @@ import (
 )
 
 const hashCacheSize = 1 << 17 // ~128K entries
+const enableHitMissCounter = false
 
 type AddressHasher struct {
 	entries []cachedHasherEntry[common.Address]
@@ -28,12 +29,16 @@ func (h *AddressHasher) Get(addr *common.Address) common.Hash {
 	entry := &h.entries[pos%hashCacheSize]
 	entry.mutex.Lock()
 	if entry.key == *addr && entry.used {
-		h.hits.Add(1)
+		if enableHitMissCounter {
+			h.hits.Add(1)
+		}
 		res := entry.hash
 		entry.mutex.Unlock()
 		return res
 	}
-	h.misses.Add(1)
+	if enableHitMissCounter {
+		h.misses.Add(1)
+	}
 	entry.used = true
 	entry.key = *addr
 	entry.hash = common.Keccak256(addr[:])
@@ -46,9 +51,11 @@ func (h *AddressHasher) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*h)
 	entrySize := unsafe.Sizeof(cachedHasherEntry[common.Address]{})
 	mf := common.NewMemoryFootprint(selfSize + uintptr(len(h.entries))*(entrySize))
-	hits := h.hits.Load()
-	misses := h.misses.Load()
-	mf.SetNote(fmt.Sprintf("(fast, hits %d, misses %d, hit ratio %f)", hits, misses, float64(hits)/float64(hits+misses)))
+	if enableHitMissCounter {
+		hits := h.hits.Load()
+		misses := h.misses.Load()
+		mf.SetNote(fmt.Sprintf("(fast, hits %d, misses %d, hit ratio %f)", hits, misses, float64(hits)/float64(hits+misses)))
+	}
 	return mf
 }
 
@@ -70,12 +77,16 @@ func (h *KeyHasher) Get(key *common.Key) common.Hash {
 	entry := &h.entries[pos%hashCacheSize]
 	entry.mutex.Lock()
 	if entry.key == *key && entry.used {
-		h.hits.Add(1)
+		if enableHitMissCounter {
+			h.hits.Add(1)
+		}
 		res := entry.hash
 		entry.mutex.Unlock()
 		return res
 	}
-	h.misses.Add(1)
+	if enableHitMissCounter {
+		h.misses.Add(1)
+	}
 	entry.used = true
 	entry.key = *key
 	entry.hash = common.Keccak256(key[:])
@@ -88,9 +99,11 @@ func (h *KeyHasher) GetMemoryFootprint() *common.MemoryFootprint {
 	selfSize := unsafe.Sizeof(*h)
 	entrySize := unsafe.Sizeof(cachedHasherEntry[common.Address]{})
 	mf := common.NewMemoryFootprint(selfSize + uintptr(len(h.entries))*(entrySize))
-	hits := h.hits.Load()
-	misses := h.misses.Load()
-	mf.SetNote(fmt.Sprintf("(fast, hits %d, misses %d, hit ratio %f)", hits, misses, float64(hits)/float64(hits+misses)))
+	if enableHitMissCounter {
+		hits := h.hits.Load()
+		misses := h.misses.Load()
+		mf.SetNote(fmt.Sprintf("(fast, hits %d, misses %d, hit ratio %f)", hits, misses, float64(hits)/float64(hits+misses)))
+	}
 	return mf
 }
 
