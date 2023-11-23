@@ -8,9 +8,9 @@ import (
 func TestKeccakC_ProducesSameHashAsGo(t *testing.T) {
 	tests := [][]byte{
 		nil,
-		[]byte{},
-		[]byte{1, 2, 3},
-		[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+		{},
+		{1, 2, 3},
+		{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		make([]byte, 128),
 		make([]byte, 1024),
 	}
