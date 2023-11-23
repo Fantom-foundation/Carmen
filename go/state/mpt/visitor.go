@@ -134,7 +134,7 @@ func (c *nodeStatisticsCollector) visitBranch(b *BranchNode, info NodeInfo) {
 	c.stats.numBranches++
 	numChildren := 0
 	for _, child := range b.children {
-		if !child.IsEmpty() {
+		if !child.Id().IsEmpty() {
 			numChildren++
 		}
 	}

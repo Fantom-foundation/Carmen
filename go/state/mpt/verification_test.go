@@ -110,14 +110,14 @@ func TestVerification_ModifiedRootIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, encoder, _, _ := getEncoder(config)
 
-		root := EmptyId()
+		root := NewNodeReference(EmptyId())
 		for i := 0; i < len(roots); i++ {
-			if roots[i].NodeId.IsBranch() {
-				root = roots[i].NodeId
+			if roots[i].NodeRef.Id().IsBranch() {
+				root = roots[i].NodeRef
 				break
 			}
 		}
-		if !root.IsBranch() {
+		if !root.Id().IsBranch() {
 			t.Fatalf("no root referencing a branch found")
 		}
 
@@ -126,20 +126,20 @@ func TestVerification_ModifiedRootIsDetected(t *testing.T) {
 			t.Fatalf("failed to open stock")
 		}
 
-		node, err := stock.Get(root.Index())
+		node, err := stock.Get(root.Id().Index())
 		if err != nil {
 			t.Fatalf("failed to load node from stock: %v", err)
 		}
 
 		a := 0
 		b := 1
-		for node.children[b].IsEmpty() {
+		for node.children[b].Id().IsEmpty() {
 			b++
 		}
 		node.children[a], node.children[b] = node.children[b], node.children[a]
 		node.hashes[a], node.hashes[b] = node.hashes[b], node.hashes[a]
 
-		if err := stock.Set(root.Index(), node); err != nil {
+		if err := stock.Set(root.Id().Index(), node); err != nil {
 			t.Fatalf("failed to update node: %v", err)
 		}
 
@@ -200,7 +200,7 @@ func TestVerification_AccountStorageModificationIsDetected(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.storage = ValueId(123456789) // invalid in test forest
+			node.storage = NewNodeReference(ValueId(123456789)) // invalid in test forest
 		})
 
 		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -248,7 +248,7 @@ func TestVerification_BranchChildIdModificationIsDetected(t *testing.T) {
 		_, encoder, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
-			node.children[8] = ValueId(123456789) // does not exist in test forest
+			node.children[8] = NewNodeReference(ValueId(123456789)) // does not exist in test forest
 		})
 
 		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -283,7 +283,7 @@ func TestVerification_BranchChildHashModificationIsDetected(t *testing.T) {
 
 		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			for i, child := range node.children {
-				if !child.IsEmpty() {
+				if !child.Id().IsEmpty() {
 					node.hashes[i][4]++
 					break
 				}
@@ -315,7 +315,7 @@ func TestVerification_ExtensionNextModificationIsDetected(t *testing.T) {
 		_, _, encoder, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
-			node.next = BranchId(123456789)
+			node.next = NewNodeReference(BranchId(123456789))
 		})
 
 		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -421,25 +421,25 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 		t.Fatalf("failed to start empty forest: %v", err)
 	}
 
-	root := EmptyId()
+	root := NewNodeReference(EmptyId())
 
 	addr := common.Address{}
-	root, err = forest.SetAccountInfo(root, addr, AccountInfo{Nonce: common.ToNonce(1)})
+	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1)})
 	if err != nil {
 		t.Fatalf("failed to create account: %v", err)
 	}
 
-	root, err = forest.SetValue(root, addr, key1, v1)
+	root, err = forest.SetValue(&root, addr, key1, v1)
 	if err != nil {
 		t.Fatalf("failed to set value for key1: %v", err)
 	}
 
-	root, err = forest.SetValue(root, addr, key2, v1)
+	root, err = forest.SetValue(&root, addr, key2, v1)
 	if err != nil {
 		t.Fatalf("failed to set value for key2: %v", err)
 	}
 
-	hash, _, err := forest.updateHashesFor(root)
+	hash, _, err := forest.updateHashesFor(&root)
 	if err != nil {
 		t.Fatalf("failed to compute hash for trie: %v", err)
 	}
@@ -512,30 +512,30 @@ func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 		return nil, err
 	}
 
-	root := EmptyId()
+	root := NewNodeReference(EmptyId())
 	for i := 0; i < N; i++ {
 		addr := common.Address{byte(i)}
-		root, err = forest.SetAccountInfo(root, addr, AccountInfo{Nonce: common.ToNonce(1)})
+		root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1)})
 		if err != nil {
 			return nil, err
 		}
 		for j := 0; j < N; j++ {
-			root, err = forest.SetValue(root, addr, common.Key{byte(j)}, common.Value{byte(i + j + 1)})
+			root, err = forest.SetValue(&root, addr, common.Key{byte(j)}, common.Value{byte(i + j + 1)})
 			if err != nil {
 				return nil, err
 			}
 		}
-		err = forest.Freeze(root)
+		err = forest.Freeze(&root)
 		if err != nil {
 			return nil, err
 		}
-		hash, _, err := forest.updateHashesFor(root)
+		hash, _, err := forest.updateHashesFor(&root)
 		if err != nil {
 			return nil, err
 		}
 		roots = append(roots, Root{
-			NodeId: root,
-			Hash:   hash,
+			NodeRef: root,
+			Hash:    hash,
 		})
 	}
 

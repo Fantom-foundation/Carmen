@@ -205,7 +205,7 @@ func (s *MptState) GetCodeHash(address common.Address) (hash common.Hash, err er
 }
 
 func (s *MptState) GetRootId() NodeId {
-	return s.trie.root
+	return s.trie.root.Id()
 }
 
 func (s *MptState) GetHash() (hash common.Hash, err error) {

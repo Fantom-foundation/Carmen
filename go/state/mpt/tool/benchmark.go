@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
@@ -166,6 +167,16 @@ func runBenchmark(
 		return res, err
 	}
 	defer stopCpuProfiler()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for range c {
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+			fmt.Printf("signal: interrupt")
+			os.Exit(1)
+		}
+	}()
 
 	// Create the target state.
 	path := fmt.Sprintf(params.tmpDir+string(os.PathSeparator)+"state_%d", time.Now().Unix())

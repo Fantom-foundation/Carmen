@@ -184,16 +184,13 @@ func (b *writeBuffer) emptyBuffer() {
 		// Check whether the given node has not been canceled in the meantime.
 		b.bufferMutex.Lock()
 		node, found := b.buffer[id]
+		b.bufferMutex.Unlock()
 		if !found {
-			b.bufferMutex.Unlock()
 			continue
 		}
 
-		// Lock read access on the node before unlocking the buffer to avoid
-		// another thread to cancel the write and gain write access in-between.
+		// Write a snapshot of the node to the disk.
 		handle := node.GetViewHandle()
-		b.bufferMutex.Unlock()
-
 		if err := b.sink.Write(id, handle); err != nil {
 			b.errsMutex.Lock()
 			b.errs = append(b.errs, err)
