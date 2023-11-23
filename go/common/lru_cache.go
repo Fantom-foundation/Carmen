@@ -5,28 +5,24 @@ import (
 	"unsafe"
 )
 
-const MissHitMeasuring = false
-
-// Cache implements a memory overlay for the key-value pair
-type Cache[K comparable, V any] struct {
+// LruCache implements a memory overlay for the key-value pair
+type LruCache[K comparable, V any] struct {
 	cache    map[K]*entry[K, V]
 	capacity int
 	head     *entry[K, V]
 	tail     *entry[K, V]
-	misses   int
-	hits     int
 }
 
-// NewCache returns a new instance
-func NewCache[K comparable, V any](capacity int) *Cache[K, V] {
-	return &Cache[K, V]{
+// NewLruCache returns a new instance
+func NewLruCache[K comparable, V any](capacity int) *LruCache[K, V] {
+	return &LruCache[K, V]{
 		cache:    make(map[K]*entry[K, V], capacity),
 		capacity: capacity,
 	}
 }
 
 // Iterate all cached entries - calls the callback for each key-value pair in the cache
-func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
+func (c *LruCache[K, V]) Iterate(callback func(K, V) bool) {
 	for key, value := range c.cache {
 		if !callback(key, value.val) {
 			return // terminate iteration if false returned from the callback
@@ -35,7 +31,7 @@ func (c *Cache[K, V]) Iterate(callback func(K, V) bool) {
 }
 
 // Iterate all cached entries by passing a mutable value reference to the provided callback.
-func (c *Cache[K, V]) IterateMutable(callback func(K, *V) bool) {
+func (c *LruCache[K, V]) IterateMutable(callback func(K, *V) bool) {
 	for key, value := range c.cache {
 		if !callback(key, &value.val) {
 			return // terminate iteration if false returned from the callback
@@ -44,19 +40,12 @@ func (c *Cache[K, V]) IterateMutable(callback func(K, *V) bool) {
 }
 
 // Get returns a value from the cache or false. If the value exists, its number of use is updated
-func (c *Cache[K, V]) Get(key K) (V, bool) {
+func (c *LruCache[K, V]) Get(key K) (V, bool) {
 	var val V
 	item, exists := c.cache[key]
 	if exists {
 		val = item.val
 		c.touch(item)
-		if MissHitMeasuring {
-			c.hits++
-		}
-	} else {
-		if MissHitMeasuring {
-			c.misses++
-		}
 	}
 
 	return val, exists
@@ -66,7 +55,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 // If the key is already present, the value is updated and the key marked as
 // used. If the value is not present, a new entry is added to this
 // cache. This causes another entry to be removed if the cache size is exceeded.
-func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted bool) {
+func (c *LruCache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted bool) {
 	item, exists := c.cache[key]
 
 	// create entry if it does not exist
@@ -91,7 +80,7 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted b
 		}
 		c.head = item
 
-		// The very first en is head and tail at the same time.
+		// The very first item is a head and a tail at the same time.
 		if c.tail == nil {
 			c.tail = c.head
 		}
@@ -103,7 +92,7 @@ func (c *Cache[K, V]) Set(key K, val V) (evictedKey K, evictedValue V, evicted b
 	return
 }
 
-func (c *Cache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool) {
+func (c *LruCache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKey K, evictedValue V, evicted bool) {
 	current, present = c.Get(key)
 	if !present {
 		evictedKey, evictedValue, evicted = c.Set(key, val)
@@ -113,7 +102,7 @@ func (c *Cache[K, V]) GetOrSet(key K, val V) (current V, present bool, evictedKe
 }
 
 // Remove deletes the key from the map and returns the deleted value
-func (c *Cache[K, V]) Remove(key K) (original V, exists bool) {
+func (c *LruCache[K, V]) Remove(key K) (original V, exists bool) {
 	item, exists := c.cache[key]
 	if exists {
 		original = item.val
@@ -147,7 +136,7 @@ func (c *Cache[K, V]) Remove(key K) (original V, exists bool) {
 	return
 }
 
-func (c *Cache[K, V]) Clear() {
+func (c *LruCache[K, V]) Clear() {
 	if len(c.cache) > 0 {
 		c.cache = make(map[K]*entry[K, V], c.capacity)
 	}
@@ -156,7 +145,7 @@ func (c *Cache[K, V]) Clear() {
 }
 
 // touch marks the entry used
-func (c *Cache[K, V]) touch(item *entry[K, V]) {
+func (c *LruCache[K, V]) touch(item *entry[K, V]) {
 	// already head
 	if item == c.head {
 		return
@@ -178,11 +167,7 @@ func (c *Cache[K, V]) touch(item *entry[K, V]) {
 }
 
 // dropLast drop the last element from the queue and returns it
-func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
-	if c.tail == nil {
-		return nil // no tail - empty list
-	}
-
+func (c *LruCache[K, V]) dropLast() (dropped *entry[K, V]) {
 	dropped = c.tail
 	delete(c.cache, c.tail.key)
 	c.tail = c.tail.prev
@@ -193,19 +178,16 @@ func (c *Cache[K, V]) dropLast() (dropped *entry[K, V]) {
 // GetMemoryFootprint provides the size of the cache in memory in bytes
 // If V is a pointer type, it needs to provide the size of a referenced value.
 // If the size is different for individual values, use GetDynamicMemoryFootprint instead.
-func (c *Cache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
+func (c *LruCache[K, V]) GetMemoryFootprint(referencedValueSize uintptr) *MemoryFootprint {
 	selfSize := unsafe.Sizeof(*c)
 	entrySize := unsafe.Sizeof(entry[K, V]{})
 	mf := NewMemoryFootprint(selfSize + uintptr(c.capacity)*(entrySize+referencedValueSize))
-	if MissHitMeasuring {
-		mf.SetNote(c.getHitRatioReport())
-	}
 	return mf
 }
 
 // GetDynamicMemoryFootprint provides the size of the cache in memory in bytes for values,
 // which reference dynamic amount of memory - like slices.
-func (c *Cache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintptr) *MemoryFootprint {
+func (c *LruCache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintptr) *MemoryFootprint {
 	selfSize := unsafe.Sizeof(*c)
 	entryPointerSize := unsafe.Sizeof(&entry[K, V]{})
 	size := uintptr(c.capacity) * entryPointerSize
@@ -214,15 +196,7 @@ func (c *Cache[K, V]) GetDynamicMemoryFootprint(valueSizeProvider func(V) uintpt
 		size += valueSizeProvider(value.val)
 	}
 	mf := NewMemoryFootprint(selfSize + size)
-	if MissHitMeasuring {
-		mf.SetNote(c.getHitRatioReport())
-	}
 	return mf
-}
-
-func (c *Cache[K, V]) getHitRatioReport() string {
-	hitRatio := float32(c.hits) / float32(c.hits+c.misses)
-	return fmt.Sprintf("(lru, size: %d, misses: %d, hits: %d, hitRatio: %f)", c.capacity, c.misses, c.hits, hitRatio)
 }
 
 // entry is a cache item wrapping an index, a key and references to previous and next elements.

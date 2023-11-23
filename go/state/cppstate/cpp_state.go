@@ -40,7 +40,7 @@ type CppState struct {
 	// A pointer to an owned C++ object containing the actual state information.
 	state unsafe.Pointer
 	// cache of contract codes
-	codeCache *common.Cache[common.Address, []byte]
+	codeCache *common.LruCache[common.Address, []byte]
 }
 
 func newCppState(impl C.enum_StateImpl, params state.Parameters) (state.State, error) {
@@ -54,7 +54,7 @@ func newCppState(impl C.enum_StateImpl, params state.Parameters) (state.State, e
 
 	return state.WrapIntoSyncedState(&CppState{
 		state:     st,
-		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
+		codeCache: common.NewLruCache[common.Address, []byte](CodeCacheSize),
 	}), nil
 }
 
@@ -247,7 +247,7 @@ func (cs *CppState) GetMemoryFootprint() *common.MemoryFootprint {
 func (cs *CppState) GetArchiveState(block uint64) (state.State, error) {
 	return &CppState{
 		state:     C.Carmen_GetArchiveState(cs.state, C.uint64_t(block)),
-		codeCache: common.NewCache[common.Address, []byte](CodeCacheSize),
+		codeCache: common.NewLruCache[common.Address, []byte](CodeCacheSize),
 	}, nil
 }
 

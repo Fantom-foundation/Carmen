@@ -15,7 +15,7 @@ import (
 type Archive struct {
 	db                       *common.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
-	accountHashCache         *common.Cache[common.Address, common.Hash]
+	accountHashCache         *common.LruCache[common.Address, common.Hash]
 	batch                    leveldb.Batch
 	lastBlockCache           blockCache
 	addMutex                 sync.Mutex
@@ -25,7 +25,7 @@ func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
 	return &Archive{
 		db:                       db,
 		reincarnationNumberCache: map[common.Address]int{},
-		accountHashCache:         common.NewCache[common.Address, common.Hash](100_000),
+		accountHashCache:         common.NewLruCache[common.Address, common.Hash](100_000),
 	}, nil
 }
 

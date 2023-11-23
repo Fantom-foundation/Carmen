@@ -10,13 +10,13 @@ import (
 // Store wraps a cache and a store. It caches the stored keys
 type Store[I common.Identifier, V any] struct {
 	store store.Store[I, V]
-	cache *common.Cache[I, V]
+	cache *common.LruCache[I, V]
 }
 
 // NewStore creates a new store wrapping the input one, and creates a new cache with the given capacity
 // this store maintains a cache of keys
 func NewStore[I common.Identifier, V any](store store.Store[I, V], cacheCapacity int) *Store[I, V] {
-	return &Store[I, V]{store, common.NewCache[I, V](cacheCapacity)}
+	return &Store[I, V]{store, common.NewLruCache[I, V](cacheCapacity)}
 }
 
 func (m *Store[I, V]) Set(id I, value V) error {

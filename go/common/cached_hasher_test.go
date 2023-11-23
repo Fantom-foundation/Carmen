@@ -33,6 +33,16 @@ func TestHashPassThroughRunParallel(t *testing.T) {
 	}
 }
 
+func TestHash_NonCached_PassThrough(t *testing.T) {
+	cacheSize := 0
+	hasher := NewCachedHasher[Address](cacheSize, AddressSerializer{})
+	var adr Address
+	adr[0]++
+	if got, want := hasher.Hash(adr), GetHash(sha3.NewLegacyKeccak256(), adr[:]); got != want {
+		t.Errorf("hashes do not match: %v != %v", got, want)
+	}
+}
+
 func TestMemoryFootprint(t *testing.T) {
 	cacheSize := 1000
 	hasher := NewCachedHasher[Address](cacheSize, AddressSerializer{})

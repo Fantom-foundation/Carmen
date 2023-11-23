@@ -15,14 +15,14 @@ import (
 // i.e., it is not checked whether the eviction policy is correct.
 
 func FuzzLruCache_RandomOps(f *testing.F) {
-	fn := func() cache[int8, int16] {
-		return NewCache[int8, int16](128)
+	fn := func() Cache[int8, int16] {
+		return NewLruCache[int8, int16](128)
 	}
 	fuzzing.Fuzz[cacheFuzzingContext](f, &cacheFuzzingCampaign{fn})
 }
 
 func FuzzNWays_RandomOps(f *testing.F) {
-	fn := func() cache[int8, int16] {
+	fn := func() Cache[int8, int16] {
 		return NewNWaysCache[int8, int16](128, 16)
 	}
 	fuzzing.Fuzz[cacheFuzzingContext](f, &cacheFuzzingCampaign{fn})
@@ -46,7 +46,7 @@ func (op cacheOpType) serialise() []byte {
 }
 
 type cacheFuzzingCampaign struct {
-	initCache func() cache[int8, int16] // factory to create cache instance.
+	initCache func() Cache[int8, int16] // factory to create cache instance.
 }
 
 func (c *cacheFuzzingCampaign) Init() []fuzzing.OperationSequence[cacheFuzzingContext] {
@@ -91,7 +91,7 @@ func (c *cacheFuzzingCampaign) Cleanup(fuzzing.TestingT, *cacheFuzzingContext) {
 }
 
 type cacheFuzzingContext struct {
-	cache  cache[int8, int16]
+	cache  Cache[int8, int16]
 	shadow map[int8]int16
 }
 

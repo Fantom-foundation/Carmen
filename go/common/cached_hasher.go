@@ -15,7 +15,7 @@ import (
 // hashing, i.e. the caller must make sure the hasher is thread local
 // (i.e. not share across threads)
 type CachedHasher[T comparable] struct {
-	cache      *Cache[T, Hash]
+	cache      *LruCache[T, Hash]
 	serializer Serializer[T]
 	cached     bool
 	lock       *sync.Mutex
@@ -26,7 +26,7 @@ type CachedHasher[T comparable] struct {
 // Input serializer is used to convert the type, which will be hashed, to byte slice.
 func NewCachedHasher[T comparable](cacheCapacity int, serializer Serializer[T]) *CachedHasher[T] {
 	return &CachedHasher[T]{
-		cache:      NewCache[T, Hash](cacheCapacity),
+		cache:      NewLruCache[T, Hash](cacheCapacity),
 		serializer: serializer,
 		cached:     cacheCapacity > 0,
 		lock:       &sync.Mutex{},

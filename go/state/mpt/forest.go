@@ -72,7 +72,7 @@ type Forest struct {
 	storageMode StorageMode
 
 	// A unified cache for all node types.
-	nodeCache      *common.Cache[NodeId, *shared.Shared[Node]]
+	nodeCache      *common.LruCache[NodeId, *shared.Shared[Node]]
 	nodeCacheMutex sync.Mutex
 
 	// The set of dirty nodes. Nodes are dirty if there in-memory
@@ -243,7 +243,7 @@ func makeForest(
 		accounts:      synced.Sync(accounts),
 		values:        synced.Sync(values),
 		storageMode:   mode,
-		nodeCache:     common.NewCache[NodeId, *shared.Shared[Node]](cacheCapacity),
+		nodeCache:     common.NewLruCache[NodeId, *shared.Shared[Node]](cacheCapacity),
 		dirty:         map[NodeId]struct{}{},
 		hasher:        config.Hashing.createHasher(),
 		keyHasher:     common.NewCachedHasher[common.Key](hashesCacheCapacity, common.KeySerializer{}),

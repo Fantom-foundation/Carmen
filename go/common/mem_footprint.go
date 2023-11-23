@@ -65,22 +65,18 @@ func includeObjectIntoTotal(mf *MemoryFootprint, includedObjects map[*MemoryFoot
 
 // ToString provides the memory footprint as a tree summary in a string
 // The name param allows to give a name to the root of the tree.
-func (mf *MemoryFootprint) ToString(name string) (str string, err error) {
+func (mf *MemoryFootprint) ToString(name string) string {
 	var sb strings.Builder
-	err = mf.toStringBuilder(&sb, name)
-	return sb.String(), err
+	mf.toStringBuilder(&sb, name)
+	return sb.String()
 }
 
 // Allow memory footprints to be used in format strings.
 func (mf *MemoryFootprint) String() string {
-	str, err := mf.ToString(".")
-	if err != nil {
-		panic(fmt.Sprintf("error printing memory usage to string: %v", err))
-	}
-	return str
+	return mf.ToString(".")
 }
 
-func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) (err error) {
+func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) {
 	// Print children in order for simpler comparison.
 	names := make([]string, 0, len(mf.children))
 	for name := range mf.children {
@@ -91,17 +87,11 @@ func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) (er
 	for _, name := range names {
 		footprint := mf.children[name]
 		fullPath := path + "/" + name
-		err = footprint.toStringBuilder(sb, fullPath)
-		if err != nil {
-			return
-		}
+		footprint.toStringBuilder(sb, fullPath)
 	}
 
 	// Show sum at the bottom.
-	err = memoryAmountToString(sb, mf.Total())
-	if err != nil {
-		return
-	}
+	memoryAmountToString(sb, mf.Total())
 	sb.WriteRune(' ')
 	sb.WriteString(path)
 	if len(mf.note) != 0 {
@@ -113,7 +103,7 @@ func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) (er
 	return
 }
 
-func memoryAmountToString(sb *strings.Builder, bytes uintptr) (err error) {
+func memoryAmountToString(sb *strings.Builder, bytes uintptr) {
 	const unit = 1024
 	const prefixes = " KMGTPE"
 	div, exp := 1, 0
@@ -121,6 +111,6 @@ func memoryAmountToString(sb *strings.Builder, bytes uintptr) (err error) {
 		div *= unit
 		exp++
 	}
-	_, err = fmt.Fprintf(sb, "%6.1f %cB", float64(bytes)/float64(div), prefixes[exp])
-	return err
+	// writing to the string.Builder can never return error
+	_, _ = fmt.Fprintf(sb, "%6.1f %cB", float64(bytes)/float64(div), prefixes[exp])
 }

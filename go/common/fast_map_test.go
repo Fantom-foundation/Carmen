@@ -461,6 +461,59 @@ func TestMapForEachVisitsAllElements(t *testing.T) {
 	}
 }
 
+func TestMap_Fill_All_Generations(t *testing.T) {
+	m := NewFastMap[Key, int](KeyShortHasher{})
+
+	// fill in data
+	var k Key
+	for i := 0; i < 100; i++ {
+		m.Put(k, i)
+		k[i%32]++
+	}
+
+	// check some buckets filled
+	var nonEmpty bool
+	for _, d := range m.buckets {
+		if d != -1 {
+			nonEmpty = true
+			break
+		}
+	}
+
+	if !nonEmpty {
+		t.Fatalf("some buckets should be used")
+	}
+
+	// have to use all generations
+	for i := 0; i < 1<<16; i++ {
+		m.Clear()
+	}
+
+	// check some buckets filled
+	var nonEmptyAfter bool
+	for _, d := range m.buckets {
+		if d != -1 {
+			nonEmptyAfter = true
+			break
+		}
+	}
+
+	if nonEmptyAfter {
+		t.Fatalf("all buckets should be empty")
+	}
+}
+
+func TestMap_Internal_Negative_Position(t *testing.T) {
+	m := NewFastMap[Key, int](KeyShortHasher{})
+
+	for i := 0; i < 1000; i++ {
+		num := uint64(rand.Int63()) | uint64(1<<63) // always negative num
+		if got, want := m.toPtr(int64(num)), num; got != fmPtr(want) {
+			t.Errorf("negatie value should be returned unchanged: %d != %d", got, want)
+		}
+	}
+}
+
 func BenchmarkMapInsertAndClear(b *testing.B) {
 	for _, config := range getMapConfigs() {
 		key := Key{}

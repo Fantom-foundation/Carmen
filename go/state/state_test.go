@@ -247,8 +247,8 @@ func TestCanComputeNonEmptyMemoryFootprint(t *testing.T) {
 		if fp.Total() <= 0 {
 			t.Errorf("memory footprint should not be empty")
 		}
-		if _, err := fp.ToString("top"); err != nil {
-			t.Errorf("Unable to print footprint: %v", err)
+		if len(fp.ToString("top")) == 0 {
+			t.Errorf("footprint text empty: %v", fp.ToString("top"))
 		}
 	})
 }

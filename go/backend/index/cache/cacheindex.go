@@ -11,12 +11,12 @@ import (
 // Index wraps another index and a cache
 type Index[K comparable, I common.Identifier] struct {
 	wrapped index.Index[K, I]
-	cache   *common.Cache[K, I]
+	cache   *common.LruCache[K, I]
 }
 
 // NewIndex constructs a new Index instance, which either delegates to the wrapped index or gets data from the cache if it has them.
 func NewIndex[K comparable, I common.Identifier](wrapped index.Index[K, I], cacheCapacity int) *Index[K, I] {
-	return &Index[K, I]{wrapped, common.NewCache[K, I](cacheCapacity)}
+	return &Index[K, I]{wrapped, common.NewLruCache[K, I](cacheCapacity)}
 }
 
 // Size returns the number of registered keys.

@@ -10,7 +10,7 @@ import (
 // is evicted when the capacity exceeds, and stored using PageStorage. When the pool is asked for
 // a page that does not exist in this pool, it tries to load it from the PageStorage.
 type PagePool[ID comparable, T Page] struct {
-	pagePool    *common.Cache[ID, T]
+	pagePool    *common.LruCache[ID, T]
 	pageStore   PageStorage[ID] // store where the overflown pages will be stored and where they are read from
 	pageFactory func() T
 
@@ -40,7 +40,7 @@ type PageStorage[ID any] interface {
 // freeIds are used for allocating IDs for new pages, when they are all used, this pool starts to allocate new IDs.
 func NewPagePool[ID comparable, T Page](capacity int, pageStore PageStorage[ID], pageFactory func() T) *PagePool[ID, T] {
 	return &PagePool[ID, T]{
-		pagePool:    common.NewCache[ID, T](capacity),
+		pagePool:    common.NewLruCache[ID, T](capacity),
 		pageStore:   pageStore,
 		pageFactory: pageFactory,
 		freePages:   make([]T, 0, capacity),
