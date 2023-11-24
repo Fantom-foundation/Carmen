@@ -17,7 +17,7 @@ type CachedHasher[T any] interface {
 func NewAddressHasher() CachedHasher[common.Address] {
 	return newGenericHasher[common.Address](
 		func(addr common.Address) int { return int(addr[0]) | (int(addr[1]) << 8) | (int(addr[2]) << 16) },
-		func(addr common.Address) common.Hash { return common.Keccak256(addr[:]) },
+		func(addr common.Address) common.Hash { return common.Keccak256ForAddress(addr) },
 	)
 }
 
@@ -27,7 +27,7 @@ func NewKeyHasher() CachedHasher[common.Key] {
 			// Here the last 3 bytes are used since some keys are low-range big-endian values.
 			return int(key[31]) | (int(key[30]) << 8) | (int(key[29]) << 16)
 		},
-		func(key common.Key) common.Hash { return common.Keccak256(key[:]) },
+		func(key common.Key) common.Hash { return common.Keccak256ForKey(key) },
 	)
 }
 
