@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"slices"
 	"strings"
 )
 
@@ -24,6 +25,11 @@ func EmptyPath() NodePath {
 // be zero.
 func CreateNodePath(steps ...Nibble) NodePath {
 	return NodePath{steps}
+}
+
+// Equal returns true if the given path is equal to this path.
+func (p NodePath) Equal(o NodePath) bool {
+	return slices.Equal(p.path, o.path)
 }
 
 // Length returns the length of this path if valid. The result is undefined for

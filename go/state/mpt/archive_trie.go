@@ -70,7 +70,7 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
-	precomputedHashes, _ := hint.([]nodeHash)
+	precomputedHashes, _ := hint.(*NodeHashes)
 
 	a.addMutex.Lock()
 	defer a.addMutex.Unlock()

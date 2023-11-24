@@ -209,11 +209,14 @@ func (s *MptState) GetRootId() NodeId {
 }
 
 func (s *MptState) GetHash() (hash common.Hash, err error) {
-	hash, _, err = s.trie.UpdateHashes()
+	hash, hints, err := s.trie.UpdateHashes()
+	if hints != nil {
+		hints.Release()
+	}
 	return hash, err
 }
 
-func (s *MptState) Apply(block uint64, update common.Update) (archiveUpdateHints any, err error) {
+func (s *MptState) Apply(block uint64, update common.Update) (archiveUpdateHints common.Releaser, err error) {
 	if err := update.ApplyTo(s); err != nil {
 		return nil, err
 	}

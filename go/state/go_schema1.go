@@ -274,7 +274,7 @@ func (s *GoSchema1) GetHash() (hash common.Hash, err error) {
 	return hash, nil
 }
 
-func (s *GoSchema1) Apply(block uint64, update common.Update) (archiveUpdateHints any, err error) {
+func (s *GoSchema1) Apply(block uint64, update common.Update) (archiveUpdateHints common.Releaser, err error) {
 	return nil, update.ApplyTo(s)
 }
 

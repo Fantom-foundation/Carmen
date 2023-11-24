@@ -44,16 +44,11 @@ var EthereumLikeHashing = hashAlgorithm{
 // computing them as required.
 type hasher interface {
 	// updateHash refreshes the hash of the given node and all nested nodes.
-	updateHashes(root *NodeReference, nodes NodeManager) (common.Hash, []nodeHash, error)
+	updateHashes(root *NodeReference, nodes NodeManager) (common.Hash, *NodeHashes, error)
 
 	// getHash computes the hash of the node without modifying it. It is used
 	// for debugging, when checking a trie without the intend of modifying it.
 	getHash(*NodeReference, NodeSource) (common.Hash, error)
-}
-
-type nodeHash struct {
-	path NodePath
-	hash common.Hash
 }
 
 // ----------------------------------------------------------------------------
@@ -71,8 +66,8 @@ type directHasher struct{}
 
 // updateHashes implements the DirectHasher's hashing algorithm to refresh
 // the hashes stored within all nodes reachable from the given node.
-func (h directHasher) updateHashes(ref *NodeReference, source NodeManager) (common.Hash, []nodeHash, error) {
-	hashCollector := &nodeHashCollector{hashes: make([]nodeHash, 0, 2048)}
+func (h directHasher) updateHashes(ref *NodeReference, source NodeManager) (common.Hash, *NodeHashes, error) {
+	hashCollector := &nodeHashCollector{hashes: NewNodeHashes()}
 	hash, err := h.updateHashesInternal(ref, source, EmptyPath(), hashCollector)
 	return hash, hashCollector.GetHashes(), err
 }
@@ -237,8 +232,8 @@ var EmptyNodeEthereumHash = common.Keccak256(rlp.Encode(rlp.String{}))
 func (h ethHasher) updateHashes(
 	ref *NodeReference,
 	manager NodeManager,
-) (common.Hash, []nodeHash, error) {
-	hashCollector := &nodeHashCollector{hashes: make([]nodeHash, 0, 4096)}
+) (common.Hash, *NodeHashes, error) {
+	hashCollector := &nodeHashCollector{hashes: NewNodeHashes()}
 	hash, err := h.updateHashesInternal(ref, manager, hashCollector)
 	return hash, hashCollector.GetHashes(), err
 }
@@ -862,16 +857,13 @@ func getLowerBoundForEncodedSizeValue(node *ValueNode, limit int, nodes NodeSour
 }
 
 type nodeHashCollector struct {
-	hashes []nodeHash
+	hashes *NodeHashes
 }
 
 func (n *nodeHashCollector) Add(path NodePath, hash common.Hash) {
-	n.hashes = append(n.hashes, nodeHash{
-		path: path,
-		hash: hash,
-	})
+	n.hashes.Add(path, hash)
 }
 
-func (n *nodeHashCollector) GetHashes() []nodeHash {
+func (n *nodeHashCollector) GetHashes() *NodeHashes {
 	return n.hashes
 }

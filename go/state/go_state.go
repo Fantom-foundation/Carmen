@@ -37,7 +37,7 @@ type LiveDB interface {
 	GetCodeSize(address common.Address) (size int, err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
 	GetHash() (hash common.Hash, err error)
-	Apply(block uint64, update common.Update) (archiveUpdateHints any, err error)
+	Apply(block uint64, update common.Update) (archiveUpdateHints common.Releaser, err error)
 	Flush() error
 	Close() error
 	common.MemoryFootprintProvider
@@ -63,8 +63,8 @@ var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 type archiveUpdate = struct {
 	block       uint64
-	update      *common.Update // nil to signal a flush
-	updateHints any            // an optional field for passing update hints from the LiveDB to the Archive
+	update      *common.Update  // nil to signal a flush
+	updateHints common.Releaser // an optional field for passing update hints from the LiveDB to the Archive
 }
 
 func (s *GoState) Exists(address common.Address) (bool, error) {
@@ -130,6 +130,9 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 						if issue != nil {
 							err <- issue
 						}
+						if update.updateHints != nil {
+							update.updateHints.Release()
+						}
 					}
 				}
 			}()
@@ -159,6 +162,8 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		if last != nil {
 			return last
 		}
+	} else if archiveUpdateHints != nil {
+		archiveUpdateHints.Release()
 	}
 	return nil
 }
