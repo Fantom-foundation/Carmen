@@ -1329,6 +1329,8 @@ type nonCommittableStateDB struct {
 }
 
 func (db *nonCommittableStateDB) Release() {
-	nonCommittableStateDbPool.Put(db.stateDB)
-	db.stateDB = nil
+	if db.stateDB != nil {
+		nonCommittableStateDbPool.Put(db.stateDB)
+		db.stateDB = nil
+	}
 }
