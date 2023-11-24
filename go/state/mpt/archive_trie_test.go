@@ -101,7 +101,7 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 			}
 
 			// Block 4 is empty, with hints.
-			if err := archive.Add(4, common.Update{}, []nodeHash{}); err != nil {
+			if err := archive.Add(4, common.Update{}, nil); err != nil {
 				t.Errorf("failed to add block: %v", err)
 			}
 

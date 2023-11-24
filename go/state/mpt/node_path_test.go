@@ -65,6 +65,34 @@ func TestNodePath_StepsCanBeAppended(t *testing.T) {
 	}
 }
 
+func TestNodePath_Equal(t *testing.T) {
+	tests := []struct {
+		a, b  NodePath
+		equal bool
+	}{
+		{EmptyPath(), EmptyPath(), true},
+		{EmptyPath().Child(1), EmptyPath().Child(1), true},
+		{EmptyPath().Next(), EmptyPath().Next(), true},
+		{EmptyPath().Child(1).Child(2), EmptyPath().Child(1).Child(2), true},
+		{EmptyPath().Child(1).Next(), EmptyPath().Child(1).Next(), true},
+		{EmptyPath().Next().Child(2), EmptyPath().Next().Child(2), true},
+
+		{EmptyPath(), EmptyPath().Child(1), false},
+		{EmptyPath().Child(1), EmptyPath(), false},
+		{EmptyPath(), EmptyPath().Next(), false},
+		{EmptyPath().Next(), EmptyPath(), false},
+		{EmptyPath(), EmptyPath().Next().Child(1), false},
+		{EmptyPath().Next().Child(1), EmptyPath(), false},
+	}
+	for _, test := range tests {
+		want := test.equal
+		got := test.a.Equal(test.b)
+		if want != got {
+			t.Errorf("error in equal of %v and %v, wanted %t, got %t", test.a, test.b, want, got)
+		}
+	}
+}
+
 func TestNodePath_ToString(t *testing.T) {
 	tests := []struct {
 		path   NodePath

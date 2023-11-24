@@ -121,11 +121,11 @@ func (s *LiveTrie) ClearStorage(addr common.Address) error {
 	return s.forest.ClearStorage(&s.root, addr)
 }
 
-func (s *LiveTrie) UpdateHashes() (common.Hash, []nodeHash, error) {
+func (s *LiveTrie) UpdateHashes() (common.Hash, *NodeHashes, error) {
 	return s.forest.updateHashesFor(&s.root)
 }
 
-func (s *LiveTrie) setHashes(hashes []nodeHash) error {
+func (s *LiveTrie) setHashes(hashes *NodeHashes) error {
 	return s.forest.setHashesFor(&s.root, hashes)
 }
 

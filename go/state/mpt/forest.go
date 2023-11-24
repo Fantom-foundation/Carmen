@@ -323,17 +323,17 @@ func (s *Forest) VisitTrie(rootRef *NodeReference, visitor NodeVisitor) error {
 	return err
 }
 
-func (s *Forest) updateHashesFor(ref *NodeReference) (common.Hash, []nodeHash, error) {
+func (s *Forest) updateHashesFor(ref *NodeReference) (common.Hash, *NodeHashes, error) {
 	return s.hasher.updateHashes(ref, s)
 }
 
-func (s *Forest) setHashesFor(root *NodeReference, hashes []nodeHash) error {
-	for _, cur := range hashes {
-		write, err := s.getMutableNodeByPath(root, cur.path)
+func (s *Forest) setHashesFor(root *NodeReference, hashes *NodeHashes) error {
+	for _, cur := range hashes.GetHashes() {
+		write, err := s.getMutableNodeByPath(root, cur.Path)
 		if err != nil {
 			return err
 		}
-		write.Get().SetHash(cur.hash)
+		write.Get().SetHash(cur.Hash)
 		write.Release()
 	}
 	return nil
