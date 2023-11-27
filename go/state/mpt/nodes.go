@@ -1354,6 +1354,7 @@ func (n *AccountNode) SetValue(manager NodeManager, thisRef *NodeReference, this
 }
 
 func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, key common.Key, value common.Value) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	// If this is not the correct account, the real account does not exist
 	// and the insert can be skipped. The insertion of a slot value shall
 	// not create an account.
