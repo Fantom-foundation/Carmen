@@ -659,6 +659,13 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 	delete(s.dirty, evictedId)
 	s.dirtyMutex.Unlock()
 
+	view := evictedNode.GetViewHandle()
+	_, hashDirty := view.Get().GetHash()
+	view.Release()
+	if hashDirty {
+		panic(fmt.Sprintf("Unable to evict node %v: node has dirty hash", evictedId))
+	}
+
 	// Enqueue evicted node for asynchronous write to file.
 	s.writeBuffer.Add(evictedId, evictedNode)
 	return current, present
