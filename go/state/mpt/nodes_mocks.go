@@ -622,7 +622,7 @@ func (mr *MockNodeManagerMockRecorder) touch(arg0 interface{}) *gomock.Call {
 }
 
 // update mocks base method.
-func (m *MockNodeManager) update(arg0 NodeId, arg1 shared.WriteHandle[Node]) error {
+func (m *MockNodeManager) update(arg0 *NodeReference, arg1 shared.WriteHandle[Node]) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "update", arg0, arg1)
 	ret0, _ := ret[0].(error)
@@ -636,7 +636,7 @@ func (mr *MockNodeManagerMockRecorder) update(arg0, arg1 interface{}) *gomock.Ca
 }
 
 // updateHash mocks base method.
-func (m *MockNodeManager) updateHash(arg0 NodeId, arg1 shared.HashHandle[Node]) error {
+func (m *MockNodeManager) updateHash(arg0 *NodeReference, arg1 shared.HashHandle[Node]) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "updateHash", arg0, arg1)
 	ret0, _ := ret[0].(error)

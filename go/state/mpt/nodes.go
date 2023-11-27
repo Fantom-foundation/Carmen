@@ -223,8 +223,8 @@ type NodeManager interface {
 	createExtension() (NodeReference, shared.WriteHandle[Node], error)
 	createValue() (NodeReference, shared.WriteHandle[Node], error)
 
-	update(NodeId, shared.WriteHandle[Node]) error
-	updateHash(NodeId, shared.HashHandle[Node]) error
+	update(*NodeReference, shared.WriteHandle[Node]) error
+	updateHash(*NodeReference, shared.HashHandle[Node]) error
 
 	release(NodeId) error
 }
@@ -264,7 +264,7 @@ func (e EmptyNode) SetAccount(manager NodeManager, thisRef *NodeReference, this 
 	res.address = address
 	res.info = info
 	res.pathLength = byte(len(path))
-	if err := manager.update(ref.Id(), handle); err != nil {
+	if err := manager.update(&ref, handle); err != nil {
 		return NodeReference{}, false, err
 	}
 	return ref, true, nil
@@ -284,7 +284,7 @@ func (e EmptyNode) SetValue(manager NodeManager, thisRef *NodeReference, this sh
 	res.value = value
 	res.hashDirty = true
 	res.pathLength = byte(len(path))
-	if err := manager.update(ref.Id(), handle); err != nil {
+	if err := manager.update(&ref, handle); err != nil {
 		return NodeReference{}, false, err
 	}
 	return ref, true, nil
@@ -490,7 +490,7 @@ func (n *BranchNode) setNextNode(
 
 				extensionNode.path.Prepend(remainingPos)
 				extensionNode.hashDirty = true
-				manager.update(remaining.Id(), remainingHandle)
+				manager.update(&remaining, remainingHandle)
 			} else if remaining.Id().IsBranch() {
 				// An extension needs to replace this branch.
 				extensionRef, handle, err := manager.createExtension()
@@ -503,7 +503,7 @@ func (n *BranchNode) setNextNode(
 				extension.next = remaining
 				extension.hashDirty = true
 				extension.nextHashDirty = true
-				manager.update(extensionRef.Id(), handle)
+				manager.update(&extensionRef, handle)
 				newRoot = extensionRef
 			} else if manager.getConfig().TrackSuffixLengthsInLeafNodes {
 				// If suffix lengths need to be tracked, leaf nodes require an update.
@@ -534,7 +534,7 @@ func (n *BranchNode) setNextNode(
 		}
 	}
 
-	manager.update(thisRef.Id(), this)
+	manager.update(thisRef, this)
 	return *thisRef, !isClone, err
 }
 
@@ -870,13 +870,13 @@ func (n *ExtensionNode) setNextNode(
 				n.next = extension.next
 				n.hashDirty = true
 				n.nextHashDirty = true
-				manager.update(thisRef.Id(), this)
+				manager.update(thisRef, this)
 				manager.release(newRoot.Id())
 			} else if newRoot.Id().IsBranch() {
 				n.next = newRoot
 				n.hashDirty = true
 				n.nextHashDirty = true
-				manager.update(thisRef.Id(), this)
+				manager.update(thisRef, this)
 			} else {
 				// If the next node is anything but a branch or extension, remove this extension.
 				manager.release(thisRef.Id())
@@ -956,7 +956,7 @@ func (n *ExtensionNode) setNextNode(
 		n.hashDirty = true
 		n.nextHashDirty = true
 		thisNodeWasReused = true
-		manager.update(thisRef.Id(), this)
+		manager.update(thisRef, this)
 	} else {
 		branch.children[n.path.Get(commonPrefixLength)] = n.next
 		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
@@ -983,7 +983,7 @@ func (n *ExtensionNode) setNextNode(
 		extension.next = branchRef
 		extension.hashDirty = true
 		extension.nextHashDirty = true
-		manager.update(extensionRef.Id(), extensionHandle)
+		manager.update(&extensionRef, extensionHandle)
 		newRoot = extensionRef
 	}
 
@@ -1243,13 +1243,13 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			newNode.frozen = false
 			newNode.info = info
 			newNode.hashDirty = true
-			manager.update(newRef.Id(), handle)
+			manager.update(&newRef, handle)
 			return newRef, false, nil
 		}
 
 		n.info = info
 		n.hashDirty = true
-		manager.update(thisRef.Id(), this)
+		manager.update(thisRef, this)
 		return *thisRef, true, nil
 	}
 
@@ -1319,7 +1319,7 @@ func splitLeafNode(
 		extension.next = branchRef
 		extension.hashDirty = true
 		extension.nextHashDirty = true
-		manager.update(extensionRef.Id(), handle)
+		manager.update(&extensionRef, handle)
 	}
 
 	// If enabled, keep track of the suffix length of leaf values.
@@ -1333,7 +1333,7 @@ func splitLeafNode(
 		thisRef = &ref
 	} else {
 		// Commit the changes to the sibling.
-		manager.update(siblingRef.Id(), siblingHandle)
+		manager.update(siblingRef, siblingHandle)
 	}
 
 	// Add this node and the new sibling node to the branch node.
@@ -1344,7 +1344,7 @@ func splitLeafNode(
 	branch.hashDirty = true
 
 	// Commit the changes to the the branch node.
-	manager.update(branchRef.Id(), branchHandle)
+	manager.update(&branchRef, branchHandle)
 
 	return newRoot, nil
 }
@@ -1388,18 +1388,18 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 			newNode.storage = root
 			newNode.storageHashDirty = true
 			newNode.hashDirty = true
-			manager.update(newRef.Id(), newHandle)
+			manager.update(&newRef, newHandle)
 			return newRef, false, nil
 		}
 		n.storage = root
 		n.storageHashDirty = true
 		n.hashDirty = true
 		hasChanged = true
-		manager.update(thisRef.Id(), this)
+		manager.update(thisRef, this)
 	} else if hasChanged {
 		n.hashDirty = true
 		n.storageHashDirty = true
-		manager.update(thisRef.Id(), this)
+		manager.update(thisRef, this)
 	}
 	return *thisRef, hasChanged, nil
 }
@@ -1423,7 +1423,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 		newNode.storage = NewNodeReference(EmptyId())
 		newNode.storageHashDirty = true
 		newNode.hashDirty = true
-		manager.update(newRef.Id(), newHandle)
+		manager.update(&newRef, newHandle)
 		return newRef, false, nil
 	}
 
@@ -1477,12 +1477,12 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference,
 		newNode.frozen = false
 		newNode.pathLength = length
 		newNode.hashDirty = true
-		return newRef, false, manager.update(newRef.Id(), newHandle)
+		return newRef, false, manager.update(&newRef, newHandle)
 	}
 
 	n.hashDirty = true
 	n.pathLength = length
-	return *thisRef, true, manager.update(thisRef.Id(), this)
+	return *thisRef, true, manager.update(thisRef, this)
 }
 
 func (n *AccountNode) IsFrozen() bool {
@@ -1653,12 +1653,12 @@ func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this s
 			newNode.value = value
 			newNode.hashDirty = true
 			newNode.pathLength = n.pathLength
-			manager.update(newRef.Id(), newHandle)
+			manager.update(&newRef, newHandle)
 			return newRef, false, nil
 		}
 		n.value = value
 		n.hashDirty = true
-		manager.update(thisRef.Id(), this)
+		manager.update(thisRef, this)
 		return *thisRef, true, nil
 	}
 
@@ -1723,12 +1723,12 @@ func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, t
 		newNode.value = n.value
 		newNode.hashDirty = true
 		newNode.pathLength = length
-		return newRef, false, manager.update(newRef.Id(), newHandle)
+		return newRef, false, manager.update(&newRef, newHandle)
 	}
 
 	n.hashDirty = true
 	n.pathLength = length
-	return *thisRef, true, manager.update(thisRef.Id(), this)
+	return *thisRef, true, manager.update(thisRef, this)
 }
 
 func (n *ValueNode) IsFrozen() bool {

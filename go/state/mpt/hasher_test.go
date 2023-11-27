@@ -72,7 +72,7 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
+			ctxt.EXPECT().updateHash(RefTo(ref.Id()), gomock.Any())
 
 			hasher := algorithm.createHasher()
 			_, _, err := hasher.updateHashes(&ref, ctxt)
@@ -143,7 +143,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
+			ctxt.EXPECT().updateHash(RefTo(ref.Id()), gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(2)
 
 			hasher := algorithm.createHasher()
@@ -182,7 +182,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 
 			// Only the branch node is signaled to be updated.
 			hashHandle, _ := ctxt.getHashAccess(&ref)
-			ctxt.EXPECT().updateHash(ref.Id(), hashHandle)
+			ctxt.EXPECT().updateHash(RefTo(ref.Id()), hashHandle)
 			hashHandle.Release()
 
 			hasher := algorithm.createHasher()
@@ -248,7 +248,7 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			})
 
 			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
+			ctxt.EXPECT().updateHash(RefTo(ref.Id()), gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
 
 			hasher := algorithm.createHasher()

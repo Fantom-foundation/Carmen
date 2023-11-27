@@ -294,7 +294,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	readHandle := node.GetReadHandle()
 	branch := readHandle.Get().(*BranchNode)
 	account, _ := ctxt.getWriteAccess(&branch.children[8])
-	ctxt.EXPECT().update(branch.children[8].Id(), account)
+	ctxt.EXPECT().update(RefTo(branch.children[8].Id()), account)
 	account.Release()
 	readHandle.Release()
 
@@ -381,7 +381,7 @@ func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
 
 	ctxt.ExpectCreateAccount()
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	addr := common.Address{0x21}
 	path := addressToNibbles(addr)
@@ -464,7 +464,7 @@ func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
 	ctxt.ExpectCreateAccount()
 	ctxt.ExpectCreateBranch()
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	addr := common.Address{0x41}
 	path := addressToNibbles(addr)
@@ -549,7 +549,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	empty := AccountInfo{}
 	addr := common.Address{0x41}
@@ -698,7 +698,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthTracking
 	// The remaining account is updated because its length has changed.
 	accountRef, account := ctxt.Get("R")
 	accountHandle := account.GetWriteHandle()
-	ctxt.EXPECT().update(accountRef.Id(), accountHandle).Return(nil)
+	ctxt.EXPECT().update(RefTo(accountRef.Id()), accountHandle).Return(nil)
 	accountHandle.Release()
 
 	empty := AccountInfo{}
@@ -785,7 +785,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 
 	extensionRef, extension := ctxt.Get("E")
 	extensionHandle := extension.GetWriteHandle()
-	ctxt.EXPECT().update(extensionRef.Id(), extensionHandle).Return(nil)
+	ctxt.EXPECT().update(RefTo(extensionRef.Id()), extensionHandle).Return(nil)
 	extensionHandle.Release()
 
 	accountRef, _ := ctxt.Get("A")
@@ -1253,7 +1253,7 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 
 	accountRef, account := ctxt.Get("A")
 	accountHandle := account.GetWriteHandle()
-	ctxt.EXPECT().update(accountRef.Id(), accountHandle).Return(nil)
+	ctxt.EXPECT().update(RefTo(accountRef.Id()), accountHandle).Return(nil)
 	accountHandle.Release()
 
 	// Attempt to create an existing account.
@@ -1366,7 +1366,7 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 	extension, _ := ctxt.ExpectCreateExtension()
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	// Attempt to create a new account that is partially covered by the extension.
 	addr := common.Address{0x12, 0x40}
@@ -1479,7 +1479,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 	branchId, _ := ctxt.ExpectCreateBranch()
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	addr := common.Address{0x40}
 	path := addressToNibbles(addr)
@@ -1585,7 +1585,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 	ctxt.ExpectCreateBranch()
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	addr := common.Address{0x12, 0x38}
 	path := addressToNibbles(addr)
@@ -1799,7 +1799,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 	ctxt.EXPECT().release(extension.Id()).Return(nil)
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	addr := common.Address{0x12}
 	path := addressToNibbles(addr)
@@ -2004,7 +2004,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_WithLen
 	// The result's path length changes, so an update needs to be called.
 	// The first time when removing the branch, the second time when removing the extension.
 	resultHandle := result.GetWriteHandle()
-	ctxt.EXPECT().update(resultRef.Id(), resultHandle).Times(2)
+	ctxt.EXPECT().update(RefTo(resultRef.Id()), resultHandle).Times(2)
 	resultHandle.Release()
 
 	addr := common.Address{0x12}
@@ -2053,7 +2053,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_
 
 	// There is an extra update call to the account since, 1x by branch, 1x by extension.
 	accountHandle := account.GetWriteHandle()
-	ctxt.EXPECT().update(accountId.Id(), accountHandle)
+	ctxt.EXPECT().update(RefTo(accountId.Id()), accountHandle)
 	accountHandle.Release()
 
 	addr := common.Address{0x12}
@@ -2377,7 +2377,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) 
 	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
@@ -2644,7 +2644,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 
 	// Also the old node is to be updated, since its length changed.
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	path := addressToNibbles(addr2)
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
@@ -2887,7 +2887,7 @@ func TestAccountNode_SetSlot_NonZeroValue(t *testing.T) {
 	ctxt.ExpectCreateValue()
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle)
 	path := addressToNibbles(addr)
 	if newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
@@ -2975,11 +2975,11 @@ func TestAccountNode_SetSlot_UpdateOfExistingValue(t *testing.T) {
 	})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle)
 
 	storageRef, storage := ctxt.Get("S")
 	tmp := storage.GetWriteHandle()
-	ctxt.EXPECT().update(storageRef.Id(), tmp)
+	ctxt.EXPECT().update(RefTo(storageRef.Id()), tmp)
 	tmp.Release()
 
 	path := addressToNibbles(addr)
@@ -3518,7 +3518,7 @@ func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
 	after, _ := ctxt.Build(&Value{key: key, value: value2, hashDirty: true})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
+	ctxt.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 
 	if newRoot, changed, err := handle.Get().SetValue(ctxt, &ref, handle, key, path[:], value2); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
@@ -4371,7 +4371,7 @@ func (c *nodeContext) ExpectCreateAccount() (NodeReference, *shared.Shared[Node]
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
+	c.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
@@ -4382,7 +4382,7 @@ func (c *nodeContext) ExpectCreateBranch() (NodeReference, *shared.Shared[Node])
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
+	c.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
@@ -4402,7 +4402,7 @@ func (c *nodeContext) ExpectCreateExtension() (NodeReference, *shared.Shared[Nod
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
+	c.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
@@ -4422,7 +4422,7 @@ func (c *nodeContext) ExpectCreateValue() (NodeReference, *shared.Shared[Node]) 
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
+	c.EXPECT().update(RefTo(ref.Id()), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }

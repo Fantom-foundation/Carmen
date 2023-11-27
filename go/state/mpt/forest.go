@@ -762,18 +762,20 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	return ref, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
+func (s *Forest) update(ref *NodeReference, node shared.WriteHandle[Node]) error {
+	s.nodeCache.Touch(ref)
 	// all needed here is to register the modified node as dirty
 	s.dirtyMutex.Lock()
-	s.dirty[id] = struct{}{}
+	s.dirty[ref.Id()] = struct{}{}
 	s.dirtyMutex.Unlock()
 	return nil
 }
 
-func (s *Forest) updateHash(id NodeId, node shared.HashHandle[Node]) error {
+func (s *Forest) updateHash(ref *NodeReference, node shared.HashHandle[Node]) error {
+	s.nodeCache.Touch(ref)
 	// all needed here is to register the modified node as dirty
 	s.dirtyMutex.Lock()
-	s.dirty[id] = struct{}{}
+	s.dirty[ref.Id()] = struct{}{}
 	s.dirtyMutex.Unlock()
 	return nil
 }
