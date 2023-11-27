@@ -13,19 +13,26 @@ import (
 
 var variants = []struct {
 	name    string
-	factory func(directory string, config MptConfig, mode StorageMode) (*Forest, error)
+	factory func(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error)
 }{
 	{"InMemory", OpenInMemoryForest},
 	{"FileBased", OpenFileForest},
 	{"FileShadow", openFileShadowForest},
 }
 
+var forestConfigs = map[string]ForestConfig{
+	"mutable_1k":     {Mode: Mutable, CacheCapacity: 1024},
+	"mutable_128k":   {Mode: Mutable, CacheCapacity: 128 * 1024},
+	"immutable_1k":   {Mode: Immutable, CacheCapacity: 1024},
+	"immutable_128k": {Mode: Immutable, CacheCapacity: 128 * 1024},
+}
+
 func TestForest_OpenAndClose(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
-					forest, err := variant.factory(t.TempDir(), config, mode)
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -41,11 +48,11 @@ func TestForest_OpenAndClose(t *testing.T) {
 func TestForest_ClosedAndReOpened(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Immutable, Mutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
 					directory := t.TempDir()
 
-					forest, err := variant.factory(directory, config, mode)
+					forest, err := variant.factory(directory, config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -67,7 +74,7 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 						t.Fatalf("failed to close forest: %v", err)
 					}
 
-					reopened, err := variant.factory(directory, config, mode)
+					reopened, err := variant.factory(directory, config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to re-open forest: %v", err)
 					}
@@ -88,9 +95,9 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
-					forest, err := variant.factory(t.TempDir(), config, mode)
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -129,9 +136,9 @@ func TestForest_ArchiveInfoCanBeSetAndRetrieved(t *testing.T) {
 func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
-					forest, err := variant.factory(t.TempDir(), config, mode)
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -187,9 +194,9 @@ func TestForest_ValueCanBeSetAndRetrieved(t *testing.T) {
 func TestForest_TreesCanBeHashedAndNavigatedInParallel(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
-					forest, err := variant.factory(t.TempDir(), config, mode)
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -235,7 +242,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, Mutable)
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 1024})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -279,7 +286,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, Immutable)
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Immutable, CacheCapacity: 1024})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -336,9 +343,9 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
-					forest, err := variant.factory(t.TempDir(), config, mode)
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -364,10 +371,10 @@ func TestForest_ProvidesMemoryFoodPrint(t *testing.T) {
 func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
 					const N = 100
-					forest, err := variant.factory(t.TempDir(), config, mode)
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -426,10 +433,10 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for _, mode := range []StorageMode{Mutable, Immutable} {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, mode), func(t *testing.T) {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
 					const N = 100
-					forest, err := variant.factory(t.TempDir(), config, mode)
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
@@ -499,8 +506,8 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 // is mainly intended to detect implementation issues in the caching and
 // synchronization features of the file-based stock which have caused problems
 // in the past.
-func openFileShadowForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
-	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+func openFileShadowForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branchesA, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/A/branches")
 	if err != nil {
 		return nil, err
@@ -537,5 +544,5 @@ func openFileShadowForest(directory string, config MptConfig, mode StorageMode) 
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(config, directory, branches, extensions, accounts, values, mode)
+	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
 }

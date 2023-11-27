@@ -416,7 +416,8 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	v1[len(v1)-1] = 1
 
 	dir := t.TempDir()
-	forest, err := OpenFileForest(dir, S5LiveConfig, Mutable)
+	forestConfig := ForestConfig{Mode: Mutable, CacheCapacity: 1024}
+	forest, err := OpenFileForest(dir, S5LiveConfig, forestConfig)
 	if err != nil {
 		t.Fatalf("failed to start empty forest: %v", err)
 	}
@@ -507,7 +508,8 @@ func modifyNode[N any](t *testing.T, directory string, encoder stock.ValueEncode
 
 func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 	const N = 100
-	forest, err := OpenFileForest(dir, config, Immutable)
+	forestConfig := ForestConfig{Mode: Immutable, CacheCapacity: 1024}
+	forest, err := OpenFileForest(dir, config, forestConfig)
 	if err != nil {
 		return nil, err
 	}

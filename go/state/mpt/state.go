@@ -29,6 +29,8 @@ type MptState struct {
 	hasher    hash.Hash
 }
 
+const DefaultMptStateCapacity = 10_000_000
+
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
@@ -46,16 +48,16 @@ func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
 
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirely retained in memory.
-func OpenGoMemoryState(directory string, config MptConfig) (*MptState, error) {
-	trie, err := OpenInMemoryLiveTrie(directory, config)
+func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+	trie, err := OpenInMemoryLiveTrie(directory, config, cacheCapacity)
 	if err != nil {
 		return nil, err
 	}
 	return newMptState(directory, trie)
 }
 
-func OpenGoFileState(directory string, config MptConfig) (*MptState, error) {
-	trie, err := OpenFileLiveTrie(directory, config)
+func OpenGoFileState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+	trie, err := OpenFileLiveTrie(directory, config, cacheCapacity)
 	if err != nil {
 		return nil, err
 	}

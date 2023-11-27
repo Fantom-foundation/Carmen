@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
@@ -46,7 +47,7 @@ func info(context *cli.Context) error {
 
 	// attempt to open the MPT
 	if mptInfo.Mode == mpt.Mutable {
-		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.Config)
+		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.Config, mpt.DefaultMptStateCapacity)
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil
@@ -68,7 +69,7 @@ func info(context *cli.Context) error {
 			return fmt.Errorf("error closing forest: %v", err)
 		}
 	} else {
-		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config)
+		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.DefaultMptStateCapacity)
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil

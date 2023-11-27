@@ -21,7 +21,7 @@ import (
 func TestArchiveTrie_OpenAndClose(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config)
+			archive, err := OpenArchiveTrie(t.TempDir(), config, 1024)
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -35,7 +35,7 @@ func TestArchiveTrie_OpenAndClose(t *testing.T) {
 func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config)
+			archive, err := OpenArchiveTrie(t.TempDir(), config, 1024)
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -73,7 +73,7 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			archive, err := OpenArchiveTrie(t.TempDir(), config)
+			archive, err := OpenArchiveTrie(t.TempDir(), config, 1024)
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -121,14 +121,14 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			continue
 		}
 		t.Run(config.Name, func(t *testing.T) {
-			live, err := OpenGoMemoryState(t.TempDir(), config)
+			live, err := OpenGoMemoryState(t.TempDir(), config, 1024)
 			if err != nil {
 				t.Fatalf("failed to open live trie: %v", err)
 			}
 			defer live.Close()
 
 			archiveDir := t.TempDir()
-			archive, err := OpenArchiveTrie(archiveDir, config)
+			archive, err := OpenArchiveTrie(archiveDir, config, 1024)
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
@@ -219,7 +219,7 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config)
+			archive, err := OpenArchiveTrie(dir, config, 1024)
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -269,7 +269,7 @@ func TestArchiveTrie_VerificationOfArchiveWithMissingFileFails(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config)
+			archive, err := OpenArchiveTrie(dir, config, 1024)
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
@@ -309,7 +309,7 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			archive, err := OpenArchiveTrie(dir, config)
+			archive, err := OpenArchiveTrie(dir, config, 1024)
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
