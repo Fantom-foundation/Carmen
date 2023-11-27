@@ -216,10 +216,10 @@ func (c *nodeCache) Touch(r *NodeReference) {
 	}
 	if c.tail == pos {
 		c.tail = target.prev
+	} else {
+		c.owners[target.next].prev = target.prev
 	}
-
 	c.owners[target.prev].next = target.next
-	c.owners[target.next].prev = target.prev
 
 	c.owners[c.head].prev = pos
 	target.next = c.head
