@@ -1462,6 +1462,7 @@ func (n *AccountNode) SetHash(hash common.Hash) {
 }
 
 func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	if n.pathLength == length {
 		return *thisRef, false, nil
 	}
@@ -1707,6 +1708,7 @@ func (n *ValueNode) SetHash(hash common.Hash) {
 }
 
 func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
+	manager.touch(thisRef)
 	if n.pathLength == length {
 		return *thisRef, false, nil
 	}
