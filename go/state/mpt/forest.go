@@ -95,6 +95,8 @@ type Forest struct {
 
 	// A buffer for asynchronously writing nodes to files.
 	writeBuffer WriteBuffer
+
+	blockWorkSet map[NodeId]struct{}
 }
 
 func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -248,6 +250,7 @@ func makeForest(
 		hasher:        mptConfig.Hashing.createHasher(),
 		keyHasher:     NewKeyHasher(),
 		addressHasher: NewAddressHasher(),
+		blockWorkSet:  map[NodeId]struct{}{},
 	}
 	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, 1024)
 	return res, nil
@@ -324,6 +327,8 @@ func (s *Forest) VisitTrie(rootRef *NodeReference, visitor NodeVisitor) error {
 }
 
 func (s *Forest) updateHashesFor(ref *NodeReference) (common.Hash, []nodeHash, error) {
+	fmt.Printf("Number of dirty nodes: %d\n", len(s.blockWorkSet))
+	s.blockWorkSet = map[NodeId]struct{}{}
 	return s.hasher.updateHashes(ref, s)
 }
 
@@ -768,6 +773,8 @@ func (s *Forest) update(ref *NodeReference, node shared.WriteHandle[Node]) error
 	s.dirtyMutex.Lock()
 	s.dirty[ref.Id()] = struct{}{}
 	s.dirtyMutex.Unlock()
+
+	s.blockWorkSet[ref.Id()] = struct{}{}
 	return nil
 }
 
@@ -777,6 +784,8 @@ func (s *Forest) updateHash(ref *NodeReference, node shared.HashHandle[Node]) er
 	s.dirtyMutex.Lock()
 	s.dirty[ref.Id()] = struct{}{}
 	s.dirtyMutex.Unlock()
+
+	s.blockWorkSet[ref.Id()] = struct{}{}
 	return nil
 }
 
