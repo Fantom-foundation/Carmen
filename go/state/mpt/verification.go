@@ -5,11 +5,11 @@ package mpt
 import (
 	"errors"
 	"fmt"
-
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
+	"sort"
 )
 
 // VerificationObserver is a listener interface for tracking the progress of the verification
@@ -138,12 +138,15 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"account", source, source.accounts, source.accountIds, emptyNodeHash, roots, observer,
 		func(node *AccountNode) (common.Hash, error) { return hash(node) },
+		func(node *AccountNode) (common.Hash, bool) { return node.GetHash() },
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsAccount() },
-		func(i uint64) NodeId { return AccountId(i) },
 		func(node *AccountNode, hashes map[NodeId]common.Hash, embedded map[NodeId]bool) {
 			node.storageHash = hashes[node.storage.Id()]
 			node.storageHashDirty = false
+		},
+		func(node *AccountNode, ids []NodeId) []NodeId {
+			return addNonEmpty(ids, node.storage.Id())
 		},
 	)
 	if err != nil {
@@ -153,9 +156,9 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"branch", source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
 		func(node *BranchNode) (common.Hash, error) { return hash(node) },
+		func(node *BranchNode) (common.Hash, bool) { return node.GetHash() },
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsBranch() },
-		func(i uint64) NodeId { return BranchId(i) },
 		func(node *BranchNode, hashes map[NodeId]common.Hash, embedded map[NodeId]bool) {
 			for i := 0; i < 16; i++ {
 				child := node.children[i]
@@ -172,6 +175,13 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			}
 			node.dirtyHashes = 0
 		},
+		func(node *BranchNode, ids []NodeId) []NodeId {
+			for i := 0; i < 16; i++ {
+				// ID may be an embedded child, it will be determined later while hashing
+				ids = addNonEmpty(ids, node.children[i].Id())
+			}
+			return ids
+		},
 	)
 	if err != nil {
 		return err
@@ -180,13 +190,16 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"extension", source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
 		func(node *ExtensionNode) (common.Hash, error) { return hash(node) },
+		func(node *ExtensionNode) (common.Hash, bool) { return node.GetHash() },
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsExtension() },
-		func(i uint64) NodeId { return ExtensionId(i) },
 		func(node *ExtensionNode, hashes map[NodeId]common.Hash, embedded map[NodeId]bool) {
 			node.nextHash = hashes[node.next.Id()]
 			node.nextHashDirty = false
 			node.nextIsEmbedded = embedded[node.next.Id()]
+		},
+		func(node *ExtensionNode, ids []NodeId) []NodeId {
+			return addNonEmpty(ids, node.next.Id())
 		},
 	)
 	if err != nil {
@@ -196,16 +209,27 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"value", source, source.values, source.valueIds, emptyNodeHash, roots, observer,
 		func(node *ValueNode) (common.Hash, error) { return hash(node) },
+		func(node *ValueNode) (common.Hash, bool) { return node.GetHash() },
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsValue() },
-		func(i uint64) NodeId { return ValueId(i) },
 		func(*ValueNode, map[NodeId]common.Hash, map[NodeId]bool) {},
+		func(node *ValueNode, ids []NodeId) []NodeId {
+			return ids
+		},
 	)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// addNonEmpty extends the input array with the input node ID, but only when the node is not empty.
+func addNonEmpty(arr []NodeId, id NodeId) []NodeId {
+	if !id.IsEmpty() {
+		arr = append(arr, id)
+	}
+	return arr
 }
 
 func verifyHashes[N any](
@@ -217,15 +241,16 @@ func verifyHashes[N any](
 	roots []Root,
 	observer VerificationObserver,
 	hash func(*N) (common.Hash, error),
+	readHash func(*N) (common.Hash, bool),
 	isEmbedded func(Node) (bool, error),
 	isNodeType func(NodeId) bool,
-	toNodeId func(uint64) NodeId,
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
+	collectChildrenIds func(*N, []NodeId) []NodeId,
 ) error {
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
 	case HashStoredWithNode:
-		return verifyHashesStoredWithNodes(name, source, stock, ids, roots, observer, hash, isEmbedded, hashOfEmptyNode, toNodeId, fillInChildrenHashes)
+		return verifyHashesStoredWithNodes(name, source, stock, ids, hashOfEmptyNode, observer, hash, readHash, isEmbedded, fillInChildrenHashes, collectChildrenIds)
 	case HashStoredWithParent:
 		return verifyHashesStoredWithParents(name, source, stock, ids, roots, observer, hash, isNodeType)
 	default:
@@ -233,83 +258,149 @@ func verifyHashes[N any](
 	}
 }
 
+func loadNodeHashes(
+	nodeIds []NodeId,
+	source *verificationNodeSource,
+	isEmbedded func(Node) (bool, error),
+	hashOfEmptyNode common.Hash,
+) (map[NodeId]common.Hash, map[NodeId]bool, error) {
+	// Load hashes from disk
+	hashes := make(map[NodeId]common.Hash, len(nodeIds)+1)
+	hashes[EmptyId()] = hashOfEmptyNode
+	embedded := map[NodeId]bool{}
+	for _, id := range nodeIds {
+		var node Node
+		if id.IsBranch() {
+			n, err := source.branches.Get(id.Index())
+			if err != nil {
+				return hashes, embedded, err
+			}
+			node = &n
+		} else if id.IsValue() {
+			n, err := source.values.Get(id.Index())
+			if err != nil {
+				return hashes, embedded, err
+			}
+			node = &n
+		} else if id.IsAccount() {
+			n, err := source.accounts.Get(id.Index())
+			if err != nil {
+				return hashes, embedded, err
+			}
+			node = &n
+		} else if id.IsExtension() {
+			n, err := source.extensions.Get(id.Index())
+			if err != nil {
+				return hashes, embedded, err
+			}
+			node = &n
+		}
+
+		if !id.IsEmpty() {
+			hash, dirty := node.GetHash()
+			if dirty {
+				return hashes, embedded, fmt.Errorf("encountered dirty hash on disk for node %v", id)
+			}
+			hashes[id] = hash
+			if res, err := isEmbedded(node); err != nil {
+				return hashes, embedded, err
+			} else if res {
+				embedded[id] = true
+			}
+		}
+	}
+
+	return hashes, embedded, nil
+}
+
 func verifyHashesStoredWithNodes[N any](
 	name string,
 	source *verificationNodeSource,
 	stock stock.Stock[uint64, N],
 	ids stock.IndexSet[uint64],
-	roots []Root,
+	hashOfEmptyNode common.Hash,
 	observer VerificationObserver,
 	hash func(*N) (common.Hash, error),
+	readHash func(*N) (common.Hash, bool),
 	isEmbedded func(Node) (bool, error),
-	hashOfEmptyNode common.Hash,
-	toNodeId func(uint64) NodeId,
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
+	collectChildrenIds func(*N, []NodeId) []NodeId,
 ) error {
-	// TODO: perform the following operations in blocks ...
-
-	// Load all hashes from disk
-	observer.Progress("Loading all node hashes ...")
-	hashes := map[NodeId]common.Hash{}
-	hashes[EmptyId()] = hashOfEmptyNode
-	embedded := map[NodeId]bool{}
-	err := source.forAllNodes(func(id NodeId, node Node) error {
-		hash, dirty := node.GetHash()
-		if dirty {
-			return fmt.Errorf("encountered dirty hash on disk for node %v", id)
-		}
-		hashes[id] = hash
-		if res, err := isEmbedded(node); err != nil {
-			return err
-		} else if res {
-			embedded[id] = true
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("error loading node hashes: %v", err)
-	}
-
-	// Check hashes of roots.
-	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-	for _, root := range roots {
-		want := hashes[root.NodeRef.Id()]
-		got := root.Hash
-		if want != got {
-			return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
-		}
-	}
-
 	// Load nodes of current type from disk
+	const batchSize = 1 << 31 // -> 2G * 32bytes hash = 64GB memory
+
 	lowerBound := ids.GetLowerBound()
-	upperBound := ids.GetUpperBound()
-	nodes := make([]N, upperBound-lowerBound)
-	observer.Progress(fmt.Sprintf("Loading up to %d %ss ...", len(nodes), name))
-	for i := lowerBound; i < upperBound; i++ {
-		if ids.Contains(i) {
+	upperBound := ids.GetLowerBound()
+	var batchNum int
+
+	for upperBound < ids.GetUpperBound() {
+		batchNum++
+		// First step -- loop to collect Ids of node children
+		// The number of child references determines the size of this batch
+		// because some nodes like Branch can have many children while other nodes like Extension has just one or Value has none.
+		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
+		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
+		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d)...", name, batchNum))
+		refIds := make([]NodeId, 0, 1<<25)
+		for len(refIds) < batchSize && upperBound < ids.GetUpperBound() {
+			if !ids.Contains(upperBound) {
+				upperBound++
+				continue
+			}
+			node, err := stock.Get(upperBound)
+			if err != nil {
+				return err
+			}
+			refIds = collectChildrenIds(&node, refIds)
+			upperBound++
+		}
+
+		// Second step - sort and uniq IDs and load hashes from the disk
+		sort.Slice(refIds, func(i, j int) bool {
+			return refIds[i] < refIds[j]
+		})
+		j := 0
+		for i := 1; i < len(refIds); i++ {
+			if refIds[i] != refIds[j] {
+				j++
+				refIds[j] = refIds[i]
+			}
+		}
+		refIds = refIds[:j+1]
+
+		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d)...", len(refIds), name, batchNum))
+		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
+		if err != nil {
+			return err
+		}
+
+		// Third step - read again the nodes, fill-in collected child hashes, compare hashes
+		observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss (batch %d)...", upperBound-lowerBound, name, batchNum))
+		for i := lowerBound; i < upperBound; i++ {
+			if !ids.Contains(i) {
+				continue
+			}
 			node, err := stock.Get(i)
 			if err != nil {
 				return err
 			}
-			nodes[i-lowerBound] = node
-		}
-	}
+			fillInChildrenHashes(&node, hashes, embedded)
+			want, err := hash(&node)
+			if err != nil {
+				return err
+			}
 
-	// Check hashes for loaded nodes.
-	observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss ...", len(nodes), name))
-	for i := lowerBound; i < upperBound; i++ {
-		if !ids.Contains(i) {
-			continue
+			got, dirty := readHash(&node)
+			if dirty {
+				return fmt.Errorf("encountered dirty hash for node: %v", i)
+			}
+
+			if got != want {
+				return fmt.Errorf("invalid hash stored for node %v, want %v, got %v", i, want, got)
+			}
 		}
-		fillInChildrenHashes(&nodes[i], hashes, embedded)
-		want, err := hash(&nodes[i])
-		if err != nil {
-			return err
-		}
-		id := toNodeId(i)
-		if got := hashes[id]; got != want {
-			return fmt.Errorf("invalid hash stored for node %v, want %v, got %v", id, want, got)
-		}
+
+		lowerBound = upperBound // move to next window
 	}
 
 	return nil
