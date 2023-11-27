@@ -304,84 +304,89 @@ func verifyHashesStoredWithParents[N any](
 	hash func(*N) (common.Hash, error),
 	isNodeType func(NodeId) bool,
 ) error {
-	// TODO: perform the following operations in blocks ...
-
+	const batchSize = 1 << 25
 	// Load nodes of current type from disk
-	lowerBound := ids.GetLowerBound()
-	upperBound := ids.GetUpperBound()
-	nodes := make([]N, upperBound-lowerBound)
-	observer.Progress(fmt.Sprintf("Loading up to %d %ss ...", len(nodes), name))
-	for i := lowerBound; i < upperBound; i++ {
-		if ids.Contains(i) {
-			node, err := stock.Get(i)
-			if err != nil {
+	for batch := ids.GetLowerBound(); batch < ids.GetUpperBound(); batch += batchSize {
+		lowerBound := batch
+		upperBound := batch + batchSize
+		if upperBound > ids.GetUpperBound() {
+			upperBound = ids.GetUpperBound()
+		}
+		nodes := make([]N, upperBound-lowerBound)
+		observer.Progress(fmt.Sprintf("Loading up to %d %ss (batch %d of %d)...", len(nodes), name, batch/batchSize+1, ids.GetUpperBound()/batchSize+1))
+		for i := lowerBound; i < upperBound; i++ {
+			if ids.Contains(i) {
+				node, err := stock.Get(i)
+				if err != nil {
+					return err
+				}
+				nodes[i-lowerBound] = node
+			}
+		}
+
+		// Compute hashes for loaded nodes.
+		observer.Progress(fmt.Sprintf("Hashing up to %d %ss (batch %d of %d)...", len(nodes), name, batch/batchSize+1, ids.GetUpperBound()/batchSize+1))
+		hashes := make([]common.Hash, len(nodes))
+		for i := lowerBound; i < upperBound; i++ {
+			if ids.Contains(i) {
+				h, err := hash(&nodes[i-lowerBound])
+				if err != nil {
+					return err
+				}
+				hashes[i-lowerBound] = h
+			}
+		}
+
+		// Check hashes of roots.
+		checkNodeHash := func(id NodeId, hash common.Hash) error {
+			if !isNodeType(id) || id.Index() < lowerBound || id.Index() >= upperBound {
+				return nil
+			}
+			want := hashes[id.Index()-lowerBound]
+			if hash == want {
+				return nil
+			}
+			return fmt.Errorf("inconsistent hash for node %v, want %v, got %v", id, want, hash)
+		}
+
+		for _, root := range roots {
+			if err := checkNodeHash(root.NodeRef.Id(), root.Hash); err != nil {
 				return err
 			}
-			nodes[i-lowerBound] = node
 		}
-	}
 
-	// Compute hashes for loaded nodes.
-	observer.Progress(fmt.Sprintf("Hashing up to %d %ss ...", len(nodes), name))
-	hashes := make([]common.Hash, len(nodes))
-	for i := lowerBound; i < upperBound; i++ {
-		if ids.Contains(i) {
-			h, err := hash(&nodes[i])
-			if err != nil {
-				return err
+		// Check that all nodes referencing other nodes use the right hashes.
+		checkContainedHashes := func(node Node) error {
+			switch n := node.(type) {
+			case *AccountNode:
+				return checkNodeHash(n.storage.Id(), n.storageHash)
+			case *ExtensionNode:
+				if !n.nextIsEmbedded {
+					return checkNodeHash(n.next.Id(), n.nextHash)
+				}
+				return nil
+			case *BranchNode:
+				{
+					errs := []error{}
+					for i := 0; i < len(n.children); i++ {
+						if !n.isEmbedded(byte(i)) {
+							if err := checkNodeHash(n.children[i].Id(), n.hashes[i]); err != nil {
+								errs = append(errs, err)
+							}
+						}
+					}
+					return errors.Join(errs...)
+				}
 			}
-			hashes[i] = h
-		}
-	}
-
-	// Check hashes of roots.
-	checkNodeHash := func(id NodeId, hash common.Hash) error {
-		if !isNodeType(id) || id.Index() >= uint64(len(hashes)) {
 			return nil
 		}
-		want := hashes[id.Index()-lowerBound]
-		if hash == want {
-			return nil
-		}
-		return fmt.Errorf("inconsistent hash for node %v, want %v, got %v", id, want, hash)
-	}
 
-	for _, root := range roots {
-		if err := checkNodeHash(root.NodeRef.Id(), root.Hash); err != nil {
+		observer.Progress(fmt.Sprintf("Checking hash references of up to %d %ss ...", len(nodes), name))
+		if err := source.forAllInnerNodes(checkContainedHashes); err != nil {
 			return err
 		}
 	}
 
-	// Check that all nodes referencing other nodes use the right hashes.
-	checkContainedHashes := func(node Node) error {
-		switch n := node.(type) {
-		case *AccountNode:
-			return checkNodeHash(n.storage.Id(), n.storageHash)
-		case *ExtensionNode:
-			if !n.nextIsEmbedded {
-				return checkNodeHash(n.next.Id(), n.nextHash)
-			}
-			return nil
-		case *BranchNode:
-			{
-				errs := []error{}
-				for i := 0; i < len(n.children); i++ {
-					if !n.isEmbedded(byte(i)) {
-						if err := checkNodeHash(n.children[i].Id(), n.hashes[i]); err != nil {
-							errs = append(errs, err)
-						}
-					}
-				}
-				return errors.Join(errs...)
-			}
-		}
-		return nil
-	}
-
-	observer.Progress(fmt.Sprintf("Checking hash references of up to %d %ss ...", len(nodes), name))
-	if err := source.forAllInnerNodes(checkContainedHashes); err != nil {
-		return err
-	}
 	return nil
 }
 
