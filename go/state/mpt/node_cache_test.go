@@ -2,6 +2,8 @@ package mpt
 
 import (
 	"fmt"
+	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
@@ -168,5 +170,89 @@ func TestNodeCache_TouchChangesOrder(t *testing.T) {
 	if want, got := "[V-3 V-1 V-2]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
 		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
 	}
+}
 
+func TestNodeCache_StressTestLruList(t *testing.T) {
+	const Capacity = 10
+	cache := newNodeCache(Capacity)
+
+	should := []NodeId{}
+
+	// fill cache with elements
+	refs := []NodeReference{}
+	for i := 0; i < Capacity; i++ {
+		id := ValueId(uint64(i))
+		ref := NewNodeReference(id)
+		cache.GetOrSet(&ref, nil)
+		refs = append(refs, ref)
+	}
+
+	// touch elements in cache and check LRU consistency
+	r := rand.New(rand.NewSource(123))
+	for i := 0; i < 1000; i++ {
+		pos := int(r.Int31n(Capacity))
+		ref := refs[pos]
+		cache.Touch(&ref)
+
+		refs = append(refs, ref)
+		refs = slices.Delete(refs, pos, pos+1)
+
+		should = should[0:0]
+		for _, ref := range refs {
+			should = append(should, ref.Id())
+		}
+		slices.Reverse(should)
+		fmt.Printf("%3d - %v - %v\n", i, ref.Id(), should)
+
+		forward, err := getForwardLruList(cache)
+		if err != nil {
+			t.Fatalf("failed to get forward list order: %v", err)
+		}
+
+		backward, err := getBackwardLruList(cache)
+		if err != nil {
+			t.Fatalf("failed to get backward list order: %v", err)
+		}
+
+		slices.Reverse(backward)
+		if !slices.Equal(forward, backward) {
+			t.Fatalf("inconsistent list order: %v vs %v", forward, backward)
+		}
+
+		if !slices.Equal(should, forward) {
+			t.Fatalf("unexpected list, wanted %v, got %v", should, forward)
+		}
+	}
+}
+
+func getForwardLruList(c *nodeCache) ([]NodeId, error) {
+	res := make([]NodeId, 0, len(c.owners))
+	seen := map[ownerPosition]struct{}{}
+	for cur := c.head; cur != c.tail; cur = c.owners[cur].next {
+		if _, contains := seen[cur]; contains {
+			return nil, fmt.Errorf("detected loop in LRU list after %v followed by %v", res, c.owners[cur].id)
+		}
+		seen[cur] = struct{}{}
+		res = append(res, c.owners[cur].id)
+	}
+	if c.owners[c.tail].tag.Load() > 0 {
+		res = append(res, c.owners[c.tail].id)
+	}
+	return res, nil
+}
+
+func getBackwardLruList(c *nodeCache) ([]NodeId, error) {
+	res := make([]NodeId, 0, len(c.owners))
+	seen := map[ownerPosition]struct{}{}
+	for cur := c.tail; cur != c.head; cur = c.owners[cur].prev {
+		if _, contains := seen[cur]; contains {
+			return nil, fmt.Errorf("detected loop in LRU list after %v followed by %v", res, c.owners[cur].id)
+		}
+		seen[cur] = struct{}{}
+		res = append(res, c.owners[cur].id)
+	}
+	if c.owners[c.head].tag.Load() > 0 {
+		res = append(res, c.owners[c.head].id)
+	}
+	return res, nil
 }
