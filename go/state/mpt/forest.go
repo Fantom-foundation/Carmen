@@ -326,8 +326,16 @@ func (s *Forest) VisitTrie(rootRef *NodeReference, visitor NodeVisitor) error {
 	return err
 }
 
+var maxWorkSet = 0
+
 func (s *Forest) updateHashesFor(ref *NodeReference) (common.Hash, []nodeHash, error) {
-	fmt.Printf("Number of dirty nodes: %d\n", len(s.blockWorkSet))
+	size := len(s.blockWorkSet)
+	if size > 750 {
+		if size > maxWorkSet {
+			maxWorkSet = size
+		}
+		fmt.Printf("Number of dirty nodes: %d (max %d)\n", size, maxWorkSet)
+	}
 	s.blockWorkSet = map[NodeId]struct{}{}
 	return s.hasher.updateHashes(ref, s)
 }
@@ -712,6 +720,7 @@ func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error
 	node := new(AccountNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
+		s.nodeCache.Touch(&ref)
 		write := instance.GetWriteHandle()
 		*write.Get().(*AccountNode) = *node
 		write.Release()
@@ -728,6 +737,7 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	node := new(BranchNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
+		s.nodeCache.Touch(&ref)
 		write := instance.GetWriteHandle()
 		*write.Get().(*BranchNode) = *node
 		write.Release()
@@ -744,6 +754,7 @@ func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], err
 	node := new(ExtensionNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
+		s.nodeCache.Touch(&ref)
 		write := instance.GetWriteHandle()
 		*write.Get().(*ExtensionNode) = *node
 		write.Release()
@@ -760,6 +771,7 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	node := new(ValueNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
+		s.nodeCache.Touch(&ref)
 		write := instance.GetWriteHandle()
 		*write.Get().(*ValueNode) = *node
 		write.Release()
@@ -768,7 +780,6 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 }
 
 func (s *Forest) update(ref *NodeReference, node shared.WriteHandle[Node]) error {
-	s.nodeCache.Touch(ref)
 	// all needed here is to register the modified node as dirty
 	s.dirtyMutex.Lock()
 	s.dirty[ref.Id()] = struct{}{}
@@ -779,7 +790,6 @@ func (s *Forest) update(ref *NodeReference, node shared.WriteHandle[Node]) error
 }
 
 func (s *Forest) updateHash(ref *NodeReference, node shared.HashHandle[Node]) error {
-	s.nodeCache.Touch(ref)
 	// all needed here is to register the modified node as dirty
 	s.dirtyMutex.Lock()
 	s.dirty[ref.Id()] = struct{}{}

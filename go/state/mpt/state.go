@@ -29,7 +29,7 @@ type MptState struct {
 	hasher    hash.Hash
 }
 
-const DefaultMptStateCapacity = 10_000_000
+const DefaultMptStateCapacity = 10_000
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
