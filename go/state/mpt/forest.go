@@ -50,6 +50,14 @@ type Root struct {
 	Hash    common.Hash
 }
 
+// ForestConfig summarizes forest instance configuration options that affect
+// the functional and non-functional properties of a forest but do not change
+// the on-disk format.
+type ForestConfig struct {
+	Mode          StorageMode // whether to perform destructive or constructive updates
+	CacheCapacity int         // the maximum number of nodes retained in memory
+}
+
 // Forest is a utility node managing nodes for one or more Tries.
 // It provides the common foundation for the Live and Archive Tries.
 //
@@ -89,19 +97,13 @@ type Forest struct {
 	writeBuffer WriteBuffer
 }
 
-// The number of elements to retain in the node cache.
-const cacheCapacity = 10_000_000
-
-// The number of hashes retained in the cache of the addresses or caches keys
-const hashesCacheCapacity = 100_000
-
-func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
-	if _, err := checkForestMetadata(directory, config, mode); err != nil {
+func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
+	if _, err := checkForestMetadata(directory, mptConfig, forestConfig.Mode); err != nil {
 		return nil, err
 	}
 
 	success := false
-	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -139,16 +141,16 @@ func OpenInMemoryForest(directory string, config MptConfig, mode StorageMode) (*
 		}
 	}()
 	success = true
-	return makeForest(config, directory, branches, extensions, accounts, values, mode)
+	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
 }
 
-func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Forest, error) {
-	if _, err := checkForestMetadata(directory, config, mode); err != nil {
+func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
+	if _, err := checkForestMetadata(directory, mptConfig, forestConfig.Mode); err != nil {
 		return nil, err
 	}
 
 	success := false
-	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
+	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
@@ -186,7 +188,7 @@ func OpenFileForest(directory string, config MptConfig, mode StorageMode) (*Fore
 		}
 	}()
 	success = true
-	return makeForest(config, directory, branches, extensions, accounts, values, mode)
+	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
 }
 
 func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (ForestMetadata, error) {
@@ -226,24 +228,24 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 }
 
 func makeForest(
-	config MptConfig,
+	mptConfig MptConfig,
 	directory string,
 	branches stock.Stock[uint64, BranchNode],
 	extensions stock.Stock[uint64, ExtensionNode],
 	accounts stock.Stock[uint64, AccountNode],
 	values stock.Stock[uint64, ValueNode],
-	mode StorageMode,
+	forestConfig ForestConfig,
 ) (*Forest, error) {
 	res := &Forest{
-		config:        config,
+		config:        mptConfig,
 		branches:      synced.Sync(branches),
 		extensions:    synced.Sync(extensions),
 		accounts:      synced.Sync(accounts),
 		values:        synced.Sync(values),
-		storageMode:   mode,
-		nodeCache:     NewNodeCache(cacheCapacity),
+		storageMode:   forestConfig.Mode,
+		nodeCache:     NewNodeCache(forestConfig.CacheCapacity),
 		dirty:         map[NodeId]struct{}{},
-		hasher:        config.Hashing.createHasher(),
+		hasher:        mptConfig.Hashing.createHasher(),
 		keyHasher:     NewKeyHasher(),
 		addressHasher: NewAddressHasher(),
 	}

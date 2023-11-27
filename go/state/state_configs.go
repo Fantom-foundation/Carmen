@@ -930,7 +930,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, mpt.DefaultMptStateCapacity)
 		return arch, nil, err
 
 	case S5Archive:
@@ -938,7 +938,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)

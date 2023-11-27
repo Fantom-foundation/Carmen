@@ -18,7 +18,7 @@ func BenchmarkStorageChanges(b *testing.B) {
 				mode = "with_hashing"
 			}
 			b.Run(fmt.Sprintf("%s/%s", config.Name, mode), func(b *testing.B) {
-				state, err := OpenGoMemoryState(b.TempDir(), config)
+				state, err := OpenGoMemoryState(b.TempDir(), config, 1024)
 				if err != nil {
 					b.Fail()
 				}

@@ -30,7 +30,7 @@ func newS4State(params Parameters, state *mpt.MptState) (State, error) {
 }
 
 func newGoMemoryS4State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S4LiveConfig)
+	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func newGoMemoryS4State(params Parameters) (State, error) {
 }
 
 func newGoFileS4State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoFileState(params.Directory, mpt.S4LiveConfig)
+	state, err := mpt.OpenGoFileState(params.Directory, mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return nil, err
 	}
