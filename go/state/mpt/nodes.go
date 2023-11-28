@@ -1440,7 +1440,13 @@ func (n *AccountNode) Release(manager NodeManager, thisRef *NodeReference, this 
 		return nil
 	}
 	if !n.storage.Id().IsEmpty() {
-		if err := manager.release(n.storage.Id()); err != nil {
+		rootHandle, err := manager.getWriteAccess(&n.storage)
+		if err != nil {
+			return err
+		}
+		err = rootHandle.Get().Release(manager, &n.storage, rootHandle)
+		rootHandle.Release()
+		if err != nil {
 			return err
 		}
 	}

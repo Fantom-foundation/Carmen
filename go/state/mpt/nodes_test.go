@@ -3062,16 +3062,20 @@ func TestAccountNode_ReleaseStateTrie(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
 
-	storage, _ := ctxt.Build(&Value{})
-	ref, node := ctxt.Build(&Account{})
+	storage := NewMockNode(ctrl)
+	ref, node := ctxt.Build(&Account{
+		storage: &Tag{"A", &Mock{storage}},
+	})
+
+	storageRef, storageNode := ctxt.Get("A")
+	ctxt.EXPECT().release(ref.Id()).Return(nil)
+
+	write := storageNode.GetWriteHandle()
+	storage.EXPECT().Release(ctxt, RefTo(storageRef.Id()), write)
+	write.Release()
 
 	handle := node.GetWriteHandle()
 	defer handle.Release()
-	handle.Get().(*AccountNode).storage = storage
-
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
-	ctxt.EXPECT().release(storage.Id()).Return(nil)
-
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
 	}

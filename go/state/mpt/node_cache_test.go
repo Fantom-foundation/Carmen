@@ -202,7 +202,6 @@ func TestNodeCache_StressTestLruList(t *testing.T) {
 			should = append(should, ref.Id())
 		}
 		slices.Reverse(should)
-		fmt.Printf("%3d - %v - %v\n", i, ref.Id(), should)
 
 		forward, err := getForwardLruList(cache)
 		if err != nil {
