@@ -457,10 +457,6 @@ func (s *Forest) getConfig() MptConfig {
 	return s.config
 }
 
-func (s *Forest) touch(ref *NodeReference) {
-	s.nodeCache.Touch(ref)
-}
-
 func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error) {
 	res, found := s.nodeCache.Get(ref)
 	if found {
