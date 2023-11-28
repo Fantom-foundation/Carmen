@@ -204,7 +204,6 @@ type NodeSource interface {
 	getConfig() MptConfig
 	getReadAccess(*NodeReference) (shared.ReadHandle[Node], error)
 	getViewAccess(*NodeReference) (shared.ViewHandle[Node], error)
-	touch(*NodeReference)
 	getHashFor(*NodeReference) (common.Hash, error)
 	hashKey(common.Key) common.Hash
 	hashAddress(address common.Address) common.Hash
@@ -400,7 +399,6 @@ func (n *BranchNode) setNextNode(
 	path []Nibble,
 	createSubTree func(*NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
 ) (NodeReference, bool, error) {
-	manager.touch(thisRef)
 	// Forward call to child node.
 	child := &n.children[path[0]]
 	node, err := manager.getWriteAccess(child)
@@ -817,7 +815,6 @@ func (n *ExtensionNode) setNextNode(
 	valueIsEmpty bool,
 	createSubTree func(*NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
 ) (NodeReference, bool, error) {
-	manager.touch(thisRef)
 	// Check whether the updates targets the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
 		handle, err := manager.getWriteAccess(&n.next)
@@ -1203,7 +1200,6 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 }
 
 func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
-	manager.touch(thisRef)
 	// Check whether this is the correct account.
 	if n.address == address {
 		if info == n.info {
@@ -1628,7 +1624,6 @@ func (n *ValueNode) SetAccount(NodeManager, *NodeReference, shared.WriteHandle[N
 }
 
 func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], key common.Key, path []Nibble, value common.Value) (NodeReference, bool, error) {
-	manager.touch(thisRef)
 	// Check whether this is the correct value node.
 	if n.key == key {
 		if value == n.value {

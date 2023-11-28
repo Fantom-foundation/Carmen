@@ -4318,7 +4318,6 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 	}
 	res.EXPECT().getConfig().AnyTimes().Return(config)
 	res.EXPECT().getHashFor(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
-	res.EXPECT().touch(gomock.Any()).AnyTimes() // TODO: restrict usage
 
 	// The empty node is always present.
 	res.Build(Empty{})

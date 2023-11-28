@@ -593,9 +593,12 @@ func (s *Forest) getHashAccess(ref *NodeReference) (shared.HashHandle[Node], err
 	)
 }
 
-func (s *Forest) getWriteAccess(ref *NodeReference) (shared.WriteHandle[Node], error) {
-	return getAccess(s, ref,
+func (f *Forest) getWriteAccess(ref *NodeReference) (shared.WriteHandle[Node], error) {
+	return getAccess(f, ref,
 		func(s *shared.Shared[Node]) shared.WriteHandle[Node] {
+			// When gaining write access to nodes, they need to be touched to make sure
+			// modified nodes are at the head of the cache's LRU queue to be evicted last.
+			f.nodeCache.Touch(ref)
 			return s.GetWriteHandle()
 		},
 		func(p shared.WriteHandle[Node]) {
@@ -645,6 +648,12 @@ func (s *Forest) getMutableNodeByPath(root *NodeReference, path NodePath) (share
 
 func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
 	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(ref, node)
+	if present {
+		// If a present element is re-used, it needs to be touched to be at the
+		// head of the cache's LRU queue -- just like a newly inserted node
+		// would be. Methods like createBranch depend on this to be covered here.
+		s.nodeCache.Touch(ref)
+	}
 	if !evicted {
 		return current, present
 	}
