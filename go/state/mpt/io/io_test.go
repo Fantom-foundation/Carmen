@@ -3,6 +3,8 @@ package io
 import (
 	"bytes"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -131,4 +133,71 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 	}
 
 	return buffer.Bytes(), hash
+}
+
+func TestImport_ImportIntoNonEmptyTargetDirectoryFails(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+string(os.PathSeparator)+"test.txt", nil, 0700); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	if err := ImportLiveDb(dir, nil); err == nil || !strings.Contains(err.Error(), "is not empty") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestInitializeArchive_ImportIntoNonEmptyTargetDirectoryFails(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+string(os.PathSeparator)+"test.txt", nil, 0700); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	if err := InitializeArchive(dir, nil, 0); err == nil || !strings.Contains(err.Error(), "is not empty") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckEmptyDirectory_PassesIfEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := checkEmptyDirectory(dir); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckEmptyDirectory_FailsIfDirectoryDoesNotExist(t *testing.T) {
+	dir := t.TempDir()
+	if err := checkEmptyDirectory(dir + string(os.PathSeparator) + "sub"); err == nil {
+		t.Errorf("test expected to produce an error")
+	}
+}
+
+func TestCheckEmptyDirectory_FailsIfDirectoryIsAFile(t *testing.T) {
+	dir := t.TempDir()
+	file := dir + string(os.PathSeparator) + "test.txt"
+	if err := os.WriteFile(file, nil, 0700); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := checkEmptyDirectory(file); err == nil {
+		t.Errorf("test expected to produce an error")
+	}
+}
+
+func TestCheckEmptyDirectory_FailsIfDirectoryContainsAFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+string(os.PathSeparator)+"test.txt", nil, 0700); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := checkEmptyDirectory(dir); err == nil || !strings.Contains(err.Error(), "is not empty") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckEmptyDirectory_FailsIfDirectoryContainsADirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(dir+string(os.PathSeparator)+"sub", 0700); err != nil {
+		t.Fatalf("failed to create sub-directory: %v", err)
+	}
+	if err := checkEmptyDirectory(dir); err == nil || !strings.Contains(err.Error(), "is not empty") {
+		t.Errorf("unexpected error: %v", err)
+	}
 }

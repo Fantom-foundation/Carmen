@@ -157,6 +157,11 @@ func InitializeArchive(directory string, in io.Reader, block uint64) (err error)
 }
 
 func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.NodeId, hash common.Hash, err error) {
+	// check that the destination directory is an empty directory
+	if err := checkEmptyDirectory(directory); err != nil {
+		return root, hash, err
+	}
+
 	// Start by checking the magic number.
 	buffer := make([]byte, len(stateMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
@@ -341,4 +346,27 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 		}
 	}
 	return mpt.VisitResponseContinue
+}
+
+func checkEmptyDirectory(directory string) error {
+	file, err := os.Open(directory)
+	if err != nil {
+		return fmt.Errorf("failed to open directory %s: %w", directory, err)
+	}
+	defer file.Close()
+	state, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to open file information for %s: %w", directory, err)
+	}
+	if !state.IsDir() {
+		return fmt.Errorf("the path `%s` does not point to a directory", directory)
+	}
+	_, err = file.Readdirnames(1)
+	if err == nil {
+		return fmt.Errorf("directory `%s` is not empty", directory)
+	}
+	if !errors.Is(err, io.EOF) {
+		return fmt.Errorf("failed to list content of directory `%s`: %w", directory, err)
+	}
+	return nil
 }
