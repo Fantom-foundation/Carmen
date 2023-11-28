@@ -660,7 +660,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nib
 			if err != nil {
 				errs = append(errs, err)
 			} else if got := n.hashes[i]; want != got {
-				errs = append(errs, fmt.Errorf("in node %v the hash for child %d is invalid\nwant: %v\ngot: %v\n", thisRef.Id(), i, want, got))
+				errs = append(errs, fmt.Errorf("in node %v the hash for child %d is invalid\nwant: %v\ngot: %v", thisRef.Id(), i, want, got))
 			}
 		}
 	}
@@ -1110,7 +1110,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []
 		if err != nil {
 			errs = append(errs, err)
 		} else if want != n.nextHash {
-			errs = append(errs, fmt.Errorf("node %v - next node hash invalid\nwant: %v\ngot: %v\n", thisRef.Id(), want, n.nextHash))
+			errs = append(errs, fmt.Errorf("node %v - next node hash invalid\nwant: %v\ngot: %v", thisRef.Id(), want, n.nextHash))
 		}
 	}
 	return errors.Join(errs...)
@@ -1744,7 +1744,6 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 	if slices.Contains(ancestors, thisRef.Id()) {
 		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
 	}
-	ancestors = append(ancestors, thisRef.Id())
 	errs := []error{}
 
 	fullPath := KeyToNibblePath(n.key, source)

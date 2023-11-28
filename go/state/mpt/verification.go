@@ -504,10 +504,6 @@ func (s *verificationNodeSource) getShared(id NodeId) (*shared.Shared[Node], err
 	return shared.MakeShared[Node](node), nil
 }
 
-func (s *verificationNodeSource) touch(*NodeReference) {
-	// ignored
-}
-
 func (s *verificationNodeSource) getReadAccess(ref *NodeReference) (shared.ReadHandle[Node], error) {
 	node, err := s.getShared(ref.Id())
 	if err != nil {
