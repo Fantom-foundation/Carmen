@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
+	"log"
 	"os"
+	"time"
 
 	"github.com/urfave/cli/v2"
 )
@@ -25,16 +27,27 @@ func doExport(context *cli.Context) error {
 	dir := context.Args().Get(0)
 	trg := context.Args().Get(1)
 
+	start := time.Now()
+	logFromStart(start, "export started")
 	file, err := os.Create(trg)
 	if err != nil {
 		return err
 	}
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
+	defer func() {
+		logFromStart(start, "export done")
+	}()
 	return errors.Join(
 		io.Export(dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
 	)
+}
+
+func logFromStart(start time.Time, msg string) {
+	now := time.Now()
+	t := uint64(now.Sub(start).Seconds())
+	log.Printf("[t=%4d:%02d] - %s.\n", t/60, t%60, msg)
 }
