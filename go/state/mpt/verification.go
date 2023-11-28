@@ -325,7 +325,7 @@ func verifyHashesStoredWithParents[N any](
 	hash func(*N) (common.Hash, error),
 	isNodeType func(NodeId) bool,
 ) error {
-	const batchSize = 1 << 25
+	const batchSize = 1 << 31 // -> 2G * 32bytes hash = 64GB memory
 	// Load nodes of current type from disk
 	for batch := ids.GetLowerBound(); batch < ids.GetUpperBound(); batch += batchSize {
 		lowerBound := batch
@@ -333,24 +333,16 @@ func verifyHashesStoredWithParents[N any](
 		if upperBound > ids.GetUpperBound() {
 			upperBound = ids.GetUpperBound()
 		}
-		nodes := make([]N, upperBound-lowerBound)
-		observer.Progress(fmt.Sprintf("Loading up to %d %ss (batch %d of %d)...", len(nodes), name, batch/batchSize+1, ids.GetUpperBound()/batchSize+1))
+
+		observer.Progress(fmt.Sprintf("Hashing up to %d %ss (batch %d of %d)...", upperBound-lowerBound, name, batch/batchSize+1, ids.GetUpperBound()/batchSize+1))
+		hashes := make([]common.Hash, upperBound-lowerBound)
 		for i := lowerBound; i < upperBound; i++ {
 			if ids.Contains(i) {
 				node, err := stock.Get(i)
 				if err != nil {
 					return err
 				}
-				nodes[i-lowerBound] = node
-			}
-		}
-
-		// Compute hashes for loaded nodes.
-		observer.Progress(fmt.Sprintf("Hashing up to %d %ss (batch %d of %d)...", len(nodes), name, batch/batchSize+1, ids.GetUpperBound()/batchSize+1))
-		hashes := make([]common.Hash, len(nodes))
-		for i := lowerBound; i < upperBound; i++ {
-			if ids.Contains(i) {
-				h, err := hash(&nodes[i-lowerBound])
+				h, err := hash(&node)
 				if err != nil {
 					return err
 				}
@@ -402,7 +394,7 @@ func verifyHashesStoredWithParents[N any](
 			return nil
 		}
 
-		observer.Progress(fmt.Sprintf("Checking hash references of up to %d %ss ...", len(nodes), name))
+		observer.Progress(fmt.Sprintf("Checking hash references of up to %d %ss ...", upperBound-lowerBound, name))
 		if err := source.forAllInnerNodes(checkContainedHashes); err != nil {
 			return err
 		}
