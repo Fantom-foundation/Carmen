@@ -379,18 +379,6 @@ func (mr *MockNodeSourceMockRecorder) hashKey(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "hashKey", reflect.TypeOf((*MockNodeSource)(nil).hashKey), arg0)
 }
 
-// touch mocks base method.
-func (m *MockNodeSource) touch(arg0 *NodeReference) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "touch", arg0)
-}
-
-// touch indicates an expected call of touch.
-func (mr *MockNodeSourceMockRecorder) touch(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "touch", reflect.TypeOf((*MockNodeSource)(nil).touch), arg0)
-}
-
 // MockNodeManager is a mock of NodeManager interface.
 type MockNodeManager struct {
 	ctrl     *gomock.Controller
@@ -607,18 +595,6 @@ func (m *MockNodeManager) release(arg0 NodeId) error {
 func (mr *MockNodeManagerMockRecorder) release(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "release", reflect.TypeOf((*MockNodeManager)(nil).release), arg0)
-}
-
-// touch mocks base method.
-func (m *MockNodeManager) touch(arg0 *NodeReference) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "touch", arg0)
-}
-
-// touch indicates an expected call of touch.
-func (mr *MockNodeManagerMockRecorder) touch(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "touch", reflect.TypeOf((*MockNodeManager)(nil).touch), arg0)
 }
 
 // update mocks base method.

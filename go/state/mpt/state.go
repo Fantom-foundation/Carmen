@@ -29,6 +29,11 @@ type MptState struct {
 	hasher    hash.Hash
 }
 
+// The capacity of an MPT's node cache must be at least as large as the maximum
+// number of nodes modified in a block. Evaluations show that most blocks
+// modify less than 2000 nodes. However, one block, presumably the one handling
+// the opera fork at ~4.5M, modifies 434.589 nodes. Thus, the cache size of a
+// MPT processing Fantom's history should be at least ~500.000 nodes.
 const DefaultMptStateCapacity = 10_000_000
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
