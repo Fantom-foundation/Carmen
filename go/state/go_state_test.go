@@ -6,9 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"go.uber.org/mock/gomock"
 )
 
 var (
@@ -464,4 +466,34 @@ func TestGetMemoryFootprint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGoState_FlushFlushesLiveDbAndArchive(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	live := NewMockLiveDB(ctrl)
+	archive := archive.NewMockArchive(ctrl)
+
+	live.EXPECT().Flush()
+	archive.EXPECT().Flush()
+
+	state := newGoState(live, archive, nil)
+	state.Flush()
+}
+
+func TestGoState_CloseClosesLiveDbAndArchive(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	live := NewMockLiveDB(ctrl)
+	archive := archive.NewMockArchive(ctrl)
+
+	gomock.InOrder(
+		live.EXPECT().Flush(),
+		live.EXPECT().Close(),
+	)
+	gomock.InOrder(
+		archive.EXPECT().Flush(),
+		archive.EXPECT().Close(),
+	)
+
+	state := newGoState(live, archive, nil)
+	state.Close()
 }

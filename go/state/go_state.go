@@ -1,5 +1,7 @@
 package state
 
+//go:generate mockgen -source go_state.go -destination go_state_mock.go -package state
+
 import (
 	"fmt"
 	"runtime"
@@ -52,11 +54,53 @@ type LiveDB interface {
 }
 
 func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) State {
-	return WrapIntoSyncedState(&GoState{
+
+	res := &GoState{
 		live:    live,
 		archive: archive,
 		cleanup: cleanup,
-	})
+	}
+
+	// If there is an archive, start an asynchronous archive writer routine.
+	if archive != nil {
+		in := make(chan archiveUpdate, 10)
+		flush := make(chan bool)
+		done := make(chan bool)
+		err := make(chan error, 10)
+
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			defer close(flush)
+			defer close(done)
+			// Process all incoming updates, no not stop on errors.
+			for update := range in {
+				// If there is no update, the state is asking for a flush signal.
+				if update.update == nil {
+					if issue := res.archive.Flush(); issue != nil {
+						err <- issue
+					}
+					flush <- true
+				} else {
+					// Otherwise, process the update.
+					issue := res.archive.Add(update.block, *update.update, update.updateHints)
+					if issue != nil {
+						err <- issue
+					}
+					if update.updateHints != nil {
+						update.updateHints.Release()
+					}
+				}
+			}
+		}()
+
+		res.archiveWriter = in
+		res.archiveWriterDone = done
+		res.archiveWriterFlushDone = flush
+		res.archiveWriterError = err
+	}
+
+	return WrapIntoSyncedState(res)
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
@@ -107,42 +151,6 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 	}
 
 	if s.archive != nil {
-		// If the writer is not yet active, start it.
-		if s.archiveWriter == nil {
-			in := make(chan archiveUpdate, 10)
-			flush := make(chan bool)
-			done := make(chan bool)
-			err := make(chan error, 10)
-
-			go func() {
-				runtime.LockOSThread()
-				defer runtime.UnlockOSThread()
-				defer close(flush)
-				defer close(done)
-				// Process all incoming updates, no not stop on errors.
-				for update := range in {
-					// If there is no update, the state is asking for a flush signal.
-					if update.update == nil {
-						flush <- true
-					} else {
-						// Otherwise, process the update.
-						issue := s.archive.Add(update.block, *update.update, update.updateHints)
-						if issue != nil {
-							err <- issue
-						}
-						if update.updateHints != nil {
-							update.updateHints.Release()
-						}
-					}
-				}
-			}()
-
-			s.archiveWriter = in
-			s.archiveWriterDone = done
-			s.archiveWriterFlushDone = flush
-			s.archiveWriterError = err
-		}
-
 		// Send the update to the writer to be processed asynchronously.
 		s.archiveWriter <- archiveUpdate{block, &update, archiveUpdateHints}
 

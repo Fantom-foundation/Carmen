@@ -49,6 +49,21 @@ func (mr *MockhasherMockRecorder) getHash(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getHash", reflect.TypeOf((*Mockhasher)(nil).getHash), arg0, arg1)
 }
 
+// isEmbedded mocks base method.
+func (m *Mockhasher) isEmbedded(arg0 Node, arg1 NodeSource) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "isEmbedded", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// isEmbedded indicates an expected call of isEmbedded.
+func (mr *MockhasherMockRecorder) isEmbedded(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isEmbedded", reflect.TypeOf((*Mockhasher)(nil).isEmbedded), arg0, arg1)
+}
+
 // updateHashes mocks base method.
 func (m *Mockhasher) updateHashes(root *NodeReference, nodes NodeManager) (common.Hash, *NodeHashes, error) {
 	m.ctrl.T.Helper()
