@@ -138,9 +138,10 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"account", source, source.accounts, source.accountIds, emptyNodeHash, roots, observer,
 		func(node *AccountNode) (common.Hash, error) { return hash(node) },
+		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsAccount() },
 		func(i uint64) NodeId { return AccountId(i) },
-		func(node *AccountNode, hashes map[NodeId]common.Hash) {
+		func(node *AccountNode, hashes map[NodeId]common.Hash, embedded map[NodeId]bool) {
 			node.storageHash = hashes[node.storage.Id()]
 			node.storageHashDirty = false
 		},
@@ -152,12 +153,21 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"branch", source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
 		func(node *BranchNode) (common.Hash, error) { return hash(node) },
+		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsBranch() },
 		func(i uint64) NodeId { return BranchId(i) },
-		func(node *BranchNode, hashes map[NodeId]common.Hash) {
+		func(node *BranchNode, hashes map[NodeId]common.Hash, embedded map[NodeId]bool) {
 			for i := 0; i < 16; i++ {
+				child := node.children[i]
+				if !child.Id().IsEmpty() && embedded[child.Id()] {
+					node.setEmbedded(byte(i), true)
+				}
 				if child := node.children[i]; !node.isEmbedded(byte(i)) && !child.Id().IsEmpty() {
-					node.hashes[i] = hashes[child.Id()]
+					hash, found := hashes[child.Id()]
+					if !found {
+						panic(fmt.Sprintf("missing hash for %v\n", child.Id()))
+					}
+					node.hashes[i] = hash
 				}
 			}
 			node.dirtyHashes = 0
@@ -170,11 +180,13 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"extension", source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
 		func(node *ExtensionNode) (common.Hash, error) { return hash(node) },
+		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsExtension() },
 		func(i uint64) NodeId { return ExtensionId(i) },
-		func(node *ExtensionNode, hashes map[NodeId]common.Hash) {
+		func(node *ExtensionNode, hashes map[NodeId]common.Hash, embedded map[NodeId]bool) {
 			node.nextHash = hashes[node.next.Id()]
 			node.nextHashDirty = false
+			node.nextIsEmbedded = embedded[node.next.Id()]
 		},
 	)
 	if err != nil {
@@ -184,9 +196,10 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	err = verifyHashes(
 		"value", source, source.values, source.valueIds, emptyNodeHash, roots, observer,
 		func(node *ValueNode) (common.Hash, error) { return hash(node) },
+		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsValue() },
 		func(i uint64) NodeId { return ValueId(i) },
-		func(*ValueNode, map[NodeId]common.Hash) {},
+		func(*ValueNode, map[NodeId]common.Hash, map[NodeId]bool) {},
 	)
 	if err != nil {
 		return err
@@ -204,14 +217,15 @@ func verifyHashes[N any](
 	roots []Root,
 	observer VerificationObserver,
 	hash func(*N) (common.Hash, error),
+	isEmbedded func(Node) (bool, error),
 	isNodeType func(NodeId) bool,
 	toNodeId func(uint64) NodeId,
-	fillInChildrenHashes func(*N, map[NodeId]common.Hash),
+	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
 ) error {
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
 	case HashStoredWithNode:
-		return verifyHashesStoredWithNodes(name, source, stock, ids, roots, observer, hash, hashOfEmptyNode, toNodeId, fillInChildrenHashes)
+		return verifyHashesStoredWithNodes(name, source, stock, ids, roots, observer, hash, isEmbedded, hashOfEmptyNode, toNodeId, fillInChildrenHashes)
 	case HashStoredWithParent:
 		return verifyHashesStoredWithParents(name, source, stock, ids, roots, observer, hash, isNodeType)
 	default:
@@ -227,9 +241,10 @@ func verifyHashesStoredWithNodes[N any](
 	roots []Root,
 	observer VerificationObserver,
 	hash func(*N) (common.Hash, error),
+	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
 	toNodeId func(uint64) NodeId,
-	fillInChildrenHashes func(*N, map[NodeId]common.Hash),
+	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
 ) error {
 	// TODO: perform the following operations in blocks ...
 
@@ -237,12 +252,18 @@ func verifyHashesStoredWithNodes[N any](
 	observer.Progress("Loading all node hashes ...")
 	hashes := map[NodeId]common.Hash{}
 	hashes[EmptyId()] = hashOfEmptyNode
+	embedded := map[NodeId]bool{}
 	err := source.forAllNodes(func(id NodeId, node Node) error {
 		hash, dirty := node.GetHash()
 		if dirty {
 			return fmt.Errorf("encountered dirty hash on disk for node %v", id)
 		}
 		hashes[id] = hash
+		if res, err := isEmbedded(node); err != nil {
+			return err
+		} else if res {
+			embedded[id] = true
+		}
 		return nil
 	})
 	if err != nil {
@@ -280,7 +301,7 @@ func verifyHashesStoredWithNodes[N any](
 		if !ids.Contains(i) {
 			continue
 		}
-		fillInChildrenHashes(&nodes[i], hashes)
+		fillInChildrenHashes(&nodes[i], hashes, embedded)
 		want, err := hash(&nodes[i])
 		if err != nil {
 			return err

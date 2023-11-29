@@ -49,6 +49,10 @@ type hasher interface {
 	// getHash computes the hash of the node without modifying it. It is used
 	// for debugging, when checking a trie without the intend of modifying it.
 	getHash(*NodeReference, NodeSource) (common.Hash, error)
+
+	// isEmbedded determines whether the given node is embedded in the parent
+	// or represented by its hash.
+	isEmbedded(Node, NodeSource) (bool, error)
 }
 
 // ----------------------------------------------------------------------------
@@ -214,6 +218,10 @@ func (h directHasher) hash(
 	return hash, nil
 }
 
+func (h directHasher) isEmbedded(Node, NodeSource) (bool, error) {
+	return false, nil // nothing is embedded
+}
+
 // ----------------------------------------------------------------------------
 //                          Ethereum Like Hasher
 // ----------------------------------------------------------------------------
@@ -367,7 +375,7 @@ func (h ethHasher) updateHashesInternal(
 			}
 
 			// Test whether this node is to be embedded.
-			if res, e := h.isEmbedded(cur.node, cur.handle, manager); err != nil {
+			if res, e := h.isEmbedded(cur.handle.Get(), manager); err != nil {
 				cur.handle.Release()
 				err = e
 				break
@@ -712,14 +720,13 @@ func getEncodedPartialPathSize(numNibbles int) int {
 // marked dirty, this information is updated. Thus, calls to this function may
 // cause updates to the state of some nodes.
 func (h ethHasher) isEmbedded(
-	ref *NodeReference,
-	handle shared.HashHandle[Node],
+	node Node,
 	source NodeSource,
 ) (bool, error) {
 	// TODO: test this function
 
 	// Start by estimating a lower bound for the node size.
-	minSize, err := getLowerBoundForEncodedSize(handle.Get(), 32, source)
+	minSize, err := getLowerBoundForEncodedSize(node, 32, source)
 	if err != nil {
 		return false, err
 	}
@@ -731,7 +738,7 @@ func (h ethHasher) isEmbedded(
 
 	// We need to encode it to be certain.
 	var encoded = make([]byte, 0, 1024)
-	encoded, err = h.encode(handle.Get(), source, encoded)
+	encoded, err = h.encode(node, source, encoded)
 	if err != nil {
 		return false, err
 	}
