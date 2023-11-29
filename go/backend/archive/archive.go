@@ -1,8 +1,8 @@
 package archive
 
-import (
-	"io"
+//go:generate mockgen -source archive.go -destination archive_mock.go -package archive
 
+import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -45,5 +45,5 @@ type Archive interface {
 	// MemoryFootprintProvider provides the size of the store in memory in bytes.
 	common.MemoryFootprintProvider
 
-	io.Closer
+	common.FlushAndCloser
 }

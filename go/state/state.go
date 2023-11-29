@@ -1,6 +1,6 @@
 package state
 
-//go:generate mockgen -source state.go -destination mock_state.go -package state
+//go:generate mockgen -source state.go -destination state_mock.go -package state
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend"

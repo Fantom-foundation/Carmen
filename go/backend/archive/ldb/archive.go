@@ -29,6 +29,11 @@ func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
 	}, nil
 }
 
+func (a *Archive) Flush() error {
+	// nothing to do
+	return nil
+}
+
 func (a *Archive) Close() error {
 	// no-op
 	return nil
