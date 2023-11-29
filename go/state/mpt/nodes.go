@@ -1792,7 +1792,7 @@ type BranchNodeEncoderWithNodeHash struct{}
 
 func (BranchNodeEncoderWithNodeHash) GetEncodedSize() int {
 	encoder := NodeIdEncoder{}
-	return encoder.GetEncodedSize()*16 + common.HashSize + 2
+	return encoder.GetEncodedSize()*16 + common.HashSize
 }
 
 func (BranchNodeEncoderWithNodeHash) Store(dst []byte, node *BranchNode) error {
@@ -1808,8 +1808,6 @@ func (BranchNodeEncoderWithNodeHash) Store(dst []byte, node *BranchNode) error {
 	}
 	dst = dst[step*16:]
 	copy(dst, node.hash[:])
-	dst = dst[common.HashSize:]
-	binary.BigEndian.PutUint16(dst, node.embeddedChildren)
 	return nil
 }
 
@@ -1825,8 +1823,6 @@ func (BranchNodeEncoderWithNodeHash) Load(src []byte, node *BranchNode) error {
 	}
 	src = src[step*16:]
 	copy(node.hash[:], src)
-	src = src[common.HashSize:]
-	node.embeddedChildren = binary.BigEndian.Uint16(src)
 
 	// The hashes of the child nodes are not stored with the node, so they are
 	// marked as dirty to trigger a re-computation the next time they are used.
@@ -1894,7 +1890,7 @@ type ExtensionNodeEncoderWithNodeHash struct{}
 func (ExtensionNodeEncoderWithNodeHash) GetEncodedSize() int {
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
-	return pathEncoder.GetEncodedSize() + idEncoder.GetEncodedSize() + common.HashSize + 1
+	return pathEncoder.GetEncodedSize() + idEncoder.GetEncodedSize() + common.HashSize
 }
 
 func (ExtensionNodeEncoderWithNodeHash) Store(dst []byte, value *ExtensionNode) error {
@@ -1912,12 +1908,6 @@ func (ExtensionNodeEncoderWithNodeHash) Store(dst []byte, value *ExtensionNode) 
 	}
 	dst = dst[idEncoder.GetEncodedSize():]
 	copy(dst, value.hash[:])
-	dst = dst[common.HashSize:]
-	if value.nextIsEmbedded {
-		dst[0] = 1
-	} else {
-		dst[0] = 0
-	}
 	return nil
 }
 
@@ -1935,8 +1925,6 @@ func (ExtensionNodeEncoderWithNodeHash) Load(src []byte, node *ExtensionNode) er
 	node.next = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.hash[:], src)
-	src = src[common.HashSize:]
-	node.nextIsEmbedded = src[0] != 0
 
 	// The hash of the next node is not stored with the node, so it is marked
 	// as dirty to trigger a re-computation the next time it is accessed.

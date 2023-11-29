@@ -4063,6 +4063,7 @@ func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
 	recovered := BranchNode{}
 	encoder.Load(buffer, &recovered)
 	node.dirtyHashes = ^uint16(0)
+	node.embeddedChildren = 0
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
@@ -4104,6 +4105,7 @@ func TestExtensionNodeEncoderWithNodeHash(t *testing.T) {
 	recovered := ExtensionNode{}
 	encoder.Load(buffer, &recovered)
 	node.nextHashDirty = true
+	node.nextIsEmbedded = false
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
