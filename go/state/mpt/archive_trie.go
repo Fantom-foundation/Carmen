@@ -10,7 +10,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -31,7 +30,7 @@ type ArchiveTrie struct {
 	addMutex   sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
 }
 
-func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (archive.Archive, error) {
+func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*ArchiveTrie, error) {
 	rootfile := directory + "/roots.dat"
 	roots, err := loadRoots(rootfile)
 	if err != nil {
@@ -242,6 +241,14 @@ func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(len(a.roots))*unsafe.Sizeof(NodeId(0))))
 	a.rootsMutex.Unlock()
 	return mf
+}
+
+func (a *ArchiveTrie) Check() error {
+	roots := make([]*NodeReference, len(a.roots))
+	for i := 0; i < len(a.roots); i++ {
+		roots[i] = &a.roots[i].NodeRef
+	}
+	return a.head.trie.forest.CheckAll(roots)
 }
 
 func (a *ArchiveTrie) Dump() {

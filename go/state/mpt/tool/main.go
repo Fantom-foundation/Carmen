@@ -17,6 +17,7 @@ func main() {
 		Copyright: "(c) 2022-23 Fantom Foundation",
 		Flags:     []cli.Flag{},
 		Commands: []*cli.Command{
+			&Check,
 			&ExportCmd,
 			&ImportCmd,
 			&Info,
