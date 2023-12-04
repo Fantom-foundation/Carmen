@@ -1754,7 +1754,7 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 
 	fullPath := KeyToNibblePath(n.key, source)
 	if !IsPrefixOf(path, fullPath[:]) {
-		errs = append(errs, fmt.Errorf("node %v - value node %v located in wrong branch: %v", thisRef.Id(), n.key, path))
+		errs = append(errs, fmt.Errorf("node %v - value node %v [%v] located in wrong branch: %v", thisRef.Id(), n.key, fullPath, path))
 	}
 
 	if n.value == (common.Value{}) {
