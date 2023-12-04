@@ -88,14 +88,12 @@ pipeline {
             steps {
                 sh "cd Aida/carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
             }
-        }  
-
-        stage('Remove DB') {
-            steps {
-                sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/"
-                sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
-            }
-        }                    
-
-}
+        }               
+    }
+    post {
+        always {
+            sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/"
+            sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
+        }
+    }   
 }
