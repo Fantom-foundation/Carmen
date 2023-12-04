@@ -108,9 +108,9 @@ func (n NodeId) String() string {
 //                               NodeId Encoder
 // ----------------------------------------------------------------------------
 
-// NodeIdEncoder encode interal 8-byte node IDs using a fixed-length 6-byte disk
-// format ignoring the two most significant bytes which are always zero for any
-// state DB bellow ~1PB.
+// NodeIdEncoder encodes the internal 8-byte node IDs using a fixed-length
+// 6-byte disk format ignoring the two most significant bytes which are always
+// zero for any state DB bellow ~1PB.
 type NodeIdEncoder struct{}
 
 func (NodeIdEncoder) GetEncodedSize() int {
@@ -126,7 +126,6 @@ func (NodeIdEncoder) Store(dst []byte, id *NodeId) error {
 
 func (NodeIdEncoder) Load(src []byte, id *NodeId) error {
 	var buffer [8]byte
-	buffer[0] = src[0]
 	copy(buffer[2:], src)
 	*id = NodeId(binary.BigEndian.Uint64(buffer[:]))
 	return nil

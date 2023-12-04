@@ -302,7 +302,7 @@ func loadRoots(filename string) ([]Root, error) {
 
 func loadRootsFrom(reader io.Reader) ([]Root, error) {
 	res := []Root{}
-	var id [4]byte
+	var id [8]byte
 	var hash common.Hash
 	for {
 		if _, err := io.ReadFull(reader, id[:]); err != nil {
@@ -316,7 +316,7 @@ func loadRootsFrom(reader io.Reader) ([]Root, error) {
 			return nil, fmt.Errorf("invalid root file format: %v", err)
 		}
 
-		id := NodeId(binary.BigEndian.Uint32(id[:]))
+		id := NodeId(binary.BigEndian.Uint64(id[:]))
 		res = append(res, Root{NewNodeReference(id), hash})
 	}
 }
@@ -339,9 +339,9 @@ func StoreRoots(filename string, roots []Root) error {
 
 func storeRootsTo(writer io.Writer, roots []Root) error {
 	// Simple file format: [<node-id><state-hash>]*
-	var buffer [4]byte
+	var buffer [8]byte
 	for _, root := range roots {
-		binary.BigEndian.PutUint32(buffer[:], uint32(root.NodeRef.Id()))
+		binary.BigEndian.PutUint64(buffer[:], uint64(root.NodeRef.Id()))
 		if _, err := writer.Write(buffer[:]); err != nil {
 			return err
 		}

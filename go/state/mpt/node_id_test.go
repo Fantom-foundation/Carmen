@@ -135,3 +135,18 @@ func TestNodeID_EncodingAndDecoding(t *testing.T) {
 		}
 	}
 }
+
+func TestNodeID_EncodingAndDecodingPowerOfTwos(t *testing.T) {
+	var buffer [6]byte
+	encoder := NodeIdEncoder{}
+	for i := 0; i < 6*8; i++ {
+		id := NodeId(uint64(1) << i)
+		if err := encoder.Store(buffer[:], &id); err != nil {
+			t.Fatalf("failed to encode id: %v", err)
+		}
+		restored := NodeId(12345)
+		if err := encoder.Load(buffer[:], &restored); err != nil || restored != id {
+			t.Fatalf("failed to decode id %v: got %v, err %v", id, restored, err)
+		}
+	}
+}

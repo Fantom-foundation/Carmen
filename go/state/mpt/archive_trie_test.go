@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -372,6 +373,38 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 		}
 		if !reflect.DeepEqual(roots, res) {
 			t.Errorf("failed to restore roots, wanted %v, got %v", roots, res)
+		}
+	}
+}
+
+func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
+	roots := []Root{}
+	for i := 0; i < 48; i++ {
+		id := NodeId(uint64(1) << i)
+		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
+		id = NodeId((uint64(1) << (i + 1)) - 1)
+		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
+	}
+
+	dir := t.TempDir()
+	file := dir + string(filepath.Separator) + "roots.dat"
+	if err := StoreRoots(file, roots); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+
+	restored, err := loadRoots(file)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	if len(roots) != len(restored) {
+		t.Fatalf("invalid number of restored roots, wanted %d, got %d", len(roots), len(restored))
+	}
+
+	for i := 0; i < len(roots); i++ {
+		want := roots[i].NodeRef.Id()
+		got := restored[i].NodeRef.Id()
+		if want != got {
+			t.Errorf("invalid restored root at position %d, wanted %v, got %v", i, want, got)
 		}
 	}
 }
