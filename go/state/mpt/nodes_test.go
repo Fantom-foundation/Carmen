@@ -4446,9 +4446,10 @@ func (c *nodeContext) nextIndex() uint64 {
 }
 
 func (c *nodeContext) Check(t *testing.T, ref NodeReference) {
-	handle := c.tryGetNode(t, ref.Id())
-	defer handle.Release()
-	if err := handle.Get().Check(c, &ref, nil, nil); err != nil {
+	t.Helper()
+	if err := CheckForest(c, []*NodeReference{&ref}); err != nil {
+		handle := c.tryGetNode(t, ref.Id())
+		defer handle.Release()
 		handle.Get().Dump(c, &ref, "")
 		t.Fatalf("inconsistent node structure encountered:\n%v", err)
 	}

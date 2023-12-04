@@ -178,11 +178,9 @@ type Node interface {
 	// storage.
 	MarkFrozen()
 
-	// Check verifies internal invariants of this node and all nodes in its
-	// induced sub-tree. It is mainly intended to validate invariants in unit
-	// tests. It may be very costly for larger instances since it requires a
-	// full tree-scan (linear in size of the trie).
-	Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error
+	// Check verifies internal invariants of this node. It is mainly intended
+	// to validate invariants in unit tests and for issue diagnostics.
+	Check(source NodeSource, thisRef *NodeReference, path []Nibble) error
 
 	// Dump dumps this node and its sub-trees to the console. It is mainly
 	// intended for debugging and may be very costly for larger instances.
@@ -226,6 +224,138 @@ type NodeManager interface {
 	updateHash(NodeId, shared.HashHandle[Node]) error
 
 	release(NodeId) error
+}
+
+// ----------------------------------------------------------------------------
+//                               Utilities
+// ----------------------------------------------------------------------------
+
+// CheckForest evaluates invariants throughout all nodes reachable from the
+// given list of roots. Executed checks include node-specific checks like the
+// minimum number of child nodes of a BranchNode, the correct placement of
+// nodes within the forest, and the absence of zero values. The function also
+// checks the proper sharing of nodes in multiple tries rooted by different
+// nodes. A reuse is only valid if the node's position within the respective
+// tries is compatible -- thus, the node is reachable through the same
+// navigation path.
+func CheckForest(source NodeSource, roots []*NodeReference) error {
+	// The check algorithm is based on an iterative depth-first traversal
+	// where information on encountered nodes is cached to avoid multiple
+	// evaluations.
+	workList := []NodeId{}
+	contexts := map[NodeId]nodeCheckContext{}
+	for _, ref := range roots {
+		workList = append(workList, ref.Id())
+		contexts[ref.Id()] = nodeCheckContext{
+			root:           ref.Id(),
+			hasSeenAccount: false,
+			path:           nil,
+		}
+	}
+
+	// scheduleNode verifies that the given node is reached consistently
+	// with earlier encounters or schedules the node for future checks
+	// if this is the first time a path to this node was discovered.
+	scheduleNode := func(ref *NodeReference, root NodeId, accountSeen bool, path []Nibble) error {
+		context := nodeCheckContext{
+			root:           root,
+			hasSeenAccount: accountSeen,
+			path:           path,
+		}
+		previous, found := contexts[ref.Id()]
+		if found {
+			if !context.isCompatible(&previous) {
+				return fmt.Errorf(
+					"invalid reuse of node %v: reachable from %v through %v and from %v through %v",
+					ref.Id(), previous.root, previous.path, context.root, context.path,
+				)
+			}
+			return nil
+		} else {
+			contexts[ref.Id()] = context
+		}
+		workList = append(workList, ref.Id())
+		return nil
+	}
+
+	count := 0
+	for len(workList) > 0 {
+		curId := workList[len(workList)-1]
+		workList = workList[:len(workList)-1]
+
+		// TODO: replace this by an observer
+		count++
+		if count%100000 == 0 {
+			fmt.Printf("Checking %v (%d), |ws| = %d, |contexts| = %d\n", curId, count, len(workList), len(contexts))
+		}
+
+		context := contexts[curId]
+		curNodeRef := NewNodeReference(curId)
+		handle, err := source.getViewAccess(&curNodeRef)
+		if err != nil {
+			return err
+		}
+		node := handle.Get()
+		err = node.Check(source, &curNodeRef, context.path)
+		if err != nil {
+			handle.Release()
+			return err
+		}
+
+		// schedule child nodes to be checked
+		switch cur := node.(type) {
+		case EmptyNode:
+			// terminal node without children
+		case *AccountNode:
+			storage := cur.storage
+			if !storage.id.IsEmpty() {
+				err = scheduleNode(&storage, context.root, true, nil)
+			}
+		case *BranchNode:
+			for i := 0; i < 16; i++ {
+				child := cur.children[i]
+				if !child.id.IsEmpty() {
+					path := make([]Nibble, len(context.path)+1)
+					copy(path, context.path)
+					path[len(context.path)] = Nibble(i)
+					if err = scheduleNode(&child, context.root, context.hasSeenAccount, path); err != nil {
+						break
+					}
+				}
+			}
+		case *ExtensionNode:
+			next := cur.next
+			if !next.id.IsEmpty() {
+				path := make([]Nibble, len(context.path), len(context.path)+cur.path.Length())
+				copy(path, context.path)
+				for i := 0; i < cur.path.Length(); i++ {
+					path = append(path, cur.path.Get(i))
+				}
+				err = scheduleNode(&next, context.root, context.hasSeenAccount, path)
+			}
+		case *ValueNode:
+			// terminal node without children
+			if !context.hasSeenAccount {
+				err = fmt.Errorf("value node %v is reachable without passing an account", curNodeRef.Id())
+			}
+		}
+
+		handle.Release()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type nodeCheckContext struct {
+	root           NodeId
+	path           []Nibble
+	hasSeenAccount bool
+}
+
+func (c *nodeCheckContext) isCompatible(other *nodeCheckContext) bool {
+	return c.hasSeenAccount == other.hasSeenAccount && slices.Equal(c.path, other.path)
 }
 
 // ----------------------------------------------------------------------------
@@ -322,7 +452,7 @@ func (e EmptyNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
 	return nil
 }
 
-func (EmptyNode) Check(NodeSource, *NodeReference, []Nibble, []NodeId) error {
+func (EmptyNode) Check(NodeSource, *NodeReference, []Nibble) error {
 	// No invariants to be checked.
 	return nil
 }
@@ -629,15 +759,11 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 	return nil
 }
 
-func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
+func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
 	// Checked invariants:
 	//  - no loop in trie
 	//  - must have 2+ children
 	//  - child trees must be error free
-	if slices.Contains(ancestors, thisRef.Id()) {
-		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
-	}
-	ancestors = append(ancestors, thisRef.Id())
 	numChildren := 0
 	errs := []error{}
 	for i, child := range n.children {
@@ -645,16 +771,6 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nib
 			continue
 		}
 		numChildren++
-
-		if handle, err := source.getViewAccess(&child); err == nil {
-			defer handle.Release()
-			if err := handle.Get().Check(source, &child, append(path, Nibble(i)), ancestors); err != nil {
-				errs = append(errs, err)
-			}
-		} else {
-			errs = append(errs, fmt.Errorf("unable to resolve node %v: %v", child, err))
-		}
-
 		if !n.isChildHashDirty(byte(i)) && !n.isEmbedded(byte(i)) {
 			want, err := source.getHashFor(&child)
 			if err != nil {
@@ -1076,34 +1192,18 @@ func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
+func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
 	// Checked invariants:
 	//  - extension path have a length > 0
 	//  - extension can only be followed by a branch
 	//  - sub-trie is correct
 	//  - hash of sub-tree is either dirty or correct
-	if slices.Contains(ancestors, thisRef.Id()) {
-		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
-	}
-	ancestors = append(ancestors, thisRef.Id())
 	errs := []error{}
 	if n.path.Length() <= 0 {
 		errs = append(errs, fmt.Errorf("node %v - extension path must not be empty", thisRef.Id()))
 	}
 	if !n.next.Id().IsBranch() {
 		errs = append(errs, fmt.Errorf("node %v - extension path must be followed by a branch", thisRef.Id()))
-	}
-	if handle, err := source.getViewAccess(&n.next); err == nil {
-		defer handle.Release()
-		extended := path
-		for i := 0; i < n.path.Length(); i++ {
-			extended = append(extended, n.path.Get(i))
-		}
-		if err := handle.Get().Check(source, &n.next, extended, ancestors); err != nil {
-			errs = append(errs, err)
-		}
-	} else {
-		errs = append(errs, err)
 	}
 	if !n.nextHashDirty && !n.nextIsEmbedded {
 		want, err := source.getHashFor(&n.next)
@@ -1506,16 +1606,12 @@ func (n *AccountNode) Freeze(manager NodeManager, this shared.WriteHandle[Node])
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
+func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
 	// Checked invariants:
 	//  - account information must not be empty
 	//  - the account is at a correct position in the trie
 	//  - state sub-trie is correct
 	//  - path length
-	if slices.Contains(ancestors, thisRef.Id()) {
-		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
-	}
-	ancestors = append(ancestors, thisRef.Id())
 	errs := []error{}
 
 	fullPath := AddressToNibblePath(n.address, source)
@@ -1525,17 +1621,6 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 
 	if n.info.IsEmpty() {
 		errs = append(errs, fmt.Errorf("node %v - account information must not be empty", thisRef.Id()))
-	}
-
-	if !n.storage.Id().IsEmpty() {
-		if node, err := source.getViewAccess(&n.storage); err == nil {
-			defer node.Release()
-			if err := node.Get().Check(source, &n.storage, make([]Nibble, 0, common.KeySize*2), ancestors); err != nil {
-				errs = append(errs, err)
-			}
-		} else {
-			errs = append(errs, err)
-		}
 	}
 
 	if source.getConfig().TrackSuffixLengthsInLeafNodes {
@@ -1742,14 +1827,11 @@ func (n *ValueNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
 	return nil
 }
 
-func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
+func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
 	// Checked invariants:
 	//  - value must not be empty
 	//  - values are in the right position of the trie
 	//  - the path length is correct (if enabled to be tracked)
-	if slices.Contains(ancestors, thisRef.Id()) {
-		return fmt.Errorf("node cycle detected: %v in %v", thisRef.Id(), ancestors)
-	}
 	errs := []error{}
 
 	fullPath := KeyToNibblePath(n.key, source)
