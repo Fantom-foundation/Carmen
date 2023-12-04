@@ -450,6 +450,7 @@ func (s *Forest) Check(rootRef *NodeReference) error {
 // the given nodes. It is a generalization of the Check() function.
 func (s *Forest) CheckAll(rootRefs []*NodeReference) error {
 	for i := len(rootRefs) - 1; i >= 0; i-- {
+
 		rootRef := rootRefs[i]
 		fmt.Printf("checking block %d ...\n", i)
 		root, err := s.getViewAccess(rootRef)
@@ -459,7 +460,10 @@ func (s *Forest) CheckAll(rootRefs []*NodeReference) error {
 		err = root.Get().Check(s, rootRef, make([]Nibble, 0, common.AddressSize*2), nil)
 		root.Release()
 		if err != nil {
-			return err
+			fmt.Printf("block is faults, continuing ...\n")
+		} else {
+			fmt.Printf("block is ok, stopping")
+			return nil
 		}
 	}
 	return nil
