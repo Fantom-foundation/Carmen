@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	mptIo "github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 
@@ -31,6 +32,8 @@ func doImport(context *cli.Context) error {
 		return fmt.Errorf("error creating output directory: %v", err)
 	}
 
+	start := time.Now()
+	logFromStart(start, "import started")
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -39,6 +42,9 @@ func doImport(context *cli.Context) error {
 	if in, err = gzip.NewReader(in); err != nil {
 		return err
 	}
+	defer func() {
+		logFromStart(start, "import done")
+	}()
 	return errors.Join(
 		mptIo.ImportLiveDb(dir, in),
 		file.Close(),
