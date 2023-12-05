@@ -4952,3 +4952,122 @@ func (m refTo) Matches(value any) bool {
 func (m refTo) String() string {
 	return fmt.Sprintf("reference to %v", m.id)
 }
+
+// ----------------------------------------------------------------------------
+//                            Enumeration Tests
+// ----------------------------------------------------------------------------
+
+// TODO: use compact Path instead of list of nibbles.
+
+func encodePrefix(dst []byte, prefix Path) {
+	length := prefix.Length()
+	for i := 0; i < length; i++ {
+		dst[i/2] |= byte(prefix.Get(i)) << (4 * (1 - (i % 2)))
+	}
+	dst[length/2] |= byte(8) << (4 * (1 - (length % 2)))
+}
+
+func enumerateNodeFragments(maxDepth int, accountSeen bool, prefix Path, consume func(NodeDesc)) {
+	if maxDepth <= 0 {
+		return
+	}
+
+	// Any branch may be empty.
+	consume(&Empty{})
+
+	// Leaf values may be accounts or values.
+	if accountSeen {
+		key := common.Key{}
+		value := common.Value{}
+		encodePrefix(key[:], prefix)
+		encodePrefix(value[:], prefix)
+		consume(&Value{key: key, value: value})
+	} else {
+		addr := common.Address{}
+		encodePrefix(addr[:], prefix)
+		balance := common.Balance{}
+		encodePrefix(balance[:], prefix)
+		enumerateNodeFragments(maxDepth-1, true, Path{}, func(desc NodeDesc) {
+			consume(&Account{
+				address: addr,
+				info:    AccountInfo{Balance: balance},
+				storage: desc,
+			})
+		})
+	}
+
+	if maxDepth <= 1 {
+		return
+	}
+
+	// Branches
+	enumerateBranchNodes(maxDepth, accountSeen, prefix, consume)
+
+	// Extension
+	path := []Nibble{1, 2, 3}
+	prefix = *prefix.Append(1).Append(2).Append(3)
+	enumerateBranchNodes(maxDepth-1, accountSeen, prefix, func(desc NodeDesc) {
+		consume(&Extension{
+			path: path,
+			next: desc,
+		})
+	})
+}
+
+func enumerateBranchNodes(maxDepth int, accountSeen bool, prefix Path, consume func(NodeDesc)) {
+	nestedPrefix1 := prefix
+	nestedPrefix1 = *nestedPrefix1.Append(2)
+	nestedPrefix2 := prefix
+	nestedPrefix2 = *nestedPrefix2.Append(5)
+	nestedPrefix3 := prefix
+	nestedPrefix3 = *nestedPrefix3.Append(0xB)
+
+	// Enumerate branches with 2 and 3 children (enough for all use cases).
+	enumerateNodeFragments(maxDepth-1, accountSeen, nestedPrefix1, func(desc NodeDesc) {
+		if _, ok := desc.(*Empty); ok {
+			return
+		}
+		child1 := desc
+		enumerateNodeFragments(maxDepth-1, accountSeen, nestedPrefix2, func(desc NodeDesc) {
+			if _, ok := desc.(*Empty); ok {
+				return
+			}
+			child2 := desc
+			consume(&Branch{children: Children{
+				2: child1,
+				5: child2,
+			}})
+			enumerateNodeFragments(maxDepth-1, accountSeen, nestedPrefix3, func(desc NodeDesc) {
+				if _, ok := desc.(*Empty); ok {
+					return
+				}
+				consume(&Branch{children: Children{
+					2:   child1,
+					5:   child2,
+					0xB: desc,
+				}})
+			})
+		})
+	})
+}
+
+func TestEnumerateNodeFragments_EnumeratedFragmentsAreValid(t *testing.T) {
+	counter := 0
+	enumerateNodeFragments(4, false, Path{}, func(desc NodeDesc) {
+		ctrl := gomock.NewController(t)
+		ctxt := newNodeContext(t, ctrl)
+		ref, node := ctxt.Build(desc)
+		if counter < 10 {
+			if err := CheckForest(ctxt, []*NodeReference{&ref}); err != nil {
+				handle := node.GetViewHandle()
+				handle.Get().Dump(ctxt, &ref, "")
+				handle.Release()
+				fmt.Printf("\n")
+				t.Fatalf("generated invalid node: %v", err)
+			}
+		}
+		counter++
+	})
+	fmt.Printf("Enumerated %d combinations\n", counter)
+	t.Fail()
+}
