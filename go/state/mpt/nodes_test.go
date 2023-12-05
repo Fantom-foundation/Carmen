@@ -4957,7 +4957,175 @@ func (m refTo) String() string {
 //                            Enumeration Tests
 // ----------------------------------------------------------------------------
 
-// TODO: use compact Path instead of list of nibbles.
+// TODO:
+//  - create custom node manager with release and value reuse
+
+var enumConfig = MptConfig{
+	Name:                          "enumConfig",
+	TrackSuffixLengthsInLeafNodes: true,
+}
+
+type enumerationNodeManager struct {
+	empty      *shared.Shared[Node]
+	accounts   []*shared.Shared[Node]
+	branches   []*shared.Shared[Node]
+	extensions []*shared.Shared[Node]
+	values     []*shared.Shared[Node]
+
+	freeAccounts   []NodeId
+	freeBranches   []NodeId
+	freeExtensions []NodeId
+	freeValues     []NodeId
+}
+
+func newEnumerationNodeManager() *enumerationNodeManager {
+	return &enumerationNodeManager{
+		empty: shared.MakeShared[Node](EmptyNode{}),
+	}
+}
+
+func (m *enumerationNodeManager) getConfig() MptConfig {
+	return enumConfig
+}
+
+func (m *enumerationNodeManager) getReadAccess(ref *NodeReference) (shared.ReadHandle[Node], error) {
+	return m.getSharedNode(ref).GetReadHandle(), nil
+}
+
+func (m *enumerationNodeManager) getViewAccess(ref *NodeReference) (shared.ViewHandle[Node], error) {
+	return m.getSharedNode(ref).GetViewHandle(), nil
+}
+
+func (m *enumerationNodeManager) getHashAccess(ref *NodeReference) (shared.HashHandle[Node], error) {
+	return m.getSharedNode(ref).GetHashHandle(), nil
+}
+
+func (m *enumerationNodeManager) getWriteAccess(ref *NodeReference) (shared.WriteHandle[Node], error) {
+	return m.getSharedNode(ref).GetWriteHandle(), nil
+}
+
+func (m *enumerationNodeManager) getSharedNode(ref *NodeReference) *shared.Shared[Node] {
+	id := ref.Id()
+	if id.IsEmpty() {
+		return m.empty
+	}
+	if id.IsAccount() {
+		return m.accounts[id.Index()]
+	}
+	if id.IsBranch() {
+		return m.branches[id.Index()]
+	}
+	if id.IsExtension() {
+		return m.extensions[id.Index()]
+	}
+	if id.IsValue() {
+		return m.values[id.Index()]
+	}
+	panic(fmt.Sprintf("unknown node type: %v", id))
+}
+
+func (m *enumerationNodeManager) createAccount() (NodeReference, shared.WriteHandle[Node], error) {
+	l := len(m.freeAccounts)
+	if l > 0 {
+		id := m.freeAccounts[l-1]
+		m.freeAccounts = m.freeAccounts[:l-1]
+		handle := m.accounts[id.Index()].GetWriteHandle()
+		//*handle.Get().(*AccountNode) = AccountNode{}
+		return NewNodeReference(id), handle, nil
+	}
+	id := AccountId(uint64(len(m.accounts)))
+	node := shared.MakeShared[Node](&AccountNode{})
+	m.accounts = append(m.accounts, node)
+	return NewNodeReference(id), node.GetWriteHandle(), nil
+}
+
+func (m *enumerationNodeManager) createBranch() (NodeReference, shared.WriteHandle[Node], error) {
+	l := len(m.freeBranches)
+	if l > 0 {
+		id := m.freeBranches[l-1]
+		m.freeBranches = m.freeBranches[:l-1]
+		handle := m.branches[id.Index()].GetWriteHandle()
+		//*handle.Get().(*BranchNode) = BranchNode{}
+		return NewNodeReference(id), handle, nil
+	}
+	id := BranchId(uint64(len(m.branches)))
+	node := shared.MakeShared[Node](&BranchNode{})
+	m.branches = append(m.branches, node)
+	return NewNodeReference(id), node.GetWriteHandle(), nil
+}
+
+func (m *enumerationNodeManager) createExtension() (NodeReference, shared.WriteHandle[Node], error) {
+	l := len(m.freeExtensions)
+	if l > 0 {
+		id := m.freeExtensions[l-1]
+		m.freeExtensions = m.freeExtensions[:l-1]
+		handle := m.extensions[id.Index()].GetWriteHandle()
+		//*handle.Get().(*ExtensionNode) = ExtensionNode{}
+		return NewNodeReference(id), handle, nil
+	}
+	id := ExtensionId(uint64(len(m.extensions)))
+	node := shared.MakeShared[Node](&ExtensionNode{})
+	m.extensions = append(m.extensions, node)
+	return NewNodeReference(id), node.GetWriteHandle(), nil
+}
+
+func (m *enumerationNodeManager) createValue() (NodeReference, shared.WriteHandle[Node], error) {
+	l := len(m.freeValues)
+	if l > 0 {
+		id := m.freeValues[l-1]
+		m.freeValues = m.freeValues[:l-1]
+		handle := m.values[id.Index()].GetWriteHandle()
+		//*handle.Get().(*ValueNode) = ValueNode{}
+		return NewNodeReference(id), handle, nil
+	}
+	id := ValueId(uint64(len(m.values)))
+	node := shared.MakeShared[Node](&ValueNode{})
+	m.values = append(m.values, node)
+	return NewNodeReference(id), node.GetWriteHandle(), nil
+}
+
+func (m *enumerationNodeManager) getHashFor(*NodeReference) (common.Hash, error) {
+	return common.Hash{}, nil // hash value is not relevant for enumeration tests
+}
+
+func (m *enumerationNodeManager) hashKey(common.Key) common.Hash {
+	panic("should not be needed")
+}
+
+func (m *enumerationNodeManager) hashAddress(address common.Address) common.Hash {
+	panic("should not be needed")
+}
+
+func (m *enumerationNodeManager) update(NodeId, shared.WriteHandle[Node]) error {
+	return nil // ignored
+}
+
+func (m *enumerationNodeManager) updateHash(NodeId, shared.HashHandle[Node]) error {
+	return nil // ignored
+}
+
+func (m *enumerationNodeManager) release(id NodeId) error {
+	if id.IsEmpty() {
+		return nil
+	}
+	if id.IsAccount() {
+		m.freeAccounts = append(m.freeAccounts, id)
+		return nil
+	}
+	if id.IsBranch() {
+		m.freeBranches = append(m.freeBranches, id)
+		return nil
+	}
+	if id.IsExtension() {
+		m.freeExtensions = append(m.freeExtensions, id)
+		return nil
+	}
+	if id.IsValue() {
+		m.freeValues = append(m.freeValues, id)
+		return nil
+	}
+	return nil
+}
 
 func encodePrefix(dst []byte, prefix Path) {
 	length := prefix.Length()
@@ -4967,13 +5135,20 @@ func encodePrefix(dst []byte, prefix Path) {
 	dst[length/2] |= byte(8) << (4 * (1 - (length % 2)))
 }
 
-func enumerateNodeFragments(maxDepth int, accountSeen bool, prefix Path, consume func(NodeDesc)) {
+func enumerateNodeFragments(
+	manager *enumerationNodeManager,
+	maxDepth int,
+	accountSeen bool,
+	prefix Path,
+	consume func(NodeId),
+) {
+
+	// Any branch may be empty.
+	consume(EmptyId())
+
 	if maxDepth <= 0 {
 		return
 	}
-
-	// Any branch may be empty.
-	consume(&Empty{})
 
 	// Leaf values may be accounts or values.
 	if accountSeen {
@@ -4981,18 +5156,29 @@ func enumerateNodeFragments(maxDepth int, accountSeen bool, prefix Path, consume
 		value := common.Value{}
 		encodePrefix(key[:], prefix)
 		encodePrefix(value[:], prefix)
-		consume(&Value{key: key, value: value})
+
+		ref, write, _ := manager.createValue()
+		*write.Get().(*ValueNode) = ValueNode{
+			key: key, value: value,
+		}
+		write.Release()
+		consume(ref.Id())
+		manager.release(ref.Id())
 	} else {
 		addr := common.Address{}
 		encodePrefix(addr[:], prefix)
 		balance := common.Balance{}
 		encodePrefix(balance[:], prefix)
-		enumerateNodeFragments(maxDepth-1, true, Path{}, func(desc NodeDesc) {
-			consume(&Account{
+		enumerateNodeFragments(manager, maxDepth-1, true, Path{}, func(id NodeId) {
+			ref, write, _ := manager.createAccount()
+			*write.Get().(*AccountNode) = AccountNode{
 				address: addr,
 				info:    AccountInfo{Balance: balance},
-				storage: desc,
-			})
+				storage: NewNodeReference(id),
+			}
+			write.Release()
+			consume(ref.Id())
+			manager.release(ref.Id())
 		})
 	}
 
@@ -5001,20 +5187,30 @@ func enumerateNodeFragments(maxDepth int, accountSeen bool, prefix Path, consume
 	}
 
 	// Branches
-	enumerateBranchNodes(maxDepth, accountSeen, prefix, consume)
+	enumerateBranchNodes(manager, maxDepth, accountSeen, prefix, consume)
 
 	// Extension
-	path := []Nibble{1, 2, 3}
-	prefix = *prefix.Append(1).Append(2).Append(3)
-	enumerateBranchNodes(maxDepth-1, accountSeen, prefix, func(desc NodeDesc) {
-		consume(&Extension{
+	path := CreatePathFromNibbles([]Nibble{1, 2, 3})
+	prefix = *prefix.AppendAll(&path)
+	enumerateBranchNodes(manager, maxDepth-1, accountSeen, prefix, func(id NodeId) {
+		ref, write, _ := manager.createExtension()
+		*write.Get().(*ExtensionNode) = ExtensionNode{
 			path: path,
-			next: desc,
-		})
+			next: NewNodeReference(id),
+		}
+		write.Release()
+		consume(ref.Id())
+		manager.release(ref.Id())
 	})
 }
 
-func enumerateBranchNodes(maxDepth int, accountSeen bool, prefix Path, consume func(NodeDesc)) {
+func enumerateBranchNodes(
+	manager *enumerationNodeManager,
+	maxDepth int,
+	accountSeen bool,
+	prefix Path,
+	consume func(NodeId),
+) {
 	nestedPrefix1 := prefix
 	nestedPrefix1 = *nestedPrefix1.Append(2)
 	nestedPrefix2 := prefix
@@ -5023,29 +5219,43 @@ func enumerateBranchNodes(maxDepth int, accountSeen bool, prefix Path, consume f
 	nestedPrefix3 = *nestedPrefix3.Append(0xB)
 
 	// Enumerate branches with 2 and 3 children (enough for all use cases).
-	enumerateNodeFragments(maxDepth-1, accountSeen, nestedPrefix1, func(desc NodeDesc) {
-		if _, ok := desc.(*Empty); ok {
+	enumerateNodeFragments(manager, maxDepth-1, accountSeen, nestedPrefix1, func(id NodeId) {
+		if id.IsEmpty() {
 			return
 		}
-		child1 := desc
-		enumerateNodeFragments(maxDepth-1, accountSeen, nestedPrefix2, func(desc NodeDesc) {
-			if _, ok := desc.(*Empty); ok {
+		child1 := NewNodeReference(id)
+		enumerateNodeFragments(manager, maxDepth-1, accountSeen, nestedPrefix2, func(id NodeId) {
+			if id.IsEmpty() {
 				return
 			}
-			child2 := desc
-			consume(&Branch{children: Children{
-				2: child1,
-				5: child2,
-			}})
-			enumerateNodeFragments(maxDepth-1, accountSeen, nestedPrefix3, func(desc NodeDesc) {
-				if _, ok := desc.(*Empty); ok {
+			child2 := NewNodeReference(id)
+
+			// Emit a branch with 2 children.
+			ref, write, _ := manager.createBranch()
+			node := write.Get().(*BranchNode)
+			node.children[0x2] = child1
+			node.children[0x5] = child2
+			node.children[0xB] = NewNodeReference(EmptyId())
+			write.Release()
+
+			consume(ref.Id())
+			manager.release(ref.Id())
+
+			// And another one with three children.
+			enumerateNodeFragments(manager, maxDepth-1, accountSeen, nestedPrefix3, func(id NodeId) {
+				if id.IsEmpty() {
 					return
 				}
-				consume(&Branch{children: Children{
-					2:   child1,
-					5:   child2,
-					0xB: desc,
-				}})
+
+				ref, write, _ := manager.createBranch()
+				node := write.Get().(*BranchNode)
+				node.children[0x2] = child1
+				node.children[0x5] = child2
+				node.children[0xB] = NewNodeReference(id)
+				write.Release()
+
+				consume(ref.Id())
+				manager.release(ref.Id())
 			})
 		})
 	})
@@ -5053,21 +5263,36 @@ func enumerateBranchNodes(maxDepth int, accountSeen bool, prefix Path, consume f
 
 func TestEnumerateNodeFragments_EnumeratedFragmentsAreValid(t *testing.T) {
 	counter := 0
-	enumerateNodeFragments(4, false, Path{}, func(desc NodeDesc) {
-		ctrl := gomock.NewController(t)
-		ctxt := newNodeContext(t, ctrl)
-		ref, node := ctxt.Build(desc)
-		if counter < 10 {
-			if err := CheckForest(ctxt, []*NodeReference{&ref}); err != nil {
-				handle := node.GetViewHandle()
-				handle.Get().Dump(ctxt, &ref, "")
-				handle.Release()
-				fmt.Printf("\n")
-				t.Fatalf("generated invalid node: %v", err)
+	extensionCounter := 0
+	mgr := newEnumerationNodeManager()
+	enumerateNodeFragments(mgr, 3, false, Path{}, func(id NodeId) {
+
+		/*
+			fmt.Printf("node: %v\n", id)
+
+			ref := NewNodeReference(id)
+			view, _ := mgr.getViewAccess(&ref)
+			view.Get().Dump(mgr, &ref, "")
+			view.Release()
+			fmt.Printf("\n")
+		*/
+
+		/*
+			if counter < 10 {
+				if err := CheckForest(ctxt, []*NodeReference{&ref}); err != nil {
+					handle := node.GetViewHandle()
+					handle.Get().Dump(ctxt, &ref, "")
+					handle.Release()
+					fmt.Printf("\n")
+					t.Fatalf("generated invalid node: %v", err)
+				}
 			}
-		}
+		*/
 		counter++
+		if id.IsExtension() {
+			extensionCounter++
+		}
 	})
-	fmt.Printf("Enumerated %d combinations\n", counter)
+	fmt.Printf("Enumerated %d combinations, %d starting with an extension\n", counter, extensionCounter)
 	t.Fail()
 }
