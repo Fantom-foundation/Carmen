@@ -2,7 +2,6 @@ package mpt
 
 import (
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -302,10 +301,11 @@ func loadRoots(filename string) ([]Root, error) {
 
 func loadRootsFrom(reader io.Reader) ([]Root, error) {
 	res := []Root{}
-	var id [8]byte
+	encoder := NodeIdEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
 	var hash common.Hash
 	for {
-		if _, err := io.ReadFull(reader, id[:]); err != nil {
+		if _, err := io.ReadFull(reader, buffer); err != nil {
 			if err == io.EOF {
 				return res, nil
 			}
@@ -316,7 +316,10 @@ func loadRootsFrom(reader io.Reader) ([]Root, error) {
 			return nil, fmt.Errorf("invalid root file format: %v", err)
 		}
 
-		id := NodeId(binary.BigEndian.Uint64(id[:]))
+		var id NodeId
+		if err := encoder.Load(buffer, &id); err != nil {
+			return nil, err
+		}
 		res = append(res, Root{NewNodeReference(id), hash})
 	}
 }
@@ -339,9 +342,12 @@ func StoreRoots(filename string, roots []Root) error {
 
 func storeRootsTo(writer io.Writer, roots []Root) error {
 	// Simple file format: [<node-id><state-hash>]*
-	var buffer [8]byte
+	encoder := NodeIdEncoder{}
+	buffer := make([]byte, encoder.GetEncodedSize())
 	for _, root := range roots {
-		binary.BigEndian.PutUint64(buffer[:], uint64(root.NodeRef.Id()))
+		if err := encoder.Store(buffer, &root.NodeRef.id); err != nil {
+			return err
+		}
 		if _, err := writer.Write(buffer[:]); err != nil {
 			return err
 		}
