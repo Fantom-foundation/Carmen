@@ -34,7 +34,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh "go mod tidy"
-                sh "make all"
+                sh "make -j aida-vm-sdb"
             }
         }
 
