@@ -94,6 +94,7 @@ pipeline {
             sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/"
             sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
             sh "rm -rf ${params.tmpDb}/state_db_carmen_go-file_${params.secondBlockHeight}/"
+            sh "rm -rf ${params.tmpDb}/genesis.dat"
         }
     }   
 }
