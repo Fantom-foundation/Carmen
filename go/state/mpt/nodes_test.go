@@ -3,6 +3,7 @@ package mpt
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -180,6 +181,13 @@ func TestEmptyNode_Visit(t *testing.T) {
 
 	if abort, err := handle.Get().Visit(ctxt, &ref, 6, visitor); abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (false,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestEmptyNode_ChecksDoNotProduceErrors(t *testing.T) {
+	empty := EmptyNode{}
+	if err := empty.Check(nil, nil, nil); err != nil {
+		t.Errorf("unexpected error from empty node check: %v", err)
 	}
 }
 
@@ -1111,6 +1119,43 @@ func TestBranchNode_VisitAbortByChild(t *testing.T) {
 
 	if abort, err := handle.Get().Visit(ctxt, &ref, 2, visitor); !abort || err != nil {
 		t.Errorf("unexpected result of visit, wanted (true,nil), got(%v,%v)", abort, err)
+	}
+}
+
+func TestBranchNode_CheckDetectsIssues(t *testing.T) {
+	tests := map[string]struct {
+		setup NodeDesc
+		ok    bool
+	}{
+		"no children":    {&Branch{}, false},
+		"only one child": {&Branch{children: Children{1: &Value{}}}, false},
+		"two children":   {&Branch{children: Children{1: &Value{}, 2: &Value{}}}, true},
+		"invalid hash": {&Branch{
+			children:    Children{1: &Value{}, 2: &Value{}},
+			childHashes: ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
+		}, false},
+		"dirty hashes are ignored": {&Branch{
+			children:    Children{1: &Value{}, 2: &Value{}},
+			childHashes: ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
+			dirty:       []int{1},
+		}, true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+			ref, node := ctxt.Build(test.setup)
+			handle := node.GetViewHandle()
+			defer handle.Release()
+
+			err := handle.Get().Check(ctxt, &ref, nil)
+			if test.ok && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Errorf("expected an error but check passed")
+			}
+		})
 	}
 }
 
@@ -2288,6 +2333,36 @@ func TestExtensionNode_VisitAbortByChild(t *testing.T) {
 	}
 }
 
+func TestExtensionNode_CheckDetectsIssues(t *testing.T) {
+	tests := map[string]struct {
+		setup NodeDesc
+		ok    bool
+	}{
+		"ok":                    {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}}, true},
+		"empty path":            {&Extension{next: &Branch{}}, false},
+		"next not a branch":     {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
+		"invalid hash":          {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
+		"dirty hash is ignored": {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, nextHashDirty: true}, true},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+			ref, node := ctxt.Build(test.setup)
+			handle := node.GetViewHandle()
+			defer handle.Release()
+
+			err := handle.Get().Check(ctxt, &ref, nil)
+			if test.ok && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Errorf("expected an error but check passed")
+			}
+		})
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Account Node
 // ----------------------------------------------------------------------------
@@ -3394,6 +3469,54 @@ func TestAccountNode_VisitAbortByChild(t *testing.T) {
 	}
 }
 
+func TestAccountNode_CheckDetectsIssues(t *testing.T) {
+	tests := map[string]struct {
+		path  []Nibble
+		setup NodeDesc
+		ok    bool
+	}{
+		"ok": {[]Nibble{1, 2, 3}, &Account{
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+		}, true},
+		"wrong branch": {[]Nibble{1, 2, 3}, &Account{
+			address:    common.Address{0x32, 0x10},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+		}, false},
+		"empty info": {[]Nibble{1, 2, 3}, &Account{
+			address:    common.Address{0x12, 0x34},
+			pathLength: 37,
+		}, false},
+		"wrong path length": {[]Nibble{1, 2, 3}, &Account{
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 36,
+		}, false},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			config := MptConfig{
+				TrackSuffixLengthsInLeafNodes: true,
+			}
+			ctxt := newNodeContextWithConfig(t, ctrl, config)
+			ref, node := ctxt.Build(test.setup)
+			handle := node.GetViewHandle()
+			defer handle.Release()
+
+			err := handle.Get().Check(ctxt, &ref, test.path)
+			if test.ok && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Errorf("expected an error but check passed")
+			}
+		})
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Value Node
 // ----------------------------------------------------------------------------
@@ -3933,6 +4056,147 @@ func TestValueNode_Visit(t *testing.T) {
 	}
 }
 
+func TestValueNode_CheckDetectsIssues(t *testing.T) {
+	tests := map[string]struct {
+		path  []Nibble
+		setup NodeDesc
+		ok    bool
+	}{
+		"ok": {[]Nibble{1, 2, 3}, &Value{
+			key:    common.Key{0x12, 0x34},
+			value:  common.Value{1},
+			length: 61,
+		}, true},
+		"wrong location": {[]Nibble{1, 2, 3}, &Value{
+			key:    common.Key{0x43, 0x21},
+			value:  common.Value{1},
+			length: 61,
+		}, false},
+		"zero value": {[]Nibble{1, 2, 3}, &Value{
+			key:    common.Key{0x12, 0x34},
+			value:  common.Value{},
+			length: 61,
+		}, false},
+		"wrong path length": {[]Nibble{1, 2, 3}, &Value{
+			key:    common.Key{0x12, 0x34},
+			value:  common.Value{1},
+			length: 37,
+		}, false},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			config := MptConfig{
+				TrackSuffixLengthsInLeafNodes: true,
+			}
+			ctxt := newNodeContextWithConfig(t, ctrl, config)
+			ref, node := ctxt.Build(test.setup)
+			handle := node.GetViewHandle()
+			defer handle.Release()
+
+			err := handle.Get().Check(ctxt, &ref, test.path)
+			if test.ok && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Errorf("expected an error but check passed")
+			}
+		})
+	}
+}
+
+// ----------------------------------------------------------------------------
+//                             CheckForest
+// ----------------------------------------------------------------------------
+
+func TestCheckForest_DetectsIssuesInTrees(t *testing.T) {
+	tests := map[string]struct {
+		tree NodeDesc
+		ok   bool
+	}{
+		"ok empty": {&Empty{}, true},
+		"ok nested": {&Branch{children: Children{
+			1: &Account{address: common.Address{0x12}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			4: &Account{address: common.Address{0x45}, info: AccountInfo{Nonce: common.Nonce{1}}},
+		}}, true},
+		"top level issue": {&Branch{children: Children{
+			// not enough children
+			1: &Account{address: common.Address{0x12}, info: AccountInfo{Nonce: common.Nonce{1}}},
+		}}, false},
+		"nested issue": {&Branch{children: Children{
+			1: &Account{address: common.Address{0x12}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			4: &Account{address: common.Address{0x45}, info: AccountInfo{}}, // empty info
+		}}, false},
+		"value node reachable without account": {&Branch{children: Children{
+			1: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			4: &Value{key: common.Key{0x45}, value: common.Value{2}},
+		}}, false},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+			ref, _ := ctxt.Build(test.tree)
+
+			err := CheckForest(ctxt, []*NodeReference{&ref})
+			if test.ok && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if !test.ok && err == nil {
+				t.Errorf("expected an error but check passed")
+			}
+		})
+	}
+}
+
+func TestCheckForest_AcceptsValidReUse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	ref1, node1 := ctxt.Build(&Branch{children: Children{
+		1: &Account{address: common.Address{0x12}, info: AccountInfo{Nonce: common.Nonce{1}}},
+	}})
+
+	ref2, node2 := ctxt.Build(&Branch{children: Children{
+		8: &Account{address: common.Address{0x82}, info: AccountInfo{Nonce: common.Nonce{1}}},
+	}})
+
+	// integrate shared mock node into both trees
+	node := NewMockNode(ctrl)
+	node.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()) // shared node is only checked once
+	refMock, _ := ctxt.Build(&Mock{node})
+
+	handle := node1.GetWriteHandle()
+	handle.Get().(*BranchNode).children[4] = refMock
+	handle.Release()
+
+	handle = node2.GetWriteHandle()
+	handle.Get().(*BranchNode).children[4] = refMock
+	handle.Release()
+
+	if err := CheckForest(ctxt, []*NodeReference{&ref1, &ref2}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCheckForest_DetectsInvalidReUse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	ref1, _ := ctxt.Build(&Branch{children: Children{
+		1: &Account{address: common.Address{0x12}, info: AccountInfo{Nonce: common.Nonce{1}}},
+		4: &Tag{"A", &Account{address: common.Address{0x45}, info: AccountInfo{Nonce: common.Nonce{1}}}},
+	}})
+
+	ref2, _ := ctxt.Get("A")
+
+	err := CheckForest(ctxt, []*NodeReference{&ref1, &ref2})
+	if err == nil || !strings.Contains(err.Error(), "invalid reuse") {
+		t.Errorf("expected an invalid reuse error but got: %v", err)
+	}
+}
+
 // ----------------------------------------------------------------------------
 //                               Encoders
 // ----------------------------------------------------------------------------
@@ -4228,12 +4492,14 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 }
 
 type Children map[Nibble]NodeDesc
+type ChildHashes map[Nibble]common.Hash
 
 type Branch struct {
-	children  Children
-	dirty     []int
-	frozen    []int
-	hashDirty bool
+	children    Children
+	childHashes ChildHashes
+	dirty       []int
+	frozen      []int
+	hashDirty   bool
 }
 
 func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -4242,6 +4508,9 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	for i, desc := range b.children {
 		id, _ := ctx.Build(desc)
 		res.children[i] = id
+	}
+	for i, hash := range b.childHashes {
+		res.hashes[i] = hash
 	}
 	for _, i := range b.dirty {
 		res.markChildHashDirty(byte(i))
@@ -4257,6 +4526,7 @@ type Extension struct {
 	path          []Nibble
 	next          NodeDesc
 	hashDirty     bool
+	nextHash      common.Hash
 	nextHashDirty bool
 }
 
@@ -4266,6 +4536,7 @@ func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
 	res.hashDirty = e.hashDirty
+	res.nextHash = e.nextHash
 	res.nextHashDirty = e.nextHashDirty
 	return ref, shared.MakeShared[Node](res)
 }
@@ -4446,9 +4717,10 @@ func (c *nodeContext) nextIndex() uint64 {
 }
 
 func (c *nodeContext) Check(t *testing.T, ref NodeReference) {
-	handle := c.tryGetNode(t, ref.Id())
-	defer handle.Release()
-	if err := handle.Get().Check(c, &ref, nil, nil); err != nil {
+	t.Helper()
+	if err := CheckForest(c, []*NodeReference{&ref}); err != nil {
+		handle := c.tryGetNode(t, ref.Id())
+		defer handle.Release()
 		handle.Get().Dump(c, &ref, "")
 		t.Fatalf("inconsistent node structure encountered:\n%v", err)
 	}

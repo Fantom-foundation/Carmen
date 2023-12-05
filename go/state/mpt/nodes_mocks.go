@@ -36,17 +36,17 @@ func (m *MockNode) EXPECT() *MockNodeMockRecorder {
 }
 
 // Check mocks base method.
-func (m *MockNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
+func (m *MockNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", source, thisRef, path, ancestors)
+	ret := m.ctrl.Call(m, "Check", source, thisRef, path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Check indicates an expected call of Check.
-func (mr *MockNodeMockRecorder) Check(source, thisRef, path, ancestors interface{}) *gomock.Call {
+func (mr *MockNodeMockRecorder) Check(source, thisRef, path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockNode)(nil).Check), source, thisRef, path, ancestors)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockNode)(nil).Check), source, thisRef, path)
 }
 
 // ClearStorage mocks base method.
@@ -649,17 +649,17 @@ func (m *MockleafNode) EXPECT() *MockleafNodeMockRecorder {
 }
 
 // Check mocks base method.
-func (m *MockleafNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble, ancestors []NodeId) error {
+func (m *MockleafNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", source, thisRef, path, ancestors)
+	ret := m.ctrl.Call(m, "Check", source, thisRef, path)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Check indicates an expected call of Check.
-func (mr *MockleafNodeMockRecorder) Check(source, thisRef, path, ancestors interface{}) *gomock.Call {
+func (mr *MockleafNodeMockRecorder) Check(source, thisRef, path interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockleafNode)(nil).Check), source, thisRef, path, ancestors)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockleafNode)(nil).Check), source, thisRef, path)
 }
 
 // ClearStorage mocks base method.

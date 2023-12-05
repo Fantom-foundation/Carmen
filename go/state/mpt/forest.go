@@ -439,16 +439,17 @@ func (s *Forest) Dump(rootRef *NodeReference) {
 }
 
 // Check verifies internal invariants of the Trie instance. If the trie is
-// self-consistent, nil is returned and the Trie is read to be accessed. If
+// self-consistent, nil is returned and the Trie is ready to be accessed. If
 // errors are detected, the Trie is to be considered in an invalid state and
 // the behavior of all other operations is undefined.
 func (s *Forest) Check(rootRef *NodeReference) error {
-	root, err := s.getViewAccess(rootRef)
-	if err != nil {
-		return err
-	}
-	defer root.Release()
-	return root.Get().Check(s, rootRef, make([]Nibble, 0, common.AddressSize*2), nil)
+	return s.CheckAll([]*NodeReference{rootRef})
+}
+
+// CheckAll verifies internal invariants of a set of Trie instances rooted by
+// the given nodes. It is a generalization of the Check() function.
+func (s *Forest) CheckAll(rootRefs []*NodeReference) error {
+	return CheckForest(s, rootRefs)
 }
 
 // -- NodeManager interface --
