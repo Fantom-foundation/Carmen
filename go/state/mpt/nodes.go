@@ -759,11 +759,10 @@ func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) 
 	return nil
 }
 
-func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
+func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble) error {
 	// Checked invariants:
-	//  - no loop in trie
 	//  - must have 2+ children
-	//  - child trees must be error free
+	//  - non-dirty hashes for child nodes are valid
 	numChildren := 0
 	errs := []error{}
 	for i, child := range n.children {
@@ -1192,11 +1191,10 @@ func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node
 	return handle.Get().Freeze(manager, handle)
 }
 
-func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, path []Nibble) error {
+func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble) error {
 	// Checked invariants:
 	//  - extension path have a length > 0
 	//  - extension can only be followed by a branch
-	//  - sub-trie is correct
 	//  - hash of sub-tree is either dirty or correct
 	errs := []error{}
 	if n.path.Length() <= 0 {
@@ -1610,7 +1608,6 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 	// Checked invariants:
 	//  - account information must not be empty
 	//  - the account is at a correct position in the trie
-	//  - state sub-trie is correct
 	//  - path length
 	errs := []error{}
 
