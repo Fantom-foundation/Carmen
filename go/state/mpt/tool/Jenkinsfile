@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent {label 'short'}
 
     parameters {
         string(name: 'tmpDb', defaultValue: '/var/opera/Aida/dbtmpjenkins', description: 'Temporary directory to store the state DB.')
