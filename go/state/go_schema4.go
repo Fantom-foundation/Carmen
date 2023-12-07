@@ -3,6 +3,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
@@ -30,7 +31,7 @@ func newS4State(params Parameters, state *mpt.MptState) (State, error) {
 }
 
 func newGoMemoryS4State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoMemoryState(params.Directory, mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
+	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +39,7 @@ func newGoMemoryS4State(params Parameters) (State, error) {
 }
 
 func newGoFileS4State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoFileState(params.Directory, mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
+	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return nil, err
 	}

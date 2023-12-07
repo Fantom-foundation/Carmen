@@ -150,6 +150,10 @@ func NewState(params Parameters) (State, error) {
 // newGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
 func newGoMemoryState(params Parameters) (State, error) {
+	_, err := getLiveDbPath(params)
+	if err != nil {
+		return nil, err
+	}
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -264,6 +268,10 @@ func newGoMemoryState(params Parameters) (State, error) {
 
 // newGoFileState creates File based Index and Store implementations
 func newGoFileState(params Parameters) (State, error) {
+	path, err := getLiveDbPath(params)
+	if err != nil {
+		return nil, err
+	}
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -274,7 +282,7 @@ func newGoFileState(params Parameters) (State, error) {
 		return newGoFileS5State(params)
 	}
 
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
 	}
@@ -441,6 +449,10 @@ func newGoFileState(params Parameters) (State, error) {
 
 // newGoCachedFileState creates File based Index and Store implementations
 func newGoCachedFileState(params Parameters) (State, error) {
+	path, err := getLiveDbPath(params)
+	if err != nil {
+		return nil, err
+	}
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -451,7 +463,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 		return newGoFileS5State(params)
 	}
 
-	indexPath, storePath, err := createSubDirs(params.Directory)
+	indexPath, storePath, err := createSubDirs(path)
 	if err != nil {
 		return nil, err
 	}
@@ -617,7 +629,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	db, err := common.OpenLevelDb(params.Directory, nil)
+	db, err := common.OpenLevelDb(params.Directory+string(filepath.Separator)+"live", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -746,7 +758,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	db, err := common.OpenLevelDb(params.Directory, nil)
+	db, err := common.OpenLevelDb(params.Directory+string(filepath.Separator)+"live", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -892,20 +904,24 @@ func cleanUpByClosing(db io.Closer) func() {
 	}
 }
 
+func getLiveDbPath(params Parameters) (string, error) {
+	path := filepath.Join(params.Directory, "live")
+	return path, os.MkdirAll(path, 0700)
+}
+
+func getArchivePath(params Parameters) (string, error) {
+	path := filepath.Join(params.Directory, "archive")
+	return path, os.MkdirAll(path, 0700)
+}
+
 func openArchive(params Parameters) (archive archive.Archive, cleanup func(), err error) {
-
-	getArchivePath := func() (string, error) {
-		path := params.Directory + string(filepath.Separator) + "archive"
-		return path, os.MkdirAll(path, 0700)
-	}
-
 	switch params.Archive {
 
 	case NoArchive:
 		return nil, nil, nil
 
 	case LevelDbArchive:
-		path, err := getArchivePath()
+		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -918,15 +934,15 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		return arch, cleanup, err
 
 	case SqliteArchive:
-		path, err := getArchivePath()
+		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := sqlite.NewArchive(path + string(filepath.Separator) + "archive.sqlite")
+		arch, err := sqlite.NewArchive(filepath.Join(path, "archive.sqlite"))
 		return arch, nil, err
 
 	case S4Archive:
-		path, err := getArchivePath()
+		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -934,7 +950,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		return arch, nil, err
 
 	case S5Archive:
-		path, err := getArchivePath()
+		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
 		}

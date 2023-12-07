@@ -53,19 +53,19 @@ pipeline {
 
         stage('Verify sync DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/"
+                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live"
             }
         }
 
         stage('Export DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool export ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/ ${params.tmpDb}/genesis.dat"
+                sh "cd carmen/go && go run ./state/mpt/tool export ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live ${params.tmpDb}/genesis.dat"
             }
         }
 
         stage('Import DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool import ${params.tmpDb}/genesis.dat ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
+                sh "cd carmen/go && go run ./state/mpt/tool import ${params.tmpDb}/genesis.dat ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
             }
         }
 
@@ -85,7 +85,7 @@ pipeline {
 
         stage('Re-verify DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.secondBlockHeight}/"
+                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.secondBlockHeight}/live"
             }
         }               
     }

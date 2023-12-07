@@ -54,6 +54,9 @@ func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirely retained in memory.
 func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
 	trie, err := OpenInMemoryLiveTrie(directory, config, cacheCapacity)
 	if err != nil {
 		return nil, err
@@ -62,6 +65,9 @@ func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*
 }
 
 func OpenGoFileState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, err
+	}
 	trie, err := OpenFileLiveTrie(directory, config, cacheCapacity)
 	if err != nil {
 		return nil, err
