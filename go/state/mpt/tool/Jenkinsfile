@@ -71,7 +71,7 @@ pipeline {
 
         stage('Verify recovered DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
+                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
             }
         }
 
