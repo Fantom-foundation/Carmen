@@ -127,7 +127,7 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 		}
 		// Fetch the owner and check the tag.
 		owner := &c.owners[pos]
-		res := owner.node
+		res := owner.Node()
 		// Check that the tag is still correct and the fetched result is valid.
 		if owner.tag.Load() == tag {
 			return res, true
@@ -154,7 +154,7 @@ func (c *nodeCache) GetOrSet(
 		c.mutex.Unlock()
 		atomic.StoreUint32(&ref.pos, uint32(pos))
 		atomic.StoreUint64(&ref.tag, c.owners[pos].tag.Load())
-		return c.owners[pos].node, true, NodeId(0), nil, false
+		return c.owners[pos].Node(), true, NodeId(0), nil, false
 	}
 
 	// If not present, the capacity needs to be checked.
@@ -165,12 +165,12 @@ func (c *nodeCache) GetOrSet(
 		pos = c.tail
 
 		target = &c.owners[pos]
-		delete(c.index, target.id)
+		delete(c.index, target.Id())
 		c.tail = target.prev
 
 		// remember the evicted node
-		evictedId = target.id
-		evictedNode = target.node
+		evictedId = target.Id()
+		evictedNode = target.Node()
 		evicted = true
 
 	} else {
@@ -182,8 +182,8 @@ func (c *nodeCache) GetOrSet(
 	// update the owner to own the new ID and node
 	c.tagCounter++
 	target.tag.Store(c.tagCounter)
-	target.id = ref.Id()
-	target.node = node
+	target.id.Store(uint64(ref.Id()))
+	target.node.Store(node)
 
 	// Move new owner to head of the LRU list.
 	target.next = c.head
@@ -243,10 +243,10 @@ func (c *nodeCache) GetMemoryFootprint() *common.MemoryFootprint {
 	size := uintptr(0)
 	for i := 0; i < len(c.owners); i++ {
 		cur := &c.owners[i]
-		if cur.node == nil {
+		if cur.Node() == nil {
 			continue
 		}
-		id := cur.id
+		id := cur.Id()
 		if id.IsEmpty() {
 			size += emptySize
 		} else if id.IsBranch() {
@@ -269,10 +269,10 @@ func (c *nodeCache) getIdsInReverseEvictionOrder() []NodeId {
 	defer c.mutex.Unlock()
 	res := make([]NodeId, 0, len(c.owners))
 	for cur := c.head; cur != c.tail; cur = c.owners[cur].next {
-		res = append(res, c.owners[cur].id)
+		res = append(res, c.owners[cur].Id())
 	}
 	if c.owners[c.tail].tag.Load() > 0 {
-		res = append(res, c.owners[c.tail].id)
+		res = append(res, c.owners[c.tail].Id())
 	}
 	return res
 }
@@ -281,11 +281,19 @@ func (c *nodeCache) getIdsInReverseEvictionOrder() []NodeId {
 // - provide synchronized access to an owned node
 // - be an element of a LRU list to manage eviction order
 type nodeOwner struct {
-	tag  atomic.Uint64        // a tag vor versioning the owned node
-	id   NodeId               // the ID of the owned node
-	node *shared.Shared[Node] // the owned node
-	prev ownerPosition        // predecessor in the LRU list
-	next ownerPosition        // successor in the LRU list
+	tag  atomic.Uint64                       // a tag vor versioning the owned node
+	id   atomic.Uint64                       // the ID of the owned node (protected by seq lock, but atomic for race detection check)
+	node atomic.Pointer[shared.Shared[Node]] // the owned node (protected by seq lock, but atomic for race detection check)
+	prev ownerPosition                       // predecessor in the LRU list
+	next ownerPosition                       // successor in the LRU list
+}
+
+func (o *nodeOwner) Id() NodeId {
+	return NodeId(o.id.Load())
+}
+
+func (o *nodeOwner) Node() *shared.Shared[Node] {
+	return o.node.Load()
 }
 
 type ownerPosition uint32

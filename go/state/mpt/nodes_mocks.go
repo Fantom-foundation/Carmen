@@ -597,6 +597,18 @@ func (mr *MockNodeManagerMockRecorder) release(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "release", reflect.TypeOf((*MockNodeManager)(nil).release), arg0)
 }
 
+// releaseTrieAsynchronous mocks base method.
+func (m *MockNodeManager) releaseTrieAsynchronous(arg0 NodeReference) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "releaseTrieAsynchronous", arg0)
+}
+
+// releaseTrieAsynchronous indicates an expected call of releaseTrieAsynchronous.
+func (mr *MockNodeManagerMockRecorder) releaseTrieAsynchronous(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "releaseTrieAsynchronous", reflect.TypeOf((*MockNodeManager)(nil).releaseTrieAsynchronous), arg0)
+}
+
 // update mocks base method.
 func (m *MockNodeManager) update(arg0 NodeId, arg1 shared.WriteHandle[Node]) error {
 	m.ctrl.T.Helper()

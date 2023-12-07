@@ -4,7 +4,9 @@ import (
 	"math/rand"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -435,6 +437,114 @@ func getTestKeys(number int) []common.Key {
 		res[i], res[j] = res[j], res[i]
 	})
 	return res
+}
+
+func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			//t.Parallel()
+			const N = 50000
+
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			if err != nil {
+				t.Fatalf("failed to open trie: %v", err)
+			}
+
+			// Create a single account with a large storage.
+			addr := common.Address{1, 2, 3}
+			if err := trie.SetAccountInfo(addr, AccountInfo{Nonce: common.Nonce{1}}); err != nil {
+				t.Fatalf("failed to create account: %v", err)
+			}
+			for i := 0; i < N; i++ {
+				if err := trie.SetValue(addr, common.Key{byte(i), byte(i >> 8), byte(i >> 16)}, common.Value{1}); err != nil {
+					t.Fatalf("failed to insert value: %v", err)
+				}
+				if i%100 == 0 {
+					if _, _, err := trie.UpdateHashes(); err != nil {
+						t.Fatalf("failed to update hashes: %v", err)
+					}
+				}
+			}
+
+			if _, _, err := trie.UpdateHashes(); err != nil {
+				t.Fatalf("failed to update hashes: %v", err)
+			}
+
+			// There should be N value nodes now.
+			ids, err := trie.forest.values.GetIds()
+			if err != nil {
+				t.Fatalf("failed to get list of value IDs: %v", err)
+			}
+			if want, got := N, getSize(ids); want != got {
+				t.Errorf("unexpected number of values, wanted %d, got %d", want, got)
+			}
+
+			// Deleting the account storage should be fast (not blocking until the entire storage tree is released).
+			start := time.Now()
+			if err := trie.ClearStorage(addr); err != nil {
+				t.Errorf("failed to clear storage: %v", err)
+			}
+			if duration, limit := time.Since(start), time.Millisecond; duration > limit {
+				t.Errorf("delete took too long: %v, limit %v", duration, limit)
+			}
+
+			if _, _, err := trie.UpdateHashes(); err != nil {
+				t.Fatalf("failed to update hashes: %v", err)
+			}
+
+			if err := trie.Flush(); err != nil {
+				t.Fatalf("failed to flush trie: %v", err)
+			}
+
+			// check the number of stored nodes to make sure everything but the account got released
+			ids, err = trie.forest.accounts.GetIds()
+			if err != nil {
+				t.Fatalf("failed to get list of account IDs: %v", err)
+			}
+			if want, got := 1, getSize(ids); want != got {
+				t.Errorf("unexpected number of accounts, wanted %d, got %d", want, got)
+			}
+
+			ids, err = trie.forest.branches.GetIds()
+			if err != nil {
+				t.Fatalf("failed to get list of branch IDs: %v", err)
+			}
+			if want, got := 0, getSize(ids); want != got {
+				t.Errorf("unexpected number of branches, wanted %d, got %d", want, got)
+			}
+
+			ids, err = trie.forest.extensions.GetIds()
+			if err != nil {
+				t.Fatalf("failed to get list of extension IDs: %v", err)
+			}
+			if want, got := 0, getSize(ids); want != got {
+				t.Errorf("unexpected number of extensions, wanted %d, got %d", want, got)
+			}
+
+			ids, err = trie.forest.values.GetIds()
+			if err != nil {
+				t.Fatalf("failed to get list of value IDs: %v", err)
+			}
+			if want, got := 0, getSize(ids); want != got {
+				t.Errorf("unexpected number of values, wanted %d, got %d", want, got)
+			}
+
+			if err := trie.Close(); err != nil {
+				t.Fatalf("failed to close trie: %v", err)
+			}
+		})
+	}
+}
+
+func getSize(set stock.IndexSet[uint64]) int {
+	counter := 0
+	for i := set.GetLowerBound(); i < set.GetUpperBound(); i++ {
+		if set.Contains(i) {
+			counter++
+		}
+	}
+	return counter
 }
 
 func TestLiveTrie_VerificationOfEmptyDirectoryPasses(t *testing.T) {

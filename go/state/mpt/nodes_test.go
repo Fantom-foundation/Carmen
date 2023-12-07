@@ -2501,10 +2501,16 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{}
 
-	ref, node := ctxt.Build(&Account{address: addr, info: info1})
+	ref, node := ctxt.Build(&Account{
+		address: addr,
+		info:    info1,
+		storage: &Tag{"S", &Value{}},
+	})
 	after, _ := ctxt.Build(Empty{})
 
+	id, _ := ctxt.Get("S")
 	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().releaseTrieAsynchronous(RefTo(id.Id()))
 
 	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); !newRoot.Id().IsEmpty() || !changed || err != nil {
@@ -3321,7 +3327,7 @@ func TestAccountNode_ClearStorage(t *testing.T) {
 	})
 
 	storage, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(storage.Id())
+	ctxt.EXPECT().releaseTrieAsynchronous(RefTo(storage.Id()))
 
 	handle := node.GetWriteHandle()
 	path := keyToNibbles(key)

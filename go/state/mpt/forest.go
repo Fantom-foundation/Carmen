@@ -95,6 +95,12 @@ type Forest struct {
 
 	// A buffer for asynchronously writing nodes to files.
 	writeBuffer WriteBuffer
+
+	// Utilities to manage a background worker releasing nodes.
+	releaseQueue chan<- NodeId   // send EmptyId to trigger sync signal
+	releaseSync  <-chan struct{} // signaled whenever the release worker reaches a sync point
+	releaseError <-chan error    // errors detected by the release worker
+	releaseDone  <-chan struct{} // closed when the release worker is done
 }
 
 func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -236,6 +242,11 @@ func makeForest(
 	values stock.Stock[uint64, ValueNode],
 	forestConfig ForestConfig,
 ) (*Forest, error) {
+	releaseQueue := make(chan NodeId, 1<<16) // NodeIds are small and a large buffer increases resilience.
+	releaseSync := make(chan struct{})
+	releaseError := make(chan error, 1)
+	releaseDone := make(chan struct{})
+
 	res := &Forest{
 		config:        mptConfig,
 		branches:      synced.Sync(branches),
@@ -248,7 +259,41 @@ func makeForest(
 		hasher:        mptConfig.Hashing.createHasher(),
 		keyHasher:     NewKeyHasher(),
 		addressHasher: NewAddressHasher(),
+		releaseQueue:  releaseQueue,
+		releaseSync:   releaseSync,
+		releaseError:  releaseError,
+		releaseDone:   releaseDone,
 	}
+
+	// Run a background worker releasing entire tries of nodes on demand.
+	go func() {
+		defer close(releaseDone)
+		defer close(releaseError)
+		defer close(releaseSync)
+		for id := range releaseQueue {
+			if id.IsEmpty() {
+				releaseSync <- struct{}{}
+			} else {
+				ref := NewNodeReference(id)
+				handle, err := res.getWriteAccess(&ref)
+				if err != nil {
+					releaseError <- err
+					return
+				}
+				err = handle.Get().Release(res, &ref, handle)
+				handle.Release()
+				if err != nil {
+					releaseError <- err
+					return
+				}
+				if err = res.release(id); err != nil {
+					releaseError <- err
+					return
+				}
+			}
+		}
+	}()
+
 	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, 1024)
 	return res, nil
 }
@@ -366,6 +411,13 @@ func (f *Forest) Freeze(ref *NodeReference) error {
 }
 
 func (s *Forest) Flush() error {
+	// Wait for releaser to finish its current tasks.
+	s.releaseQueue <- EmptyId() // signals a sync request
+	<-s.releaseSync
+
+	// Consume potential release errors.
+	errs := []error{s.collectReleaseWorkerErrors()}
+
 	// Get snapshot of set of dirty Node IDs.
 	s.dirtyMutex.Lock()
 	ids := make([]NodeId, 0, len(s.dirty))
@@ -377,7 +429,6 @@ func (s *Forest) Flush() error {
 
 	// Flush dirty keys in order (to avoid excessive seeking).
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	var errs = []error{}
 	for _, id := range ids {
 		ref := NewNodeReference(id)
 		node, present := s.nodeCache.Get(&ref)
@@ -404,14 +455,43 @@ func (s *Forest) Flush() error {
 }
 
 func (s *Forest) Close() error {
+	var errs []error
+	errs = append(errs, s.Flush())
+
+	// shut down release worker
+	close(s.releaseQueue)
+	<-s.releaseDone
+
+	// Consume potential release errors.
+	errs = append(errs, s.collectReleaseWorkerErrors())
+
 	return errors.Join(
-		s.Flush(),
+		errors.Join(errs...),
 		s.writeBuffer.Close(),
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
 		s.values.Close(),
 	)
+}
+
+func (s *Forest) collectReleaseWorkerErrors() error {
+	var errs []error
+loop:
+	for {
+		select {
+		case err, open := <-s.releaseError:
+			if !open {
+				break loop
+			}
+			if err != nil {
+				errs = append(errs, err)
+			}
+		default:
+			break loop
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
@@ -795,6 +875,13 @@ func (s *Forest) release(id NodeId) error {
 		return s.values.Delete(id.Index())
 	}
 	return fmt.Errorf("unable to release node %v", id)
+}
+
+func (s *Forest) releaseTrieAsynchronous(ref NodeReference) {
+	id := ref.Id()
+	if !id.IsEmpty() { // empty Id is used for signalling sync requests
+		s.releaseQueue <- id
+	}
 }
 
 func getEncoder(config MptConfig) (
