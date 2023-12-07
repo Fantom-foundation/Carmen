@@ -46,7 +46,7 @@ func TestStateConfigs_AllSetupsCreateDataInCorrectDirectories(t *testing.T) {
 
 				content := getFilesIn(t, dir)
 				if len(content) > 0 {
-					t.Errorf("not all data is stored in the live and archive directory, directory contains: %v", content)
+					t.Errorf("some data stored outside the live and archive directories, the root directory contains: %v", content)
 				}
 			})
 		}
