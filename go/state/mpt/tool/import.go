@@ -28,7 +28,7 @@ func doImport(context *cli.Context) error {
 	src := context.Args().Get(0)
 	dir := context.Args().Get(1)
 
-	if err := os.Mkdir(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("error creating output directory: %v", err)
 	}
 
