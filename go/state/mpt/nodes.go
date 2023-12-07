@@ -224,6 +224,7 @@ type NodeManager interface {
 	updateHash(NodeId, shared.HashHandle[Node]) error
 
 	release(NodeId) error
+	releaseTrieAsynchronous(NodeReference)
 }
 
 // ----------------------------------------------------------------------------
@@ -874,7 +875,7 @@ type ExtensionNode struct {
 	next           NodeReference
 	nextHash       common.Hash
 	nextHashDirty  bool
-	nextIsEmbedded bool // TODO: include this in encoding; also for the branch node
+	nextIsEmbedded bool
 	frozen         bool
 	hash           common.Hash // the hash of this node (may be dirty)
 	hashDirty      bool        // indicating whether this node's hash is dirty
@@ -1309,15 +1310,8 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 				return NewNodeReference(EmptyId()), false, nil
 			}
 			// Recursively release the entire state DB.
-			// TODO: consider performing this asynchronously.
-			root, err := manager.getWriteAccess(&n.storage)
-			if err != nil {
-				return NodeReference{}, false, err
-			}
-			defer root.Release()
-			err = root.Get().Release(manager, &n.storage, root)
-			if err != nil {
-				return NodeReference{}, false, err
+			if !n.storage.Id().IsEmpty() {
+				manager.releaseTrieAsynchronous(n.storage)
 			}
 			// Release this account node and remove it from the trie.
 			manager.release(thisRef.Id())
@@ -1520,13 +1514,10 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 		return newRef, false, nil
 	}
 
-	rootHandle, err := manager.getWriteAccess(&n.storage)
-	if err != nil {
-		return *thisRef, false, err
+	if !n.storage.Id().IsEmpty() {
+		manager.releaseTrieAsynchronous(n.storage)
 	}
-	defer rootHandle.Release()
 
-	err = rootHandle.Get().Release(manager, &n.storage, rootHandle)
 	n.storage = NewNodeReference(EmptyId())
 	n.storageHashDirty = true
 	n.hashDirty = true

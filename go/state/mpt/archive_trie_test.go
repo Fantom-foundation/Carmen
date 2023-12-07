@@ -126,14 +126,12 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open live trie: %v", err)
 			}
-			defer live.Close()
 
 			archiveDir := t.TempDir()
 			archive, err := OpenArchiveTrie(archiveDir, config, 1024)
 			if err != nil {
 				t.Fatalf("failed to open empty archive: %v", err)
 			}
-			defer archive.Close()
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}

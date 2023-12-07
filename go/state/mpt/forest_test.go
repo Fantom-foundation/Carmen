@@ -378,7 +378,6 @@ func TestForest_ConcurrentReadsAreRaceFree(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
-					defer forest.Close()
 
 					// Fill in some data (sequentially).
 					root := NewNodeReference(EmptyId())

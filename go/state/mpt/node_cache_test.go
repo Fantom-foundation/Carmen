@@ -229,13 +229,13 @@ func getForwardLruList(c *nodeCache) ([]NodeId, error) {
 	seen := map[ownerPosition]struct{}{}
 	for cur := c.head; cur != c.tail; cur = c.owners[cur].next {
 		if _, contains := seen[cur]; contains {
-			return nil, fmt.Errorf("detected loop in LRU list after %v followed by %v", res, c.owners[cur].id)
+			return nil, fmt.Errorf("detected loop in LRU list after %v followed by %v", res, c.owners[cur].Id())
 		}
 		seen[cur] = struct{}{}
-		res = append(res, c.owners[cur].id)
+		res = append(res, c.owners[cur].Id())
 	}
 	if c.owners[c.tail].tag.Load() > 0 {
-		res = append(res, c.owners[c.tail].id)
+		res = append(res, c.owners[c.tail].Id())
 	}
 	return res, nil
 }
@@ -245,13 +245,13 @@ func getBackwardLruList(c *nodeCache) ([]NodeId, error) {
 	seen := map[ownerPosition]struct{}{}
 	for cur := c.tail; cur != c.head; cur = c.owners[cur].prev {
 		if _, contains := seen[cur]; contains {
-			return nil, fmt.Errorf("detected loop in LRU list after %v followed by %v", res, c.owners[cur].id)
+			return nil, fmt.Errorf("detected loop in LRU list after %v followed by %v", res, c.owners[cur].Id())
 		}
 		seen[cur] = struct{}{}
-		res = append(res, c.owners[cur].id)
+		res = append(res, c.owners[cur].Id())
 	}
 	if c.owners[c.head].tag.Load() > 0 {
-		res = append(res, c.owners[c.head].id)
+		res = append(res, c.owners[c.head].Id())
 	}
 	return res, nil
 }
