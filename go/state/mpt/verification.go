@@ -9,6 +9,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
+	"github.com/pbnjay/memory"
 	"sort"
 )
 
@@ -328,7 +329,7 @@ func verifyHashesStoredWithNodes[N any](
 	collectChildrenIds func(*N, []NodeId) []NodeId,
 ) error {
 	// Load nodes of current type from disk
-	const batchSize = 1 << 31 // -> 2G * 32bytes hash = 64GB memory
+	var batchSize = uint64(float64(memory.TotalMemory()) * 0.8 / 32) // 80% of memory, 32byte hash size
 
 	// Check hashes of roots.
 	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
@@ -362,8 +363,8 @@ func verifyHashesStoredWithNodes[N any](
 		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d)...", name, batchNum))
-		refIds := make([]NodeId, 0, 1<<25)
-		for len(refIds) < batchSize && upperBound < ids.GetUpperBound() {
+		refIds := make([]NodeId, 0, batchSize)
+		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
 				continue
@@ -442,7 +443,7 @@ func verifyHashesStoredWithParents[N any](
 	hash func(*N) (common.Hash, error),
 	isNodeType func(NodeId) bool,
 ) error {
-	const batchSize = 1 << 31 // -> 2G * 32bytes hash = 64GB memory
+	var batchSize = uint64(float64(memory.TotalMemory()) * 0.8 / 32) // 80% of memory, 32byte hash size
 	// Load nodes of current type from disk
 	for batch := ids.GetLowerBound(); batch < ids.GetUpperBound(); batch += batchSize {
 		lowerBound := batch
