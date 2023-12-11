@@ -11,7 +11,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"github.com/pbnjay/memory"
 	"sort"
-	"sync"
 )
 
 // VerificationObserver is a listener interface for tracking the progress of the verification
@@ -323,13 +322,6 @@ func getHashListBatchSize() uint64 {
 	return uint64(float64(memory.TotalMemory()) * 0.8 / 32)
 }
 
-var nodeIdListPool = sync.Pool{
-	New: func() any {
-		arr := make([]NodeId, 0, getHashListBatchSize())
-		return &arr
-	},
-}
-
 func verifyHashesStoredWithNodes[N any](
 	name string,
 	source *verificationNodeSource,
@@ -348,14 +340,12 @@ func verifyHashesStoredWithNodes[N any](
 
 	// Check hashes of roots.
 	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-	rootIdsPtr := nodeIdListPool.Get().(*[]NodeId)
-	rootIds := (*rootIdsPtr)[0:0]
+	refIds := make([]NodeId, 0, batchSize)
 	for _, root := range roots {
-		rootIds = append(rootIds, root.NodeRef.id)
+		refIds = append(refIds, root.NodeRef.id)
 	}
-	rootIds = sortUnique(rootIds)
-	hashes, _, err := loadNodeHashes(rootIds, source, isEmbedded, hashOfEmptyNode)
-	nodeIdListPool.Put(rootIdsPtr)
+	refIds = sortUnique(refIds)
+	hashes, _, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
 	if err != nil {
 		return err
 	}
@@ -380,8 +370,7 @@ func verifyHashesStoredWithNodes[N any](
 		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
-		refIdsPtr := nodeIdListPool.Get().(*[]NodeId)
-		refIds := (*refIdsPtr)[0:0]
+		refIds = refIds[0:0] // re-use the same pool every-time
 		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
@@ -400,7 +389,6 @@ func verifyHashesStoredWithNodes[N any](
 
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", len(refIds), name, batchNum, batchSize))
 		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
-		nodeIdListPool.Put(refIdsPtr)
 		if err != nil {
 			return err
 		}
