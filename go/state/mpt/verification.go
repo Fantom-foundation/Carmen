@@ -274,25 +274,25 @@ func loadNodeHashes(
 		if id.IsBranch() {
 			n, err := source.branches.Get(id.Index())
 			if err != nil {
-				return hashes, embedded, err
+				return nil, nil, err
 			}
 			node = &n
 		} else if id.IsValue() {
 			n, err := source.values.Get(id.Index())
 			if err != nil {
-				return hashes, embedded, err
+				return nil, nil, err
 			}
 			node = &n
 		} else if id.IsAccount() {
 			n, err := source.accounts.Get(id.Index())
 			if err != nil {
-				return hashes, embedded, err
+				return nil, nil, err
 			}
 			node = &n
 		} else if id.IsExtension() {
 			n, err := source.extensions.Get(id.Index())
 			if err != nil {
-				return hashes, embedded, err
+				return nil, nil, err
 			}
 			node = &n
 		}
@@ -304,7 +304,7 @@ func loadNodeHashes(
 			}
 			hashes[id] = hash
 			if res, err := isEmbedded(node); err != nil {
-				return hashes, embedded, err
+				return nil, nil, err
 			} else if res {
 				embedded[id] = true
 			}
