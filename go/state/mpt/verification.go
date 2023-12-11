@@ -385,7 +385,10 @@ func verifyHashesStoredWithNodes[N any](
 		}
 
 		// Second step - sort and uniq IDs and load hashes from the disk
+		sizeBefore := len(refIds)
 		refIds = sortUnique(refIds)
+		sizeAfter := len(refIds)
+		fmt.Printf("Ids list before: %d, After: %d, ratio: %.2f\n", sizeBefore, sizeAfter, float64(sizeAfter)/float64(sizeBefore))
 
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", len(refIds), name, batchNum, batchSize))
 		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
