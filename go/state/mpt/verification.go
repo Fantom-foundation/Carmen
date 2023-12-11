@@ -250,7 +250,7 @@ func verifyHashes[N any](
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
 	case HashStoredWithNode:
-		return verifyHashesStoredWithNodes(name, source, stock, ids, hashOfEmptyNode, observer, hash, readHash, isEmbedded, fillInChildrenHashes, collectChildrenIds)
+		return verifyHashesStoredWithNodes(name, source, stock, ids, roots, hashOfEmptyNode, observer, hash, readHash, isEmbedded, fillInChildrenHashes, collectChildrenIds)
 	case HashStoredWithParent:
 		return verifyHashesStoredWithParents(name, source, stock, ids, roots, observer, hash, isNodeType)
 	default:
@@ -318,6 +318,7 @@ func verifyHashesStoredWithNodes[N any](
 	source *verificationNodeSource,
 	stock stock.Stock[uint64, N],
 	ids stock.IndexSet[uint64],
+	roots []Root,
 	hashOfEmptyNode common.Hash,
 	observer VerificationObserver,
 	hash func(*N) (common.Hash, error),
@@ -329,6 +330,26 @@ func verifyHashesStoredWithNodes[N any](
 	// Load nodes of current type from disk
 	const batchSize = 1 << 31 // -> 2G * 32bytes hash = 64GB memory
 
+	// Check hashes of roots.
+	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
+	rootIds := make([]NodeId, 0, len(roots))
+	for _, root := range roots {
+		rootIds = append(rootIds, root.NodeRef.id)
+	}
+	rootIds = sortUnique(rootIds)
+	hashes, _, err := loadNodeHashes(rootIds, source, isEmbedded, hashOfEmptyNode)
+	if err != nil {
+		return err
+	}
+	for _, root := range roots {
+		want := hashes[root.NodeRef.Id()]
+		got := root.Hash
+		if want != got {
+			return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
+		}
+	}
+
+	// check other nodes
 	lowerBound := ids.GetLowerBound()
 	upperBound := ids.GetLowerBound()
 	var batchNum int
@@ -356,17 +377,7 @@ func verifyHashesStoredWithNodes[N any](
 		}
 
 		// Second step - sort and uniq IDs and load hashes from the disk
-		sort.Slice(refIds, func(i, j int) bool {
-			return refIds[i] < refIds[j]
-		})
-		j := 0
-		for i := 1; i < len(refIds); i++ {
-			if refIds[i] != refIds[j] {
-				j++
-				refIds[j] = refIds[i]
-			}
-		}
-		refIds = refIds[:j+1]
+		refIds = sortUnique(refIds)
 
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d)...", len(refIds), name, batchNum))
 		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
@@ -404,6 +415,21 @@ func verifyHashesStoredWithNodes[N any](
 	}
 
 	return nil
+}
+
+func sortUnique(refIds []NodeId) []NodeId {
+	sort.Slice(refIds, func(i, j int) bool {
+		return refIds[i] < refIds[j]
+	})
+	j := 0
+	for i := 1; i < len(refIds); i++ {
+		if refIds[i] != refIds[j] {
+			j++
+			refIds[j] = refIds[i]
+		}
+	}
+	refIds = refIds[:j+1]
+	return refIds
 }
 
 func verifyHashesStoredWithParents[N any](
