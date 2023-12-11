@@ -362,7 +362,7 @@ func verifyHashesStoredWithNodes[N any](
 		// because some nodes like Branch can have many children while other nodes like Extension has just one or Value has none.
 		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
-		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d)...", name, batchNum))
+		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
 		refIds := make([]NodeId, 0, batchSize)
 		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
@@ -380,14 +380,14 @@ func verifyHashesStoredWithNodes[N any](
 		// Second step - sort and uniq IDs and load hashes from the disk
 		refIds = sortUnique(refIds)
 
-		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d)...", len(refIds), name, batchNum))
+		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", len(refIds), name, batchNum, batchSize))
 		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
 
 		// Third step - read again the nodes, fill-in collected child hashes, compare hashes
-		observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss (batch %d)...", upperBound-lowerBound, name, batchNum))
+		observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss (batch %d, size: %d)...", upperBound-lowerBound, name, batchNum, batchSize))
 		for i := lowerBound; i < upperBound; i++ {
 			if !ids.Contains(i) {
 				continue
