@@ -279,14 +279,12 @@ func verifyHashes[N any](
 type nodeIds struct {
 	nodeIds     map[NodeId]struct{}
 	nodeIdsKeys []NodeId
-	capacity    uint64
 }
 
 func newNodeIds(capacity uint64) *nodeIds {
 	return &nodeIds{
-		nodeIds:     make(map[NodeId]struct{}, capacity),
+		nodeIds:     make(map[NodeId]struct{}), // TODO init with capacity?
 		nodeIdsKeys: make([]NodeId, 0, capacity),
-		capacity:    capacity,
 	}
 }
 
@@ -338,9 +336,20 @@ func loadNodeHashes(
 	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
 ) (map[NodeId]embeddedHash, error) {
+	fmt.Printf("Before drain: \n")
+	printMemoryUsage()
+
 	nodeIdsKeys := nodeIds.DrainToOrderedKeys()
+
+	fmt.Printf("After drain: \n")
+	printMemoryUsage()
+
 	// Load hashes from disk
 	hashes := make(map[NodeId]embeddedHash, len(nodeIdsKeys)+1)
+
+	fmt.Printf("After hashes allocation \n")
+	printMemoryUsage()
+
 	hashes[EmptyId()] = embeddedHash{hashOfEmptyNode, false}
 	for _, id := range nodeIdsKeys {
 		var node Node
@@ -391,7 +400,7 @@ func loadNodeHashes(
 // getBatchSize gets the size of batch used for a list of items stored in memory.
 // It is computed as 60% of the main memory divided by the input item size.
 func getBatchSize(itemSize uint) uint64 {
-	return uint64(float64(memory.TotalMemory()) * 0.8 / float64(itemSize))
+	return uint64(float64(memory.TotalMemory()) * 0.6 / float64(itemSize))
 }
 
 func verifyHashesStoredWithNodes[N any](
