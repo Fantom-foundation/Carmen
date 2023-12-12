@@ -286,10 +286,6 @@ func makeForest(
 					releaseError <- err
 					return
 				}
-				if err = res.release(id); err != nil {
-					releaseError <- err
-					return
-				}
 			}
 		}
 	}()

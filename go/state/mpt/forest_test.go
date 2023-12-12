@@ -5,10 +5,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/shadow"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"go.uber.org/mock/gomock"
 )
 
 var variants = []struct {
@@ -497,6 +499,68 @@ func TestForest_ConcurrentWritesAreRaceFree(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+	values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+	forest, err := makeForest(
+		MptConfig{Hashing: DirectHashing},
+		t.TempDir(),
+		branches,
+		extensions,
+		accounts,
+		values,
+		ForestConfig{},
+	)
+	if err != nil {
+		t.Fatalf("failed to create test forest: %v", err)
+	}
+
+	gomock.InOrder(
+		accounts.EXPECT().New().Return(uint64(1), nil),
+		values.EXPECT().New().Return(uint64(1), nil),
+	)
+	accounts.EXPECT().Delete(uint64(1))
+	values.EXPECT().Delete(uint64(1))
+
+	branches.EXPECT().Flush()
+	extensions.EXPECT().Flush()
+	accounts.EXPECT().Flush()
+	values.EXPECT().Flush()
+
+	branches.EXPECT().Close()
+	extensions.EXPECT().Close()
+	accounts.EXPECT().Close()
+	values.EXPECT().Close()
+
+	// Create an account with some storage.
+	addr := common.Address{}
+	root := NewNodeReference(EmptyId())
+	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(12)})
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+
+	root, err = forest.SetValue(&root, addr, common.Key{}, common.Value{1})
+	if err != nil {
+		t.Fatalf("failed to set value: %v", err)
+	}
+
+	// Deleting the account should free the storage.
+	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{})
+	if err != nil {
+		t.Fatalf("failed to delete account: %v", err)
+	}
+
+	if err = forest.Close(); err != nil {
+		t.Fatalf("failed to close the forest: %v", err)
 	}
 }
 
