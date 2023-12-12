@@ -384,8 +384,8 @@ func verifyHashesStoredWithNodes[N any](
 		// because some nodes like Branch can have many children while other nodes like Extension has just one or Value has none.
 		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
-		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
 		printMemoryUsage()
+		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
 		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
@@ -434,6 +434,7 @@ func verifyHashesStoredWithNodes[N any](
 			}
 		}
 
+		observer.Progress(fmt.Sprintf("Bbatch %d done", batchNum))
 		printMemoryUsage()
 		lowerBound = upperBound // move to next window
 	}
@@ -451,7 +452,7 @@ func printMemoryUsage() {
 }
 
 func bToMb(b uint64) float64 {
-	return float64(b) / 1024.0 / 1024.0 / 1024
+	return float64(b) / 1024.0 / 1024.0 / 1024.0
 }
 
 func verifyHashesStoredWithParents[N any](
