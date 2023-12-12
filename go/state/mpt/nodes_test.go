@@ -332,9 +332,9 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing
 
 	afterId, _ := ctxt.Build(
 		&Branch{children: Children{
-			4: &Account{address: common.Address{0x40}, info: info1},
+			4: &Account{address: common.Address{0x40}, info: info1, frozen: true},
 			8: &Account{address: common.Address{0x81}, info: info2, hashDirty: true},
-		}, dirty: []int{8}, frozen: []int{4}, hashDirty: true},
+		}, dirty: []int{8}, frozenChildren: []int{4}, hashDirty: true},
 	)
 	ctxt.Check(t, afterId)
 
@@ -419,9 +419,9 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T)
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x21}, info: info, hashDirty: true},
-			4: &Account{address: common.Address{0x40}, info: info},
-			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{2}, frozen: []int{4, 8}, hashDirty: true},
+			4: &Account{address: common.Address{0x40}, info: info, frozen: true},
+			8: &Account{address: common.Address{0x81}, info: info, frozen: true},
+		}, dirty: []int{2}, frozenChildren: []int{4, 8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -502,11 +502,11 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
 			4: &Branch{children: Children{
-				0: &Account{address: common.Address{0x40}, info: info},
+				0: &Account{address: common.Address{0x40}, info: info, frozen: true},
 				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
-			}, dirty: []int{0, 1}, hashDirty: true},
-			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{4}, frozen: []int{8}, hashDirty: true},
+			}, dirty: []int{0, 1}, frozenChildren: []int{0}, hashDirty: true},
+			8: &Account{address: common.Address{0x81}, info: info, frozen: true},
+		}, dirty: []int{4}, frozenChildren: []int{8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -587,9 +587,9 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *test
 	before, _ := ctxt.Clone(ref)
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
-			2: &Account{address: common.Address{0x20}, info: info},
-			8: &Account{address: common.Address{0x82}, info: info},
-		}, dirty: []int{4}, frozen: []int{2, 8}, hashDirty: true},
+			2: &Account{address: common.Address{0x20}, info: info, frozen: true},
+			8: &Account{address: common.Address{0x82}, info: info, frozen: true},
+		}, dirty: []int{4}, frozenChildren: []int{2, 8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -660,7 +660,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.
 	ctxt.Freeze(ref)
 
 	before, _ := ctxt.Clone(ref)
-	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, frozen: true})
 	ctxt.Check(t, after)
 
 	// This operation creates a temporary branch node that gets removed again.
@@ -836,9 +836,9 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainin
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{4, 1, 2, 3},
 		next: &Branch{children: Children{
-			1: &Account{address: common.Address{0x41, 0x23, 0x10}, info: info},
-			2: &Account{address: common.Address{0x41, 0x23, 0x20}, info: info},
-		}, frozen: []int{1, 2}},
+			1: &Account{address: common.Address{0x41, 0x23, 0x10}, info: info, frozen: true},
+			2: &Account{address: common.Address{0x41, 0x23, 0x20}, info: info, frozen: true},
+		}, frozen: true, frozenChildren: []int{1, 2}},
 		hashDirty: true,
 	})
 	ctxt.Check(t, after)
@@ -932,9 +932,9 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedBy
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{4},
 		next: &Branch{children: Children{
-			1: &Account{address: common.Address{0x41, 0x20}, info: info},
-			2: &Account{address: common.Address{0x42, 0x84}, info: info},
-		}, frozen: []int{1, 2}},
+			1: &Account{address: common.Address{0x41, 0x20}, info: info, frozen: true},
+			2: &Account{address: common.Address{0x42, 0x84}, info: info, frozen: true},
+		}, frozen: true, frozenChildren: []int{1, 2}},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -1139,6 +1139,30 @@ func TestBranchNode_CheckDetectsIssues(t *testing.T) {
 			childHashes: ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
 			dirty:       []int{1},
 		}, true},
+		"full_frozen": {&Branch{
+			children:       Children{1: &Value{frozen: true}, 2: &Value{frozen: true}},
+			frozenChildren: []int{1, 2},
+			frozen:         true,
+		}, true},
+		"partial_frozen": {&Branch{
+			children:       Children{1: &Value{frozen: true}, 2: &Value{frozen: true}},
+			frozenChildren: []int{1, 2},
+			frozen:         false,
+		}, true},
+		"partial_frozen_with_missing_hint": {&Branch{
+			children:       Children{1: &Value{frozen: true}, 2: &Value{frozen: true}},
+			frozenChildren: []int{1},
+			frozen:         false,
+		}, true},
+		"inconsistent_freeze_flags": {&Branch{
+			children:       Children{1: &Value{}, 2: &Value{}},
+			frozenChildren: []int{2},
+		}, false},
+		"frozen_branch_with_non_frozen_children": {&Branch{
+			children:       Children{1: &Value{}, 2: &Value{frozen: true}},
+			frozenChildren: []int{2},
+			frozen:         true,
+		}, false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -1337,8 +1361,8 @@ func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) 
 			path: []Nibble{1, 2, 3},
 			next: &Branch{children: Children{
 				5: &Account{address: common.Address{0x12, 0x35}, info: info2, hashDirty: true},
-				8: &Account{address: common.Address{0x12, 0x38}, info: info2},
-			}, dirty: []int{5}, frozen: []int{8}, hashDirty: true},
+				8: &Account{address: common.Address{0x12, 0x38}, info: info2, frozen: true},
+			}, dirty: []int{5}, frozenChildren: []int{8}, hashDirty: true},
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1447,9 +1471,9 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *t
 				3: &Extension{
 					path: []Nibble{4},
 					next: &Branch{children: Children{
-						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
-						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
-					}, frozen: []int{0xA, 0xE}},
+						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
+						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
+					}, frozen: true, frozenChildren: []int{0xA, 0xE}},
 					hashDirty:     true,
 					nextHashDirty: true,
 				},
@@ -1558,9 +1582,9 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T)
 			1: &Extension{
 				path: []Nibble{2, 3, 4},
 				next: &Branch{children: Children{
-					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
-					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
-				}, frozen: []int{0xA, 0xE}},
+					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
+					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
+				}, frozen: true, frozenChildren: []int{0xA, 0xE}},
 				hashDirty:     true,
 				nextHashDirty: true,
 			},
@@ -1662,13 +1686,18 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing
 	after, _ := ctxt.Build(
 		&Extension{
 			path: []Nibble{1, 2, 3},
-			next: &Branch{children: Children{
-				4: &Branch{children: Children{
-					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
-					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
-				}, frozen: []int{0xA, 0xE}},
-				8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
-			}, hashDirty: true, dirty: []int{4, 8}}, // < TODO: it should be possible to restrict this to {8}
+			next: &Branch{
+				children: Children{
+					4: &Branch{children: Children{
+						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
+						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
+					}, frozen: true, frozenChildren: []int{0xA, 0xE}},
+					8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
+				},
+				hashDirty:      true,
+				dirty:          []int{4, 8}, // < TODO: it should be possible to restrict this to {8}
+				frozenChildren: []int{},     // < TODO: it would be possible to extend this to {4}
+			},
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1761,13 +1790,18 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *
 
 	before, _ := ctxt.Clone(ref)
 	after, _ := ctxt.Build(
-		&Branch{children: Children{
-			1: &Branch{children: Children{
-				0xA: &Account{address: common.Address{0x1A}, info: info},
-				0xE: &Account{address: common.Address{0x1E}, info: info},
-			}, frozen: []int{0xA, 0xE}},
-			2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
-		}, hashDirty: true, dirty: []int{1, 2}},
+		&Branch{
+			children: Children{
+				1: &Branch{children: Children{
+					0xA: &Account{address: common.Address{0x1A}, info: info, frozen: true},
+					0xE: &Account{address: common.Address{0x1E}, info: info, frozen: true},
+				}, frozen: true, frozenChildren: []int{0xA, 0xE}},
+				2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
+			},
+			hashDirty:      true,
+			dirty:          []int{1, 2},
+			frozenChildren: []int{}, // < TODO: this could be extended to {1}
+		},
 	)
 
 	ctxt.Check(t, ref)
@@ -1881,9 +1915,9 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 		&Extension{
 			path: []Nibble{1, 1},
 			next: &Branch{children: Children{
-				1: &Account{address: common.Address{0x11, 0x10}, info: info},
-				2: &Account{address: common.Address{0x11, 0x20}, info: info},
-			}, frozen: []int{1, 2}},
+				1: &Account{address: common.Address{0x11, 0x10}, info: info, frozen: true},
+				2: &Account{address: common.Address{0x11, 0x20}, info: info, frozen: true},
+			}, frozen: true, frozenChildren: []int{1, 2}},
 			hashDirty:     true,
 			nextHashDirty: true, // < could be optimized away ..
 		},
@@ -1981,7 +2015,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(
 	ctxt.Freeze(ref)
 
 	before, _ := ctxt.Clone(ref)
-	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, frozen: true})
 
 	ctxt.Check(t, before)
 	ctxt.Check(t, ref)
@@ -2343,6 +2377,9 @@ func TestExtensionNode_CheckDetectsIssues(t *testing.T) {
 		"next not a branch":     {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
 		"invalid hash":          {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
 		"dirty hash is ignored": {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, nextHashDirty: true}, true},
+		"full_frozen":           {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
+		"partial_frozen":        {&Extension{frozen: false, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
+		"inconsistent_frozen":   {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: false}}, false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -2417,9 +2454,9 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_SameInfo(t *testing.T
 	info := AccountInfo{Nonce: common.Nonce{1}}
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
-	after, _ := ctxt.Build(&Account{address: addr, info: info})
+	after, _ := ctxt.Build(&Account{address: addr, info: info, frozen: true})
 
 	// Update the account information with the same information.
 	handle := node.GetWriteHandle()
@@ -2472,8 +2509,8 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info1})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
 
 	ctxt.ExpectCreateAccount()
@@ -2513,8 +2550,8 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 	ctxt.EXPECT().releaseTrieAsynchronous(RefTo(id.Id()))
 
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); !newRoot.Id().IsEmpty() || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), true, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); !newRoot.Id().IsEmpty() || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", EmptyId(), false, newRoot.Id(), changed, err)
 	}
 	handle.Release()
 
@@ -2531,8 +2568,8 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T
 	info2 := AccountInfo{}
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info1})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 	after, _ := ctxt.Build(Empty{})
 
 	handle := node.GetWriteHandle()
@@ -2590,13 +2627,13 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Branch{children: Children{
-		2: &Account{address: addr1, info: info1},
+		2: &Account{address: addr1, info: info1, frozen: true},
 		3: &Account{address: addr2, info: info2, hashDirty: true},
-	}, dirty: []int{2, 3}, hashDirty: true})
+	}, dirty: []int{2, 3}, hashDirty: true, frozenChildren: []int{2}})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2664,15 +2701,15 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Account{address: addr1, info: info1},
+			0xA: &Account{address: addr1, info: info1, frozen: true},
 			0xB: &Account{address: addr2, info: info2, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true, frozenChildren: []int{0xA}},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -2747,8 +2784,8 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1, pathLength: 40})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
@@ -2814,10 +2851,10 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_ZeroI
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
-	after, _ := ctxt.Build(&Account{address: addr1, info: info1})
+	after, _ := ctxt.Build(&Account{address: addr1, info: info1, frozen: true})
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
@@ -2870,10 +2907,10 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Zer
 
 	before, _ := ctxt.Build(&Account{address: addr1, info: info1})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
-	after, _ := ctxt.Build(&Account{address: addr1, info: info1})
+	after, _ := ctxt.Build(&Account{address: addr1, info: info1, frozen: true})
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
@@ -2989,8 +3026,8 @@ func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
 
 	before, _ := ctxt.Build(&Account{address: addr, info: info})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Account{
 		address: addr,
@@ -3091,8 +3128,8 @@ func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
 		},
 	})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Account{
 		address: addr,
@@ -3270,7 +3307,7 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 			0xA: &Branch{
 				children: Children{
 					0: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
-						storage:    &Value{key: key, value: value, length: 64},
+						storage:    &Value{key: key, value: value, length: 64, frozen: true},
 						pathLength: 38, hashDirty: true},
 					0xA: &Account{address: newAddr, info: newInfo,
 						pathLength: 38, hashDirty: true},
@@ -3279,11 +3316,11 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 				dirty:     []int{0, 0xA},
 			},
 			0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
-				pathLength: 39},
+				pathLength: 39, frozen: true},
 		},
-		hashDirty: true,
-		dirty:     []int{0xA},
-		frozen:    []int{0xB},
+		hashDirty:      true,
+		dirty:          []int{0xA},
+		frozenChildren: []int{0xB},
 	})
 	ctxt.Check(t, after)
 
@@ -3500,6 +3537,27 @@ func TestAccountNode_CheckDetectsIssues(t *testing.T) {
 			info:       AccountInfo{Nonce: common.Nonce{1}},
 			pathLength: 36,
 		}, false},
+		"full_frozen": {[]Nibble{1, 2, 3}, &Account{
+			frozen:     true,
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+			storage:    &Value{frozen: true},
+		}, true},
+		"partial_frozen": {[]Nibble{1, 2, 3}, &Account{
+			frozen:     false,
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+			storage:    &Value{frozen: true},
+		}, true},
+		"inconsistent_frozen": {[]Nibble{1, 2, 3}, &Account{
+			frozen:     true,
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+			storage:    &Value{frozen: false},
+		}, false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -3624,8 +3682,8 @@ func TestValueNode_Frozen_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	value := common.Value{1}
 
 	ref, node := ctxt.Build(&Value{key: key, value: value})
-	backup, _ := ctxt.Clone(ref)
 	ctxt.Freeze(ref)
+	backup, _ := ctxt.Clone(ref)
 
 	// Update the value with the same value.
 	handle := node.GetWriteHandle()
@@ -3671,10 +3729,9 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_DifferentValue(t *testing.T) 
 	value2 := common.Value{2}
 
 	before, _ := ctxt.Build(&Value{key: key, value: value1})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
 	after, _ := ctxt.Build(&Value{key: key, value: value2, hashDirty: true})
-
-	ctxt.Freeze(ref)
 
 	ctxt.ExpectCreateValue()
 
@@ -3725,10 +3782,9 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 	value2 := common.Value{}
 
 	before, _ := ctxt.Build(&Value{key: key, value: value1})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
 	after, _ := ctxt.Build(Empty{})
-
-	ctxt.Freeze(ref)
 
 	handle := node.GetWriteHandle()
 	newRoot, changed, err := handle.Get().SetValue(ctxt, &ref, handle, key, path[:], value2)
@@ -3785,13 +3841,13 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(
 
 	before, _ := ctxt.Build(&Value{key: key1, value: value1})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Branch{children: Children{
-		2: &Value{key: key1, value: value1},
+		2: &Value{key: key1, value: value1, frozen: true},
 		3: &Value{key: key2, value: value2, hashDirty: true},
-	}, dirty: []int{2, 3}, hashDirty: true})
+	}, dirty: []int{2, 3}, hashDirty: true, frozenChildren: []int{2}})
 
 	// This operation creates one new value node and a branch.
 	ctxt.ExpectCreateBranch()
@@ -3859,15 +3915,15 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 
 	before, _ := ctxt.Build(&Value{key: key1, value: value1})
 
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
 
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Value{key: key1, value: value1},
+			0xA: &Value{key: key1, value: value1, frozen: true},
 			0xB: &Value{key: key2, value: value2, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		}, dirty: []int{0xA, 0xB}, hashDirty: true, frozenChildren: []int{0xA}},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -3924,9 +3980,9 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_ZeroValue(t *
 	value2 := common.Value{}
 
 	before, _ := ctxt.Build(&Value{key: key1, value: value1})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
-	after, _ := ctxt.Build(&Value{key: key1, value: value1})
+	after, _ := ctxt.Build(&Value{key: key1, value: value1, frozen: true})
 
 	path := keyToNibbles(key2)
 	handle := node.GetWriteHandle()
@@ -3978,9 +4034,9 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t
 	value2 := common.Value{}
 
 	before, _ := ctxt.Build(&Value{key: key1, value: value1})
+	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	ctxt.Freeze(ref)
-	after, _ := ctxt.Build(&Value{key: key1, value: value1})
+	after, _ := ctxt.Build(&Value{key: key1, value: value1, frozen: true})
 
 	path := keyToNibbles(key2)
 	handle := node.GetWriteHandle()
@@ -4170,6 +4226,7 @@ func TestCheckForest_AcceptsValidReUse(t *testing.T) {
 
 	// integrate shared mock node into both trees
 	node := NewMockNode(ctrl)
+	node.EXPECT().IsFrozen().AnyTimes().Return(false)
 	node.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()) // shared node is only checked once
 	refMock, _ := ctxt.Build(&Mock{node})
 
@@ -4475,6 +4532,7 @@ func (m *Mock) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 type Account struct {
 	address          common.Address
 	info             AccountInfo
+	frozen           bool
 	pathLength       byte
 	storage          NodeDesc
 	storageHashDirty bool
@@ -4490,6 +4548,7 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](&AccountNode{
 		address:          a.address,
 		info:             a.info,
+		frozen:           a.frozen,
 		pathLength:       a.pathLength,
 		storage:          storage,
 		storageHashDirty: a.storageHashDirty,
@@ -4501,16 +4560,18 @@ type Children map[Nibble]NodeDesc
 type ChildHashes map[Nibble]common.Hash
 
 type Branch struct {
-	children    Children
-	childHashes ChildHashes
-	dirty       []int
-	frozen      []int
-	hashDirty   bool
+	children       Children
+	childHashes    ChildHashes
+	dirty          []int
+	frozen         bool
+	frozenChildren []int
+	hashDirty      bool
 }
 
 func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(BranchId(ctx.nextIndex()))
 	res := &BranchNode{}
+	res.frozen = b.frozen
 	for i, desc := range b.children {
 		id, _ := ctx.Build(desc)
 		res.children[i] = id
@@ -4521,7 +4582,7 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	for _, i := range b.dirty {
 		res.markChildHashDirty(byte(i))
 	}
-	for _, i := range b.frozen {
+	for _, i := range b.frozenChildren {
 		res.setChildFrozen(byte(i), true)
 	}
 	res.hashDirty = b.hashDirty
@@ -4529,6 +4590,7 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 }
 
 type Extension struct {
+	frozen        bool
 	path          []Nibble
 	next          NodeDesc
 	hashDirty     bool
@@ -4539,6 +4601,7 @@ type Extension struct {
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(ExtensionId(ctx.nextIndex()))
 	res := &ExtensionNode{}
+	res.frozen = e.frozen
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
 	res.hashDirty = e.hashDirty
@@ -4563,6 +4626,7 @@ type Value struct {
 	value     common.Value
 	length    byte
 	hashDirty bool
+	frozen    bool
 }
 
 func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -4571,6 +4635,7 @@ func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 		value:      v.value,
 		hashDirty:  v.hashDirty,
 		pathLength: v.length,
+		frozen:     v.frozen,
 	})
 }
 
@@ -4743,8 +4808,8 @@ func (c *nodeContext) tryGetNode(t *testing.T, id NodeId) shared.ReadHandle[Node
 	if !found {
 		t.Fatalf("unknown node: %v", id)
 	}
-	handle, succ := entry.node.TryGetReadHandle()
-	if !succ {
+	handle, success := entry.node.TryGetReadHandle()
+	if !success {
 		t.Fatalf("failed to gain read access to node %v -- forgot to release some handles?", id)
 	}
 	return handle
@@ -4756,17 +4821,21 @@ func (c *nodeContext) ExpectEqualTries(t *testing.T, want, got NodeReference) {
 	defer wantHandle.Release()
 	gotHandle := c.tryGetNode(t, got.Id())
 	defer gotHandle.Release()
-	c.ExpectEqual(t, wantHandle.Get(), gotHandle.Get())
-}
-
-func (c *nodeContext) ExpectEqual(t *testing.T, want, got Node) {
-	t.Helper()
-	if !c.equal(want, got) {
+	equal := c.equal(wantHandle.Get(), gotHandle.Get())
+	diffs := c.diff("root", wantHandle.Get(), gotHandle.Get())
+	if equal != (len(diffs) == 0) {
+		panic("FATAL: equal and diff not consistent")
+	}
+	if len(diffs) > 0 {
 		fmt.Printf("Want:\n")
-		want.Dump(c, nil, "")
+		wantHandle.Get().Dump(c, &want, "")
 		fmt.Printf("Have:\n")
-		got.Dump(c, nil, "")
+		gotHandle.Get().Dump(c, &got, "")
 		t.Errorf("unexpected resulting node structure")
+		t.Errorf("differences:\n")
+		for _, diff := range diffs {
+			t.Errorf("\t" + diff)
+		}
 	}
 }
 
@@ -4833,6 +4902,122 @@ func (c *nodeContext) cloneInternal(node Node) (NodeReference, *shared.Shared[No
 	panic(fmt.Sprintf("encountered unsupported node type: %v", reflect.TypeOf(node)))
 }
 
+func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
+	diffs := []string{}
+	if _, ok := nodeA.(EmptyNode); ok {
+		if _, ok := nodeB.(EmptyNode); !ok {
+			diffs = append(diffs, fmt.Sprintf("%s: different node types, got %v and %v", prefix, reflect.TypeOf(nodeA), reflect.TypeOf(nodeB)))
+		}
+	}
+
+	if a, ok := nodeA.(*AccountNode); ok {
+		if b, ok := nodeB.(*AccountNode); ok {
+			if a.address != b.address {
+				diffs = append(diffs, fmt.Sprintf("%s: different address, got %x and %x", prefix, a.address, b.address))
+			}
+			if a.frozen != b.frozen {
+				diffs = append(diffs, fmt.Sprintf("%s: different frozen state, got %t and %t", prefix, a.frozen, b.frozen))
+			}
+			if a.info != b.info {
+				diffs = append(diffs, fmt.Sprintf("%s: different info, got %v and %v", prefix, a.info, b.info))
+			}
+			if a.hashDirty != b.hashDirty {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			}
+			if a.storageHashDirty != b.storageHashDirty {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.storageHashDirty, b.storageHashDirty))
+			}
+
+			if c.config.TrackSuffixLengthsInLeafNodes {
+				if a.pathLength != b.pathLength {
+					diffs = append(diffs, fmt.Sprintf("%s: different path-length, got %d and %d", prefix, a.pathLength, b.pathLength))
+				}
+			}
+
+			diffs = append(diffs, c.diffTries(prefix+"/storage", a.storage, b.storage)...)
+		} else {
+			diffs = append(diffs, fmt.Sprintf("%s: different node types, got %v and %v", prefix, reflect.TypeOf(a), reflect.TypeOf(nodeB)))
+		}
+	}
+
+	if a, ok := nodeA.(*ExtensionNode); ok {
+		if b, ok := nodeB.(*ExtensionNode); ok {
+			if a.frozen != b.frozen {
+				diffs = append(diffs, fmt.Sprintf("%s: different frozen state, got %t and %t", prefix, a.frozen, b.frozen))
+			}
+			if a.path != b.path {
+				diffs = append(diffs, fmt.Sprintf("%s: different extension path, got %v and %v", prefix, a.path, b.path))
+			}
+			if a.hashDirty != b.hashDirty {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			}
+			if a.nextHashDirty != b.nextHashDirty {
+				diffs = append(diffs, fmt.Sprintf("%s: different next-hash-dirty flag, got %t and %t", prefix, a.nextHashDirty, b.nextHashDirty))
+			}
+			diffs = append(diffs, c.diffTries(prefix+"/next", a.next, b.next)...)
+		} else {
+			diffs = append(diffs, fmt.Sprintf("%s: different node types, got %v and %v", prefix, reflect.TypeOf(a), reflect.TypeOf(nodeB)))
+		}
+	}
+
+	if a, ok := nodeA.(*BranchNode); ok {
+		if b, ok := nodeB.(*BranchNode); ok {
+			if a.frozen != b.frozen {
+				diffs = append(diffs, fmt.Sprintf("%s: different frozen state, got %t and %t", prefix, a.frozen, b.frozen))
+			}
+			if a.frozenChildren != b.frozenChildren {
+				diffs = append(diffs, fmt.Sprintf("%s: different frozen children flags, got %016b and %016b", prefix, a.frozenChildren, b.frozenChildren))
+			}
+			if a.hashDirty != b.hashDirty {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			}
+			if a.dirtyHashes != b.dirtyHashes {
+				diffs = append(diffs, fmt.Sprintf("%s: different dirty-child-hashes flags, got %016b and %016b", prefix, a.dirtyHashes, b.dirtyHashes))
+			}
+
+			for i, next := range a.children {
+				diffs = append(diffs, c.diffTries(fmt.Sprintf("%s/0x%X", prefix, i), next, b.children[i])...)
+			}
+		} else {
+			diffs = append(diffs, fmt.Sprintf("%s: different node types, got %v and %v", prefix, reflect.TypeOf(a), reflect.TypeOf(nodeB)))
+		}
+	}
+
+	if a, ok := nodeA.(*ValueNode); ok {
+		if b, ok := nodeB.(*ValueNode); ok {
+			if a.frozen != b.frozen {
+				diffs = append(diffs, fmt.Sprintf("%s: different frozen state, got %t and %t", prefix, a.frozen, b.frozen))
+			}
+			if a.hashDirty != b.hashDirty {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			}
+			if a.key != b.key {
+				diffs = append(diffs, fmt.Sprintf("%s: different key, got %x and %x", prefix, a.key, b.key))
+			}
+			if a.key != b.key {
+				diffs = append(diffs, fmt.Sprintf("%s: different value, got %x and %x", prefix, a.value, b.value))
+			}
+			if c.config.TrackSuffixLengthsInLeafNodes {
+				if a.pathLength != b.pathLength {
+					diffs = append(diffs, fmt.Sprintf("%s: different path-length, got %d and %d", prefix, a.pathLength, b.pathLength))
+				}
+			}
+		} else {
+			diffs = append(diffs, fmt.Sprintf("%s: different node types, got %v and %v", prefix, reflect.TypeOf(a), reflect.TypeOf(b)))
+		}
+	}
+
+	return diffs
+}
+
+func (c *nodeContext) diffTries(prefix string, a, b NodeReference) []string {
+	nodeA, _ := c.getReadAccess(&a)
+	nodeB, _ := c.getReadAccess(&b)
+	defer nodeA.Release()
+	defer nodeB.Release()
+	return c.diff(prefix, nodeA.Get(), nodeB.Get())
+}
+
 func (c *nodeContext) equal(a, b Node) bool {
 	if _, ok := a.(EmptyNode); ok {
 		_, ok := b.(EmptyNode)
@@ -4845,7 +5030,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 			eq = eq && a.info == b.info
 			eq = eq && a.hashDirty == b.hashDirty
 			eq = eq && a.storageHashDirty == b.storageHashDirty
-			// eq = eq && a.frozen == b.frozen  // < TODO: add support
+			eq = eq && a.frozen == b.frozen
 			eq = eq && c.equalTries(a.storage, b.storage)
 			if !eq {
 				return false
@@ -4874,11 +5059,9 @@ func (c *nodeContext) equal(a, b Node) bool {
 
 	if a, ok := a.(*BranchNode); ok {
 		if b, ok := b.(*BranchNode); ok {
-			/* TODO: add support
 			if a.frozen != b.frozen {
 				return false
 			}
-			*/
 			if a.hashDirty != b.hashDirty {
 				return false
 			}
@@ -4903,7 +5086,7 @@ func (c *nodeContext) equal(a, b Node) bool {
 			eq := a.key == b.key
 			eq = eq && a.value == b.value
 			eq = eq && a.hashDirty == b.hashDirty
-			// eq = eq && a.frozen == b.frozen // TODO: add support
+			eq = eq && a.frozen == b.frozen
 			if !eq {
 				return false
 			}
