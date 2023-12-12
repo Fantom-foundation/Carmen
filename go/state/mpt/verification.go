@@ -390,7 +390,7 @@ func loadNodeHashes(
 // It is computed as 80% of the main memory divided by the input item size.
 func getBatchSize(itemSize uint) uint64 {
 	fmt.Printf("Total memory: %d\n", memory.TotalMemory())
-	return uint64(float64(memory.TotalMemory()) * 0.8 / float64(itemSize))
+	return uint64(float64(memory.TotalMemory()) * 0.6 / float64(itemSize))
 }
 
 func verifyHashesStoredWithNodes[N any](
