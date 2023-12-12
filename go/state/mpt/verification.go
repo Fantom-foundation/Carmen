@@ -147,8 +147,8 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.storageHash = hashes[node.storage.Id()]
 			node.storageHashDirty = false
 		},
-		func(node *AccountNode, ids map[NodeId]struct{}) {
-			ids[node.storage.Id()] = struct{}{}
+		func(node *AccountNode, ids *nodeIds) {
+			ids.Put(node.storage.Id())
 		},
 	)
 	if err != nil {
@@ -177,10 +177,10 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			}
 			node.dirtyHashes = 0
 		},
-		func(node *BranchNode, ids map[NodeId]struct{}) {
+		func(node *BranchNode, ids *nodeIds) {
 			for i := 0; i < 16; i++ {
 				// ID may be an embedded child, it will be determined later while hashing
-				ids[node.children[i].Id()] = struct{}{}
+				ids.Put(node.children[i].Id())
 			}
 		},
 	)
@@ -199,8 +199,8 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.nextHashDirty = false
 			node.nextIsEmbedded = embedded[node.next.Id()]
 		},
-		func(node *ExtensionNode, ids map[NodeId]struct{}) {
-			ids[node.next.Id()] = struct{}{}
+		func(node *ExtensionNode, ids *nodeIds) {
+			ids.Put(node.next.Id())
 		},
 	)
 	if err != nil {
@@ -214,7 +214,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsValue() },
 		func(*ValueNode, map[NodeId]common.Hash, map[NodeId]bool) {},
-		func(node *ValueNode, ids map[NodeId]struct{}) {},
+		func(node *ValueNode, ids *nodeIds) {},
 	)
 	if err != nil {
 		return err
@@ -224,13 +224,12 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	if source.getConfig().HashStorageLocation == HashStoredWithNode {
 		// Check hashes of roots.
 		observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-		refIds := make(map[NodeId]struct{}, len(roots))
+		refIds := newNodeIds(uint64(len(roots)))
 		for _, root := range roots {
-			refIds[root.NodeRef.id] = struct{}{}
+			refIds.Put(root.NodeRef.id)
 		}
-		nodeIdsKeys := make([]NodeId, 0, len(refIds))
 		isEmbedded := func(node Node) (bool, error) { return false, nil } // root node cannot be embedded
-		hashes, _, err := loadNodeHashes(refIds, nodeIdsKeys, source, isEmbedded, emptyNodeHash)
+		hashes, _, err := loadNodeHashes(refIds, source, isEmbedded, emptyNodeHash)
 		if err != nil {
 			return err
 		}
@@ -259,7 +258,7 @@ func verifyHashes[N any](
 	isEmbedded func(Node) (bool, error),
 	isNodeType func(NodeId) bool,
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
-	collectChildrenIds func(*N, map[NodeId]struct{}),
+	collectChildrenIds func(*N, *nodeIds),
 ) error {
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
@@ -272,6 +271,50 @@ func verifyHashes[N any](
 	}
 }
 
+// nodeIds is a struct that collects NodeIds.
+// It allows adding the IDs in the inner map so that duplicities are eliminated.
+// It contains additional structure, which is used for exporting collected NodeIDs
+// ordered.
+type nodeIds struct {
+	nodeIds     map[NodeId]struct{}
+	nodeIdsKeys []NodeId
+}
+
+func newNodeIds(capacity uint64) *nodeIds {
+	return &nodeIds{
+		nodeIds:     make(map[NodeId]struct{}, capacity),
+		nodeIdsKeys: make([]NodeId, 0, capacity),
+	}
+}
+
+// Put adds node ID into this structure if it is not present yet.
+func (n *nodeIds) Put(id NodeId) {
+	n.nodeIds[id] = struct{}{}
+}
+
+func (n *nodeIds) Size() uint64 {
+	return uint64(len(n.nodeIds))
+}
+
+// DrainToOrderedKeys returns accumulated keys ordered.
+// The accumulated keys are drained.
+// It means that repeated call to this method will not return the same keys again.
+// The returned slice is re-used for further calls of this method to save on memory allocations.
+func (n *nodeIds) DrainToOrderedKeys() []NodeId {
+	n.nodeIdsKeys = n.nodeIdsKeys[0:0]
+	// collect keys ...
+	for id := range n.nodeIds {
+		n.nodeIdsKeys = append(n.nodeIdsKeys, id)
+		delete(n.nodeIds, id) // remove item to save space
+	}
+	// ... and sort
+	sort.Slice(n.nodeIdsKeys, func(i, j int) bool {
+		return n.nodeIdsKeys[i] < n.nodeIdsKeys[j]
+	})
+
+	return n.nodeIdsKeys
+}
+
 // loadNodeHashes loads hashes of nodes from the input map nodeIds.
 // This method optimizes I/O access and memory.
 // For this reason, it collects all nodeIds from the input map and copies then to a slice, which is sorted.
@@ -282,23 +325,14 @@ func verifyHashes[N any](
 // It must be an empty slice, but it can be re-used for multiple calls of this method.
 // This method returns hashed nodes for the input ID and a map with embedded node IDs.
 func loadNodeHashes(
-	nodeIds map[NodeId]struct{},
-	nodeIdsKeys []NodeId, // empty re-used slice should be passed from the outside to save on allocations
+	nodeIds *nodeIds,
 	source *verificationNodeSource,
 	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
 ) (map[NodeId]common.Hash, map[NodeId]bool, error) {
-	// collect keys ...
-	for id := range nodeIds {
-		nodeIdsKeys = append(nodeIdsKeys, id)
-		delete(nodeIds, id) // remove item to save space
-	}
-	// ... and sort to be more I/O friendly
-	sort.Slice(nodeIdsKeys, func(i, j int) bool {
-		return nodeIdsKeys[i] < nodeIdsKeys[j]
-	})
+	nodeIdsKeys := nodeIds.DrainToOrderedKeys()
 	// Load hashes from disk
-	hashes := make(map[NodeId]common.Hash, len(nodeIds)+1)
+	hashes := make(map[NodeId]common.Hash, len(nodeIdsKeys)+1)
 	hashes[EmptyId()] = hashOfEmptyNode
 	embedded := map[NodeId]bool{}
 	for _, id := range nodeIdsKeys {
@@ -364,7 +398,7 @@ func verifyHashesStoredWithNodes[N any](
 	readHash func(*N) (common.Hash, bool),
 	isEmbedded func(Node) (bool, error),
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
-	collectChildrenIds func(*N, map[NodeId]struct{}),
+	collectChildrenIds func(*N, *nodeIds),
 ) error {
 	// Two maps:
 	// - Hashes: 8bytes map overhead, 8 bytes NodeID, 32bytes hash
@@ -377,8 +411,7 @@ func verifyHashesStoredWithNodes[N any](
 	printMemoryUsage()
 	fmt.Printf("Debug: Allocation start: \n")
 	// re-used for each loop to save on allocations
-	refIds := make(map[NodeId]struct{}, batchSize)
-	nodeIdsKeys := make([]NodeId, 0, batchSize)
+	refIds := newNodeIds(batchSize)
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -394,7 +427,7 @@ func verifyHashesStoredWithNodes[N any](
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
 		printMemoryUsage()
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
-		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
+		for refIds.Size() < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
 				continue
@@ -409,8 +442,8 @@ func verifyHashesStoredWithNodes[N any](
 		printMemoryUsage()
 
 		// Second step - sort IDs and load hashes from the disk
-		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", len(refIds), name, batchNum, batchSize))
-		hashes, embedded, err := loadNodeHashes(refIds, nodeIdsKeys[0:0], source, isEmbedded, hashOfEmptyNode)
+		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", refIds.Size(), name, batchNum, batchSize))
+		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
