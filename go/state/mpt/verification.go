@@ -146,8 +146,8 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.storageHash = hashes[node.storage.Id()]
 			node.storageHashDirty = false
 		},
-		func(node *AccountNode, ids []NodeId) []NodeId {
-			return addNonEmpty(ids, node.storage.Id())
+		func(node *AccountNode, ids map[NodeId]struct{}) {
+			ids[node.storage.Id()] = struct{}{}
 		},
 	)
 	if err != nil {
@@ -176,12 +176,11 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			}
 			node.dirtyHashes = 0
 		},
-		func(node *BranchNode, ids []NodeId) []NodeId {
+		func(node *BranchNode, ids map[NodeId]struct{}) {
 			for i := 0; i < 16; i++ {
 				// ID may be an embedded child, it will be determined later while hashing
-				ids = addNonEmpty(ids, node.children[i].Id())
+				ids[node.children[i].Id()] = struct{}{}
 			}
-			return ids
 		},
 	)
 	if err != nil {
@@ -199,8 +198,8 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.nextHashDirty = false
 			node.nextIsEmbedded = embedded[node.next.Id()]
 		},
-		func(node *ExtensionNode, ids []NodeId) []NodeId {
-			return addNonEmpty(ids, node.next.Id())
+		func(node *ExtensionNode, ids map[NodeId]struct{}) {
+			ids[node.next.Id()] = struct{}{}
 		},
 	)
 	if err != nil {
@@ -214,23 +213,37 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsValue() },
 		func(*ValueNode, map[NodeId]common.Hash, map[NodeId]bool) {},
-		func(node *ValueNode, ids []NodeId) []NodeId {
-			return ids
-		},
+		func(node *ValueNode, ids map[NodeId]struct{}) {},
 	)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-// addNonEmpty extends the input array with the input node ID, but only when the node is not empty.
-func addNonEmpty(arr []NodeId, id NodeId) []NodeId {
-	if !id.IsEmpty() {
-		arr = append(arr, id)
+	// Finally, check roots for Archive node
+	if source.getConfig().HashStorageLocation == HashStoredWithNode {
+		batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
+		// Check hashes of roots.
+		observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
+		refIds := make(map[NodeId]struct{}, batchSize)
+		for _, root := range roots {
+			refIds[root.NodeRef.id] = struct{}{}
+		}
+		nodeIdsKeys := make([]NodeId, 0, len(refIds))
+		isEmbedded := func(node Node) (bool, error) { return false, nil } // root node cannot be embedded
+		hashes, _, err := loadNodeHashes(refIds, nodeIdsKeys, source, isEmbedded, emptyNodeHash)
+		if err != nil {
+			return err
+		}
+		for _, root := range roots {
+			want := hashes[root.NodeRef.Id()]
+			got := root.Hash
+			if want != got {
+				return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
+			}
+		}
 	}
-	return arr
+
+	return nil
 }
 
 func verifyHashes[N any](
@@ -246,7 +259,7 @@ func verifyHashes[N any](
 	isEmbedded func(Node) (bool, error),
 	isNodeType func(NodeId) bool,
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
-	collectChildrenIds func(*N, []NodeId) []NodeId,
+	collectChildrenIds func(*N, map[NodeId]struct{}),
 ) error {
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
@@ -259,17 +272,36 @@ func verifyHashes[N any](
 	}
 }
 
+// loadNodeHashes loads hashes of nodes from the input map nodeIds.
+// This method optimizes I/O access and memory.
+// For this reason, it collects all nodeIds from the input map and copies then to a slice, which is sorted.
+// The nodes to be hashes are loaded in sequence then using the sorted slice.
+// To save memory, this method clears the input map while coping the keys into the slice.
+// It means that the map content cannot be used after this method executes.
+// Furthermore, the slice for storing map keys is passes as the input.
+// It must be an empty slice, but it can be re-used for multiple calls of this method.
+// This method returns hashed nodes for the input ID and a map with embedded node IDs.
 func loadNodeHashes(
-	nodeIds []NodeId,
+	nodeIds map[NodeId]struct{},
+	nodeIdsKeys []NodeId, // empty re-used slice should be passed from the outside to save on allocations
 	source *verificationNodeSource,
 	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
 ) (map[NodeId]common.Hash, map[NodeId]bool, error) {
+	// collect keys ...
+	for id := range nodeIds {
+		nodeIdsKeys = append(nodeIdsKeys, id)
+		delete(nodeIds, id) // remove item to save space
+	}
+	// ... and sort to be more I/O friendly
+	sort.Slice(nodeIdsKeys, func(i, j int) bool {
+		return nodeIdsKeys[i] < nodeIdsKeys[j]
+	})
 	// Load hashes from disk
 	hashes := make(map[NodeId]common.Hash, len(nodeIds)+1)
 	hashes[EmptyId()] = hashOfEmptyNode
 	embedded := map[NodeId]bool{}
-	for _, id := range nodeIds {
+	for _, id := range nodeIdsKeys {
 		var node Node
 		if id.IsBranch() {
 			n, err := source.branches.Get(id.Index())
@@ -300,7 +332,7 @@ func loadNodeHashes(
 		if !id.IsEmpty() {
 			hash, dirty := node.GetHash()
 			if dirty {
-				return hashes, embedded, fmt.Errorf("encountered dirty hash on disk for node %v", id)
+				return nil, nil, fmt.Errorf("encountered dirty hash on disk for node %v", id)
 			}
 			hashes[id] = hash
 			if res, err := isEmbedded(node); err != nil {
@@ -314,12 +346,11 @@ func loadNodeHashes(
 	return hashes, embedded, nil
 }
 
-// getHashListBatchSize gets the size of batch used for each list of hashes
-// stored in memory.
-// It is computed as 80% of the size of memory divided by 32, which is the size of hash.
-func getHashListBatchSize() uint64 {
+// getHashListBatchSize gets the size of batch used for a list of items stored in memory.
+// It is computed as 80% of the main memory divided by the input item size.
+func getHashListBatchSize(itemSize uint) uint64 {
 	// 80% of memory, 32byte hash size
-	return uint64(float64(memory.TotalMemory()) * 0.8 / 32)
+	return uint64(float64(memory.TotalMemory()) * 0.8 / float64(itemSize))
 }
 
 func verifyHashesStoredWithNodes[N any](
@@ -334,28 +365,12 @@ func verifyHashesStoredWithNodes[N any](
 	readHash func(*N) (common.Hash, bool),
 	isEmbedded func(Node) (bool, error),
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
-	collectChildrenIds func(*N, []NodeId) []NodeId,
+	collectChildrenIds func(*N, map[NodeId]struct{}),
 ) error {
-	batchSize := getHashListBatchSize()
+	batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
 
-	// Check hashes of roots.
-	observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-	refIds := make([]NodeId, 0, batchSize)
-	for _, root := range roots {
-		refIds = append(refIds, root.NodeRef.id)
-	}
-	refIds = sortUnique(refIds)
-	hashes, _, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
-	if err != nil {
-		return err
-	}
-	for _, root := range roots {
-		want := hashes[root.NodeRef.Id()]
-		got := root.Hash
-		if want != got {
-			return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
-		}
-	}
+	refIds := make(map[NodeId]struct{}, batchSize)
+	nodeIdsKeys := make([]NodeId, 0, len(refIds))
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -370,7 +385,6 @@ func verifyHashesStoredWithNodes[N any](
 		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
-		refIds = refIds[0:0] // re-use the same pool every-time
 		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
@@ -380,18 +394,13 @@ func verifyHashesStoredWithNodes[N any](
 			if err != nil {
 				return err
 			}
-			refIds = collectChildrenIds(&node, refIds)
+			collectChildrenIds(&node, refIds)
 			upperBound++
 		}
 
-		// Second step - sort and uniq IDs and load hashes from the disk
-		sizeBefore := len(refIds)
-		refIds = sortUnique(refIds)
-		sizeAfter := len(refIds)
-		fmt.Printf("Ids list before: %d, After: %d, ratio: %.2f\n", sizeBefore, sizeAfter, float64(sizeAfter)/float64(sizeBefore))
-
+		// Second step - sort IDs and load hashes from the disk
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", len(refIds), name, batchNum, batchSize))
-		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
+		hashes, embedded, err := loadNodeHashes(refIds, nodeIdsKeys[0:0], source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
@@ -428,21 +437,6 @@ func verifyHashesStoredWithNodes[N any](
 	return nil
 }
 
-func sortUnique(refIds []NodeId) []NodeId {
-	sort.Slice(refIds, func(i, j int) bool {
-		return refIds[i] < refIds[j]
-	})
-	j := 0
-	for i := 1; i < len(refIds); i++ {
-		if refIds[i] != refIds[j] {
-			j++
-			refIds[j] = refIds[i]
-		}
-	}
-	refIds = refIds[:j+1]
-	return refIds
-}
-
 func verifyHashesStoredWithParents[N any](
 	name string,
 	source *verificationNodeSource,
@@ -453,7 +447,7 @@ func verifyHashesStoredWithParents[N any](
 	hash func(*N) (common.Hash, error),
 	isNodeType func(NodeId) bool,
 ) error {
-	batchSize := getHashListBatchSize()
+	batchSize := getHashListBatchSize(32) // a batch stores 32byte hashes
 	// Load nodes of current type from disk
 	for batch := ids.GetLowerBound(); batch < ids.GetUpperBound(); batch += batchSize {
 		lowerBound := batch
