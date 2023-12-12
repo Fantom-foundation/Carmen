@@ -368,8 +368,8 @@ func verifyHashesStoredWithNodes[N any](
 ) error {
 	batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
 
-	fmt.Printf("Debug: Allocation start: \n")
 	printMemoryUsage()
+	fmt.Printf("Debug: Allocation start: \n")
 	// re-used for each loop to save on allocations
 	refIds := make(map[NodeId]struct{}, batchSize)
 	nodeIdsKeys := make([]NodeId, 0, batchSize)
@@ -436,7 +436,7 @@ func verifyHashesStoredWithNodes[N any](
 			}
 		}
 
-		observer.Progress(fmt.Sprintf("Bbatch %d done", batchNum))
+		fmt.Printf("Bbatch %d done\n", batchNum)
 		printMemoryUsage()
 		lowerBound = upperBound // move to next window
 	}
@@ -449,7 +449,7 @@ func printMemoryUsage() {
 	runtime.ReadMemStats(&m)
 	fmt.Printf("Alloc = %v GB\n", bToMb(m.Alloc))
 	//fmt.Printf("TotalAlloc = %v GB\n", bToMb(m.TotalAlloc))
-	fmt.Printf("HeapSys = %v GB\n", bToMb(m.HeapSys))
+	//fmt.Printf("HeapSys = %v GB\n", bToMb(m.HeapSys))
 	//fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
 	//fmt.Printf("NumGC = %v\n", m.NumGC)
 }
