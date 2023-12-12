@@ -553,7 +553,7 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 		t.Fatalf("failed to set value: %v", err)
 	}
 
-	// Deleting the account should free the storage.
+	// Deleting the account should free the storage -` Accounts.Delete()` and `Values.Delete()` get called.
 	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{})
 	if err != nil {
 		t.Fatalf("failed to delete account: %v", err)
