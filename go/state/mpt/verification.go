@@ -282,17 +282,9 @@ type nodeIds struct {
 }
 
 func newNodeIds(capacity uint64) *nodeIds {
-	fmt.Printf("Map-before\n")
-	printMemoryUsage()
-	x := make(map[NodeId]struct{}, capacity)
-	printMemoryUsage()
-	fmt.Printf("Map-after\n")
-	printMemoryUsage()
-	y := make([]NodeId, 0, capacity)
-	fmt.Printf("Slice-after\n")
 	return &nodeIds{
-		nodeIds:     x,
-		nodeIdsKeys: y,
+		nodeIds:     make(map[NodeId]struct{}, capacity),
+		nodeIdsKeys: make([]NodeId, 0, capacity),
 	}
 }
 
