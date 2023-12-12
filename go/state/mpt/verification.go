@@ -366,7 +366,13 @@ func verifyHashesStoredWithNodes[N any](
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
 	collectChildrenIds func(*N, map[NodeId]struct{}),
 ) error {
-	batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
+	// Two maps:
+	// - Hashes: 8bytes map overhead, 8 bytes NodeID, 32bytes hash
+	// - Embedded: 8bytes map overhead, 8 bytes NodeID, 1byte bool
+	// NodeList:
+	// - 8bytes NodeID
+	const itemSize = (8 + 8 + 32) + (8 + 8 + 1) + 8
+	batchSize := getHashListBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
 
 	printMemoryUsage()
 	fmt.Printf("Debug: Allocation start: \n")
