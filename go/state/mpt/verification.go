@@ -263,7 +263,7 @@ func verifyHashes[N any](
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
 	case HashStoredWithNode:
-		return verifyHashesStoredWithNodes(name, source, stock, ids, roots, hashOfEmptyNode, observer, hash, readHash, isEmbedded, fillInChildrenHashes, collectChildrenIds)
+		return verifyHashesStoredWithNodes(name, source, stock, ids, hashOfEmptyNode, observer, hash, readHash, isEmbedded, fillInChildrenHashes, collectChildrenIds)
 	case HashStoredWithParent:
 		return verifyHashesStoredWithParents(name, source, stock, ids, roots, observer, hash, isNodeType)
 	default:
@@ -357,7 +357,6 @@ func verifyHashesStoredWithNodes[N any](
 	source *verificationNodeSource,
 	stock stock.Stock[uint64, N],
 	ids stock.IndexSet[uint64],
-	roots []Root,
 	hashOfEmptyNode common.Hash,
 	observer VerificationObserver,
 	hash func(*N) (common.Hash, error),
@@ -368,8 +367,9 @@ func verifyHashesStoredWithNodes[N any](
 ) error {
 	batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
 
+	// re-used for each loop to save on allocations
 	refIds := make(map[NodeId]struct{}, batchSize)
-	nodeIdsKeys := make([]NodeId, 0, len(refIds))
+	nodeIdsKeys := make([]NodeId, 0, batchSize)
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -430,6 +430,8 @@ func verifyHashesStoredWithNodes[N any](
 			}
 		}
 
+		hashes = nil
+		embedded = nil
 		lowerBound = upperBound // move to next window
 	}
 
