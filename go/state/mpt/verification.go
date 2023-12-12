@@ -12,6 +12,7 @@ import (
 	"github.com/pbnjay/memory"
 	"runtime"
 	"sort"
+	"unsafe"
 )
 
 // VerificationObserver is a listener interface for tracking the progress of the verification
@@ -416,6 +417,7 @@ func verifyHashesStoredWithNodes[N any](
 	fmt.Printf("Debug: Allocation start: \n")
 	// re-used for each loop to save on allocations
 	refIds := newNodeIds(batchSize)
+	fmt.Printf("unsafe size: %d\n", unsafe.Sizeof(*refIds))
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
