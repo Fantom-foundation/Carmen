@@ -447,7 +447,8 @@ func printMemoryUsage() {
 	runtime.ReadMemStats(&m)
 	fmt.Printf("Alloc = %v GB\n", bToMb(m.Alloc))
 	//fmt.Printf("TotalAlloc = %v GB\n", bToMb(m.TotalAlloc))
-	fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
+	fmt.Printf("HeapSys = %v GB\n", bToMb(m.HeapSys))
+	//fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
 	//fmt.Printf("NumGC = %v\n", m.NumGC)
 }
 
