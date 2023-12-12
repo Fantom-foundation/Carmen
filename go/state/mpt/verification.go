@@ -10,6 +10,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"github.com/pbnjay/memory"
+	"runtime"
 	"sort"
 )
 
@@ -472,10 +473,25 @@ func verifyHashesStoredWithNodes[N any](
 			}
 		}
 
+		printMemoryUsage()
 		lowerBound = upperBound // move to next window
 	}
 
 	return nil
+}
+
+func printMemoryUsage() {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	fmt.Printf("Alloc = %v GB\n", bToMb(m.Alloc))
+	//fmt.Printf("TotalAlloc = %v GB\n", bToMb(m.TotalAlloc))
+	//fmt.Printf("HeapSys = %v GB\n", bToMb(m.HeapSys))
+	//fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
+	//fmt.Printf("NumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) float64 {
+	return float64(b) / 1024.0 / 1024.0 / 1024.0
 }
 
 func verifyHashesStoredWithParents[N any](
