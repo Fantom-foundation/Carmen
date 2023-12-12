@@ -12,7 +12,6 @@ import (
 	"github.com/pbnjay/memory"
 	"runtime"
 	"sort"
-	"unsafe"
 )
 
 // VerificationObserver is a listener interface for tracking the progress of the verification
@@ -148,8 +147,8 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.storageHash = hashes[node.storage.Id()].hash
 			node.storageHashDirty = false
 		},
-		func(node *AccountNode, ids *nodeIds) {
-			ids.Put(node.storage.Id())
+		func(node *AccountNode, ids map[NodeId]struct{}) {
+			ids[node.storage.Id()] = struct{}{}
 		},
 	)
 	if err != nil {
@@ -178,10 +177,10 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			}
 			node.dirtyHashes = 0
 		},
-		func(node *BranchNode, ids *nodeIds) {
+		func(node *BranchNode, ids map[NodeId]struct{}) {
 			for i := 0; i < 16; i++ {
 				// ID may be an embedded child, it will be determined later while hashing
-				ids.Put(node.children[i].Id())
+				ids[node.children[i].Id()] = struct{}{}
 			}
 		},
 	)
@@ -201,8 +200,8 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.nextHashDirty = false
 			node.nextIsEmbedded = h.isEmbedded
 		},
-		func(node *ExtensionNode, ids *nodeIds) {
-			ids.Put(node.next.Id())
+		func(node *ExtensionNode, ids map[NodeId]struct{}) {
+			ids[node.next.Id()] = struct{}{}
 		},
 	)
 	if err != nil {
@@ -216,7 +215,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsValue() },
 		func(*ValueNode, map[NodeId]embeddedHash) {},
-		func(node *ValueNode, ids *nodeIds) {},
+		func(node *ValueNode, ids map[NodeId]struct{}) {},
 	)
 	if err != nil {
 		return err
@@ -226,12 +225,13 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	if source.getConfig().HashStorageLocation == HashStoredWithNode {
 		// Check hashes of roots.
 		observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-		refIds := newNodeIds(uint64(len(roots)))
+		refIds := make(map[NodeId]struct{}, len(roots))
 		for _, root := range roots {
-			refIds.Put(root.NodeRef.id)
+			refIds[root.NodeRef.id] = struct{}{}
 		}
+		nodeIdsKeys := make([]NodeId, 0, len(refIds))
 		isEmbedded := func(node Node) (bool, error) { return false, nil } // root node cannot be embedded
-		hashes, err := loadNodeHashes(refIds, source, isEmbedded, emptyNodeHash)
+		hashes, err := loadNodeHashes(refIds, nodeIdsKeys, source, isEmbedded, emptyNodeHash)
 		if err != nil {
 			return err
 		}
@@ -260,7 +260,7 @@ func verifyHashes[N any](
 	isEmbedded func(Node) (bool, error),
 	isNodeType func(NodeId) bool,
 	fillInChildrenHashes func(*N, map[NodeId]embeddedHash),
-	collectChildrenIds func(*N, *nodeIds),
+	collectChildrenIds func(*N, map[NodeId]struct{}),
 ) error {
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
@@ -331,14 +331,23 @@ type embeddedHash struct {
 // The nodes to be hashes are loaded in sequence then using this sorted slice.
 // This method returns hashed nodes for the input ID and a map with embedded node IDs.
 func loadNodeHashes(
-	nodeIds *nodeIds,
+	nodeIds map[NodeId]struct{},
+	nodeIdsKeys []NodeId, // empty re-used slice should be passed from the outside to save on allocations
 	source *verificationNodeSource,
 	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
 ) (map[NodeId]embeddedHash, error) {
-	nodeIdsKeys := nodeIds.DrainToOrderedKeys()
+	// collect keys ...
+	for id := range nodeIds {
+		nodeIdsKeys = append(nodeIdsKeys, id)
+		delete(nodeIds, id) // remove item to save space
+	}
+	// ... and sort to be more I/O friendly
+	sort.Slice(nodeIdsKeys, func(i, j int) bool {
+		return nodeIdsKeys[i] < nodeIdsKeys[j]
+	})
 	// Load hashes from disk
-	hashes := make(map[NodeId]embeddedHash, len(nodeIdsKeys)+1)
+	hashes := make(map[NodeId]embeddedHash, len(nodeIds)+1)
 	hashes[EmptyId()] = embeddedHash{hashOfEmptyNode, false}
 	for _, id := range nodeIdsKeys {
 		var node Node
@@ -404,7 +413,7 @@ func verifyHashesStoredWithNodes[N any](
 	readHash func(*N) (common.Hash, bool),
 	isEmbedded func(Node) (bool, error),
 	fillInChildrenHashes func(*N, map[NodeId]embeddedHash),
-	collectChildrenIds func(*N, *nodeIds),
+	collectChildrenIds func(*N, map[NodeId]struct{}),
 ) error {
 	// Maps:
 	// - Hashes with an embedded flag: 8bytes map overhead, 8 bytes NodeID, 32bytes hash, 1byte boolean
@@ -416,8 +425,8 @@ func verifyHashesStoredWithNodes[N any](
 	printMemoryUsage()
 	fmt.Printf("Debug: Allocation start: \n")
 	// re-used for each loop to save on allocations
-	refIds := newNodeIds(batchSize)
-	fmt.Printf("unsafe size: %d\n", unsafe.Sizeof(*refIds))
+	refIds := make(map[NodeId]struct{}, batchSize)
+	nodeIdsKeys := make([]NodeId, 0, batchSize)
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -433,7 +442,7 @@ func verifyHashesStoredWithNodes[N any](
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
 		printMemoryUsage()
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
-		for refIds.Size() < batchSize && upperBound < ids.GetUpperBound() {
+		for uint64(len(refIds)) < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
 				continue
@@ -448,8 +457,8 @@ func verifyHashesStoredWithNodes[N any](
 		printMemoryUsage()
 
 		// Second step - sort IDs and load hashes from the disk
-		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", refIds.Size(), name, batchNum, batchSize))
-		hashes, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
+		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", len(refIds), name, batchNum, batchSize))
+		hashes, err := loadNodeHashes(refIds, nodeIdsKeys[0:0], source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
