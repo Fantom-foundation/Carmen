@@ -385,10 +385,10 @@ func loadNodeHashes(
 	return hashes, nil
 }
 
-// getHashListBatchSize gets the size of batch used for a list of items stored in memory.
+// getBatchSize gets the size of batch used for a list of items stored in memory.
 // It is computed as 80% of the main memory divided by the input item size.
-func getHashListBatchSize(itemSize uint) uint64 {
-	// 80% of memory, 32byte hash size
+func getBatchSize(itemSize uint) uint64 {
+	fmt.Printf("Total memory: %d\n", memory.TotalMemory())
 	return uint64(float64(memory.TotalMemory()) * 0.8 / float64(itemSize))
 }
 
@@ -410,7 +410,7 @@ func verifyHashesStoredWithNodes[N any](
 	// NodeList:
 	// - 8bytes NodeID
 	const itemSize = (8 + 8 + 32 + 1) + 8
-	batchSize := getHashListBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
+	batchSize := getBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
 
 	printMemoryUsage()
 	fmt.Printf("Debug: Allocation start: \n")
@@ -511,7 +511,7 @@ func verifyHashesStoredWithParents[N any](
 	hash func(*N) (common.Hash, error),
 	isNodeType func(NodeId) bool,
 ) error {
-	batchSize := getHashListBatchSize(32) // a batch stores 32byte hashes
+	batchSize := getBatchSize(32) // a batch stores 32byte hashes
 	// Load nodes of current type from disk
 	for batch := ids.GetLowerBound(); batch < ids.GetUpperBound(); batch += batchSize {
 		lowerBound := batch
