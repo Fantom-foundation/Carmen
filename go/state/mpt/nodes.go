@@ -764,6 +764,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 	// Checked invariants:
 	//  - must have 2+ children
 	//  - non-dirty hashes for child nodes are valid
+	//  - mask of frozen children is consistent
 	numChildren := 0
 	errs := []error{}
 	for i, child := range n.children {
@@ -779,6 +780,23 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 				errs = append(errs, fmt.Errorf("in node %v the hash for child %d is invalid\nwant: %v\ngot: %v", thisRef.Id(), i, want, got))
 			}
 		}
+		handle, err := source.getViewAccess(&child)
+		if err != nil {
+			return err
+		}
+
+		childIsFrozen := handle.Get().IsFrozen()
+		handle.Release()
+
+		// rule: flag -> childIsFrozen (implication)
+		if flag := n.isChildFrozen(byte(i)); flag && !childIsFrozen {
+			errs = append(errs, fmt.Errorf("in node %v the frozen flag for child 0x%X is invalid, flag: %t, actual: %t", thisRef.Id(), i, flag, childIsFrozen))
+		}
+
+		// rule: if this node is frozen, all children must be frozen
+		if n.frozen && !childIsFrozen {
+			errs = append(errs, fmt.Errorf("the frozen node %v must not have a non-frozen child at position 0x%X", thisRef.Id(), i))
+		}
 	}
 	if numChildren < 2 {
 		errs = append(errs, fmt.Errorf("node %v has an insufficient number of child nodes: %d", thisRef.Id(), numChildren))
@@ -787,7 +805,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 }
 
 func (n *BranchNode) Dump(source NodeSource, thisRef *NodeReference, indent string) {
-	fmt.Printf("%sBranch (ID: %v/%t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisRef.Id(), n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
+	fmt.Printf("%sBranch (ID: %v, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisRef.Id(), n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
 	for i, child := range n.children {
 		if child.Id().IsEmpty() {
 			continue
@@ -1197,6 +1215,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 	//  - extension path have a length > 0
 	//  - extension can only be followed by a branch
 	//  - hash of sub-tree is either dirty or correct
+	//  - frozen flags are consistent
 	errs := []error{}
 	if n.path.Length() <= 0 {
 		errs = append(errs, fmt.Errorf("node %v - extension path must not be empty", thisRef.Id()))
@@ -1212,6 +1231,20 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 			errs = append(errs, fmt.Errorf("node %v - next node hash invalid\nwant: %v\ngot: %v", thisRef.Id(), want, n.nextHash))
 		}
 	}
+
+	if !n.next.Id().IsEmpty() {
+		handle, err := source.getViewAccess(&n.next)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			nextIsFrozen := handle.Get().IsFrozen()
+			handle.Release()
+			if n.frozen && !nextIsFrozen {
+				errs = append(errs, fmt.Errorf("the frozen node %v must not have a non-frozen next", thisRef.Id()))
+			}
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -1315,7 +1348,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			}
 			// Release this account node and remove it from the trie.
 			manager.release(thisRef.Id())
-			return NewNodeReference(EmptyId()), true, nil
+			return NewNodeReference(EmptyId()), false, nil
 		}
 
 		// If this node is frozen, we need to write the result in
@@ -1411,6 +1444,7 @@ func splitLeafNode(
 	}
 
 	// If enabled, keep track of the suffix length of leaf values.
+	thisIsFrozen := this.IsFrozen()
 	remainingPathLength := byte(len(partialPath)-commonPrefixLength) - 1
 	if manager.getConfig().TrackSuffixLengthsInLeafNodes {
 		sibling.setPathLength(manager, siblingRef, siblingHandle, remainingPathLength)
@@ -1419,6 +1453,7 @@ func splitLeafNode(
 			return NodeReference{}, err
 		}
 		thisRef = &ref
+		thisIsFrozen = false
 	} else {
 		// Commit the changes to the sibling.
 		manager.update(siblingRef.Id(), siblingHandle)
@@ -1430,6 +1465,11 @@ func splitLeafNode(
 	branch.markChildHashDirty(byte(partialPath[commonPrefixLength]))
 	branch.markChildHashDirty(byte(siblingPath[commonPrefixLength]))
 	branch.hashDirty = true
+
+	// Track frozen state of split node.
+	if thisIsFrozen {
+		branch.setChildFrozen(byte(partialPath[commonPrefixLength]), true)
+	}
 
 	// Commit the changes to the the branch node.
 	manager.update(branchRef.Id(), branchHandle)
@@ -1599,6 +1639,7 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 	// Checked invariants:
 	//  - account information must not be empty
 	//  - the account is at a correct position in the trie
+	//  - frozen flags are consistent
 	//  - path length
 	errs := []error{}
 
@@ -1621,11 +1662,24 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 		}
 	}
 
+	if !n.storage.Id().IsEmpty() {
+		handle, err := source.getViewAccess(&n.storage)
+		if err != nil {
+			errs = append(errs, err)
+		} else {
+			storageIsFrozen := handle.Get().IsFrozen()
+			handle.Release()
+			if n.frozen && !storageIsFrozen {
+				errs = append(errs, fmt.Errorf("the frozen node %v must not have a non-frozen storage", thisRef.Id()))
+			}
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
 func (n *AccountNode) Dump(source NodeSource, thisRef *NodeReference, indent string) {
-	fmt.Printf("%sAccount (ID: %v/%t/%v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
+	fmt.Printf("%sAccount (ID: %v, frozen: %t, path length: %v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
 	if n.storage.Id().IsEmpty() {
 		return
 	}
