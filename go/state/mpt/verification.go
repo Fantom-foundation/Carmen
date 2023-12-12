@@ -279,12 +279,14 @@ func verifyHashes[N any](
 type nodeIds struct {
 	nodeIds     map[NodeId]struct{}
 	nodeIdsKeys []NodeId
+	capacity    uint64
 }
 
 func newNodeIds(capacity uint64) *nodeIds {
 	return &nodeIds{
 		nodeIds:     make(map[NodeId]struct{}, capacity),
 		nodeIdsKeys: make([]NodeId, 0, capacity),
+		capacity:    capacity,
 	}
 }
 
@@ -307,8 +309,9 @@ func (n *nodeIds) DrainToOrderedKeys() []NodeId {
 	// collect keys ...
 	for id := range n.nodeIds {
 		n.nodeIdsKeys = append(n.nodeIdsKeys, id)
-		delete(n.nodeIds, id) // remove item to save space
 	}
+	n.nodeIds = make(map[NodeId]struct{}) // remove items to save space
+
 	// ... and sort
 	sort.Slice(n.nodeIdsKeys, func(i, j int) bool {
 		return n.nodeIdsKeys[i] < n.nodeIdsKeys[j]
@@ -412,7 +415,7 @@ func verifyHashesStoredWithNodes[N any](
 	batchSize := getBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
 
 	// re-used for each loop to save on allocations
-	refIds := newNodeIds(batchSize / 3) // pre-allocate only a third of the capacity to prevent huge allocations and GC when not the whole batch is used.
+	refIds := newNodeIds(batchSize / 3) // pre-allocate only a fraction of the capacity to prevent huge allocations and GC when not the whole batch is used.
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
