@@ -388,7 +388,7 @@ func loadNodeHashes(
 // getBatchSize gets the size of batch used for a list of items stored in memory.
 // It is computed as 60% of the main memory divided by the input item size.
 func getBatchSize(itemSize uint) uint64 {
-	return uint64(float64(memory.TotalMemory()) * 0.6 / float64(itemSize))
+	return uint64(float64(memory.TotalMemory()) * 0.8 / float64(itemSize))
 }
 
 func verifyHashesStoredWithNodes[N any](
@@ -412,7 +412,7 @@ func verifyHashesStoredWithNodes[N any](
 	batchSize := getBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
 
 	// re-used for each loop to save on allocations
-	refIds := newNodeIds(batchSize)
+	refIds := newNodeIds(batchSize / 3) // pre-allocate only a third of the capacity to prevent huge allocations and GC when not the whole batch is used.
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -440,12 +440,16 @@ func verifyHashesStoredWithNodes[N any](
 			upperBound++
 		}
 
+		printMemoryUsage()
+
 		// Second step - sort IDs and load hashes from the disk
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", refIds.Size(), name, batchNum, batchSize))
 		hashes, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
+
+		printMemoryUsage()
 
 		// Third step - read again the nodes, fill-in collected child hashes, compare hashes
 		observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss (batch %d, size: %d)...", upperBound-lowerBound, name, batchNum, batchSize))
