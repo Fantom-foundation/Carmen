@@ -368,6 +368,8 @@ func verifyHashesStoredWithNodes[N any](
 ) error {
 	batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
 
+	fmt.Printf("Debug: Allocation start: \n")
+	printMemoryUsage()
 	// re-used for each loop to save on allocations
 	refIds := make(map[NodeId]struct{}, batchSize)
 	nodeIdsKeys := make([]NodeId, 0, batchSize)
