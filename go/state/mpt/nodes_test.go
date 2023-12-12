@@ -55,8 +55,8 @@ func TestEmptyNode_SetAccount(t *testing.T) {
 		t.Fatalf("failed to create account: %v", err)
 	}
 	handle.Release()
-	if !changed {
-		t.Errorf("added account information not indicated as a change")
+	if changed {
+		t.Errorf("empty node should never change")
 	}
 	if newRoot != accountRef {
 		t.Errorf("failed to return new root node ID, wanted %v, got %v", accountRef, newRoot)
@@ -89,8 +89,8 @@ func TestEmptyNode_SetAccount_WithLengthTracking(t *testing.T) {
 		t.Fatalf("failed to create account: %v", err)
 	}
 	handle.Release()
-	if !changed {
-		t.Errorf("added account information not indicated as a change")
+	if changed {
+		t.Errorf("empty node should never change")
 	}
 	if newRoot != account {
 		t.Errorf("failed to return new root node ID, wanted %v, got %v", account, newRoot)
@@ -463,7 +463,7 @@ func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
 			4: &Branch{children: Children{
 				0: &Account{address: common.Address{0x40}, info: info},
 				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
-			}, dirty: []int{0, 1}, hashDirty: true},
+			}, dirty: []int{1}, hashDirty: true},
 			8: &Account{address: common.Address{0x81}, info: info},
 		}, dirty: []int{4}, hashDirty: true},
 	)
@@ -504,7 +504,7 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing
 			4: &Branch{children: Children{
 				0: &Account{address: common.Address{0x40}, info: info, frozen: true},
 				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
-			}, dirty: []int{0, 1}, frozenChildren: []int{0}, hashDirty: true},
+			}, dirty: []int{1}, frozenChildren: []int{0}, hashDirty: true},
 			8: &Account{address: common.Address{0x81}, info: info, frozen: true},
 		}, dirty: []int{4}, frozenChildren: []int{8}, hashDirty: true},
 	)
@@ -549,7 +549,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x20}, info: info},
 			8: &Account{address: common.Address{0x82}, info: info},
-		}, dirty: []int{4}, hashDirty: true},
+		}, dirty: []int{}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -589,7 +589,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *test
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x20}, info: info, frozen: true},
 			8: &Account{address: common.Address{0x82}, info: info, frozen: true},
-		}, dirty: []int{4}, frozenChildren: []int{2, 8}, hashDirty: true},
+		}, dirty: []int{}, frozenChildren: []int{2, 8}, hashDirty: true},
 	)
 	ctxt.Check(t, after)
 
@@ -888,8 +888,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 			1: &Account{address: common.Address{0x41, 0x20}, info: info},
 			2: &Account{address: common.Address{0x42, 0x84}, info: info},
 		}},
-		hashDirty:     true,
-		nextHashDirty: true,
+		hashDirty: true,
 	})
 	ctxt.Check(t, after)
 
@@ -935,8 +934,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedBy
 			1: &Account{address: common.Address{0x41, 0x20}, info: info, frozen: true},
 			2: &Account{address: common.Address{0x42, 0x84}, info: info, frozen: true},
 		}, frozen: true, frozenChildren: []int{1, 2}},
-		hashDirty:     true,
-		nextHashDirty: true,
+		hashDirty: true,
 	})
 	ctxt.Check(t, after)
 
@@ -1416,8 +1414,7 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 					}},
-					hashDirty:     true,
-					nextHashDirty: true,
+					hashDirty: true,
 				},
 				4: &Account{address: common.Address{0x12, 0x40}, info: info, hashDirty: true},
 			}, dirty: []int{3, 4}, hashDirty: true},
@@ -1474,8 +1471,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *t
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
 					}, frozen: true, frozenChildren: []int{0xA, 0xE}},
-					hashDirty:     true,
-					nextHashDirty: true,
+					hashDirty: true,
 				},
 				4: &Account{address: common.Address{0x12, 0x40}, info: info, hashDirty: true},
 			}, dirty: []int{3, 4}, hashDirty: true},
@@ -1533,8 +1529,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}},
-				hashDirty:     true,
-				nextHashDirty: true, // < if the extension node is reused, this would not be needed; but there is no guarantee for that
+				hashDirty: true,
 			},
 			4: &Account{address: common.Address{0x40}, info: info, hashDirty: true},
 		}, dirty: []int{1, 4}, hashDirty: true},
@@ -1585,8 +1580,7 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T)
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
 				}, frozen: true, frozenChildren: []int{0xA, 0xE}},
-				hashDirty:     true,
-				nextHashDirty: true,
+				hashDirty: true,
 			},
 			4: &Account{address: common.Address{0x40}, info: info, hashDirty: true},
 		}, dirty: []int{1, 4}, hashDirty: true},
@@ -1640,7 +1634,7 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}},
 				8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
-			}, dirty: []int{4, 8}, hashDirty: true},
+			}, dirty: []int{8}, hashDirty: true},
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1695,8 +1689,8 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing
 					8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
 				},
 				hashDirty:      true,
-				dirty:          []int{4, 8}, // < TODO: it should be possible to restrict this to {8}
-				frozenChildren: []int{},     // < TODO: it would be possible to extend this to {4}
+				dirty:          []int{8},
+				frozenChildren: []int{4},
 			},
 			hashDirty:     true,
 			nextHashDirty: true,
@@ -1749,7 +1743,7 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 				0xE: &Account{address: common.Address{0x1E}, info: info},
 			}},
 			2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
-		}, hashDirty: true, dirty: []int{1, 2}}, // < TODO: could be {2}
+		}, hashDirty: true, dirty: []int{2}},
 	)
 
 	ctxt.Check(t, ref)
@@ -1764,8 +1758,8 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 	addr := common.Address{0x20}
 	path := addressToNibbles(addr)
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info); newRoot != branchId || !changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info); newRoot != branchId || changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, false, newRoot, changed, err)
 	}
 	handle.Release()
 
@@ -1799,8 +1793,8 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *
 				2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
 			},
 			hashDirty:      true,
-			dirty:          []int{1, 2},
-			frozenChildren: []int{}, // < TODO: this could be extended to {1}
+			dirty:          []int{2},
+			frozenChildren: []int{1},
 		},
 	)
 
@@ -1858,8 +1852,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 				1: &Account{address: common.Address{0x11, 0x10}, info: info},
 				2: &Account{address: common.Address{0x11, 0x20}, info: info},
 			}},
-			hashDirty:     true,
-			nextHashDirty: true,
+			hashDirty: true,
 		},
 	)
 
@@ -1918,8 +1911,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 				1: &Account{address: common.Address{0x11, 0x10}, info: info, frozen: true},
 				2: &Account{address: common.Address{0x11, 0x20}, info: info, frozen: true},
 			}, frozen: true, frozenChildren: []int{1, 2}},
-			hashDirty:     true,
-			nextHashDirty: true, // < could be optimized away ..
+			hashDirty: true,
 		},
 	)
 
@@ -2600,7 +2592,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1},
 		3: &Account{address: addr2, info: info2, hashDirty: true},
-	}, dirty: []int{2, 3}, hashDirty: true})
+	}, dirty: []int{3}, hashDirty: true})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2633,7 +2625,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1, frozen: true},
 		3: &Account{address: addr2, info: info2, hashDirty: true},
-	}, dirty: []int{2, 3}, hashDirty: true, frozenChildren: []int{2}})
+	}, dirty: []int{3}, hashDirty: true, frozenChildren: []int{2}})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2670,7 +2662,7 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 		next: &Branch{children: Children{
 			0xA: &Account{address: addr1, info: info1},
 			0xB: &Account{address: addr2, info: info2, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		}, dirty: []int{0xB}, hashDirty: true},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -2709,7 +2701,7 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 		next: &Branch{children: Children{
 			0xA: &Account{address: addr1, info: info1, frozen: true},
 			0xB: &Account{address: addr2, info: info2, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true, frozenChildren: []int{0xA}},
+		}, dirty: []int{0xB}, hashDirty: true, frozenChildren: []int{0xA}},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -3814,7 +3806,7 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *test
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Value{key: key1, value: value1},
 		3: &Value{key: key2, value: value2, hashDirty: true},
-	}, dirty: []int{2, 3}, hashDirty: true})
+	}, dirty: []int{3}, hashDirty: true})
 
 	// This operation creates one new value node and a branch.
 	res, _ := ctxt.ExpectCreateBranch()
@@ -3847,7 +3839,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Value{key: key1, value: value1, frozen: true},
 		3: &Value{key: key2, value: value2, hashDirty: true},
-	}, dirty: []int{2, 3}, hashDirty: true, frozenChildren: []int{2}})
+	}, dirty: []int{3}, hashDirty: true, frozenChildren: []int{2}})
 
 	// This operation creates one new value node and a branch.
 	ctxt.ExpectCreateBranch()
@@ -3884,7 +3876,7 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *te
 		next: &Branch{children: Children{
 			0xA: &Value{key: key1, value: value1},
 			0xB: &Value{key: key2, value: value2, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+		}, dirty: []int{0xB}, hashDirty: true},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -3923,7 +3915,7 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 		next: &Branch{children: Children{
 			0xA: &Value{key: key1, value: value1, frozen: true},
 			0xB: &Value{key: key2, value: value2, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true, frozenChildren: []int{0xA}},
+		}, dirty: []int{0xB}, hashDirty: true, frozenChildren: []int{0xA}},
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -4505,6 +4497,1099 @@ func TestValueNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
+//                               Transitions
+// ----------------------------------------------------------------------------
+
+type nodeType int
+
+const (
+	ntAccount nodeType = iota
+	ntBranch
+	ntEmpty
+	ntExtension
+	ntValue
+)
+
+func (t nodeType) String() string {
+	switch t {
+	case ntAccount:
+		return "Account"
+	case ntBranch:
+		return "Branch"
+	case ntEmpty:
+		return "Empty"
+	case ntExtension:
+		return "Extension"
+	case ntValue:
+		return "Value"
+	}
+	return "unknown"
+}
+
+type operationType int
+
+const (
+	otSetAccount operationType = iota
+	otSetValue
+	otClearStorage
+)
+
+func (t operationType) String() string {
+	switch t {
+	case otSetAccount:
+		return "SetAccount"
+	case otSetValue:
+		return "SetValue"
+	case otClearStorage:
+		return "ClearStorage"
+	}
+	return "unknown"
+}
+
+type transition struct {
+	node        nodeType
+	operation   operationType
+	description string
+	before      NodeDesc
+	change      func(*trie) (NodeReference, bool, error)
+	after       NodeDesc
+}
+
+func (t *transition) getLabel() string {
+	return fmt.Sprintf("%s/%s/%s", t.node, t.operation, t.description)
+}
+
+func (t *transition) apply(mgr NodeManager, root NodeReference) (NodeReference, bool, error) {
+	return t.change(&trie{mgr, root})
+}
+
+type trie struct {
+	manager NodeManager
+	root    NodeReference
+}
+
+func (t *trie) SetAccount(addr common.Address, info AccountInfo) (NodeReference, bool, error) {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return NodeReference{}, false, err
+	}
+	defer handle.Release()
+	path := addressToNibbles(addr)
+	return handle.Get().SetAccount(t.manager, &t.root, handle, addr, path, info)
+}
+
+func (t *trie) SetValue(addr common.Address, key common.Key, value common.Value) (NodeReference, bool, error) {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return NodeReference{}, false, err
+	}
+	defer handle.Release()
+	path := addressToNibbles(addr)
+	return handle.Get().SetSlot(t.manager, &t.root, handle, addr, path, key, value)
+}
+
+func getTestTransitions() []transition {
+	res := []transition{}
+
+	// --- Accounts ---
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "no_change",
+		before: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{5}, AccountInfo{Nonce: common.Nonce{1, 2, 3}})
+		},
+		after: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "update",
+		before: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{5}, AccountInfo{Nonce: common.Nonce{3, 2, 1}})
+		},
+		after: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{3, 2, 1}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "delete",
+		before: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{5}, AccountInfo{})
+		},
+		after: &Empty{},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "new_empty_account",
+		before: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{2}, AccountInfo{})
+		},
+		after: &Account{
+			address: common.Address{5},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "create_sibling_no_common_prefix",
+
+		before: &Account{
+			address: common.Address{0x12, 0x34},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x43, 0x21}, AccountInfo{Nonce: common.Nonce{3, 2, 1}})
+		},
+		after: &Branch{children: Children{
+			1: &Account{
+				address: common.Address{0x12, 0x34},
+				info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			},
+			4: &Account{
+				address: common.Address{0x43, 0x21},
+				info:    AccountInfo{Nonce: common.Nonce{3, 2, 1}},
+			},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "create_sibling_with_common_prefix_length_1",
+		before: &Account{
+			address: common.Address{0x12, 0x34},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x14, 0x21}, AccountInfo{Nonce: common.Nonce{3, 2, 1}})
+		},
+		after: &Extension{
+			path: []Nibble{1},
+			next: &Branch{children: Children{
+				2: &Account{
+					address: common.Address{0x12, 0x34},
+					info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+				},
+				4: &Account{
+					address: common.Address{0x14, 0x21},
+					info:    AccountInfo{Nonce: common.Nonce{3, 2, 1}},
+				},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetAccount,
+		description: "create_sibling_with_common_prefix_length_2",
+		before: &Account{
+			address: common.Address{0x12, 0x34},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x43}, AccountInfo{Nonce: common.Nonce{3, 2, 1}})
+		},
+		after: &Extension{
+			path: []Nibble{1, 2},
+			next: &Branch{children: Children{
+				3: &Account{
+					address: common.Address{0x12, 0x34},
+					info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+				},
+				4: &Account{
+					address: common.Address{0x12, 0x43},
+					info:    AccountInfo{Nonce: common.Nonce{3, 2, 1}},
+				},
+			}},
+		},
+	})
+
+	// --- Branches ---
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "no_change",
+		before: &Branch{children: Children{
+			4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{Nonce: common.Nonce{1, 2}})
+		},
+		after: &Branch{children: Children{
+			4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "update",
+		before: &Branch{children: Children{
+			4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{Nonce: common.Nonce{2, 3}})
+		},
+		after: &Branch{children: Children{
+			4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{2, 3}}},
+			7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "new_child",
+		before: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0xA3}, AccountInfo{Nonce: common.Nonce{5, 6}})
+		},
+		after: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+			0xA: &Account{address: common.Address{0xA3}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "split_child",
+		before: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x46}, AccountInfo{Nonce: common.Nonce{5, 6}})
+		},
+		after: &Branch{children: Children{
+			0x4: &Branch{
+				children: Children{
+					0x2: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+					0x6: &Account{address: common.Address{0x46}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
+				},
+			},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "delete_child_from_more_than_two_children",
+		before: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+			0xB: &Account{address: common.Address{0xB4}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{})
+		},
+		after: &Branch{children: Children{
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+			0xB: &Account{address: common.Address{0xB4}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "delete_causing_replacement_by_leave",
+		before: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{})
+		},
+		after: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "delete_causing_replacement_by_extension",
+		before: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
+			0x7: &Branch{children: Children{
+				3: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+				5: &Account{address: common.Address{0x75}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
+			}},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{})
+		},
+		after: &Extension{path: []Nibble{7}, next: &Branch{children: Children{
+			3: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
+			5: &Account{address: common.Address{0x75}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
+		}}},
+	})
+
+	// --- Empty ---
+
+	res = append(res, transition{
+		node:        ntEmpty,
+		operation:   otSetAccount,
+		description: "no_change",
+		before:      &Empty{},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{})
+		},
+		after: &Empty{},
+	})
+
+	res = append(res, transition{
+		node:        ntEmpty,
+		operation:   otSetAccount,
+		description: "create_account",
+		before:      &Empty{},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x42}, AccountInfo{Nonce: common.Nonce{1, 2, 3}})
+		},
+		after: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2, 3}}},
+	})
+
+	// --- Extension ---
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "no_change",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x34, 0x56}, AccountInfo{Nonce: common.Nonce{1}})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_zero_common_prefix_length_0",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x23}, AccountInfo{})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_zero_common_prefix_length_1",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x13}, AccountInfo{})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_zero_common_prefix_length_2",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x40}, AccountInfo{})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_zero_common_prefix_length_3",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x30}, AccountInfo{})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_non_zero_common_prefix_length_0",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x78}, AccountInfo{Nonce: common.Nonce{3}})
+		},
+		after: &Branch{children: Children{
+			1: &Extension{path: []Nibble{2, 3}, next: &Branch{children: Children{
+				4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+				7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			}}},
+			7: &Account{address: common.Address{0x78}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_non_zero_common_prefix_length_1",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x18}, AccountInfo{Nonce: common.Nonce{3}})
+		},
+		after: &Extension{path: []Nibble{1}, next: &Branch{children: Children{
+			2: &Extension{path: []Nibble{3}, next: &Branch{children: Children{
+				4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+				7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			}}},
+			8: &Account{address: common.Address{0x18}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_non_zero_common_prefix_length_2",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x84}, AccountInfo{Nonce: common.Nonce{3}})
+		},
+		after: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			3: &Branch{children: Children{
+				4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+				7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			}},
+			8: &Account{address: common.Address{0x12, 0x84}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_non_zero_common_prefix_length_3",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x39, 0xAB}, AccountInfo{Nonce: common.Nonce{3}})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			9: &Account{address: common.Address{0x12, 0x39, 0xAB}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_into_short_extension_non_zero_common_prefix_length_0",
+		before: &Extension{path: []Nibble{1}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x14}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x17}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x78}, AccountInfo{Nonce: common.Nonce{3}})
+		},
+		after: &Branch{children: Children{
+			1: &Branch{children: Children{
+				4: &Account{address: common.Address{0x14}, info: AccountInfo{Nonce: common.Nonce{1}}},
+				7: &Account{address: common.Address{0x17}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			}},
+			7: &Account{address: common.Address{0x78}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "insert_into_short_extension_non_zero_common_prefix_length_1",
+		before: &Extension{path: []Nibble{1}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x14}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x17}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x18}, AccountInfo{Nonce: common.Nonce{3}})
+		},
+		after: &Extension{path: []Nibble{1}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x14}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x17}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			8: &Account{address: common.Address{0x18}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "delete_causing_collapse",
+		before: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+			4: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			7: &Account{address: common.Address{0x12, 0x37, 0x89}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x37, 0x89}, AccountInfo{})
+		},
+		after: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetAccount,
+		description: "delete_causing_merge",
+		before: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			3: &Extension{path: []Nibble{4, 5}, next: &Branch{children: Children{
+				6: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+				8: &Account{address: common.Address{0x12, 0x34, 0x58}, info: AccountInfo{Nonce: common.Nonce{2}}},
+			}}},
+			7: &Account{address: common.Address{0x12, 0x70}, info: AccountInfo{Nonce: common.Nonce{3}}},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetAccount(common.Address{0x12, 0x70}, AccountInfo{})
+		},
+		after: &Extension{path: []Nibble{1, 2, 3, 4, 5}, next: &Branch{children: Children{
+			6: &Account{address: common.Address{0x12, 0x34, 0x56}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			8: &Account{address: common.Address{0x12, 0x34, 0x58}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+	})
+
+	// --- Values ---
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "no_change",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{5}, common.Value{1, 2, 3})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{1, 2, 3},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "update",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{5}, common.Value{3, 2, 1})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{3, 2, 1},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "delete",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{5}, common.Value{})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "new_zero_value",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{8}, common.Value{})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{5},
+				value: common.Value{1, 2, 3},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "new_sibling_with_common_prefix_length_0",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{0x12, 0x34},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{0x43, 0x21}, common.Value{3, 2, 1})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Branch{children: Children{
+				1: &Value{
+					key:   common.Key{0x12, 0x34},
+					value: common.Value{1, 2, 3},
+				},
+				4: &Value{
+					key:   common.Key{0x43, 0x21},
+					value: common.Value{3, 2, 1},
+				},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "new_sibling_with_common_prefix_length_1",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{0x12, 0x34},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{0x14, 0x21}, common.Value{3, 2, 1})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Extension{
+				path: []Nibble{1},
+				next: &Branch{children: Children{
+					2: &Value{
+						key:   common.Key{0x12, 0x34},
+						value: common.Value{1, 2, 3},
+					},
+					4: &Value{
+						key:   common.Key{0x14, 0x21},
+						value: common.Value{3, 2, 1},
+					},
+				}},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntValue,
+		operation:   otSetValue,
+		description: "new_sibling_with_common_prefix_length_2",
+		before: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Value{
+				key:   common.Key{0x12, 0x34},
+				value: common.Value{1, 2, 3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{}, common.Key{0x12, 0x43}, common.Value{3, 2, 1})
+		},
+		after: &Account{
+			info: AccountInfo{Balance: common.Balance{1}},
+			storage: &Extension{
+				path: []Nibble{1, 2},
+				next: &Branch{children: Children{
+					3: &Value{
+						key:   common.Key{0x12, 0x34},
+						value: common.Value{1, 2, 3},
+					},
+					4: &Value{
+						key:   common.Key{0x12, 0x43},
+						value: common.Value{3, 2, 1},
+					},
+				}},
+			},
+		},
+	})
+
+	return res
+}
+
+func TestTransitions_TestForMissingTransitions(t *testing.T) {
+	allNodeTypes := []nodeType{
+		ntAccount,
+		ntBranch,
+		ntEmpty, // TODO: enable when examples are covered
+		//ntExtension,
+		//ntValue,
+	}
+
+	allOperationTypes := []operationType{
+		otSetAccount,
+		//otSetValue, // TODO: enable when examples are covered
+		//otSetSlot,
+		//otClearStorage,
+	}
+
+	transitions := getTestTransitions()
+	for _, nodeType := range allNodeTypes {
+		for _, opType := range allOperationTypes {
+			found := false
+			for _, cur := range transitions {
+				if cur.node == nodeType && cur.operation == opType {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("Missing transition for node type %v and operation %v", nodeType, opType)
+			}
+		}
+	}
+}
+
+func TestTransitions_BeforeAndAfterStatesAreValid(t *testing.T) {
+	for _, transition := range getTestTransitions() {
+		transition := transition
+		t.Run(transition.getLabel(), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			ref, _ := ctxt.Build(transition.before)
+			ctxt.Check(t, ref)
+
+			ref, _ = ctxt.Build(transition.after)
+			ctxt.Check(t, ref)
+		})
+	}
+}
+
+func TestTransitions_BeforeAndAfterStatesCanBeFrozen(t *testing.T) {
+	for _, transition := range getTestTransitions() {
+		transition := transition
+		t.Run(transition.getLabel(), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			ctxt := newNodeContext(t, ctrl)
+
+			ref, _ := ctxt.Build(transition.before)
+			ctxt.Check(t, ref)
+			ctxt.Freeze(ref)
+			ctxt.Check(t, ref)
+
+			ref, _ = ctxt.Build(transition.after)
+			ctxt.Check(t, ref)
+			ctxt.Freeze(ref)
+			ctxt.Check(t, ref)
+		})
+	}
+}
+
+func TestTransitions_MutableTransitionHaveExpectedEffect(t *testing.T) {
+	for _, transition := range getTestTransitions() {
+		transition := transition
+		t.Run(transition.getLabel(), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			ctxt := newNiceNodeContext(t, ctrl)
+
+			before, _ := ctxt.Build(transition.before)
+			original, _ := ctxt.Clone(before)
+			after, changed, err := transition.apply(ctxt, before)
+			if err != nil {
+				t.Fatalf("failed to apply transition: %v", err)
+			}
+			ctxt.Check(t, after)
+
+			if want, got := !ctxt.equalTries(original, before), changed; want != got {
+				t.Errorf("unexpected 'changed' result, wanted %t, got %t", want, got)
+			}
+
+			want, _ := ctxt.Build(transition.after)
+			markModifiedAsDirty(t, ctxt, original, want)
+			ctxt.Check(t, want)
+
+			ctxt.ExpectEqualTries(t, want, after)
+		})
+	}
+}
+
+func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeReference) {
+	t.Helper()
+
+	// Collect all nodes that have been there before.
+	allPreexistingNodes, err := getAllReachableNodes(ctxt, before)
+	if err != nil {
+		t.Fatalf("failed to collect preexisting nodes: %v", err)
+	}
+	isReused := func(n Node) bool {
+		for _, cur := range allPreexistingNodes {
+			if ctxt.equalWithConfig(cur, n, equalityConfig{ignoreDirtyHash: true, ignoreFreeze: true}) {
+				return true
+			}
+		}
+		return false
+	}
+
+	handle, _ := ctxt.getViewAccess(&after)
+	handle.Get().Visit(ctxt, &after, 0, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
+		// If the current node is not equivalent to a node that was present before,
+		// then it it is a new node and should have a dirty hash.
+		if !isReused(n) {
+			switch n := n.(type) {
+			case (*AccountNode):
+				n.hashDirty = true
+			case (*BranchNode):
+				n.hashDirty = true
+			case (*ExtensionNode):
+				n.hashDirty = true
+			case (*ValueNode):
+				n.hashDirty = true
+			}
+		}
+		// Also update the dirty child-hash markers in the nodes.
+		if branch, ok := n.(*BranchNode); ok {
+			branch.dirtyHashes = 0
+			for i := byte(0); i < 16; i++ {
+				if branch.children[i].Id().IsEmpty() {
+					continue
+				}
+				read, _ := ctxt.getReadAccess(&branch.children[i])
+				if !isReused(read.Get()) {
+					branch.markChildHashDirty(i)
+				}
+				read.Release()
+			}
+		}
+		if extension, ok := n.(*ExtensionNode); ok {
+			read, _ := ctxt.getReadAccess(&extension.next)
+			extension.nextHashDirty = !isReused(read.Get())
+			read.Release()
+		}
+		if account, ok := n.(*AccountNode); ok {
+			if !account.storage.Id().IsEmpty() {
+				read, _ := ctxt.getReadAccess(&account.storage)
+				account.storageHashDirty = !isReused(read.Get())
+				read.Release()
+			} else {
+				// If it is now empty, check whether there is an account
+				// in the before state that is not empty. If so, we assume
+				// the state was deleted and thus the hash should be updated.
+				deleted := false
+				for _, node := range allPreexistingNodes {
+					preexisting, ok := node.(*AccountNode)
+					if !ok {
+						continue
+					}
+					if preexisting.storage.Id().IsEmpty() {
+						continue
+					}
+					deleted = true
+					break
+				}
+				account.storageHashDirty = deleted
+			}
+		}
+		return VisitResponseContinue
+	}))
+	handle.Release()
+}
+
+func TestTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T) {
+	for _, transition := range getTestTransitions() {
+		transition := transition
+		t.Run(transition.getLabel(), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			ctxt := newNiceNodeContext(t, ctrl)
+
+			before, _ := ctxt.Build(transition.before)
+			ctxt.Freeze(before)
+			original, _ := ctxt.Clone(before)
+
+			after, changed, err := transition.apply(ctxt, before)
+			if err != nil {
+				t.Fatalf("failed to apply transition: %v", err)
+			}
+			ctxt.Check(t, before)
+			ctxt.Check(t, after)
+
+			if changed {
+				t.Errorf("frozen nodes should never be changed")
+			}
+
+			// Make sure the result is what is expected.
+			want, _ := ctxt.Build(transition.after)
+			markModifiedAsDirty(t, ctxt, before, want)
+			markReusedAsFrozen(t, ctxt, before, want)
+			ctxt.Check(t, want)
+
+			// This modified after state, partially referring to old nodes,
+			// should be equal to the modified trie.
+			ctxt.ExpectEqualTries(t, want, after)
+
+			// Also, make sure the original structure is preserved.
+			ctxt.ExpectEqualTries(t, original, before)
+		})
+	}
+}
+
+func markReusedAsFrozen(t *testing.T, ctxt *nodeContext, before, after NodeReference) {
+	t.Helper()
+	// All nodes that have been there before should be reused and frozen.
+	allPreexistingNodes, err := getAllReachableNodes(ctxt, before)
+	if err != nil {
+		t.Fatalf("failed to collect preexisting nodes: %v", err)
+	}
+	isReused := func(n Node) bool {
+		for _, cur := range allPreexistingNodes {
+			if ctxt.equalWithConfig(cur, n, equalityConfig{ignoreFreeze: true}) {
+				return true
+			}
+		}
+		return false
+	}
+
+	handle, _ := ctxt.getViewAccess(&after)
+	handle.Get().Visit(ctxt, &after, 0, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
+		// Update the wanted node expected to be frozen.
+		if isReused(n) {
+			n.MarkFrozen()
+		}
+		// Also update the frozen hints in branch nodes.
+		if branch, ok := n.(*BranchNode); ok {
+			branch.frozenChildren = 0
+			for i := byte(0); i < 16; i++ {
+				if branch.children[i].Id().IsEmpty() {
+					continue
+				}
+				read, _ := ctxt.getReadAccess(&branch.children[i])
+				if isReused(read.Get()) {
+					branch.setChildFrozen(i, true)
+				}
+				read.Release()
+			}
+		}
+		return VisitResponseContinue
+	}))
+	handle.Release()
+}
+
+func getAllReachableNodes(source NodeSource, root NodeReference) ([]Node, error) {
+	res := []Node{}
+
+	handle, err := source.getViewAccess(&root)
+	if err != nil {
+		return nil, err
+	}
+	defer handle.Release()
+
+	_, err = handle.Get().Visit(source, &root, 0, MakeVisitor(func(n Node, _ NodeInfo) VisitResponse {
+		res = append(res, n)
+		return VisitResponseContinue
+	}))
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+// ----------------------------------------------------------------------------
 //                               Utilities
 // ----------------------------------------------------------------------------
 
@@ -4683,6 +5768,38 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 	})
 
 	return res
+}
+
+// newNiceNodeContext is a node context that expects (and accepts) an arbitrary
+// number of calls to its functions without the need to explicitly define
+// those expectations.
+func newNiceNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
+	ctxt := newNodeContext(t, ctrl)
+
+	ctxt.EXPECT().createAccount().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
+		ref, shared := ctxt.Build(&Account{})
+		return ref, shared.GetWriteHandle(), nil
+	})
+
+	ctxt.EXPECT().createBranch().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
+		ref, shared := ctxt.Build(&Branch{})
+		return ref, shared.GetWriteHandle(), nil
+	})
+
+	ctxt.EXPECT().createExtension().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
+		ref, shared := ctxt.Build(&Extension{})
+		return ref, shared.GetWriteHandle(), nil
+	})
+
+	ctxt.EXPECT().createValue().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
+		ref, shared := ctxt.Build(&Value{})
+		return ref, shared.GetWriteHandle(), nil
+	})
+
+	ctxt.EXPECT().release(gomock.Any()).AnyTimes()
+	ctxt.EXPECT().update(gomock.Any(), gomock.Any()).AnyTimes()
+
+	return ctxt
 }
 
 func (c *nodeContext) Build(desc NodeDesc) (NodeReference, *shared.Shared[Node]) {
@@ -4925,7 +6042,7 @@ func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
 				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
 			}
 			if a.storageHashDirty != b.storageHashDirty {
-				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.storageHashDirty, b.storageHashDirty))
+				diffs = append(diffs, fmt.Sprintf("%s: different storage hash-dirty flag, got %t and %t", prefix, a.storageHashDirty, b.storageHashDirty))
 			}
 
 			if c.config.TrackSuffixLengthsInLeafNodes {
@@ -5019,6 +6136,15 @@ func (c *nodeContext) diffTries(prefix string, a, b NodeReference) []string {
 }
 
 func (c *nodeContext) equal(a, b Node) bool {
+	return c.equalWithConfig(a, b, equalityConfig{})
+}
+
+type equalityConfig struct {
+	ignoreDirtyHash bool
+	ignoreFreeze    bool
+}
+
+func (c *nodeContext) equalWithConfig(a, b Node, config equalityConfig) bool {
 	if _, ok := a.(EmptyNode); ok {
 		_, ok := b.(EmptyNode)
 		return ok
@@ -5028,10 +6154,10 @@ func (c *nodeContext) equal(a, b Node) bool {
 		if b, ok := b.(*AccountNode); ok {
 			eq := a.address == b.address
 			eq = eq && a.info == b.info
-			eq = eq && a.hashDirty == b.hashDirty
-			eq = eq && a.storageHashDirty == b.storageHashDirty
-			eq = eq && a.frozen == b.frozen
-			eq = eq && c.equalTries(a.storage, b.storage)
+			eq = eq && (config.ignoreDirtyHash || a.hashDirty == b.hashDirty)
+			eq = eq && (config.ignoreDirtyHash || a.storageHashDirty == b.storageHashDirty)
+			eq = eq && (config.ignoreFreeze || a.frozen == b.frozen)
+			eq = eq && c.equalTriesWithConfig(a.storage, b.storage, config)
 			if !eq {
 				return false
 			}
@@ -5048,10 +6174,10 @@ func (c *nodeContext) equal(a, b Node) bool {
 	if a, ok := a.(*ExtensionNode); ok {
 		if b, ok := b.(*ExtensionNode); ok {
 			eq := a.path == b.path
-			eq = eq && a.hashDirty == b.hashDirty
-			eq = eq && a.nextHashDirty == b.nextHashDirty
-			eq = eq && a.frozen == b.frozen
-			eq = eq && c.equalTries(a.next, b.next)
+			eq = eq && (config.ignoreDirtyHash || a.hashDirty == b.hashDirty)
+			eq = eq && (config.ignoreDirtyHash || a.nextHashDirty == b.nextHashDirty)
+			eq = eq && (config.ignoreFreeze || a.frozen == b.frozen)
+			eq = eq && c.equalTriesWithConfig(a.next, b.next, config)
 			return eq
 		}
 		return false
@@ -5059,20 +6185,20 @@ func (c *nodeContext) equal(a, b Node) bool {
 
 	if a, ok := a.(*BranchNode); ok {
 		if b, ok := b.(*BranchNode); ok {
-			if a.frozen != b.frozen {
+			if !config.ignoreFreeze && a.frozen != b.frozen {
 				return false
 			}
 			if a.hashDirty != b.hashDirty {
 				return false
 			}
-			if a.dirtyHashes != b.dirtyHashes {
+			if !config.ignoreDirtyHash && a.dirtyHashes != b.dirtyHashes {
 				return false
 			}
-			if a.frozenChildren != b.frozenChildren {
+			if !config.ignoreFreeze && a.frozenChildren != b.frozenChildren {
 				return false
 			}
 			for i, next := range a.children {
-				if !c.equalTries(next, b.children[i]) {
+				if !c.equalTriesWithConfig(next, b.children[i], config) {
 					return false
 				}
 			}
@@ -5085,8 +6211,8 @@ func (c *nodeContext) equal(a, b Node) bool {
 		if b, ok := b.(*ValueNode); ok {
 			eq := a.key == b.key
 			eq = eq && a.value == b.value
-			eq = eq && a.hashDirty == b.hashDirty
-			eq = eq && a.frozen == b.frozen
+			eq = eq && (config.ignoreDirtyHash || a.hashDirty == b.hashDirty)
+			eq = eq && (config.ignoreFreeze || a.frozen == b.frozen)
 			if !eq {
 				return false
 			}
@@ -5105,11 +6231,15 @@ func (c *nodeContext) equal(a, b Node) bool {
 }
 
 func (c *nodeContext) equalTries(a, b NodeReference) bool {
+	return c.equalTriesWithConfig(a, b, equalityConfig{})
+}
+
+func (c *nodeContext) equalTriesWithConfig(a, b NodeReference, config equalityConfig) bool {
 	nodeA, _ := c.getReadAccess(&a)
 	nodeB, _ := c.getReadAccess(&b)
 	defer nodeA.Release()
 	defer nodeB.Release()
-	return c.equal(nodeA.Get(), nodeB.Get())
+	return c.equalWithConfig(nodeA.Get(), nodeB.Get(), config)
 }
 
 func addressToNibbles(addr common.Address) []Nibble {
