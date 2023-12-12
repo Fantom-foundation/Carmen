@@ -1240,7 +1240,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 			nextIsFrozen := handle.Get().IsFrozen()
 			handle.Release()
 			if n.frozen && !nextIsFrozen {
-				errs = append(errs, fmt.Errorf("the frozen node %v must not have a non-frozen next", thisRef.Id()))
+				errs = append(errs, fmt.Errorf("the frozen node %v must have a frozen next", thisRef.Id()))
 			}
 		}
 	}
