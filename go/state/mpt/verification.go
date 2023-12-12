@@ -10,9 +10,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"github.com/pbnjay/memory"
-	"runtime"
 	"sort"
-	"unsafe"
 )
 
 // VerificationObserver is a listener interface for tracking the progress of the verification
@@ -387,9 +385,8 @@ func loadNodeHashes(
 }
 
 // getBatchSize gets the size of batch used for a list of items stored in memory.
-// It is computed as 80% of the main memory divided by the input item size.
+// It is computed as 60% of the main memory divided by the input item size.
 func getBatchSize(itemSize uint) uint64 {
-	fmt.Printf("Total memory: %d\n", memory.TotalMemory())
 	return uint64(float64(memory.TotalMemory()) * 0.6 / float64(itemSize))
 }
 
@@ -413,11 +410,8 @@ func verifyHashesStoredWithNodes[N any](
 	const itemSize = (8 + 8 + 32 + 1) + 8
 	batchSize := getBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
 
-	printMemoryUsage()
-	fmt.Printf("Debug: Allocation start: \n")
 	// re-used for each loop to save on allocations
 	refIds := newNodeIds(batchSize)
-	fmt.Printf("unsafe size: %d\n", unsafe.Sizeof(*refIds))
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -431,7 +425,6 @@ func verifyHashesStoredWithNodes[N any](
 		// because some nodes like Branch can have many children while other nodes like Extension has just one or Value has none.
 		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
 		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
-		printMemoryUsage()
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
 		for refIds.Size() < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
@@ -445,7 +438,6 @@ func verifyHashesStoredWithNodes[N any](
 			collectChildrenIds(&node, refIds)
 			upperBound++
 		}
-		printMemoryUsage()
 
 		// Second step - sort IDs and load hashes from the disk
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", refIds.Size(), name, batchNum, batchSize))
@@ -453,7 +445,6 @@ func verifyHashesStoredWithNodes[N any](
 		if err != nil {
 			return err
 		}
-		printMemoryUsage()
 
 		// Third step - read again the nodes, fill-in collected child hashes, compare hashes
 		observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss (batch %d, size: %d)...", upperBound-lowerBound, name, batchNum, batchSize))
@@ -481,26 +472,10 @@ func verifyHashesStoredWithNodes[N any](
 			}
 		}
 
-		fmt.Printf("Bbatch %d done\n", batchNum)
-		printMemoryUsage()
 		lowerBound = upperBound // move to next window
 	}
 
 	return nil
-}
-
-func printMemoryUsage() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Printf("Alloc = %v GB\n", bToMb(m.Alloc))
-	//fmt.Printf("TotalAlloc = %v GB\n", bToMb(m.TotalAlloc))
-	//fmt.Printf("HeapSys = %v GB\n", bToMb(m.HeapSys))
-	//fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
-	//fmt.Printf("NumGC = %v\n", m.NumGC)
-}
-
-func bToMb(b uint64) float64 {
-	return float64(b) / 1024.0 / 1024.0 / 1024.0
 }
 
 func verifyHashesStoredWithParents[N any](
