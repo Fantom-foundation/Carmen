@@ -221,10 +221,9 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 
 	// Finally, check roots for Archive node
 	if source.getConfig().HashStorageLocation == HashStoredWithNode {
-		batchSize := getHashListBatchSize(32 + 8) // batch stores 32byte hashes + 8byte NodeId
 		// Check hashes of roots.
 		observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-		refIds := make(map[NodeId]struct{}, batchSize)
+		refIds := make(map[NodeId]struct{}, len(roots))
 		for _, root := range roots {
 			refIds[root.NodeRef.id] = struct{}{}
 		}
