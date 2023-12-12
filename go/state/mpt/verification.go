@@ -444,14 +444,14 @@ func verifyHashesStoredWithNodes[N any](
 func printMemoryUsage() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	fmt.Printf("Alloc = %v MiB\n", bToMb(m.Alloc))
-	//fmt.Printf("TotalAlloc = %v MiB\n", bToMb(m.TotalAlloc))
-	fmt.Printf("Sys = %v MiB\n", bToMb(m.Sys))
+	fmt.Printf("Alloc = %v GB\n", bToMb(m.Alloc))
+	//fmt.Printf("TotalAlloc = %v GB\n", bToMb(m.TotalAlloc))
+	fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
 	//fmt.Printf("NumGC = %v\n", m.NumGC)
 }
 
 func bToMb(b uint64) float64 {
-	return float64(b) / 1024.0 / 1024.0
+	return float64(b) / 1024.0 / 1024.0 / 1024
 }
 
 func verifyHashesStoredWithParents[N any](
