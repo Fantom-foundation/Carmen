@@ -283,7 +283,7 @@ type nodeIds struct {
 
 func newNodeIds(capacity uint64) *nodeIds {
 	return &nodeIds{
-		nodeIds:     make(map[NodeId]struct{}), // TODO init with capacity?
+		nodeIds:     make(map[NodeId]struct{}),
 		nodeIdsKeys: make([]NodeId, 0, capacity),
 	}
 }
@@ -345,7 +345,7 @@ func loadNodeHashes(
 	printMemoryUsage()
 
 	// Load hashes from disk
-	hashes := make(map[NodeId]embeddedHash, len(nodeIdsKeys)+1)
+	hashes := make(map[NodeId]embeddedHash)
 
 	fmt.Printf("After hashes allocation \n")
 	printMemoryUsage()
