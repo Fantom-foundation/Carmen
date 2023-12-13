@@ -3,6 +3,7 @@ package mpt
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -562,6 +563,76 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 	if err = forest.Close(); err != nil {
 		t.Fatalf("failed to close the forest: %v", err)
 	}
+}
+
+func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
+	// This test stress-tests the code recovering nodes from the write buffer.
+	// To that end, it creates a forest with a node cache of only one node.
+	// In this forest, two trees are placed, and then 10 workers are used
+	// to concurrently update those traces, mutually pushing tries out of
+	// the cache and recovering it.
+	// This test reproduces issue
+	// https://github.com/Fantom-foundation/Carmen/issues/687
+
+	ctrl := gomock.NewController(t)
+
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+	values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+	forest, err := makeForest(
+		MptConfig{Hashing: DirectHashing},
+		t.TempDir(),
+		branches,
+		extensions,
+		accounts,
+		values,
+		ForestConfig{},
+	)
+	if err != nil {
+		t.Fatalf("failed to create test forest: %v", err)
+	}
+
+	var counter atomic.Uint64
+	accounts.EXPECT().New().AnyTimes().DoAndReturn(func() (uint64, error) {
+		return counter.Add(1) - 1, nil
+	})
+	accounts.EXPECT().Get(gomock.Any()).AnyTimes().DoAndReturn(func(i uint64) (AccountNode, error) {
+		return AccountNode{address: common.Address{byte(i)}, info: AccountInfo{Nonce: common.Nonce{byte(i)}}}, nil
+	})
+
+	empty := NewNodeReference(EmptyId())
+	treeA, err := forest.SetAccountInfo(&empty, common.Address{0}, AccountInfo{Nonce: common.Nonce{1}})
+	if err != nil {
+		t.Fatalf("failed to create tree A: %v", err)
+	}
+
+	treeB, err := forest.SetAccountInfo(&empty, common.Address{1}, AccountInfo{Nonce: common.Nonce{2}})
+	if err != nil {
+		t.Fatalf("failed to create tree B: %v", err)
+	}
+
+	const N = 10
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 100; i++ {
+				tree := treeA
+				if i%2 > 0 {
+					tree = treeB
+				}
+				_, err := forest.SetAccountInfo(&tree, common.Address{byte(i % 2)}, AccountInfo{Nonce: common.Nonce{byte(i + 2)}})
+				if err != nil {
+					t.Errorf("failed to update trie: %v", err)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
 }
 
 // openFileShadowForest creates a forest instance based on a shadowed file

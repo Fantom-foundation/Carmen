@@ -96,6 +96,9 @@ type Forest struct {
 	// A buffer for asynchronously writing nodes to files.
 	writeBuffer WriteBuffer
 
+	// A mutex required by the 'getSharedNode' function to synchronize access.
+	getSharedNodeMutex sync.Mutex
+
 	// Utilities to manage a background worker releasing nodes.
 	releaseQueue chan<- NodeId   // send EmptyId to trigger sync signal
 	releaseSync  <-chan struct{} // signaled whenever the release worker reaches a sync point
@@ -544,8 +547,16 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	// Note: although Cancel is thread safe, it is important to make sure
 	// that this part is only run by a single thread to avoid one thread
 	// recovering a node from the buffer and another fetching it from the
-	// storage. This synchronization is currently ensured by the
-	// nodeCacheMutex acquired above and held until the end of the function.
+	// storage. This synchronization is currently ensured by acquiring the
+	// getSharedNodeMutex and holding it until the end of the function.
+	// Using a global lock that does not differentiate between node IDs may
+	// cause performance issues since it is delaying unrelated lookup
+	// operations. However, the impact should be small since cache misses
+	// should be infrequent enough. Unless it is detected in CPU profiles
+	// and traces, this lock should be fine.
+	s.getSharedNodeMutex.Lock()
+	defer s.getSharedNodeMutex.Unlock()
+
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
