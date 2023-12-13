@@ -345,7 +345,7 @@ func loadNodeHashes(
 	printMemoryUsage()
 
 	// Load hashes from disk
-	hashes := make(map[NodeId]embeddedHash)
+	hashes := make(map[NodeId]embeddedHash, len(nodeIdsKeys)+1)
 
 	fmt.Printf("After hashes allocation \n")
 	printMemoryUsage()
@@ -398,9 +398,9 @@ func loadNodeHashes(
 }
 
 // getBatchSize gets the size of batch used for a list of items stored in memory.
-// It is computed as 60% of the main memory divided by the input item size.
+// It is computed as 40% of the main memory divided by the input item size.
 func getBatchSize(itemSize uint) uint64 {
-	return uint64(float64(memory.TotalMemory()) * 0.6 / float64(itemSize))
+	return uint64(float64(memory.TotalMemory()) * 0.4 / float64(itemSize))
 }
 
 func verifyHashesStoredWithNodes[N any](
