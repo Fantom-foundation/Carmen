@@ -398,9 +398,9 @@ func loadNodeHashes(
 }
 
 // getBatchSize gets the size of batch used for a list of items stored in memory.
-// It is computed as 40% of the main memory divided by the input item size.
+// It is computed as 80% of the main memory divided by the input item size.
 func getBatchSize(itemSize uint) uint64 {
-	return uint64(float64(memory.TotalMemory()) * 0.4 / float64(itemSize))
+	return uint64(float64(memory.TotalMemory()) * 0.8 / float64(itemSize))
 }
 
 func verifyHashesStoredWithNodes[N any](
@@ -420,8 +420,8 @@ func verifyHashesStoredWithNodes[N any](
 	// - Hashes with an embedded flag: 8bytes map overhead, 8 bytes NodeID, 32bytes hash, 1byte boolean
 	// NodeList:
 	// - 8bytes NodeID
-	const itemSize = (8 + 8 + 32 + 1) + 8
-	batchSize := getBatchSize(itemSize) // batch stores 32byte hashes + 8byte NodeId
+	//const itemSize = (8 + 8 + 32 + 1) + 8
+	batchSize := getBatchSize(150) // TODO empirically determined item size
 
 	// re-used for each loop to save on allocations
 	refIds := newNodeIds(batchSize / 3) // pre-allocate only a fraction of the capacity to prevent huge allocations and GC when not the whole batch is used.
