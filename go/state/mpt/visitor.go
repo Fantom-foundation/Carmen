@@ -54,6 +54,23 @@ func VisitForestNodes(directory string, config MptConfig, visitor NodeVisitor) e
 }
 
 // ----------------------------------------------------------------------------
+//                          Lambda Visitor
+// ----------------------------------------------------------------------------
+
+// MakeVisitor wraps a function into the node visitor interface.
+func MakeVisitor(visit func(Node, NodeInfo) VisitResponse) NodeVisitor {
+	return &lambdaVisitor{visit}
+}
+
+type lambdaVisitor struct {
+	visit func(Node, NodeInfo) VisitResponse
+}
+
+func (v *lambdaVisitor) Visit(n Node, i NodeInfo) VisitResponse {
+	return v.visit(n, i)
+}
+
+// ----------------------------------------------------------------------------
 //                            Node Statistics
 // ----------------------------------------------------------------------------
 
