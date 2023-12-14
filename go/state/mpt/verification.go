@@ -408,7 +408,7 @@ func verifyHashesStoredWithNodes[N any](
 	fillInChildrenHashes func(*N, map[NodeId]embeddedHash),
 	collectChildrenIds func(*N, *nodeIds),
 ) error {
-	batchSize := getBatchSize(150) // TODO empirically determined item size
+	batchSize := getBatchSize(150) // empirically determined item size
 
 	// re-used for each loop to save on allocations
 	refIds := newNodeIds(batchSize / 3) // pre-allocate only a fraction of the capacity to prevent huge allocations and GC when not the whole batch is used.
