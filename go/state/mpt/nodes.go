@@ -397,7 +397,7 @@ func (e EmptyNode) SetAccount(manager NodeManager, thisRef *NodeReference, this 
 	if err := manager.update(ref.Id(), handle); err != nil {
 		return NodeReference{}, false, err
 	}
-	return ref, false, nil
+	return ref, true, nil
 }
 
 func (e EmptyNode) SetValue(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], key common.Key, path []Nibble, value common.Value) (NodeReference, bool, error) {
@@ -575,7 +575,6 @@ func (n *BranchNode) setNextNode(
 
 	// If a branch got removed, check that there are enough children left.
 	if !wasEmpty && newRoot.Id().IsEmpty() {
-		n.markChildHashClean(byte(path[0]))
 		count := 0
 		var remainingPos Nibble
 		var remaining NodeReference
@@ -632,8 +631,7 @@ func (n *BranchNode) setNextNode(
 				extension.path = SingleStepPath(remainingPos)
 				extension.next = remaining
 				extension.hashDirty = true
-				extension.nextHashDirty = n.isChildHashDirty(byte(remainingPos))
-				extension.nextHash = n.hashes[byte(remainingPos)]
+				extension.nextHashDirty = true
 				manager.update(extensionRef.Id(), handle)
 				newRoot = extensionRef
 			} else if manager.getConfig().TrackSuffixLengthsInLeafNodes {
@@ -851,10 +849,6 @@ func (n *BranchNode) markChildHashDirty(index byte) {
 	n.dirtyHashes = n.dirtyHashes | (1 << index)
 }
 
-func (n *BranchNode) markChildHashClean(index byte) {
-	n.dirtyHashes = n.dirtyHashes & ^(1 << index)
-}
-
 func (n *BranchNode) isChildHashDirty(index byte) bool {
 	return (n.dirtyHashes & (1 << index)) != 0
 }
@@ -1006,7 +1000,7 @@ func (n *ExtensionNode) setNextNode(
 				n.path.AppendAll(&extension.path)
 				n.next = extension.next
 				n.hashDirty = true
-				n.nextHashDirty = extension.nextHashDirty
+				n.nextHashDirty = true
 				manager.update(thisRef.Id(), this)
 				manager.release(newRoot.Id())
 			} else if newRoot.Id().IsBranch() {
@@ -1091,17 +1085,12 @@ func (n *ExtensionNode) setNextNode(
 		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
 		n.path.ShiftLeft(commonPrefixLength + 1)
 		n.hashDirty = true
+		n.nextHashDirty = true
 		thisNodeWasReused = true
 		manager.update(thisRef.Id(), this)
 	} else {
-		pos := byte(n.path.Get(commonPrefixLength))
-		branch.children[pos] = n.next
-		if n.nextHashDirty {
-			branch.markChildHashDirty(pos)
-		} else {
-			branch.hashes[pos] = n.nextHash
-		}
-		branch.setChildFrozen(pos, isClone)
+		branch.children[n.path.Get(commonPrefixLength)] = n.next
+		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
 	}
 
 	// Build the extension covering the common prefix.
@@ -1138,7 +1127,6 @@ func (n *ExtensionNode) setNextNode(
 	// If this node was not needed any more, we can discard it.
 	if !thisNodeWasReused {
 		manager.release(thisRef.Id())
-		return newRoot, false, nil
 	}
 
 	return newRoot, !isClone, nil
@@ -1456,7 +1444,6 @@ func splitLeafNode(
 	}
 
 	// If enabled, keep track of the suffix length of leaf values.
-	thisModified := false
 	thisIsFrozen := this.IsFrozen()
 	remainingPathLength := byte(len(partialPath)-commonPrefixLength) - 1
 	if manager.getConfig().TrackSuffixLengthsInLeafNodes {
@@ -1465,7 +1452,6 @@ func splitLeafNode(
 		if err != nil {
 			return NodeReference{}, err
 		}
-		thisModified = thisRef.Id() != ref.Id()
 		thisRef = &ref
 		thisIsFrozen = false
 	} else {
@@ -1476,15 +1462,9 @@ func splitLeafNode(
 	// Add this node and the new sibling node to the branch node.
 	branch.children[partialPath[commonPrefixLength]] = *thisRef
 	branch.children[siblingPath[commonPrefixLength]] = *siblingRef
+	branch.markChildHashDirty(byte(partialPath[commonPrefixLength]))
 	branch.markChildHashDirty(byte(siblingPath[commonPrefixLength]))
 	branch.hashDirty = true
-
-	// Update hash if present.
-	if hash, dirty := this.GetHash(); thisModified || dirty {
-		branch.markChildHashDirty(byte(partialPath[commonPrefixLength]))
-	} else {
-		branch.hashes[partialPath[commonPrefixLength]] = hash
-	}
 
 	// Track frozen state of split node.
 	if thisIsFrozen {
