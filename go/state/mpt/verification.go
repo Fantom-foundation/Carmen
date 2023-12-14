@@ -272,14 +272,18 @@ func verifyHashes[N any](
 }
 
 // nodeIds is a struct that collects NodeIds.
-// It allows adding the IDs in the inner map so that duplicities are eliminated.
-// It contains additional structure, which is used for exporting collected NodeIDs
+// It allows for adding the IDs in the map so that duplicities are eliminated.
+// It maintains an additional slice, which is used for exporting collected NodeIDs
 // ordered.
+// The slice is pre-allocated with the input capacity.
 type nodeIds struct {
 	nodeIds     map[NodeId]struct{}
 	nodeIdsKeys []NodeId
 }
 
+// newNodeIds creates a new NodeIDs collector.
+// The input capacity is used for allocating a slice,
+// which is used for exporting sorted and unique NodeIds.
 func newNodeIds(capacity uint64) *nodeIds {
 	return &nodeIds{
 		nodeIds:     make(map[NodeId]struct{}),
