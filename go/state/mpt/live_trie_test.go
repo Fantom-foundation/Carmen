@@ -443,10 +443,10 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 	for _, config := range allMptConfigs {
 		config := config
 		t.Run(config.Name, func(t *testing.T) {
-			//t.Parallel()
-			const N = 50000
+			t.Parallel()
+			const N = 200000
 
-			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024)
+			trie, err := OpenInMemoryLiveTrie(t.TempDir(), config, 1024*1024)
 			if err != nil {
 				t.Fatalf("failed to open trie: %v", err)
 			}
@@ -485,7 +485,8 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 			if err := trie.ClearStorage(addr); err != nil {
 				t.Errorf("failed to clear storage: %v", err)
 			}
-			if duration, limit := time.Since(start), time.Millisecond; duration > limit {
+			// If done wrong, the delete takes > 1 second.
+			if duration, limit := time.Since(start), 50*time.Millisecond; duration > limit {
 				t.Errorf("delete took too long: %v, limit %v", duration, limit)
 			}
 
