@@ -423,8 +423,6 @@ func verifyHashesStoredWithNodes[N any](
 		// First step -- loop to collect Ids of node children
 		// The number of child references determines the size of this batch
 		// because some nodes like Branch can have many children while other nodes like Extension has just one or Value has none.
-		// Since the collected Ids may contain duplicities after this step, the size of the actual batch does not have to fully
-		// utilize the maximal batch size, but this is cheaper than finding duplicities in each loop.
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
 		for refIds.Size() < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
