@@ -62,6 +62,9 @@ type NodeCache interface {
 	// are used by implementation to manage the eviction order of elements.
 	Touch(r *NodeReference)
 
+	// ForEach iterates through all elements in this cache.
+	ForEach(func(NodeId, *shared.Shared[Node]))
+
 	// MemoryFootprintProvider is embedded to require implementations to
 	// produces a summary of the overall memory usage of this cache, including
 	// the size of all owned node instances.
@@ -225,6 +228,26 @@ func (c *nodeCache) Touch(r *NodeReference) {
 	target.next = c.head
 	c.head = pos
 	c.mutex.Unlock()
+}
+
+func (c *nodeCache) ForEach(consume func(NodeId, *shared.Shared[Node])) {
+	for i := 0; i < len(c.owners); i++ {
+		cur := &c.owners[i]
+		for {
+			tag := cur.tag.Load()
+			if tag == 0 {
+				break
+			}
+			id := cur.Id()
+			node := cur.Node()
+			if tag != cur.tag.Load() {
+				// The owner was updated in the meantime, repeat.
+				continue
+			}
+			consume(id, node)
+			break
+		}
+	}
 }
 
 func (c *nodeCache) GetMemoryFootprint() *common.MemoryFootprint {

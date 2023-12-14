@@ -154,6 +154,20 @@ func (mr *MockNodeMockRecorder) GetValue(source, key, path interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockNode)(nil).GetValue), source, key, path)
 }
 
+// IsDirty mocks base method.
+func (m *MockNode) IsDirty() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDirty")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDirty indicates an expected call of IsDirty.
+func (mr *MockNodeMockRecorder) IsDirty() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDirty", reflect.TypeOf((*MockNode)(nil).IsDirty))
+}
+
 // IsFrozen mocks base method.
 func (m *MockNode) IsFrozen() bool {
 	m.ctrl.T.Helper()
@@ -166,6 +180,18 @@ func (m *MockNode) IsFrozen() bool {
 func (mr *MockNodeMockRecorder) IsFrozen() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsFrozen", reflect.TypeOf((*MockNode)(nil).IsFrozen))
+}
+
+// MarkClean mocks base method.
+func (m *MockNode) MarkClean() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MarkClean")
+}
+
+// MarkClean indicates an expected call of MarkClean.
+func (mr *MockNodeMockRecorder) MarkClean() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkClean", reflect.TypeOf((*MockNode)(nil).MarkClean))
 }
 
 // MarkFrozen mocks base method.
@@ -609,34 +635,6 @@ func (mr *MockNodeManagerMockRecorder) releaseTrieAsynchronous(arg0 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "releaseTrieAsynchronous", reflect.TypeOf((*MockNodeManager)(nil).releaseTrieAsynchronous), arg0)
 }
 
-// update mocks base method.
-func (m *MockNodeManager) update(arg0 NodeId, arg1 shared.WriteHandle[Node]) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "update", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// update indicates an expected call of update.
-func (mr *MockNodeManagerMockRecorder) update(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "update", reflect.TypeOf((*MockNodeManager)(nil).update), arg0, arg1)
-}
-
-// updateHash mocks base method.
-func (m *MockNodeManager) updateHash(arg0 NodeId, arg1 shared.HashHandle[Node]) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "updateHash", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// updateHash indicates an expected call of updateHash.
-func (mr *MockNodeManagerMockRecorder) updateHash(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "updateHash", reflect.TypeOf((*MockNodeManager)(nil).updateHash), arg0, arg1)
-}
-
 // MockleafNode is a mock of leafNode interface.
 type MockleafNode struct {
 	ctrl     *gomock.Controller
@@ -779,6 +777,20 @@ func (mr *MockleafNodeMockRecorder) GetValue(source, key, path interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockleafNode)(nil).GetValue), source, key, path)
 }
 
+// IsDirty mocks base method.
+func (m *MockleafNode) IsDirty() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDirty")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDirty indicates an expected call of IsDirty.
+func (mr *MockleafNodeMockRecorder) IsDirty() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDirty", reflect.TypeOf((*MockleafNode)(nil).IsDirty))
+}
+
 // IsFrozen mocks base method.
 func (m *MockleafNode) IsFrozen() bool {
 	m.ctrl.T.Helper()
@@ -791,6 +803,18 @@ func (m *MockleafNode) IsFrozen() bool {
 func (mr *MockleafNodeMockRecorder) IsFrozen() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsFrozen", reflect.TypeOf((*MockleafNode)(nil).IsFrozen))
+}
+
+// MarkClean mocks base method.
+func (m *MockleafNode) MarkClean() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "MarkClean")
+}
+
+// MarkClean indicates an expected call of MarkClean.
+func (mr *MockleafNodeMockRecorder) MarkClean() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkClean", reflect.TypeOf((*MockleafNode)(nil).MarkClean))
 }
 
 // MarkFrozen mocks base method.

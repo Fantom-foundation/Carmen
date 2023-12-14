@@ -71,9 +71,6 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 				nextHashDirty: true,
 			})
 
-			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
-
 			hasher := algorithm.createHasher()
 			_, _, err := hasher.updateHashes(&ref, ctxt)
 			if err != nil {
@@ -104,8 +101,8 @@ func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 					0x7: &Account{},
 					0xd: &Account{},
 				},
-				hashDirty: true,
-				dirty:     []int{0x7, 0xd},
+				dirtyHash:        true,
+				dirtyChildHashes: []int{0x7, 0xd},
 			})
 
 			hasher := algorithm.createHasher()
@@ -138,12 +135,10 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 					0x7: &Account{},
 					0xd: &Account{},
 				},
-				hashDirty: true,
-				dirty:     []int{0x7, 0xd},
+				dirtyHash:        true,
+				dirtyChildHashes: []int{0x7, 0xd},
 			})
 
-			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(2)
 
 			hasher := algorithm.createHasher()
@@ -176,14 +171,9 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 					0x7: &Account{},
 					0xd: &Account{},
 				},
-				hashDirty: true,
-				dirty:     []int{1, 2, 3}, // < all empty children
+				dirtyHash:        true,
+				dirtyChildHashes: []int{1, 2, 3}, // < all empty children
 			})
-
-			// Only the branch node is signaled to be updated.
-			hashHandle, _ := ctxt.getHashAccess(&ref)
-			ctxt.EXPECT().updateHash(ref.Id(), hashHandle)
-			hashHandle.Release()
 
 			hasher := algorithm.createHasher()
 			_, _, err := hasher.updateHashes(&ref, ctxt)
@@ -211,7 +201,7 @@ func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			ctxt := newNodeContext(t, ctrl)
 
 			ref, node := ctxt.Build(&Account{
-				hashDirty:        true,
+				dirtyHash:        true,
 				storageHashDirty: true,
 			})
 
@@ -243,12 +233,10 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			ctxt := newNodeContext(t, ctrl)
 
 			ref, node := ctxt.Build(&Account{
-				hashDirty:        true,
+				dirtyHash:        true,
 				storageHashDirty: true,
 			})
 
-			// The node is updated while being hashed.
-			ctxt.EXPECT().updateHash(ref.Id(), gomock.Any())
 			ctxt.EXPECT().hashAddress(gomock.Any()).MaxTimes(1)
 
 			hasher := algorithm.createHasher()
