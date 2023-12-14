@@ -136,6 +136,28 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		return fmt.Errorf("failed to hash empty node: %v", err)
 	}
 
+	// Check roots for Archive node
+	if source.getConfig().HashStorageLocation == HashStoredWithNode {
+		// Check hashes of roots.
+		observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
+		refIds := newNodeIds(uint64(len(roots)))
+		for _, root := range roots {
+			refIds.Put(root.NodeRef.id)
+		}
+		isEmbedded := func(node Node) (bool, error) { return false, nil } // root node cannot be embedded
+		hashes, _, err := loadNodeHashes(refIds, source, isEmbedded, emptyNodeHash)
+		if err != nil {
+			return err
+		}
+		for _, root := range roots {
+			want := hashes[root.NodeRef.Id()]
+			got := root.Hash
+			if want != got {
+				return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
+			}
+		}
+	}
+
 	err = verifyHashes(
 		"account", source, source.accounts, source.accountIds, emptyNodeHash, roots, observer,
 		func(node *AccountNode) (common.Hash, error) { return hash(node) },
@@ -146,7 +168,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.storageHash = hashes[node.storage.Id()]
 			node.storageHashDirty = false
 		},
-		func(node *AccountNode, ids *nodeIds) {
+		func(node *AccountNode, ids *nodeIdCollection) {
 			ids.Put(node.storage.Id())
 		},
 	)
@@ -176,7 +198,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			}
 			node.dirtyHashes = 0
 		},
-		func(node *BranchNode, ids *nodeIds) {
+		func(node *BranchNode, ids *nodeIdCollection) {
 			for i := 0; i < 16; i++ {
 				// ID may be an embedded child, it will be determined later while hashing
 				ids.Put(node.children[i].Id())
@@ -198,7 +220,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 			node.nextHashDirty = false
 			node.nextIsEmbedded = embedded[node.next.Id()]
 		},
-		func(node *ExtensionNode, ids *nodeIds) {
+		func(node *ExtensionNode, ids *nodeIdCollection) {
 			ids.Put(node.next.Id())
 		},
 	)
@@ -213,32 +235,10 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		func(node Node) (bool, error) { return hasher.isEmbedded(node, source) },
 		func(id NodeId) bool { return id.IsValue() },
 		func(*ValueNode, map[NodeId]common.Hash, map[NodeId]bool) {},
-		func(node *ValueNode, ids *nodeIds) {},
+		func(node *ValueNode, ids *nodeIdCollection) {},
 	)
 	if err != nil {
 		return err
-	}
-
-	// Finally, check roots for Archive node
-	if source.getConfig().HashStorageLocation == HashStoredWithNode {
-		// Check hashes of roots.
-		observer.Progress(fmt.Sprintf("Checking %d root hashes ...", len(roots)))
-		refIds := newNodeIds(uint64(len(roots)))
-		for _, root := range roots {
-			refIds.Put(root.NodeRef.id)
-		}
-		isEmbedded := func(node Node) (bool, error) { return false, nil } // root node cannot be embedded
-		hashes, _, err := loadNodeHashes(refIds, source, isEmbedded, emptyNodeHash)
-		if err != nil {
-			return err
-		}
-		for _, root := range roots {
-			want := hashes[root.NodeRef.Id()]
-			got := root.Hash
-			if want != got {
-				return fmt.Errorf("inconsistent hash for root node %v, want %v, got %v", root.NodeRef.Id(), want, got)
-			}
-		}
 	}
 
 	return nil
@@ -257,7 +257,7 @@ func verifyHashes[N any](
 	isEmbedded func(Node) (bool, error),
 	isNodeType func(NodeId) bool,
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
-	collectChildrenIds func(*N, *nodeIds),
+	collectChildrenIds func(*N, *nodeIdCollection),
 ) error {
 	mode := source.getConfig().HashStorageLocation
 	switch mode {
@@ -270,12 +270,12 @@ func verifyHashes[N any](
 	}
 }
 
-// nodeIds is a struct that collects NodeIds.
+// nodeIdCollection is a struct that collects NodeIds.
 // It allows for adding the IDs in the map so that duplicities are eliminated.
 // It maintains an additional slice, which is used for exporting collected NodeIDs
 // ordered.
 // The slice is pre-allocated with the input capacity.
-type nodeIds struct {
+type nodeIdCollection struct {
 	nodeIds     map[NodeId]struct{}
 	nodeIdsKeys []NodeId
 }
@@ -283,19 +283,19 @@ type nodeIds struct {
 // newNodeIds creates a new NodeIDs collector.
 // The input capacity is used for allocating a slice,
 // which is used for exporting sorted and unique NodeIds.
-func newNodeIds(capacity uint64) *nodeIds {
-	return &nodeIds{
+func newNodeIds(capacity uint64) *nodeIdCollection {
+	return &nodeIdCollection{
 		nodeIds:     make(map[NodeId]struct{}),
 		nodeIdsKeys: make([]NodeId, 0, capacity),
 	}
 }
 
 // Put adds node ID into this structure if it is not present yet.
-func (n *nodeIds) Put(id NodeId) {
+func (n *nodeIdCollection) Put(id NodeId) {
 	n.nodeIds[id] = struct{}{}
 }
 
-func (n *nodeIds) Size() uint64 {
+func (n *nodeIdCollection) Size() uint64 {
 	return uint64(len(n.nodeIds))
 }
 
@@ -303,7 +303,7 @@ func (n *nodeIds) Size() uint64 {
 // The accumulated keys are drained.
 // It means that repeated call to this method will not return the same keys again.
 // The returned slice is re-used for further calls of this method to save on memory allocations.
-func (n *nodeIds) DrainToOrderedKeys() []NodeId {
+func (n *nodeIdCollection) DrainToOrderedKeys() []NodeId {
 	n.nodeIdsKeys = n.nodeIdsKeys[0:0]
 	// collect keys ...
 	for id := range n.nodeIds {
@@ -319,9 +319,9 @@ func (n *nodeIds) DrainToOrderedKeys() []NodeId {
 	return n.nodeIdsKeys
 }
 
-// loadNodeHashes loads hashes of nodes from the input map nodeIds.
+// loadNodeHashes loads hashes of nodes from the input map nodeIdCollection.
 // This method optimizes I/O access and memory.
-// For this reason, it collects all nodeIds from the input map and copies then to a slice, which is sorted.
+// For this reason, it collects all nodeIdCollection from the input map and copies then to a slice, which is sorted.
 // The nodes to be hashed are loaded in sequence then using the sorted slice.
 // To save memory, this method clears the input map while coping the keys into the slice.
 // It means that the map content cannot be used after this method executes.
@@ -329,7 +329,7 @@ func (n *nodeIds) DrainToOrderedKeys() []NodeId {
 // It must be an empty slice, but it can be re-used for multiple calls of this method.
 // This method returns hashed nodes for the input ID and a map with embedded node IDs.
 func loadNodeHashes(
-	nodeIds *nodeIds,
+	nodeIds *nodeIdCollection,
 	source *verificationNodeSource,
 	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
@@ -401,12 +401,12 @@ func verifyHashesStoredWithNodes[N any](
 	readHash func(*N) (common.Hash, bool),
 	isEmbedded func(Node) (bool, error),
 	fillInChildrenHashes func(*N, map[NodeId]common.Hash, map[NodeId]bool),
-	collectChildrenIds func(*N, *nodeIds),
+	collectChildrenIds func(*N, *nodeIdCollection),
 ) error {
 	batchSize := getBatchSize(150) // empirically determined item size
 
 	// re-used for each loop to save on allocations
-	refIds := newNodeIds(batchSize / 3) // pre-allocate only a fraction of the capacity to prevent huge allocations and GC when not the whole batch is used.
+	referencedIds := newNodeIds(batchSize / 3) // pre-allocate only a fraction of the capacity to prevent huge allocations and GC when not the whole batch is used.
 
 	// check other nodes
 	lowerBound := ids.GetLowerBound()
@@ -419,7 +419,7 @@ func verifyHashesStoredWithNodes[N any](
 		// The number of child references determines the size of this batch
 		// because some nodes like Branch can have many children while other nodes like Extension has just one or Value has none.
 		observer.Progress(fmt.Sprintf("Getting refeences to children for %ss (batch %d, size: %d)...", name, batchNum, batchSize))
-		for refIds.Size() < batchSize && upperBound < ids.GetUpperBound() {
+		for referencedIds.Size() < batchSize && upperBound < ids.GetUpperBound() {
 			if !ids.Contains(upperBound) {
 				upperBound++
 				continue
@@ -428,13 +428,13 @@ func verifyHashesStoredWithNodes[N any](
 			if err != nil {
 				return err
 			}
-			collectChildrenIds(&node, refIds)
+			collectChildrenIds(&node, referencedIds)
 			upperBound++
 		}
 
 		// Second step - sort IDs and load hashes from the disk
-		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", refIds.Size(), name, batchNum, batchSize))
-		hashes, embedded, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
+		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", referencedIds.Size(), name, batchNum, batchSize))
+		hashes, embedded, err := loadNodeHashes(referencedIds, source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
