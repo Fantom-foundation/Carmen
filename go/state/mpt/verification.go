@@ -10,7 +10,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"github.com/pbnjay/memory"
-	"runtime"
 	"sort"
 )
 
@@ -328,7 +327,7 @@ type embeddedHash struct {
 // loadNodeHashes loads hashes of nodes from the input map nodeIds.
 // This method optimizes I/O access and memory.
 // For this reason, it picks nodeIds from the input and drains then to a sorted slice.
-// The nodes to be hashes are loaded in sequence then using this sorted slice.
+// The nodes to be hashed are loaded in sequence then using this sorted slice.
 // This method returns hashed nodes for the input ID and a map with embedded node IDs.
 func loadNodeHashes(
 	nodeIds *nodeIds,
@@ -336,20 +335,9 @@ func loadNodeHashes(
 	isEmbedded func(Node) (bool, error),
 	hashOfEmptyNode common.Hash,
 ) (map[NodeId]embeddedHash, error) {
-	fmt.Printf("Before drain: \n")
-	printMemoryUsage()
-
 	nodeIdsKeys := nodeIds.DrainToOrderedKeys()
-
-	fmt.Printf("After drain: \n")
-	printMemoryUsage()
-
 	// Load hashes from disk
 	hashes := make(map[NodeId]embeddedHash, len(nodeIdsKeys)+1)
-
-	fmt.Printf("After hashes allocation \n")
-	printMemoryUsage()
-
 	hashes[EmptyId()] = embeddedHash{hashOfEmptyNode, false}
 	for _, id := range nodeIdsKeys {
 		var node Node
@@ -416,11 +404,6 @@ func verifyHashesStoredWithNodes[N any](
 	fillInChildrenHashes func(*N, map[NodeId]embeddedHash),
 	collectChildrenIds func(*N, *nodeIds),
 ) error {
-	// Maps:
-	// - Hashes with an embedded flag: 8bytes map overhead, 8 bytes NodeID, 32bytes hash, 1byte boolean
-	// NodeList:
-	// - 8bytes NodeID
-	//const itemSize = (8 + 8 + 32 + 1) + 8
 	batchSize := getBatchSize(150) // TODO empirically determined item size
 
 	// re-used for each loop to save on allocations
@@ -452,16 +435,12 @@ func verifyHashesStoredWithNodes[N any](
 			upperBound++
 		}
 
-		printMemoryUsage()
-
 		// Second step - sort IDs and load hashes from the disk
 		observer.Progress(fmt.Sprintf("Loading %d child hashes for %ss (batch %d, size: %d)...", refIds.Size(), name, batchNum, batchSize))
 		hashes, err := loadNodeHashes(refIds, source, isEmbedded, hashOfEmptyNode)
 		if err != nil {
 			return err
 		}
-
-		printMemoryUsage()
 
 		// Third step - read again the nodes, fill-in collected child hashes, compare hashes
 		observer.Progress(fmt.Sprintf("Checking hashes of up to %d %ss (batch %d, size: %d)...", upperBound-lowerBound, name, batchNum, batchSize))
@@ -489,25 +468,10 @@ func verifyHashesStoredWithNodes[N any](
 			}
 		}
 
-		printMemoryUsage()
 		lowerBound = upperBound // move to next window
 	}
 
 	return nil
-}
-
-func printMemoryUsage() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	fmt.Printf("Alloc = %v GB\n", bToMb(m.Alloc))
-	//fmt.Printf("TotalAlloc = %v GB\n", bToMb(m.TotalAlloc))
-	//fmt.Printf("HeapSys = %v GB\n", bToMb(m.HeapSys))
-	//fmt.Printf("Sys = %v GB\n", bToMb(m.Sys))
-	//fmt.Printf("NumGC = %v\n", m.NumGC)
-}
-
-func bToMb(b uint64) float64 {
-	return float64(b) / 1024.0 / 1024.0 / 1024.0
 }
 
 func verifyHashesStoredWithParents[N any](
