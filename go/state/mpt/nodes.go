@@ -633,7 +633,11 @@ func (n *BranchNode) setNextNode(
 				extension.next = remaining
 				extension.hashDirty = true
 				extension.nextHashDirty = n.isChildHashDirty(byte(remainingPos))
-				extension.nextHash = n.hashes[byte(remainingPos)]
+				if !extension.nextHashDirty {
+					// TODO: add unit test coverage for this!
+					extension.nextIsEmbedded = n.isEmbedded(byte(remainingPos))
+					extension.nextHash = n.hashes[byte(remainingPos)]
+				}
 				manager.update(extensionRef.Id(), handle)
 				newRoot = extensionRef
 			} else if manager.getConfig().TrackSuffixLengthsInLeafNodes {
@@ -1007,6 +1011,11 @@ func (n *ExtensionNode) setNextNode(
 				n.next = extension.next
 				n.hashDirty = true
 				n.nextHashDirty = extension.nextHashDirty
+				if !extension.nextHashDirty {
+					// TODO: add unit test coverage for this!
+					n.nextHash = extension.nextHash
+					n.nextIsEmbedded = extension.nextIsEmbedded
+				}
 				manager.update(thisRef.Id(), this)
 				manager.release(newRoot.Id())
 			} else if newRoot.Id().IsBranch() {
@@ -1100,6 +1109,7 @@ func (n *ExtensionNode) setNextNode(
 			branch.markChildHashDirty(pos)
 		} else {
 			branch.hashes[pos] = n.nextHash
+			branch.setEmbedded(pos, n.nextIsEmbedded)
 		}
 		branch.setChildFrozen(pos, isClone)
 	}
@@ -1465,7 +1475,7 @@ func splitLeafNode(
 		if err != nil {
 			return NodeReference{}, err
 		}
-		thisModified = thisRef.Id() != ref.Id()
+		thisModified = true
 		thisRef = &ref
 		thisIsFrozen = false
 	} else {
@@ -1484,6 +1494,11 @@ func splitLeafNode(
 		branch.markChildHashDirty(byte(partialPath[commonPrefixLength]))
 	} else {
 		branch.hashes[partialPath[commonPrefixLength]] = hash
+		// The embedded flag can be ignored in this case as long as direct
+		// hashing is used.
+		if manager.getConfig().Hashing.Name != DirectHashing.Name {
+			panic("unsupported mode: disabled TrackSuffixLengthsInLeafNodes is not (yet) supported with hash algorithms depending on embedded nodes.")
+		}
 	}
 
 	// Track frozen state of split node.
