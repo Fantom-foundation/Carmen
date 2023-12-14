@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/urfave/cli/v2 v2.25.7
 	go.uber.org/mock v0.2.0
