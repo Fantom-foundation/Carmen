@@ -5428,7 +5428,7 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 	handle, _ := ctxt.getViewAccess(&after)
 	handle.Get().Visit(ctxt, &after, 0, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
 		// If the current node is not equivalent to a node that was present before,
-		// then it it is a new node and should have a dirty hash.
+		// then it is a new node and should have a dirty hash.
 		if !isReused(n) {
 			switch n := n.(type) {
 			case (*AccountNode):
