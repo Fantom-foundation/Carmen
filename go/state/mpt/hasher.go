@@ -105,7 +105,6 @@ func (h directHasher) updateHashesInternal(
 		return hash, err
 	}
 	handle.Get().SetHash(hash)
-	manager.updateHash(ref.Id(), handle)
 	return hash, nil
 }
 
@@ -395,7 +394,6 @@ func (h ethHasher) updateHashesInternal(
 			}
 
 			node.SetHash(hash)
-			manager.updateHash(cur.node.Id(), cur.handle)
 
 			if hashCollector != nil {
 				hashCollector.Add(cur.path, hash)

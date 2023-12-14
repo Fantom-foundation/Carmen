@@ -81,11 +81,6 @@ type Forest struct {
 	// A unified cache for all node types.
 	nodeCache NodeCache
 
-	// The set of dirty nodes. Nodes are dirty if there in-memory
-	// state does not match their on-disk content.
-	dirty      map[NodeId]struct{}
-	dirtyMutex sync.Mutex
-
 	// The hasher managing node hashes for this forest.
 	hasher hasher
 
@@ -258,7 +253,6 @@ func makeForest(
 		values:        synced.Sync(values),
 		storageMode:   forestConfig.Mode,
 		nodeCache:     NewNodeCache(forestConfig.CacheCapacity),
-		dirty:         map[NodeId]struct{}{},
 		hasher:        mptConfig.Hashing.createHasher(),
 		keyHasher:     NewKeyHasher(),
 		addressHasher: NewAddressHasher(),
@@ -418,13 +412,15 @@ func (s *Forest) Flush() error {
 	errs := []error{s.collectReleaseWorkerErrors()}
 
 	// Get snapshot of set of dirty Node IDs.
-	s.dirtyMutex.Lock()
-	ids := make([]NodeId, 0, len(s.dirty))
-	for id := range s.dirty {
-		ids = append(ids, id)
-	}
-	s.dirty = map[NodeId]struct{}{}
-	s.dirtyMutex.Unlock()
+	ids := make([]NodeId, 0, 1<<16)
+	s.nodeCache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
+		handle := node.GetViewHandle()
+		dirty := handle.Get().IsDirty()
+		handle.Release()
+		if dirty {
+			ids = append(ids, id)
+		}
+	})
 
 	// Flush dirty keys in order (to avoid excessive seeking).
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
@@ -564,13 +560,6 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 		if masterCopy != res {
 			panic("failed to reinstate element from write buffer")
 		}
-		// Since the write was canceled, the fetched node is
-		// still dirty (only dirty nodes are in the buffer).
-		// FIXME: this is not thread safe, by now the node may already
-		// been gone again; fix this by moving the dirty flag into the node
-		s.dirtyMutex.Lock()
-		s.dirty[id] = struct{}{}
-		s.dirtyMutex.Unlock()
 		return res, nil
 	}
 
@@ -600,6 +589,9 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	if node == nil {
 		return nil, fmt.Errorf("no node with ID %d in storage", id)
 	}
+
+	// Everything loaded from the stock is in sync and thus clean.
+	node.MarkClean()
 
 	// Everything that is loaded from an archive is to be considered
 	// frozen, and thus immutable.
@@ -743,14 +735,13 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 	}
 
 	// Clean nodes can be ignored, dirty nodes need to be written.
-	s.dirtyMutex.Lock()
-	_, dirty := s.dirty[evictedId]
-	if !dirty {
-		s.dirtyMutex.Unlock()
-		return current, present
+	if handle, ok := evictedNode.TryGetViewHandle(); ok {
+		dirty := handle.Get().IsDirty()
+		handle.Release()
+		if !dirty {
+			return current, present
+		}
 	}
-	delete(s.dirty, evictedId)
-	s.dirtyMutex.Unlock()
 
 	// Enqueue evicted node for asynchronous write to file.
 	s.writeBuffer.Add(evictedId, evictedNode)
@@ -848,27 +839,7 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	return ref, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) update(id NodeId, node shared.WriteHandle[Node]) error {
-	// all needed here is to register the modified node as dirty
-	s.dirtyMutex.Lock()
-	s.dirty[id] = struct{}{}
-	s.dirtyMutex.Unlock()
-	return nil
-}
-
-func (s *Forest) updateHash(id NodeId, node shared.HashHandle[Node]) error {
-	// all needed here is to register the modified node as dirty
-	s.dirtyMutex.Lock()
-	s.dirty[id] = struct{}{}
-	s.dirtyMutex.Unlock()
-	return nil
-}
-
 func (s *Forest) release(id NodeId) error {
-	s.dirtyMutex.Lock()
-	delete(s.dirty, id)
-	s.dirtyMutex.Unlock()
-
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}

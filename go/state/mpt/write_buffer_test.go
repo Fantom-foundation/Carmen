@@ -28,7 +28,7 @@ func TestWriteBuffer_CanFlushASingleElement(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(12)
-	node := shared.MakeShared[Node](EmptyNode{})
+	node := shared.MakeShared[Node](&ValueNode{})
 	view := node.GetViewHandle()
 	sink.EXPECT().Write(id, view)
 	view.Release()
@@ -90,9 +90,8 @@ func TestWriteBuffer_CanFlushLargeNumberOfElements(t *testing.T) {
 	defer buffer.Close()
 
 	// Send in N nodes to be written to the sink.
-	node := shared.MakeShared[Node](EmptyNode{})
 	for i := 0; i < N; i++ {
-		buffer.Add(ValueId(uint64(i)), node)
+		buffer.Add(ValueId(uint64(i)), shared.MakeShared[Node](&ValueNode{}))
 	}
 
 	if err := buffer.Flush(); err != nil {
@@ -147,8 +146,8 @@ func TestWriteBuffer_CheckThatLockedNodesAreWaitedFor(t *testing.T) {
 
 	id1 := ValueId(1)
 	id2 := ValueId(2)
-	value1 := shared.MakeShared[Node](EmptyNode{})
-	value2 := shared.MakeShared[Node](EmptyNode{})
+	value1 := shared.MakeShared[Node](&ValueNode{})
+	value2 := shared.MakeShared[Node](&ValueNode{})
 
 	view1 := value1.GetViewHandle()
 	sink.EXPECT().Write(id1, view1)
@@ -185,7 +184,7 @@ func TestWriteBuffer_AFailedFlushIsReported(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(12)
-	node := shared.MakeShared[Node](EmptyNode{})
+	node := shared.MakeShared[Node](&ValueNode{})
 	view := node.GetViewHandle()
 	err := fmt.Errorf("TestError")
 	sink.EXPECT().Write(id, view).Return(err)
@@ -216,14 +215,13 @@ func TestWriteBuffer_ElementsCanBeAddedInParallel(t *testing.T) {
 	defer buffer.Close()
 
 	// Send in N nodes in parallel.
-	node := shared.MakeShared[Node](EmptyNode{})
 	var wg sync.WaitGroup
 	wg.Add(N / 100)
 	for j := 0; j < N/100; j++ {
 		go func(j int) {
 			defer wg.Done()
 			for i := 0; i < 100; i++ {
-				buffer.Add(ValueId(uint64(j*100+i)), node)
+				buffer.Add(ValueId(uint64(j*100+i)), shared.MakeShared[Node](&ValueNode{}))
 			}
 		}(j)
 	}
@@ -247,14 +245,13 @@ func TestWriteBuffer_ElementsCanBeAddedAndCanceledInParallel(t *testing.T) {
 	defer buffer.Close()
 
 	// Send in N nodes in parallel.
-	node := shared.MakeShared[Node](EmptyNode{})
 	var wg sync.WaitGroup
 	wg.Add(N / 100)
 	for j := 0; j < N/100; j++ {
 		go func(j int) {
 			defer wg.Done()
 			for i := 0; i < 100; i++ {
-				buffer.Add(ValueId(uint64(j*100+i)), node)
+				buffer.Add(ValueId(uint64(j*100+i)), shared.MakeShared[Node](&ValueNode{}))
 			}
 			for i := 0; i < 100; i++ {
 				buffer.Cancel(ValueId(uint64(j*100 + i)))
@@ -263,6 +260,51 @@ func TestWriteBuffer_ElementsCanBeAddedAndCanceledInParallel(t *testing.T) {
 	}
 	wg.Wait()
 
+	if err := buffer.Flush(); err != nil {
+		t.Errorf("failed to flush buffer: %v", err)
+	}
+}
+
+func TestWriteBuffer_FlushedElementsAreMarkedAsClean(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sink := NewMockNodeSink(ctrl)
+	mock := NewMockNode(ctrl)
+
+	id := ValueId(12)
+	node := shared.MakeShared[Node](mock)
+
+	mock.EXPECT().IsDirty().Return(true)
+	mock.EXPECT().MarkClean()
+
+	view := node.GetViewHandle()
+	sink.EXPECT().Write(id, view)
+	view.Release()
+
+	buffer := MakeWriteBuffer(sink)
+	defer buffer.Close()
+
+	buffer.Add(id, node)
+	if err := buffer.Flush(); err != nil {
+		t.Errorf("failed to flush buffer: %v", err)
+	}
+}
+
+func TestWriteBuffer_CleanNodesAreNotWritten(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sink := NewMockNodeSink(ctrl)
+	mock := NewMockNode(ctrl)
+
+	id := ValueId(12)
+	node := shared.MakeShared[Node](mock)
+
+	mock.EXPECT().IsDirty().Return(false)
+
+	// Note: no write to the sink is expected.
+
+	buffer := MakeWriteBuffer(sink)
+	defer buffer.Close()
+
+	buffer.Add(id, node)
 	if err := buffer.Flush(); err != nil {
 		t.Errorf("failed to flush buffer: %v", err)
 	}

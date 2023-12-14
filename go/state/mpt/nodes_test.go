@@ -43,7 +43,7 @@ func TestEmptyNode_SetAccount(t *testing.T) {
 	ref, node := ctxt.Build(Empty{})
 
 	// The state after the insert.
-	afterRef, _ := ctxt.Build(&Account{address: addr, info: info, hashDirty: true})
+	afterRef, _ := ctxt.Build(&Account{dirty: true, address: addr, info: info, dirtyHash: true})
 
 	// The operation is creating one account node.
 	accountRef, _ := ctxt.ExpectCreateAccount()
@@ -76,7 +76,7 @@ func TestEmptyNode_SetAccount_WithLengthTracking(t *testing.T) {
 	ref, node := ctxt.Build(Empty{})
 
 	// The state after the insert with the proper length.
-	after, _ := ctxt.Build(&Account{address: addr, info: info, pathLength: 33, hashDirty: true})
+	after, _ := ctxt.Build(&Account{dirty: true, address: addr, info: info, pathLength: 33, dirtyHash: true})
 
 	// The operation is creating one account node.
 	account, _ := ctxt.ExpectCreateAccount()
@@ -139,6 +139,10 @@ func TestEmptyNode_Release(t *testing.T) {
 	defer handle.Release()
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
+	}
+
+	if handle.Get().IsDirty() {
+		t.Errorf("expected node to be clean after release")
 	}
 }
 
@@ -291,8 +295,8 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
 			4: &Account{address: common.Address{0x40}, info: info1},
-			8: &Account{address: common.Address{0x81}, info: info2, hashDirty: true},
-		}, dirty: []int{8}, hashDirty: true},
+			8: &Account{address: common.Address{0x81}, info: info2, dirty: true, dirtyHash: true},
+		}, dirty: true, dirtyChildHashes: []int{8}, dirtyHash: true},
 	)
 
 	ctxt.Check(t, ref)
@@ -302,7 +306,6 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 	readHandle := node.GetReadHandle()
 	branch := readHandle.Get().(*BranchNode)
 	account, _ := ctxt.getWriteAccess(&branch.children[8])
-	ctxt.EXPECT().update(branch.children[8].Id(), account)
 	account.Release()
 	readHandle.Release()
 
@@ -313,7 +316,7 @@ func TestBranchNode_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
 		t.Fatalf("update should return (%v, %v), got (%v, %v), err %v", ref, true, newRoot, changed, err)
 	}
 	handle.Release()
-	ctxt.ExpectEqualTries(t, ref, after)
+	ctxt.ExpectEqualTries(t, after, ref)
 }
 
 func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing.T) {
@@ -322,25 +325,25 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing
 	info1 := AccountInfo{Nonce: common.Nonce{1}}
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
-	beforeId, _ := ctxt.Build(
+	before, _ := ctxt.Build(
 		&Branch{children: Children{
 			4: &Account{address: common.Address{0x40}, info: info1},
 			8: &Account{address: common.Address{0x81}, info: info1},
 		}},
 	)
-	ctxt.Check(t, beforeId)
+	ctxt.Check(t, before)
 
-	afterId, _ := ctxt.Build(
+	after, _ := ctxt.Build(
 		&Branch{children: Children{
 			4: &Account{address: common.Address{0x40}, info: info1, frozen: true},
-			8: &Account{address: common.Address{0x81}, info: info2, hashDirty: true},
-		}, dirty: []int{8}, frozenChildren: []int{4}, hashDirty: true},
+			8: &Account{address: common.Address{0x81}, info: info2, dirty: true, dirtyHash: true},
+		}, dirty: true, dirtyChildHashes: []int{8}, frozenChildren: []int{4}, dirtyHash: true},
 	)
-	ctxt.Check(t, afterId)
+	ctxt.Check(t, after)
 
 	// Create and freeze the target node.
-	ctxt.Freeze(beforeId)
-	ref, node := ctxt.Clone(beforeId)
+	ctxt.Freeze(before)
+	ref, node := ctxt.Clone(before)
 
 	// This operation should create a new account and branch node.
 	ctxt.ExpectCreateAccount()
@@ -361,8 +364,8 @@ func TestBranchNode_Frozen_SetAccount_WithExistingAccount_ChangedInfo(t *testing
 		t.Errorf("modification did not create a new root")
 	}
 
-	ctxt.ExpectEqualTries(t, beforeId, ref)
-	ctxt.ExpectEqualTries(t, afterId, newRoot)
+	ctxt.ExpectEqualTries(t, before, ref)
+	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
 func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
@@ -380,16 +383,15 @@ func TestBranchNode_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T) {
 
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
-			2: &Account{address: common.Address{0x21}, info: info, hashDirty: true},
+			2: &Account{address: common.Address{0x21}, info: info, dirty: true, dirtyHash: true},
 			4: &Account{address: common.Address{0x40}, info: info},
 			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{2}, hashDirty: true},
+		}, dirty: true, dirtyChildHashes: []int{2}, dirtyHash: true},
 	)
 	ctxt.Check(t, after)
 
 	ctxt.ExpectCreateAccount()
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
 
 	addr := common.Address{0x21}
 	path := addressToNibbles(addr)
@@ -418,10 +420,10 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InEmptyBranch(t *testing.T)
 	before, _ := ctxt.Clone(ref)
 	after, _ := ctxt.Build(
 		&Branch{children: Children{
-			2: &Account{address: common.Address{0x21}, info: info, hashDirty: true},
+			2: &Account{address: common.Address{0x21}, info: info, dirty: true, dirtyHash: true},
 			4: &Account{address: common.Address{0x40}, info: info, frozen: true},
 			8: &Account{address: common.Address{0x81}, info: info, frozen: true},
-		}, dirty: []int{2}, frozenChildren: []int{4, 8}, hashDirty: true},
+		}, dirty: true, dirtyChildHashes: []int{2}, frozenChildren: []int{4, 8}, dirtyHash: true},
 	)
 	ctxt.Check(t, after)
 
@@ -462,17 +464,16 @@ func TestBranchNode_SetAccount_WithNewAccount_InOccupiedBranch(t *testing.T) {
 		&Branch{children: Children{
 			4: &Branch{children: Children{
 				0: &Account{address: common.Address{0x40}, info: info},
-				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
-			}, dirty: []int{1}, hashDirty: true},
+				1: &Account{address: common.Address{0x41}, info: info, dirty: true, dirtyHash: true},
+			}, dirty: true, dirtyChildHashes: []int{1}, dirtyHash: true},
 			8: &Account{address: common.Address{0x81}, info: info},
-		}, dirty: []int{4}, hashDirty: true},
+		}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{4}},
 	)
 	ctxt.Check(t, after)
 
 	ctxt.ExpectCreateAccount()
 	ctxt.ExpectCreateBranch()
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
 
 	addr := common.Address{0x41}
 	path := addressToNibbles(addr)
@@ -503,10 +504,10 @@ func TestBranchNode_Frozen_SetAccount_WithNewAccount_InOccupiedBranch(t *testing
 		&Branch{children: Children{
 			4: &Branch{children: Children{
 				0: &Account{address: common.Address{0x40}, info: info, frozen: true},
-				1: &Account{address: common.Address{0x41}, info: info, hashDirty: true},
-			}, dirty: []int{1}, frozenChildren: []int{0}, hashDirty: true},
+				1: &Account{address: common.Address{0x41}, info: info, dirty: true, dirtyHash: true},
+			}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{1}, frozenChildren: []int{0}},
 			8: &Account{address: common.Address{0x81}, info: info, frozen: true},
-		}, dirty: []int{4}, frozenChildren: []int{8}, hashDirty: true},
+		}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{4}, frozenChildren: []int{8}},
 	)
 	ctxt.Check(t, after)
 
@@ -549,7 +550,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x20}, info: info},
 			8: &Account{address: common.Address{0x82}, info: info},
-		}, dirty: []int{}, hashDirty: true},
+		}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{}},
 	)
 	ctxt.Check(t, after)
 
@@ -557,7 +558,6 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
 
 	empty := AccountInfo{}
 	addr := common.Address{0x41}
@@ -589,7 +589,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *test
 		&Branch{children: Children{
 			2: &Account{address: common.Address{0x20}, info: info, frozen: true},
 			8: &Account{address: common.Address{0x82}, info: info, frozen: true},
-		}, dirty: []int{}, frozenChildren: []int{2, 8}, hashDirty: true},
+		}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{}, frozenChildren: []int{2, 8}},
 	)
 	ctxt.Check(t, after)
 
@@ -696,7 +696,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthTracking
 	)
 	ctxt.Check(t, ref)
 
-	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40, hashDirty: true})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40, dirty: true, dirtyHash: true})
 	ctxt.Check(t, after)
 
 	accountRef, _ := ctxt.Get("A")
@@ -706,7 +706,6 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthTracking
 	// The remaining account is updated because its length has changed.
 	accountRef, account := ctxt.Get("R")
 	accountHandle := account.GetWriteHandle()
-	ctxt.EXPECT().update(accountRef.Id(), accountHandle).Return(nil)
 	accountHandle.Release()
 
 	empty := AccountInfo{}
@@ -736,7 +735,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthT
 	ctxt.Freeze(ref)
 
 	before, _ := ctxt.Clone(ref)
-	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40, hashDirty: true})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x41}, info: info, pathLength: 40, dirty: true, dirtyHash: true})
 	ctxt.Check(t, after)
 
 	// This operation creates a temporary branch node that gets removed again.
@@ -787,14 +786,10 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 			1: &Account{address: common.Address{0x41, 0x23, 0x10}, info: info},
 			2: &Account{address: common.Address{0x41, 0x23, 0x20}, info: info},
 		}},
+		dirty:     true,
 		hashDirty: true,
 	})
 	ctxt.Check(t, after)
-
-	extensionRef, extension := ctxt.Get("E")
-	extensionHandle := extension.GetWriteHandle()
-	ctxt.EXPECT().update(extensionRef.Id(), extensionHandle).Return(nil)
-	extensionHandle.Release()
 
 	accountRef, _ := ctxt.Get("A")
 	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
@@ -839,6 +834,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainin
 			1: &Account{address: common.Address{0x41, 0x23, 0x10}, info: info, frozen: true},
 			2: &Account{address: common.Address{0x41, 0x23, 0x20}, info: info, frozen: true},
 		}, frozen: true, frozenChildren: []int{1, 2}},
+		dirty:     true,
 		hashDirty: true,
 	})
 	ctxt.Check(t, after)
@@ -888,6 +884,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 			1: &Account{address: common.Address{0x41, 0x20}, info: info},
 			2: &Account{address: common.Address{0x42, 0x84}, info: info},
 		}},
+		dirty:     true,
 		hashDirty: true,
 	})
 	ctxt.Check(t, after)
@@ -934,6 +931,7 @@ func TestBranchNode_Frozen_SetAccount_ToDefaultValue_CausingBranchToBeReplacedBy
 			1: &Account{address: common.Address{0x41, 0x20}, info: info, frozen: true},
 			2: &Account{address: common.Address{0x42, 0x84}, info: info, frozen: true},
 		}, frozen: true, frozenChildren: []int{1, 2}},
+		dirty:     true,
 		hashDirty: true,
 	})
 	ctxt.Check(t, after)
@@ -984,6 +982,11 @@ func TestBranchNode_Release(t *testing.T) {
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
 	}
+
+	if handle.Get().IsDirty() {
+		t.Errorf("released nodes should be clean")
+	}
+
 	handle.Release()
 }
 
@@ -1133,9 +1136,11 @@ func TestBranchNode_CheckDetectsIssues(t *testing.T) {
 			childHashes: ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
 		}, false},
 		"dirty hashes are ignored": {&Branch{
-			children:    Children{1: &Value{}, 2: &Value{}},
-			childHashes: ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
-			dirty:       []int{1},
+			children:         Children{1: &Value{}, 2: &Value{}},
+			childHashes:      ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
+			dirty:            true,
+			dirtyHash:        true,
+			dirtyChildHashes: []int{1},
 		}, true},
 		"full_frozen": {&Branch{
 			children:       Children{1: &Value{frozen: true}, 2: &Value{frozen: true}},
@@ -1160,6 +1165,17 @@ func TestBranchNode_CheckDetectsIssues(t *testing.T) {
 			children:       Children{1: &Value{}, 2: &Value{frozen: true}},
 			frozenChildren: []int{2},
 			frozen:         true,
+		}, false},
+		"clean_with_dirty_hash": {&Branch{
+			children:  Children{1: &Value{}, 2: &Value{}},
+			dirty:     false,
+			dirtyHash: true,
+		}, false},
+		"clean_hash_with_dirty_child_hash": {&Branch{
+			children:         Children{1: &Value{}, 2: &Value{}},
+			dirty:            true,
+			dirtyHash:        false,
+			dirtyChildHashes: []int{1},
 		}, false},
 	}
 	for name, test := range tests {
@@ -1309,19 +1325,15 @@ func TestExtensionNode_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) {
 		&Extension{
 			path: []Nibble{1, 2, 3},
 			next: &Branch{children: Children{
-				5: &Account{address: common.Address{0x12, 0x35}, info: info2, hashDirty: true},
+				5: &Account{address: common.Address{0x12, 0x35}, info: info2, dirty: true, dirtyHash: true},
 				8: &Account{address: common.Address{0x12, 0x38}, info: info2},
-			}, dirty: []int{5}, hashDirty: true},
+			}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{5}},
+			dirty:         true,
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
 	)
 	ctxt.Check(t, after)
-
-	accountRef, account := ctxt.Get("A")
-	accountHandle := account.GetWriteHandle()
-	ctxt.EXPECT().update(accountRef.Id(), accountHandle).Return(nil)
-	accountHandle.Release()
 
 	// Attempt to create an existing account.
 	trg := common.Address{0x12, 0x35}
@@ -1358,9 +1370,10 @@ func TestExtensionNode_Frozen_SetAccount_ExistingLeaf_ChangedInfo(t *testing.T) 
 		&Extension{
 			path: []Nibble{1, 2, 3},
 			next: &Branch{children: Children{
-				5: &Account{address: common.Address{0x12, 0x35}, info: info2, hashDirty: true},
+				5: &Account{address: common.Address{0x12, 0x35}, info: info2, dirty: true, dirtyHash: true},
 				8: &Account{address: common.Address{0x12, 0x38}, info: info2, frozen: true},
-			}, dirty: []int{5}, frozenChildren: []int{8}, hashDirty: true},
+			}, dirtyChildHashes: []int{5}, frozenChildren: []int{8}, dirty: true, dirtyHash: true},
+			dirty:         true,
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1414,10 +1427,12 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 					}},
+					dirty:     true,
 					hashDirty: true,
 				},
-				4: &Account{address: common.Address{0x12, 0x40}, info: info, hashDirty: true},
-			}, dirty: []int{3, 4}, hashDirty: true},
+				4: &Account{address: common.Address{0x12, 0x40}, info: info, dirty: true, dirtyHash: true},
+			}, dirtyChildHashes: []int{3, 4}, dirty: true, dirtyHash: true},
+			dirty:         true,
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1431,12 +1446,10 @@ func TestExtensionNode_SetAccount_NewAccount_PartialExtensionCovered(t *testing.
 	ctxt.ExpectCreateAccount()
 	extension, _ := ctxt.ExpectCreateExtension()
 
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
-
 	// Attempt to create a new account that is partially covered by the extension.
 	addr := common.Address{0x12, 0x40}
 	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info); newRoot != extension || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", extension, true, newRoot, changed, err)
 	}
@@ -1471,10 +1484,12 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_PartialExtensionCovered(t *t
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
 					}, frozen: true, frozenChildren: []int{0xA, 0xE}},
+					dirty:     true,
 					hashDirty: true,
 				},
-				4: &Account{address: common.Address{0x12, 0x40}, info: info, hashDirty: true},
-			}, dirty: []int{3, 4}, hashDirty: true},
+				4: &Account{address: common.Address{0x12, 0x40}, info: info, dirty: true, dirtyHash: true},
+			}, dirtyChildHashes: []int{3, 4}, dirty: true, dirtyHash: true},
+			dirty:         true,
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1529,10 +1544,11 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}},
+				dirty:     true,
 				hashDirty: true,
 			},
-			4: &Account{address: common.Address{0x40}, info: info, hashDirty: true},
-		}, dirty: []int{1, 4}, hashDirty: true},
+			4: &Account{address: common.Address{0x40}, info: info, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{1, 4}, dirty: true, dirtyHash: true},
 	)
 
 	ctxt.Check(t, ref)
@@ -1542,11 +1558,9 @@ func TestExtensionNode_SetAccount_NewAccount_NoCommonPrefix(t *testing.T) {
 	ctxt.ExpectCreateAccount()
 	branchId, _ := ctxt.ExpectCreateBranch()
 
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
-
 	addr := common.Address{0x40}
 	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info); newRoot != branchId || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", branchId, true, newRoot, changed, err)
 	}
@@ -1580,10 +1594,11 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoCommonPrefix(t *testing.T)
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
 				}, frozen: true, frozenChildren: []int{0xA, 0xE}},
+				dirty:     true,
 				hashDirty: true,
 			},
-			4: &Account{address: common.Address{0x40}, info: info, hashDirty: true},
-		}, dirty: []int{1, 4}, hashDirty: true},
+			4: &Account{address: common.Address{0x40}, info: info, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{1, 4}, dirty: true, dirtyHash: true},
 	)
 
 	ctxt.Check(t, ref)
@@ -1633,8 +1648,9 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 					0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info},
 					0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info},
 				}},
-				8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
-			}, dirty: []int{8}, hashDirty: true},
+				8: &Account{address: common.Address{0x12, 0x38}, info: info, dirty: true, dirtyHash: true},
+			}, dirtyChildHashes: []int{8}, dirty: true, dirtyHash: true},
+			dirty:         true,
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1647,11 +1663,9 @@ func TestExtensionNode_SetAccount_NewAccount_NoRemainingSuffix(t *testing.T) {
 	ctxt.ExpectCreateAccount()
 	ctxt.ExpectCreateBranch()
 
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
-
 	addr := common.Address{0x12, 0x38}
 	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", ref, true, newRoot, changed, err)
 	}
@@ -1686,12 +1700,14 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_NoRemainingSuffix(t *testing
 						0xA: &Account{address: common.Address{0x12, 0x34, 0xAB}, info: info, frozen: true},
 						0xE: &Account{address: common.Address{0x12, 0x34, 0xEF}, info: info, frozen: true},
 					}, frozen: true, frozenChildren: []int{0xA, 0xE}},
-					8: &Account{address: common.Address{0x12, 0x38}, info: info, hashDirty: true},
+					8: &Account{address: common.Address{0x12, 0x38}, info: info, dirty: true, dirtyHash: true},
 				},
-				hashDirty:      true,
-				dirty:          []int{8},
-				frozenChildren: []int{4},
+				dirty:            true,
+				dirtyHash:        true,
+				dirtyChildHashes: []int{8},
+				frozenChildren:   []int{4},
 			},
+			dirty:         true,
 			hashDirty:     true,
 			nextHashDirty: true,
 		},
@@ -1742,8 +1758,8 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 				0xA: &Account{address: common.Address{0x1A}, info: info},
 				0xE: &Account{address: common.Address{0x1E}, info: info},
 			}},
-			2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
-		}, hashDirty: true, dirty: []int{2}},
+			2: &Account{address: common.Address{0x20}, info: info, dirty: true, dirtyHash: true},
+		}, dirty: true, dirtyHash: true, dirtyChildHashes: []int{2}},
 	)
 
 	ctxt.Check(t, ref)
@@ -1790,11 +1806,12 @@ func TestExtensionNode_Frozen_SetAccount_NewAccount_ExtensionBecomesObsolete(t *
 					0xA: &Account{address: common.Address{0x1A}, info: info, frozen: true},
 					0xE: &Account{address: common.Address{0x1E}, info: info, frozen: true},
 				}, frozen: true, frozenChildren: []int{0xA, 0xE}},
-				2: &Account{address: common.Address{0x20}, info: info, hashDirty: true},
+				2: &Account{address: common.Address{0x20}, info: info, dirty: true, dirtyHash: true},
 			},
-			hashDirty:      true,
-			dirty:          []int{2},
-			frozenChildren: []int{1},
+			dirty:            true,
+			dirtyHash:        true,
+			dirtyChildHashes: []int{2},
+			frozenChildren:   []int{1},
 		},
 	)
 
@@ -1852,6 +1869,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 				1: &Account{address: common.Address{0x11, 0x10}, info: info},
 				2: &Account{address: common.Address{0x11, 0x20}, info: info},
 			}},
+			dirty:     true,
 			hashDirty: true,
 		},
 	)
@@ -1870,12 +1888,10 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 	extension, _ := ctxt.ExpectCreateExtension()
 	ctxt.EXPECT().release(extension.Id()).Return(nil)
 
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
-
 	addr := common.Address{0x12}
 	path := addressToNibbles(addr)
 	empty := AccountInfo{}
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], empty); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err %v", ref, true, newRoot, changed, err)
 	}
@@ -1911,6 +1927,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 				1: &Account{address: common.Address{0x11, 0x10}, info: info, frozen: true},
 				2: &Account{address: common.Address{0x11, 0x20}, info: info, frozen: true},
 			}, frozen: true, frozenChildren: []int{1, 2}},
+			dirty:     true,
 			hashDirty: true,
 		},
 	)
@@ -2055,7 +2072,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_WithLen
 		},
 	)
 
-	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40, hashDirty: true})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40, dirty: true, dirtyHash: true})
 
 	ctxt.Check(t, ref)
 	ctxt.Check(t, after)
@@ -2070,13 +2087,7 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_WithLen
 
 	ctxt.EXPECT().release(ref.Id()).Return(nil)
 
-	resultRef, result := ctxt.Get("R")
-
-	// The result's path length changes, so an update needs to be called.
-	// The first time when removing the branch, the second time when removing the extension.
-	resultHandle := result.GetWriteHandle()
-	ctxt.EXPECT().update(resultRef.Id(), resultHandle).Times(2)
-	resultHandle.Release()
+	resultRef, _ := ctxt.Get("R")
 
 	addr := common.Address{0x12}
 	path := addressToNibbles(addr)
@@ -2107,7 +2118,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_
 	ctxt.Freeze(ref)
 
 	before, _ := ctxt.Clone(ref)
-	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40, hashDirty: true})
+	after, _ := ctxt.Build(&Account{address: common.Address{0x11, 0x10}, info: info, pathLength: 40, dirty: true, dirtyHash: true})
 
 	ctxt.Check(t, before)
 	ctxt.Check(t, ref)
@@ -2120,12 +2131,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_
 	ctxt.ExpectCreateTemporaryExtension()
 
 	// It also creates a new account with an altered length.
-	accountId, account := ctxt.ExpectCreateAccount()
-
-	// There is an extra update call to the account since, 1x by branch, 1x by extension.
-	accountHandle := account.GetWriteHandle()
-	ctxt.EXPECT().update(accountId.Id(), accountHandle)
-	accountHandle.Release()
+	ctxt.ExpectCreateAccount()
 
 	addr := common.Address{0x12}
 	path := addressToNibbles(addr)
@@ -2364,14 +2370,16 @@ func TestExtensionNode_CheckDetectsIssues(t *testing.T) {
 		setup NodeDesc
 		ok    bool
 	}{
-		"ok":                    {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}}, true},
-		"empty path":            {&Extension{next: &Branch{}}, false},
-		"next not a branch":     {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
-		"invalid hash":          {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
-		"dirty hash is ignored": {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, nextHashDirty: true}, true},
-		"full_frozen":           {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
-		"partial_frozen":        {&Extension{frozen: false, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
-		"inconsistent_frozen":   {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: false}}, false},
+		"ok":                              {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}}, true},
+		"empty path":                      {&Extension{next: &Branch{}}, false},
+		"next not a branch":               {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
+		"invalid hash":                    {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
+		"dirty hash is ignored":           {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, dirty: true, hashDirty: true, nextHashDirty: true}, true},
+		"full_frozen":                     {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
+		"partial_frozen":                  {&Extension{frozen: false, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
+		"inconsistent_frozen":             {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: false}}, false},
+		"clean_with_dirty_hash":           {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: false, hashDirty: true}, false},
+		"clean_hash_with_dirty_next_hash": {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: false, hashDirty: false, nextHashDirty: true}, false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -2478,11 +2486,9 @@ func TestAccountNode_SetAccount_WithMatchingAccount_DifferentInfo(t *testing.T) 
 	info2 := AccountInfo{Nonce: common.Nonce{2}}
 
 	ref, node := ctxt.Build(&Account{address: addr, info: info1})
-	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
+	after, _ := ctxt.Build(&Account{address: addr, info: info2, dirty: true, dirtyHash: true})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
-
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr, path[:], info2); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
 	}
@@ -2503,7 +2509,7 @@ func TestAccountNode_Frozen_SetAccount_WithMatchingAccount_DifferentInfo(t *test
 	before, _ := ctxt.Build(&Account{address: addr, info: info1})
 	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	after, _ := ctxt.Build(&Account{address: addr, info: info2, hashDirty: true})
+	after, _ := ctxt.Build(&Account{address: addr, info: info2, dirty: true, dirtyHash: true})
 
 	ctxt.ExpectCreateAccount()
 
@@ -2591,8 +2597,8 @@ func TestAccountNode_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZeroInfo(
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1},
-		3: &Account{address: addr2, info: info2, hashDirty: true},
-	}, dirty: []int{3}, hashDirty: true})
+		3: &Account{address: addr2, info: info2, dirty: true, dirtyHash: true},
+	}, dirtyChildHashes: []int{3}, dirty: true, dirtyHash: true})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2624,8 +2630,8 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_NoCommonPrefix_NonZe
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Account{address: addr1, info: info1, frozen: true},
-		3: &Account{address: addr2, info: info2, hashDirty: true},
-	}, dirty: []int{3}, hashDirty: true, frozenChildren: []int{2}})
+		3: &Account{address: addr2, info: info2, dirty: true, dirtyHash: true},
+	}, dirtyChildHashes: []int{3}, dirty: true, dirtyHash: true, frozenChildren: []int{2}})
 
 	// This operation creates one new account node and a branch.
 	ctxt.ExpectCreateAccount()
@@ -2661,8 +2667,9 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
 			0xA: &Account{address: addr1, info: info1},
-			0xB: &Account{address: addr2, info: info2, hashDirty: true},
-		}, dirty: []int{0xB}, hashDirty: true},
+			0xB: &Account{address: addr2, info: info2, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{0xB}, dirty: true, dirtyHash: true},
+		dirty:         true,
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -2700,8 +2707,9 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
 			0xA: &Account{address: addr1, info: info1, frozen: true},
-			0xB: &Account{address: addr2, info: info2, hashDirty: true},
-		}, dirty: []int{0xB}, hashDirty: true, frozenChildren: []int{0xA}},
+			0xB: &Account{address: addr2, info: info2, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{0xB}, dirty: true, dirtyHash: true, frozenChildren: []int{0xA}},
+		dirty:         true,
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -2740,9 +2748,10 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Account{address: addr1, info: info1, pathLength: 36, hashDirty: true},
-			0xB: &Account{address: addr2, info: info2, pathLength: 36, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+			0xA: &Account{address: addr1, info: info1, pathLength: 36, dirty: true, dirtyHash: true},
+			0xB: &Account{address: addr2, info: info2, pathLength: 36, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{0xA, 0xB}, dirty: true, dirtyHash: true},
+		dirty:         true,
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -2752,11 +2761,8 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 	ctxt.ExpectCreateBranch()
 	res, _ := ctxt.ExpectCreateExtension()
 
-	// Also the old node is to be updated, since its length changed.
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
-
 	path := addressToNibbles(addr2)
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
 	}
@@ -2782,9 +2788,10 @@ func TestAccountNode_Frozen_SetAccount_WithDifferentAccount_WithCommonPrefix_Non
 	after, _ := ctxt.Build(&Extension{
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
-			0xA: &Account{address: addr1, info: info1, pathLength: 36, hashDirty: true},
-			0xB: &Account{address: addr2, info: info2, pathLength: 36, hashDirty: true},
-		}, dirty: []int{0xA, 0xB}, hashDirty: true},
+			0xA: &Account{address: addr1, info: info1, pathLength: 36, dirty: true, dirtyHash: true},
+			0xB: &Account{address: addr2, info: info2, pathLength: 36, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{0xA, 0xB}, dirty: true, dirtyHash: true},
+		dirty:         true,
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -2984,21 +2991,21 @@ func TestAccountNode_SetSlot_NonZeroValue(t *testing.T) {
 		address: addr,
 		info:    info,
 		storage: &Value{
-			key:       key,
-			value:     value,
-			length:    64,
-			hashDirty: true,
+			key:    key,
+			value:  value,
+			length: 64,
+			dirty:  true, dirtyHash: true,
 		},
-		hashDirty:        true,
+		dirty:            true,
+		dirtyHash:        true,
 		storageHashDirty: true,
 	})
 
 	// This operation creates one new value node.
 	ctxt.ExpectCreateValue()
 
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle)
 	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
 	}
@@ -3025,12 +3032,13 @@ func TestAccountNode_Frozen_SetSlot_NonZeroValue(t *testing.T) {
 		address: addr,
 		info:    info,
 		storage: &Value{
-			key:       key,
-			value:     value,
-			length:    64,
-			hashDirty: true,
+			key:    key,
+			value:  value,
+			length: 64,
+			dirty:  true, dirtyHash: true,
 		},
-		hashDirty:        true,
+		dirty:            true,
+		dirtyHash:        true,
 		storageHashDirty: true,
 	})
 
@@ -3066,33 +3074,27 @@ func TestAccountNode_SetSlot_UpdateOfExistingValue(t *testing.T) {
 	ref, node := ctxt.Build(&Account{
 		address: addr,
 		info:    info,
-		storage: &Tag{"S", &Value{
+		storage: &Value{
 			key:   key,
 			value: value1,
-		}},
+		},
 	})
 
 	after, _ := ctxt.Build(&Account{
 		address: addr,
 		info:    info,
 		storage: &Value{
-			key:       key,
-			value:     value2,
-			hashDirty: true,
+			key:   key,
+			value: value2,
+			dirty: true, dirtyHash: true,
 		},
-		hashDirty:        true,
+		dirty:            true,
+		dirtyHash:        true,
 		storageHashDirty: true,
 	})
 
-	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle)
-
-	storageRef, storage := ctxt.Get("S")
-	tmp := storage.GetWriteHandle()
-	ctxt.EXPECT().update(storageRef.Id(), tmp)
-	tmp.Release()
-
 	path := addressToNibbles(addr)
+	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value2); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
 	}
@@ -3127,11 +3129,12 @@ func TestAccountNode_Frozen_SetSlot_UpdateOfExistingValue(t *testing.T) {
 		address: addr,
 		info:    info,
 		storage: &Value{
-			key:       key,
-			value:     value2,
-			hashDirty: true,
+			key:   key,
+			value: value2,
+			dirty: true, dirtyHash: true,
 		},
-		hashDirty:        true,
+		dirty:            true,
+		dirtyHash:        true,
 		storageHashDirty: true,
 	})
 
@@ -3300,19 +3303,21 @@ func TestAccountNode_Frozen_Split_InSetPrefixLength(t *testing.T) {
 				children: Children{
 					0: &Account{address: addr1, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
 						storage:    &Value{key: key, value: value, length: 64, frozen: true},
-						pathLength: 38, hashDirty: true},
+						pathLength: 38, dirty: true, dirtyHash: true},
 					0xA: &Account{address: newAddr, info: newInfo,
-						pathLength: 38, hashDirty: true},
+						pathLength: 38, dirty: true, dirtyHash: true},
 				},
-				hashDirty: true,
-				dirty:     []int{0, 0xA},
+				dirty:            true,
+				dirtyHash:        true,
+				dirtyChildHashes: []int{0, 0xA},
 			},
 			0xB: &Account{address: addr2, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAB}},
 				pathLength: 39, frozen: true},
 		},
-		hashDirty:      true,
-		dirty:          []int{0xA},
-		frozenChildren: []int{0xB},
+		dirty:            true,
+		dirtyHash:        true,
+		dirtyChildHashes: []int{0xA},
+		frozenChildren:   []int{0xB},
 	})
 	ctxt.Check(t, after)
 
@@ -3351,7 +3356,8 @@ func TestAccountNode_ClearStorage(t *testing.T) {
 	after, _ := ctxt.Build(&Account{
 		address:          addr,
 		info:             AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
-		hashDirty:        true,
+		dirty:            true,
+		dirtyHash:        true,
 		storageHashDirty: true,
 	})
 
@@ -3550,6 +3556,24 @@ func TestAccountNode_CheckDetectsIssues(t *testing.T) {
 			pathLength: 37,
 			storage:    &Value{frozen: false},
 		}, false},
+		"clean_with_dirty_hash": {[]Nibble{1, 2, 3}, &Account{
+			frozen:     true,
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+			storage:    &Value{frozen: false},
+			dirty:      false,
+			dirtyHash:  true,
+		}, false},
+		"clean_hash_with_dirty_storage_hash": {[]Nibble{1, 2, 3}, &Account{
+			frozen:           true,
+			address:          common.Address{0x12, 0x34},
+			info:             AccountInfo{Nonce: common.Nonce{1}},
+			pathLength:       37,
+			storage:          &Value{frozen: false},
+			dirtyHash:        false,
+			storageHashDirty: true,
+		}, false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -3698,10 +3722,9 @@ func TestValueNode_SetValue_WithMatchingKey_DifferentValue(t *testing.T) {
 	value2 := common.Value{2}
 
 	ref, node := ctxt.Build(&Value{key: key, value: value1})
-	after, _ := ctxt.Build(&Value{key: key, value: value2, hashDirty: true})
+	after, _ := ctxt.Build(&Value{key: key, value: value2, dirty: true, dirtyHash: true})
 
 	handle := node.GetWriteHandle()
-	ctxt.EXPECT().update(ref.Id(), handle).Return(nil)
 
 	if newRoot, changed, err := handle.Get().SetValue(ctxt, &ref, handle, key, path[:], value2); newRoot != ref || !changed || err != nil {
 		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", ref, true, newRoot, changed, err)
@@ -3723,7 +3746,7 @@ func TestValueNode_Frozen_SetValue_WithMatchingKey_DifferentValue(t *testing.T) 
 	before, _ := ctxt.Build(&Value{key: key, value: value1})
 	ctxt.Freeze(before)
 	ref, node := ctxt.Clone(before)
-	after, _ := ctxt.Build(&Value{key: key, value: value2, hashDirty: true})
+	after, _ := ctxt.Build(&Value{key: key, value: value2, dirty: true, dirtyHash: true})
 
 	ctxt.ExpectCreateValue()
 
@@ -3805,8 +3828,8 @@ func TestValueNode_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(t *test
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Value{key: key1, value: value1},
-		3: &Value{key: key2, value: value2, hashDirty: true},
-	}, dirty: []int{3}, hashDirty: true})
+		3: &Value{key: key2, value: value2, dirty: true, dirtyHash: true},
+	}, dirtyChildHashes: []int{3}, dirty: true, dirtyHash: true})
 
 	// This operation creates one new value node and a branch.
 	res, _ := ctxt.ExpectCreateBranch()
@@ -3838,8 +3861,8 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_NoCommonPrefix_NonZeroValue(
 
 	after, _ := ctxt.Build(&Branch{children: Children{
 		2: &Value{key: key1, value: value1, frozen: true},
-		3: &Value{key: key2, value: value2, hashDirty: true},
-	}, dirty: []int{3}, hashDirty: true, frozenChildren: []int{2}})
+		3: &Value{key: key2, value: value2, dirty: true, dirtyHash: true},
+	}, dirtyChildHashes: []int{3}, dirty: true, dirtyHash: true, frozenChildren: []int{2}})
 
 	// This operation creates one new value node and a branch.
 	ctxt.ExpectCreateBranch()
@@ -3875,8 +3898,9 @@ func TestValueNode_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValue(t *te
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
 			0xA: &Value{key: key1, value: value1},
-			0xB: &Value{key: key2, value: value2, hashDirty: true},
-		}, dirty: []int{0xB}, hashDirty: true},
+			0xB: &Value{key: key2, value: value2, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{0xB}, dirty: true, dirtyHash: true},
+		dirty:         true,
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -3914,8 +3938,9 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_NonZeroValu
 		path: []Nibble{1, 2, 3},
 		next: &Branch{children: Children{
 			0xA: &Value{key: key1, value: value1, frozen: true},
-			0xB: &Value{key: key2, value: value2, hashDirty: true},
-		}, dirty: []int{0xB}, hashDirty: true, frozenChildren: []int{0xA}},
+			0xB: &Value{key: key2, value: value2, dirty: true, dirtyHash: true},
+		}, dirtyChildHashes: []int{0xB}, dirty: true, dirtyHash: true, frozenChildren: []int{0xA}},
+		dirty:         true,
 		hashDirty:     true,
 		nextHashDirty: true,
 	})
@@ -4135,6 +4160,13 @@ func TestValueNode_CheckDetectsIssues(t *testing.T) {
 			key:    common.Key{0x12, 0x34},
 			value:  common.Value{1},
 			length: 37,
+		}, false},
+		"clean with dirty hash": {[]Nibble{1, 2, 3}, &Value{
+			key:       common.Key{0x12, 0x34},
+			value:     common.Value{1},
+			length:    37,
+			dirty:     false,
+			dirtyHash: true,
 		}, false},
 	}
 	for name, test := range tests {
@@ -5517,9 +5549,9 @@ func TestTransitions_TestForMissingTransitions(t *testing.T) {
 	allNodeTypes := []nodeType{
 		ntAccount,
 		ntBranch,
-		ntEmpty, // TODO: enable when examples are covered
+		ntEmpty,
 		ntExtension,
-		//ntValue,
+		//ntValue,  // TODO: enable when examples are covered
 	}
 
 	allOperationTypes := []operationType{
@@ -5647,8 +5679,13 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 		t.Fatalf("failed to collect preexisting nodes: %v", err)
 	}
 	isReused := func(n Node) bool {
+		equalConfig := equalityConfig{
+			ignoreDirtyFlag: true,
+			ignoreDirtyHash: true,
+			ignoreFreeze:    true,
+		}
 		for _, cur := range allPreexistingNodes {
-			if ctxt.equalWithConfig(cur, n, equalityConfig{ignoreDirtyHash: true, ignoreFreeze: true}) {
+			if ctxt.equalWithConfig(cur, n, equalConfig) {
 				return true
 			}
 		}
@@ -5662,12 +5699,16 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 		if !isReused(n) {
 			switch n := n.(type) {
 			case (*AccountNode):
+				n.markDirty()
 				n.hashDirty = true
 			case (*BranchNode):
+				n.markDirty()
 				n.hashDirty = true
 			case (*ExtensionNode):
+				n.markDirty()
 				n.hashDirty = true
 			case (*ValueNode):
+				n.markDirty()
 				n.hashDirty = true
 			}
 		}
@@ -5839,13 +5880,14 @@ func (m *Mock) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 }
 
 type Account struct {
+	dirty            bool
 	address          common.Address
 	info             AccountInfo
 	frozen           bool
 	pathLength       byte
 	storage          NodeDesc
 	storageHashDirty bool
-	hashDirty        bool
+	dirtyHash        bool
 }
 
 func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -5855,13 +5897,14 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 		storage = id
 	}
 	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](&AccountNode{
+		nodeBase:         nodeBase{clean: !a.dirty},
 		address:          a.address,
 		info:             a.info,
 		frozen:           a.frozen,
 		pathLength:       a.pathLength,
 		storage:          storage,
 		storageHashDirty: a.storageHashDirty,
-		hashDirty:        a.hashDirty,
+		hashDirty:        a.dirtyHash,
 	})
 }
 
@@ -5869,17 +5912,19 @@ type Children map[Nibble]NodeDesc
 type ChildHashes map[Nibble]common.Hash
 
 type Branch struct {
-	children       Children
-	childHashes    ChildHashes
-	dirty          []int
-	frozen         bool
-	frozenChildren []int
-	hashDirty      bool
+	dirty            bool
+	children         Children
+	childHashes      ChildHashes
+	dirtyChildHashes []int
+	frozen           bool
+	frozenChildren   []int
+	dirtyHash        bool
 }
 
 func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(BranchId(ctx.nextIndex()))
 	res := &BranchNode{}
+	res.nodeBase.clean = !b.dirty
 	res.frozen = b.frozen
 	for i, desc := range b.children {
 		id, _ := ctx.Build(desc)
@@ -5888,17 +5933,18 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	for i, hash := range b.childHashes {
 		res.hashes[i] = hash
 	}
-	for _, i := range b.dirty {
+	for _, i := range b.dirtyChildHashes {
 		res.markChildHashDirty(byte(i))
 	}
 	for _, i := range b.frozenChildren {
 		res.setChildFrozen(byte(i), true)
 	}
-	res.hashDirty = b.hashDirty
+	res.hashDirty = b.dirtyHash
 	return ref, shared.MakeShared[Node](res)
 }
 
 type Extension struct {
+	dirty         bool
 	frozen        bool
 	path          []Nibble
 	next          NodeDesc
@@ -5910,6 +5956,7 @@ type Extension struct {
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(ExtensionId(ctx.nextIndex()))
 	res := &ExtensionNode{}
+	res.nodeBase.clean = !e.dirty
 	res.frozen = e.frozen
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
@@ -5931,18 +5978,20 @@ func (t *Tag) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 }
 
 type Value struct {
+	dirty     bool
 	key       common.Key
 	value     common.Value
 	length    byte
-	hashDirty bool
+	dirtyHash bool
 	frozen    bool
 }
 
 func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	return NewNodeReference(ValueId(ctx.nextIndex())), shared.MakeShared[Node](&ValueNode{
+		nodeBase:   nodeBase{clean: !v.dirty},
 		key:        v.key,
 		value:      v.value,
-		hashDirty:  v.hashDirty,
+		hashDirty:  v.dirtyHash,
 		pathLength: v.length,
 		frozen:     v.frozen,
 	})
@@ -5959,6 +6008,7 @@ type nodeContext struct {
 	tags      map[string]entry
 	lastIndex uint64
 	config    MptConfig
+	released  []NodeId
 }
 
 func newNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
@@ -5991,6 +6041,22 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 		}
 	})
 
+	// Make sure that all released nodes are marked as clean.
+	t.Cleanup(func() {
+		for _, id := range res.released {
+			ref := NewNodeReference(id)
+			handle, err := res.getViewAccess(&ref)
+			if err != nil {
+				t.Errorf("failed to acquire read access to node %v: %v", id, err)
+				continue
+			}
+			if handle.Get().IsDirty() {
+				t.Errorf("released node %v is dirty at end of test", id)
+			}
+			handle.Release()
+		}
+	})
+
 	return res
 }
 
@@ -6001,28 +6067,27 @@ func newNiceNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
 	ctxt := newNodeContext(t, ctrl)
 
 	ctxt.EXPECT().createAccount().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
-		ref, shared := ctxt.Build(&Account{})
+		ref, shared := ctxt.Build(&Account{dirty: true})
 		return ref, shared.GetWriteHandle(), nil
 	})
 
 	ctxt.EXPECT().createBranch().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
-		ref, shared := ctxt.Build(&Branch{})
+		ref, shared := ctxt.Build(&Branch{dirty: true})
 		return ref, shared.GetWriteHandle(), nil
 	})
 
 	ctxt.EXPECT().createExtension().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
-		ref, shared := ctxt.Build(&Extension{})
+		ref, shared := ctxt.Build(&Extension{dirty: true})
 		return ref, shared.GetWriteHandle(), nil
 	})
 
 	ctxt.EXPECT().createValue().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
-		ref, shared := ctxt.Build(&Value{})
+		ref, shared := ctxt.Build(&Value{dirty: true})
 		return ref, shared.GetWriteHandle(), nil
 	})
 
 	ctxt.EXPECT().release(gomock.Any()).AnyTimes()
 	ctxt.EXPECT().releaseTrieAsynchronous(gomock.Any()).AnyTimes()
-	ctxt.EXPECT().update(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return ctxt
 }
@@ -6055,29 +6120,27 @@ func (c *nodeContext) Build(desc NodeDesc) (NodeReference, *shared.Shared[Node])
 }
 
 func (c *nodeContext) ExpectCreateAccount() (NodeReference, *shared.Shared[Node]) {
-	ref, instance := c.Build(&Account{})
+	ref, instance := c.Build(&Account{dirty: true})
 	c.EXPECT().createAccount().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
 
 func (c *nodeContext) ExpectCreateBranch() (NodeReference, *shared.Shared[Node]) {
-	ref, instance := c.Build(&Branch{})
+	ref, instance := c.Build(&Branch{dirty: true})
 	c.EXPECT().createBranch().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
 
 func (c *nodeContext) ExpectCreateTemporaryBranch() (NodeReference, *shared.Shared[Node]) {
-	ref, instance := c.Build(&Branch{})
+	ref, instance := c.Build(&Branch{dirty: true})
 	c.EXPECT().createBranch().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
@@ -6086,18 +6149,17 @@ func (c *nodeContext) ExpectCreateTemporaryBranch() (NodeReference, *shared.Shar
 }
 
 func (c *nodeContext) ExpectCreateExtension() (NodeReference, *shared.Shared[Node]) {
-	ref, instance := c.Build(&Extension{})
+	ref, instance := c.Build(&Extension{dirty: true})
 	c.EXPECT().createExtension().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
 
 func (c *nodeContext) ExpectCreateTemporaryExtension() (NodeReference, *shared.Shared[Node]) {
-	ref, instance := c.Build(&Extension{})
+	ref, instance := c.Build(&Extension{dirty: true})
 	c.EXPECT().createExtension().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
@@ -6106,12 +6168,11 @@ func (c *nodeContext) ExpectCreateTemporaryExtension() (NodeReference, *shared.S
 }
 
 func (c *nodeContext) ExpectCreateValue() (NodeReference, *shared.Shared[Node]) {
-	ref, instance := c.Build(&Value{})
+	ref, instance := c.Build(&Value{dirty: true})
 	c.EXPECT().createValue().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
 	handle := instance.GetWriteHandle()
-	c.EXPECT().update(ref.Id(), handle).Return(nil)
 	handle.Release()
 	return ref, instance
 }
@@ -6246,6 +6307,11 @@ func (c *nodeContext) cloneInternal(node Node) (NodeReference, *shared.Shared[No
 
 func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
 	diffs := []string{}
+
+	if dirtyA, dirtyB := nodeA.IsDirty(), nodeB.IsDirty(); dirtyA != dirtyB {
+		diffs = append(diffs, fmt.Sprintf("%s: different dirty state, got %t and %t", prefix, dirtyA, dirtyB))
+	}
+
 	if _, ok := nodeA.(EmptyNode); ok {
 		if _, ok := nodeB.(EmptyNode); !ok {
 			diffs = append(diffs, fmt.Sprintf("%s: different node types, got %v and %v", prefix, reflect.TypeOf(nodeA), reflect.TypeOf(nodeB)))
@@ -6365,11 +6431,18 @@ func (c *nodeContext) equal(a, b Node) bool {
 }
 
 type equalityConfig struct {
+	ignoreDirtyFlag bool
 	ignoreDirtyHash bool
 	ignoreFreeze    bool
 }
 
 func (c *nodeContext) equalWithConfig(a, b Node, config equalityConfig) bool {
+	if !config.ignoreDirtyFlag {
+		if dirtyA, dirtyB := a.IsDirty(), b.IsDirty(); dirtyA != dirtyB {
+			return false
+		}
+	}
+
 	if _, ok := a.(EmptyNode); ok {
 		_, ok := b.(EmptyNode)
 		return ok
@@ -6465,6 +6538,11 @@ func (c *nodeContext) equalTriesWithConfig(a, b NodeReference, config equalityCo
 	defer nodeA.Release()
 	defer nodeB.Release()
 	return c.equalWithConfig(nodeA.Get(), nodeB.Get(), config)
+}
+
+func (c *nodeContext) release(id NodeId) error {
+	c.released = append(c.released, id)
+	return c.MockNodeManager.release(id)
 }
 
 func addressToNibbles(addr common.Address) []Nibble {

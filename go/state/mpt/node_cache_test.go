@@ -2,6 +2,7 @@ package mpt
 
 import (
 	"fmt"
+	"maps"
 	"math/rand"
 	"slices"
 	"testing"
@@ -254,4 +255,36 @@ func getBackwardLruList(c *nodeCache) ([]NodeId, error) {
 		res = append(res, c.owners[c.head].Id())
 	}
 	return res, nil
+}
+
+func TestNodeCache_ForEachEnumeratesAllEntries(t *testing.T) {
+	const Capacity = 10
+	cache := newNodeCache(Capacity)
+
+	getAll := func() map[NodeId]*shared.Shared[Node] {
+		res := map[NodeId]*shared.Shared[Node]{}
+		cache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
+			res[id] = node
+		})
+		return res
+	}
+
+	want := map[NodeId]*shared.Shared[Node]{}
+	if got := getAll(); !maps.Equal(want, got) {
+		t.Errorf("invalid content, wanted %v, got %v", want, got)
+	}
+
+	for i := 0; i < 2*Capacity; i++ {
+		ref := NewNodeReference(ValueId(uint64(i)))
+		node := shared.MakeShared[Node](&ValueNode{})
+
+		if _, _, evictedId, _, evicted := cache.GetOrSet(&ref, node); evicted {
+			delete(want, evictedId)
+		}
+
+		want[ref.Id()] = node
+		if got := getAll(); !maps.Equal(want, got) {
+			t.Errorf("invalid content, wanted %v, got %v", want, got)
+		}
+	}
 }

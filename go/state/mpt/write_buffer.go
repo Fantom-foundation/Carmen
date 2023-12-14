@@ -191,10 +191,14 @@ func (b *writeBuffer) emptyBuffer() {
 
 		// Write a snapshot of the node to the disk.
 		handle := node.GetViewHandle()
-		if err := b.sink.Write(id, handle); err != nil {
-			b.errsMutex.Lock()
-			b.errs = append(b.errs, err)
-			b.errsMutex.Unlock()
+		if handle.Get().IsDirty() {
+			if err := b.sink.Write(id, handle); err != nil {
+				b.errsMutex.Lock()
+				b.errs = append(b.errs, err)
+				b.errsMutex.Unlock()
+			} else {
+				handle.Get().MarkClean()
+			}
 		}
 
 		b.bufferMutex.Lock()
