@@ -4588,6 +4588,16 @@ func (t *trie) SetValue(addr common.Address, key common.Key, value common.Value)
 	return handle.Get().SetSlot(t.manager, &t.root, handle, addr, path, key, value)
 }
 
+func (t *trie) ClearStorage(addr common.Address) (NodeReference, bool, error) {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return NodeReference{}, false, err
+	}
+	defer handle.Release()
+	path := addressToNibbles(addr)
+	return handle.Get().ClearStorage(t.manager, &t.root, handle, addr, path)
+}
+
 func getTestTransitions() []transition {
 	res := []transition{}
 
@@ -4731,6 +4741,169 @@ func getTestTransitions() []transition {
 					info:    AccountInfo{Nonce: common.Nonce{3, 2, 1}},
 				},
 			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetValue,
+		description: "creating_storage",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1}, common.Key{2}, common.Value{3})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetValue,
+		description: "updating_storage",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1}, common.Key{2}, common.Value{4})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{4},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetValue,
+		description: "extending_storage",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1}, common.Key{4}, common.Value{5})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Extension{path: []Nibble{0}, next: &Branch{children: Children{
+				2: &Value{key: common.Key{2}, value: common.Value{3}},
+				4: &Value{key: common.Key{4}, value: common.Value{5}},
+			}}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetValue,
+		description: "shrink_storage",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Extension{path: []Nibble{0}, next: &Branch{children: Children{
+				2: &Value{key: common.Key{2}, value: common.Value{3}},
+				4: &Value{key: common.Key{4}, value: common.Value{5}},
+			}}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1}, common.Key{4}, common.Value{0})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetValue,
+		description: "deleting_storage",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1}, common.Key{2}, common.Value{0})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otClearStorage,
+		description: "clear_storage_hit",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{1})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otClearStorage,
+		description: "clear_storage_miss",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{2})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+			storage: &Value{
+				key:   common.Key{2},
+				value: common.Value{3},
+			},
 		},
 	})
 
@@ -4884,6 +5057,28 @@ func getTestTransitions() []transition {
 			return trg.SetAccount(common.Address{0x42}, AccountInfo{Nonce: common.Nonce{1, 2, 3}})
 		},
 		after: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2, 3}}},
+	})
+
+	res = append(res, transition{
+		node:        ntEmpty,
+		operation:   otSetValue,
+		description: "no_change",
+		before:      &Empty{},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1}, common.Key{2}, common.Value{3})
+		},
+		after: &Empty{},
+	})
+
+	res = append(res, transition{
+		node:        ntEmpty,
+		operation:   otClearStorage,
+		description: "no_change",
+		before:      &Empty{},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{1})
+		},
+		after: &Empty{},
 	})
 
 	// --- Extension ---
@@ -5309,12 +5504,21 @@ func getTestTransitions() []transition {
 	return res
 }
 
+func getTestStats() []NodeDesc {
+	res := []NodeDesc{}
+	for _, cur := range getTestTransitions() {
+		res = append(res, cur.before)
+		res = append(res, cur.after)
+	}
+	return res
+}
+
 func TestTransitions_TestForMissingTransitions(t *testing.T) {
 	allNodeTypes := []nodeType{
 		ntAccount,
 		ntBranch,
 		ntEmpty, // TODO: enable when examples are covered
-		//ntExtension,
+		ntExtension,
 		//ntValue,
 	}
 
@@ -5341,7 +5545,7 @@ func TestTransitions_TestForMissingTransitions(t *testing.T) {
 	}
 }
 
-func TestTransitions_BeforeAndAfterStatesAreValid(t *testing.T) {
+func TestTransitions_TestStatesAreValid(t *testing.T) {
 	for _, transition := range getTestTransitions() {
 		transition := transition
 		t.Run(transition.getLabel(), func(t *testing.T) {
@@ -5376,6 +5580,32 @@ func TestTransitions_BeforeAndAfterStatesCanBeFrozen(t *testing.T) {
 			ctxt.Freeze(ref)
 			ctxt.Check(t, ref)
 		})
+	}
+}
+
+func TestTransitions_StatesAreReleasable(t *testing.T) {
+	for _, state := range getTestStats() {
+		ctrl := gomock.NewController(t)
+		ctxt := newNiceNodeContext(t, ctrl)
+
+		ref, node := ctxt.Build(state)
+		handle := node.GetWriteHandle()
+		if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
+			t.Errorf("error during release: %v", err)
+		}
+		handle.Release()
+	}
+}
+
+func TestTransitions_StatesAreDumpable(t *testing.T) {
+	for _, state := range getTestStats() {
+		ctrl := gomock.NewController(t)
+		ctxt := newNodeContext(t, ctrl)
+
+		ref, node := ctxt.Build(state)
+		handle := node.GetViewHandle()
+		handle.Get().Dump(ctxt, &ref, "")
+		handle.Release()
 	}
 }
 
@@ -5461,27 +5691,21 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 			read.Release()
 		}
 		if account, ok := n.(*AccountNode); ok {
-			if !account.storage.Id().IsEmpty() {
-				read, _ := ctxt.getReadAccess(&account.storage)
-				account.storageHashDirty = !isReused(read.Get())
-				read.Release()
-			} else {
-				// If it is now empty, check whether there is an account
-				// in the before state that is not empty. If so, we assume
-				// the state was deleted and thus the hash should be updated.
-				deleted := false
-				for _, node := range allPreexistingNodes {
-					preexisting, ok := node.(*AccountNode)
-					if !ok {
-						continue
-					}
-					if preexisting.storage.Id().IsEmpty() {
-						continue
-					}
-					deleted = true
+			// Look in pre-existing nodes for this account.
+			found := false
+			for _, node := range allPreexistingNodes {
+				cur, ok := node.(*AccountNode)
+				if !ok {
+					continue
+				}
+				if cur.address == account.address {
+					found = true
+					account.storageHashDirty = !ctxt.equalTriesWithConfig(account.storage, cur.storage, equalityConfig{ignoreDirtyHash: true, ignoreFreeze: true})
 					break
 				}
-				account.storageHashDirty = deleted
+			}
+			if !found {
+				account.storageHashDirty = !account.storage.Id().IsEmpty()
 			}
 		}
 		return VisitResponseContinue
@@ -5797,6 +6021,7 @@ func newNiceNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
 	})
 
 	ctxt.EXPECT().release(gomock.Any()).AnyTimes()
+	ctxt.EXPECT().releaseTrieAsynchronous(gomock.Any()).AnyTimes()
 	ctxt.EXPECT().update(gomock.Any(), gomock.Any()).AnyTimes()
 
 	return ctxt
