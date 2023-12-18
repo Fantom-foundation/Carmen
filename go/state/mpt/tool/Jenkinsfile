@@ -51,11 +51,17 @@ pipeline {
             }
         }
 
-        stage('Verify sync DB') {
+        stage('Verify Live DB') {
             steps {
                 sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live"
             }
         }
+
+        stage('Verify Archive DB') {
+            steps {
+                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/archive"
+            }
+        }        
 
         stage('Export DB') {
             steps {
@@ -69,7 +75,7 @@ pipeline {
             }
         }
 
-        stage('Verify recovered DB') {
+        stage('Verify recovered Live DB') {
             steps {
                 sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
             }
@@ -79,7 +85,7 @@ pipeline {
             steps {
                 sh "cp ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/statedb_info.json ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
                 script {nextBlock=params.firstBlockHeight.toInteger()+1}
-                sh "build/aida-vm-sdb substate --aida-db ${params.aidaDb} --db-tmp ${params.tmpDb} --db-src ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/ --vm-impl=lfvm --db-impl carmen --db-variant go-file --carmen-schema 5 --archive --archive-variant s5 --keep-db --validate-state-hash ${nextBlock} ${params.secondBlockHeight}"
+                sh "build/aida-vm-sdb substate --aida-db ${params.aidaDb} --db-tmp ${params.tmpDb} --db-src ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/ --vm-impl=lfvm --db-impl carmen --db-variant go-file --carmen-schema 5 --keep-db --validate-state-hash ${nextBlock} ${params.secondBlockHeight}"
             }
         }    
 
