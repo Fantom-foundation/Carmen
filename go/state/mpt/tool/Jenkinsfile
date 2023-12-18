@@ -83,7 +83,9 @@ pipeline {
 
         stage('Continue Synchronise Blocks') {
             steps {
+                // continue with liveDB only as the Import/Export tool does not cover Archive
                 sh "cp ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/statedb_info.json ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/"
+                sh "sed -i -r 's/\"archiveMode\": true,/\"archiveMode\": false,/' ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/statedb_info.json"
                 script {nextBlock=params.firstBlockHeight.toInteger()+1}
                 sh "build/aida-vm-sdb substate --aida-db ${params.aidaDb} --db-tmp ${params.tmpDb} --db-src ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/ --vm-impl=lfvm --db-impl carmen --db-variant go-file --carmen-schema 5 --keep-db --validate-state-hash ${nextBlock} ${params.secondBlockHeight}"
             }
