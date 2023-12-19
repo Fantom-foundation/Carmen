@@ -255,6 +255,20 @@ func (r OpsFactoryRegistry[T, C]) ReadNextOp(raw *[]byte) (T, Operation[C]) {
 	return opType, op
 }
 
+// ReadAllOps parses all operations from the input stream.
+// It expects opcode of the operation at the first byte followed by payload at next bytes.
+// A next opcode follows the payload, repeating this pattern throughout the array.
+// Note: this method expects that operations were registered under opcodes using consecutive integers starting from zero
+// (i.e. 0, 1, 2, ...). If this does not hold, the method will not parse the input correctly.
+func (r OpsFactoryRegistry[T, C]) ReadAllOps(raw []byte) []Operation[C] {
+	var ops []Operation[C]
+	for len(raw) >= 1 {
+		_, op := r.ReadNextOp(&raw)
+		ops = append(ops, op)
+	}
+	return ops
+}
+
 // RegisterNoDataOp registers a factory that creates a fuzzing operation.
 // This method registers an operation that has only its opcode, but no payload.
 func RegisterNoDataOp[T ~byte, C any](registry OpsFactoryRegistry[T, C], opType T, apply func(opType T, t TestingT, context *C)) {
@@ -273,6 +287,8 @@ func RegisterNoDataOp[T ~byte, C any](registry OpsFactoryRegistry[T, C], opType 
 // RegisterDataOp registers a factory that creates a fuzzing operation.
 // This method registers an operation that has its opcode together with a payload.
 // It furthermore registers two callbacks to serialize and deserialize payload of this operation to/from a byte array.
+// The deserialize method should consume the required number of bytes from the input
+// and remove them from the array.
 func RegisterDataOp[T ~byte, C any, D any](
 	registry OpsFactoryRegistry[T, C],
 	opType T,

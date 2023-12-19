@@ -80,7 +80,7 @@ func FuzzStack_RandomOps(f *testing.F) {
 	deserialise := func(b *[]byte) int {
 		if len(*b) >= 4 {
 			res := int(binary.BigEndian.Uint32((*b)[0:4]))
-			*b = (*b)[0:4]
+			*b = (*b)[4:]
 			return res
 		} else {
 			*b = (*b)[:]
