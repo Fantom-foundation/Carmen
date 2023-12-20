@@ -92,13 +92,20 @@ pipeline {
                         sh 'cd go && go test ./backend/stock/memory -fuzztime 3h -fuzz FuzzSyncStock_RandomOps'
                     }
                 }
-                stage('Fuzzing Live MPT') {
+                stage('Fuzzing Live MPT - Accounts') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
                         sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountOps'
                     }
                 }  
+                stage('Fuzzing Live MPT - Storage') {
+                    agent {label 'fuzzing'}
+                    steps {
+                        unstash 'source'
+                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
+                    }
+                }                  
             }
         }
     }
