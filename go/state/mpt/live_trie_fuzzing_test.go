@@ -44,6 +44,10 @@ func FuzzLiveTrie_RandomAccountOps(f *testing.F) {
 	serialise := func(payload accountPayload) []byte {
 		return payload.Serialise()
 	}
+	serialiseAddrOnly := func(payload accountPayload) []byte {
+		return payload.SerialiseAddress()
+	}
+
 	deserialise := func(b *[]byte) accountPayload {
 		var addr shortAddress
 		var nonce common.Nonce
@@ -69,10 +73,19 @@ func FuzzLiveTrie_RandomAccountOps(f *testing.F) {
 		return accountPayload{addr, AccountInfo{nonce, balance, codeHash}}
 	}
 
+	deserialiseAddrOnly := func(b *[]byte) accountPayload {
+		var addr shortAddress
+		if len(*b) >= len(addr) {
+			addr = shortAddress((*b)[0:len(addr)])
+			*b = (*b)[len(addr):]
+		}
+		return accountPayload{address: addr}
+	}
+
 	registry := fuzzing.NewRegistry[opType, liveTrieAccountFuzzingContext]()
 	fuzzing.RegisterDataOp(registry, set, serialise, deserialise, opSet)
-	fuzzing.RegisterDataOp(registry, get, serialise, deserialise, opGet)
-	fuzzing.RegisterDataOp(registry, deleteAddr, serialise, deserialise, opDelete)
+	fuzzing.RegisterDataOp(registry, get, serialiseAddrOnly, deserialiseAddrOnly, opGet)
+	fuzzing.RegisterDataOp(registry, deleteAddr, serialiseAddrOnly, deserialiseAddrOnly, opDelete)
 
 	fuzzing.Fuzz[liveTrieAccountFuzzingContext](f, &liveTrieAccountFuzzingCampaign{registry: registry})
 }
@@ -208,6 +221,17 @@ func (a *accountPayload) Serialise() []byte {
 	return res
 }
 
+// SerialiseAddress serializes the address of an accountPayload.
+// The serialized data is laid out as <shortAddress>.
+func (a *accountPayload) SerialiseAddress() []byte {
+	res := make([]byte, 0, len(a.address))
+	res = append(res, a.address[:]...)
+	return res
+}
+
+// GetAddress returns the address of an accountPayload by copying its address bytes into a new common.Address variable and returning it.
+// It loops over the address bytes of the accountPayload and copies each byte into the new common.Address variable.
+// The resulting address is then returned.
 func (a *accountPayload) GetAddress() common.Address {
 	var addr common.Address
 	for i := 0; i < len(a.address); i++ {
