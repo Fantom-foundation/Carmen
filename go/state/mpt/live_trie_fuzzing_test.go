@@ -147,14 +147,14 @@ func (c *liveTrieAccountFuzzingCampaign) Init() []fuzzing.OperationSequence[live
 	}
 
 	var seed []fuzzing.OperationSequence[liveTrieAccountFuzzingContext]
-	for _, op := range []opType{set, get} {
+	{
 		var sequence fuzzing.OperationSequence[liveTrieAccountFuzzingContext]
 		for _, addr := range []common.Address{addr1, addr2, addr3} {
 			for _, nonce := range []common.Nonce{nonce1, nonce2, nonce3} {
 				for _, balance := range []common.Balance{balance1, balance2, balance3} {
 					for _, codeHash := range []common.Hash{codeHash1, codeHash2, codeHash3} {
 						info := AccountInfo{nonce, balance, codeHash}
-						sequence = append(sequence, c.registry.CreateDataOp(op, accountPayload{createShortAddress(addr), info}))
+						sequence = append(sequence, c.registry.CreateDataOp(set, accountPayload{createShortAddress(addr), info}))
 					}
 				}
 			}
@@ -162,12 +162,25 @@ func (c *liveTrieAccountFuzzingCampaign) Init() []fuzzing.OperationSequence[live
 		seed = append(seed, sequence)
 	}
 
-	var sequence fuzzing.OperationSequence[liveTrieAccountFuzzingContext]
-	for _, addr := range []common.Address{addr1, addr2, addr3} {
-		info := AccountInfo{}
-		sequence = append(sequence, c.registry.CreateDataOp(deleteAddr, accountPayload{createShortAddress(addr), info}))
+	{
+		var sequence fuzzing.OperationSequence[liveTrieAccountFuzzingContext]
+		for _, addr := range []common.Address{addr1, addr2, addr3} {
+			info := AccountInfo{}
+			sequence = append(sequence, c.registry.CreateDataOp(deleteAddr, accountPayload{createShortAddress(addr), info}))
+		}
+		seed = append(seed, sequence)
 	}
-	return append(seed, sequence)
+
+	{
+		var sequence fuzzing.OperationSequence[liveTrieAccountFuzzingContext]
+		for _, addr := range []common.Address{addr1, addr2, addr3} {
+			info := AccountInfo{}
+			sequence = append(sequence, c.registry.CreateDataOp(get, accountPayload{createShortAddress(addr), info}))
+		}
+		seed = append(seed, sequence)
+	}
+
+	return seed
 }
 
 func (c *liveTrieAccountFuzzingCampaign) CreateContext(t fuzzing.TestingT) *liveTrieAccountFuzzingContext {
