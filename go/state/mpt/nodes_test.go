@@ -5036,7 +5036,7 @@ func getTestTransitions() []transition {
 	res = append(res, transition{
 		node:        ntBranch,
 		operation:   otSetAccount,
-		description: "delete_causing_replacement_by_leave",
+		description: "delete_causing_replacement_by_leaf",
 		before: &Branch{children: Children{
 			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1, 2}}},
 			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
@@ -5065,6 +5065,253 @@ func getTestTransitions() []transition {
 			3: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{3, 4}}},
 			5: &Account{address: common.Address{0x75}, info: AccountInfo{Nonce: common.Nonce{5, 6}}},
 		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetValue,
+		description: "no_change",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x42}, common.Value{1, 2})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetValue,
+		description: "update",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x42}, common.Value{2, 3})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				4: &Value{key: common.Key{0x42}, value: common.Value{2, 3}},
+				7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "new_child",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0xA3}, common.Value{5, 6})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				0x4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				0x7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+				0xA: &Value{key: common.Key{0xA3}, value: common.Value{5, 6}},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "split_child",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x46}, common.Value{5, 6})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				0x4: &Branch{
+					children: Children{
+						0x2: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+						0x6: &Value{key: common.Key{0x46}, value: common.Value{5, 6}},
+					},
+				},
+				0x7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "delete_child_from_more_than_two_children",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				0x4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				0x7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+				0xB: &Value{key: common.Key{0xB4}, value: common.Value{5, 6}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x42}, common.Value{})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				0x7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+				0xB: &Value{key: common.Key{0xB4}, value: common.Value{5, 6}},
+			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "delete_causing_replacement_by_leave",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				0x4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				0x7: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x42}, common.Value{})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otSetAccount,
+		description: "delete_causing_replacement_by_extension",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Branch{children: Children{
+				0x4: &Value{key: common.Key{0x42}, value: common.Value{1, 2}},
+				0x7: &Branch{children: Children{
+					3: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+					5: &Value{key: common.Key{0x75}, value: common.Value{5, 6}},
+				}},
+			}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x42}, common.Value{})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Extension{path: []Nibble{7}, next: &Branch{children: Children{
+				3: &Value{key: common.Key{0x73}, value: common.Value{3, 4}},
+				5: &Value{key: common.Key{0x75}, value: common.Value{5, 6}},
+			}}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otClearStorage,
+		description: "clear_storage_missing_account",
+		before: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{0x12})
+		},
+		after: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}},
+	})
+
+	res = append(res, transition{
+		node:        ntBranch,
+		operation:   otClearStorage,
+		description: "clear_storage_existing_account",
+		before: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{0x73})
+		},
+		after: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+			},
+		}},
 	})
 
 	// --- Empty ---
@@ -5350,6 +5597,99 @@ func getTestTransitions() []transition {
 		}}},
 	})
 
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otSetValue,
+		description: "insert_value_common_prefix_length_2",
+		before: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Extension{path: []Nibble{1, 2, 3}, next: &Branch{children: Children{
+				4: &Value{key: common.Key{0x12, 0x34, 0x56}, value: common.Value{1}},
+				7: &Value{key: common.Key{0x12, 0x37, 0x89}, value: common.Value{2}},
+			}}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{1, 2}, common.Key{0x12, 0x40}, common.Value{3})
+		},
+		after: &Account{
+			address: common.Address{1, 2},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+				0x3: &Branch{children: Children{
+					4: &Value{key: common.Key{0x12, 0x34, 0x56}, value: common.Value{1}},
+					7: &Value{key: common.Key{0x12, 0x37, 0x89}, value: common.Value{2}},
+				}},
+				0x4: &Value{key: common.Key{0x12, 0x40}, value: common.Value{3}},
+			}}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otClearStorage,
+		description: "clear_storage_missing_account",
+		before: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x12, 0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{0x12, 0x34})
+		},
+		after: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x12, 0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}}},
+	})
+
+	res = append(res, transition{
+		node:        ntExtension,
+		operation:   otClearStorage,
+		description: "clear_storage_existing_account",
+		before: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Value{key: common.Key{0x12}, value: common.Value{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x12, 0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}}},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.ClearStorage(common.Address{0x12, 0x42})
+		},
+		after: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+			},
+			0x7: &Account{
+				address: common.Address{0x12, 0x73},
+				info:    AccountInfo{Nonce: common.Nonce{2}},
+				storage: &Value{key: common.Key{0x34}, value: common.Value{2}},
+			},
+		}}},
+	})
+
 	// --- Values ---
 
 	res = append(res, transition{
@@ -5551,19 +5891,24 @@ func TestTransitions_TestForMissingTransitions(t *testing.T) {
 		ntBranch,
 		ntEmpty,
 		ntExtension,
-		//ntValue,  // TODO: enable when examples are covered
+		ntValue,
 	}
 
 	allOperationTypes := []operationType{
 		otSetAccount,
-		//otSetValue, // TODO: enable when examples are covered
-		//otSetSlot,
-		//otClearStorage,
+		otSetValue,
+		otClearStorage,
 	}
 
 	transitions := getTestTransitions()
 	for _, nodeType := range allNodeTypes {
 		for _, opType := range allOperationTypes {
+			if nodeType == ntValue {
+				// Setting an account or clearing storage is not defined for this node type.
+				if opType == otSetAccount || opType == otClearStorage {
+					continue
+				}
+			}
 			found := false
 			for _, cur := range transitions {
 				if cur.node == nodeType && cur.operation == opType {
