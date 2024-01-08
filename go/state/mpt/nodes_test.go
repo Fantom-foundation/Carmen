@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -4601,6 +4602,16 @@ type trie struct {
 	root    NodeReference
 }
 
+func (t *trie) GetAccount(addr common.Address) (AccountInfo, bool, error) {
+	handle, err := t.manager.getReadAccess(&t.root)
+	if err != nil {
+		return AccountInfo{}, false, err
+	}
+	defer handle.Release()
+	path := addressToNibbles(addr)
+	return handle.Get().GetAccount(t.manager, addr, path)
+}
+
 func (t *trie) SetAccount(addr common.Address, info AccountInfo) (NodeReference, bool, error) {
 	handle, err := t.manager.getWriteAccess(&t.root)
 	if err != nil {
@@ -4609,6 +4620,16 @@ func (t *trie) SetAccount(addr common.Address, info AccountInfo) (NodeReference,
 	defer handle.Release()
 	path := addressToNibbles(addr)
 	return handle.Get().SetAccount(t.manager, &t.root, handle, addr, path, info)
+}
+
+func (t *trie) GetValue(addr common.Address, key common.Key) (common.Value, bool, error) {
+	handle, err := t.manager.getReadAccess(&t.root)
+	if err != nil {
+		return common.Value{}, false, err
+	}
+	defer handle.Release()
+	path := addressToNibbles(addr)
+	return handle.Get().GetSlot(t.manager, addr, path, key)
 }
 
 func (t *trie) SetValue(addr common.Address, key common.Key, value common.Value) (NodeReference, bool, error) {
@@ -4629,6 +4650,47 @@ func (t *trie) ClearStorage(addr common.Address) (NodeReference, bool, error) {
 	defer handle.Release()
 	path := addressToNibbles(addr)
 	return handle.Get().ClearStorage(t.manager, &t.root, handle, addr, path)
+}
+
+func (t *trie) Check() error {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return err
+	}
+	defer handle.Release()
+	return handle.Get().Check(t.manager, &t.root, []Nibble{})
+}
+
+func (t *trie) Visit() error {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return err
+	}
+	defer handle.Release()
+	_, err = handle.Get().Visit(t.manager, &t.root, 0,
+		MakeVisitor(func(Node, NodeInfo) VisitResponse {
+			return VisitResponseContinue
+		}),
+	)
+	return err
+}
+
+func (t *trie) Release() error {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return err
+	}
+	defer handle.Release()
+	return handle.Get().Release(t.manager, &t.root, handle)
+}
+
+func (t *trie) Freeze() error {
+	handle, err := t.manager.getWriteAccess(&t.root)
+	if err != nil {
+		return err
+	}
+	defer handle.Release()
+	return handle.Get().Freeze(t.manager, handle)
 }
 
 func getTestTransitions() []transition {
@@ -5877,11 +5939,14 @@ func getTestTransitions() []transition {
 	return res
 }
 
-func getTestStats() []NodeDesc {
+func getTestStates() []NodeDesc {
 	res := []NodeDesc{}
 	for _, cur := range getTestTransitions() {
 		res = append(res, cur.before)
 		res = append(res, cur.after)
+	}
+	for _, cur := range getTestActions() {
+		res = append(res, cur.input)
 	}
 	return res
 }
@@ -5962,7 +6027,7 @@ func TestTransitions_BeforeAndAfterStatesCanBeFrozen(t *testing.T) {
 }
 
 func TestTransitions_StatesAreReleasable(t *testing.T) {
-	for _, state := range getTestStats() {
+	for _, state := range getTestStates() {
 		ctrl := gomock.NewController(t)
 		ctxt := newNiceNodeContext(t, ctrl)
 
@@ -5976,7 +6041,7 @@ func TestTransitions_StatesAreReleasable(t *testing.T) {
 }
 
 func TestTransitions_StatesAreDumpable(t *testing.T) {
-	for _, state := range getTestStats() {
+	for _, state := range getTestStates() {
 		ctrl := gomock.NewController(t)
 		ctxt := newNodeContext(t, ctrl)
 
@@ -6200,29 +6265,551 @@ func getAllReachableNodes(source NodeSource, root NodeReference) ([]Node, error)
 	return res, nil
 }
 
-func TestTransitions_AllErrorsAreForwardedByMutableNodes(t *testing.T) {
-	testTransitions_AllErrorsAreForwarded(t, false)
+// ----------------------------------------------------------------------------
+//                                 Actions
+// ----------------------------------------------------------------------------
+
+type action struct {
+	description string
+	input       NodeDesc
+	action      func(*testing.T, *trie) error
 }
 
-func TestTransitions_AllErrorsAreForwardedByFrozenNodes(t *testing.T) {
-	testTransitions_AllErrorsAreForwarded(t, true)
+func (a *action) apply(t *testing.T, mgr NodeManager, root NodeReference) error {
+	return a.action(t, &trie{mgr, root})
 }
 
-func testTransitions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
+func getTestActions() []action {
+	res := []action{}
+
+	// Make all transitions actions.
 	for _, transition := range getTestTransitions() {
 		transition := transition
-		t.Run(transition.getLabel(), func(t *testing.T) {
+		res = append(res, action{
+			description: fmt.Sprintf("transition/%s", transition.getLabel()),
+			input:       transition.before,
+			action: func(t *testing.T, trie *trie) error {
+				_, _, err := transition.change(trie)
+				return err
+			},
+		})
+	}
+
+	// Add additional actions.
+
+	// -- Account Nodes --
+
+	res = append(res, action{
+		description: "Account/GetAccount/missing",
+		input:       &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested account should not exist")
+			}
+			if want, got := (AccountInfo{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Account/GetAccount/present",
+		input:       &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x73})
+			if err != nil {
+				return err
+			}
+			if !exists {
+				t.Errorf("requested account should exist")
+			}
+			if want, got := (AccountInfo{Nonce: common.Nonce{2}}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Account/GetValue/missing_account",
+		input: &Account{
+			address: common.Address{0x42},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Value{key: common.Key{0x52}, value: common.Value{1}},
+		},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x24}, common.Key{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested value should not exist")
+			}
+			if want, got := (common.Value{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Account/GetValue/missing_slot",
+		input: &Account{
+			address: common.Address{0x42},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Value{key: common.Key{0x52}, value: common.Value{1}},
+		},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x42}, common.Key{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested value should not exist")
+			}
+			if want, got := (common.Value{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Account/GetValue/present",
+		input: &Account{
+			address: common.Address{0x42},
+			info:    AccountInfo{Nonce: common.Nonce{1}},
+			storage: &Value{key: common.Key{0x52}, value: common.Value{1}},
+		},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x42}, common.Key{0x52})
+			if err != nil {
+				return err
+			}
+			if !exists {
+				t.Errorf("requested value should exist")
+			}
+			if want, got := (common.Value{1}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	// -- Branch Nodes --
+
+	res = append(res, action{
+		description: "Branch/GetAccount/missing",
+		input: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested account should not exist")
+			}
+			if want, got := (AccountInfo{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Branch/GetAccount/present",
+		input: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x42}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x73})
+			if err != nil {
+				return err
+			}
+			if !exists {
+				t.Errorf("requested account should exist")
+			}
+			if want, got := (AccountInfo{Nonce: common.Nonce{2}}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Branch/GetValue/missing",
+		input: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Branch{children: Children{
+					0x5: &Value{key: common.Key{0x52}, value: common.Value{1}},
+					0xB: &Value{key: common.Key{0xBC}, value: common.Value{2}},
+				}},
+			},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x42}, common.Key{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested value should not exist")
+			}
+			if want, got := (common.Value{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Branch/GetValue/present",
+		input: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Branch{children: Children{
+					0x5: &Value{key: common.Key{0x52}, value: common.Value{1}},
+					0xB: &Value{key: common.Key{0xBC}, value: common.Value{2}},
+				}},
+			},
+			0x7: &Account{address: common.Address{0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x42}, common.Key{0x52})
+			if err != nil {
+				return err
+			}
+			if !exists {
+				t.Errorf("requested value should exist")
+			}
+			if want, got := (common.Value{1}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	// -- Empty Nodes --
+
+	res = append(res, action{
+		description: "Empty/GetAccount",
+		input:       &Empty{},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested account should not exist")
+			}
+			if want, got := (AccountInfo{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Empty/GetValue",
+		input:       &Empty{},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x42}, common.Key{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested value should not exist")
+			}
+			if want, got := (common.Value{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	// -- Extension Node --
+
+	res = append(res, action{
+		description: "Extension/GetAccount/missing",
+		input: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x12, 0x42}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			0x7: &Account{address: common.Address{0x12, 0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested account should not exist")
+			}
+			if want, got := (AccountInfo{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Extension/GetAccount/present",
+		input: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{address: common.Address{0x12, 0x42}, info: AccountInfo{Nonce: common.Nonce{1}}},
+			0x7: &Account{address: common.Address{0x12, 0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetAccount(common.Address{0x12, 0x73})
+			if err != nil {
+				return err
+			}
+			if !exists {
+				t.Errorf("requested account should exist")
+			}
+			if want, got := (AccountInfo{Nonce: common.Nonce{2}}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Extension/GetValue/missing_account",
+		input: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+					0x5: &Value{key: common.Key{0x12, 0x52}, value: common.Value{1}},
+					0xB: &Value{key: common.Key{0x12, 0xBC}, value: common.Value{2}},
+				}}},
+			},
+			0x7: &Account{address: common.Address{0x12, 0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x42}, common.Key{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested value should not exist")
+			}
+			if want, got := (common.Value{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Extension/GetValue/missing_slot",
+		input: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+					0x5: &Value{key: common.Key{0x12, 0x52}, value: common.Value{1}},
+					0xB: &Value{key: common.Key{0x12, 0xBC}, value: common.Value{2}},
+				}}},
+			},
+			0x7: &Account{address: common.Address{0x12, 0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x12, 0x42}, common.Key{0x12})
+			if err != nil {
+				return err
+			}
+			if exists {
+				t.Errorf("requested value should not exist")
+			}
+			if want, got := (common.Value{}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	res = append(res, action{
+		description: "Extension/GetValue/present",
+		input: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+			0x4: &Account{
+				address: common.Address{0x12, 0x42},
+				info:    AccountInfo{Nonce: common.Nonce{1}},
+				storage: &Extension{path: []Nibble{1, 2}, next: &Branch{children: Children{
+					0x5: &Value{key: common.Key{0x12, 0x52}, value: common.Value{1}},
+					0xB: &Value{key: common.Key{0x12, 0xBC}, value: common.Value{2}},
+				}}},
+			},
+			0x7: &Account{address: common.Address{0x12, 0x73}, info: AccountInfo{Nonce: common.Nonce{2}}},
+		}}},
+		action: func(t *testing.T, trie *trie) error {
+			info, exists, err := trie.GetValue(common.Address{0x12, 0x42}, common.Key{0x12, 0x52})
+			if err != nil {
+				return err
+			}
+			if !exists {
+				t.Errorf("requested value should exist")
+			}
+			if want, got := (common.Value{1}), info; want != got {
+				t.Errorf("unexpected result, wanted %v, got %v", want, got)
+			}
+			return nil
+		},
+	})
+
+	// General operations on all states defined so far.
+	snapshot := slices.Clone(res)
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/check",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				return trie.Check()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/visit",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				return trie.Visit()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/release",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				return trie.Release()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/freeze",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				return trie.Freeze()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/freeze_and_check",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				if err := trie.Freeze(); err != nil {
+					return err
+				}
+				return trie.Check()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/freeze_and_visit",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				if err := trie.Freeze(); err != nil {
+					return err
+				}
+				return trie.Visit()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/freeze_and_release",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				if err := trie.Freeze(); err != nil {
+					return err
+				}
+				return trie.Release()
+			},
+		})
+	}
+
+	return res
+}
+
+func TestActions_InputsAreValid(t *testing.T) {
+	for _, state := range getTestStates() {
+		ctrl := gomock.NewController(t)
+		ctxt := newNiceNodeContext(t, ctrl)
+		input, _ := ctxt.Build(state)
+		ctxt.Check(t, input)
+	}
+}
+
+func TestActions_PassOnMutableNode(t *testing.T) {
+	testActions_Pass(t, false)
+}
+
+func TestActions_PassOnFrozenNode(t *testing.T) {
+	testActions_Pass(t, true)
+}
+
+func testActions_Pass(t *testing.T, frozen bool) {
+	for _, action := range getTestActions() {
+		action := action
+		t.Run(action.description, func(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
 			ctxt := newNiceNodeContext(t, ctrl)
-			before, _ := ctxt.Build(transition.before)
+			input, _ := ctxt.Build(action.input)
 			if frozen {
-				ctxt.Freeze(before)
+				ctxt.Freeze(input)
+			}
+			if err := action.apply(t, ctxt, input); err != nil {
+				t.Fatalf("action failed with error: %v", err)
+			}
+		})
+	}
+}
+
+func TestActions_AllErrorsAreForwardedByMutableNodes(t *testing.T) {
+	testActions_AllErrorsAreForwarded(t, false)
+}
+
+func TestActions_AllErrorsAreForwardedByFrozenNodes(t *testing.T) {
+	testActions_AllErrorsAreForwarded(t, true)
+}
+
+func testActions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
+	for _, action := range getTestActions() {
+		action := action
+		t.Run(action.description, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			ctxt := newNiceNodeContext(t, ctrl)
+			input, _ := ctxt.Build(action.input)
+			if frozen {
+				ctxt.Freeze(input)
 			}
 
 			// Count the number of NodeManager calls.
 			countingManager := &errorInjectingNodeManager{NodeManager: ctxt, errorPosition: -1}
-			if _, _, err := transition.apply(countingManager, before); err != nil {
+			if err := action.apply(t, countingManager, input); err != nil {
 				t.Fatalf("failed to process transition: %v", err)
 			}
 
@@ -6232,7 +6819,7 @@ func testTransitions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
 				t.Run(fmt.Sprintf("failing_call_%d", i), func(t *testing.T) {
 					ctrl := gomock.NewController(t)
 					ctxt := newNiceNodeContext(t, ctrl)
-					before, _ := ctxt.Build(transition.before)
+					before, _ := ctxt.Build(action.input)
 					if frozen {
 						ctxt.Freeze(before)
 					}
@@ -6242,7 +6829,7 @@ func testTransitions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
 						errorPosition: i,
 						err:           injectedError,
 					}
-					_, _, err := transition.apply(manager, before)
+					err := action.apply(t, manager, before)
 
 					if manager.counter < i {
 						t.Fatalf("invalid number of manager calls, expected %d, got %d", i, manager.counter)
