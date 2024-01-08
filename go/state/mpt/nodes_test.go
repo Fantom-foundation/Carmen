@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -6197,6 +6198,153 @@ func getAllReachableNodes(source NodeSource, root NodeReference) ([]Node, error)
 	}
 
 	return res, nil
+}
+
+func TestTransitions_AllErrorsAreForwardedByMutableNodes(t *testing.T) {
+	testTransitions_AllErrorsAreForwarded(t, false)
+}
+
+func TestTransitions_AllErrorsAreForwardedByFrozenNodes(t *testing.T) {
+	testTransitions_AllErrorsAreForwarded(t, true)
+}
+
+func testTransitions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
+	for _, transition := range getTestTransitions() {
+		transition := transition
+		t.Run(transition.getLabel(), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			ctxt := newNiceNodeContext(t, ctrl)
+			before, _ := ctxt.Build(transition.before)
+			if frozen {
+				ctxt.Freeze(before)
+			}
+
+			// Count the number of NodeManager calls.
+			countingManager := &errorInjectingNodeManager{NodeManager: ctxt, errorPosition: -1}
+			if _, _, err := transition.apply(countingManager, before); err != nil {
+				t.Fatalf("failed to process transition: %v", err)
+			}
+
+			// Inject a test error for each encountered manager call.
+			for i := 0; i < countingManager.counter; i++ {
+				injectedError := fmt.Errorf("Introduced-Test-Error")
+				t.Run(fmt.Sprintf("failing_call_%d", i), func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+					ctxt := newNiceNodeContext(t, ctrl)
+					before, _ := ctxt.Build(transition.before)
+					if frozen {
+						ctxt.Freeze(before)
+					}
+
+					manager := &errorInjectingNodeManager{
+						NodeManager:   ctxt,
+						errorPosition: i,
+						err:           injectedError,
+					}
+					_, _, err := transition.apply(manager, before)
+
+					if manager.counter < i {
+						t.Fatalf("invalid number of manager calls, expected %d, got %d", i, manager.counter)
+					}
+
+					if err == nil || !errors.Is(err, injectedError) {
+						t.Fatalf("missing expected error, wanted %v, got %v", injectedError, err)
+					}
+
+				})
+			}
+		})
+	}
+}
+
+// errorInjectingNodeManager is a wrapper around a node manager capable of injecting errors
+// for selected manager interface calls.
+type errorInjectingNodeManager struct {
+	NodeManager
+	errorPosition int   // the call index at which an error is injected
+	err           error // the error to be injected
+	counter       int
+}
+
+func (m *errorInjectingNodeManager) getReadAccess(r *NodeReference) (shared.ReadHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return shared.ReadHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.getReadAccess(r)
+}
+
+func (m *errorInjectingNodeManager) getViewAccess(r *NodeReference) (shared.ViewHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return shared.ViewHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.getViewAccess(r)
+}
+
+func (m *errorInjectingNodeManager) getHashAccess(r *NodeReference) (shared.HashHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return shared.HashHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.getHashAccess(r)
+}
+
+func (m *errorInjectingNodeManager) getWriteAccess(r *NodeReference) (shared.WriteHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return shared.WriteHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.getWriteAccess(r)
+}
+
+func (m *errorInjectingNodeManager) getHashFor(r *NodeReference) (common.Hash, error) {
+	if m.counter == m.errorPosition {
+		return common.Hash{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.getHashFor(r)
+}
+
+func (m *errorInjectingNodeManager) createAccount() (NodeReference, shared.WriteHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return NodeReference{}, shared.WriteHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.createAccount()
+}
+
+func (m *errorInjectingNodeManager) createBranch() (NodeReference, shared.WriteHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return NodeReference{}, shared.WriteHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.createBranch()
+}
+
+func (m *errorInjectingNodeManager) createExtension() (NodeReference, shared.WriteHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return NodeReference{}, shared.WriteHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.createExtension()
+}
+
+func (m *errorInjectingNodeManager) createValue() (NodeReference, shared.WriteHandle[Node], error) {
+	if m.counter == m.errorPosition {
+		return NodeReference{}, shared.WriteHandle[Node]{}, m.err
+	}
+	m.counter++
+	return m.NodeManager.createValue()
+}
+
+func (m *errorInjectingNodeManager) release(id NodeId) error {
+	if m.counter == m.errorPosition {
+		return m.err
+	}
+	m.counter++
+	return m.NodeManager.release(id)
 }
 
 // ----------------------------------------------------------------------------

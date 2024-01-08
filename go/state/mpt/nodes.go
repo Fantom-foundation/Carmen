@@ -637,7 +637,7 @@ func (n *BranchNode) setNextNode(
 				if extensionNode.frozen {
 					copyId, handle, err := manager.createExtension()
 					if err != nil {
-						return NodeReference{}, false, nil
+						return NodeReference{}, false, err
 					}
 					defer handle.Release()
 					copy := handle.Get().(*ExtensionNode)
@@ -1060,7 +1060,9 @@ func (n *ExtensionNode) setNextNode(
 				}
 				n.markDirty()
 				extension.nodeBase.Release()
-				manager.release(newRoot.Id())
+				if err := manager.release(newRoot.Id()); err != nil {
+					return NodeReference{}, false, err
+				}
 			} else if newRoot.Id().IsBranch() {
 				n.next = newRoot
 				n.hashDirty = true
@@ -1069,7 +1071,9 @@ func (n *ExtensionNode) setNextNode(
 			} else {
 				// If the next node is anything but a branch or extension, remove this extension.
 				n.nodeBase.Release()
-				manager.release(thisRef.Id())
+				if err := manager.release(thisRef.Id()); err != nil {
+					return NodeReference{}, false, err
+				}
 
 				// Grow path length of next nodes if tracking of length is enabled.
 				if manager.getConfig().TrackSuffixLengthsInLeafNodes {
@@ -1194,8 +1198,7 @@ func (n *ExtensionNode) setNextNode(
 	// If this node was not needed any more, we can discard it.
 	if !thisNodeWasReused {
 		n.nodeBase.Release()
-		manager.release(thisRef.Id())
-		return newRoot, false, nil
+		return newRoot, false, manager.release(thisRef.Id())
 	}
 
 	return newRoot, !isClone, nil
@@ -1427,8 +1430,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			}
 			// Release this account node and remove it from the trie.
 			n.nodeBase.Release()
-			manager.release(thisRef.Id())
-			return NewNodeReference(EmptyId()), false, nil
+			return NewNodeReference(EmptyId()), false, manager.release(thisRef.Id())
 		}
 
 		// If this node is frozen, we need to write the result in
@@ -1864,7 +1866,9 @@ func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this s
 		if value == (common.Value{}) {
 			if !n.frozen {
 				n.nodeBase.Release()
-				manager.release(thisRef.Id())
+				if err := manager.release(thisRef.Id()); err != nil {
+					return NodeReference{}, false, err
+				}
 			}
 			return NewNodeReference(EmptyId()), !n.frozen, nil
 		}
