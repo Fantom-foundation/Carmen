@@ -340,15 +340,15 @@ func (s *Forest) SetValue(rootRef *NodeReference, addr common.Address, key commo
 	return newRoot, nil
 }
 
-func (s *Forest) ClearStorage(rootRef *NodeReference, addr common.Address) error {
+func (s *Forest) ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error) {
 	root, err := s.getWriteAccess(rootRef)
 	if err != nil {
-		return err
+		return NodeReference{}, err
 	}
 	defer root.Release()
 	path := AddressToNibblePath(addr, s)
-	_, _, err = root.Get().ClearStorage(s, rootRef, root, addr, path[:])
-	return err
+	newRoot, _, err := root.Get().ClearStorage(s, rootRef, root, addr, path[:])
+	return newRoot, err
 }
 
 func (s *Forest) VisitTrie(rootRef *NodeReference, visitor NodeVisitor) error {

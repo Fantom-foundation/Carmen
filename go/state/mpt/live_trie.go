@@ -118,7 +118,12 @@ func (s *LiveTrie) SetValue(addr common.Address, key common.Key, value common.Va
 }
 
 func (s *LiveTrie) ClearStorage(addr common.Address) error {
-	return s.forest.ClearStorage(&s.root, addr)
+	newRoot, err := s.forest.ClearStorage(&s.root, addr)
+	if err != nil {
+		return err
+	}
+	s.root = newRoot
+	return nil
 }
 
 func (s *LiveTrie) UpdateHashes() (common.Hash, *NodeHashes, error) {

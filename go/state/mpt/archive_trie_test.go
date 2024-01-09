@@ -406,3 +406,55 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 		}
 	}
 }
+
+func TestArchiveTrie_RecreateAccount_ClearStorage(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, 1024)
+			if err != nil {
+				t.Fatalf("failed to open empty archive: %v", err)
+			}
+
+			addr := common.Address{0xA}
+			key := common.Key{0xB}
+			val := common.Value{0xC}
+
+			// create an account with a non-empty slot
+			update := common.Update{}
+			update.AppendCreateAccount(addr)
+			update.AppendSlotUpdate(addr, key, val)
+			if err := archive.Add(0, update, nil); err != nil {
+				t.Errorf("cannot add update: %s", err)
+			}
+
+			// re-create an account in the next block
+			update = common.Update{}
+			update.AppendCreateAccount(addr)
+			if err := archive.Add(1, update, nil); err != nil {
+				t.Errorf("cannot add update: %s", err)
+			}
+
+			// verify that the account is re-created with an empty slot
+			exists, err := archive.Exists(1, addr)
+			if err != nil {
+				t.Errorf("cannot check account existence: %s", err)
+			}
+			if !exists {
+				t.Errorf("account does not exist")
+			}
+			storage, err := archive.GetStorage(1, addr, key)
+			if err != nil {
+				t.Errorf("cannot get slot value: %s", err)
+			}
+
+			var empty common.Value
+			if storage != empty {
+				t.Errorf("value is not empty, but it is: %v", storage)
+			}
+
+			if err := archive.Close(); err != nil {
+				t.Fatalf("failed to close empty archive: %v", err)
+			}
+		})
+	}
+}
