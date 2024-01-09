@@ -569,7 +569,7 @@ func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
 	// This test stress-tests the code recovering nodes from the write buffer.
 	// To that end, it creates a forest with a node cache of only one node.
 	// In this forest, two trees are placed, and then 10 workers are used
-	// to concurrently update those traces, mutually pushing tries out of
+	// to concurrently update those trees, mutually pushing nodes out of
 	// the cache and recovering it.
 	// This test reproduces issue
 	// https://github.com/Fantom-foundation/Carmen/issues/687
@@ -588,7 +588,7 @@ func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
 		extensions,
 		accounts,
 		values,
-		ForestConfig{},
+		ForestConfig{CacheCapacity: 1},
 	)
 	if err != nil {
 		t.Fatalf("failed to create test forest: %v", err)
@@ -601,6 +601,11 @@ func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
 	accounts.EXPECT().Get(gomock.Any()).AnyTimes().DoAndReturn(func(i uint64) (AccountNode, error) {
 		return AccountNode{address: common.Address{byte(i)}, info: AccountInfo{Nonce: common.Nonce{byte(i)}}}, nil
 	})
+
+	// We need to set expectations for output operations to avoid a panic in the node writer
+	// goroutine which causes a deadlock since held locks are not properly released while resolving
+	// the panic triggered by a missing expectation.
+	accounts.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 
 	empty := NewNodeReference(EmptyId())
 	treeA, err := forest.SetAccountInfo(&empty, common.Address{0}, AccountInfo{Nonce: common.Nonce{1}})
@@ -619,12 +624,12 @@ func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
 	for i := 0; i < N; i++ {
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
+			for i := 0; i < 1000; i++ {
 				tree := treeA
 				if i%2 > 0 {
 					tree = treeB
 				}
-				_, err := forest.SetAccountInfo(&tree, common.Address{byte(i % 2)}, AccountInfo{Nonce: common.Nonce{byte(i + 2)}})
+				_, err := forest.SetAccountInfo(&tree, common.Address{byte(i % 2)}, AccountInfo{Nonce: common.Nonce{byte(i%200 + 2)}})
 				if err != nil {
 					t.Errorf("failed to update trie: %v", err)
 				}
