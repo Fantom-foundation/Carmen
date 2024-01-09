@@ -566,6 +566,14 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 }
 
 func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
+	testForest_WriteBufferRecoveryIsThreadSafe(t, false)
+}
+
+func TestForest_WriteBufferRecoveryIsThreadSafeWithConcurrentNodeCreation(t *testing.T) {
+	testForest_WriteBufferRecoveryIsThreadSafe(t, true)
+}
+
+func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNodeGeneration bool) {
 	// This test stress-tests the code recovering nodes from the write buffer.
 	// To that end, it creates a forest with a node cache of only one node.
 	// In this forest, two trees are placed, and then 10 workers are used
@@ -573,6 +581,13 @@ func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
 	// the cache and recovering it.
 	// This test reproduces issue
 	// https://github.com/Fantom-foundation/Carmen/issues/687
+	//
+	// Another issue related to this was reported by
+	// https://github.com/Fantom-foundation/Carmen/issues/709
+	// In this case, parallel to the swapping of nodes between the write buffer
+	// and the cache, new nodes are created concurrently. Due to a
+	// synchronization issue in the cache this lead to a panic indicating that
+	// the node retrieved from the buffer could not be correctly restored.
 
 	ctrl := gomock.NewController(t)
 
@@ -619,12 +634,31 @@ func TestForest_WriteBufferRecoveryIsThreadSafe(t *testing.T) {
 	}
 
 	const N = 10
+	const M = 1000
 	var wg sync.WaitGroup
 	wg.Add(N)
+
+	if withConcurrentNodeGeneration {
+		// Optionally new nodes are generated in parallel to the reloading of
+		// the root nodes of the forest.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < M; i++ {
+				_, handle, err := forest.createAccount()
+				if err != nil {
+					t.Errorf("failed to create new node: %v", err)
+				} else {
+					handle.Release()
+				}
+			}
+		}()
+	}
+
 	for i := 0; i < N; i++ {
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 1000; i++ {
+			for i := 0; i < M; i++ {
 				tree := treeA
 				if i%2 > 0 {
 					tree = treeB
