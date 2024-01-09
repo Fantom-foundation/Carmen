@@ -5,6 +5,7 @@ import (
 	"maps"
 	"math/rand"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
@@ -287,4 +288,27 @@ func TestNodeCache_ForEachEnumeratesAllEntries(t *testing.T) {
 			t.Errorf("invalid content, wanted %v, got %v", want, got)
 		}
 	}
+}
+
+func TestNodeCache_GetAndSetThreadSafety(t *testing.T) {
+	cache := newNodeCache(2)
+	N := 100
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func(i int) {
+			defer wg.Done()
+			id := ValueId(uint64(i))
+			node := shared.MakeShared[Node](EmptyNode{})
+			for j := 0; j < 1000; j++ {
+				ref := NewNodeReference(id)
+				got, _, _, _, _ := cache.GetOrSet(&ref, node)
+				if got != node {
+					t.Errorf("Invalid element in cache, wanted %p, got %p for ID %v", node, got, id)
+				}
+			}
+
+		}(i)
+	}
+	wg.Wait()
 }
