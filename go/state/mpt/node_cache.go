@@ -154,10 +154,11 @@ func (c *nodeCache) GetOrSet(
 	c.mutex.Lock()
 	// Lookup element - if present, we are done.
 	if pos, found := c.index[ref.id]; found {
+		current := c.owners[pos].Node()
 		c.mutex.Unlock()
 		atomic.StoreUint32(&ref.pos, uint32(pos))
 		atomic.StoreUint64(&ref.tag, c.owners[pos].tag.Load())
-		return c.owners[pos].Node(), true, NodeId(0), nil, false
+		return current, true, NodeId(0), nil, false
 	}
 
 	// If not present, the capacity needs to be checked.
