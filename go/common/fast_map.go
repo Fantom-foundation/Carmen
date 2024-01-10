@@ -124,6 +124,13 @@ func (m *FastMap[K, V]) ForEach(op func(K, V)) {
 	}
 }
 
+// CopyTo copy all the map content to another FastMap.
+func (m *FastMap[K, V]) CopyTo(dest *FastMap[K, V]) {
+	m.ForEach(func(key K, value V) {
+		dest.Put(key, value)
+	})
+}
+
 // fmPtr is the pointer type used inside the FastMap, comprising an
 // a position in the FastMap's data store and a generation counter.
 // The format devices the 64 bit of the fmPtr

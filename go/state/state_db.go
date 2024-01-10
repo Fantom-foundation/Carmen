@@ -114,6 +114,12 @@ type StateDB interface {
 type NonCommittableStateDB interface {
 	VmStateDB
 
+	// Copy creates a copy of the StateDB, including all uncommitted changes.
+	// Any change to the copy does not affect the original StateDB, except the state caches.
+	// Available for non-committable states only, as a commit to the backing state
+	// makes all other StateDBs with the same backing state invalid.
+	Copy() NonCommittableStateDB
+
 	// Release should be called whenever this instance is no longer needed to allow
 	// held resources to be reused for future requests. After the release, no more
 	// operations may be conducted on this StateDB instance.
@@ -336,6 +342,7 @@ type codeValue struct {
 }
 
 const storedDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
+const nonCommittableStoredDataCacheSize = 100
 
 // storedDataCacheValue maintains the cached version of a value in the store. To
 // support the efficient clearing of values cached for accounts being deleted, an
@@ -1320,7 +1327,7 @@ var nonCommittableStateDbPool = sync.Pool{
 		// We use a smaller stored-data cache size to support faster initialization
 		// and resetting of instances. NonCommittable instances are expected to live
 		// only for the duration of a few transactions.
-		return createStateDBWith(nil, 100, false)
+		return createStateDBWith(nil, nonCommittableStoredDataCacheSize, false)
 	},
 }
 
@@ -1328,9 +1335,39 @@ type nonCommittableStateDB struct {
 	*stateDB
 }
 
+func (db *nonCommittableStateDB) Copy() NonCommittableStateDB {
+	cp := nonCommittableStateDbPool.Get().(*stateDB)
+	cp.resetState(db.state)
+
+	copyMap(cp.accounts, db.accounts)
+	copyMap(cp.balances, db.balances)
+	copyMap(cp.nonces, db.nonces)
+	db.data.CopyTo(cp.data)
+	copyMap(cp.codes, db.codes)
+	copy(cp.accountsToDelete, db.accountsToDelete)
+	copyMap(cp.clearedAccounts, db.clearedAccounts)
+	copy(cp.undo, db.undo)
+	cp.refund = db.refund
+	copy(cp.logs, db.logs)
+	cp.logsInBlock = db.logsInBlock
+	copyMap(cp.accessedAddresses, db.accessedAddresses)
+	db.accessedSlots.CopyTo(cp.accessedSlots)
+	copyMap(cp.writtenSlots, db.writtenSlots)
+	copyMap(cp.reincarnation, db.reincarnation)
+	copy(cp.emptyCandidates, db.emptyCandidates)
+
+	return &nonCommittableStateDB{cp}
+}
+
 func (db *nonCommittableStateDB) Release() {
 	if db.stateDB != nil {
 		nonCommittableStateDbPool.Put(db.stateDB)
 		db.stateDB = nil
+	}
+}
+
+func copyMap[K comparable, V any](dest map[K]V, src map[K]V) {
+	for k, v := range src {
+		dest[k] = v
 	}
 }
