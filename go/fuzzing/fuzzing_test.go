@@ -97,4 +97,69 @@ func TestFuzz_TwoFuzzingLoopOneCampaignSeedOnly(t *testing.T) {
 	}
 }
 
+type testOpType byte
 type testContext []byte
+type testData byte
+
+const (
+	set testOpType = iota
+	get
+	print
+)
+
+func TestFuzz_CanParseRegisteredOps(t *testing.T) {
+	registry := NewRegistry[testOpType, testContext]()
+
+	serialise := func(data testData) []byte {
+		return []byte{byte(data)}
+	}
+	deserialise := func(raw *[]byte) testData {
+		r := testData((*raw)[0])
+		*raw = (*raw)[1:]
+		return r
+	}
+
+	opSet := func(opType testOpType, data testData, _ TestingT, context *testContext) {
+		*context = append(*context, byte(opType))
+		*context = append(*context, byte(data))
+	}
+	opGet := func(opType testOpType, data testData, _ TestingT, context *testContext) {
+		*context = append(*context, byte(opType))
+		*context = append(*context, byte(data))
+	}
+	opPrint := func(opType testOpType, _ TestingT, context *testContext) {
+		*context = append(*context, byte(opType))
+	}
+
+	RegisterDataOp(registry, set, serialise, deserialise, opSet)
+	RegisterDataOp(registry, get, serialise, deserialise, opGet)
+	RegisterNoDataOp(registry, print, opPrint)
+
+	// create an expected chain of operations
+	var expected []Operation[testContext]
+	expected = append(expected, registry.CreateDataOp(set, testData(10)))
+	expected = append(expected, registry.CreateDataOp(get, testData(10)))
+	expected = append(expected, registry.CreateDataOp(set, testData(20)))
+	expected = append(expected, registry.CreateDataOp(set, testData(30)))
+	expected = append(expected, registry.CreateDataOp(get, testData(20)))
+	expected = append(expected, registry.CreateNoDataOp(print))
+	expected = append(expected, registry.CreateDataOp(get, testData(20)))
+
+	// serialise
+	var raw []byte
+	for _, op := range expected {
+		raw = append(raw, op.Serialize()...)
+	}
+
+	got := &testContext{}
+	// deserialize and execute all ops
+	for _, op := range registry.ReadAllOps(raw) {
+		op.Apply(nil, got)
+	}
+
+	want := []byte{byte(set), 10, byte(get), 10, byte(set), 20, byte(set), 30, byte(get), 20, byte(print), byte(get), 20}
+
+	if !slices.Equal(*got, want) {
+		t.Errorf("exectued operations do not match: got: %v != want: %v", *got, want)
+	}
+}
