@@ -91,8 +91,9 @@ type Forest struct {
 	// A buffer for asynchronously writing nodes to files.
 	writeBuffer WriteBuffer
 
-	// A mutex required by the 'getSharedNode' function to synchronize access.
-	getSharedNodeMutex sync.Mutex
+	// A mutex synchronizing the transfer of elements between the cache, the
+	// write buffer, and stocks (=disks).
+	nodeTransferMutex sync.Mutex
 
 	// Utilities to manage a background worker releasing nodes.
 	releaseQueue chan<- NodeId   // send EmptyId to trigger sync signal
@@ -544,19 +545,19 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	// that this part is only run by a single thread to avoid one thread
 	// recovering a node from the buffer and another fetching it from the
 	// storage. This synchronization is currently ensured by acquiring the
-	// getSharedNodeMutex and holding it until the end of the function.
+	// nodeTransferMutex and holding it until the end of the function.
 	// Using a global lock that does not differentiate between node IDs may
 	// cause performance issues since it is delaying unrelated lookup
 	// operations. However, the impact should be small since cache misses
 	// should be infrequent enough. Unless it is detected in CPU profiles
 	// and traces, this lock should be fine.
-	s.getSharedNodeMutex.Lock()
-	defer s.getSharedNodeMutex.Unlock()
+	s.nodeTransferMutex.Lock()
+	defer s.nodeTransferMutex.Unlock()
 
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
-		masterCopy, _ := s.addToCache(ref, res)
+		masterCopy, _ := s.addToCacheHoldingTransferMutex(ref, res)
 		if masterCopy != res {
 			panic("failed to reinstate element from write buffer")
 		}
@@ -600,7 +601,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	}
 
 	// if there has been a concurrent fetch, use the other value
-	instance, _ := s.addToCache(ref, shared.MakeShared[Node](node))
+	instance, _ := s.addToCacheHoldingTransferMutex(ref, shared.MakeShared[Node](node))
 	return instance, nil
 }
 
@@ -723,6 +724,15 @@ func (s *Forest) getMutableNodeByPath(root *NodeReference, path NodePath) (share
 }
 
 func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+	s.nodeTransferMutex.Lock()
+	defer s.nodeTransferMutex.Unlock()
+	return s.addToCacheHoldingTransferMutex(ref, node)
+}
+
+func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+	// Replacing the element in the already thread safe node cache needs to be
+	// guarded by the `getTransferMutex` since an evicted node might have to
+	// be moved to the write buffer in an atomic step.
 	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(ref, node)
 	if present {
 		// If a present element is re-used, it needs to be touched to be at the
