@@ -731,7 +731,7 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 
 func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
 	// Replacing the element in the already thread safe node cache needs to be
-	// guarded by the `getTransferMutex` since an evicted node might have to
+	// guarded by the `getTransferMutex` since an evicted node have to
 	// be moved to the write buffer in an atomic step.
 	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(ref, node)
 	if present {
