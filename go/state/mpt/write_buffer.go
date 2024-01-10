@@ -190,9 +190,9 @@ func (b *writeBuffer) emptyBuffer() {
 		}
 
 		// Write a snapshot of the node to the disk.
-		handle := node.GetWriteHandle() // write access is needed to clear the dirty flag.
+		handle := node.GetViewHandle()
 		if handle.Get().IsDirty() {
-			if err := b.sink.Write(id, handle.AsViewHandle()); err != nil {
+			if err := b.sink.Write(id, handle); err != nil {
 				b.errsMutex.Lock()
 				b.errs = append(b.errs, err)
 				b.errsMutex.Unlock()
