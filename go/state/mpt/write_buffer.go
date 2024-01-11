@@ -51,17 +51,18 @@ func MakeWriteBuffer(sink NodeSink) WriteBuffer {
 // ----------------------------------------------------------------------------
 
 type writeBuffer struct {
-	sink        NodeSink
-	capacity    int
-	buffer      map[NodeId]*shared.Shared[Node]
-	bufferMutex sync.Mutex
-	ids         chan NodeId
-	idsMutex    sync.Mutex
-	idsClosed   bool
-	flushDone   <-chan struct{}
-	done        <-chan struct{}
-	errs        []error
-	errsMutex   sync.Mutex
+	sink                    NodeSink
+	capacity                int
+	counter                 int
+	buffer                  map[NodeId]*shared.Shared[Node]
+	bufferMutex             sync.Mutex
+	emptyBufferSignal       chan bool // true if an explicit flush is triggered, false for an implicit
+	emptyBufferSignalMutex  sync.Mutex
+	emptyBufferSignalClosed bool
+	flushDone               <-chan struct{}
+	done                    <-chan struct{}
+	errs                    []error
+	errsMutex               sync.Mutex
 }
 
 func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
@@ -69,37 +70,30 @@ func makeWriteBuffer(sink NodeSink, capacity int) WriteBuffer {
 		capacity = 1
 	}
 
-	ids := make(chan NodeId, capacity)
+	emptyBufferSignal := make(chan bool, 1)
 	flushDone := make(chan struct{})
 	done := make(chan struct{})
 
 	res := &writeBuffer{
-		sink:      sink,
-		capacity:  capacity,
-		buffer:    make(map[NodeId]*shared.Shared[Node], 2*capacity),
-		ids:       ids,
-		flushDone: flushDone,
-		done:      done,
+		sink:              sink,
+		capacity:          capacity,
+		buffer:            make(map[NodeId]*shared.Shared[Node], 2*capacity),
+		emptyBufferSignal: emptyBufferSignal,
+		flushDone:         flushDone,
+		done:              done,
 	}
 
+	// A background goroutine flushing nodes to the sink and handling
+	// synchronization tasks.
 	go func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 		defer close(done)
 		defer close(flushDone)
-		counter := 0
-		for id := range ids {
-			// Check if this is a token signaling a flush request.
-			if id.IsEmpty() {
-				res.emptyBuffer()
+		for flush := range emptyBufferSignal {
+			res.emptyBuffer()
+			if flush {
 				flushDone <- struct{}{}
-				continue
-			}
-			// Otherwise, perform a flush every time the capacity is reached.
-			counter++
-			if counter >= capacity {
-				res.emptyBuffer()
-				counter = 0
 			}
 		}
 	}()
@@ -115,11 +109,20 @@ func (b *writeBuffer) Add(id NodeId, node *shared.Shared[Node]) {
 	b.bufferMutex.Lock()
 	b.buffer[id] = node
 	b.bufferMutex.Unlock()
-	b.idsMutex.Lock()
-	if !b.idsClosed {
-		b.ids <- id
+	b.emptyBufferSignalMutex.Lock()
+	b.counter++
+	if b.counter > b.capacity && !b.emptyBufferSignalClosed {
+		// The option to ignore a full signal channel here is important
+		// to prevent a potential deadlock. See
+		// https://github.com/Fantom-foundation/Carmen/issues/724
+		// for more details.
+		select {
+		case b.emptyBufferSignal <- false: /* ok, a new clear-buffer operation is scheduled */
+		default: /* also fine, an operation to clear the buffer is already pending */
+		}
+		b.counter = 0
 	}
-	b.idsMutex.Unlock()
+	b.emptyBufferSignalMutex.Unlock()
 }
 
 func (b *writeBuffer) contains(id NodeId) bool {
@@ -141,11 +144,11 @@ func (b *writeBuffer) Cancel(id NodeId) (*shared.Shared[Node], bool) {
 }
 
 func (b *writeBuffer) Flush() error {
-	b.idsMutex.Lock()
-	if !b.idsClosed {
-		b.ids <- EmptyId()
+	b.emptyBufferSignalMutex.Lock()
+	if !b.emptyBufferSignalClosed {
+		b.emptyBufferSignal <- true
 	}
-	b.idsMutex.Unlock()
+	b.emptyBufferSignalMutex.Unlock()
 	<-b.flushDone // finishes either due to flush signal or being closed
 	b.errsMutex.Lock()
 	defer b.errsMutex.Unlock()
@@ -153,12 +156,12 @@ func (b *writeBuffer) Flush() error {
 }
 
 func (b *writeBuffer) Close() error {
-	b.idsMutex.Lock()
-	if !b.idsClosed {
-		close(b.ids)
-		b.idsClosed = true
+	b.emptyBufferSignalMutex.Lock()
+	if !b.emptyBufferSignalClosed {
+		close(b.emptyBufferSignal)
+		b.emptyBufferSignalClosed = true
 	}
-	b.idsMutex.Unlock()
+	b.emptyBufferSignalMutex.Unlock()
 	<-b.done // finishes once all elements are written
 	b.errsMutex.Lock()
 	defer b.errsMutex.Unlock()
@@ -205,7 +208,7 @@ func (b *writeBuffer) emptyBuffer() {
 		delete(b.buffer, id)
 		b.bufferMutex.Unlock()
 
-		// Only release read access of the node after it has been removed from
+		// Only release access of the node after it has been removed from
 		// the buffer such that subsequent updates are not lost.
 		handle.Release()
 	}

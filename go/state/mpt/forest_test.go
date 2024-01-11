@@ -596,6 +596,15 @@ func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNode
 	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 	values := stock.NewMockStock[uint64, ValueNode](ctrl)
 
+	branches.EXPECT().Flush()
+	branches.EXPECT().Close()
+	extensions.EXPECT().Flush()
+	extensions.EXPECT().Close()
+	accounts.EXPECT().Flush()
+	accounts.EXPECT().Close()
+	values.EXPECT().Flush()
+	values.EXPECT().Close()
+
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
 		t.TempDir(),
@@ -672,6 +681,10 @@ func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNode
 	}
 
 	wg.Wait()
+
+	if err := forest.Close(); err != nil {
+		t.Errorf("failed to close forest: %v", err)
+	}
 }
 
 // openFileShadowForest creates a forest instance based on a shadowed file
@@ -718,4 +731,99 @@ func openFileShadowForest(directory string, mptConfig MptConfig, forestConfig Fo
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
 	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+}
+
+func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
+	// This test used to trigger a bug leading to a deadlock as reported in
+	// https://github.com/Fantom-foundation/Carmen/issues/724
+	//
+	// It runs a stress test on the forest's node management code with a
+	// particular focus on the transitioning of nodes between a tiny cache
+	// and the write buffer. To increase the likelihood of the issue to
+	// occur, the size of the channel used to transfer nodes from the cache
+	// to the write buffer is reduced to 1.
+	//
+	// For a full description of the identified deadlock see the comments of
+	// issue https://github.com/Fantom-foundation/Carmen/issues/724
+
+	ctrl := gomock.NewController(t)
+
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+	values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+	branches.EXPECT().Flush()
+	branches.EXPECT().Close()
+	extensions.EXPECT().Flush()
+	extensions.EXPECT().Close()
+	accounts.EXPECT().Flush()
+	accounts.EXPECT().Close()
+	values.EXPECT().Flush()
+	values.EXPECT().Close()
+
+	forest, err := makeForest(
+		MptConfig{Hashing: DirectHashing},
+		t.TempDir(),
+		branches,
+		extensions,
+		accounts,
+		values,
+		ForestConfig{
+			CacheCapacity:          1,
+			writeBufferChannelSize: 1,
+		},
+	)
+	if err != nil {
+		t.Fatalf("failed to create test forest: %v", err)
+	}
+
+	var counter atomic.Uint64
+	accounts.EXPECT().New().AnyTimes().DoAndReturn(func() (uint64, error) {
+		return counter.Add(1) - 1, nil
+	})
+	accounts.EXPECT().Get(gomock.Any()).AnyTimes().DoAndReturn(func(i uint64) (AccountNode, error) {
+		return AccountNode{address: common.Address{byte(i)}, info: AccountInfo{Nonce: common.Nonce{byte(i)}}}, nil
+	})
+
+	// We need to set expectations for output operations to avoid a panic in the node writer
+	// goroutine which causes a deadlock since held locks are not properly released while resolving
+	// the panic triggered by a missing expectation.
+	accounts.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
+
+	empty := NewNodeReference(EmptyId())
+	treeA, err := forest.SetAccountInfo(&empty, common.Address{0}, AccountInfo{Nonce: common.Nonce{1}})
+	if err != nil {
+		t.Fatalf("failed to create tree A: %v", err)
+	}
+
+	treeB, err := forest.SetAccountInfo(&empty, common.Address{1}, AccountInfo{Nonce: common.Nonce{2}})
+	if err != nil {
+		t.Fatalf("failed to create tree B: %v", err)
+	}
+
+	const N = 10
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 1000; i++ {
+				tree := treeA
+				if i%2 > 0 {
+					tree = treeB
+				}
+				_, err := forest.SetAccountInfo(&tree, common.Address{byte(i % 2)}, AccountInfo{Nonce: common.Nonce{byte(i%200 + 2)}})
+				if err != nil {
+					t.Errorf("failed to update trie: %v", err)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if err := forest.Close(); err != nil {
+		t.Errorf("failed to close forest: %v", err)
+	}
 }
