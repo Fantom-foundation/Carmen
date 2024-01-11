@@ -66,6 +66,11 @@ type VmStateDB interface {
 	BeginTransaction()
 	EndTransaction()
 
+	// GetTransactionChanges provides a set of accounts and their slots, which have been
+	// potentially changed in the current transaction.
+	// Must be called before EndTransaction call.
+	GetTransactionChanges() map[common.Address]map[common.Key]bool
+
 	// Deprecated: not necessary, to be removed
 	AbortTransaction()
 
@@ -974,10 +979,10 @@ func (s *stateDB) EndTransaction() {
 		}
 	}
 
-	// Delete accounts scheduled for deletion.
+	// Delete accounts scheduled for deletion - by suicide or because they are empty.
 	if len(s.accountsToDelete) > 0 {
 		for _, addr := range s.accountsToDelete {
-			// Transition accounts marked for suicide to deleted.
+			// Transition accounts marked by suicide to be deleted.
 			if s.HasSuicided(addr) {
 				s.setAccountState(addr, kNonExisting)
 				s.setCodeInternal(addr, []byte{})
@@ -1019,6 +1024,31 @@ func (s *stateDB) EndTransaction() {
 	s.writtenSlots = map[*slotValue]bool{}
 	// Reset state, in particular seal effects by forgetting undo list.
 	s.resetTransactionContext()
+}
+
+func (s *stateDB) GetTransactionChanges() map[common.Address]map[common.Key]bool {
+	changes := make(map[common.Address]map[common.Key]bool)
+	for addr := range s.accounts {
+		changes[addr] = nil
+	}
+	for addr := range s.balances {
+		changes[addr] = nil
+	}
+	for addr := range s.nonces {
+		changes[addr] = nil
+	}
+	for addr := range s.codes {
+		changes[addr] = nil
+	}
+	s.data.ForEach(func(slot slotId, value *slotValue) {
+		if !value.committedKnown || value.committed != value.current {
+			if changes[slot.addr] == nil {
+				changes[slot.addr] = make(map[common.Key]bool)
+			}
+			changes[slot.addr][slot.key] = true
+		}
+	})
+	return changes
 }
 
 // Deprecated: not necessary, to be removed
