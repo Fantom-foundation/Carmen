@@ -602,9 +602,6 @@ func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
 	s.undo = append(s.undo, func() {
 		s.balances[addr].current = *oldValue
 	})
-	if newValue.Sign() == 0 {
-		s.emptyCandidates = append(s.emptyCandidates, addr)
-	}
 }
 
 func (s *stateDB) resetBalance(addr common.Address) {
