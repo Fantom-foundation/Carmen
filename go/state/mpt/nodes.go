@@ -194,7 +194,7 @@ type Node interface {
 
 	// Dump dumps this node and its sub-trees to the console. It is mainly
 	// intended for debugging and may be very costly for larger instances.
-	Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string)
+	Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) error
 
 	// Visit visits this and all nodes in the respective sub-tree. The
 	// visitor is called by each encountered node, with the proper NodeInfo
@@ -489,8 +489,9 @@ func (EmptyNode) Check(NodeSource, *NodeReference, []Nibble) error {
 	return nil
 }
 
-func (EmptyNode) Dump(out io.Writer, _ NodeSource, thisRef *NodeReference, indent string) {
+func (EmptyNode) Dump(out io.Writer, _ NodeSource, thisRef *NodeReference, indent string) error {
 	fmt.Fprintf(out, "%s-empty- (ID: %v)\n", indent, thisRef.Id())
+	return nil
 }
 
 func (EmptyNode) Visit(_ NodeSource, ref *NodeReference, depth int, visitor NodeVisitor) (bool, error) {
@@ -851,20 +852,24 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 	return errors.Join(errs...)
 }
 
-func (n *BranchNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
+func (n *BranchNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
+	errs := []error{}
 	fmt.Fprintf(out, "%sBranch (ID: %v, dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisRef.Id(), n.IsDirty(), n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
 	for i, child := range n.children {
 		if child.Id().IsEmpty() {
 			continue
 		}
-
 		if handle, err := source.getViewAccess(&child); err == nil {
 			defer handle.Release()
-			handle.Get().Dump(out, source, &child, fmt.Sprintf("%s  %v ", indent, Nibble(i)))
+			if err := handle.Get().Dump(out, source, &child, fmt.Sprintf("%s  %v ", indent, Nibble(i))); err != nil {
+				errs = append(errs, err)
+			}
 		} else {
-			fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, child, err)
+			fmt.Fprintf(out, "%s  ERROR: unable to load node %v: %v", indent, child, err)
+			errs = append(errs, err)
 		}
 	}
+	return errors.Join(errs...)
 }
 
 func (b *BranchNode) Visit(source NodeSource, thisRef *NodeReference, depth int, visitor NodeVisitor) (bool, error) {
@@ -1330,14 +1335,19 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 	return errors.Join(errs...)
 }
 
-func (n *ExtensionNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
+func (n *ExtensionNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
+	errs := []error{}
 	fmt.Fprintf(out, "%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisRef.Id(), n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
 	if handle, err := source.getViewAccess(&n.next); err == nil {
 		defer handle.Release()
-		handle.Get().Dump(out, source, &n.next, indent+"  ")
+		if err := handle.Get().Dump(out, source, &n.next, indent+"  "); err != nil {
+			errs = append(errs, err)
+		}
 	} else {
-		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.next, err)
+		fmt.Fprintf(out, "%s  ERROR: unable to load node %v: %v", indent, n.next, err)
+		errs = append(errs, err)
 	}
+	return errors.Join(errs...)
 }
 
 func (n *ExtensionNode) Visit(source NodeSource, thisRef *NodeReference, depth int, visitor NodeVisitor) (bool, error) {
@@ -1779,17 +1789,22 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 	return errors.Join(errs...)
 }
 
-func (n *AccountNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
+func (n *AccountNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
+	errs := []error{}
 	fmt.Fprintf(out, "%sAccount (ID: %v, dirty: %t, frozen: %t, path length: %v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.IsDirty(), n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
 	if n.storage.Id().IsEmpty() {
-		return
+		return nil
 	}
 	if node, err := source.getViewAccess(&n.storage); err == nil {
 		defer node.Release()
-		node.Get().Dump(out, source, &n.storage, indent+"  ")
+		if err := node.Get().Dump(out, source, &n.storage, indent+"  "); err != nil {
+			errs = append(errs, err)
+		}
 	} else {
-		fmt.Printf("%s  ERROR: unable to load node %v: %v", indent, n.storage, err)
+		fmt.Fprintf(out, "%s  ERROR: unable to load node %v: %v", indent, n.storage, err)
+		errs = append(errs, err)
 	}
+	return errors.Join(errs...)
 }
 
 func (n *AccountNode) Visit(source NodeSource, thisRef *NodeReference, depth int, visitor NodeVisitor) (bool, error) {
@@ -2004,8 +2019,9 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 	return errors.Join(errs...)
 }
 
-func (n *ValueNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
+func (n *ValueNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.key, n.value)
+	return nil
 }
 
 func formatHashForDump(hash common.Hash) string {
