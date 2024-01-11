@@ -69,7 +69,7 @@ type VmStateDB interface {
 	// GetTransactionChanges provides a set of accounts and their slots, which have been
 	// potentially changed in the current transaction.
 	// Must be called before EndTransaction call.
-	GetTransactionChanges() map[common.Address]map[common.Key]bool
+	GetTransactionChanges() map[common.Address]map[common.Key]common.Value
 
 	// Deprecated: not necessary, to be removed
 	AbortTransaction()
@@ -1026,8 +1026,8 @@ func (s *stateDB) EndTransaction() {
 	s.resetTransactionContext()
 }
 
-func (s *stateDB) GetTransactionChanges() map[common.Address]map[common.Key]bool {
-	changes := make(map[common.Address]map[common.Key]bool)
+func (s *stateDB) GetTransactionChanges() map[common.Address]map[common.Key]common.Value {
+	changes := make(map[common.Address]map[common.Key]common.Value)
 	for addr := range s.accounts {
 		changes[addr] = nil
 	}
@@ -1043,9 +1043,9 @@ func (s *stateDB) GetTransactionChanges() map[common.Address]map[common.Key]bool
 	s.data.ForEach(func(slot slotId, value *slotValue) {
 		if !value.committedKnown || value.committed != value.current {
 			if changes[slot.addr] == nil {
-				changes[slot.addr] = make(map[common.Key]bool)
+				changes[slot.addr] = make(map[common.Key]common.Value)
 			}
-			changes[slot.addr][slot.key] = true
+			changes[slot.addr][slot.key] = value.current
 		}
 	})
 	return changes
