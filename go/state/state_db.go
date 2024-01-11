@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math/big"
 	"sync"
 	"unsafe"
@@ -115,6 +116,7 @@ type NonCommittableStateDB interface {
 	VmStateDB
 
 	// Copy creates a copy of the StateDB, including all uncommitted changes.
+	// Should be used only in-between transactions, as the tx context is not copied.
 	// Any change to the copy does not affect the original StateDB, except the state caches.
 	// Available for non-committable states only, as a commit to the backing state
 	// makes all other StateDBs with the same backing state invalid.
@@ -1339,22 +1341,16 @@ func (db *nonCommittableStateDB) Copy() NonCommittableStateDB {
 	cp := nonCommittableStateDbPool.Get().(*stateDB)
 	cp.resetState(db.state)
 
-	copyMap(cp.accounts, db.accounts)
-	copyMap(cp.balances, db.balances)
-	copyMap(cp.nonces, db.nonces)
+	maps.Copy(cp.accounts, db.accounts)
+	maps.Copy(cp.balances, db.balances)
+	maps.Copy(cp.nonces, db.nonces)
 	db.data.CopyTo(cp.data)
-	copyMap(cp.codes, db.codes)
-	copy(cp.accountsToDelete, db.accountsToDelete)
-	copyMap(cp.clearedAccounts, db.clearedAccounts)
-	copy(cp.undo, db.undo)
-	cp.refund = db.refund
-	copy(cp.logs, db.logs)
+	maps.Copy(cp.codes, db.codes)
+	maps.Copy(cp.clearedAccounts, db.clearedAccounts)
+	maps.Copy(cp.reincarnation, db.reincarnation)
 	cp.logsInBlock = db.logsInBlock
-	copyMap(cp.accessedAddresses, db.accessedAddresses)
-	db.accessedSlots.CopyTo(cp.accessedSlots)
-	copyMap(cp.writtenSlots, db.writtenSlots)
-	copyMap(cp.reincarnation, db.reincarnation)
-	copy(cp.emptyCandidates, db.emptyCandidates)
+	// we suppose ended tx - we may skip members,
+	// which are reset at the end of every tx
 
 	return &nonCommittableStateDB{cp}
 }
@@ -1363,11 +1359,5 @@ func (db *nonCommittableStateDB) Release() {
 	if db.stateDB != nil {
 		nonCommittableStateDbPool.Put(db.stateDB)
 		db.stateDB = nil
-	}
-}
-
-func copyMap[K comparable, V any](dest map[K]V, src map[K]V) {
-	for k, v := range src {
-		dest[k] = v
 	}
 }

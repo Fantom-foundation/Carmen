@@ -2802,6 +2802,37 @@ func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	db.EndBlock(1)
 }
 
+func TestCarmenStateCopy(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateNonCommittableStateDBUsing(mock)
+
+	mock.EXPECT().Exists(gomock.Any()).Return(true, nil).AnyTimes()
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+
+	db.BeginTransaction()
+	db.AddBalance(address1, big.NewInt(2))
+	db.SetNonce(address1, 8)
+	db.SetCode(address1, []byte{0x12})
+	db.SetState(address2, key3, val1)
+	db.EndTransaction()
+
+	cp := db.Copy()
+	// state introduced by the previous tx should be readable from the copy
+	if cp.GetBalance(address1).Cmp(big.NewInt(2)) != 0 {
+		t.Errorf("balance not copied")
+	}
+	if cp.GetNonce(address1) != 8 {
+		t.Errorf("nonce not copied")
+	}
+	if !bytes.Equal(cp.GetCode(address1), []byte{0x12}) {
+		t.Errorf("code not copied")
+	}
+	if cp.GetState(address2, key3) != val1 {
+		t.Errorf("storage not copied")
+	}
+}
+
 func TestCarmenStateLogsCanBeAddedAndRetrieved(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
