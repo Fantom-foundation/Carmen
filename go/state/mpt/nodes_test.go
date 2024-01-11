@@ -4663,6 +4663,20 @@ func (t *trie) Check() error {
 	return handle.Get().Check(t.manager, &t.root, []Nibble{})
 }
 
+func (t *trie) Dump() error {
+	handle, err := t.manager.getViewAccess(&t.root)
+	if err != nil {
+		return err
+	}
+	defer handle.Release()
+	// The output of the dump is a side effect ignored in the context of this
+	// test operation on tries. The relevant part is that (a) it does not cause
+	// a panic and (b) that errors encountered while dumping the node are
+	// reported correctly.
+	out := &bytes.Buffer{}
+	return handle.Get().Dump(out, t.manager, &t.root, "")
+}
+
 func (t *trie) Visit() error {
 	handle, err := t.manager.getWriteAccess(&t.root)
 	if err != nil {
@@ -6050,7 +6064,9 @@ func TestTransitions_StatesAreDumpable(t *testing.T) {
 		ref, node := ctxt.Build(state)
 		handle := node.GetViewHandle()
 		buffer := &bytes.Buffer{}
-		handle.Get().Dump(buffer, ctxt, &ref, "")
+		if err := handle.Get().Dump(buffer, ctxt, &ref, ""); err != nil {
+			t.Errorf("failed to dump node: %v", err)
+		}
 		handle.Release()
 
 		str := buffer.String()
@@ -6690,6 +6706,16 @@ func getTestActions() []action {
 
 	for _, cur := range snapshot {
 		res = append(res, action{
+			description: cur.description + "/dump",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				return trie.Dump()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
 			description: cur.description + "/visit",
 			input:       cur.input,
 			action: func(t *testing.T, trie *trie) error {
@@ -6727,6 +6753,19 @@ func getTestActions() []action {
 					return err
 				}
 				return trie.Check()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/freeze_and_dump",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				if err := trie.Freeze(); err != nil {
+					return err
+				}
+				return trie.Dump()
 			},
 		})
 	}

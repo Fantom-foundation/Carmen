@@ -67,9 +67,11 @@ func (mr *MockNodeMockRecorder) ClearStorage(manager, thisRef, this, address, pa
 }
 
 // Dump mocks base method.
-func (m *MockNode) Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
+func (m *MockNode) Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Dump", dest, source, thisRef, indent)
+	ret := m.ctrl.Call(m, "Dump", dest, source, thisRef, indent)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Dump indicates an expected call of Dump.
@@ -690,9 +692,11 @@ func (mr *MockleafNodeMockRecorder) ClearStorage(manager, thisRef, this, address
 }
 
 // Dump mocks base method.
-func (m *MockleafNode) Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
+func (m *MockleafNode) Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Dump", dest, source, thisRef, indent)
+	ret := m.ctrl.Call(m, "Dump", dest, source, thisRef, indent)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Dump indicates an expected call of Dump.
