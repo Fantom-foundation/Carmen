@@ -1,8 +1,10 @@
 package mpt
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -6047,8 +6049,14 @@ func TestTransitions_StatesAreDumpable(t *testing.T) {
 
 		ref, node := ctxt.Build(state)
 		handle := node.GetViewHandle()
-		handle.Get().Dump(ctxt, &ref, "")
+		buffer := &bytes.Buffer{}
+		handle.Get().Dump(buffer, ctxt, &ref, "")
 		handle.Release()
+
+		str := buffer.String()
+		if len(str) == 0 {
+			t.Errorf("dump for node should not be empty")
+		}
 	}
 }
 
@@ -7275,7 +7283,7 @@ func (c *nodeContext) Check(t *testing.T, ref NodeReference) {
 	if err := CheckForest(c, []*NodeReference{&ref}); err != nil {
 		handle := c.tryGetNode(t, ref.Id())
 		defer handle.Release()
-		handle.Get().Dump(c, &ref, "")
+		handle.Get().Dump(os.Stdout, c, &ref, "")
 		t.Fatalf("inconsistent node structure encountered:\n%v", err)
 	}
 }
@@ -7311,9 +7319,9 @@ func (c *nodeContext) ExpectEqualTries(t *testing.T, want, got NodeReference) {
 	}
 	if len(diffs) > 0 {
 		fmt.Printf("Want:\n")
-		wantHandle.Get().Dump(c, &want, "")
+		wantHandle.Get().Dump(os.Stdout, c, &want, "")
 		fmt.Printf("Have:\n")
-		gotHandle.Get().Dump(c, &got, "")
+		gotHandle.Get().Dump(os.Stdout, c, &got, "")
 		t.Errorf("unexpected resulting node structure")
 		t.Errorf("differences:\n")
 		for _, diff := range diffs {

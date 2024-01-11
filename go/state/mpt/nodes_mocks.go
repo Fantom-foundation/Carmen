@@ -5,6 +5,7 @@
 package mpt
 
 import (
+	io "io"
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
@@ -66,15 +67,15 @@ func (mr *MockNodeMockRecorder) ClearStorage(manager, thisRef, this, address, pa
 }
 
 // Dump mocks base method.
-func (m *MockNode) Dump(source NodeSource, thisRef *NodeReference, indent string) {
+func (m *MockNode) Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Dump", source, thisRef, indent)
+	m.ctrl.Call(m, "Dump", dest, source, thisRef, indent)
 }
 
 // Dump indicates an expected call of Dump.
-func (mr *MockNodeMockRecorder) Dump(source, thisRef, indent interface{}) *gomock.Call {
+func (mr *MockNodeMockRecorder) Dump(dest, source, thisRef, indent interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockNode)(nil).Dump), source, thisRef, indent)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockNode)(nil).Dump), dest, source, thisRef, indent)
 }
 
 // Freeze mocks base method.
@@ -689,15 +690,15 @@ func (mr *MockleafNodeMockRecorder) ClearStorage(manager, thisRef, this, address
 }
 
 // Dump mocks base method.
-func (m *MockleafNode) Dump(source NodeSource, thisRef *NodeReference, indent string) {
+func (m *MockleafNode) Dump(dest io.Writer, source NodeSource, thisRef *NodeReference, indent string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Dump", source, thisRef, indent)
+	m.ctrl.Call(m, "Dump", dest, source, thisRef, indent)
 }
 
 // Dump indicates an expected call of Dump.
-func (mr *MockleafNodeMockRecorder) Dump(source, thisRef, indent interface{}) *gomock.Call {
+func (mr *MockleafNodeMockRecorder) Dump(dest, source, thisRef, indent interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockleafNode)(nil).Dump), source, thisRef, indent)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Dump", reflect.TypeOf((*MockleafNode)(nil).Dump), dest, source, thisRef, indent)
 }
 
 // Freeze mocks base method.
