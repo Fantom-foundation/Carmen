@@ -1485,7 +1485,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 
 	thisPath := AddressToNibblePath(n.address, manager)
 	newRoot, err := splitLeafNode(manager, thisRef, thisPath[:], n, this, path, &siblingRef, sibling, handle)
-	return newRoot, false, err
+	return newRoot, !n.frozen && manager.getConfig().TrackSuffixLengthsInLeafNodes, err
 }
 
 type leafNode interface {

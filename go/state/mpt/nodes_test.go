@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -2767,8 +2766,8 @@ func TestAccountNode_SetAccount_WithDifferentAccount_WithCommonPrefix_NonZeroInf
 
 	path := addressToNibbles(addr2)
 	handle := node.GetWriteHandle()
-	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || changed || err != nil {
-		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, false, newRoot, changed, err)
+	if newRoot, changed, err := handle.Get().SetAccount(ctxt, &ref, handle, addr2, path[:], info2); newRoot != res || !changed || err != nil {
+		t.Fatalf("update should return (%v,%v), got (%v,%v), err: %v", res, true, newRoot, changed, err)
 	}
 	handle.Release()
 
@@ -6077,12 +6076,27 @@ func TestTransitions_StatesAreDumpable(t *testing.T) {
 }
 
 func TestTransitions_MutableTransitionHaveExpectedEffect(t *testing.T) {
+	testTransitions_MutableTransitionHaveExpectedEffect(t, S4LiveConfig)
+}
+
+func TestTransitions_MutableTransitionHaveExpectedEffectWithTrackedPrefixLength(t *testing.T) {
+	config := S4LiveConfig
+	config.TrackSuffixLengthsInLeafNodes = true
+	testTransitions_MutableTransitionHaveExpectedEffect(t, config)
+}
+
+func testTransitions_MutableTransitionHaveExpectedEffect(t *testing.T, config MptConfig) {
 	for _, transition := range getTestTransitions() {
 		transition := transition
 		t.Run(transition.getLabel(), func(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
-			ctxt := newNiceNodeContext(t, ctrl)
+			ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
+
+			if config.TrackSuffixLengthsInLeafNodes {
+				fixPrefixLength(transition.before, 0)
+				fixPrefixLength(transition.after, 0)
+			}
 
 			before, _ := ctxt.Build(transition.before)
 			original, _ := ctxt.Clone(before)
@@ -6102,6 +6116,28 @@ func TestTransitions_MutableTransitionHaveExpectedEffect(t *testing.T) {
 
 			ctxt.ExpectEqualTries(t, want, after)
 		})
+	}
+}
+
+func fixPrefixLength(desc NodeDesc, depth byte) {
+	if desc == nil {
+		return
+	}
+	switch n := desc.(type) {
+	case *Empty: /* nothing */
+	case *Branch:
+		for _, child := range n.children {
+			fixPrefixLength(child, depth+1)
+		}
+	case *Extension:
+		fixPrefixLength(n.next, depth+byte(len(n.path)))
+	case *Account:
+		n.pathLength = 40 - depth
+		fixPrefixLength(n.storage, 0)
+	case *Value:
+		n.length = 64 - depth
+	default:
+		panic(fmt.Sprintf("unsupported node description type: %v", reflect.TypeOf(desc)))
 	}
 }
 
@@ -6190,12 +6226,27 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 }
 
 func TestTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T) {
+	testTransitions_ImmutableTransitionHaveExpectedEffect(t, S4LiveConfig)
+}
+
+func TestTransitions_ImmutableTransitionHaveExpectedEffectWithTrackedPrefixLength(t *testing.T) {
+	config := S4LiveConfig
+	config.TrackSuffixLengthsInLeafNodes = true
+	testTransitions_ImmutableTransitionHaveExpectedEffect(t, config)
+}
+
+func testTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T, config MptConfig) {
 	for _, transition := range getTestTransitions() {
 		transition := transition
 		t.Run(transition.getLabel(), func(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
-			ctxt := newNiceNodeContext(t, ctrl)
+			ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
+
+			if config.TrackSuffixLengthsInLeafNodes {
+				fixPrefixLength(transition.before, 0)
+				fixPrefixLength(transition.after, 0)
+			}
 
 			before, _ := ctxt.Build(transition.before)
 			ctxt.Freeze(before)
@@ -6843,12 +6894,28 @@ func TestActions_AllErrorsAreForwardedByFrozenNodes(t *testing.T) {
 }
 
 func testActions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
+	t.Run("without_path_length", func(t *testing.T) {
+		testActions_AllErrorsAreForwardedInternal(t, frozen, S4LiveConfig)
+	})
+	t.Run("with_path_length", func(t *testing.T) {
+		config := S4LiveConfig
+		config.TrackSuffixLengthsInLeafNodes = true
+		testActions_AllErrorsAreForwardedInternal(t, frozen, config)
+	})
+}
+
+func testActions_AllErrorsAreForwardedInternal(t *testing.T, frozen bool, config MptConfig) {
 	for _, action := range getTestActions() {
 		action := action
 		t.Run(action.description, func(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
-			ctxt := newNiceNodeContext(t, ctrl)
+			ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
+
+			if config.TrackSuffixLengthsInLeafNodes {
+				fixPrefixLength(action.input, 0)
+			}
+
 			input, _ := ctxt.Build(action.input)
 			if frozen {
 				ctxt.Freeze(input)
@@ -6865,7 +6932,7 @@ func testActions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
 				injectedError := fmt.Errorf("Introduced-Test-Error")
 				t.Run(fmt.Sprintf("failing_call_%d", i), func(t *testing.T) {
 					ctrl := gomock.NewController(t)
-					ctxt := newNiceNodeContext(t, ctrl)
+					ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
 					before, _ := ctxt.Build(action.input)
 					if frozen {
 						ctxt.Freeze(before)
@@ -7191,7 +7258,11 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 // number of calls to its functions without the need to explicitly define
 // those expectations.
 func newNiceNodeContext(t *testing.T, ctrl *gomock.Controller) *nodeContext {
-	ctxt := newNodeContext(t, ctrl)
+	return newNiceNodeContextWithConfig(t, ctrl, S4LiveConfig)
+}
+
+func newNiceNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptConfig) *nodeContext {
+	ctxt := newNodeContextWithConfig(t, ctrl, config)
 
 	ctxt.EXPECT().createAccount().AnyTimes().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		ref, shared := ctxt.Build(&Account{dirty: true})
@@ -7322,8 +7393,9 @@ func (c *nodeContext) Check(t *testing.T, ref NodeReference) {
 	if err := CheckForest(c, []*NodeReference{&ref}); err != nil {
 		handle := c.tryGetNode(t, ref.Id())
 		defer handle.Release()
-		handle.Get().Dump(os.Stdout, c, &ref, "")
-		t.Fatalf("inconsistent node structure encountered:\n%v", err)
+		out := &bytes.Buffer{}
+		handle.Get().Dump(out, c, &ref, "")
+		t.Fatalf("inconsistent node structure encountered:\n%v\n%s", err, out.String())
 	}
 }
 
@@ -7357,10 +7429,12 @@ func (c *nodeContext) ExpectEqualTries(t *testing.T, want, got NodeReference) {
 		panic("FATAL: equal and diff not consistent")
 	}
 	if len(diffs) > 0 {
-		fmt.Printf("Want:\n")
-		wantHandle.Get().Dump(os.Stdout, c, &want, "")
-		fmt.Printf("Have:\n")
-		gotHandle.Get().Dump(os.Stdout, c, &got, "")
+		print := &bytes.Buffer{}
+		wantHandle.Get().Dump(print, c, &want, "")
+		t.Errorf("Want:\n%s", print.String())
+		have := &bytes.Buffer{}
+		gotHandle.Get().Dump(have, c, &got, "")
+		t.Errorf("Have:\n%s", have.String())
 		t.Errorf("unexpected resulting node structure")
 		t.Errorf("differences:\n")
 		for _, diff := range diffs {
