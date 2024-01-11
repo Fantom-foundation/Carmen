@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math/big"
 	"sync"
 	"unsafe"
@@ -113,6 +114,13 @@ type StateDB interface {
 // way offered for committing those.
 type NonCommittableStateDB interface {
 	VmStateDB
+
+	// Copy creates a copy of the StateDB, including all uncommitted changes.
+	// Should be used only in-between transactions, as the tx context is not copied.
+	// Any change to the copy does not affect the original StateDB, except the state caches.
+	// Available for non-committable states only, as a commit to the backing state
+	// makes all other StateDBs with the same backing state invalid.
+	Copy() NonCommittableStateDB
 
 	// Release should be called whenever this instance is no longer needed to allow
 	// held resources to be reused for future requests. After the release, no more
@@ -336,6 +344,7 @@ type codeValue struct {
 }
 
 const storedDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
+const nonCommittableStoredDataCacheSize = 100
 
 // storedDataCacheValue maintains the cached version of a value in the store. To
 // support the efficient clearing of values cached for accounts being deleted, an
@@ -1317,12 +1326,30 @@ var nonCommittableStateDbPool = sync.Pool{
 		// We use a smaller stored-data cache size to support faster initialization
 		// and resetting of instances. NonCommittable instances are expected to live
 		// only for the duration of a few transactions.
-		return createStateDBWith(nil, 100, false)
+		return createStateDBWith(nil, nonCommittableStoredDataCacheSize, false)
 	},
 }
 
 type nonCommittableStateDB struct {
 	*stateDB
+}
+
+func (db *nonCommittableStateDB) Copy() NonCommittableStateDB {
+	cp := nonCommittableStateDbPool.Get().(*stateDB)
+	cp.resetState(db.state)
+
+	maps.Copy(cp.accounts, db.accounts)
+	maps.Copy(cp.balances, db.balances)
+	maps.Copy(cp.nonces, db.nonces)
+	db.data.CopyTo(cp.data)
+	maps.Copy(cp.codes, db.codes)
+	maps.Copy(cp.clearedAccounts, db.clearedAccounts)
+	maps.Copy(cp.reincarnation, db.reincarnation)
+	cp.logsInBlock = db.logsInBlock
+	// we suppose ended tx - we may skip members,
+	// which are reset at the end of every tx
+
+	return &nonCommittableStateDB{cp}
 }
 
 func (db *nonCommittableStateDB) Release() {
