@@ -54,8 +54,9 @@ type Root struct {
 // the functional and non-functional properties of a forest but do not change
 // the on-disk format.
 type ForestConfig struct {
-	Mode          StorageMode // whether to perform destructive or constructive updates
-	CacheCapacity int         // the maximum number of nodes retained in memory
+	Mode                   StorageMode // whether to perform destructive or constructive updates
+	CacheCapacity          int         // the maximum number of nodes retained in memory
+	writeBufferChannelSize int         // the maximum number of elements retained in the write buffer channel
 }
 
 // Forest is a utility node managing nodes for one or more Tries.
@@ -288,7 +289,12 @@ func makeForest(
 		}
 	}()
 
-	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, 1024)
+	channelSize := forestConfig.writeBufferChannelSize
+	if channelSize <= 0 {
+		channelSize = 1024 // the default value
+	}
+
+	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, channelSize)
 	return res, nil
 }
 
