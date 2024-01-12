@@ -15,12 +15,10 @@ func TestAccountInfo_EncodingAndDecoding(t *testing.T) {
 	encoder := AccountInfoEncoder{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	for _, info := range infos {
-		if err := encoder.Store(buffer[:], &info); err != nil {
-			t.Fatalf("failed to encode info: %v", info)
-		}
+		encoder.Store(buffer[:], &info)
 		restored := AccountInfo{}
-		if err := encoder.Load(buffer[:], &restored); err != nil || restored != info {
-			t.Fatalf("failed to decode info %v: got %v, err %v", info, restored, err)
+		if encoder.Load(buffer[:], &restored); restored != info {
+			t.Fatalf("failed to decode info %v: got %v", info, restored)
 		}
 	}
 }

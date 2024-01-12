@@ -125,12 +125,10 @@ func TestNodeID_EncodingAndDecoding(t *testing.T) {
 	encoder := NodeIdEncoder{}
 	for i := uint64(0); i < 100; i++ {
 		for _, id := range []NodeId{NodeId(0), ValueId(i), AccountId(i), BranchId(i), ExtensionId(i)} {
-			if err := encoder.Store(buffer[:], &id); err != nil {
-				t.Fatalf("failed to encode id: %v", err)
-			}
+			encoder.Store(buffer[:], &id)
 			restored := NodeId(12345)
-			if err := encoder.Load(buffer[:], &restored); err != nil || restored != id {
-				t.Fatalf("failed to decode id %v: got %v, err %v", id, restored, err)
+			if encoder.Load(buffer[:], &restored); restored != id {
+				t.Fatalf("failed to decode id %v: got %v", id, restored)
 			}
 		}
 	}
@@ -141,12 +139,10 @@ func TestNodeID_EncodingAndDecodingPowerOfTwos(t *testing.T) {
 	encoder := NodeIdEncoder{}
 	for i := 0; i < 6*8; i++ {
 		id := NodeId(uint64(1) << i)
-		if err := encoder.Store(buffer[:], &id); err != nil {
-			t.Fatalf("failed to encode id: %v", err)
-		}
+		encoder.Store(buffer[:], &id)
 		restored := NodeId(12345)
-		if err := encoder.Load(buffer[:], &restored); err != nil || restored != id {
-			t.Fatalf("failed to decode id %v: got %v, err %v", id, restored, err)
+		if encoder.Load(buffer[:], &restored); restored != id {
+			t.Fatalf("failed to decode id %v: got %v", id, restored)
 		}
 	}
 }

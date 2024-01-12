@@ -187,14 +187,12 @@ func (PathEncoder) GetEncodedSize() int {
 	return 33
 }
 
-func (PathEncoder) Store(trg []byte, path *Path) error {
+func (PathEncoder) Store(trg []byte, path *Path) {
 	copy(trg, path.path[:])
 	trg[32] = path.length
-	return nil
 }
 
-func (PathEncoder) Load(src []byte, path *Path) error {
+func (PathEncoder) Load(src []byte, path *Path) {
 	copy(path.path[:], src)
 	path.length = uint8(src[32])
-	return nil
 }

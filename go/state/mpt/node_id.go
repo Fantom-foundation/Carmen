@@ -117,16 +117,14 @@ func (NodeIdEncoder) GetEncodedSize() int {
 	return 6
 }
 
-func (NodeIdEncoder) Store(dst []byte, id *NodeId) error {
+func (NodeIdEncoder) Store(dst []byte, id *NodeId) {
 	var buffer [8]byte
 	binary.BigEndian.PutUint64(buffer[:], uint64(*id))
 	copy(dst, buffer[2:])
-	return nil
 }
 
-func (NodeIdEncoder) Load(src []byte, id *NodeId) error {
+func (NodeIdEncoder) Load(src []byte, id *NodeId) {
 	var buffer [8]byte
 	copy(buffer[2:], src)
 	*id = NodeId(binary.BigEndian.Uint64(buffer[:]))
-	return nil
 }

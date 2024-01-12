@@ -2052,9 +2052,7 @@ func (BranchNodeEncoderWithNodeHash) Store(dst []byte, node *BranchNode) error {
 	encoder := NodeIdEncoder{}
 	step := encoder.GetEncodedSize()
 	for i := 0; i < 16; i++ {
-		if err := encoder.Store(dst[i*step:], &node.children[i].id); err != nil {
-			return err
-		}
+		encoder.Store(dst[i*step:], &node.children[i].id)
 	}
 	dst = dst[step*16:]
 	copy(dst, node.hash[:])
@@ -2066,9 +2064,7 @@ func (BranchNodeEncoderWithNodeHash) Load(src []byte, node *BranchNode) error {
 	step := encoder.GetEncodedSize()
 	for i := 0; i < 16; i++ {
 		var id NodeId
-		if err := encoder.Load(src[i*step:], &id); err != nil {
-			return err
-		}
+		encoder.Load(src[i*step:], &id)
 		node.children[i] = NewNodeReference(id)
 	}
 	src = src[step*16:]
@@ -2099,9 +2095,7 @@ func (BranchNodeEncoderWithChildHashes) Store(dst []byte, node *BranchNode) erro
 	encoder := NodeIdEncoder{}
 	step := encoder.GetEncodedSize()
 	for i := 0; i < 16; i++ {
-		if err := encoder.Store(dst[i*step:], &node.children[i].id); err != nil {
-			return err
-		}
+		encoder.Store(dst[i*step:], &node.children[i].id)
 	}
 	dst = dst[step*16:]
 	for i := 0; i < 16; i++ {
@@ -2117,9 +2111,7 @@ func (BranchNodeEncoderWithChildHashes) Load(src []byte, node *BranchNode) error
 	step := encoder.GetEncodedSize()
 	for i := 0; i < 16; i++ {
 		var id NodeId
-		if err := encoder.Load(src[i*step:], &id); err != nil {
-			return err
-		}
+		encoder.Load(src[i*step:], &id)
 		node.children[i] = NewNodeReference(id)
 	}
 	src = src[step*16:]
@@ -2149,13 +2141,9 @@ func (ExtensionNodeEncoderWithNodeHash) Store(dst []byte, value *ExtensionNode) 
 	}
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
-	if err := pathEncoder.Store(dst, &value.path); err != nil {
-		return err
-	}
+	pathEncoder.Store(dst, &value.path)
 	dst = dst[pathEncoder.GetEncodedSize():]
-	if err := idEncoder.Store(dst, &value.next.id); err != nil {
-		return err
-	}
+	idEncoder.Store(dst, &value.next.id)
 	dst = dst[idEncoder.GetEncodedSize():]
 	copy(dst, value.hash[:])
 	return nil
@@ -2164,14 +2152,10 @@ func (ExtensionNodeEncoderWithNodeHash) Store(dst []byte, value *ExtensionNode) 
 func (ExtensionNodeEncoderWithNodeHash) Load(src []byte, node *ExtensionNode) error {
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
-	if err := pathEncoder.Load(src, &node.path); err != nil {
-		return err
-	}
+	pathEncoder.Load(src, &node.path)
 	src = src[pathEncoder.GetEncodedSize():]
 	var id NodeId
-	if err := idEncoder.Load(src, &id); err != nil {
-		return err
-	}
+	idEncoder.Load(src, &id)
 	node.next = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.hash[:], src)
@@ -2197,13 +2181,9 @@ func (ExtensionNodeEncoderWithChildHash) Store(dst []byte, value *ExtensionNode)
 	}
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
-	if err := pathEncoder.Store(dst, &value.path); err != nil {
-		return err
-	}
+	pathEncoder.Store(dst, &value.path)
 	dst = dst[pathEncoder.GetEncodedSize():]
-	if err := idEncoder.Store(dst, &value.next.id); err != nil {
-		return err
-	}
+	idEncoder.Store(dst, &value.next.id)
 	dst = dst[idEncoder.GetEncodedSize():]
 	copy(dst, value.nextHash[:])
 	dst = dst[common.HashSize:]
@@ -2218,14 +2198,10 @@ func (ExtensionNodeEncoderWithChildHash) Store(dst []byte, value *ExtensionNode)
 func (ExtensionNodeEncoderWithChildHash) Load(src []byte, node *ExtensionNode) error {
 	pathEncoder := PathEncoder{}
 	idEncoder := NodeIdEncoder{}
-	if err := pathEncoder.Load(src, &node.path); err != nil {
-		return err
-	}
+	pathEncoder.Load(src, &node.path)
 	src = src[pathEncoder.GetEncodedSize():]
 	var id NodeId
-	if err := idEncoder.Load(src, &id); err != nil {
-		return err
-	}
+	idEncoder.Load(src, &id)
 	node.next = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.nextHash[:], src)
@@ -2255,15 +2231,11 @@ func (AccountNodeEncoderWithNodeHash) Store(dst []byte, node *AccountNode) error
 	dst = dst[len(node.address):]
 
 	infoEncoder := AccountInfoEncoder{}
-	if err := infoEncoder.Store(dst, &node.info); err != nil {
-		return err
-	}
+	infoEncoder.Store(dst, &node.info)
 	dst = dst[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
-	if err := idEncoder.Store(dst, &node.storage.id); err != nil {
-		return err
-	}
+	idEncoder.Store(dst, &node.storage.id)
 	dst = dst[idEncoder.GetEncodedSize():]
 	copy(dst[:], node.hash[:])
 	return nil
@@ -2274,16 +2246,12 @@ func (AccountNodeEncoderWithNodeHash) Load(src []byte, node *AccountNode) error 
 	src = src[len(node.address):]
 
 	infoEncoder := AccountInfoEncoder{}
-	if err := infoEncoder.Load(src, &node.info); err != nil {
-		return err
-	}
+	infoEncoder.Load(src, &node.info)
 	src = src[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
 	var id NodeId
-	if err := idEncoder.Load(src, &id); err != nil {
-		return err
-	}
+	idEncoder.Load(src, &id)
 	node.storage = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.hash[:], src)
@@ -2312,15 +2280,11 @@ func (AccountNodeEncoderWithChildHash) Store(dst []byte, node *AccountNode) erro
 	dst = dst[len(node.address):]
 
 	infoEncoder := AccountInfoEncoder{}
-	if err := infoEncoder.Store(dst, &node.info); err != nil {
-		return err
-	}
+	infoEncoder.Store(dst, &node.info)
 	dst = dst[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
-	if err := idEncoder.Store(dst, &node.storage.id); err != nil {
-		return err
-	}
+	idEncoder.Store(dst, &node.storage.id)
 	dst = dst[idEncoder.GetEncodedSize():]
 	copy(dst[:], node.storageHash[:])
 	return nil
@@ -2331,16 +2295,12 @@ func (AccountNodeEncoderWithChildHash) Load(src []byte, node *AccountNode) error
 	src = src[len(node.address):]
 
 	infoEncoder := AccountInfoEncoder{}
-	if err := infoEncoder.Load(src, &node.info); err != nil {
-		return err
-	}
+	infoEncoder.Load(src, &node.info)
 	src = src[infoEncoder.GetEncodedSize():]
 
 	idEncoder := NodeIdEncoder{}
 	var id NodeId
-	if err := idEncoder.Load(src, &id); err != nil {
-		return err
-	}
+	idEncoder.Load(src, &id)
 	node.storage = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.storageHash[:], src)
