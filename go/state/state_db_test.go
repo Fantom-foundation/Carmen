@@ -2934,6 +2934,32 @@ func TestCarmenStateLogsAreCoveredByRollbacks(t *testing.T) {
 	}
 }
 
+func TestCarmenStateProvidesTransactionChanges(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(gomock.Any()).Return(true, nil).AnyTimes()
+	mock.EXPECT().GetBalance(gomock.Any()).Return(balance1, nil)
+
+	db.BeginTransaction()
+	db.AddBalance(address1, big.NewInt(1))
+	db.SetNonce(address2, 2)
+	db.SetCode(address3, []byte{0x12})
+	db.SetState(address4, key1, val1)
+	changes := db.GetTransactionChanges()
+
+	for _, addr := range []common.Address{address1, address2, address3, address4} {
+		_, exists := changes[addr]
+		if !exists {
+			t.Errorf("account %x missing in the set of changed accounts", addr)
+		}
+	}
+	if changes[address4][0] != key1 {
+		t.Errorf("slot %x missing in the set of changed slots", key1)
+	}
+}
+
 func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)

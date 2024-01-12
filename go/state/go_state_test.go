@@ -17,6 +17,7 @@ var (
 	address1 = common.Address{0x01}
 	address2 = common.Address{0x02}
 	address3 = common.Address{0x03}
+	address4 = common.Address{0x04}
 
 	key1 = common.Key{0x01}
 	key2 = common.Key{0x02}
