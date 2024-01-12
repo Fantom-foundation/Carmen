@@ -2924,7 +2924,7 @@ func TestCarmenStateProvidesTransactionChanges(t *testing.T) {
 			t.Errorf("account %x missing in the set of changed accounts", addr)
 		}
 	}
-	if changes[address4][key1] != val1 {
+	if changes[address4][0] != key1 {
 		t.Errorf("slot %x missing in the set of changed slots", key1)
 	}
 }
