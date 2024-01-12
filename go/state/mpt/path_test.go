@@ -248,13 +248,9 @@ func TestPath_EncodingAndDecoding(t *testing.T) {
 	var buffer [33]byte
 	encoder := PathEncoder{}
 	for _, path := range paths {
-		if err := encoder.Store(buffer[:], &path); err != nil {
-			t.Fatalf("failed to encode path %v: %v", path, err)
-		}
+		encoder.Store(buffer[:], &path)
 		restored := Path{}
-		if err := encoder.Load(buffer[:], &restored); err != nil {
-			t.Fatalf("failed to decode path %v: %v", path, err)
-		}
+		encoder.Load(buffer[:], &restored)
 		if path != restored {
 			t.Fatalf("failed to restore path, wanted %v, got %v", path, restored)
 		}

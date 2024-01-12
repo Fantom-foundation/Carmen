@@ -29,16 +29,14 @@ func (AccountInfoEncoder) GetEncodedSize() int {
 	return common.AddressSize + common.BalanceSize + common.HashSize
 }
 
-func (AccountInfoEncoder) Store(dst []byte, info *AccountInfo) error {
+func (AccountInfoEncoder) Store(dst []byte, info *AccountInfo) {
 	copy(dst[0:], info.Nonce[:])
 	copy(dst[common.NonceSize:], info.Balance[:])
 	copy(dst[common.NonceSize+common.BalanceSize:], info.CodeHash[:])
-	return nil
 }
 
-func (AccountInfoEncoder) Load(src []byte, info *AccountInfo) error {
+func (AccountInfoEncoder) Load(src []byte, info *AccountInfo) {
 	copy(info.Nonce[:], src[0:])
 	copy(info.Balance[:], src[common.NonceSize:])
 	copy(info.CodeHash[:], src[common.NonceSize+common.BalanceSize:])
-	return nil
 }

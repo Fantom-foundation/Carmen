@@ -324,9 +324,7 @@ func loadRootsFrom(reader io.Reader) ([]Root, error) {
 		}
 
 		var id NodeId
-		if err := encoder.Load(buffer, &id); err != nil {
-			return nil, err
-		}
+		encoder.Load(buffer, &id)
 		res = append(res, Root{NewNodeReference(id), hash})
 	}
 }
@@ -352,9 +350,7 @@ func storeRootsTo(writer io.Writer, roots []Root) error {
 	encoder := NodeIdEncoder{}
 	buffer := make([]byte, encoder.GetEncodedSize())
 	for _, root := range roots {
-		if err := encoder.Store(buffer, &root.NodeRef.id); err != nil {
-			return err
-		}
+		encoder.Store(buffer, &root.NodeRef.id)
 		if _, err := writer.Write(buffer[:]); err != nil {
 			return err
 		}
