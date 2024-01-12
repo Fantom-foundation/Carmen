@@ -468,6 +468,10 @@ func (e EmptyNode) IsDirty() bool {
 func (e EmptyNode) MarkClean() {}
 
 func (e EmptyNode) GetHash() (common.Hash, bool) {
+	// The hash of an empty node should be defined by the hash algorithm as
+	// a constant, and not stored in an empty node instance. Thus, the empty
+	// node is not required to store a hash and if asked for it, it is always
+	// appearing as to have a dirty hash.
 	return common.Hash{}, true
 }
 
@@ -1018,13 +1022,9 @@ func (n *ExtensionNode) setNextNode(
 			return NodeReference{}, false, err
 		}
 
-		if newRoot.Id().IsEmpty() {
-			if n.frozen {
-				return NewNodeReference(EmptyId()), false, nil
-			}
-			n.nodeBase.Release()
-			return newRoot, true, manager.release(thisRef.Id())
-		}
+		// The modified sub-trie is either a branch, extension, account, or
+		// value node. It can not be empty, since a single modification cannot
+		// convert a branch node into an empty node.
 
 		if newRoot != n.next {
 
