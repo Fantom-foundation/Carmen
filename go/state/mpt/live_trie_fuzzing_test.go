@@ -40,35 +40,28 @@ func FuzzLiveTrie_RandomAccountStorageOps(f *testing.F) {
 // - f: The testing.F parameter for the fuzzLiveTrieRandomAccountOps function.
 func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 	var opSet = func(_ accountOpType, value accountPayload, t fuzzing.TestingT, c *liveTrieAccountFuzzingContext) {
-		if err := c.liveTrie.SetAccountInfo(value.GetAddress(), value.info); err != nil {
+		if err := c.liveTrie.SetAccountInfo(value.address.GetAddress(), value.info); err != nil {
 			t.Errorf("error to set account: %s", err)
 		}
-		if value.info.IsEmpty() {
-			delete(c.shadow, value.address)
-		} else {
-			c.shadow[value.address] = value.info
-		}
+		c.shadow[value.address] = value.info
 	}
 
 	var opGet = func(_ accountOpType, value accountPayload, t fuzzing.TestingT, c *liveTrieAccountFuzzingContext) {
-		info, exists, err := c.liveTrie.GetAccountInfo(value.GetAddress())
+		info, _, err := c.liveTrie.GetAccountInfo(value.address.GetAddress())
 		if err != nil {
 			t.Errorf("cannot get account: %s", err)
 		}
-		shadow, existsShadow := c.shadow[value.address]
-		if existsShadow != exists {
-			t.Errorf("account existence does not match the shadow: %v-> %v != %v", value.address, existsShadow, exists)
-		}
+		shadow := c.shadow[value.address]
 		if shadow != info {
 			t.Errorf("accounts do not match: %v -> got: %v != want: %v", value.address, info, shadow)
 		}
 	}
 
 	var opDelete = func(_ accountOpType, value accountPayload, t fuzzing.TestingT, c *liveTrieAccountFuzzingContext) {
-		if err := c.liveTrie.SetAccountInfo(value.GetAddress(), AccountInfo{}); err != nil {
+		if err := c.liveTrie.SetAccountInfo(value.address.GetAddress(), AccountInfo{}); err != nil {
 			t.Errorf("error to set account: %s", err)
 		}
-		delete(c.shadow, value.address)
+		c.shadow[value.address] = AccountInfo{}
 	}
 
 	serialise := func(payload accountPayload) []byte {
@@ -179,7 +172,7 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 	}
 
 	create := func(liveTrie *LiveTrie) *liveTrieAccountFuzzingContext {
-		shadow := make(map[tinyAddress]AccountInfo)
+		shadow := make([]AccountInfo, 256)
 		return &liveTrieAccountFuzzingContext{liveTrie, shadow}
 	}
 
@@ -207,7 +200,7 @@ type liveTrieAccountFuzzingCampaign[T ~byte, C any] struct {
 // liveTrieAccountFuzzingContext represents the context for fuzzing account operations on a LiveTrie.
 type liveTrieAccountFuzzingContext struct {
 	liveTrie *LiveTrie
-	shadow   map[tinyAddress]AccountInfo
+	shadow   []AccountInfo // index is tinyAddress
 }
 
 // Init initializes the liveTrieAccountFuzzingCampaign by calling the init method with the registry as an argument and returning the result.
@@ -249,6 +242,16 @@ func (c *liveTrieAccountFuzzingCampaign[T, C]) Cleanup(t fuzzing.TestingT, _ *C)
 // tinyAddress is a type representing a small address value.
 type tinyAddress byte
 
+// GetAddress converts the tinyAddress to the output common.Address.
+// It assures all bytes of the output are filled with non-empty value,
+// while the output being deterministic for all inputs.
+// It does this by first getting the Keccak256 hash of the tinyAddress byte and then copying
+// the resulting hash into the addr variable of type common.Address.
+// Addresses are already pre-computed, i.e., calls to this method are fast.
+func (a tinyAddress) GetAddress() common.Address {
+	return tinyAddressLookup[a]
+}
+
 // accountPayload comprises account address and account info.
 type accountPayload struct {
 	address tinyAddress
@@ -272,18 +275,6 @@ func (a *accountPayload) SerialiseAddress() []byte {
 	return []byte{byte(a.address)}
 }
 
-// GetAddress converts the tinyAddress to the output common.Address.
-// It assures all bytes of the output are filled with non-empty value,
-// while the output being deterministic for all inputs.
-// It does this by first getting the Keccak256 hash of the tinyAddress byte and then copying
-// the resulting hash into the addr variable of type common.Address.
-func (a *accountPayload) GetAddress() common.Address {
-	var addr common.Address
-	hash := common.GetKeccak256Hash([]byte{byte(a.address)})
-	copy(addr[:], hash[:])
-	return addr
-}
-
 // storageOpType is an operation type to be applied to the storage of a contract.
 type storageOpType byte
 
@@ -303,48 +294,37 @@ const (
 func fuzzLiveTrieRandomAccountStorageOps(f *testing.F) {
 	accountInfo := AccountInfo{Balance: common.Balance{0x9}}
 	var createAccountIfNotExists = func(value storagePayload, t fuzzing.TestingT, c *liveTrieStorageFuzzingContext) {
-		if _, exists := c.shadow[value.address]; !exists {
-			if err := c.liveTrie.SetAccountInfo(value.GetAddress(), accountInfo); err != nil {
+		if account := c.shadow[value.address]; account == nil {
+			if err := c.liveTrie.SetAccountInfo(value.address.GetAddress(), accountInfo); err != nil {
 				t.Errorf("cannot create account: %s", err)
 			}
-			c.shadow[value.address] = make(map[tinyKey]common.Value)
+			c.shadow[value.address] = make([]common.Value, 256)
 		}
 	}
 	var opSet = func(_ storageOpType, value storagePayload, t fuzzing.TestingT, c *liveTrieStorageFuzzingContext) {
 		createAccountIfNotExists(value, t, c)
-		if err := c.liveTrie.SetValue(value.GetAddress(), value.GetKey(), value.value); err != nil {
+		if err := c.liveTrie.SetValue(value.address.GetAddress(), value.key.GetKey(), value.value); err != nil {
 			t.Errorf("error to set value: %s", err)
 		}
-		var empty common.Value
-		if value.value == empty {
-			delete(c.shadow[value.address], value.key)
-		} else {
-			c.shadow[value.address][value.key] = value.value
-		}
+		// assign a new value, it can be also empty
+		c.shadow[value.address][value.key] = value.value
 	}
 
 	var opGet = func(_ storageOpType, value storagePayload, t fuzzing.TestingT, c *liveTrieStorageFuzzingContext) {
-		slotValue, err := c.liveTrie.GetValue(value.GetAddress(), value.GetKey())
+		slotValue, err := c.liveTrie.GetValue(value.address.GetAddress(), value.key.GetKey())
 		if err != nil {
 			t.Errorf("cannot get value: %s", err)
 		}
-		shadow, existsShadow := c.shadow[value.address]
+		shadow := c.shadow[value.address]
 		var empty common.Value
-		if !existsShadow {
+		if shadow == nil {
 			if slotValue != empty {
 				t.Errorf("value for non existing account is not empty: %v-> %v != %v", value.address, slotValue, empty)
 			}
 			return
 		}
 
-		shadowVal, existsShadowVal := shadow[value.key]
-		if !existsShadowVal {
-			if slotValue != empty {
-				t.Errorf("value not in shadow: %v-> %v != %v", value.address, slotValue, shadowVal)
-			}
-			return
-		}
-
+		shadowVal := shadow[value.key]
 		if shadowVal != slotValue {
 			t.Errorf("values do not match: %v -> got: %v != want: %v", value.address, shadowVal, slotValue)
 		}
@@ -352,19 +332,19 @@ func fuzzLiveTrieRandomAccountStorageOps(f *testing.F) {
 
 	var opDelete = func(_ storageOpType, value storagePayload, t fuzzing.TestingT, c *liveTrieStorageFuzzingContext) {
 		var empty common.Value
-		if err := c.liveTrie.SetValue(value.GetAddress(), value.GetKey(), empty); err != nil {
+		if err := c.liveTrie.SetValue(value.address.GetAddress(), value.key.GetKey(), empty); err != nil {
 			t.Errorf("error to clear value: %s", err)
 		}
-		if _, exists := c.shadow[value.address]; exists {
-			delete(c.shadow[value.address], value.key)
+		if account := c.shadow[value.address]; account != nil {
+			c.shadow[value.address][value.key] = common.Value{}
 		}
 	}
 
 	var opDeleteAccount = func(_ storageOpType, value storagePayload, t fuzzing.TestingT, c *liveTrieStorageFuzzingContext) {
-		if err := c.liveTrie.SetAccountInfo(value.GetAddress(), AccountInfo{}); err != nil {
+		if err := c.liveTrie.SetAccountInfo(value.address.GetAddress(), AccountInfo{}); err != nil {
 			t.Errorf("error to set account: %s", err)
 		}
-		delete(c.shadow, value.address)
+		c.shadow[value.address] = nil
 	}
 
 	serialise := func(payload storagePayload) []byte {
@@ -464,7 +444,7 @@ func fuzzLiveTrieRandomAccountStorageOps(f *testing.F) {
 	}
 
 	create := func(liveTrie *LiveTrie) *liveTrieStorageFuzzingContext {
-		shadow := make(map[tinyAddress]map[tinyKey]common.Value)
+		shadow := make([][]common.Value, 256)
 		return &liveTrieStorageFuzzingContext{liveTrie, shadow}
 	}
 
@@ -476,11 +456,21 @@ func fuzzLiveTrieRandomAccountStorageOps(f *testing.F) {
 // that stores the expected values for each storage address.
 type liveTrieStorageFuzzingContext struct {
 	liveTrie *LiveTrie
-	shadow   map[tinyAddress]map[tinyKey]common.Value
+	shadow   [][]common.Value // indexes are tinyAddress -> tinyKey -> common.Value
 }
 
 // tinyKey is the storage address shrunk to 1-bytes to limit the address space.
 type tinyKey byte
+
+// GetKey converts the tinyKey to the output common.Key.
+// It assures all bytes of the output are filled with non-empty value,
+// while the output is deterministic for all inputs.
+// It does this by first getting the Keccak256 hash of the tinyKey byte and then copying
+// the resulting hash into the addr variable of type common.Key.
+// Keys are already pre-computed, i.e., calls to this method are fast.
+func (a tinyKey) GetKey() common.Key {
+	return tinyKeyLookup[a]
+}
 
 // storagePayload comprises a fraction of an account address, a short key and a value
 type storagePayload struct {
@@ -508,26 +498,29 @@ func (a *storagePayload) SerialiseAddressKey() []byte {
 	return res
 }
 
-// GetKey converts the tinyKey to the output common.Key.
-// It assures all bytes of the output are filled with non-empty value,
-// while the output is deterministic for all inputs.
-// It does this by first getting the Keccak256 hash of the tinyKey byte and then copying
-// the resulting hash into the addr variable of type common.Key.
-func (a *storagePayload) GetKey() common.Key {
-	var key common.Key
-	hash := common.GetKeccak256Hash([]byte{byte(a.key)})
-	copy(key[:], hash[:])
-	return key
-}
+// tinyAddressLookup is an array where the index is a tinyAddress pointing to the full common.Address.
+var tinyAddressLookup []common.Address
 
-// GetAddress converts the tinyAddress to the output common.Address.
-// It assures all bytes of the output are filled with non-empty value,
-// while the output being deterministic for all inputs.
-// It does this by first getting the Keccak256 hash of the tinyAddress byte and then copying
-// the resulting hash into the addr variable of type common.Address.
-func (a *storagePayload) GetAddress() common.Address {
-	var addr common.Address
-	hash := common.GetKeccak256Hash([]byte{byte(a.address)})
-	copy(addr[:], hash[:])
-	return addr
+// tinyKeyLookup is an array where the index is a tinyKey pointing to the full common.Key.
+var tinyKeyLookup []common.Key
+
+func init() {
+	tinyAddressLookup = make([]common.Address, 256)
+	tinyKeyLookup = make([]common.Key, 256)
+
+	for i := 0; i < 256; i++ {
+		{
+			var addr common.Address
+			hash := common.GetKeccak256Hash([]byte{byte(i)})
+			copy(addr[:], hash[:])
+			tinyAddressLookup[i] = addr
+		}
+
+		{
+			var key common.Key
+			hash := common.GetKeccak256Hash([]byte{byte(i)})
+			copy(key[:], hash[:])
+			tinyKeyLookup[i] = key
+		}
+	}
 }

@@ -108,6 +108,77 @@ const (
 )
 
 func TestFuzz_CanParseRegisteredOps(t *testing.T) {
+	runWithTestOpsRegistration(func(registry OpsFactoryRegistry[testOpType, testContext]) {
+		var input []Operation[testContext]
+		input = append(input, registry.CreateDataOp(set, testData(10)))
+		input = append(input, registry.CreateDataOp(get, testData(10)))
+		input = append(input, registry.CreateDataOp(set, testData(20)))
+		input = append(input, registry.CreateDataOp(set, testData(30)))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+		input = append(input, registry.CreateNoDataOp(print))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+
+		// create an expected chain of operations
+		var expected []Operation[testContext]
+		expected = append(expected, registry.CreateDataOp(set, testData(10)))
+		expected = append(expected, registry.CreateDataOp(get, testData(10)))
+		expected = append(expected, registry.CreateDataOp(set, testData(20)))
+		expected = append(expected, registry.CreateDataOp(set, testData(30)))
+		expected = append(expected, registry.CreateDataOp(get, testData(20)))
+		expected = append(expected, registry.CreateNoDataOp(print))
+		expected = append(expected, registry.CreateDataOp(get, testData(20)))
+
+		applyAndMatch(input, expected, func(rawInput []byte, ctx *testContext) {
+			for _, op := range registry.ReadAllOps(rawInput) {
+				op.Apply(nil, ctx)
+			}
+		}, t)
+	})
+}
+
+func TestFuzz_CanParseRegisteredOpsUniq(t *testing.T) {
+	runWithTestOpsRegistration(func(registry OpsFactoryRegistry[testOpType, testContext]) {
+		// create an input chain of operations
+		var input OperationSequence[testContext]
+		input = append(input, registry.CreateDataOp(set, testData(10)))
+		input = append(input, registry.CreateDataOp(set, testData(10)))
+		input = append(input, registry.CreateDataOp(get, testData(10)))
+		input = append(input, registry.CreateDataOp(set, testData(20)))
+		input = append(input, registry.CreateDataOp(set, testData(30)))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+		input = append(input, registry.CreateNoDataOp(print))
+		input = append(input, registry.CreateNoDataOp(print))
+		input = append(input, registry.CreateNoDataOp(print))
+		input = append(input, registry.CreateNoDataOp(print))
+		input = append(input, registry.CreateNoDataOp(print))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+		input = append(input, registry.CreateDataOp(get, testData(20)))
+
+		var expected OperationSequence[testContext]
+		expected = append(expected, registry.CreateDataOp(set, testData(10)))
+		expected = append(expected, registry.CreateDataOp(get, testData(10)))
+		expected = append(expected, registry.CreateDataOp(set, testData(20)))
+		expected = append(expected, registry.CreateDataOp(set, testData(30)))
+		expected = append(expected, registry.CreateDataOp(get, testData(20)))
+		expected = append(expected, registry.CreateNoDataOp(print))
+		expected = append(expected, registry.CreateDataOp(get, testData(20)))
+
+		applyAndMatch(input, expected, func(rawInput []byte, ctx *testContext) {
+			for _, op := range registry.ReadAllUniqueOps(rawInput) {
+				op.Apply(nil, ctx)
+			}
+		}, t)
+	})
+}
+
+// runWithTestOpsRegistration registers an arbitrary set of test operations and allows them to be executed with a callback function.
+// It receives a callback 'call' that takes a OpsFactoryRegistry[testOpType, testContext] as a parameter
+// to access these operations.
+// All test operations perform single modification of the test context, which is adding its opcode and payload
+// to the test context. It allows for observing that the correct chain of operations was executed in various tests.
+func runWithTestOpsRegistration(call func(OpsFactoryRegistry[testOpType, testContext])) {
 	registry := NewRegistry[testOpType, testContext]()
 
 	serialise := func(data testData) []byte {
@@ -135,29 +206,30 @@ func TestFuzz_CanParseRegisteredOps(t *testing.T) {
 	RegisterDataOp(registry, get, serialise, deserialise, opGet)
 	RegisterNoDataOp(registry, print, opPrint)
 
-	// create an expected chain of operations
-	var expected []Operation[testContext]
-	expected = append(expected, registry.CreateDataOp(set, testData(10)))
-	expected = append(expected, registry.CreateDataOp(get, testData(10)))
-	expected = append(expected, registry.CreateDataOp(set, testData(20)))
-	expected = append(expected, registry.CreateDataOp(set, testData(30)))
-	expected = append(expected, registry.CreateDataOp(get, testData(20)))
-	expected = append(expected, registry.CreateNoDataOp(print))
-	expected = append(expected, registry.CreateDataOp(get, testData(20)))
+	call(registry)
+}
 
-	// serialise
-	var raw []byte
-	for _, op := range expected {
-		raw = append(raw, op.Serialize()...)
+// applyAndMatch serialises the given input operations and uses them to apply modifications to the test context.
+// The resulting context is matched with expected operations in their serialised form.
+// Modification of the context is done via the callback function for customisation.
+// The raw dat provided to the callback represents the serialised form of the input.
+// The expected operations are serialised as well and the serialised form of is compared.
+func applyAndMatch(input, expected OperationSequence[testContext], apply func(rawInput []byte, ctx *testContext), t *testing.T) {
+	// serialise input
+	var rawInput []byte
+	for _, op := range input {
+		rawInput = append(rawInput, op.Serialize()...)
 	}
 
+	// apply modification
 	got := &testContext{}
-	// deserialize and execute all ops
-	for _, op := range registry.ReadAllOps(raw) {
-		op.Apply(nil, got)
-	}
+	apply(rawInput, got)
 
-	want := []byte{byte(set), 10, byte(get), 10, byte(set), 20, byte(set), 30, byte(get), 20, byte(print), byte(get), 20}
+	// serialise and match output
+	var want []byte
+	for _, op := range expected {
+		want = append(want, op.Serialize()...)
+	}
 
 	if !slices.Equal(*got, want) {
 		t.Errorf("exectued operations do not match: got: %v != want: %v", *got, want)
