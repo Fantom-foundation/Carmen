@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
@@ -456,5 +459,66 @@ func TestArchiveTrie_RecreateAccount_ClearStorage(t *testing.T) {
 				t.Fatalf("failed to close empty archive: %v", err)
 			}
 		})
+	}
+}
+
+func TestArchiveTrie_QueryLoadTest(t *testing.T) {
+	// Goal: stress-test an archive with a limited node cache.
+	archive, err := OpenArchiveTrie(t.TempDir(), S5ArchiveConfig, 30_000)
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+
+	// We fill the archive with N blocks, each with N accounts and N slots.
+	const N = 100
+	for b := 0; b < N; b++ {
+		update := common.Update{}
+		for a := 0; a < N; a++ {
+			addr := common.Address{byte(a)}
+			if b == 0 {
+				update.AppendCreateAccount(addr)
+			}
+			for k := 0; k < N; k++ {
+				update.AppendSlotUpdate(addr, common.Key{byte(k)}, common.Value{byte(b), byte(a), byte(k)})
+			}
+		}
+		if err := archive.Add(uint64(b), update, nil); err != nil {
+			t.Errorf("failed to add update to archive: %v", err)
+		}
+	}
+
+	// In a second step, random queries are send concurrently into the archive.
+	const Q = 10_000
+	P := runtime.NumCPU()
+	var wg sync.WaitGroup
+	wg.Add(P)
+	for i := 0; i < P; i++ {
+		go func(seed int) {
+			defer wg.Done()
+			r := rand.New(rand.NewSource(int64(seed)))
+			for i := 0; i < Q; i++ {
+				block := uint64(r.Intn(N))
+				addr := common.Address{byte(r.Intn(N))}
+				key := common.Key{byte(r.Intn(N))}
+
+				live, err := archive.getView(block)
+				if err != nil {
+					t.Errorf("failed to get view to block %d: %v", block, err)
+					continue
+				}
+				value, err := live.GetValue(addr, key)
+				if err != nil {
+					t.Errorf("failed to get value from archive: %d/%v/%v: %v", block, addr, key, err)
+				}
+				if want, got := (common.Value{byte(block), addr[0], key[0]}), value; want != got {
+					t.Errorf("wrong result for lookup %d/%v/%v: wanted %v, got %v", block, addr, key, want, got)
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive: %v", err)
 	}
 }
