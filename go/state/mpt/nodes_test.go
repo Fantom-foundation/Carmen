@@ -149,6 +149,33 @@ func TestEmptyNode_Release(t *testing.T) {
 	}
 }
 
+func TestEmptyNode_StoresAConstantZeroHashThatIsConsideredDirty(t *testing.T) {
+	node := EmptyNode{}
+	_, dirty := node.GetHash()
+	if !dirty {
+		t.Errorf("an empty node should have a dirty hash")
+	}
+}
+
+func TestEmptyNode_SetHashHasNoEffect(t *testing.T) {
+	node := EmptyNode{}
+	_, dirty := node.GetHash()
+	if !dirty {
+		t.Errorf("an empty node should always have a dirty hash")
+	}
+	node.SetHash(common.Hash{})
+	if !dirty {
+		t.Errorf("an empty node should always have a dirty hash")
+	}
+}
+
+func TestEmptyNode_IsAlwaysFrozen(t *testing.T) {
+	node := EmptyNode{}
+	if !node.IsFrozen() {
+		t.Errorf("empty node should be alway frozen")
+	}
+}
+
 func TestEmptyNode_Freeze(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -2407,6 +2434,57 @@ func TestExtensionNode_CheckDetectsIssues(t *testing.T) {
 //                               Account Node
 // ----------------------------------------------------------------------------
 
+func TestAccountNode_AddressIsAccessible(t *testing.T) {
+	node := AccountNode{address: common.Address{1, 2, 3}}
+	if want, got := node.address, node.Address(); want != got {
+		t.Errorf("invalid address produced, wanted %v, got %v", want, got)
+	}
+}
+
+func TestAccountNode_InfoIsAccessible(t *testing.T) {
+	node := AccountNode{info: AccountInfo{
+		Balance:  common.Balance{1, 2, 3},
+		Nonce:    common.Nonce{4, 5},
+		CodeHash: common.Hash{6, 7, 8},
+	}}
+	if want, got := node.info, node.Info(); want != got {
+		t.Errorf("invalid info produced, wanted %v, got %v", want, got)
+	}
+}
+func TestAccountNode_SetPathLength(t *testing.T) {
+	tests := []struct {
+		before, after byte
+	}{
+		{0, 0},
+		{10, 10},
+		{0, 1},
+		{1, 0},
+		{10, 11},
+		{10, 9},
+	}
+
+	for _, test := range tests {
+		node := AccountNode{
+			pathLength: test.before,
+		}
+		ref := NodeReference{}
+		handle := shared.WriteHandle[Node]{}
+		res, changed, err := node.setPathLength(nil, &ref, handle, test.after)
+		if err != nil {
+			t.Fatalf("failed to change path length: %v", err)
+		}
+		if want, got := (test.before != test.after), changed; want != got {
+			t.Errorf("invalid changed flag, wanted %t, got %t", want, got)
+		}
+		if want, got := ref.Id(), res.Id(); want != got {
+			t.Errorf("invalid result node reference, wanted %v, got %v", want, got)
+		}
+		if want, got := test.after, node.pathLength; want != got {
+			t.Errorf("invalid modified path length, wanted %d, got %d", want, got)
+		}
+	}
+}
+
 func TestAccountNode_GetAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mgr := NewMockNodeManager(ctrl)
@@ -3604,6 +3682,54 @@ func TestAccountNode_CheckDetectsIssues(t *testing.T) {
 //                               Value Node
 // ----------------------------------------------------------------------------
 
+func TestValueNode_KeyIsAccessible(t *testing.T) {
+	node := ValueNode{key: common.Key{1, 2, 3}}
+	if want, got := node.key, node.Key(); want != got {
+		t.Errorf("invalid key produced, wanted %v, got %v", want, got)
+	}
+}
+
+func TestValueNode_ValueIsAccessible(t *testing.T) {
+	node := ValueNode{value: common.Value{1, 2, 3}}
+	if want, got := node.value, node.Value(); want != got {
+		t.Errorf("invalid value produced, wanted %v, got %v", want, got)
+	}
+}
+
+func TestValueNode_SetPathLength(t *testing.T) {
+	tests := []struct {
+		before, after byte
+	}{
+		{0, 0},
+		{10, 10},
+		{0, 1},
+		{1, 0},
+		{10, 11},
+		{10, 9},
+	}
+
+	for _, test := range tests {
+		node := ValueNode{
+			pathLength: test.before,
+		}
+		ref := NodeReference{}
+		handle := shared.WriteHandle[Node]{}
+		res, changed, err := node.setPathLength(nil, &ref, handle, test.after)
+		if err != nil {
+			t.Fatalf("failed to change path length: %v", err)
+		}
+		if want, got := (test.before != test.after), changed; want != got {
+			t.Errorf("invalid changed flag, wanted %t, got %t", want, got)
+		}
+		if want, got := ref.Id(), res.Id(); want != got {
+			t.Errorf("invalid result node reference, wanted %v, got %v", want, got)
+		}
+		if want, got := test.after, node.pathLength; want != got {
+			t.Errorf("invalid modified path length, wanted %d, got %d", want, got)
+		}
+	}
+}
+
 func TestValueNode_GetAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -3651,6 +3777,56 @@ func TestValueNode_Frozen_SetAccount(t *testing.T) {
 	}
 }
 
+func TestValueNode_GetSlot(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(addr)
+	key := common.Key{}
+
+	node := &ValueNode{}
+	if _, _, err := node.GetSlot(ctxt, addr, path[:], key); err == nil {
+		t.Fatalf("GetSlot call should always return an error")
+	}
+}
+
+func TestValueNode_SetSlot(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(addr)
+	key := common.Key{}
+	value := common.Value{}
+
+	ref := NewNodeReference(ValueId(12))
+	node := &ValueNode{}
+
+	if _, _, err := node.SetSlot(ctxt, &ref, shared.WriteHandle[Node]{}, addr, path[:], key, value); err == nil {
+		t.Fatalf("SetSlot call should always return an error")
+	}
+}
+
+func TestValueNode_Frozen_SetSlot(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(addr)
+	key := common.Key{}
+	value := common.Value{}
+
+	ref, node := ctxt.Build(&Value{})
+	ctxt.Freeze(ref)
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+	if _, _, err := handle.Get().SetSlot(ctxt, &ref, handle, addr, path[:], key, value); err == nil {
+		t.Fatalf("SetSlot call should always return an error")
+	}
+}
+
 func TestValueNode_GetValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mgr := NewMockNodeManager(ctrl)
@@ -3672,7 +3848,7 @@ func TestValueNode_GetValue(t *testing.T) {
 	}
 }
 
-func TestValueNode_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
+func TestValueNode_SetValue_WithMatchingKey_SameValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
 
@@ -3692,7 +3868,7 @@ func TestValueNode_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
 	ctxt.ExpectEqualTries(t, backup, ref)
 }
 
-func TestValueNode_Frozen_SetAccount_WithMatchingKey_SameValue(t *testing.T) {
+func TestValueNode_Frozen_SetValue_WithMatchingKey_SameValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
 
@@ -4076,6 +4252,38 @@ func TestValueNode_Frozen_SetValue_WithDifferentKey_WithCommonPrefix_ZeroValue(t
 	ctxt.ExpectEqualTries(t, after, newRoot)
 }
 
+func TestValueNode_ClearStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(addr)
+
+	ref := NewNodeReference(ValueId(12))
+	node := &ValueNode{}
+
+	if _, _, err := node.ClearStorage(ctxt, &ref, shared.WriteHandle[Node]{}, addr, path[:]); err == nil {
+		t.Fatalf("ClearStorage call should always return an error")
+	}
+}
+
+func TestValueNode_Frozen_ClearStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	addr := common.Address{0x21}
+	path := addressToNibbles(addr)
+
+	ref, node := ctxt.Build(&Value{})
+	ctxt.Freeze(ref)
+
+	handle := node.GetWriteHandle()
+	defer handle.Release()
+	if _, _, err := handle.Get().ClearStorage(ctxt, &ref, handle, addr, path[:]); err == nil {
+		t.Fatalf("ClearStorage call should always return an error")
+	}
+}
+
 func TestValueNode_Release(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -4083,6 +4291,20 @@ func TestValueNode_Release(t *testing.T) {
 	ref, node := ctxt.Build(&Value{})
 
 	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	handle := node.GetWriteHandle()
+	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
+		t.Errorf("failed to release node: %v", err)
+	}
+	handle.Release()
+}
+
+func TestValueNode_Frozen_Release(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	ref, node := ctxt.Build(&Value{})
+	ctxt.Freeze(ref)
+
 	handle := node.GetWriteHandle()
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
@@ -4662,6 +4884,10 @@ func (t *trie) Check() error {
 	return handle.Get().Check(t.manager, &t.root, []Nibble{})
 }
 
+func (t *trie) CheckForest() error {
+	return CheckForest(t.manager, []*NodeReference{&t.root})
+}
+
 func (t *trie) Dump() error {
 	handle, err := t.manager.getViewAccess(&t.root)
 	if err != nil {
@@ -4851,6 +5077,23 @@ func getTestTransitions() []transition {
 					info:    AccountInfo{Nonce: common.Nonce{3, 2, 1}},
 				},
 			}},
+		},
+	})
+
+	res = append(res, transition{
+		node:        ntAccount,
+		operation:   otSetValue,
+		description: "no_change",
+		before: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
+		},
+		change: func(trg *trie) (NodeReference, bool, error) {
+			return trg.SetValue(common.Address{2}, common.Key{2}, common.Value{3})
+		},
+		after: &Account{
+			address: common.Address{1},
+			info:    AccountInfo{Nonce: common.Nonce{1, 2, 3}},
 		},
 	})
 
@@ -6757,6 +7000,16 @@ func getTestActions() []action {
 
 	for _, cur := range snapshot {
 		res = append(res, action{
+			description: cur.description + "/check_forest",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				return trie.CheckForest()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
 			description: cur.description + "/dump",
 			input:       cur.input,
 			action: func(t *testing.T, trie *trie) error {
@@ -6804,6 +7057,19 @@ func getTestActions() []action {
 					return err
 				}
 				return trie.Check()
+			},
+		})
+	}
+
+	for _, cur := range snapshot {
+		res = append(res, action{
+			description: cur.description + "/freeze_and_check_forest",
+			input:       cur.input,
+			action: func(t *testing.T, trie *trie) error {
+				if err := trie.Freeze(); err != nil {
+					return err
+				}
+				return trie.CheckForest()
 			},
 		})
 	}
