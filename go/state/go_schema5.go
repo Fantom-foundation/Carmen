@@ -31,7 +31,7 @@ func newS5State(params Parameters, state *mpt.MptState) (State, error) {
 }
 
 func mptStateCapacity(params Parameters) int {
-	if params.CacheCapacity == 0 {
+	if params.CacheCapacity <= 0 {
 		return mpt.DefaultMptStateCapacity
 	}
 	capacity := int(params.CacheCapacity / 512) // TODO use more accurate coefficient
