@@ -35,6 +35,7 @@ type MptState struct {
 // the opera fork at ~4.5M, modifies 434.589 nodes. Thus, the cache size of a
 // MPT processing Fantom's history should be at least ~500.000 nodes.
 const DefaultMptStateCapacity = 10_000_000
+const MinMptStateCapacity = 2_000
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
