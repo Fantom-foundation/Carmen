@@ -30,11 +30,11 @@ func newS5State(params Parameters, state *mpt.MptState) (State, error) {
 	}, arch, []func(){archiveCleanup}), nil
 }
 
-func mptStateCapacity(params Parameters) int {
-	if params.CacheCapacity <= 0 {
+func mptStateCapacity(param int64) int {
+	if param <= 0 {
 		return mpt.DefaultMptStateCapacity
 	}
-	capacity := int(params.CacheCapacity / 512) // TODO use more accurate coefficient
+	capacity := int(param / 512) // TODO use more accurate coefficient
 	if capacity < mpt.MinMptStateCapacity {
 		capacity = mpt.MinMptStateCapacity
 	}
@@ -42,7 +42,7 @@ func mptStateCapacity(params Parameters) int {
 }
 
 func newGoMemoryS5State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, mptStateCapacity(params))
+	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, mptStateCapacity(params.LiveCache))
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func newGoMemoryS5State(params Parameters) (State, error) {
 }
 
 func newGoFileS5State(params Parameters) (State, error) {
-	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, mptStateCapacity(params))
+	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, mptStateCapacity(params.LiveCache))
 	if err != nil {
 		return nil, err
 	}
