@@ -105,10 +105,11 @@ func GetAllSchemas() []StateSchema {
 
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
-	Directory string
-	Variant   Variant
-	Schema    StateSchema
-	Archive   ArchiveType
+	Directory     string
+	Variant       Variant
+	Schema        StateSchema
+	Archive       ArchiveType
+	CacheCapacity int64 // bytes, approximate, supported only by S5 now
 }
 
 // UnsupportedConfiguration is the error returned if unsupported configuration
@@ -954,7 +955,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, mptStateCapacity(params))
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)
