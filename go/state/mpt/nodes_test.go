@@ -7172,15 +7172,16 @@ func testActions_AllErrorsAreForwarded(t *testing.T, frozen bool) {
 
 func testActions_AllErrorsAreForwardedInternal(t *testing.T, frozen bool, config MptConfig) {
 	for _, action := range getTestActions() {
+
+		if config.TrackSuffixLengthsInLeafNodes {
+			fixPrefixLength(action.input, 0)
+		}
+
 		action := action
 		t.Run(action.description, func(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
 			ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
-
-			if config.TrackSuffixLengthsInLeafNodes {
-				fixPrefixLength(action.input, 0)
-			}
 
 			input, _ := ctxt.Build(action.input)
 			if frozen {
