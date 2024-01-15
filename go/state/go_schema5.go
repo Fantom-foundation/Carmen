@@ -35,7 +35,7 @@ func mptStateCapacity(params Parameters) int {
 		return mpt.DefaultMptStateCapacity
 	}
 	capacity := int(params.CacheCapacity / 512) // TODO use more accurate coefficient
-	if capacity == 0 {
+	if capacity < mpt.MinMptStateCapacity {
 		capacity = mpt.MinMptStateCapacity
 	}
 	return capacity
