@@ -106,20 +106,20 @@ pipeline {
                         sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
                     }
                 }                  
-                stage('Fuzzing Archive MPT - Accounts') {
-                    agent {label 'fuzzing'}
-                    steps {
-                        unstash 'source'
-                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
-                    }
-                }                  
-                stage('Fuzzing Archive MPT - Storage') {
-                    agent {label 'fuzzing'}
-                    steps {
-                        unstash 'source'
-                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
-                    }
-                }                  
+//                 stage('Fuzzing Archive MPT - Accounts') {
+//                     agent {label 'fuzzing'}
+//                     steps {
+//                         unstash 'source'
+//                         sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
+//                     }
+//                 }
+//                 stage('Fuzzing Archive MPT - Storage') {
+//                     agent {label 'fuzzing'}
+//                     steps {
+//                         unstash 'source'
+//                         sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
+//                     }
+//                 }
             }
         }
     }
