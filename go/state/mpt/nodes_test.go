@@ -4515,13 +4515,15 @@ func TestCheckForest_DetectsInvalidReUse(t *testing.T) {
 
 func TestAccountNodeEncoderWithNodeHash(t *testing.T) {
 	node := AccountNode{
+		nodeBase: nodeBase{
+			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 			CodeHash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		},
 		storage: NewNodeReference(NodeId(12)),
-		hash:    common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
 	encoder := AccountNodeEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
@@ -4556,6 +4558,9 @@ func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 }
 func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 	node := AccountNode{
+		nodeBase: nodeBase{
+			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
 			Balance:  common.Balance{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
@@ -4563,7 +4568,6 @@ func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 		},
 		storage:    NewNodeReference(NodeId(12)),
 		pathLength: 14,
-		hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 	}
 	encoder := AccountNodeWithPathLengthEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
@@ -4612,6 +4616,9 @@ func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 
 func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
 	node := BranchNode{
+		nodeBase: nodeBase{
+			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		},
 		children: [16]NodeReference{
 			NewNodeReference(1),
 			NewNodeReference(2),
@@ -4631,7 +4638,6 @@ func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
 			NewNodeReference(16),
 		},
 		embeddedChildren: 12,
-		hash:             common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 	}
 	encoder := BranchNodeEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
@@ -4667,12 +4673,14 @@ func TestExtensionNodeEncoderWithChildHash(t *testing.T) {
 }
 func TestExtensionNodeEncoderWithNodeHash(t *testing.T) {
 	node := ExtensionNode{
+		nodeBase: nodeBase{
+			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		},
 		path: Path{
 			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 			length: 7,
 		},
 		next:           NewNodeReference(NodeId(12)),
-		hash:           common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		nextIsEmbedded: true,
 	}
 	encoder := ExtensionNodeEncoderWithNodeHash{}
@@ -4705,9 +4713,11 @@ func TestValueNodeEncoderWithoutNodeHash(t *testing.T) {
 
 func TestValueNodeEncoderWithNodeHash(t *testing.T) {
 	node := ValueNode{
+		nodeBase: nodeBase{
+			hash: common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+		},
 		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
-		value: common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
-		hash:  common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+		value: common.Value{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
 	}
 	encoder := ValueNodeEncoderWithNodeHash{}
 	buffer := make([]byte, encoder.GetEncodedSize())
@@ -4722,7 +4732,7 @@ func TestValueNodeEncoderWithNodeHash(t *testing.T) {
 func TestValueNodeWithPathLengthEncoderWithoutNodeHash(t *testing.T) {
 	node := ValueNode{
 		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
-		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+		value:      common.Value{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
 		pathLength: 12,
 	}
 	encoder := ValueNodeWithPathLengthEncoderWithoutNodeHash{}
@@ -4738,9 +4748,11 @@ func TestValueNodeWithPathLengthEncoderWithoutNodeHash(t *testing.T) {
 
 func TestValueNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 	node := ValueNode{
+		nodeBase: nodeBase{
+			hash: common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+		},
 		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
-		value:      common.Value{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
-		hash:       common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+		value:      common.Value{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
 		pathLength: 12,
 	}
 	encoder := ValueNodeWithPathLengthEncoderWithNodeHash{}
@@ -7358,14 +7370,16 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 		storage = id
 	}
 	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](&AccountNode{
-		nodeBase:         nodeBase{clean: !a.dirty},
+		nodeBase: nodeBase{
+			clean:     !a.dirty,
+			frozen:    a.frozen,
+			hashDirty: a.dirtyHash,
+		},
 		address:          a.address,
 		info:             a.info,
-		frozen:           a.frozen,
 		pathLength:       a.pathLength,
 		storage:          storage,
 		storageHashDirty: a.storageHashDirty,
-		hashDirty:        a.dirtyHash,
 	})
 }
 
@@ -7449,12 +7463,14 @@ type Value struct {
 
 func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	return NewNodeReference(ValueId(ctx.nextIndex())), shared.MakeShared[Node](&ValueNode{
-		nodeBase:   nodeBase{clean: !v.dirty},
+		nodeBase: nodeBase{
+			clean:     !v.dirty,
+			frozen:    v.frozen,
+			hashDirty: v.dirtyHash,
+		},
 		key:        v.key,
 		value:      v.value,
-		hashDirty:  v.dirtyHash,
 		pathLength: v.length,
-		frozen:     v.frozen,
 	})
 }
 
