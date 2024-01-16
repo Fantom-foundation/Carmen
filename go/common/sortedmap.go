@@ -84,7 +84,6 @@ func (m *SortedMap[K, V]) Put(key K, val V) {
 	}
 
 	m.size += 1
-	return
 }
 
 // Remove deletes the key from the map and returns whether an element was removed.

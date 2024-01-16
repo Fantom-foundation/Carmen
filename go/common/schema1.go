@@ -49,9 +49,7 @@ func (s SlotIdx32Hasher) Hash(a *SlotIdx[uint32]) uint64 {
 }
 
 // SlotIdx32Serializer is a Serializer of the SlotIdx[uint32] type
-type SlotIdx32Serializer struct {
-	identifierSerializer32 Identifier32Serializer
-}
+type SlotIdx32Serializer struct{}
 
 func (a SlotIdx32Serializer) ToBytes(value SlotIdx[uint32]) []byte {
 	res := make([]byte, 0, 8)

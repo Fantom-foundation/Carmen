@@ -392,14 +392,14 @@ func TestIndexSnapshot_IndexSnapshotRestoreClearsPreviousVersion(t *testing.T) {
 			originalIndex := idx(t)
 			original, ok := originalIndex.(backend.Snapshotable)
 			if !ok {
-				t.Skip(fmt.Sprintf("index: %s is not Snapshotable", name))
+				t.Skipf("index: %s is not Snapshotable", name)
 			}
 
 			fillIndex(t, originalIndex, 20)
 
 			snapshot, err := original.CreateSnapshot()
 			if err == backend.ErrSnapshotNotSupported {
-				t.Skip(fmt.Sprintf("%v", err))
+				t.Skipf("%v", err)
 			}
 
 			if err != nil {

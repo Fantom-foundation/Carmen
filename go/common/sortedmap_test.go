@@ -7,12 +7,6 @@ import (
 
 const sortedMapCapacity = 5
 
-var (
-	A = Address{0xAA}
-	B = Address{0xBB}
-	C = Address{0xCC}
-)
-
 func TestSortedMapIsMap(t *testing.T) {
 	var instance SortedMap[Address, uint32]
 	var _ Map[Address, uint32] = &instance
@@ -22,37 +16,37 @@ func TestSortedMapGetPut(t *testing.T) {
 
 	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
 
-	if _, exists := h.Get(A); exists {
+	if _, exists := h.Get(addressA); exists {
 		t.Errorf("Value is not correct")
 	}
 
-	h.Put(A, 10)
-	h.Put(B, 20)
-	h.Put(C, 30)
+	h.Put(addressA, 10)
+	h.Put(addressB, 20)
+	h.Put(addressC, 30)
 
-	if val, exists := h.Get(A); !exists || val != 10 {
+	if val, exists := h.Get(addressA); !exists || val != 10 {
 		t.Errorf("Value is not correct")
 	}
-	if val, exists := h.Get(B); !exists || val != 20 {
+	if val, exists := h.Get(addressB); !exists || val != 20 {
 		t.Errorf("Value is not correct")
 	}
-	if val, exists := h.Get(C); !exists || val != 30 {
+	if val, exists := h.Get(addressC); !exists || val != 30 {
 		t.Errorf("Value is not correct")
 	}
 
 	// replace
-	h.Put(A, 33)
-	if val, exists := h.Get(A); !exists || val != 33 {
+	h.Put(addressA, 33)
+	if val, exists := h.Get(addressA); !exists || val != 33 {
 		t.Errorf("Value is not correct")
 	}
 	// replace
-	h.Put(B, 44)
-	if val, exists := h.Get(B); !exists || val != 44 {
+	h.Put(addressB, 44)
+	if val, exists := h.Get(addressB); !exists || val != 44 {
 		t.Errorf("Value is not correct")
 	}
 	// replace
-	h.Put(C, 55)
-	if val, exists := h.Get(C); !exists || val != 55 {
+	h.Put(addressC, 55)
+	if val, exists := h.Get(addressC); !exists || val != 55 {
 		t.Errorf("Value is not correct")
 	}
 
@@ -92,37 +86,37 @@ func TestSortedMapInverseGetPut(t *testing.T) {
 
 	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
 
-	if _, exists := h.Get(A); exists {
+	if _, exists := h.Get(addressA); exists {
 		t.Errorf("Value is not correct")
 	}
 
-	h.Put(C, 30)
-	h.Put(B, 20)
-	h.Put(A, 10)
+	h.Put(addressC, 30)
+	h.Put(addressB, 20)
+	h.Put(addressA, 10)
 
-	if val, _ := h.Get(A); val != 10 {
+	if val, _ := h.Get(addressA); val != 10 {
 		t.Errorf("Value is not correct")
 	}
-	if val, _ := h.Get(B); val != 20 {
+	if val, _ := h.Get(addressB); val != 20 {
 		t.Errorf("Value is not correct")
 	}
-	if val, _ := h.Get(C); val != 30 {
+	if val, _ := h.Get(addressC); val != 30 {
 		t.Errorf("Value is not correct")
 	}
 
 	// replace
-	h.Put(A, 33)
-	if val, _ := h.Get(A); val != 33 {
+	h.Put(addressA, 33)
+	if val, _ := h.Get(addressA); val != 33 {
 		t.Errorf("Value is not correct")
 	}
 	// replace
-	h.Put(B, 44)
-	if val, _ := h.Get(B); val != 44 {
+	h.Put(addressB, 44)
+	if val, _ := h.Get(addressB); val != 44 {
 		t.Errorf("Value is not correct")
 	}
 	// replace
-	h.Put(C, 55)
-	if val, _ := h.Get(C); val != 55 {
+	h.Put(addressC, 55)
+	if val, _ := h.Get(addressC); val != 55 {
 		t.Errorf("Value is not correct")
 	}
 
@@ -178,33 +172,33 @@ func TestSortedMapRemove(t *testing.T) {
 
 	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
 
-	if exists := h.Remove(C); exists {
+	if exists := h.Remove(addressC); exists {
 		t.Errorf("Remove from empty map failed")
 	}
 
-	h.Put(C, 99)
-	if exists := h.Remove(C); !exists {
-		t.Errorf("Remove failed:  %v ", C)
+	h.Put(addressC, 99)
+	if exists := h.Remove(addressC); !exists {
+		t.Errorf("Remove failed:  %v ", addressC)
 	}
-	if actual, exists := h.Get(C); exists || actual == 99 {
-		t.Errorf("Remove failed:  %v -> %v", C, actual)
+	if actual, exists := h.Get(addressC); exists || actual == 99 {
+		t.Errorf("Remove failed:  %v -> %v", addressC, actual)
 	}
 
-	h.Put(A, 1)
-	h.Put(B, 2)
-	h.Put(C, 3)
+	h.Put(addressA, 1)
+	h.Put(addressB, 2)
+	h.Put(addressC, 3)
 
 	// remove from middle
-	if exists := h.Remove(B); !exists {
-		t.Errorf("Remove failed:  %v ", B)
+	if exists := h.Remove(addressB); !exists {
+		t.Errorf("Remove failed:  %v ", addressB)
 	}
 
 	// remove from last
-	if exists := h.Remove(C); !exists {
-		t.Errorf("Remove failed:  %v", B)
+	if exists := h.Remove(addressC); !exists {
+		t.Errorf("Remove failed:  %v", addressB)
 	}
 
-	if exists := h.Remove(A); !exists {
-		t.Errorf("Remove failed:  %v", B)
+	if exists := h.Remove(addressA); !exists {
+		t.Errorf("Remove failed:  %v", addressB)
 	}
 }

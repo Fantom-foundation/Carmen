@@ -17,7 +17,6 @@ func NewBuildInMap[K comparable, V any]() *BuildInMap[K, V] {
 
 func (m *BuildInMap[K, V]) Put(key K, value V) {
 	m.data[key] = value
-	return
 }
 
 func (m *BuildInMap[K, V]) Get(key K) (V, bool) {
@@ -104,8 +103,6 @@ func (m *KeyIntMap) Put(key Key, value int) {
 	m.data[new].value = value
 	m.data[new].next = m.buckets[hash]
 	m.buckets[hash] = m.toPtr(int64(new))
-
-	return
 }
 
 func (m *KeyIntMap) Remove(key Key) bool {
@@ -509,7 +506,7 @@ func TestMap_Internal_Negative_Position(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		num := uint64(rand.Int63()) | uint64(1<<63) // always negative num
 		if got, want := m.toPtr(int64(num)), num; got != fmPtr(want) {
-			t.Errorf("negatie value should be returned unchanged: %d != %d", got, want)
+			t.Errorf("negative value should be returned unchanged: %d != %d", got, want)
 		}
 	}
 }
@@ -636,9 +633,9 @@ func parseCommands(encoded []byte) []command {
 }
 
 // toBytes encodes a list of commands into a byte sequence.
-func toBytes(cmds []command) []byte {
+func toBytes(commands []command) []byte {
 	res := []byte{}
-	for _, cmd := range cmds {
+	for _, cmd := range commands {
 		res = cmd.appendTo(res)
 	}
 	return res

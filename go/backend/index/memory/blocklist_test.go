@@ -1,8 +1,9 @@
 package memory
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 func TestBlockListIsMap(t *testing.T) {
@@ -47,7 +48,7 @@ func TestBlockListBulkInsert(t *testing.T) {
 	data := make([]common.MapEntry[common.Address, uint32], max)
 	for i := uint32(0); i < max; i++ {
 		address := common.Address{byte(i + 1)}
-		data[i] = common.MapEntry[common.Address, uint32]{address, i + 1}
+		data[i] = common.MapEntry[common.Address, uint32]{Key: address, Val: i + 1}
 	}
 
 	b := InitBlockList[common.Address, uint32](10, data, common.AddressComparator{})

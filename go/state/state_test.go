@@ -474,12 +474,12 @@ func TestArchive(t *testing.T) {
 				if err := s.Apply(1, common.Update{
 					CreatedAccounts: []common.Address{address1},
 					Balances: []common.BalanceUpdate{
-						{address1, balance12},
+						{Account: address1, Balance: balance12},
 					},
 					Codes:  nil,
 					Nonces: nil,
 					Slots: []common.SlotUpdate{
-						{address1, common.Key{0x05}, common.Value{0x47}},
+						{Account: address1, Key: common.Key{0x05}, Value: common.Value{0x47}},
 					},
 				}); err != nil {
 					t.Fatalf("failed to add block 1; %s", err)
@@ -487,18 +487,18 @@ func TestArchive(t *testing.T) {
 
 				if err := s.Apply(2, common.Update{
 					Balances: []common.BalanceUpdate{
-						{address1, balance34},
-						{address2, balance12},
-						{address3, balance12},
+						{Account: address1, Balance: balance34},
+						{Account: address2, Balance: balance12},
+						{Account: address3, Balance: balance12},
 					},
 					Codes: []common.CodeUpdate{
-						{address1, []byte{0x12, 0x23}},
+						{Account: address1, Code: []byte{0x12, 0x23}},
 					},
 					Nonces: []common.NonceUpdate{
-						{address1, common.Nonce{0x54}},
+						{Account: address1, Nonce: common.Nonce{0x54}},
 					},
 					Slots: []common.SlotUpdate{
-						{address1, common.Key{0x05}, common.Value{0x89}},
+						{Account: address1, Key: common.Key{0x05}, Value: common.Value{0x89}},
 					},
 				}); err != nil {
 					t.Fatalf("failed to add block 2; %v", err)
@@ -636,7 +636,7 @@ func TestLastArchiveBlock(t *testing.T) {
 
 				_, err = s.GetArchiveState(lastBlockHeight + 1)
 				if err == nil {
-					t.Errorf("obtainig a block higher than the last one (%d) did not failed", lastBlockHeight)
+					t.Errorf("obtaining a block higher than the last one (%d) did not failed", lastBlockHeight)
 				}
 			})
 		}
@@ -900,7 +900,7 @@ func TestStateRead(t *testing.T) {
 	if storage, err := s.GetStorage(address1, key1); err != nil || storage != val1 {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", storage, val1, err)
 	}
-	if code, err := s.GetCode(address1); err != nil || bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+	if code, err := s.GetCode(address1); err != nil || !bytes.Equal(code, []byte{1, 2, 3}) {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", code, []byte{1, 2, 3}, err)
 	}
 
@@ -920,7 +920,7 @@ func TestStateRead(t *testing.T) {
 	if storage, err := as.GetStorage(address1, key1); err != nil || storage != val1 {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", storage, val1, err)
 	}
-	if code, err := as.GetCode(address1); err != nil || bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+	if code, err := as.GetCode(address1); err != nil || !bytes.Equal(code, []byte{1, 2, 3}) {
 		t.Errorf("Unexpected value or err, val: %v != %v, err:  %v", code, []byte{1, 2, 3}, err)
 	}
 }

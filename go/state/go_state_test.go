@@ -377,14 +377,14 @@ func TestHashing(t *testing.T) {
 	}
 }
 
-var testingErr = fmt.Errorf("testing error")
+var errInjectedByTest = fmt.Errorf("testing error")
 
 type failingStore[I common.Identifier, V any] struct {
 	store.Store[I, V]
 }
 
 func (m failingStore[I, V]) Get(id I) (value V, err error) {
-	err = testingErr
+	err = errInjectedByTest
 	return
 }
 
@@ -393,7 +393,7 @@ type failingIndex[K comparable, I common.Identifier] struct {
 }
 
 func (m failingIndex[K, I]) Get(key K) (id I, err error) {
-	err = testingErr
+	err = errInjectedByTest
 	return
 }
 
@@ -412,17 +412,17 @@ func TestFailingStore(t *testing.T) {
 	_ = goSchema.SetStorage(address1, key1, common.Value{})
 
 	_, err = state.GetBalance(address1)
-	if err != testingErr {
+	if err != errInjectedByTest {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 
 	_, err = state.GetNonce(address1)
-	if err != testingErr {
+	if err != errInjectedByTest {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 
 	_, err = state.GetStorage(address1, key1)
-	if err != testingErr {
+	if err != errInjectedByTest {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 }
@@ -436,17 +436,17 @@ func TestFailingIndex(t *testing.T) {
 	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
 	_, err = state.GetBalance(address1)
-	if err != testingErr {
+	if err != errInjectedByTest {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 
 	_, err = state.GetNonce(address1)
-	if err != testingErr {
+	if err != errInjectedByTest {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 
 	_, err = state.GetStorage(address1, key1)
-	if err != testingErr {
+	if err != errInjectedByTest {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 }

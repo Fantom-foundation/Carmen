@@ -17,7 +17,7 @@ import (
 //   - a string of bytes
 //   - a list of items
 // Note the recursive definition in the second line. This recursive step
-// allows arbitraryily nested structures to be encoded. This package provides
+// allows arbitrarily nested structures to be encoded. This package provides
 // RLP encoding support for Items and a few convenience utilities for encoding
 // frequently utilized types.
 
@@ -48,7 +48,7 @@ func (w writer) Write(data []byte) writer {
 	return append(w, data...)
 }
 
-func (w writer) WriteByte(c byte) writer {
+func (w writer) Put(c byte) writer {
 	return append(w, c)
 }
 
@@ -130,12 +130,12 @@ func (s List) getEncodedLength() int {
 // encode the length of the string or list in the output stream.
 func encodeLength(length int, offset byte, writer writer) writer {
 	if length < 56 {
-		return writer.WriteByte(offset + byte(length))
+		return writer.Put(offset + byte(length))
 	}
 	numBytesForLength := getNumBytes(uint64(length))
-	writer = writer.WriteByte(offset + 55 + numBytesForLength)
+	writer = writer.Put(offset + 55 + numBytesForLength)
 	for i := byte(0); i < numBytesForLength; i++ {
-		writer = writer.WriteByte(byte(length >> (8 * (numBytesForLength - i - 1))))
+		writer = writer.Put(byte(length >> (8 * (numBytesForLength - i - 1))))
 	}
 	return writer
 }
@@ -187,7 +187,7 @@ type Uint64 struct {
 func (u Uint64) write(writer writer) writer {
 	// Uint64 values are encoded using their non-zero big-endian encoding suffix.
 	if u.Value == 0 {
-		return writer.WriteByte(0x80)
+		return writer.Put(0x80)
 	}
 	var buffer = make([]byte, 8)
 	binary.BigEndian.PutUint64(buffer, u.Value)

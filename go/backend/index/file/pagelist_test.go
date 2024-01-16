@@ -1,9 +1,10 @@
 package file
 
 import (
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 const (
@@ -26,7 +27,7 @@ func TestPageListBulkInsert(t *testing.T) {
 	data := make([]common.MapEntry[common.Address, uint32], max)
 	for i := uint32(0); i < max; i++ {
 		address := common.Address{byte(i + 1)}
-		data[i] = common.MapEntry[common.Address, uint32]{address, i + 1}
+		data[i] = common.MapEntry[common.Address, uint32]{Key: address, Val: i + 1}
 	}
 
 	_ = p.bulkInsert(data)

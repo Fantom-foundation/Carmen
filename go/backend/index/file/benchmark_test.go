@@ -2,9 +2,10 @@ package file
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // running all these options takes long, run with a longer timeout, e.g. " -timeout 360m"
@@ -46,7 +47,7 @@ func BenchmarkBulkInsert(b *testing.B) {
 func nextRandKey[I common.Identifier]() common.SlotIdxKey[I] {
 	nextIndex := rand.Uint32()
 	var nextKey common.Key
-	return common.SlotIdxKey[I]{I(nextIndex), nextKey}
+	return common.SlotIdxKey[I]{AddressIdx: I(nextIndex), Key: nextKey}
 }
 
 func genRandKeys[I common.Identifier](size int) []common.SlotIdxKey[I] {

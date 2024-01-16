@@ -142,7 +142,7 @@ func (s *GoSchema1) GetStorage(address common.Address, key common.Key) (value co
 		}
 		return
 	}
-	slotIdx, err := s.slotIndex.Get(common.SlotIdx[uint32]{addressIdx, keyIdx})
+	slotIdx, err := s.slotIndex.Get(common.SlotIdx[uint32]{AddressIdx: addressIdx, KeyIdx: keyIdx})
 	if err != nil {
 		if err == index.ErrNotFound {
 			return common.Value{}, nil
@@ -161,7 +161,7 @@ func (s *GoSchema1) SetStorage(address common.Address, key common.Key, value com
 	if err != nil {
 		return err
 	}
-	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{addressIdx, keyIdx})
+	slotIdx, err := s.slotIndex.GetOrAdd(common.SlotIdx[uint32]{AddressIdx: addressIdx, KeyIdx: keyIdx})
 	if err != nil {
 		return err
 	}

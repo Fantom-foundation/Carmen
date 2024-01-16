@@ -1,9 +1,10 @@
 package file
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/rand"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 func TestPageGetPut(t *testing.T) {
@@ -29,7 +30,7 @@ func TestPageGetPut(t *testing.T) {
 	}
 
 	if !h.IsDirty() {
-		t.Errorf("The dirty flag incorectly set")
+		t.Errorf("The dirty flag incorrectly set")
 	}
 
 	verifyPageSorted(t, h)
@@ -135,13 +136,13 @@ func TestPageBulk(t *testing.T) {
 	data := make([]common.MapEntry[common.Address, uint32], max)
 	for i := uint32(0); i < max; i++ {
 		address := common.Address{byte(i + 1)}
-		data[i] = common.MapEntry[common.Address, uint32]{address, i + 1}
+		data[i] = common.MapEntry[common.Address, uint32]{Key: address, Val: i + 1}
 	}
 
 	h.bulkInsert(data)
 
 	if !h.IsDirty() {
-		t.Errorf("The dirty flag incorectly set")
+		t.Errorf("The dirty flag incorrectly set")
 	}
 
 	if size := h.sizeKeys(); size != int(max) {
@@ -171,7 +172,7 @@ func TestPageBulkMultipleTimes(t *testing.T) {
 	data := make([]common.MapEntry[common.Address, uint32], 0, max)
 	for i := uint32(0); i < max; i++ {
 		address := common.Address{byte(i + 1)}
-		data = append(data, common.MapEntry[common.Address, uint32]{address, i + 1})
+		data = append(data, common.MapEntry[common.Address, uint32]{Key: address, Val: i + 1})
 	}
 
 	h.bulkInsert(data)
@@ -180,7 +181,7 @@ func TestPageBulkMultipleTimes(t *testing.T) {
 	nextData := make([]common.MapEntry[common.Address, uint32], 0, nextMax)
 	for i := max; i < nextMax+max; i++ {
 		address := common.Address{byte(i + 1)}
-		nextData = append(nextData, common.MapEntry[common.Address, uint32]{address, i + 1})
+		nextData = append(nextData, common.MapEntry[common.Address, uint32]{Key: address, Val: i + 1})
 	}
 
 	h.bulkInsert(nextData)
@@ -265,11 +266,11 @@ func TestPageRemove(t *testing.T) {
 	}
 
 	if !h.IsDirty() {
-		t.Errorf("The dirty flag incorectly set")
+		t.Errorf("The dirty flag incorrectly set")
 	}
 
 	h.forEach(func(k common.Address, v uint32) {
-		t.Errorf("There should be no item to iterata: %v -> %d", k, v)
+		t.Errorf("There should be no item to iterate: %v -> %d", k, v)
 	})
 }
 
@@ -292,11 +293,11 @@ func TestPageClear(t *testing.T) {
 	}
 
 	if !h.IsDirty() {
-		t.Errorf("The dirty flag incorectly set")
+		t.Errorf("The dirty flag incorrectly set")
 	}
 
 	h.forEach(func(k common.Address, v uint32) {
-		t.Errorf("There should be no item to iterata: %v -> %d", k, v)
+		t.Errorf("There should be no item to iterate: %v -> %d", k, v)
 	})
 }
 
@@ -397,7 +398,7 @@ func TestPageSetGetNext(t *testing.T) {
 	}
 
 	if !h.IsDirty() {
-		t.Errorf("The dirty flag incorectly set")
+		t.Errorf("The dirty flag incorrectly set")
 	}
 
 	// remove link
@@ -412,7 +413,7 @@ func TestPageSetGetNext(t *testing.T) {
 	}
 
 	if !h.IsDirty() {
-		t.Errorf("The dirty flag incorectly set")
+		t.Errorf("The dirty flag incorrectly set")
 	}
 }
 
