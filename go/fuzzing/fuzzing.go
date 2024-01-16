@@ -1,6 +1,7 @@
 package fuzzing
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -265,6 +266,31 @@ func (r OpsFactoryRegistry[T, C]) ReadAllOps(raw []byte) []Operation[C] {
 	for len(raw) >= 1 {
 		_, op := r.ReadNextOp(&raw)
 		ops = append(ops, op)
+	}
+	return ops
+}
+
+// ReadAllUniqueOps parses all operations from the input stream.
+// It expects opcode of the operation at the first byte followed by payload at next bytes.
+// A next opcode follows after the payload, repeating this pattern throughout the array.
+// This method filters out identical consecutive operations. Thus,
+// consecutive operations that have the same opcode and the same payload
+// are removed.
+// It does not mean that the same operations
+// will not appear in the output list, but it assures they will not directly follow each other.
+// Note: this method expects that operations were registered under opcodes using consecutive integers starting from zero
+// (i.e. 0, 1, 2, ...). If this does not hold, the method will not parse the input correctly.
+func (r OpsFactoryRegistry[T, C]) ReadAllUniqueOps(raw []byte) []Operation[C] {
+	var ops []Operation[C]
+	var prev []byte
+	for len(raw) >= 1 {
+		_, op := r.ReadNextOp(&raw)
+		curr := op.Serialize() // serialisation will be quick as we store original bytes in the op
+		// append only when the previous op is different
+		if !slices.Equal(prev, curr) {
+			ops = append(ops, op)
+			prev = curr
+		}
 	}
 	return ops
 }

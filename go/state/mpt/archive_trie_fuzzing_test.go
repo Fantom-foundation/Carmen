@@ -42,18 +42,18 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 		switch value.changedFieldType {
 		case changeNonce:
 			nonce := nonceSerialiser.FromBytes(value.changePayload)
-			update.AppendNonceUpdate(value.GetAddress(), nonce)
+			update.AppendNonceUpdate(value.address.GetAddress(), nonce)
 			updateAccount = func(info *AccountInfo) {
 				info.Nonce = nonce
 			}
 		case changeBalance:
 			balance := balanceSerialiser.FromBytes(value.changePayload)
-			update.AppendBalanceUpdate(value.GetAddress(), balance)
+			update.AppendBalanceUpdate(value.address.GetAddress(), balance)
 			updateAccount = func(info *AccountInfo) {
 				info.Balance = balance
 			}
 		case changeCodeHash:
-			update.AppendCodeUpdate(value.GetAddress(), value.changePayload)
+			update.AppendCodeUpdate(value.address.GetAddress(), value.changePayload)
 			updateAccount = func(info *AccountInfo) {
 				info.CodeHash = common.GetKeccak256Hash(value.changePayload)
 			}
@@ -87,13 +87,9 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 
 		block := uint64(value.block % c.GetNextBlock()) // search only within existing blocks
 		shadow := c.shadow[block]
+		shadowAccount := shadow[value.address]
 
-		shadowAccount, exists := shadow[value.address]
-		if !exists {
-			return // the address was not inserted before calling this op, or it was deleted
-		}
-
-		fullAddress := value.GetAddress()
+		fullAddress := value.address.GetAddress()
 		nonce, err := c.archiveTrie.GetNonce(block, fullAddress)
 		if err != nil {
 			t.Errorf("cannot get nonce: %s", err)
@@ -126,7 +122,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 
 	var opDelete = func(_ accountOpType, value archiveAccountPayload, t fuzzing.TestingT, c *archiveTrieAccountFuzzingContext) {
 		update := common.Update{}
-		update.AppendDeleteAccount(value.GetAddress())
+		update.AppendDeleteAccount(value.address.GetAddress())
 		if err := c.archiveTrie.Add(uint64(c.GetNextBlock()), update, nil); err != nil {
 			t.Errorf("error to delete account: %v,  block: %d", value.address, c.GetNextBlock())
 		}
@@ -291,7 +287,44 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 		return &archiveTrieAccountFuzzingContext{archiveTrie, shadow}
 	}
 
-	fuzzing.Fuzz[archiveTrieAccountFuzzingContext](f, &archiveTrieAccountFuzzingCampaign[accountOpType, archiveTrieAccountFuzzingContext]{registry: registry, init: init, create: create})
+	cleanup := func(t fuzzing.TestingT, c *archiveTrieAccountFuzzingContext) {
+		// check the whole history at the end
+		for block := 0; block < len(c.shadow); block++ {
+			for addr, account := range c.shadow[block] {
+				fullAddr := addr.GetAddress()
+
+				code, err := c.archiveTrie.GetCode(uint64(block), fullAddr)
+				if err != nil {
+					t.Errorf("cannot get code: %s", err)
+				}
+				if code != nil {
+					codeHash := common.GetKeccak256Hash(code)
+					if codeHash != account.CodeHash {
+						t.Errorf("codeHashes do not match: got %v != want: %v", codeHash, account.CodeHash)
+					}
+				}
+
+				nonce, err := c.archiveTrie.GetNonce(uint64(block), fullAddr)
+				if err != nil {
+					t.Errorf("cannot get code: %s", err)
+				}
+				if nonce != account.Nonce {
+					t.Errorf("nonces do not match: got %v != want: %v", nonce, account.Nonce)
+				}
+
+				balance, err := c.archiveTrie.GetBalance(uint64(block), fullAddr)
+				if err != nil {
+					t.Errorf("cannot get code: %s", err)
+				}
+				if balance != account.Balance {
+					t.Errorf("balances do not match: got %v != want: %v", balance, account.Balance)
+				}
+
+			}
+		}
+	}
+
+	fuzzing.Fuzz[archiveTrieAccountFuzzingContext](f, &archiveTrieAccountFuzzingCampaign[accountOpType, archiveTrieAccountFuzzingContext]{registry: registry, init: init, create: create, cleanup: cleanup})
 }
 
 // accountChangedFieldType is a type used to represent the field that was changed in an account.
@@ -341,23 +374,11 @@ func (a *archiveAccountPayload) SerialiseBlockAddress() []byte {
 	return res
 }
 
-// GetAddress converts the tinyAddress to the output common.Address.
-// It assures all bytes of the output are filled with non-empty value,
-// while the output is deterministic for all inputs.
-// It does this by first getting the Keccak256 hash of the tinyAddress byte and then copying
-// the resulting hash into the addr variable of type common.Address.
-func (a *archiveAccountPayload) GetAddress() common.Address {
-	var addr common.Address
-	hash := common.GetKeccak256Hash([]byte{byte(a.address)})
-	copy(addr[:], hash[:])
-	return addr
-}
-
 // archiveTrieAccountFuzzingContext is a fuzzing context for account modifications in the archive trie.
 // It contains the current block number, which is equal to the current tip of the chain.
-// It maintains a shadow db, which is a slice indexed by the block number and items are maps of
+// It maintains a shadow db, which is a slice indexed by the block number and items are mappings of
 // account address pointing to AccountInfo.
-// Everytime a new block is created, the map from the tip of the chain (the slice) is copied, updated
+// Everytime a new block is created, the mapping from the tip of the chain (the slice) is copied, updated
 // and appended to the slice, extending the shadow blockchain.
 // Furthermore, it contains a pointer to the ArchiveTrie, which undergoes the fuzzing campaign.
 // The account address is limited to one byte only to limit the address space.
@@ -373,8 +394,8 @@ type archiveTrieAccountFuzzingContext struct {
 
 // AddUpdate adds or updates an account in the archiveTrieAccountFuzzingContext.
 // It takes an address and an updateAccount function as parameters.
-// The function first copies the current block to a new map as a base for a new block.
-// Then, it locates if an AccountInfo for the given address exists in this map.
+// The function first copies the current block to a new mapping as a base for a new block.
+// Then, it locates if an AccountInfo for the given address exists in this mapping.
 // It creates a new empty AccountInfo if the address does not exist.
 // The updateAccount callback is called on this AccountInfo to apply a requested update on the account.
 // After the updateAccount function completes, the map is updated with the modified AccountInfo.
@@ -390,18 +411,17 @@ func (c *archiveTrieAccountFuzzingContext) AddUpdate(address tinyAddress, update
 	var accountInfo AccountInfo
 	if info, exists := current[address]; exists {
 		accountInfo = info
-	} else {
-		accountInfo = AccountInfo{}
 	}
+
 	updateAccount(&accountInfo)
 	current[address] = accountInfo
 
-	// assign to the next block
+	// append as a next block
 	c.shadow = append(c.shadow, current)
 }
 
 // DeleteAccount deletes the account with the given address from a new block.
-// It first makes a copy of the current block and assigns it to a new map as a preparation for the next block.
+// It first makes a copy of the current block and assigns it to a new mapping as a preparation for the next block.
 // Then, it deletes the account with the given address from this map and appends
 // it to the shadow slice, creating a new block.
 func (c *archiveTrieAccountFuzzingContext) DeleteAccount(address tinyAddress) {
@@ -418,7 +438,7 @@ func (c *archiveTrieAccountFuzzingContext) DeleteAccount(address tinyAddress) {
 	c.shadow = append(c.shadow, current)
 }
 
-// GetNextBlock returns the number of next block in this shadow blockchain.
+// GetNextBlock returns the number of the next block in this shadow blockchain.
 func (c *archiveTrieAccountFuzzingContext) GetNextBlock() uint {
 	return uint(len(c.shadow))
 }
@@ -455,9 +475,9 @@ func fuzzArchiveTrieRandomAccountStorageOps(f *testing.F) {
 		update := common.Update{}
 		// slot update does not include account creation, i.e., create the account if it does not exist.
 		if !c.AccountExists(value.address) {
-			update.AppendCreateAccount(value.GetAddress())
+			update.AppendCreateAccount(value.address.GetAddress())
 		}
-		update.AppendSlotUpdate(value.GetAddress(), value.GetKey(), value.value)
+		update.AppendSlotUpdate(value.address.GetAddress(), value.key.GetKey(), value.value)
 
 		// Apply change to the archive trie
 		if err := c.archiveTrie.Add(uint64(c.GetNextBlock()), update, nil); err != nil {
@@ -487,28 +507,24 @@ func fuzzArchiveTrieRandomAccountStorageOps(f *testing.F) {
 
 		block := uint64(value.block % c.GetNextBlock()) // search only within existing blocks
 		shadow := c.shadow[block]
-
-		shadowAccount, exists := shadow[value.address]
-		if !exists {
+		shadowAccount := shadow[value.address]
+		if shadowAccount == nil {
 			return // the address was not inserted before calling this op, or it was deleted
 		}
-
-		// check only when the storage was actually inserted before, i.e., it exists in the shadow db.
-		if shadowValue, exists := shadowAccount[value.key]; exists {
-			val, err := c.archiveTrie.GetStorage(block, value.GetAddress(), value.GetKey())
-			if err != nil {
-				t.Errorf("cannot get slot value: addr: %v, key: %v, block: %v, err: %s", value.GetAddress(), value.GetKey(), block, err)
-			}
-			if shadowValue != val {
-				t.Errorf("values do not match: got: %v != want: %v", val, shadowValue)
-			}
+		shadowValue := shadowAccount[value.key]
+		val, err := c.archiveTrie.GetStorage(block, value.address.GetAddress(), value.key.GetKey())
+		if err != nil {
+			t.Errorf("cannot get slot value: addr: %v, key: %v, block: %v, err: %s", value.address.GetAddress(), value.key.GetKey(), block, err)
+		}
+		if shadowValue != val {
+			t.Errorf("values do not match: got: %v != want: %v", val, shadowValue)
 		}
 	}
 
 	var opDelete = func(_ archiveStorageOpType, value archiveAccountStoragePayload, t fuzzing.TestingT, c *archiveTrieAccountStorageFuzzingContext) {
 		var empty common.Value
 		update := common.Update{}
-		update.AppendSlotUpdate(value.GetAddress(), value.GetKey(), empty)
+		update.AppendSlotUpdate(value.address.GetAddress(), value.key.GetKey(), empty)
 		if err := c.archiveTrie.Add(uint64(c.GetNextBlock()), update, nil); err != nil {
 			t.Errorf("error to delete account storage: %v_%v -> %v,  block: %d", value.address, value.key, value.value, c.GetCurrentBlock())
 		}
@@ -517,7 +533,7 @@ func fuzzArchiveTrieRandomAccountStorageOps(f *testing.F) {
 
 	var opCreateAccount = func(_ archiveStorageOpType, value archiveAccountStoragePayload, t fuzzing.TestingT, c *archiveTrieAccountStorageFuzzingContext) {
 		update := common.Update{}
-		update.AppendCreateAccount(value.GetAddress())
+		update.AppendCreateAccount(value.address.GetAddress())
 		if err := c.archiveTrie.Add(uint64(c.GetNextBlock()), update, nil); err != nil {
 			t.Errorf("error to delete account: %v,  block: %d", value.address, c.GetCurrentBlock())
 		}
@@ -526,7 +542,7 @@ func fuzzArchiveTrieRandomAccountStorageOps(f *testing.F) {
 
 	var opDeleteAccount = func(_ archiveStorageOpType, value archiveAccountStoragePayload, t fuzzing.TestingT, c *archiveTrieAccountStorageFuzzingContext) {
 		update := common.Update{}
-		update.AppendDeleteAccount(value.GetAddress())
+		update.AppendDeleteAccount(value.address.GetAddress())
 		if err := c.archiveTrie.Add(uint64(c.GetNextBlock()), update, nil); err != nil {
 			t.Errorf("error to delete account: %v,  block: %d", value.address, c.GetCurrentBlock())
 		}
@@ -686,7 +702,25 @@ func fuzzArchiveTrieRandomAccountStorageOps(f *testing.F) {
 		return &archiveTrieAccountStorageFuzzingContext{archiveTrie, shadow}
 	}
 
-	fuzzing.Fuzz[archiveTrieAccountStorageFuzzingContext](f, &archiveTrieAccountFuzzingCampaign[archiveStorageOpType, archiveTrieAccountStorageFuzzingContext]{registry: registry, init: init, create: create})
+	cleanup := func(t fuzzing.TestingT, c *archiveTrieAccountStorageFuzzingContext) {
+		// check the whole history at the end
+		for block := 0; block < len(c.shadow); block++ {
+			for addr, storage := range c.shadow[block] {
+				fullAddr := addr.GetAddress()
+				for key, want := range storage {
+					got, err := c.archiveTrie.GetStorage(uint64(block), fullAddr, key.GetKey())
+					if err != nil {
+						t.Errorf("cannot read storage value: %s", err)
+					}
+					if got != want {
+						t.Errorf("values do not match: %d_%v_%v -> got: %v != want: %v", block, addr, key, got, want)
+					}
+				}
+			}
+		}
+	}
+
+	fuzzing.Fuzz[archiveTrieAccountStorageFuzzingContext](f, &archiveTrieAccountFuzzingCampaign[archiveStorageOpType, archiveTrieAccountStorageFuzzingContext]{registry: registry, init: init, create: create, cleanup: cleanup})
 }
 
 // archiveAccountStoragePayload represents the payload structure used for carrying account storage updates.
@@ -738,30 +772,6 @@ func (a *archiveAccountStoragePayload) SerialiseAddress() []byte {
 	return []byte{byte(a.address)}
 }
 
-// GetAddress converts the tinyAddress to the output common.Address.
-// It assures all bytes of the output are filled with non-empty value,
-// while the output is deterministic for all inputs.
-// It does this by first getting the Keccak256 hash of the tinyAddress byte and then copying
-// the resulting hash into the addr variable of type common.Address.
-func (a *archiveAccountStoragePayload) GetAddress() common.Address {
-	var addr common.Address
-	hash := common.GetKeccak256Hash([]byte{byte(a.address)})
-	copy(addr[:], hash[:])
-	return addr
-}
-
-// GetKey converts the tinyKey to the output common.Key.
-// It assures all bytes of the output are filled with non-empty value,
-// while the output is deterministic for all inputs.
-// It does this by first getting the Keccak256 hash of the tinyKey byte and then copying
-// the resulting hash into the key variable of type common.Key.
-func (a *archiveAccountStoragePayload) GetKey() common.Key {
-	var key common.Key
-	hash := common.GetKeccak256Hash([]byte{byte(a.key)})
-	copy(key[:], hash[:])
-	return key
-}
-
 // archiveStorageOpType is a type used to represent different operations applied
 // to an archive account storage.
 type archiveStorageOpType byte
@@ -783,9 +793,9 @@ const (
 // It contains currentBlock, which equals to the current tip of the blockchain.
 // Furthermore, it contains the ArchiveTrie that undergoes the fuzzing campaign.
 // A shadow db is maintained to mimic the changes applied to the ArchiveTrie.
-// It is a slice indexed according to the block number, and items are nested maps to compose
-// a mapping account address -> key address -> value.
-// Everytime a new block is created, the map from the tip of the chain (the slice) is copied, updated
+// It is a slice indexed according to the block number, and items compose
+// a mapping: account address -> key address -> value.
+// Everytime a new block is created, the mapping from the tip of the chain (the slice) is copied, updated
 // and appended to the slice, extending the shadow blockchain.
 // The account address is limited to one byte only to limit the address space.
 // The reason is to increase the chance that the get operation hits an existing account generated by the set operation,
@@ -819,7 +829,7 @@ func (c *archiveTrieAccountStorageFuzzingContext) IsEmpty() bool {
 
 // SetAccountStorage mimics an update of the account storage update.
 // It sets the value of a key in the account storage for a specific address.
-// It copies the current block accounts and storage, represented as a mp.
+// It copies the current block accounts and storage, represented as a matrix.
 // If the storage for the given address exists, the respective storage slot is updated.
 // If the storage does not exist, it is created and the value is assigned to the storage slot.
 // Finally, it appends the updated state to the blockchain.
@@ -833,13 +843,10 @@ func (c *archiveTrieAccountStorageFuzzingContext) SetAccountStorage(address tiny
 	}
 
 	// apply change to the new copy
-	if storage, exists := current[address]; exists {
-		storage[key] = value
-	} else {
-		storage = make(map[tinyKey]common.Value)
-		storage[key] = value
-		current[address] = storage
+	if _, exists := current[address]; !exists {
+		current[address] = make(map[tinyKey]common.Value)
 	}
+	current[address][key] = value
 
 	// assign to the next block
 	c.shadow = append(c.shadow, current)
@@ -883,24 +890,17 @@ func (c *archiveTrieAccountStorageFuzzingContext) DeleteAccountStorage(address t
 // The new copy of the block is then appended as a next block in the shadow db.
 func (c *archiveTrieAccountStorageFuzzingContext) CreateAccount(address tinyAddress) {
 	// copy the current block first while emptying the account if it exists
-	var emptied bool
 	current := make(map[tinyAddress]map[tinyKey]common.Value)
 	if len(c.shadow) > 0 {
 		for addr, storage := range c.shadow[c.GetCurrentBlock()] {
-			if addr == address {
-				current[addr] = make(map[tinyKey]common.Value)
-				emptied = true
-			} else {
+			if addr != address {
 				current[addr] = maps.Clone(storage)
 			}
 		}
 	}
 
 	// assign a new empty account
-	if !emptied {
-		storage := make(map[tinyKey]common.Value)
-		current[address] = storage
-	}
+	current[address] = make(map[tinyKey]common.Value)
 
 	// assign to the next block
 	c.shadow = append(c.shadow, current)
@@ -937,6 +937,7 @@ type archiveTrieAccountFuzzingCampaign[T ~byte, C any] struct {
 	archiveTrie *ArchiveTrie
 	init        func(fuzzing.OpsFactoryRegistry[T, C]) []fuzzing.OperationSequence[C]
 	create      func(*ArchiveTrie) *C
+	cleanup     func(fuzzing.TestingT, *C)
 }
 
 // Init initializes the archiveTrieAccountFuzzingCampaign.
@@ -962,12 +963,18 @@ func (c *archiveTrieAccountFuzzingCampaign[T, C]) CreateContext(t fuzzing.Testin
 // Deserialize deserializes the given rawData into a slice of fuzzing.Operation[C].
 // It uses the c.registry to read all the operations from the rawData.
 func (c *archiveTrieAccountFuzzingCampaign[T, C]) Deserialize(rawData []byte) []fuzzing.Operation[C] {
-	return c.registry.ReadAllOps(rawData)
+	const sizeCap = 10_000
+	ops := c.registry.ReadAllUniqueOps(rawData)
+	if len(ops) > sizeCap {
+		ops = ops[:sizeCap]
+	}
+	return ops
 }
 
 // Cleanup handles the clean-up operations for the archiveTrieAccountFuzzingCampaign.
 // It checks the correctness of the trie and closes the file.
-func (c *archiveTrieAccountFuzzingCampaign[T, C]) Cleanup(t fuzzing.TestingT, _ *C) {
+func (c *archiveTrieAccountFuzzingCampaign[T, C]) Cleanup(t fuzzing.TestingT, context *C) {
+	c.cleanup(t, context)
 	if err := c.archiveTrie.Check(); err != nil {
 		t.Errorf("trie verification fails: \n%s", err)
 	}

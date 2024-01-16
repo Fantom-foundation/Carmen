@@ -136,7 +136,11 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	var err error
 	var hash common.Hash
 	if precomputedHashes == nil {
-		hash, _, err = a.head.trie.UpdateHashes()
+		var hashes *NodeHashes
+		hash, hashes, err = a.head.trie.UpdateHashes()
+		if err == nil {
+			hashes.Release()
+		}
 	} else {
 		err = a.head.trie.setHashes(precomputedHashes)
 		if err == nil {
