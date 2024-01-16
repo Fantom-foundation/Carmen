@@ -12,8 +12,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-// TODO: make thread safe.
-
 // ArchiveTrie retains a per-block history of the state trie. Each state is
 // a trie in a Forest of which the root node is retained. Updates can only
 // be applied through the `Add` method, according to the `archive.Archive“
@@ -30,7 +28,7 @@ type ArchiveTrie struct {
 }
 
 func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*ArchiveTrie, error) {
-	lock, err := LockDirectory(directory)
+	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -279,10 +277,7 @@ func (a *ArchiveTrie) Flush() error {
 }
 
 func (a *ArchiveTrie) Close() error {
-	return errors.Join(
-		a.Flush(),
-		a.head.Close(),
-	)
+	return a.head.closeWithError(a.Flush())
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {

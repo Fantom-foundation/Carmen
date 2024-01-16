@@ -3,6 +3,7 @@ package mpt
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -55,6 +56,74 @@ func TestState_CanBeReOpened(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestState_DirtyStateCanNotBeOpened(t *testing.T) {
+	for name, open := range stateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			if err := markDirty(dir); err != nil {
+				t.Fatalf("failed to mark directory as dirty: %v", err)
+			}
+
+			_, err := open(dir)
+			if err == nil {
+				t.Fatalf("dirty state should fail to be opened")
+			}
+
+			if !strings.Contains(err.Error(), "likely corrupted") {
+				t.Errorf("unexpected error message: %s", err.Error())
+			}
+		})
+	}
+}
+
+func TestState_RegularCloseResultsInCleanState(t *testing.T) {
+	dir := t.TempDir()
+	if dirty, err := isDirty(dir); dirty || err != nil {
+		t.Fatalf("directory initially in invalid state: %t, %v", dirty, err)
+	}
+	state, err := OpenGoFileState(dir, S5LiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to open test state: %v", err)
+	}
+
+	if dirty, err := isDirty(dir); !dirty || err != nil {
+		t.Fatalf("opened directory in invalid state: %t, %v", dirty, err)
+	}
+
+	if err := state.Close(); err != nil {
+		t.Errorf("failed to close the state: %v", err)
+	}
+
+	if dirty, err := isDirty(dir); dirty || err != nil {
+		t.Fatalf("closed directory in invalid state: %t, %v", dirty, err)
+	}
+}
+
+func TestState_ErrorsLeadToDirtyState(t *testing.T) {
+	dir := t.TempDir()
+	if dirty, err := isDirty(dir); dirty || err != nil {
+		t.Fatalf("directory initially in invalid state: %t, %v", dirty, err)
+	}
+	state, err := OpenGoFileState(dir, S5LiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to open test state: %v", err)
+	}
+
+	if dirty, err := isDirty(dir); !dirty || err != nil {
+		t.Fatalf("opened directory in invalid state: %t, %v", dirty, err)
+	}
+
+	injectedError := fmt.Errorf("injected-error")
+	if err := state.closeWithError(injectedError); !errors.Is(err, injectedError) {
+		t.Errorf("failed to close the state: %v", err)
+	}
+
+	if dirty, err := isDirty(dir); !dirty || err != nil {
+		t.Fatalf("closed directory in invalid state: %t, %v", dirty, err)
 	}
 }
 
