@@ -30,6 +30,10 @@ type ArchiveTrie struct {
 }
 
 func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*ArchiveTrie, error) {
+	lock, err := LockDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
 	rootfile := directory + "/roots.dat"
 	roots, err := loadRoots(rootfile)
 	if err != nil {
@@ -45,7 +49,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 		forest.Close()
 		return nil, err
 	}
-	state, err := newMptState(directory, head)
+	state, err := newMptState(directory, lock, head)
 	if err != nil {
 		head.Close()
 		return nil, err

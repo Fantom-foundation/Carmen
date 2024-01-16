@@ -36,6 +36,33 @@ func TestArchiveTrie_OpenAndClose(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_CanOnlyBeOpenedOnce(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to open test archive: %v", err)
+	}
+	if _, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		t.Fatalf("archive should not be accessible by more than one instance")
+	}
+	if err := archive.Close(); err != nil {
+		t.Errorf("failed to close the archive: %v", err)
+	}
+}
+
+func TestArchiveTrie_CanBeReOpened(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 5; i++ {
+		archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+		if err != nil {
+			t.Fatalf("failed to open test archive: %v", err)
+		}
+		if err := archive.Close(); err != nil {
+			t.Errorf("failed to close the archive: %v", err)
+		}
+	}
+}
+
 func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {

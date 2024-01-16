@@ -46,7 +46,7 @@ func VisitForestNodes(directory string, config MptConfig, visitor NodeVisitor) e
 	if err != nil {
 		return err
 	}
-	defer source.close()
+	defer source.Close()
 	return source.forAllNodes(func(id NodeId, node Node) error {
 		visitor.Visit(node, NodeInfo{Id: id})
 		return nil
