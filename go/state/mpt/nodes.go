@@ -368,8 +368,31 @@ func (c *nodeCheckContext) isCompatible(other *nodeCheckContext) bool {
 
 // nodeBase is an optional common base type for nodes.
 type nodeBase struct {
-	clean bool // by default nodes are dirty (clean == false)
-	// TODO: move frozen state and hash handling to nodeBase
+	hash      common.Hash // the hash of this node (may be dirty)
+	hashDirty bool        // indicating whether this node's hash is dirty
+	clean     bool        // by default nodes are dirty (clean == false)
+	frozen    bool        // a flag marking the node as immutable (default: mutable)
+}
+
+func (n *nodeBase) GetHash() (common.Hash, bool) {
+	return n.hash, n.hashDirty
+}
+
+func (n *nodeBase) SetHash(hash common.Hash) {
+	n.hash = hash
+	n.hashDirty = false
+}
+
+func (n *nodeBase) IsFrozen() bool {
+	return n.frozen
+}
+
+func (n *nodeBase) MarkFrozen() {
+	n.frozen = true
+}
+
+func (n *nodeBase) markMutable() {
+	n.frozen = false
 }
 
 func (n *nodeBase) IsDirty() bool {
@@ -515,10 +538,7 @@ type BranchNode struct {
 	hashes           [16]common.Hash   // the hashes of child nodes
 	dirtyHashes      uint16            // a bit mask marking hashes as dirty; 0 .. clean, 1 .. dirty
 	embeddedChildren uint16            // a bit mask marking children as embedded; 0 .. not, 1 .. embedded
-	frozen           bool              // a flag marking the node as immutable
 	frozenChildren   uint16            // a bit mask marking frozen children; not persisted
-	hash             common.Hash       // the hash of this node (may be dirty)
-	hashDirty        bool              // indicating whether this node's hash is dirty
 }
 
 func (n *BranchNode) getNextNodeInBranch(
@@ -590,7 +610,7 @@ func (n *BranchNode) setNextNode(
 
 	// If frozen, clone the current node and modify copy.
 	isClone := false
-	if n.frozen {
+	if n.IsFrozen() {
 		newRef, handle, err := manager.createBranch()
 		if err != nil {
 			return NodeReference{}, false, err
@@ -599,7 +619,7 @@ func (n *BranchNode) setNextNode(
 		newNode := handle.Get().(*BranchNode)
 		*newNode = *n
 		newNode.markDirty()
-		newNode.frozen = false
+		newNode.markMutable()
 		n = newNode
 		thisRef = &newRef
 		isClone = true
@@ -640,7 +660,7 @@ func (n *BranchNode) setNextNode(
 				extensionNode := extension.Get().(*ExtensionNode)
 
 				// If the extension is frozen, we need to modify a copy.
-				if extensionNode.frozen {
+				if extensionNode.IsFrozen() {
 					copyId, handle, err := manager.createExtension()
 					if err != nil {
 						return NodeReference{}, false, err
@@ -648,7 +668,7 @@ func (n *BranchNode) setNextNode(
 					defer handle.Release()
 					copy := handle.Get().(*ExtensionNode)
 					*copy = *extensionNode
-					copy.frozen = false
+					copy.markMutable()
 					extensionNode = copy
 					remaining = copyId
 					newRoot = copyId
@@ -742,7 +762,7 @@ func (n *BranchNode) ClearStorage(manager NodeManager, thisRef *NodeReference, t
 }
 
 func (n *BranchNode) Release(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
 	n.nodeBase.Release()
@@ -762,29 +782,16 @@ func (n *BranchNode) Release(manager NodeManager, thisRef *NodeReference, this s
 	return manager.release(thisRef.Id())
 }
 
-func (n *BranchNode) GetHash() (common.Hash, bool) {
-	return n.hash, n.hashDirty
-}
-
-func (n *BranchNode) SetHash(hash common.Hash) {
-	n.hash = hash
-	n.hashDirty = false
-}
-
-func (n *BranchNode) IsFrozen() bool {
-	return n.frozen
-}
-
 func (n *BranchNode) MarkFrozen() {
-	n.frozen = true
+	n.nodeBase.MarkFrozen()
 	n.frozenChildren = ^uint16(0)
 }
 
 func (n *BranchNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
-	n.frozen = true
+	n.nodeBase.MarkFrozen()
 	for i := 0; i < len(n.children); i++ {
 		if n.children[i].Id().IsEmpty() || n.isChildFrozen(byte(i)) {
 			continue
@@ -846,7 +853,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 		}
 
 		// rule: if this node is frozen, all children must be frozen
-		if n.frozen && !childIsFrozen {
+		if n.IsFrozen() && !childIsFrozen {
 			errs = append(errs, fmt.Errorf("the frozen node %v must not have a non-frozen child at position 0x%X", thisRef.Id(), i))
 		}
 	}
@@ -858,7 +865,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 
 func (n *BranchNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sBranch (ID: %v, dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisRef.Id(), n.IsDirty(), n.frozen, n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
+	fmt.Fprintf(out, "%sBranch (ID: %v, dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
 	for i, child := range n.children {
 		if child.Id().IsEmpty() {
 			continue
@@ -955,9 +962,6 @@ type ExtensionNode struct {
 	nextHash       common.Hash
 	nextHashDirty  bool
 	nextIsEmbedded bool
-	frozen         bool
-	hash           common.Hash // the hash of this node (may be dirty)
-	hashDirty      bool        // indicating whether this node's hash is dirty
 }
 
 func (n *ExtensionNode) getNextNodeInExtension(
@@ -1030,7 +1034,7 @@ func (n *ExtensionNode) setNextNode(
 
 			// If frozen, modify a clone.
 			isClone := false
-			if n.frozen {
+			if n.IsFrozen() {
 				newRef, handle, err := manager.createExtension()
 				if err != nil {
 					return NodeReference{}, false, err
@@ -1039,7 +1043,7 @@ func (n *ExtensionNode) setNextNode(
 				newNode := handle.Get().(*ExtensionNode)
 				*newNode = *n
 				newNode.markDirty()
-				newNode.frozen = false
+				newNode.markMutable()
 				thisRef, this, n = &newRef, handle, newNode
 				isClone = true
 			}
@@ -1117,7 +1121,7 @@ func (n *ExtensionNode) setNextNode(
 
 	// If frozen, modify a clone.
 	isClone := false
-	if n.frozen {
+	if n.IsFrozen() {
 		newRef, handle, err := manager.createExtension()
 		if err != nil {
 			return NodeReference{}, false, err
@@ -1126,7 +1130,7 @@ func (n *ExtensionNode) setNextNode(
 		newNode := handle.Get().(*ExtensionNode)
 		*newNode = *n
 		newNode.markDirty()
-		newNode.frozen = false
+		newNode.markMutable()
 		thisRef, this, n = &newRef, handle, newNode
 		isClone = true
 	}
@@ -1243,7 +1247,7 @@ func (n *ExtensionNode) ClearStorage(manager NodeManager, thisRef *NodeReference
 }
 
 func (n *ExtensionNode) Release(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
 	n.nodeBase.Release()
@@ -1259,28 +1263,11 @@ func (n *ExtensionNode) Release(manager NodeManager, thisRef *NodeReference, thi
 	return manager.release(thisRef.Id())
 }
 
-func (n *ExtensionNode) GetHash() (common.Hash, bool) {
-	return n.hash, n.hashDirty
-}
-
-func (n *ExtensionNode) SetHash(hash common.Hash) {
-	n.hash = hash
-	n.hashDirty = false
-}
-
-func (n *ExtensionNode) IsFrozen() bool {
-	return n.frozen
-}
-
-func (n *ExtensionNode) MarkFrozen() {
-	n.frozen = true
-}
-
 func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
-	n.frozen = true
+	n.MarkFrozen()
 	handle, err := manager.getWriteAccess(&n.next)
 	if err != nil {
 		return err
@@ -1326,7 +1313,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 		} else {
 			nextIsFrozen := handle.Get().IsFrozen()
 			handle.Release()
-			if n.frozen && !nextIsFrozen {
+			if n.IsFrozen() && !nextIsFrozen {
 				errs = append(errs, fmt.Errorf("the frozen node %v must have a frozen next", thisRef.Id()))
 			}
 		}
@@ -1337,7 +1324,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 
 func (n *ExtensionNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisRef.Id(), n.frozen, n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
+	fmt.Fprintf(out, "%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisRef.Id(), n.IsFrozen(), n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
 	if handle, err := source.getViewAccess(&n.next); err == nil {
 		defer handle.Release()
 		if err := handle.Get().Dump(out, source, &n.next, indent+"  "); err != nil {
@@ -1383,13 +1370,10 @@ type AccountNode struct {
 	storage          NodeReference
 	storageHash      common.Hash
 	storageHashDirty bool
-	frozen           bool
 	// pathLength is the number of nibbles of the key (or its hash) not covered
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
-	hash       common.Hash // the hash of this node (may be dirty)
-	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
 func (n *AccountNode) Address() common.Address {
@@ -1432,7 +1416,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 		}
 		if info.IsEmpty() {
 			// TODO: test this
-			if n.frozen {
+			if n.IsFrozen() {
 				return NewNodeReference(EmptyId()), false, nil
 			}
 			// Recursively release the entire state DB.
@@ -1446,7 +1430,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 
 		// If this node is frozen, we need to write the result in
 		// a new account node.
-		if n.frozen {
+		if n.IsFrozen() {
 			newRef, handle, err := manager.createAccount()
 			if err != nil {
 				return NodeReference{}, false, err
@@ -1455,7 +1439,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			newNode := handle.Get().(*AccountNode)
 			*newNode = *n
 			newNode.markDirty()
-			newNode.frozen = false
+			newNode.markMutable()
 			newNode.info = info
 			newNode.hashDirty = true
 			return newRef, false, nil
@@ -1485,7 +1469,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 
 	thisPath := AddressToNibblePath(n.address, manager)
 	newRoot, err := splitLeafNode(manager, thisRef, thisPath[:], n, this, path, &siblingRef, sibling, handle)
-	return newRoot, !n.frozen && manager.getConfig().TrackSuffixLengthsInLeafNodes, err
+	return newRoot, !n.IsFrozen() && manager.getConfig().TrackSuffixLengthsInLeafNodes, err
 }
 
 type leafNode interface {
@@ -1603,7 +1587,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 	if root != n.storage {
 		// If this node is frozen, we need to write the result in
 		// a new account node.
-		if n.frozen {
+		if n.IsFrozen() {
 			newRef, newHandle, err := manager.createAccount()
 			if err != nil {
 				return NodeReference{}, false, err
@@ -1612,7 +1596,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 			newNode := newHandle.Get().(*AccountNode)
 			*newNode = *n
 			newNode.markDirty()
-			newNode.frozen = false
+			newNode.markMutable()
 			newNode.storage = root
 			newNode.storageHashDirty = true
 			newNode.hashDirty = true
@@ -1638,7 +1622,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 
 	// If this node is frozen, we need to write the result in
 	// a new account node.
-	if n.frozen {
+	if n.IsFrozen() {
 		newRef, newHandle, err := manager.createAccount()
 		if err != nil {
 			return *thisRef, false, err
@@ -1647,7 +1631,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 		newNode := newHandle.Get().(*AccountNode)
 		*newNode = *n
 		newNode.markDirty()
-		newNode.frozen = false
+		newNode.markMutable()
 		newNode.storage = NewNodeReference(EmptyId())
 		newNode.storageHashDirty = true
 		newNode.hashDirty = true
@@ -1666,7 +1650,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 }
 
 func (n *AccountNode) Release(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
 	n.nodeBase.Release()
@@ -1684,20 +1668,11 @@ func (n *AccountNode) Release(manager NodeManager, thisRef *NodeReference, this 
 	return manager.release(thisRef.Id())
 }
 
-func (n *AccountNode) GetHash() (common.Hash, bool) {
-	return n.hash, n.hashDirty
-}
-
-func (n *AccountNode) SetHash(hash common.Hash) {
-	n.hash = hash
-	n.hashDirty = false
-}
-
 func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
 	if n.pathLength == length {
 		return *thisRef, false, nil
 	}
-	if n.frozen {
+	if n.IsFrozen() {
 		newRef, newHandle, err := manager.createAccount()
 		if err != nil {
 			return NodeReference{}, false, err
@@ -1706,7 +1681,7 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference,
 		newNode := newHandle.Get().(*AccountNode)
 		*newNode = *n
 		newNode.markDirty()
-		newNode.frozen = false
+		newNode.markMutable()
 		newNode.pathLength = length
 		newNode.hashDirty = true
 		return newRef, false, nil
@@ -1718,19 +1693,11 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference,
 	return *thisRef, true, nil
 }
 
-func (n *AccountNode) IsFrozen() bool {
-	return n.frozen
-}
-
-func (n *AccountNode) MarkFrozen() {
-	n.frozen = true
-}
-
 func (n *AccountNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
-	n.frozen = true
+	n.MarkFrozen()
 	handle, err := manager.getWriteAccess(&n.storage)
 	if err != nil {
 		return err
@@ -1780,7 +1747,7 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 		} else {
 			storageIsFrozen := handle.Get().IsFrozen()
 			handle.Release()
-			if n.frozen && !storageIsFrozen {
+			if n.IsFrozen() && !storageIsFrozen {
 				errs = append(errs, fmt.Errorf("the frozen node %v must not have a non-frozen storage", thisRef.Id()))
 			}
 		}
@@ -1791,7 +1758,7 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 
 func (n *AccountNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sAccount (ID: %v, dirty: %t, frozen: %t, path length: %v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.IsDirty(), n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
+	fmt.Fprintf(out, "%sAccount (ID: %v, dirty: %t, frozen: %t, path length: %v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
 	if n.storage.Id().IsEmpty() {
 		return nil
 	}
@@ -1835,15 +1802,12 @@ func (n *AccountNode) Visit(source NodeSource, thisRef *NodeReference, depth int
 // exactly one AccountNode.
 type ValueNode struct {
 	nodeBase
-	key    common.Key
-	value  common.Value
-	frozen bool
+	key   common.Key
+	value common.Value
 	// pathLength is the number of nibbles of the key (or its hash) not covered
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
-	hash       common.Hash // the hash of this node (may be dirty)
-	hashDirty  bool        // indicating whether this node's hash is dirty
 }
 
 func (n *ValueNode) Key() common.Key {
@@ -1880,15 +1844,15 @@ func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this s
 			return *thisRef, false, nil
 		}
 		if value == (common.Value{}) {
-			if !n.frozen {
+			if !n.IsFrozen() {
 				n.nodeBase.Release()
 				if err := manager.release(thisRef.Id()); err != nil {
 					return NodeReference{}, false, err
 				}
 			}
-			return NewNodeReference(EmptyId()), !n.frozen, nil
+			return NewNodeReference(EmptyId()), !n.IsFrozen(), nil
 		}
-		if n.frozen {
+		if n.IsFrozen() {
 			newRef, newHandle, err := manager.createValue()
 			if err != nil {
 				return NodeReference{}, false, nil
@@ -1937,27 +1901,18 @@ func (n *ValueNode) ClearStorage(NodeManager, *NodeReference, shared.WriteHandle
 }
 
 func (n *ValueNode) Release(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node]) error {
-	if n.frozen {
+	if n.IsFrozen() {
 		return nil
 	}
 	n.nodeBase.Release()
 	return manager.release(thisRef.Id())
 }
 
-func (n *ValueNode) GetHash() (common.Hash, bool) {
-	return n.hash, n.hashDirty
-}
-
-func (n *ValueNode) SetHash(hash common.Hash) {
-	n.hash = hash
-	n.hashDirty = false
-}
-
 func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
 	if n.pathLength == length {
 		return *thisRef, false, nil
 	}
-	if n.frozen {
+	if n.IsFrozen() {
 		newRef, newHandle, err := manager.createValue()
 		if err != nil {
 			return NodeReference{}, false, err
@@ -1977,16 +1932,8 @@ func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, t
 	return *thisRef, true, nil
 }
 
-func (n *ValueNode) IsFrozen() bool {
-	return n.frozen
-}
-
-func (n *ValueNode) MarkFrozen() {
-	n.frozen = true
-}
-
 func (n *ValueNode) Freeze(NodeManager, shared.WriteHandle[Node]) error {
-	n.frozen = true
+	n.MarkFrozen()
 	return nil
 }
 
@@ -2020,7 +1967,7 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 }
 
 func (n *ValueNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
-	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.frozen, n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.key, n.value)
+	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.key, n.value)
 	return nil
 }
 
