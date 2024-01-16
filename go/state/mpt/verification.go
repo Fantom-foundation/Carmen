@@ -564,7 +564,8 @@ type verificationNodeSource struct {
 	config MptConfig
 
 	// The lock guaranteeing exclusive access to the data directory.
-	lock common.LockFile
+	lock      common.LockFile
+	directory string
 
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
@@ -584,7 +585,7 @@ type verificationNodeSource struct {
 }
 
 func openVerificationNodeSource(directory string, config MptConfig) (*verificationNodeSource, error) {
-	lock, err := LockDirectory(directory)
+	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -647,6 +648,7 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	return &verificationNodeSource{
 		config:       config,
 		lock:         lock,
+		directory:    directory,
 		accounts:     accounts,
 		branches:     branches,
 		extensions:   extensions,
@@ -717,11 +719,17 @@ func (s *verificationNodeSource) hashAddress(address common.Address) common.Hash
 }
 
 func (s *verificationNodeSource) Close() error {
-	return errors.Join(
+	err := errors.Join(
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
 		s.values.Close(),
+	)
+	if err == nil {
+		err = markClean(s.directory)
+	}
+	return errors.Join(
+		err,
 		s.lock.Release(),
 	)
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ import (
 // The main role of the MptState is to provide an adapter between a LiveTrie and
 // Carmen's State interface. Also, it retains an index of contract codes.
 type MptState struct {
+	directory string
 	lock      common.LockFile
 	trie      *LiveTrie
 	code      map[common.Hash][]byte
@@ -47,17 +49,39 @@ func newMptState(directory string, lock common.LockFile, trie *LiveTrie) (*MptSt
 		return nil, err
 	}
 	return &MptState{
-		lock:     lock,
-		trie:     trie,
-		code:     codes,
-		codefile: codefile,
+		directory: directory,
+		lock:      lock,
+		trie:      trie,
+		code:      codes,
+		codefile:  codefile,
 	}, nil
+}
+
+func openStateDirectory(directory string) (common.LockFile, error) {
+	lock, err := LockDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+	dirty, err := isDirty(directory)
+	if err != nil {
+		return nil, errors.Join(err, lock.Release())
+	}
+	if dirty {
+		return nil, errors.Join(
+			fmt.Errorf("unable to open %s, content is dirty, likely corrupted", directory),
+			lock.Release(),
+		)
+	}
+	if err := markDirty(directory); err != nil {
+		return nil, errors.Join(err, lock.Release())
+	}
+	return lock, nil
 }
 
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirely retained in memory.
 func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
-	lock, err := LockDirectory(directory)
+	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +93,7 @@ func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*
 }
 
 func OpenGoFileState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
-	lock, err := LockDirectory(directory)
+	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
@@ -258,11 +282,24 @@ func (s *MptState) Flush() error {
 	)
 }
 
-func (s *MptState) Close() (lastErr error) {
-	return errors.Join(
+func (s *MptState) Close() error {
+	return s.closeWithError(nil)
+}
+
+func (s *MptState) closeWithError(externalError error) error {
+	// Only if the state can be successfully closed the directory is to
+	// be marked as clean. Otherwise, the dirty flag needs to be retained.
+	err := errors.Join(
+		externalError,
 		s.Flush(),
 		s.trie.Close(),
-		s.lock.Release(), // TODO: if flushing or closing fails, mark the directory as corrupted
+	)
+	if err == nil {
+		err = markClean(s.directory)
+	}
+	return errors.Join(
+		err,
+		s.lock.Release(),
 	)
 }
 
