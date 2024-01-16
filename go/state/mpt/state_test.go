@@ -4,11 +4,59 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
+
+var stateFactories = map[string]func(string) (io.Closer, error){
+	"memory":  func(dir string) (io.Closer, error) { return OpenGoMemoryState(dir, S5LiveConfig, 1024) },
+	"file":    func(dir string) (io.Closer, error) { return OpenGoFileState(dir, S5LiveConfig, 1024) },
+	"archive": func(dir string) (io.Closer, error) { return OpenArchiveTrie(dir, S5ArchiveConfig, 1024) },
+	"verify":  func(dir string) (io.Closer, error) { return openVerificationNodeSource(dir, S5LiveConfig) },
+}
+
+func TestState_CanOnlyBeOpenedOnce(t *testing.T) {
+	for nameA, openA := range stateFactories {
+		for nameB, openB := range stateFactories {
+			t.Run(nameA+"_"+nameB, func(t *testing.T) {
+				dir := t.TempDir()
+				state, err := openA(dir)
+				if err != nil {
+					t.Fatalf("failed to open test state: %v", err)
+				}
+				if _, err := openB(dir); err == nil {
+					t.Fatalf("state should not be accessible by more than one instance")
+				} else if !strings.Contains(err.Error(), "failed to acquire file lock") {
+					t.Errorf("missing hint of locking issue in error: %v", err)
+				}
+				if err := state.Close(); err != nil {
+					t.Errorf("failed to close the state: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestState_CanBeReOpened(t *testing.T) {
+	for name, open := range stateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			for i := 0; i < 5; i++ {
+				state, err := open(dir)
+				if err != nil {
+					t.Fatalf("failed to open test state: %v", err)
+				}
+				if err := state.Close(); err != nil {
+					t.Errorf("failed to close the state: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func BenchmarkStorageChanges(b *testing.B) {
 	for _, config := range allMptConfigs {

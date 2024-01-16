@@ -22,6 +22,7 @@ import (
 // The main role of the MptState is to provide an adapter between a LiveTrie and
 // Carmen's State interface. Also, it retains an index of contract codes.
 type MptState struct {
+	lock      common.LockFile
 	trie      *LiveTrie
 	code      map[common.Hash][]byte
 	codeMutex sync.Mutex
@@ -39,13 +40,14 @@ const MinMptStateCapacity = 2_000
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
-func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
+func newMptState(directory string, lock common.LockFile, trie *LiveTrie) (*MptState, error) {
 	codefile := directory + "/codes.dat"
 	codes, err := readCodes(codefile)
 	if err != nil {
 		return nil, err
 	}
 	return &MptState{
+		lock:     lock,
 		trie:     trie,
 		code:     codes,
 		codefile: codefile,
@@ -55,25 +57,27 @@ func newMptState(directory string, trie *LiveTrie) (*MptState, error) {
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirely retained in memory.
 func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	lock, err := LockDirectory(directory)
+	if err != nil {
 		return nil, err
 	}
 	trie, err := OpenInMemoryLiveTrie(directory, config, cacheCapacity)
 	if err != nil {
 		return nil, err
 	}
-	return newMptState(directory, trie)
+	return newMptState(directory, lock, trie)
 }
 
 func OpenGoFileState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	lock, err := LockDirectory(directory)
+	if err != nil {
 		return nil, err
 	}
 	trie, err := OpenFileLiveTrie(directory, config, cacheCapacity)
 	if err != nil {
 		return nil, err
 	}
-	return newMptState(directory, trie)
+	return newMptState(directory, lock, trie)
 }
 
 func (s *MptState) CreateAccount(address common.Address) (err error) {
@@ -258,6 +262,7 @@ func (s *MptState) Close() (lastErr error) {
 	return errors.Join(
 		s.Flush(),
 		s.trie.Close(),
+		s.lock.Release(), // TODO: if flushing or closing fails, mark the directory as corrupted
 	)
 }
 

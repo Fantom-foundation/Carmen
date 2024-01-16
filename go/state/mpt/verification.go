@@ -5,12 +5,13 @@ package mpt
 import (
 	"errors"
 	"fmt"
+	"sort"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"github.com/pbnjay/memory"
-	"sort"
 )
 
 // VerificationObserver is a listener interface for tracking the progress of the verification
@@ -73,7 +74,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	if err != nil {
 		return err
 	}
-	defer source.close()
+	defer source.Close()
 
 	// ----------------- First Pass: check Node References --------------------
 
@@ -562,6 +563,9 @@ func verifyHashesStoredWithParents[N any](
 type verificationNodeSource struct {
 	config MptConfig
 
+	// The lock guaranteeing exclusive access to the data directory.
+	lock common.LockFile
+
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
 	extensions stock.Stock[uint64, ExtensionNode]
@@ -580,6 +584,11 @@ type verificationNodeSource struct {
 }
 
 func openVerificationNodeSource(directory string, config MptConfig) (*verificationNodeSource, error) {
+	lock, err := LockDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+
 	success := false
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(config)
 	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
@@ -637,6 +646,7 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	success = true
 	return &verificationNodeSource{
 		config:       config,
+		lock:         lock,
 		accounts:     accounts,
 		branches:     branches,
 		extensions:   extensions,
@@ -706,12 +716,13 @@ func (s *verificationNodeSource) hashAddress(address common.Address) common.Hash
 	return common.Keccak256(address[:])
 }
 
-func (s *verificationNodeSource) close() error {
+func (s *verificationNodeSource) Close() error {
 	return errors.Join(
 		s.accounts.Close(),
 		s.branches.Close(),
 		s.extensions.Close(),
 		s.values.Close(),
+		s.lock.Release(),
 	)
 }
 
