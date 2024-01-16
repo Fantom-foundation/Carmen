@@ -3,12 +3,13 @@ package common_test
 import (
 	"encoding/binary"
 	"fmt"
+	"math/rand"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"math/rand"
-	"testing"
 )
 
 var inputSizes = []int{1, 10, 20, 1300, 12345}
@@ -54,10 +55,6 @@ func TestMapsFetchDataFromInitMap(t *testing.T) {
 			})
 		}
 	}
-}
-
-func remove[V any](s []V, i int) []V {
-	return append(s[:i], s[i+1:]...)
 }
 
 func TestMapsRemoveItemsFromInitMap(t *testing.T) {
@@ -129,8 +126,7 @@ func TestMapsClearInitMap(t *testing.T) {
 
 // initTestData generates test data and prefills the map
 func initTestData(t *testing.T, initMap common.Map[common.Address, uint32], max int) map[common.Address]uint32 {
-	rand.Seed(123456)
-	//rand.Seed(time.Now().UnixNano())
+	rand := rand.New(rand.NewSource(123456))
 	n := rand.Intn(max)
 
 	keySerializer := common.AddressSerializer{}

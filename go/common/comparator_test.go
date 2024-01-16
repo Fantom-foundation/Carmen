@@ -3,11 +3,12 @@ package common
 import "testing"
 
 var (
-	addressA = &Address{byte(0xA)}
-	addressB = &Address{byte(0xB)}
+	addressA = Address{0xA}
+	addressB = Address{0xB}
+	addressC = Address{0xC}
 
-	keyA = &Key{byte(0xA)}
-	keyB = &Key{byte(0xB)}
+	keyA = &Key{0xA}
+	keyB = &Key{0xB}
 
 	slotA = &SlotIdx[uint32]{uint32(10), uint32(20)}
 	slotB = &SlotIdx[uint32]{uint32(30), uint32(40)}
@@ -16,13 +17,13 @@ var (
 
 func TestAddressComparator(t *testing.T) {
 
-	if addressA.Compare(addressA) != 0 {
+	if addressA.Compare(&addressA) != 0 {
 		t.Errorf("Wrong comparator error")
 	}
-	if addressA.Compare(addressB) > 0 {
+	if addressA.Compare(&addressB) > 0 {
 		t.Errorf("Wrong comparator error")
 	}
-	if addressB.Compare(addressA) < 0 {
+	if addressB.Compare(&addressA) < 0 {
 		t.Errorf("Wrong comparator error")
 	}
 }

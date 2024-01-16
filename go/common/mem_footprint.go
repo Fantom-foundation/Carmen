@@ -99,8 +99,6 @@ func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) {
 		sb.WriteString(mf.note)
 	}
 	sb.WriteRune('\n')
-
-	return
 }
 
 func memoryAmountToString(sb *strings.Builder, bytes uintptr) {

@@ -81,10 +81,10 @@ type Variant string
 
 const (
 	GoMemory         Variant = "go-memory"
-	GoFile                   = "go-file"
-	GoFileNoCache            = "go-file-nocache"
-	GoLevelDb                = "go-ldb"
-	GoLevelDbNoCache         = "go-ldb-nocache"
+	GoFile           Variant = "go-file"
+	GoFileNoCache    Variant = "go-file-nocache"
+	GoLevelDb        Variant = "go-ldb"
+	GoLevelDbNoCache Variant = "go-ldb-nocache"
 )
 
 func GetAllVariants() []Variant {

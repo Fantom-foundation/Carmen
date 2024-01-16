@@ -97,12 +97,12 @@ func TestAddGet(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x12}},
+					{Account: addr1, Balance: common.Balance{0x12}},
 				},
 				Codes:  nil,
 				Nonces: nil,
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x05}, common.Value{0x47}},
+					{Account: addr1, Key: common.Key{0x05}, Value: common.Value{0x47}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -110,16 +110,16 @@ func TestAddGet(t *testing.T) {
 
 			if err := a.Add(5, common.Update{
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x34}},
+					{Account: addr1, Balance: common.Balance{0x34}},
 				},
 				Codes: []common.CodeUpdate{
-					{addr1, []byte{0x12, 0x23}},
+					{Account: addr1, Code: []byte{0x12, 0x23}},
 				},
 				Nonces: []common.NonceUpdate{
-					{addr1, common.Nonce{0x54}},
+					{Account: addr1, Nonce: common.Nonce{0x54}},
 				},
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x05}, common.Value{0x89}},
+					{Account: addr1, Key: common.Key{0x05}, Value: common.Value{0x89}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 5; %v", err)
@@ -187,16 +187,16 @@ func TestAccountDeleteCreate(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x12}},
+					{Account: addr1, Balance: common.Balance{0x12}},
 				},
 				Codes: []common.CodeUpdate{
-					{addr1, []byte{0x12, 0x23}},
+					{Account: addr1, Code: []byte{0x12, 0x23}},
 				},
 				Nonces: []common.NonceUpdate{
-					{addr1, common.Nonce{0x14}},
+					{Account: addr1, Nonce: common.Nonce{0x14}},
 				},
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x05}, common.Value{0x47}},
+					{Account: addr1, Key: common.Key{0x05}, Value: common.Value{0x47}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -283,7 +283,7 @@ func TestBalanceOnly(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x12}},
+					{Account: addr1, Balance: common.Balance{0x12}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -291,7 +291,7 @@ func TestBalanceOnly(t *testing.T) {
 
 			if err := a.Add(200, common.Update{
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x34}},
+					{Account: addr1, Balance: common.Balance{0x34}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 200; %s", err)
@@ -321,7 +321,7 @@ func TestStorageOnly(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x37}, common.Value{0x12}},
+					{Account: addr1, Key: common.Key{0x37}, Value: common.Value{0x12}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -329,7 +329,7 @@ func TestStorageOnly(t *testing.T) {
 
 			if err := a.Add(2, common.Update{
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x37}, common.Value{0x34}},
+					{Account: addr1, Key: common.Key{0x37}, Value: common.Value{0x34}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 2; %s", err)
@@ -359,7 +359,7 @@ func TestPreventingBlockOverrides(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x37}, common.Value{0x12}},
+					{Account: addr1, Key: common.Key{0x37}, Value: common.Value{0x12}},
 				},
 			}, nil); err == nil {
 				t.Errorf("allowed overriding already written block 1")
@@ -388,7 +388,7 @@ func TestPreventingBlockOutOfOrder(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Slots: []common.SlotUpdate{
-					{addr1, common.Key{0x37}, common.Value{0x12}},
+					{Account: addr1, Key: common.Key{0x37}, Value: common.Value{0x12}},
 				},
 			}, nil); err == nil {
 				t.Errorf("allowed inserting block 1 while block 2 already exists")
@@ -457,7 +457,7 @@ func TestZeroBlock(t *testing.T) {
 			if err := a.Add(0, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x11}},
+					{Account: addr1, Balance: common.Balance{0x11}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 0; %s", err)
@@ -465,7 +465,7 @@ func TestZeroBlock(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x12}},
+					{Account: addr1, Balance: common.Balance{0x12}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -505,7 +505,7 @@ func TestTwinProtection(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x12}},
+					{Account: addr1, Balance: common.Balance{0x12}},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -513,7 +513,7 @@ func TestTwinProtection(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{addr1, common.Balance{0x34}},
+					{Account: addr1, Balance: common.Balance{0x34}},
 				},
 			}, nil); err == nil {
 				t.Errorf("second adding of block 1 should have failed but it succeed")

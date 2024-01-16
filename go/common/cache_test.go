@@ -382,11 +382,11 @@ func TestCache_Iterate_FullCache(t *testing.T) {
 			c.Iterate(func(key int, val int) bool {
 				want, exists := expected[key]
 				if !exists {
-					t.Errorf("iterated throught the key that should not exist: %d", key)
+					t.Errorf("iterated through the key that should not exist: %d", key)
 				}
 
 				if want != val {
-					t.Errorf("iterated throught an unexpected value: %d != %d", want, val)
+					t.Errorf("iterated through an unexpected value: %d != %d", want, val)
 				}
 				return true
 			})
@@ -398,10 +398,10 @@ func TestPrintNumberOfEvictions(t *testing.T) {
 	if !testing.Verbose() {
 		return
 	}
-	ExamplePrintNumberOfEvictions()
+	EvalPrintNumberOfEvictions()
 }
 
-func ExamplePrintNumberOfEvictions() {
+func EvalPrintNumberOfEvictions() {
 	const N = 15_000
 	const CAPACITY = 10_000
 	keys := generateRandomKeys(N)

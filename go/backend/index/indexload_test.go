@@ -1,12 +1,13 @@
 package index_test
 
 import (
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"testing"
 )
 
 func indexesFactories() map[string]func(t *testing.T) index.Index[common.Address, uint32] {
@@ -60,7 +61,7 @@ func TestIndexesLoadTest(t *testing.T) {
 	// generate test data
 	var data = make([]common.MapEntry[common.Address, uint32], 0, n)
 	for i := 0; i < n; i++ {
-		data = append(data, common.MapEntry[common.Address, uint32]{common.AddressFromNumber(i), uint32(i)})
+		data = append(data, common.MapEntry[common.Address, uint32]{Key: common.AddressFromNumber(i), Val: uint32(i)})
 	}
 
 	var prevHash common.Hash
@@ -86,7 +87,7 @@ func TestIndexesLoadTest(t *testing.T) {
 			// check all data there by contains
 			for _, entry := range data {
 				if exists := idx.Contains(entry.Key); !exists {
-					t.Errorf("Key not pressent %v", entry.Key)
+					t.Errorf("Key not present %v", entry.Key)
 				}
 			}
 

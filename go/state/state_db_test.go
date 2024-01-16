@@ -75,11 +75,11 @@ func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	}
 
 	if got := db.GetCode(address1); len(got) != 0 {
-		t.Errorf("code not initialized to zero-lenght code")
+		t.Errorf("code not initialized to zero-length code")
 	}
 
 	if got := db.GetCodeSize(address1); got != 0 {
-		t.Errorf("code not initialized to zero-lenght code")
+		t.Errorf("code not initialized to zero-length code")
 	}
 }
 
@@ -98,7 +98,7 @@ func TestCarmenStateCreateAccountSetsStorageToZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRecreateingAnAccountSetsStorageToZero(t *testing.T) {
+func TestCarmenStateRecreatingAnAccountSetsStorageToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -3093,7 +3093,7 @@ func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 
 	fp := db.GetMemoryFootprint()
 	if fp == nil || fp.Total() == 0 {
-		t.Errorf("invalid memory footpring: %v", fp)
+		t.Errorf("invalid memory footprint: %v", fp)
 	}
 }
 
@@ -3337,10 +3337,10 @@ func TestStateDBRead(t *testing.T) {
 		t.Errorf("Unexpected value, val: %v != %v", nonce, 91)
 	}
 
-	if code := stateDb.GetCode(address1); bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+	if code := stateDb.GetCode(address1); !bytes.Equal(code, []byte{1, 2, 3}) {
 		t.Errorf("Unexpected value, val: %v != %v", code, []byte{1, 2, 3})
 	}
-	if code := stateDb.GetCode(address2); bytes.Compare(code, []byte{3, 2, 1}) != 0 {
+	if code := stateDb.GetCode(address2); !bytes.Equal(code, []byte{3, 2, 1}) {
 		t.Errorf("Unexpected value, val: %v != %v", code, []byte{3, 2, 1})
 	}
 
@@ -3402,10 +3402,10 @@ func TestStateDBRead(t *testing.T) {
 	if nonce := as2.GetNonce(address2); nonce != 91 {
 		t.Errorf("Unexpected value, val: %v != %v", nonce, 91)
 	}
-	if code := as2.GetCode(address1); bytes.Compare(code, []byte{1, 2, 3}) != 0 {
+	if code := as2.GetCode(address1); !bytes.Equal(code, []byte{1, 2, 3}) {
 		t.Errorf("Unexpected value, val: %v != %v", code, []byte{1, 2, 3})
 	}
-	if code := as2.GetCode(address2); bytes.Compare(code, []byte{3, 2, 1}) != 0 {
+	if code := as2.GetCode(address2); !bytes.Equal(code, []byte{3, 2, 1}) {
 		t.Errorf("Unexpected value, val: %v != %v", code, []byte{3, 2, 1})
 	}
 }
@@ -3450,7 +3450,7 @@ func TestStateDBArchive(t *testing.T) {
 				bl.CreateAccount(address1)
 				bl.SetBalance(address1, big.NewInt(12))
 				if err := bl.Close(); err != nil {
-					t.Fatalf("failed to bulkload StateDB with archive; %s", err)
+					t.Fatalf("failed to bulk-load StateDB with archive; %s", err)
 				}
 
 				stateDb.BeginBlock()

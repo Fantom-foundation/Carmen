@@ -2,9 +2,10 @@ package file
 
 import (
 	"fmt"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/pagepool"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"unsafe"
 )
 
 // PageList is a data structure that maintains a list of pages. Each page maps a fixed number of Key/Value pairs.
@@ -302,6 +303,9 @@ func (m *PageList[K, V]) Clear() error {
 	}
 	for page != nil {
 		_, err := m.pagePool.Remove(pageId)
+		if err != nil {
+			return err
+		}
 		// fetch new page if it exists
 		page, pageId, err = m.getNextPage(page)
 		if err != nil {
