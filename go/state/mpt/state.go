@@ -287,7 +287,7 @@ func (s *MptState) Close() error {
 }
 
 func (s *MptState) closeWithError(externalError error) error {
-	// Only if the state can be successfully closed the directory is to
+	// Only if the state can be successfully closed, the directory is to
 	// be marked as clean. Otherwise, the dirty flag needs to be retained.
 	err := errors.Join(
 		externalError,
