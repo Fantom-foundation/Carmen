@@ -827,3 +827,65 @@ func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
 		t.Errorf("failed to close forest: %v", err)
 	}
 }
+
+func TestForest_CheckPassesAfterReopeningDirectory(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			for _, mode := range []StorageMode{Immutable, Mutable} {
+				t.Run(mode.String(), func(t *testing.T) {
+					// Create a forest, fill it with data, check it, close it, reopen
+					// it, and check that the consistency test still passes.
+					dir := t.TempDir()
+					forestConfig := ForestConfig{
+						Mode:          mode,
+						CacheCapacity: 1024,
+					}
+					forest, err := OpenFileForest(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// Fill the forest with some data.
+					const N = 10
+					root := NewNodeReference(EmptyId())
+					for a := 0; a < N; a++ {
+						addr := common.Address{byte(a)}
+						root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.Nonce{1}})
+						if err != nil {
+							t.Fatalf("failed to create account %v: %v", addr, err)
+						}
+						for k := 0; k < N; k++ {
+							root, err = forest.SetValue(&root, addr, common.Key{byte(k)}, common.Value{byte(k)})
+							if err != nil {
+								t.Fatalf("failed to update value %v: %v", addr, err)
+							}
+						}
+					}
+					_, _, err = forest.updateHashesFor(&root)
+					if err != nil {
+						t.Fatalf("failed to update hashes: %v", err)
+					}
+					if err := forest.Check(&root); err != nil {
+						t.Fatalf("check for initial forest failed: %v", err)
+					}
+
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+
+					// Reopen the forest and run check again.
+					forest, err = OpenFileForest(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to re-open forest: %v", err)
+					}
+					if err := forest.Check(&root); err != nil {
+						t.Fatalf("check for re-opened forest failed: %v", err)
+					}
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+				})
+			}
+		})
+	}
+}
