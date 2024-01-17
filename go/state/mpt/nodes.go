@@ -368,19 +368,46 @@ func (c *nodeCheckContext) isCompatible(other *nodeCheckContext) bool {
 
 // nodeBase is an optional common base type for nodes.
 type nodeBase struct {
-	hash      common.Hash // the hash of this node (may be dirty)
-	hashDirty bool        // indicating whether this node's hash is dirty
-	clean     bool        // by default nodes are dirty (clean == false)
-	frozen    bool        // a flag marking the node as immutable (default: mutable)
+	hash       common.Hash // the hash of this node (may be dirty)
+	hashStatus hashStatus  // indicating whether this node's hash is valid
+	clean      bool        // by default nodes are dirty (clean == false)
+	frozen     bool        // a flag marking the node as immutable (default: mutable)
+}
+
+type hashStatus byte
+
+const (
+	hashStatusClean   hashStatus = 0 // the hash is up-to-date, matching the nodes content
+	hashStatusDirty   hashStatus = 1 // the hash is out-of-date and needs to be refreshed
+	hashStatusUnknown hashStatus = 2 // the hash is missing / invalid
+)
+
+func (s hashStatus) String() string {
+	switch s {
+	case hashStatusClean:
+		return "clean"
+	case hashStatusDirty:
+		return "dirty"
+	default:
+		return "unknown"
+	}
 }
 
 func (n *nodeBase) GetHash() (common.Hash, bool) {
-	return n.hash, n.hashDirty
+	return n.hash, n.hashStatus != hashStatusClean
 }
 
 func (n *nodeBase) SetHash(hash common.Hash) {
 	n.hash = hash
-	n.hashDirty = false
+	n.hashStatus = hashStatusClean
+}
+
+func (n *nodeBase) hasCleanHash() bool {
+	return n.hashStatus == hashStatusClean
+}
+
+func (n *nodeBase) getHashStatus() hashStatus {
+	return n.hashStatus
 }
 
 func (n *nodeBase) IsFrozen() bool {
@@ -405,12 +432,25 @@ func (n *nodeBase) MarkClean() {
 
 func (n *nodeBase) markDirty() {
 	n.clean = false
+	n.hashStatus = hashStatusDirty
 }
 
 func (n *nodeBase) Release() {
 	// The node is disconnected from the disk version and thus clean.
 	// TODO: test that all released nodes are clean!
 	n.clean = true
+	n.hashStatus = hashStatusClean
+}
+
+func (n *nodeBase) check(thisRef *NodeReference) error {
+	var errs []error
+	if !n.IsDirty() && n.hashStatus == hashStatusDirty {
+		errs = append(errs, fmt.Errorf("node %v is marked clean but hash is dirty", thisRef.Id()))
+	}
+	if n.IsDirty() && n.hashStatus == hashStatusUnknown {
+		errs = append(errs, fmt.Errorf("node %v is marked dirty but hash is marked unknown (should be dirty or clean)", thisRef.Id()))
+	}
+	return errors.Join(errs...)
 }
 
 // ----------------------------------------------------------------------------
@@ -444,7 +484,7 @@ func (e EmptyNode) SetAccount(manager NodeManager, thisRef *NodeReference, this 
 	}
 	defer handle.Release()
 	res := handle.Get().(*AccountNode)
-	res.hashDirty = true
+	res.markDirty()
 	res.address = address
 	res.info = info
 	res.pathLength = byte(len(path))
@@ -463,7 +503,7 @@ func (e EmptyNode) SetValue(manager NodeManager, thisRef *NodeReference, this sh
 	res := handle.Get().(*ValueNode)
 	res.key = key
 	res.value = value
-	res.hashDirty = true
+	res.markDirty()
 	res.pathLength = byte(len(path))
 	return ref, true, nil
 }
@@ -602,7 +642,6 @@ func (n *BranchNode) setNextNode(
 	if newRoot.Id() == child.Id() {
 		if hasChanged {
 			n.markDirty()
-			n.hashDirty = true
 			n.markChildHashDirty(byte(path[0]))
 		}
 		return *thisRef, hasChanged, nil
@@ -627,7 +666,6 @@ func (n *BranchNode) setNextNode(
 
 	wasEmpty := child.Id().IsEmpty()
 	n.children[path[0]] = newRoot
-	n.hashDirty = true
 	n.markChildHashDirty(byte(path[0]))
 	n.setChildFrozen(byte(path[0]), false)
 
@@ -675,7 +713,6 @@ func (n *BranchNode) setNextNode(
 				}
 
 				extensionNode.path.Prepend(remainingPos)
-				extensionNode.hashDirty = true
 				extensionNode.markDirty()
 			} else if remaining.Id().IsBranch() {
 				// An extension needs to replace this branch.
@@ -687,7 +724,6 @@ func (n *BranchNode) setNextNode(
 				extension := handle.Get().(*ExtensionNode)
 				extension.path = SingleStepPath(remainingPos)
 				extension.next = remaining
-				extension.hashDirty = true
 				extension.nextHashDirty = n.isChildHashDirty(byte(remainingPos))
 				if !extension.nextHashDirty {
 					// TODO: add unit test coverage for this!
@@ -816,13 +852,14 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 	//  - non-dirty hashes for child nodes are valid
 	//  - mask of frozen children is consistent
 	numChildren := 0
-	errs := []error{}
+	var errs []error
 
-	// TODO: move to base node check
-	if !n.IsDirty() && n.hashDirty {
-		errs = append(errs, fmt.Errorf("node %v is marked clean but hash is dirty", thisRef.Id()))
+	if err := n.nodeBase.check(thisRef); err != nil {
+		errs = append(errs, err)
 	}
-	if !n.hashDirty && n.dirtyHashes != 0 {
+
+	hashWithParent := source.getConfig().HashStorageLocation == HashStoredWithParent
+	if hashWithParent && n.hasCleanHash() && n.dirtyHashes != 0 {
 		errs = append(errs, fmt.Errorf("node %v is has clean hash but child hashes are dirty: %016b", thisRef.Id(), n.dirtyHashes))
 	}
 
@@ -865,7 +902,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 
 func (n *BranchNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sBranch (ID: %v, dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, dirtyHash: %t):\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.hashDirty)
+	fmt.Fprintf(out, "%sBranch (ID: %v, dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, hashState: %v):\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.getHashStatus())
 	for i, child := range n.children {
 		if child.Id().IsEmpty() {
 			continue
@@ -1009,7 +1046,6 @@ func (n *ExtensionNode) GetSlot(source NodeSource, address common.Address, path 
 func (n *ExtensionNode) setNextNode(
 	manager NodeManager,
 	thisRef *NodeReference,
-	this shared.WriteHandle[Node],
 	path []Nibble,
 	valueIsEmpty bool,
 	createSubTree func(*NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
@@ -1044,7 +1080,7 @@ func (n *ExtensionNode) setNextNode(
 				*newNode = *n
 				newNode.markDirty()
 				newNode.markMutable()
-				thisRef, this, n = &newRef, handle, newNode
+				thisRef, n = &newRef, newNode
 				isClone = true
 			}
 
@@ -1061,7 +1097,6 @@ func (n *ExtensionNode) setNextNode(
 				extension := handle.Get().(*ExtensionNode)
 				n.path.AppendAll(&extension.path)
 				n.next = extension.next
-				n.hashDirty = true
 				n.nextHashDirty = extension.nextHashDirty
 				if !extension.nextHashDirty {
 					// TODO: add unit test coverage for this!
@@ -1075,7 +1110,6 @@ func (n *ExtensionNode) setNextNode(
 				}
 			} else if newRoot.Id().IsBranch() {
 				n.next = newRoot
-				n.hashDirty = true
 				n.nextHashDirty = true
 				n.markDirty()
 			} else {
@@ -1108,7 +1142,6 @@ func (n *ExtensionNode) setNextNode(
 			}
 		} else if hasChanged {
 			n.markDirty()
-			n.hashDirty = true
 			n.nextHashDirty = true
 		}
 		return *thisRef, hasChanged, err
@@ -1131,7 +1164,7 @@ func (n *ExtensionNode) setNextNode(
 		*newNode = *n
 		newNode.markDirty()
 		newNode.markMutable()
-		thisRef, this, n = &newRef, handle, newNode
+		thisRef, n = &newRef, newNode
 		isClone = true
 	}
 
@@ -1159,7 +1192,6 @@ func (n *ExtensionNode) setNextNode(
 		branch.children[n.path.Get(commonPrefixLength)] = *thisRef
 		branch.markChildHashDirty(byte(n.path.Get(commonPrefixLength)))
 		n.path.ShiftLeft(commonPrefixLength + 1)
-		n.hashDirty = true
 		n.markDirty()
 		thisNodeWasReused = true
 	} else {
@@ -1179,8 +1211,8 @@ func (n *ExtensionNode) setNextNode(
 		// Reuse current node unless already taken.
 		extension := n
 		extensionRef := *thisRef
-		extensionHandle := this
 		if thisNodeWasReused {
+			var extensionHandle shared.WriteHandle[Node]
 			extensionRef, extensionHandle, err = manager.createExtension()
 			if err != nil {
 				return NodeReference{}, false, err
@@ -1193,7 +1225,6 @@ func (n *ExtensionNode) setNextNode(
 
 		extension.path = CreatePathFromNibbles(path[0:commonPrefixLength])
 		extension.next = branchRef
-		extension.hashDirty = true
 		extension.nextHashDirty = true
 		extension.markDirty()
 		newRoot = extensionRef
@@ -1215,7 +1246,7 @@ func (n *ExtensionNode) setNextNode(
 }
 
 func (n *ExtensionNode) SetAccount(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
-	return n.setNextNode(manager, thisRef, this, path, info.IsEmpty(),
+	return n.setNextNode(manager, thisRef, path, info.IsEmpty(),
 		func(next *NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().SetAccount(manager, next, node, address, path, info)
 		},
@@ -1223,7 +1254,7 @@ func (n *ExtensionNode) SetAccount(manager NodeManager, thisRef *NodeReference, 
 }
 
 func (n *ExtensionNode) SetValue(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], key common.Key, path []Nibble, value common.Value) (NodeReference, bool, error) {
-	return n.setNextNode(manager, thisRef, this, path, value == (common.Value{}),
+	return n.setNextNode(manager, thisRef, path, value == (common.Value{}),
 		func(next *NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().SetValue(manager, next, node, key, path, value)
 		},
@@ -1231,7 +1262,7 @@ func (n *ExtensionNode) SetValue(manager NodeManager, thisRef *NodeReference, th
 }
 
 func (n *ExtensionNode) SetSlot(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, key common.Key, value common.Value) (NodeReference, bool, error) {
-	return n.setNextNode(manager, thisRef, this, path, true,
+	return n.setNextNode(manager, thisRef, path, true,
 		func(next *NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().SetSlot(manager, next, node, address, path, key, value)
 		},
@@ -1239,7 +1270,7 @@ func (n *ExtensionNode) SetSlot(manager NodeManager, thisRef *NodeReference, thi
 }
 
 func (n *ExtensionNode) ClearStorage(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble) (newRoot NodeReference, hasChanged bool, err error) {
-	return n.setNextNode(manager, thisRef, this, path, true,
+	return n.setNextNode(manager, thisRef, path, true,
 		func(next *NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().ClearStorage(manager, next, node, address, path)
 		},
@@ -1282,12 +1313,14 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 	//  - extension can only be followed by a branch
 	//  - hash of sub-tree is either dirty or correct
 	//  - frozen flags are consistent
-	errs := []error{}
+	var errs []error
 
-	if !n.IsDirty() && n.hashDirty {
-		errs = append(errs, fmt.Errorf("node %v is marked clean but hash is dirty", thisRef.Id()))
+	if err := n.nodeBase.check(thisRef); err != nil {
+		errs = append(errs, err)
 	}
-	if !n.hashDirty && n.nextHashDirty {
+
+	hashWithParent := source.getConfig().HashStorageLocation == HashStoredWithParent
+	if hashWithParent && n.hasCleanHash() && n.nextHashDirty {
 		errs = append(errs, fmt.Errorf("node %v is marked to have a clean hash but next hash is dirty", thisRef.Id()))
 	}
 
@@ -1324,7 +1357,7 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 
 func (n *ExtensionNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sExtension (ID: %v/%t, dirtyHash: %t, Embedded: %t, Hash: %v, dirtyHash: %t): %v\n", indent, thisRef.Id(), n.IsFrozen(), n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.hashDirty, &n.path)
+	fmt.Fprintf(out, "%sExtension (ID: %v/%t, nextHashDirty: %t, Embedded: %t, Hash: %v, hashState: %v): %v\n", indent, thisRef.Id(), n.IsFrozen(), n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.getHashStatus(), &n.path)
 	if handle, err := source.getViewAccess(&n.next); err == nil {
 		defer handle.Release()
 		if err := handle.Get().Dump(out, source, &n.next, indent+"  "); err != nil {
@@ -1441,12 +1474,10 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			newNode.markDirty()
 			newNode.markMutable()
 			newNode.info = info
-			newNode.hashDirty = true
 			return newRef, false, nil
 		}
 
 		n.info = info
-		n.hashDirty = true
 		n.markDirty()
 		return *thisRef, true, nil
 	}
@@ -1465,7 +1496,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 	sibling := handle.Get().(*AccountNode)
 	sibling.address = address
 	sibling.info = info
-	sibling.hashDirty = true
+	sibling.markDirty()
 
 	thisPath := AddressToNibblePath(n.address, manager)
 	newRoot, err := splitLeafNode(manager, thisRef, thisPath[:], n, this, path, &siblingRef, sibling, handle)
@@ -1515,7 +1546,6 @@ func splitLeafNode(
 
 		extension.path = CreatePathFromNibbles(siblingPath[0:commonPrefixLength])
 		extension.next = branchRef
-		extension.hashDirty = true
 		extension.nextHashDirty = true
 		extension.markDirty()
 	}
@@ -1539,7 +1569,7 @@ func splitLeafNode(
 	branch.children[partialPath[commonPrefixLength]] = *thisRef
 	branch.children[siblingPath[commonPrefixLength]] = *siblingRef
 	branch.markChildHashDirty(byte(siblingPath[commonPrefixLength]))
-	branch.hashDirty = true
+	branch.markDirty()
 
 	// Update hash if present.
 	if hash, dirty := this.GetHash(); thisModified || dirty {
@@ -1599,16 +1629,13 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 			newNode.markMutable()
 			newNode.storage = root
 			newNode.storageHashDirty = true
-			newNode.hashDirty = true
 			return newRef, false, nil
 		}
 		n.storage = root
 		n.storageHashDirty = true
-		n.hashDirty = true
 		n.markDirty()
 		hasChanged = true
 	} else if hasChanged {
-		n.hashDirty = true
 		n.storageHashDirty = true
 		n.markDirty()
 	}
@@ -1634,7 +1661,6 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 		newNode.markMutable()
 		newNode.storage = NewNodeReference(EmptyId())
 		newNode.storageHashDirty = true
-		newNode.hashDirty = true
 		return newRef, false, nil
 	}
 
@@ -1644,7 +1670,6 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 
 	n.storage = NewNodeReference(EmptyId())
 	n.markDirty()
-	n.hashDirty = true
 	n.storageHashDirty = true
 	return *thisRef, true, err
 }
@@ -1683,11 +1708,9 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference,
 		newNode.markDirty()
 		newNode.markMutable()
 		newNode.pathLength = length
-		newNode.hashDirty = true
 		return newRef, false, nil
 	}
 
-	n.hashDirty = true
 	n.pathLength = length
 	n.markDirty()
 	return *thisRef, true, nil
@@ -1712,12 +1735,14 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 	//  - the account is at a correct position in the trie
 	//  - frozen flags are consistent
 	//  - path length
-	errs := []error{}
+	var errs []error
 
-	if !n.IsDirty() && n.hashDirty {
-		errs = append(errs, fmt.Errorf("node %v is marked clean but hash is dirty", thisRef.Id()))
+	if err := n.nodeBase.check(thisRef); err != nil {
+		errs = append(errs, err)
 	}
-	if !n.hashDirty && n.storageHashDirty {
+
+	hashWithParent := source.getConfig().HashStorageLocation == HashStoredWithParent
+	if hashWithParent && n.hasCleanHash() && n.storageHashDirty {
 		errs = append(errs, fmt.Errorf("node %v is marked to have a clean hash but storage hash is dirty", thisRef.Id()))
 	}
 
@@ -1758,7 +1783,7 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 
 func (n *AccountNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sAccount (ID: %v, dirty: %t, frozen: %t, path length: %v, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.address, n.info)
+	fmt.Fprintf(out, "%sAccount (ID: %v, dirty: %t, frozen: %t, path length: %v, Hash: %v, hashState: %v): %v - %v\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.address, n.info)
 	if n.storage.Id().IsEmpty() {
 		return nil
 	}
@@ -1861,12 +1886,11 @@ func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this s
 			newNode := newHandle.Get().(*ValueNode)
 			newNode.key = n.key
 			newNode.value = value
-			newNode.hashDirty = true
+			newNode.markDirty()
 			newNode.pathLength = n.pathLength
 			return newRef, false, nil
 		}
 		n.value = value
-		n.hashDirty = true
 		n.markDirty()
 		return *thisRef, true, nil
 	}
@@ -1885,7 +1909,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this s
 	sibling := siblingHandle.Get().(*ValueNode)
 	sibling.key = key
 	sibling.value = value
-	sibling.hashDirty = true
+	sibling.markDirty()
 
 	thisPath := KeyToNibblePath(n.key, manager)
 	newRootId, err := splitLeafNode(manager, thisRef, thisPath[:], n, this, path, &siblingRef, sibling, siblingHandle)
@@ -1921,12 +1945,11 @@ func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, t
 		newNode := newHandle.Get().(*ValueNode)
 		newNode.key = n.key
 		newNode.value = n.value
-		newNode.hashDirty = true
+		newNode.markDirty()
 		newNode.pathLength = length
 		return newRef, false, nil
 	}
 
-	n.hashDirty = true
 	n.pathLength = length
 	n.markDirty()
 	return *thisRef, true, nil
@@ -1942,10 +1965,10 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 	//  - value must not be empty
 	//  - values are in the right position of the trie
 	//  - the path length is correct (if enabled to be tracked)
-	errs := []error{}
+	var errs []error
 
-	if !n.IsDirty() && n.hashDirty {
-		errs = append(errs, fmt.Errorf("node %v is marked clean but hash is dirty", thisRef.Id()))
+	if err := n.nodeBase.check(thisRef); err != nil {
+		errs = append(errs, err)
 	}
 
 	fullPath := KeyToNibblePath(n.key, source)
@@ -1967,7 +1990,7 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 }
 
 func (n *ValueNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
-	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, dirtyHash: %t): %v - %v\n", indent, thisRef.Id(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.hashDirty, n.key, n.value)
+	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, hashState: %v): %v - %v\n", indent, thisRef.Id(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.key, n.value)
 	return nil
 }
 
@@ -1993,7 +2016,7 @@ func (BranchNodeEncoderWithNodeHash) GetEncodedSize() int {
 }
 
 func (BranchNodeEncoderWithNodeHash) Store(dst []byte, node *BranchNode) error {
-	if node.hashDirty {
+	if !node.hasCleanHash() {
 		panic("unable to store branch node with dirty hash")
 	}
 	encoder := NodeIdEncoder{}
@@ -2016,6 +2039,7 @@ func (BranchNodeEncoderWithNodeHash) Load(src []byte, node *BranchNode) error {
 	}
 	src = src[step*16:]
 	copy(node.hash[:], src)
+	node.hashStatus = hashStatusClean
 
 	// The hashes of the child nodes are not stored with the node, so they are
 	// marked as dirty to trigger a re-computation the next time they are used.
@@ -2068,8 +2092,8 @@ func (BranchNodeEncoderWithChildHashes) Load(src []byte, node *BranchNode) error
 	}
 	node.embeddedChildren = binary.BigEndian.Uint16(src)
 
-	// The node's hash is not stored with the node, so it is marked dirty.
-	node.hashDirty = true
+	// The node's hash is not stored with the node, so it is marked unknown.
+	node.hashStatus = hashStatusUnknown
 
 	return nil
 }
@@ -2083,7 +2107,7 @@ func (ExtensionNodeEncoderWithNodeHash) GetEncodedSize() int {
 }
 
 func (ExtensionNodeEncoderWithNodeHash) Store(dst []byte, value *ExtensionNode) error {
-	if value.hashDirty {
+	if !value.hasCleanHash() {
 		panic("unable to store extension node with dirty hash")
 	}
 	pathEncoder := PathEncoder{}
@@ -2106,6 +2130,7 @@ func (ExtensionNodeEncoderWithNodeHash) Load(src []byte, node *ExtensionNode) er
 	node.next = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.hash[:], src)
+	node.hashStatus = hashStatusClean
 
 	// The hash of the next node is not stored with the node, so it is marked
 	// as dirty to trigger a re-computation the next time it is accessed.
@@ -2155,8 +2180,8 @@ func (ExtensionNodeEncoderWithChildHash) Load(src []byte, node *ExtensionNode) e
 	src = src[common.HashSize:]
 	node.nextIsEmbedded = src[0] != 0
 
-	// The node's hash is not stored with the node, so it is marked dirty.
-	node.hashDirty = true
+	// The node's hash is not stored with the node, so it is marked unknown.
+	node.hashStatus = hashStatusUnknown
 
 	return nil
 }
@@ -2171,7 +2196,7 @@ func (AccountNodeEncoderWithNodeHash) GetEncodedSize() int {
 }
 
 func (AccountNodeEncoderWithNodeHash) Store(dst []byte, node *AccountNode) error {
-	if node.hashDirty {
+	if !node.hasCleanHash() {
 		panic("unable to store account node with dirty hash")
 	}
 	copy(dst, node.address[:])
@@ -2202,6 +2227,7 @@ func (AccountNodeEncoderWithNodeHash) Load(src []byte, node *AccountNode) error 
 	node.storage = NewNodeReference(id)
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.hash[:], src)
+	node.hashStatus = hashStatusClean
 
 	// The storage hash is not stored with the node, so it is marked as dirty to
 	// trigger a re-computation the next time it is accessed.
@@ -2252,8 +2278,8 @@ func (AccountNodeEncoderWithChildHash) Load(src []byte, node *AccountNode) error
 	src = src[idEncoder.GetEncodedSize():]
 	copy(node.storageHash[:], src)
 
-	// The node's hash is not stored with the node, so it is marked dirty.
-	node.hashDirty = true
+	// The node's hash is not stored with the node, so it is marked unknown.
+	node.hashStatus = hashStatusUnknown
 
 	return nil
 }
@@ -2312,8 +2338,8 @@ func (ValueNodeEncoderWithoutNodeHash) Load(src []byte, node *ValueNode) error {
 	src = src[len(node.key):]
 	copy(node.value[:], src)
 
-	// The node's hash is not stored with the node, so it is marked dirty.
-	node.hashDirty = true
+	// The node's hash is not stored with the node, so it is marked unknown.
+	node.hashStatus = hashStatusUnknown
 
 	return nil
 }
@@ -2325,6 +2351,9 @@ func (ValueNodeEncoderWithNodeHash) GetEncodedSize() int {
 }
 
 func (ValueNodeEncoderWithNodeHash) Store(dst []byte, node *ValueNode) error {
+	if !node.hasCleanHash() {
+		panic("unable to store value node with dirty hash")
+	}
 	ValueNodeEncoderWithoutNodeHash{}.Store(dst, node)
 	dst = dst[ValueNodeEncoderWithoutNodeHash{}.GetEncodedSize():]
 	copy(dst, node.hash[:])
@@ -2335,7 +2364,7 @@ func (ValueNodeEncoderWithNodeHash) Load(src []byte, node *ValueNode) error {
 	ValueNodeEncoderWithoutNodeHash{}.Load(src, node)
 	src = src[ValueNodeEncoderWithoutNodeHash{}.GetEncodedSize():]
 	copy(node.hash[:], src)
-	node.hashDirty = false
+	node.hashStatus = hashStatusClean
 	return nil
 }
 

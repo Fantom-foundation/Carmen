@@ -1154,6 +1154,7 @@ func TestBranchNode_VisitAbortByChild(t *testing.T) {
 }
 
 func TestBranchNode_CheckDetectsIssues(t *testing.T) {
+	unknownHashStatus := hashStatusUnknown
 	tests := map[string]struct {
 		setup NodeDesc
 		ok    bool
@@ -1206,6 +1207,11 @@ func TestBranchNode_CheckDetectsIssues(t *testing.T) {
 			dirty:            true,
 			dirtyHash:        false,
 			dirtyChildHashes: []int{1},
+		}, false},
+		"dirts_node_with_unknown_hash_status": {&Branch{
+			children:   Children{1: &Value{}, 2: &Value{}},
+			dirty:      true,
+			hashStatus: &unknownHashStatus,
 		}, false},
 	}
 	for name, test := range tests {
@@ -2396,20 +2402,22 @@ func TestExtensionNode_VisitAbortByChild(t *testing.T) {
 }
 
 func TestExtensionNode_CheckDetectsIssues(t *testing.T) {
+	unknownHashStatus := hashStatusUnknown
 	tests := map[string]struct {
 		setup NodeDesc
 		ok    bool
 	}{
-		"ok":                              {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}}, true},
-		"empty path":                      {&Extension{next: &Branch{}}, false},
-		"next not a branch":               {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
-		"invalid hash":                    {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
-		"dirty hash is ignored":           {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, dirty: true, hashDirty: true, nextHashDirty: true}, true},
-		"full_frozen":                     {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
-		"partial_frozen":                  {&Extension{frozen: false, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
-		"inconsistent_frozen":             {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: false}}, false},
-		"clean_with_dirty_hash":           {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: false, hashDirty: true}, false},
-		"clean_hash_with_dirty_next_hash": {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: false, hashDirty: false, nextHashDirty: true}, false},
+		"ok":                                  {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}}, true},
+		"empty path":                          {&Extension{next: &Branch{}}, false},
+		"next not a branch":                   {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
+		"invalid hash":                        {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
+		"dirty hash is ignored":               {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, dirty: true, hashDirty: true, nextHashDirty: true}, true},
+		"full_frozen":                         {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
+		"partial_frozen":                      {&Extension{frozen: false, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
+		"inconsistent_frozen":                 {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: false}}, false},
+		"clean_with_dirty_hash":               {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: false, hashDirty: true}, false},
+		"clean_hash_with_dirty_next_hash":     {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: false, hashDirty: false, nextHashDirty: true}, false},
+		"dirts_node_with_unknown_hash_status": {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, dirty: true, hashStatus: &unknownHashStatus}, false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -3592,6 +3600,7 @@ func TestAccountNode_VisitAbortByChild(t *testing.T) {
 }
 
 func TestAccountNode_CheckDetectsIssues(t *testing.T) {
+	unknownHashStatus := hashStatusUnknown
 	tests := map[string]struct {
 		path  []Nibble
 		setup NodeDesc
@@ -3654,6 +3663,13 @@ func TestAccountNode_CheckDetectsIssues(t *testing.T) {
 			storage:          &Value{frozen: false},
 			dirtyHash:        false,
 			storageHashDirty: true,
+		}, false},
+		"dirts_node_with_unknown_hash_status": {[]Nibble{1, 2, 3}, &Account{
+			address:    common.Address{0x12, 0x34},
+			info:       AccountInfo{Nonce: common.Nonce{1}},
+			pathLength: 37,
+			dirty:      true,
+			hashStatus: &unknownHashStatus,
 		}, false},
 	}
 	for name, test := range tests {
@@ -4361,6 +4377,7 @@ func TestValueNode_Visit(t *testing.T) {
 }
 
 func TestValueNode_CheckDetectsIssues(t *testing.T) {
+	unknownHashStatus := hashStatusUnknown
 	tests := map[string]struct {
 		path  []Nibble
 		setup NodeDesc
@@ -4392,6 +4409,13 @@ func TestValueNode_CheckDetectsIssues(t *testing.T) {
 			length:    37,
 			dirty:     false,
 			dirtyHash: true,
+		}, false},
+		"dirts_node_with_unknown_hash_status": {[]Nibble{1, 2, 3}, &Value{
+			key:        common.Key{0x12, 0x34},
+			value:      common.Value{1},
+			length:     61,
+			dirty:      true,
+			hashStatus: &unknownHashStatus,
 		}, false},
 	}
 	for name, test := range tests {
@@ -4510,13 +4534,36 @@ func TestCheckForest_DetectsInvalidReUse(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
+//                              HashStatus
+// ----------------------------------------------------------------------------
+
+func TestHashStatus_Print(t *testing.T) {
+	tests := []struct {
+		status hashStatus
+		print  string
+	}{
+		{hashStatusClean, "clean"},
+		{hashStatusDirty, "dirty"},
+		{hashStatusUnknown, "unknown"},
+		{hashStatus(12), "unknown"},
+	}
+
+	for _, test := range tests {
+		if want, got := test.print, test.status.String(); want != got {
+			t.Errorf("unexpected print, wanted %v, got %v", want, got)
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------
 //                               Encoders
 // ----------------------------------------------------------------------------
 
 func TestAccountNodeEncoderWithNodeHash(t *testing.T) {
 	node := AccountNode{
 		nodeBase: nodeBase{
-			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			hashStatus: hashStatusClean,
 		},
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
@@ -4551,7 +4598,7 @@ func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 	encoder.Store(buffer, &node)
 	recovered := AccountNode{}
 	encoder.Load(buffer, &recovered)
-	node.hashDirty = true
+	node.hashStatus = hashStatusUnknown
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
@@ -4559,7 +4606,8 @@ func TestAccountNodeEncoderWithChildHash(t *testing.T) {
 func TestAccountNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 	node := AccountNode{
 		nodeBase: nodeBase{
-			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			hashStatus: hashStatusClean,
 		},
 		info: AccountInfo{
 			Nonce:    common.Nonce{1, 2, 3, 4, 5, 6, 7, 8},
@@ -4608,7 +4656,7 @@ func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 	encoder.Store(buffer, &node)
 	recovered := BranchNode{}
 	encoder.Load(buffer, &recovered)
-	node.hashDirty = true
+	node.hashStatus = hashStatusUnknown
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
@@ -4617,7 +4665,8 @@ func TestBranchNodeEncoderWithChildHashes(t *testing.T) {
 func TestBranchNodeEncoderWithNodeHash(t *testing.T) {
 	node := BranchNode{
 		nodeBase: nodeBase{
-			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+			hashStatus: hashStatusClean,
 		},
 		children: [16]NodeReference{
 			NewNodeReference(1),
@@ -4666,7 +4715,7 @@ func TestExtensionNodeEncoderWithChildHash(t *testing.T) {
 	encoder.Store(buffer, &node)
 	recovered := ExtensionNode{}
 	encoder.Load(buffer, &recovered)
-	node.hashDirty = true
+	node.hashStatus = hashStatusUnknown
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
@@ -4674,7 +4723,8 @@ func TestExtensionNodeEncoderWithChildHash(t *testing.T) {
 func TestExtensionNodeEncoderWithNodeHash(t *testing.T) {
 	node := ExtensionNode{
 		nodeBase: nodeBase{
-			hash: common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			hash:       common.Hash{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
+			hashStatus: hashStatusClean,
 		},
 		path: Path{
 			path:   [32]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
@@ -4705,7 +4755,7 @@ func TestValueNodeEncoderWithoutNodeHash(t *testing.T) {
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}
 	encoder.Load(buffer, &recovered)
-	node.hashDirty = true
+	node.hashStatus = hashStatusUnknown
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
@@ -4714,7 +4764,8 @@ func TestValueNodeEncoderWithoutNodeHash(t *testing.T) {
 func TestValueNodeEncoderWithNodeHash(t *testing.T) {
 	node := ValueNode{
 		nodeBase: nodeBase{
-			hash: common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			hash:       common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			hashStatus: hashStatusClean,
 		},
 		key:   common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		value: common.Value{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
@@ -4740,7 +4791,7 @@ func TestValueNodeWithPathLengthEncoderWithoutNodeHash(t *testing.T) {
 	encoder.Store(buffer, &node)
 	recovered := ValueNode{}
 	encoder.Load(buffer, &recovered)
-	node.hashDirty = true
+	node.hashStatus = hashStatusUnknown
 	if !reflect.DeepEqual(node, recovered) {
 		t.Errorf("encoding/decoding failed, wanted %v, got %v", node, recovered)
 	}
@@ -4749,7 +4800,8 @@ func TestValueNodeWithPathLengthEncoderWithoutNodeHash(t *testing.T) {
 func TestValueNodeWithPathLengthEncoderWithNodeHash(t *testing.T) {
 	node := ValueNode{
 		nodeBase: nodeBase{
-			hash: common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			hash:       common.Hash{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+			hashStatus: hashStatusClean,
 		},
 		key:        common.Key{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32},
 		value:      common.Value{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
@@ -6426,16 +6478,12 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 			switch n := n.(type) {
 			case (*AccountNode):
 				n.markDirty()
-				n.hashDirty = true
 			case (*BranchNode):
 				n.markDirty()
-				n.hashDirty = true
 			case (*ExtensionNode):
 				n.markDirty()
-				n.hashDirty = true
 			case (*ValueNode):
 				n.markDirty()
-				n.hashDirty = true
 			}
 		}
 		// Also update the dirty child-hash markers in the nodes.
@@ -7361,6 +7409,7 @@ type Account struct {
 	storage          NodeDesc
 	storageHashDirty bool
 	dirtyHash        bool
+	hashStatus       *hashStatus // overrides dirtyHash flag if set
 }
 
 func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -7369,11 +7418,18 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 		id, _ := ctx.Build(a.storage)
 		storage = id
 	}
+	hashStatus := hashStatusClean
+	if a.dirtyHash {
+		hashStatus = hashStatusDirty
+	}
+	if a.hashStatus != nil {
+		hashStatus = *a.hashStatus
+	}
 	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](&AccountNode{
 		nodeBase: nodeBase{
-			clean:     !a.dirty,
-			frozen:    a.frozen,
-			hashDirty: a.dirtyHash,
+			clean:      !a.dirty,
+			frozen:     a.frozen,
+			hashStatus: hashStatus,
 		},
 		address:          a.address,
 		info:             a.info,
@@ -7394,6 +7450,7 @@ type Branch struct {
 	frozen           bool
 	frozenChildren   []int
 	dirtyHash        bool
+	hashStatus       *hashStatus // overrides dirtyHash flag if set
 }
 
 func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -7414,7 +7471,13 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	for _, i := range b.frozenChildren {
 		res.setChildFrozen(byte(i), true)
 	}
-	res.hashDirty = b.dirtyHash
+	res.hashStatus = hashStatusClean
+	if b.dirtyHash {
+		res.hashStatus = hashStatusDirty
+	}
+	if b.hashStatus != nil {
+		res.hashStatus = *b.hashStatus
+	}
 	return ref, shared.MakeShared[Node](res)
 }
 
@@ -7426,6 +7489,7 @@ type Extension struct {
 	hashDirty     bool
 	nextHash      common.Hash
 	nextHashDirty bool
+	hashStatus    *hashStatus // overrides dirtyHash flag if set
 }
 
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -7435,7 +7499,13 @@ func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]
 	res.frozen = e.frozen
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
-	res.hashDirty = e.hashDirty
+	res.hashStatus = hashStatusClean
+	if e.hashDirty {
+		res.hashStatus = hashStatusDirty
+	}
+	if e.hashStatus != nil {
+		res.hashStatus = *e.hashStatus
+	}
 	res.nextHash = e.nextHash
 	res.nextHashDirty = e.nextHashDirty
 	return ref, shared.MakeShared[Node](res)
@@ -7453,20 +7523,28 @@ func (t *Tag) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 }
 
 type Value struct {
-	dirty     bool
-	key       common.Key
-	value     common.Value
-	length    byte
-	dirtyHash bool
-	frozen    bool
+	dirty      bool
+	key        common.Key
+	value      common.Value
+	length     byte
+	dirtyHash  bool
+	frozen     bool
+	hashStatus *hashStatus // overrides dirtyHash flag if set
 }
 
 func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
+	hashStatus := hashStatusClean
+	if v.dirtyHash {
+		hashStatus = hashStatusDirty
+	}
+	if v.hashStatus != nil {
+		hashStatus = *v.hashStatus
+	}
 	return NewNodeReference(ValueId(ctx.nextIndex())), shared.MakeShared[Node](&ValueNode{
 		nodeBase: nodeBase{
-			clean:     !v.dirty,
-			frozen:    v.frozen,
-			hashDirty: v.dirtyHash,
+			clean:      !v.dirty,
+			frozen:     v.frozen,
+			hashStatus: hashStatus,
 		},
 		key:        v.key,
 		value:      v.value,
@@ -7813,8 +7891,8 @@ func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
 			if a.info != b.info {
 				diffs = append(diffs, fmt.Sprintf("%s: different info, got %v and %v", prefix, a.info, b.info))
 			}
-			if a.hashDirty != b.hashDirty {
-				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			if a.hashStatus != b.hashStatus {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %v and %v", prefix, a.hashStatus, b.hashStatus))
 			}
 			if a.storageHashDirty != b.storageHashDirty {
 				diffs = append(diffs, fmt.Sprintf("%s: different storage hash-dirty flag, got %t and %t", prefix, a.storageHashDirty, b.storageHashDirty))
@@ -7840,8 +7918,8 @@ func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
 			if a.path != b.path {
 				diffs = append(diffs, fmt.Sprintf("%s: different extension path, got %v and %v", prefix, a.path, b.path))
 			}
-			if a.hashDirty != b.hashDirty {
-				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			if a.hashStatus != b.hashStatus {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %v and %v", prefix, a.hashStatus, b.hashStatus))
 			}
 			if a.nextHashDirty != b.nextHashDirty {
 				diffs = append(diffs, fmt.Sprintf("%s: different next-hash-dirty flag, got %t and %t", prefix, a.nextHashDirty, b.nextHashDirty))
@@ -7860,8 +7938,8 @@ func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
 			if a.frozenChildren != b.frozenChildren {
 				diffs = append(diffs, fmt.Sprintf("%s: different frozen children flags, got %016b and %016b", prefix, a.frozenChildren, b.frozenChildren))
 			}
-			if a.hashDirty != b.hashDirty {
-				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			if a.hashStatus != b.hashStatus {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %v and %v", prefix, a.hashStatus, b.hashStatus))
 			}
 			if a.dirtyHashes != b.dirtyHashes {
 				diffs = append(diffs, fmt.Sprintf("%s: different dirty-child-hashes flags, got %016b and %016b", prefix, a.dirtyHashes, b.dirtyHashes))
@@ -7880,8 +7958,8 @@ func (c *nodeContext) diff(prefix string, nodeA, nodeB Node) []string {
 			if a.frozen != b.frozen {
 				diffs = append(diffs, fmt.Sprintf("%s: different frozen state, got %t and %t", prefix, a.frozen, b.frozen))
 			}
-			if a.hashDirty != b.hashDirty {
-				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %t and %t", prefix, a.hashDirty, b.hashDirty))
+			if a.hashStatus != b.hashStatus {
+				diffs = append(diffs, fmt.Sprintf("%s: different hash-dirty flag, got %v and %v", prefix, a.hashStatus, b.hashStatus))
 			}
 			if a.key != b.key {
 				diffs = append(diffs, fmt.Sprintf("%s: different key, got %x and %x", prefix, a.key, b.key))
@@ -7936,7 +8014,7 @@ func (c *nodeContext) equalWithConfig(a, b Node, config equalityConfig) bool {
 		if b, ok := b.(*AccountNode); ok {
 			eq := a.address == b.address
 			eq = eq && a.info == b.info
-			eq = eq && (config.ignoreDirtyHash || a.hashDirty == b.hashDirty)
+			eq = eq && (config.ignoreDirtyHash || a.hashStatus == b.hashStatus)
 			eq = eq && (config.ignoreDirtyHash || a.storageHashDirty == b.storageHashDirty)
 			eq = eq && (config.ignoreFreeze || a.frozen == b.frozen)
 			eq = eq && c.equalTriesWithConfig(a.storage, b.storage, config)
@@ -7956,7 +8034,7 @@ func (c *nodeContext) equalWithConfig(a, b Node, config equalityConfig) bool {
 	if a, ok := a.(*ExtensionNode); ok {
 		if b, ok := b.(*ExtensionNode); ok {
 			eq := a.path == b.path
-			eq = eq && (config.ignoreDirtyHash || a.hashDirty == b.hashDirty)
+			eq = eq && (config.ignoreDirtyHash || a.hashStatus == b.hashStatus)
 			eq = eq && (config.ignoreDirtyHash || a.nextHashDirty == b.nextHashDirty)
 			eq = eq && (config.ignoreFreeze || a.frozen == b.frozen)
 			eq = eq && c.equalTriesWithConfig(a.next, b.next, config)
@@ -7970,7 +8048,7 @@ func (c *nodeContext) equalWithConfig(a, b Node, config equalityConfig) bool {
 			if !config.ignoreFreeze && a.frozen != b.frozen {
 				return false
 			}
-			if a.hashDirty != b.hashDirty {
+			if !config.ignoreDirtyHash && a.hashStatus != b.hashStatus {
 				return false
 			}
 			if !config.ignoreDirtyHash && a.dirtyHashes != b.dirtyHashes {
@@ -7993,7 +8071,7 @@ func (c *nodeContext) equalWithConfig(a, b Node, config equalityConfig) bool {
 		if b, ok := b.(*ValueNode); ok {
 			eq := a.key == b.key
 			eq = eq && a.value == b.value
-			eq = eq && (config.ignoreDirtyHash || a.hashDirty == b.hashDirty)
+			eq = eq && (config.ignoreDirtyHash || a.hashStatus == b.hashStatus)
 			eq = eq && (config.ignoreFreeze || a.frozen == b.frozen)
 			if !eq {
 				return false

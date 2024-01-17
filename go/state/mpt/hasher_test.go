@@ -43,7 +43,7 @@ func TestHasher_ExtensionNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if !handle.Get().(*ExtensionNode).hashDirty {
+			if handle.Get().(*ExtensionNode).hasCleanHash() {
 				t.Errorf("dirty hash flag should not be cleared")
 			}
 			if !handle.Get().(*ExtensionNode).nextHashDirty {
@@ -80,7 +80,7 @@ func TestHasher_ExtensionNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if handle.Get().(*ExtensionNode).hashDirty {
+			if !handle.Get().(*ExtensionNode).hasCleanHash() {
 				t.Errorf("dirty hash flag should be cleared")
 			}
 			if handle.Get().(*ExtensionNode).nextHashDirty {
@@ -114,7 +114,7 @@ func TestHasher_BranchNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			// The dirty flag is not touched.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if !handle.Get().(*BranchNode).hashDirty {
+			if handle.Get().(*BranchNode).hasCleanHash() {
 				t.Errorf("dirty hash flag should not be cleared")
 			}
 			if handle.Get().(*BranchNode).dirtyHashes != ((1 << 0x7) | (1 << 0xd)) {
@@ -150,7 +150,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if handle.Get().(*BranchNode).hashDirty {
+			if !handle.Get().(*BranchNode).hasCleanHash() {
 				t.Errorf("dirty hash flag should be cleared")
 			}
 			if handle.Get().(*BranchNode).dirtyHashes != 0 {
@@ -184,7 +184,7 @@ func TestHasher_BranchNode_UpdateHash_DirtyFlagsForEmptyChildrenAreClearedButNoU
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if handle.Get().(*BranchNode).hashDirty {
+			if !handle.Get().(*BranchNode).hasCleanHash() {
 				t.Errorf("dirty hash flag should be cleared")
 			}
 			if handle.Get().(*BranchNode).dirtyHashes != 0 {
@@ -216,7 +216,7 @@ func TestHasher_AccountNode_GetHash_DirtyHashesAreIgnored(t *testing.T) {
 			// The dirty flag is not changed.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if !handle.Get().(*AccountNode).hashDirty {
+			if handle.Get().(*AccountNode).hasCleanHash() {
 				t.Errorf("dirty hash flags should not be changed")
 			}
 			if !handle.Get().(*AccountNode).storageHashDirty {
@@ -248,7 +248,7 @@ func TestHasher_AccountNode_UpdateHash_DirtyHashesAreRefreshed(t *testing.T) {
 			// The dirty flag is cleared.
 			handle := node.GetReadHandle()
 			defer handle.Release()
-			if handle.Get().(*AccountNode).hashDirty {
+			if !handle.Get().(*AccountNode).hasCleanHash() {
 				t.Errorf("dirty hash flag should be cleared")
 			}
 			if handle.Get().(*AccountNode).storageHashDirty {
