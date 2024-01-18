@@ -10,6 +10,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/synchronization/mutex.h"
+#include "backend/common/file.h"
 #include "backend/common/sqlite/sqlite.h"
 #include "common/hash.h"
 #include "common/memory_usage.h"
@@ -854,7 +855,8 @@ SqliteArchive& SqliteArchive::operator=(SqliteArchive&&) = default;
 
 absl::StatusOr<SqliteArchive> SqliteArchive::Open(
     std::filesystem::path directory) {
-  // TODO: create directory if it does not exist.
+  // Make sure the directory exists.
+  RETURN_IF_ERROR(backend::CreateDirectory(directory));
   auto path = directory;
   if (std::filesystem::is_directory(directory)) {
     path = path / "archive.sqlite";

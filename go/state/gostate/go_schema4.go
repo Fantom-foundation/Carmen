@@ -1,10 +1,11 @@
-package state
+package gostate
 
 import (
 	"errors"
 	"fmt"
 	"path/filepath"
 
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
@@ -14,23 +15,23 @@ type goSchema4 struct {
 	*mpt.MptState
 }
 
-func newS4State(params Parameters, state *mpt.MptState) (State, error) {
-	if params.Archive == S5Archive {
+func newS4State(params state.Parameters, mptState *mpt.MptState) (state.State, error) {
+	if params.Archive == state.S5Archive {
 		return nil, errors.Join(
-			fmt.Errorf("%w: cannot use archive %v with schema 4", UnsupportedConfiguration, params.Archive),
-			state.Close(),
+			fmt.Errorf("%w: cannot use archive %v with schema 4", state.UnsupportedConfiguration, params.Archive),
+			mptState.Close(),
 		)
 	}
 	arch, archiveCleanup, err := openArchive(params)
 	if err != nil {
-		return nil, errors.Join(err, state.Close())
+		return nil, errors.Join(err, mptState.Close())
 	}
 	return newGoState(&goSchema4{
-		MptState: state,
+		MptState: mptState,
 	}, arch, []func(){archiveCleanup}), nil
 }
 
-func newGoMemoryS4State(params Parameters) (State, error) {
+func newGoMemoryS4State(params state.Parameters) (state.State, error) {
 	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return nil, err
@@ -38,7 +39,7 @@ func newGoMemoryS4State(params Parameters) (State, error) {
 	return newS4State(params, state)
 }
 
-func newGoFileS4State(params Parameters) (State, error) {
+func newGoFileS4State(params state.Parameters) (state.State, error) {
 	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return nil, err

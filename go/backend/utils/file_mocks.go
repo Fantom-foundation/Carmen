@@ -5,6 +5,7 @@
 //
 //	mockgen -source file.go -destination file_mocks.go -package utils
 //
+
 // Package utils is a generated GoMock package.
 package utils
 

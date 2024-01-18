@@ -187,30 +187,32 @@ template <typename Config>
 absl::StatusOr<State<Config>> State<Config>::Open(
     const std::filesystem::path& dir, bool with_archive) {
   backend::Context context;
+  const auto live_dir = dir / "live";
   ASSIGN_OR_RETURN(auto address_index, (Index<Address, AddressId>::Open(
-                                           context, dir / "addresses")));
+                                           context, live_dir / "addresses")));
   ASSIGN_OR_RETURN(auto key_index,
-                   (Index<Key, KeyId>::Open(context, dir / "keys")));
+                   (Index<Key, KeyId>::Open(context, live_dir / "keys")));
   ASSIGN_OR_RETURN(auto slot_index,
-                   (Index<Slot, SlotId>::Open(context, dir / "slots")));
+                   (Index<Slot, SlotId>::Open(context, live_dir / "slots")));
 
   ASSIGN_OR_RETURN(auto balances, (Store<AddressId, Balance>::Open(
-                                      context, dir / "balances")));
-  ASSIGN_OR_RETURN(auto nonces,
-                   (Store<AddressId, Nonce>::Open(context, dir / "nonces")));
+                                      context, live_dir / "balances")));
+  ASSIGN_OR_RETURN(auto nonces, (Store<AddressId, Nonce>::Open(
+                                    context, live_dir / "nonces")));
   ASSIGN_OR_RETURN(auto values,
-                   (Store<SlotId, Value>::Open(context, dir / "values")));
-  ASSIGN_OR_RETURN(auto account_state, (Store<AddressId, AccountState>::Open(
-                                           context, dir / "account_states")));
+                   (Store<SlotId, Value>::Open(context, live_dir / "values")));
+  ASSIGN_OR_RETURN(auto account_state,
+                   (Store<AddressId, AccountState>::Open(
+                       context, live_dir / "account_states")));
   ASSIGN_OR_RETURN(auto code_hashes, (Store<AddressId, Hash>::Open(
-                                         context, dir / "code_hashes")));
+                                         context, live_dir / "code_hashes")));
 
   ASSIGN_OR_RETURN(auto codes,
-                   (Depot<AddressId>::Open(context, dir / "codes")));
+                   (Depot<AddressId>::Open(context, live_dir / "codes")));
 
-  ASSIGN_OR_RETURN(
-      auto address_to_slots,
-      (MultiMap<AddressId, SlotId>::Open(context, dir / "address_to_slots")));
+  ASSIGN_OR_RETURN(auto address_to_slots,
+                   (MultiMap<AddressId, SlotId>::Open(
+                       context, live_dir / "address_to_slots")));
 
   std::unique_ptr<Archive> archive;
   if (with_archive) {

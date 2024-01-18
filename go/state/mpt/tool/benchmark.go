@@ -16,6 +16,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"github.com/urfave/cli/v2"
+
+	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 )
 
 var Benchmark = cli.Command{
@@ -208,7 +210,7 @@ func runBenchmark(
 	}
 	state, err := state.NewState(state.Parameters{
 		Directory: path,
-		Variant:   state.GoFile,
+		Variant:   gostate.VariantGoFile,
 		Schema:    5,
 		Archive:   archive,
 	})

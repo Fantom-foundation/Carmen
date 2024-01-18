@@ -5,6 +5,7 @@
 //
 //	mockgen -source fuzzing.go -destination fuzzing_mocks.go -package fuzzing
 //
+
 // Package fuzzing is a generated GoMock package.
 package fuzzing
 

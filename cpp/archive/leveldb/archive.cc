@@ -11,6 +11,7 @@
 #include "absl/strings/str_format.h"
 #include "archive/leveldb/keys.h"
 #include "archive/leveldb/values.h"
+#include "backend/common/file.h"
 #include "backend/common/leveldb/leveldb.h"
 #include "common/byte_util.h"
 #include "common/hash.h"
@@ -141,6 +142,8 @@ class Archive {
  public:
   static absl::StatusOr<std::unique_ptr<Archive>> Open(
       const std::filesystem::path directory) {
+    // Make sure the directory exists.
+    RETURN_IF_ERROR(backend::CreateDirectory(directory));
     ASSIGN_OR_RETURN(auto db, LevelDb::Open(directory));
     return std::unique_ptr<Archive>(new Archive(std::move(db)));
   }

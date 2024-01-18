@@ -1,4 +1,4 @@
-package state
+package gostate
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -92,7 +93,7 @@ func (s *ArchiveState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVer
 	return nil, backend.ErrSnapshotNotSupported
 }
 
-func (s *ArchiveState) GetArchiveState(block uint64) (State, error) {
+func (s *ArchiveState) GetArchiveState(block uint64) (state.State, error) {
 	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block height from the archive; %s", err)

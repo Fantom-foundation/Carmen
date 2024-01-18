@@ -25,6 +25,19 @@ func WrapIntoSyncedState(state State) State {
 	}
 }
 
+// UnsafeUnwrapSyncedState obtains a reference to a potentially nested
+// synchronized state from the given state.
+// Note: extracting the state from within a synchronized state breaks
+// the synchronization guarantees for the synced state. Concurrent
+// operations on the given state and the resulting state are no longer
+// mutual exclusive.
+func UnsafeUnwrapSyncedState(state State) State {
+	if syncedState, ok := state.(*syncedState); ok {
+		return syncedState.state
+	}
+	return state
+}
+
 func (s *syncedState) Exists(address common.Address) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

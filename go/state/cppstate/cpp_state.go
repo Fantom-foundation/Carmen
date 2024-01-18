@@ -13,24 +13,15 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/state"
+	"os"
+	"path/filepath"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
-
-const (
-	CppMemory  state.Variant = "cpp-memory"
-	CppFile                  = "cpp-file"
-	CppLevelDb               = "cpp-ldb"
-)
-
-func init() {
-	state.RegisterVariantFactory(CppMemory, newCppInMemoryState)
-	state.RegisterVariantFactory(CppFile, newCppFileBasedState)
-	state.RegisterVariantFactory(CppLevelDb, newCppLevelDbBasedState)
-}
 
 const CodeCacheSize = 8_000 // ~ 200 MiB of memory for go-side code cache
 const CodeMaxSize = 25000   // Contract limit is 24577
@@ -43,11 +34,26 @@ type CppState struct {
 	codeCache *common.LruCache[common.Address, []byte]
 }
 
-func newCppState(impl C.enum_StateImpl, params state.Parameters) (state.State, error) {
+func newState(impl C.enum_StateImpl, params state.Parameters) (state.State, error) {
+	if err := os.MkdirAll(filepath.Join(params.Directory, "live"), 0700); err != nil {
+		return nil, err
+	}
 	dir := C.CString(params.Directory)
 	defer C.free(unsafe.Pointer(dir))
 
-	st := C.Carmen_OpenState(C.C_Schema(params.Schema), impl, C.enum_StateImpl(params.Archive), dir, C.int(len(params.Directory)))
+	archive := 0
+	switch params.Archive {
+	case state.ArchiveType(""), state.NoArchive:
+		archive = 0
+	case state.LevelDbArchive:
+		archive = 1
+	case state.SqliteArchive:
+		archive = 2
+	default:
+		return nil, fmt.Errorf("%w: unsupported archive type %v", state.UnsupportedConfiguration, params.Archive)
+	}
+
+	st := C.Carmen_OpenState(C.C_Schema(params.Schema), impl, C.enum_StateImpl(archive), dir, C.int(len(params.Directory)))
 	if st == unsafe.Pointer(nil) {
 		return nil, fmt.Errorf("%w: failed to create C++ state instance for parameters %v", state.UnsupportedConfiguration, params)
 	}
@@ -58,16 +64,16 @@ func newCppState(impl C.enum_StateImpl, params state.Parameters) (state.State, e
 	}), nil
 }
 
-func newCppInMemoryState(params state.Parameters) (state.State, error) {
-	return newCppState(C.kState_Memory, params)
+func newInMemoryState(params state.Parameters) (state.State, error) {
+	return newState(C.kState_Memory, params)
 }
 
-func newCppFileBasedState(params state.Parameters) (state.State, error) {
-	return newCppState(C.kState_File, params)
+func newFileBasedState(params state.Parameters) (state.State, error) {
+	return newState(C.kState_File, params)
 }
 
-func newCppLevelDbBasedState(params state.Parameters) (state.State, error) {
-	return newCppState(C.kState_LevelDb, params)
+func newLevelDbBasedState(params state.Parameters) (state.State, error) {
+	return newState(C.kState_LevelDb, params)
 }
 
 func (cs *CppState) CreateAccount(address common.Address) error {
