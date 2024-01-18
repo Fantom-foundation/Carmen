@@ -7,6 +7,7 @@ cc_library(
         "//backend:__subpackages__",
     ],
     deps = [
+        "//backend/common:file",
         "//common:memory_usage",
         "//common:status_util",
         "@com_github_google_leveldb//:leveldb",

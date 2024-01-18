@@ -1,15 +1,23 @@
-package state
+package cppstate
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
+)
+
+var (
+	address1 = common.Address{0x01}
+	key1     = common.Key{0x01}
+	balance1 = common.Balance{0x01}
+	nonce1   = common.Nonce{0x01}
+	val1     = common.Value{0x01}
 )
 
 func TestAccountsAreInitiallyUnknown(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		account_state, _ := state.Exists(address1)
 		if account_state != false {
 			t.Errorf("Initial account is not unknown, got %v", account_state)
@@ -18,7 +26,7 @@ func TestAccountsAreInitiallyUnknown(t *testing.T) {
 }
 
 func TestAccountsCanBeCreated(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		state.Apply(1, common.Update{CreatedAccounts: []common.Address{address1}})
 		account_state, _ := state.Exists(address1)
 		if account_state != true {
@@ -28,7 +36,7 @@ func TestAccountsCanBeCreated(t *testing.T) {
 }
 
 func TestAccountsCanBeDeleted(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		state.Apply(1, common.Update{CreatedAccounts: []common.Address{address1}})
 		state.Apply(2, common.Update{DeletedAccounts: []common.Address{address1}})
 		account_state, _ := state.Exists(address1)
@@ -39,7 +47,7 @@ func TestAccountsCanBeDeleted(t *testing.T) {
 }
 
 func TestReadUninitializedBalance(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		balance, err := state.GetBalance(address1)
 		if err != nil {
 			t.Fatalf("Error fetching balance: %v", err)
@@ -51,7 +59,7 @@ func TestReadUninitializedBalance(t *testing.T) {
 }
 
 func TestWriteAndReadBalance(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		err := state.Apply(1, common.Update{
 			Balances: []common.BalanceUpdate{{Account: address1, Balance: balance1}},
 		})
@@ -69,7 +77,7 @@ func TestWriteAndReadBalance(t *testing.T) {
 }
 
 func TestReadUninitializedNonce(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		nonce, err := state.GetNonce(address1)
 		if err != nil {
 			t.Fatalf("Error fetching nonce: %v", err)
@@ -81,7 +89,7 @@ func TestReadUninitializedNonce(t *testing.T) {
 }
 
 func TestWriteAndReadNonce(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		err := state.Apply(1, common.Update{
 			Nonces: []common.NonceUpdate{{Account: address1, Nonce: nonce1}},
 		})
@@ -99,7 +107,7 @@ func TestWriteAndReadNonce(t *testing.T) {
 }
 
 func TestReadUninitializedSlot(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		value, err := state.GetStorage(address1, key1)
 		if err != nil {
 			t.Fatalf("Error fetching storage slot: %v", err)
@@ -111,7 +119,7 @@ func TestReadUninitializedSlot(t *testing.T) {
 }
 
 func TestWriteAndReadSlot(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		err := state.Apply(1, common.Update{
 			Slots: []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
 		})
@@ -149,7 +157,7 @@ func getTestCodes() [][]byte {
 }
 
 func TestSetAndGetCode(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		for _, code := range getTestCodes() {
 			err := state.Apply(1, common.Update{
 				Codes: []common.CodeUpdate{{Account: address1, Code: code}},
@@ -176,7 +184,7 @@ func TestSetAndGetCode(t *testing.T) {
 }
 
 func TestSetAndGetCodeHash(t *testing.T) {
-	runForEachCppConfig(t, func(t *testing.T, state State) {
+	runForEachCppConfig(t, func(t *testing.T, state state.State) {
 		for _, code := range getTestCodes() {
 			err := state.Apply(1, common.Update{
 				Codes: []common.CodeUpdate{{Account: address1, Code: code}},
@@ -196,30 +204,21 @@ func TestSetAndGetCodeHash(t *testing.T) {
 	})
 }
 
-func initCppStates() []namedStateConfig {
-	list := []namedStateConfig{}
-	for _, s := range GetAllSchemas() {
-		list = append(list, []namedStateConfig{
-			{"memory", s, "cpp-memory"},
-			{"file", s, "cpp-file"},
-			{"leveldb", s, "cpp-ldb"},
-		}...)
-	}
-	return list
-}
-
-func runForEachCppConfig(t *testing.T, test func(*testing.T, State)) {
-	for _, config := range initCppStates() {
+func runForEachCppConfig(t *testing.T, test func(*testing.T, state.State)) {
+	for config, factory := range state.GetAllRegisteredStateFactories() {
 		config := config
-		t.Run(config.name, func(t *testing.T) {
+		factory := factory
+		t.Run(config.String(), func(t *testing.T) {
 			t.Parallel()
-			state, err := config.createState(t.TempDir())
+			params := state.Parameters{
+				Directory: t.TempDir(),
+				Variant:   config.Variant,
+				Schema:    config.Schema,
+				Archive:   config.Archive,
+			}
+			state, err := factory(params)
 			if err != nil {
-				if errors.Is(err, UnsupportedConfiguration) {
-					t.Skipf("failed to initialize state %s: %v", config.name, err)
-				} else {
-					t.Fatalf("failed to initialize state %s: %v", config.name, err)
-				}
+				t.Fatalf("failed to initialize configuration %v: %v", config, err)
 			}
 			defer state.Close()
 			test(t, state)

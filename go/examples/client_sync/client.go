@@ -8,6 +8,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 )
 
 // Client is a (very) simplified implementation of a client
@@ -42,7 +43,7 @@ func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 	// Initialize this client's State DB.
 	state, err := state.NewState(state.Parameters{
 		Directory: t.TempDir(),
-		Variant:   state.GoFile,
+		Variant:   gostate.VariantGoFile,
 		Schema:    3,
 		Archive:   state.NoArchive,
 	})

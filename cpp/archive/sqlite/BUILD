@@ -7,6 +7,7 @@ cc_library(
         "//tools:__subpackages__",
     ],
     deps = [
+        "//backend/common:file",
         "//backend/common/sqlite",
         "//common:type",
         "//state:update",

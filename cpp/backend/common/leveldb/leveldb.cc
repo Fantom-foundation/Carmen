@@ -5,6 +5,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "backend/common/file.h"
 #include "common/memory_usage.h"
 #include "common/status_util.h"
 #include "leveldb/db.h"
@@ -25,6 +26,8 @@ class LevelDbImpl {
 
   static absl::StatusOr<LevelDbImpl> Open(const std::filesystem::path& path,
                                           bool create_if_missing = true) {
+    // Make sure the directory exists.
+    RETURN_IF_ERROR(CreateDirectory(path));
     leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = create_if_missing;

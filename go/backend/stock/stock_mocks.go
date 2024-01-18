@@ -5,6 +5,7 @@
 //
 //	mockgen -source stock.go -destination stock_mocks.go -package stock -exclude_interfaces Index
 //
+
 // Package stock is a generated GoMock package.
 package stock
 

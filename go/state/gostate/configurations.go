@@ -1,4 +1,4 @@
-package state
+package gostate
 
 import (
 	"fmt"
@@ -7,22 +7,25 @@ import (
 	"path/filepath"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt"
-
-	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
-
-	cachedDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/cache"
-	fileDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/file"
-	ldbDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
-	cachedIndex "github.com/Fantom-foundation/Carmen/go/backend/index/cache"
+	"github.com/Fantom-foundation/Carmen/go/backend/index/file"
 	"github.com/Fantom-foundation/Carmen/go/backend/index/ldb"
+	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+
+	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
+	cachedDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/cache"
+	fileDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/file"
+	ldbDepot "github.com/Fantom-foundation/Carmen/go/backend/depot/ldb"
+	cachedIndex "github.com/Fantom-foundation/Carmen/go/backend/index/cache"
 	indexmem "github.com/Fantom-foundation/Carmen/go/backend/index/memory"
 	mapbtree "github.com/Fantom-foundation/Carmen/go/backend/multimap/btreemem"
 	mapldb "github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
@@ -30,10 +33,9 @@ import (
 	cachedStore "github.com/Fantom-foundation/Carmen/go/backend/store/cache"
 	ldbstore "github.com/Fantom-foundation/Carmen/go/backend/store/ldb"
 	storemem "github.com/Fantom-foundation/Carmen/go/backend/store/memory"
-	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
+
+const HashTreeFactor = 32
 
 // CacheCapacity is the size of the cache expressed as the number of cached keys
 const CacheCapacity = 1 << 20 // 2 ^ 20 keys -> 32MB for 32-bytes keys
@@ -47,111 +49,85 @@ const PoolSize = 100000
 // CodeHashGroupSize represents the number of codes grouped together in depots to form one leaf node of the hash tree.
 const CodeHashGroupSize = 4
 
-type ArchiveType int
+const defaultSchema = state.Schema(1)
 
 const (
-	NoArchive      ArchiveType = 0
-	LevelDbArchive ArchiveType = 1
-	SqliteArchive  ArchiveType = 2
-	S4Archive      ArchiveType = 3
-	S5Archive      ArchiveType = 4
+	VariantGoMemory         state.Variant = "go-memory"
+	VariantGoFile           state.Variant = "go-file"
+	VariantGoFileNoCache    state.Variant = "go-file-nocache"
+	VariantGoLevelDb        state.Variant = "go-ldb"
+	VariantGoLevelDbNoCache state.Variant = "go-ldb-nocache"
 )
-
-var allArchiveTypes = []ArchiveType{
-	NoArchive, LevelDbArchive, SqliteArchive, S4Archive, S5Archive,
-}
-
-func (a ArchiveType) String() string {
-	switch a {
-	case NoArchive:
-		return "NoArchive"
-	case LevelDbArchive:
-		return "LevelDbArchive"
-	case SqliteArchive:
-		return "SqliteArchive"
-	case S4Archive:
-		return "S4Archive"
-	case S5Archive:
-		return "S5Archive"
-	}
-	return "unknown"
-}
-
-type Variant string
-
-const (
-	GoMemory         Variant = "go-memory"
-	GoFile           Variant = "go-file"
-	GoFileNoCache    Variant = "go-file-nocache"
-	GoLevelDb        Variant = "go-ldb"
-	GoLevelDbNoCache Variant = "go-ldb-nocache"
-)
-
-func GetAllVariants() []Variant {
-	variants := make([]Variant, 0, len(variantRegistry))
-	for variant := range variantRegistry {
-		variants = append(variants, variant)
-	}
-	return variants
-}
-
-type StateSchema uint8
-
-const defaultSchema StateSchema = 1
-
-func GetAllSchemas() []StateSchema {
-	return []StateSchema{1, 2, 3, 4, 5}
-}
-
-// Parameters struct defining configuration parameters for state instances.
-type Parameters struct {
-	Directory    string
-	Variant      Variant
-	Schema       StateSchema
-	Archive      ArchiveType
-	LiveCache    int64 // bytes, approximate, supported only by S5 now
-	ArchiveCache int64 // bytes, approximate, supported only by S5 now
-}
-
-// UnsupportedConfiguration is the error returned if unsupported configuration
-// parameters have been specified. The text may contain further details regarding the
-// unsupported feature.
-const UnsupportedConfiguration = common.ConstError("unsupported configuration")
-
-type StateFactory func(params Parameters) (State, error)
-
-var variantRegistry = make(map[Variant]StateFactory)
 
 func init() {
-	RegisterVariantFactory(GoMemory, newGoMemoryState)
-	RegisterVariantFactory(GoFileNoCache, newGoFileState)
-	RegisterVariantFactory(GoFile, newGoCachedFileState)
-	RegisterVariantFactory(GoLevelDbNoCache, newGoLeveLIndexAndStoreState)
-	RegisterVariantFactory(GoLevelDb, newGoCachedLeveLIndexAndStoreState)
-}
-
-func RegisterVariantFactory(variant Variant, factory StateFactory) {
-	if _, exists := variantRegistry[variant]; exists {
-		panic(fmt.Errorf("variant %s already registered", variant))
+	generallySupportedArchives := []state.ArchiveType{
+		state.NoArchive,
+		state.LevelDbArchive,
+		state.SqliteArchive,
 	}
-	variantRegistry[variant] = factory
-}
 
-// NewState is the public interface for creating Carmen state instances. If for the
-// given parameters a state can be constructed, the resulting state is returned. If
-// construction fails, an error is reported. If the requested configuration is not
-// supported, the error is an UnsupportedConfiguration error.
-func NewState(params Parameters) (State, error) {
-	factory, found := variantRegistry[params.Variant]
-	if !found {
-		return nil, fmt.Errorf("%w: unknown variant %s", UnsupportedConfiguration, params.Variant)
+	// Register all configuration options supported by the Go implementation.
+	// TODO: break this up on a per schema basis
+	for schema := state.Schema(1); schema <= state.Schema(5); schema++ {
+		for _, archive := range generallySupportedArchives {
+			state.RegisterStateFactory(state.Configuration{
+				Variant: VariantGoMemory,
+				Schema:  schema,
+				Archive: archive,
+			}, newGoMemoryState)
+			state.RegisterStateFactory(state.Configuration{
+				Variant: VariantGoFile,
+				Schema:  schema,
+				Archive: archive,
+			}, newGoCachedFileState)
+
+			if schema < state.Schema(3) {
+				state.RegisterStateFactory(state.Configuration{
+					Variant: VariantGoFileNoCache,
+					Schema:  schema,
+					Archive: archive,
+				}, newGoFileState)
+				state.RegisterStateFactory(state.Configuration{
+					Variant: VariantGoLevelDb,
+					Schema:  schema,
+					Archive: archive,
+				}, newGoCachedLeveLIndexAndStoreState)
+				state.RegisterStateFactory(state.Configuration{
+					Variant: VariantGoLevelDbNoCache,
+					Schema:  schema,
+					Archive: archive,
+				}, newGoLeveLIndexAndStoreState)
+			}
+		}
 	}
-	return factory(params)
+
+	mptSetups := []struct {
+		schema  state.Schema
+		archive state.ArchiveType
+	}{
+		{4, state.S4Archive},
+		{5, state.S5Archive},
+	}
+
+	for _, setup := range mptSetups {
+		state.RegisterStateFactory(state.Configuration{
+			Variant: VariantGoMemory,
+			Schema:  setup.schema,
+			Archive: setup.archive,
+		}, newGoMemoryState)
+
+		state.RegisterStateFactory(state.Configuration{
+			Variant: VariantGoFile,
+			Schema:  setup.schema,
+			Archive: setup.archive,
+		}, newGoFileState)
+	}
+
 }
 
 // newGoMemoryState creates in memory implementation
 // (path parameter for compatibility with other state factories, can be left empty)
-func newGoMemoryState(params Parameters) (State, error) {
+func newGoMemoryState(params state.Parameters) (state.State, error) {
 	_, err := getLiveDbPath(params)
 	if err != nil {
 		return nil, err
@@ -256,7 +232,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", UnsupportedConfiguration, params.Schema)
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", state.UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -269,7 +245,7 @@ func newGoMemoryState(params Parameters) (State, error) {
 }
 
 // newGoFileState creates File based Index and Store implementations
-func newGoFileState(params Parameters) (State, error) {
+func newGoFileState(params state.Parameters) (state.State, error) {
 	path, err := getLiveDbPath(params)
 	if err != nil {
 		return nil, err
@@ -437,7 +413,7 @@ func newGoFileState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", UnsupportedConfiguration, params.Schema)
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", state.UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -450,7 +426,7 @@ func newGoFileState(params Parameters) (State, error) {
 }
 
 // newGoCachedFileState creates File based Index and Store implementations
-func newGoCachedFileState(params Parameters) (State, error) {
+func newGoCachedFileState(params state.Parameters) (state.State, error) {
 	path, err := getLiveDbPath(params)
 	if err != nil {
 		return nil, err
@@ -614,7 +590,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", UnsupportedConfiguration, params.Schema)
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1-5, got %d", state.UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -627,7 +603,7 @@ func newGoCachedFileState(params Parameters) (State, error) {
 }
 
 // newGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
+func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -743,7 +719,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1,2,3, got %d", UnsupportedConfiguration, params.Schema)
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1,2,3, got %d", state.UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -756,7 +732,7 @@ func newGoLeveLIndexAndStoreState(params Parameters) (State, error) {
 }
 
 // newGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
-func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
+func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, error) {
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
@@ -872,7 +848,7 @@ func newGoCachedLeveLIndexAndStoreState(params Parameters) (State, error) {
 			nil,
 		}
 	default:
-		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1,2,3, got %d", UnsupportedConfiguration, params.Schema)
+		return nil, fmt.Errorf("%w: the go implementation only supports schemas 1,2,3, got %d", state.UnsupportedConfiguration, params.Schema)
 	}
 
 	arch, archiveCleanup, err := openArchive(params)
@@ -906,23 +882,23 @@ func cleanUpByClosing(db io.Closer) func() {
 	}
 }
 
-func getLiveDbPath(params Parameters) (string, error) {
+func getLiveDbPath(params state.Parameters) (string, error) {
 	path := filepath.Join(params.Directory, "live")
 	return path, os.MkdirAll(path, 0700)
 }
 
-func getArchivePath(params Parameters) (string, error) {
+func getArchivePath(params state.Parameters) (string, error) {
 	path := filepath.Join(params.Directory, "archive")
 	return path, os.MkdirAll(path, 0700)
 }
 
-func openArchive(params Parameters) (archive archive.Archive, cleanup func(), err error) {
+func openArchive(params state.Parameters) (archive archive.Archive, cleanup func(), err error) {
 	switch params.Archive {
 
-	case NoArchive:
+	case state.ArchiveType(""), state.NoArchive:
 		return nil, nil, nil
 
-	case LevelDbArchive:
+	case state.LevelDbArchive:
 		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
@@ -935,7 +911,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		arch, err := archldb.NewArchive(db)
 		return arch, cleanup, err
 
-	case SqliteArchive:
+	case state.SqliteArchive:
 		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
@@ -943,7 +919,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		arch, err := sqlite.NewArchive(filepath.Join(path, "archive.sqlite"))
 		return arch, nil, err
 
-	case S4Archive:
+	case state.S4Archive:
 		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err
@@ -951,7 +927,7 @@ func openArchive(params Parameters) (archive archive.Archive, cleanup func(), er
 		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, mpt.DefaultMptStateCapacity)
 		return arch, nil, err
 
-	case S5Archive:
+	case state.S5Archive:
 		path, err := getArchivePath(params)
 		if err != nil {
 			return nil, nil, err

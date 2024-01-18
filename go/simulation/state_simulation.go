@@ -10,13 +10,14 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 )
 
 const KeysCacheSize = 256
 
 func main() {
 	memState, err := state.NewState(state.Parameters{
-		Variant: state.GoMemory,
+		Variant: gostate.VariantGoMemory,
 	})
 	if err != nil {
 		panic(err)

@@ -1,4 +1,4 @@
-package state
+package gostate
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
 
@@ -37,36 +38,41 @@ var (
 	nonce3 = common.Nonce{0x03}
 )
 
+type namedStateConfig struct {
+	config  state.Configuration
+	factory state.StateFactory
+}
+
+func (c *namedStateConfig) name() string {
+	return c.config.String()
+}
+
+func (c *namedStateConfig) createState(dir string) (state.State, error) {
+	return c.factory(state.Parameters{
+		Variant:   c.config.Variant,
+		Schema:    c.config.Schema,
+		Archive:   c.config.Archive,
+		Directory: dir,
+	})
+}
+
 func initGoStates() []namedStateConfig {
-	return []namedStateConfig{
-		{"Memory 1", 1, GoMemory},
-		{"Memory 2", 2, GoMemory},
-		{"Memory 3", 3, GoMemory},
-		{"Memory 4", 4, GoMemory},
-		{"Memory 5", 5, GoMemory},
-		{"File Index and Store 1", 1, GoFileNoCache},
-		{"File Index and Store 2", 2, GoFileNoCache},
-		{"File Index and Store 3", 3, GoFileNoCache},
-		{"File 4", 4, GoFileNoCache},
-		{"File 5", 5, GoFileNoCache},
-		{"Cached File Index and Store 1", 1, GoFile},
-		{"Cached File Index and Store 2", 2, GoFile},
-		{"Cached File Index and Store 3", 3, GoFile},
-		{"LevelDB Index and Store 1", 1, GoLevelDbNoCache},
-		{"LevelDB Index and Store 2", 2, GoLevelDbNoCache},
-		{"LevelDB Index and Store 3", 3, GoLevelDbNoCache},
-		{"Cached LevelDB Index and Store 1", 1, GoLevelDb},
-		{"Cached LevelDB Index and Store 2", 2, GoLevelDb},
-		{"Cached LevelDB Index and Store 3", 3, GoLevelDb},
+	res := []namedStateConfig{}
+	for config, factory := range state.GetAllRegisteredStateFactories() {
+		res = append(res, namedStateConfig{
+			config:  config,
+			factory: factory,
+		})
 	}
+	return res
 }
 
 func TestMissingKeys(t *testing.T) {
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer state.Close()
 
@@ -100,10 +106,10 @@ func TestMissingKeys(t *testing.T) {
 
 func TestBasicOperations(t *testing.T) {
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer state.Close()
 
@@ -158,10 +164,10 @@ func TestBasicOperations(t *testing.T) {
 
 func TestDeletingAccounts(t *testing.T) {
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer state.Close()
 
@@ -197,10 +203,10 @@ func TestDeletingAccounts(t *testing.T) {
 
 func TestMoreInserts(t *testing.T) {
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer state.Close()
 
@@ -246,10 +252,10 @@ func TestMoreInserts(t *testing.T) {
 
 func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer state.Close()
 
@@ -315,10 +321,10 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 func TestHashing(t *testing.T) {
 	var hashes = [][]common.Hash{nil, nil, nil, nil, nil, nil}
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %v", config.name, err)
+				t.Fatalf("failed to initialize state %s; %v", config.name(), err)
 			}
 			defer state.Close()
 
@@ -363,7 +369,7 @@ func TestHashing(t *testing.T) {
 			if initialHash == hash4 || hash3 == hash4 {
 				t.Errorf("hash of changed state not changed")
 			}
-			hashes[int(config.schema)] = append(hashes[int(config.schema)], hash4) // store the last hash
+			hashes[int(config.config.Schema)] = append(hashes[int(config.config.Schema)], hash4) // store the last hash
 		})
 	}
 
@@ -398,11 +404,15 @@ func (m failingIndex[K, I]) Get(key K) (id I, err error) {
 }
 
 func TestFailingStore(t *testing.T) {
-	state, err := newGoMemoryState(Parameters{Schema: 1})
+	db, err := newGoMemoryState(state.Parameters{
+		Directory: t.TempDir(),
+		Schema:    1,
+		Archive:   state.NoArchive,
+	})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goSchema := state.(*syncedState).state.(*GoState).live.(*GoSchema1)
+	goSchema := state.UnsafeUnwrapSyncedState(db).(*GoState).live.(*GoSchema1)
 	goSchema.balancesStore = failingStore[uint32, common.Balance]{goSchema.balancesStore}
 	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
 	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
@@ -411,41 +421,45 @@ func TestFailingStore(t *testing.T) {
 	_ = goSchema.SetNonce(address1, common.Nonce{})
 	_ = goSchema.SetStorage(address1, key1, common.Value{})
 
-	_, err = state.GetBalance(address1)
+	_, err = db.GetBalance(address1)
 	if err != errInjectedByTest {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 
-	_, err = state.GetNonce(address1)
+	_, err = db.GetNonce(address1)
 	if err != errInjectedByTest {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 
-	_, err = state.GetStorage(address1, key1)
+	_, err = db.GetStorage(address1, key1)
 	if err != errInjectedByTest {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 }
 
 func TestFailingIndex(t *testing.T) {
-	state, err := newGoMemoryState(Parameters{Schema: 1})
+	db, err := newGoMemoryState(state.Parameters{
+		Directory: t.TempDir(),
+		Schema:    1,
+		Archive:   state.NoArchive,
+	})
 	if err != nil {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
-	goSchema := state.(*syncedState).state.(*GoState).live.(*GoSchema1)
+	goSchema := state.UnsafeUnwrapSyncedState(db).(*GoState).live.(*GoSchema1)
 	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
-	_, err = state.GetBalance(address1)
+	_, err = db.GetBalance(address1)
 	if err != errInjectedByTest {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 
-	_, err = state.GetNonce(address1)
+	_, err = db.GetNonce(address1)
 	if err != errInjectedByTest {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 
-	_, err = state.GetStorage(address1, key1)
+	_, err = db.GetStorage(address1, key1)
 	if err != errInjectedByTest {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
@@ -453,16 +467,16 @@ func TestFailingIndex(t *testing.T) {
 
 func TestGetMemoryFootprint(t *testing.T) {
 	for _, config := range initGoStates() {
-		t.Run(config.name, func(t *testing.T) {
+		t.Run(config.name(), func(t *testing.T) {
 			state, err := config.createState(t.TempDir())
 			if err != nil {
-				t.Fatalf("failed to initialize state %s; %s", config.name, err)
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer state.Close()
 
 			memoryFootprint := state.GetMemoryFootprint()
 			str := memoryFootprint.ToString("state")
-			if config.schema <= 3 && !strings.Contains(str, "hashTree") {
+			if config.config.Schema <= 3 && !strings.Contains(str, "hashTree") {
 				t.Errorf("memory footprint string does not contain any hashTree")
 			}
 		})

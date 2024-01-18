@@ -1,6 +1,6 @@
-package state
+package gostate
 
-//go:generate mockgen -source go_state.go -destination go_state_mock.go -package state
+//go:generate mockgen -source go_state.go -destination go_state_mock.go -package gostate
 
 import (
 	"fmt"
@@ -9,11 +9,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
-)
-
-const (
-	HashTreeFactor = 32
 )
 
 // GoState combines a LiveDB and optional Archive implementation into a common
@@ -53,7 +50,7 @@ type LiveDB interface {
 	RunPostRestoreTasks() error
 }
 
-func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) State {
+func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) state.State {
 
 	res := &GoState{
 		live:    live,
@@ -100,7 +97,7 @@ func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) State {
 		res.archiveWriterError = err
 	}
 
-	return WrapIntoSyncedState(res)
+	return state.WrapIntoSyncedState(res)
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
@@ -238,7 +235,7 @@ func (s *GoState) Close() (lastErr error) {
 	return lastErr
 }
 
-func (s *GoState) GetArchiveState(block uint64) (as State, err error) {
+func (s *GoState) GetArchiveState(block uint64) (as state.State, err error) {
 	if s.archive == nil {
 		return nil, fmt.Errorf("archive not enabled for this GoState")
 	}

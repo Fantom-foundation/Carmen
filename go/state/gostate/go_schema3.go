@@ -1,4 +1,4 @@
-package state
+package gostate
 
 import (
 	"crypto/sha256"
