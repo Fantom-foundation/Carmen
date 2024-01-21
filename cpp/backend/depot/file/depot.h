@@ -129,7 +129,8 @@ class FileDepot {
   absl::StatusOr<std::uint32_t> GetSize(const K& key) const {
     ASSIGN_OR_RETURN(auto metadata, GetOffsetAndSize(key));
     if (metadata.size == 0) return absl::NotFoundError("Key not found");
-    return metadata.size;
+    auto res = metadata.size;
+    return res;
   }
 
   // Computes a hash over the full content of this depot.
