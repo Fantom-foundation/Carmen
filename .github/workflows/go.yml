@@ -35,7 +35,7 @@ jobs:
     - name: Set up clang
       uses: egor-tensin/setup-clang@v1
       with:
-        version: 14
+        version: 15
 
     - name: Set up bazel
       uses: bazelbuild/setup-bazelisk@v2
