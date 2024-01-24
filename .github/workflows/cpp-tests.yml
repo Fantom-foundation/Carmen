@@ -20,6 +20,9 @@ jobs:
   tests-check:
     name: Tests Check
     runs-on: ubuntu-22.04
+    env:
+      CC: clang-14
+      CXX: clang++-14
     steps:
       - name: Collect Workflow Telemetry
         uses: runforesight/workflow-telemetry-action@v1
