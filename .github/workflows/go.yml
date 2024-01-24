@@ -14,17 +14,11 @@ on:
       - 'cpp/**'
       - 'go/**'
 
-env:
-  CC: clang
-  CXX: clang++
-
 jobs:
 
   build:
     runs-on: ubuntu-20.04
     env:
-      CC: clang-14
-      CXX: clang++-14
       GOMEMLIMIT: "5GiB"
     steps:
     - name: Collect Workflow Telemetry
