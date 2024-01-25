@@ -106,7 +106,7 @@ class FileStoreBase {
 
  private:
   using Page = ArrayPage<V, page_size / sizeof(V)>;
-  using PagePool = PagePool<F<sizeof(Page)>>;
+  using Pool = PagePool<F<sizeof(Page)>>;
 
   // The actual size of a page, which may be larger than the specified page size
   // due to padding.
@@ -141,7 +141,7 @@ class FileStoreBase {
   // to pages through the page pool, and thus through its caching authority.
   class PageProvider : public PageSource {
    public:
-    PageProvider(PagePool& pool) : pool_(pool) {}
+    PageProvider(Pool& pool) : pool_(pool) {}
 
     absl::StatusOr<std::span<const std::byte>> GetPageData(PageId id) override {
       ASSIGN_OR_RETURN(Page & page, pool_.template Get<Page>(id));
@@ -149,7 +149,7 @@ class FileStoreBase {
     }
 
    private:
-    PagePool& pool_;
+    Pool& pool_;
   };
 
   // The number of elements per page, used for page and offset computation.
@@ -167,7 +167,7 @@ class FileStoreBase {
   // The page pool handling the in-memory buffer of pages fetched from disk. The
   // pool is placed in a unique pointer to ensure pointer stability when the
   // store is moved.
-  mutable std::unique_ptr<PagePool> pool_;
+  mutable std::unique_ptr<Pool> pool_;
 
   // The data structure managing the hashing of states. The hashes are placed in
   // a unique pointer to ensure pointer stability when the store is moved.
@@ -203,7 +203,7 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::FileStoreBase(
     std::unique_ptr<F<kFilePageSize>> file, std::filesystem::path hash_file,
     std::size_t hash_branching_factor)
     : num_pages_(file->GetNumPages()),
-      pool_(std::make_unique<PagePool>(std::move(file))),
+      pool_(std::make_unique<Pool>(std::move(file))),
       hashes_(std::make_unique<HashTree>(std::make_unique<PageProvider>(*pool_),
                                          hash_branching_factor)),
       hash_file_(std::move(hash_file)) {
