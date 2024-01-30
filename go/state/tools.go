@@ -14,7 +14,18 @@ var ErrVerificationNotSupported = errors.New("verification not supported for use
 var ErrImportNotSupported = errors.New("import not supported for used parameters")
 var ErrExportNotSupported = errors.New("export not supported for used parameters")
 
-func VerifyLiveDb(params Parameters, observer mpt.VerificationObserver) error {
+// VerificationObserver is a listener interface for tracking the progress of the verification
+// of a forest. It can, for instance, be implemented by a user interface to keep the user updated
+// on current activities.
+type VerificationObserver interface {
+	StartVerification()
+	Progress(msg string)
+	EndVerification(res error)
+}
+
+// VerifyLiveDb validates the live state. If the test passes, the live state data
+// stored in the respective directory can be considered valid.
+func VerifyLiveDb(params Parameters, observer VerificationObserver) error {
 	if params.Variant == "go-file" && params.Schema == 5 {
 		liveDir := params.Directory + string(filepath.Separator) + "live"
 		info, err := io.CheckMptDirectoryAndGetInfo(liveDir)
@@ -29,7 +40,9 @@ func VerifyLiveDb(params Parameters, observer mpt.VerificationObserver) error {
 	return ErrVerificationNotSupported
 }
 
-func VerifyArchive(params Parameters, observer mpt.VerificationObserver) error {
+// VerifyArchive validates the archive states database. If the test passes,
+// the archive states data stored in the respective directory can be considered valid.
+func VerifyArchive(params Parameters, observer VerificationObserver) error {
 	if params.Archive == NoArchive {
 		return nil // archive not used
 	}
@@ -47,6 +60,10 @@ func VerifyArchive(params Parameters, observer mpt.VerificationObserver) error {
 	return ErrVerificationNotSupported
 }
 
+// ExportLiveDb opens a LiveDB instance retained in the given directory and writes
+// its content to the given output writer. The result contains all the
+// information required by the ImportLiveDb function below to reconstruct the full
+// state of the LiveDB.
 func ExportLiveDb(params Parameters, out sio.Writer) error {
 	if params.Variant == "go-file" && params.Schema == 5 {
 		liveDir := params.Directory + string(filepath.Separator) + "live"
@@ -58,6 +75,8 @@ func ExportLiveDb(params Parameters, out sio.Writer) error {
 	return ErrExportNotSupported
 }
 
+// ImportLiveDb creates a fresh StateDB in the given directory and fills it
+// with the content read from the given reader.
 func ImportLiveDb(params Parameters, reader sio.Reader) error {
 	if params.Variant == "go-file" && params.Schema == 5 {
 		liveDir := params.Directory + string(filepath.Separator) + "live"
@@ -72,6 +91,9 @@ func ImportLiveDb(params Parameters, reader sio.Reader) error {
 	return ErrImportNotSupported
 }
 
+// InitializeArchive creates a fresh Archive in the given directory containing
+// the state read from the input stream at the given block. All states before
+// the given block are empty.
 func InitializeArchive(params Parameters, reader sio.Reader, blockNum uint64) error {
 	if params.Archive == NoArchive {
 		return nil // archive not used - skip import
