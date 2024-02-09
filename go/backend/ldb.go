@@ -1,12 +1,29 @@
-package common
+package backend
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
+
+// DbKey expects max size of the 36B key plus at most two bytes
+// for the table prefix (e.g. balance, nonce, slot, ...) and the domain (e.g. data, hash, ...)
+type DbKey [38]byte
+
+func (d DbKey) ToBytes() []byte {
+	return d[:]
+}
+
+// ToDBKey converts the input key to its respective table space key
+func ToDBKey(t common.TableSpace, key []byte) DbKey {
+	var dbKey DbKey
+	dbKey[0] = byte(t)
+	copy(dbKey[1:], key)
+	return dbKey
+}
 
 // LevelDB is an interface missing in original LevelDB design.
 // It contains methods common for the LevelDB instance and its Transactions.
@@ -79,7 +96,7 @@ type LevelDB interface {
 	// The snapshot must be released after use, by calling Release method.
 	GetSnapshot() (*leveldb.Snapshot, error)
 
-	MemoryFootprintProvider
+	common.MemoryFootprintProvider
 }
 
 // LevelDBReader is an interface missing in original LevelDB design.
@@ -127,24 +144,24 @@ func OpenLevelDb(path string, options *opt.Options) (wrapped *LevelDbMemoryFootp
 	if err != nil {
 		return nil, err
 	}
-	mf := NewMemoryFootprint(0)
-	mf.AddChild("writeBuffer", NewMemoryFootprint(uintptr(options.GetWriteBuffer())))
+	mf := common.NewMemoryFootprint(0)
+	mf.AddChild("writeBuffer", common.NewMemoryFootprint(uintptr(options.GetWriteBuffer())))
 	return &LevelDbMemoryFootprintWrapper{ldb, mf}, nil
 }
 
 // LevelDbMemoryFootprintWrapper is a LevelDB wrapper adding a memory footprint providing method.
 type LevelDbMemoryFootprintWrapper struct {
 	*leveldb.DB
-	mf *MemoryFootprint
+	mf *common.MemoryFootprint
 }
 
-func (wrapper *LevelDbMemoryFootprintWrapper) GetMemoryFootprint() *MemoryFootprint {
+func (wrapper *LevelDbMemoryFootprintWrapper) GetMemoryFootprint() *common.MemoryFootprint {
 	var ldbStats leveldb.DBStats
 	err := wrapper.DB.Stats(&ldbStats)
 	if err != nil {
 		panic(fmt.Errorf("failed to get LevelDB Stats; %s", err))
 	}
-	wrapper.mf.AddChild("blockCache", NewMemoryFootprint(uintptr(ldbStats.BlockCacheSize)))
+	wrapper.mf.AddChild("blockCache", common.NewMemoryFootprint(uintptr(ldbStats.BlockCacheSize)))
 	return wrapper.mf
 }
 
@@ -159,13 +176,13 @@ func (wrapper *LevelDbMemoryFootprintWrapper) OpenTransaction() (*LevelDbTransac
 // LevelDbTransactionMemoryFootprintWrapper is a LevelDB transaction wrapper adding a memory footprint method.
 type LevelDbTransactionMemoryFootprintWrapper struct {
 	*leveldb.Transaction
-	mf *MemoryFootprint
+	mf *common.MemoryFootprint
 }
 
 func (wrapper *LevelDbTransactionMemoryFootprintWrapper) GetSnapshot() (*leveldb.Snapshot, error) {
 	return nil, fmt.Errorf("unable to get snapshot from a transaction")
 }
 
-func (wrapper *LevelDbTransactionMemoryFootprintWrapper) GetMemoryFootprint() *MemoryFootprint {
+func (wrapper *LevelDbTransactionMemoryFootprintWrapper) GetMemoryFootprint() *common.MemoryFootprint {
 	return wrapper.mf
 }

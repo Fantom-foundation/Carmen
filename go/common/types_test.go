@@ -190,6 +190,19 @@ func TestTypes_Comparators(t *testing.T) {
 		b = 1
 		testTypesComparators[uint64](t, &a, &b, Uint64Comparator{})
 	})
+	t.Run("TestTypesComparator_SlotIdx32Comparator", func(t *testing.T) {
+		var a, b SlotIdx[uint32]
+		b.KeyIdx = 1
+		testTypesComparators[SlotIdx[uint32]](t, &a, &b, SlotIdx32Comparator{})
+	})
+	t.Run("TestTypesComparator_SlotIdx32KeyComparator", func(t *testing.T) {
+		var key Key
+		key[0]++
+		var a, b SlotIdxKey[uint32]
+		b.AddressIdx = 1
+		b.Key = key
+		testTypesComparators[SlotIdxKey[uint32]](t, &a, &b, SlotIdx32KeyComparator{})
+	})
 }
 
 func testTypesComparators[T any](t *testing.T, a, b *T, cmp Comparator[T]) {
@@ -247,6 +260,26 @@ func TestTypes_Hash(t *testing.T) {
 			return &a
 		}
 		testTypesHash[uint32](t, f, UInt32Hasher{})
+	})
+	t.Run("TestTypesHash_SlotIdx32Hasher", func(t *testing.T) {
+		var a SlotIdx[uint32]
+		f := func() *SlotIdx[uint32] {
+			a.KeyIdx++
+			a.AddressIdx++
+			return &a
+		}
+		testTypesHash[SlotIdx[uint32]](t, f, SlotIdx32Hasher{})
+	})
+	t.Run("TestTypesHash_SlotIdxKey", func(t *testing.T) {
+		var pos int
+		var a SlotIdxKey[uint32]
+		f := func() *SlotIdxKey[uint32] {
+			a.Key[pos%32]++
+			a.AddressIdx++
+			pos++
+			return &a
+		}
+		testTypesHash[SlotIdxKey[uint32]](t, f, SlotIdx32KeyHasher{})
 	})
 }
 

@@ -29,7 +29,7 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 			return cache.NewIndex[common.Address, uint32](memory.NewIndex[common.Address, uint32](keySerializer), 10)
 		},
 		"ldbindex": func(t *testing.T) index.Index[common.Address, uint32] {
-			db, err := common.OpenLevelDb(t.TempDir(), nil)
+			db, err := backend.OpenLevelDb(t.TempDir(), nil)
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}
@@ -64,7 +64,7 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 			return cache.NewIndex[common.Address, uint32](fileIndex, 10)
 		},
 		"cachedLdbIndex": func(t *testing.T) index.Index[common.Address, uint32] {
-			db, err := common.OpenLevelDb(t.TempDir(), nil)
+			db, err := backend.OpenLevelDb(t.TempDir(), nil)
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}

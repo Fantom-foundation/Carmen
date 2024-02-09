@@ -80,6 +80,14 @@ func TestLinearHashSplitEntries(t *testing.T) {
 	}
 }
 
+func TestLinearHash_ToString(t *testing.T) {
+	h := NewLinearHashBase[uint32, uint32](3, directHash{}, Uint32Comparator{})
+
+	if got, want := h.ToString(123, 456), "  123 -> 456 hash:                                                          1111011, mask: 10"; got != want {
+		t.Errorf("strings do not match: got: %v != want: %v", got, want)
+	}
+}
+
 // directHash hashes the input number just returning the same number as the input
 // i.e. no hashing is happening.
 type directHash struct{}

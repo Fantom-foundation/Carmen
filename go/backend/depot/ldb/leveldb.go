@@ -17,7 +17,7 @@ const LengthSize = 4 // uint32
 
 // Depot is an LevelDB backed store.Depot implementation
 type Depot[I common.Identifier] struct {
-	db              common.LevelDB
+	db              backend.LevelDB
 	table           common.TableSpace
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
@@ -27,7 +27,7 @@ type Depot[I common.Identifier] struct {
 }
 
 // NewDepot constructs a new instance of Depot.
-func NewDepot[I common.Identifier](db common.LevelDB,
+func NewDepot[I common.Identifier](db backend.LevelDB,
 	table common.TableSpace,
 	indexSerializer common.Serializer[I],
 	hashtreeFactory hashtree.Factory,
@@ -161,8 +161,8 @@ func (m *Depot[I]) GetSize(id I) (int, error) {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Depot[I]) convertKey(idx I) common.DbKey {
-	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
+func (m *Depot[I]) convertKey(idx I) backend.DbKey {
+	return backend.ToDBKey(m.table, m.indexSerializer.ToBytes(idx))
 }
 
 // getPagesCountDbKey provides a database key, where should be the amount of pages in the depot stored

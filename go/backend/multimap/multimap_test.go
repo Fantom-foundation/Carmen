@@ -2,6 +2,7 @@ package multimap
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/btreemem"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap/memory"
@@ -26,7 +27,7 @@ func getMultiMapFactories(tb testing.TB) (stores []multimapFactory) {
 		{
 			label: "LevelDb",
 			getMultiMap: func(tempDir string) MultiMap[uint32, uint64] {
-				db, err := common.OpenLevelDb(tempDir, nil)
+				db, err := backend.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}

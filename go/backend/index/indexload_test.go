@@ -1,6 +1,7 @@
 package index_test
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
@@ -28,7 +29,7 @@ func indexesFactories() map[string]func(t *testing.T) index.Index[common.Address
 			return memory.NewLinearHashParamsIndex[common.Address, uint32](numBuckets, keySerializer, idSerializer, common.AddressHasher{}, common.AddressComparator{})
 		},
 		"ldbIndex": func(t *testing.T) index.Index[common.Address, uint32] {
-			db, err := common.OpenLevelDb(t.TempDir(), nil)
+			db, err := backend.OpenLevelDb(t.TempDir(), nil)
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}

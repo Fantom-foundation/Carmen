@@ -3,6 +3,7 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"sync"
 	"unsafe"
 
@@ -13,7 +14,7 @@ import (
 )
 
 type Archive struct {
-	db                       *common.LevelDbMemoryFootprintWrapper
+	db                       *backend.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
 	accountHashCache         *common.LruCache[common.Address, common.Hash]
 	batch                    leveldb.Batch
@@ -21,7 +22,7 @@ type Archive struct {
 	addMutex                 sync.Mutex
 }
 
-func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
+func NewArchive(db *backend.LevelDbMemoryFootprintWrapper) (*Archive, error) {
 	return &Archive{
 		db:                       db,
 		reincarnationNumberCache: map[common.Address]int{},

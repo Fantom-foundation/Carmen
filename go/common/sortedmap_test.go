@@ -2,6 +2,7 @@ package common
 
 import (
 	"math/rand"
+	"slices"
 	"testing"
 )
 
@@ -146,7 +147,12 @@ func TestSortedMapSorting(t *testing.T) {
 		arr = append(arr, k)
 	})
 
-	AssertArraySorted[Address](t, arr, AddressComparator{})
+	cmp := AddressComparator{}
+	if !slices.IsSortedFunc(arr, func(a, b Address) int {
+		return cmp.Compare(&a, &b)
+	}) {
+		t.Errorf("array is not sorted: %v", arr)
+	}
 
 	if size := h.Size(); size != len(arr) {
 		t.Errorf("Size does not fit: %d", size)
@@ -200,5 +206,14 @@ func TestSortedMapRemove(t *testing.T) {
 
 	if exists := h.Remove(addressA); !exists {
 		t.Errorf("Remove failed:  %v", addressB)
+	}
+}
+
+func TestSortedMap_GetMemoryFootprint(t *testing.T) {
+	h := NewSortedMap[Address, uint32](sortedMapCapacity, AddressComparator{})
+	h.Put(addressA, 1)
+
+	if h.GetMemoryFootprint().Total() <= 0 {
+		t.Errorf("no memory footprint provided")
 	}
 }

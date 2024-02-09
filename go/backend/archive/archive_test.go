@@ -3,6 +3,7 @@ package archive_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"io"
 	"testing"
 
@@ -34,7 +35,7 @@ func getArchiveFactories(tb testing.TB) []archiveFactory {
 		{
 			label: "LevelDB",
 			getArchive: func(tempDir string) archive.Archive {
-				db, err := common.OpenLevelDb(tempDir, nil)
+				db, err := backend.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}

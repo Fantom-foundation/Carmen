@@ -3,6 +3,7 @@ package btree
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"testing"
 
@@ -29,7 +30,9 @@ func TestBTreeInsert(t *testing.T) {
 	n.Insert(9)
 	n.Insert(10)
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, getKeys(n))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	for _, key := range []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
 		if !n.Contains(key) {
@@ -52,7 +55,9 @@ func TestBTreeInsertUnsorted(t *testing.T) {
 	n.Insert(2)
 	n.Insert(1)
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, getKeys(n))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	for _, key := range []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10} {
 		if !n.Contains(key) {
@@ -71,7 +76,9 @@ func TestBTreeInsertSplitSmaller(t *testing.T) {
 	n.Insert(1)
 	n.Insert(2)
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6}, getKeys(n))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4, 5, 6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	for _, key := range []uint32{1, 2, 3, 4, 5, 6} {
 		if !n.Contains(key) {
@@ -89,17 +96,27 @@ func TestBTreeNonConsecutiveGetRange(t *testing.T) {
 	n.Insert(8)
 	n.Insert(2)
 
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3}, getTreeRange(n, 2, 4))
+	if got, want := getTreeRange(n, 2, 4), []uint32{2, 3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 6, 7, 8}, getTreeRange(n, 1, 100)) // above range
+	if got, want := getTreeRange(n, 1, 100), []uint32{2, 3, 6, 7, 8}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// sub-range
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 6}, getTreeRange(n, 2, 7))
+	if got, want := getTreeRange(n, 2, 7), []uint32{2, 3, 6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{3, 6, 7, 8}, getTreeRange(n, 3, 100))
+	if got, want := getTreeRange(n, 3, 100), []uint32{3, 6, 7, 8}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// not found
-	common.AssertArraysEqual[uint32](t, []uint32{}, getTreeRange(n, 10, 100))
+	if got, want := getTreeRange(n, 10, 100), []uint32{}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestBTreeMultiLevelGetRange(t *testing.T) {
@@ -121,18 +138,28 @@ func TestBTreeMultiLevelGetRange(t *testing.T) {
 	n.Insert(55)
 	n.Insert(86)
 
-	common.AssertArraysEqual[uint32](t, []uint32{9, 13, 15, 21}, getTreeRange(n, 9, 26))
+	if got, want := getTreeRange(n, 9, 26), []uint32{9, 13, 15, 21}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54, 55, 86}, getTreeRange(n, 1, 100)) // above range
+	if got, want := getTreeRange(n, 1, 100), []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54, 55, 86}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// left subtree
-	common.AssertArraysEqual[uint32](t, []uint32{1, 4, 7, 9, 13, 15, 21}, getTreeRange(n, 1, 26))
+	if got, want := getTreeRange(n, 1, 26), []uint32{1, 4, 7, 9, 13, 15, 21}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right subtree
-	common.AssertArraysEqual[uint32](t, []uint32{26, 27, 29, 51, 52, 54, 55, 86}, getTreeRange(n, 26, 87))
+	if got, want := getTreeRange(n, 26, 87), []uint32{26, 27, 29, 51, 52, 54, 55, 86}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// not found
-	common.AssertArraysEqual[uint32](t, []uint32{}, getTreeRange(n, 100, 200))
+	if got, want := getTreeRange(n, 100, 200), []uint32{}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestBTreeMultiLevelHasNext(t *testing.T) {
@@ -213,8 +240,9 @@ func TestBTreeThreeLevelsRemove(t *testing.T) {
 		t.Errorf("tree structure does not match: %v", str)
 	}
 
-	expected := []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54}
-	common.AssertArraysEqual[uint32](t, expected, getTreeRange(n, 1, 500))
+	if got, want := getTreeRange(n, 1, 500), []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	n.Remove(54) // rotate right middle level: 15 -> 27 -> 52 + rotate right: 51 -> 52 -> 54, and delete 54
 
@@ -286,7 +314,9 @@ func TestBTreeRemoveNonExisting(t *testing.T) {
 	n.Insert(4)
 	n.Insert(5)
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5}, getKeys(n))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// removal of non-existing cannot break properties
 	n.Remove(999)
@@ -299,7 +329,9 @@ func TestBTreeRemoveNonExisting(t *testing.T) {
 		t.Errorf("%e", err)
 	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6}, getKeys(n))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4, 5, 6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestBTreeInsertRemoveOrdered(t *testing.T) {
@@ -321,7 +353,12 @@ func TestBTreeInsertRemoveOrdered(t *testing.T) {
 			}
 
 			// check all data inserted and sorted
-			common.AssertArraySorted[uint32](t, getKeys(n), comparator)
+			if !slices.IsSortedFunc(getKeys(n), func(a, b uint32) int {
+				return comparator.Compare(&a, &b)
+			}) {
+				t.Errorf("array is not sorted: %v", getKeys(n))
+			}
+
 			for _, key := range data {
 				if !n.Contains(key) {
 					t.Errorf("key %d should be present", key)
@@ -353,7 +390,9 @@ func TestBTreeGetRangeManyElements(t *testing.T) {
 				start := rand.Intn(i + 1)
 				end := rand.Intn(len(data)-i) + i
 				keys := getTreeRange(n, data[start], data[end])
-				common.AssertArraysEqual[uint32](t, data[start:end], keys)
+				if got, want := data[start:end], keys; !slices.Equal(got, want) {
+					t.Errorf("arrays not equal: got: %v != want: %v", got, want)
+				}
 			}
 
 		})
@@ -371,7 +410,11 @@ func TestBTreeLoadTest(t *testing.T) {
 			}
 
 			// check all data inserted and sorted
-			common.AssertArraySorted[uint32](t, getKeys(n), comparator)
+			if !slices.IsSortedFunc(getKeys(n), func(a, b uint32) int {
+				return comparator.Compare(&a, &b)
+			}) {
+				t.Errorf("array is not sorted: %v", getKeys(n))
+			}
 			for _, key := range data {
 				if !n.Contains(key) {
 					t.Errorf("key %d should be present", key)

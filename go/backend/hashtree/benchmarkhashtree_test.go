@@ -2,6 +2,7 @@ package hashtree_test
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
@@ -92,7 +93,7 @@ func initHashTreeFactories() []hashTreeFunc {
 
 		},
 		func(branchingFactor int, path string) *closeableHashTree {
-			db, err := common.OpenLevelDb(path, nil)
+			db, err := backend.OpenLevelDb(path, nil)
 			cleanup := func() error {
 				if err != nil {
 					err = db.Close()

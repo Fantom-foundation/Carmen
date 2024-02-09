@@ -92,6 +92,31 @@ func TestLockFile_CanOnlyBeReleasedOnce(t *testing.T) {
 	}
 }
 
+func TestLockFile_CannotRelease_GivesError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a")
+
+	lock, err := CreateLockFile(path)
+	if err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("cannot prepare for test: %v", err)
+	}
+	if err := lock.Release(); err == nil {
+		t.Errorf("release should fail")
+	}
+}
+
+func TestLockFile_CannotRelease_Invalid_fd_GivesError(t *testing.T) {
+	lock := lockFile{}
+	lock.fileDescriptor = -1
+
+	if err := lock.Release(); err == nil {
+		t.Errorf("release should fail")
+	}
+}
+
 func TestLockFile_GovernsExclusiveAccessForSingleProcess(t *testing.T) {
 	const N = 8
 	path := filepath.Join(t.TempDir(), "a")

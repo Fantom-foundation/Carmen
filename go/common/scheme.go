@@ -44,35 +44,3 @@ const (
 	// AccountHashArchiveKey is a tablespace for archive account hashes
 	AccountHashArchiveKey TableSpace = '7'
 )
-
-// DbKey expects max size of the 36B key plus at most two bytes
-// for the table prefix (e.g. balance, nonce, slot, ...) and the domain (e.g. data, hash, ...)
-type DbKey [38]byte
-
-func (d DbKey) ToBytes() []byte {
-	return d[:]
-}
-
-// ToDBKey converts the input key to its respective table space key
-func (t TableSpace) ToDBKey(key []byte) DbKey {
-	var dbKey DbKey
-	dbKey[0] = byte(t)
-	copy(dbKey[1:], key)
-	return dbKey
-}
-
-// DBToDBKey converts the input key to its respective table space key
-func (t TableSpace) DBToDBKey(key DbKey) DbKey {
-	var dbKey DbKey
-	dbKey[0] = byte(t)
-	copy(dbKey[1:], key[:])
-	return dbKey
-}
-
-// StrToDBKey converts the input key to its respective table space key
-func (t TableSpace) StrToDBKey(key string) DbKey {
-	var dbKey DbKey
-	dbKey[0] = byte(t)
-	copy(dbKey[1:], key)
-	return dbKey
-}

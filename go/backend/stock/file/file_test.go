@@ -20,7 +20,7 @@ func TestFileStock(t *testing.T) {
 }
 
 func openFileStock(t *testing.T, directory string) (stock.Stock[int, int], error) {
-	return openStock[int, int](stock.IntEncoder{}, directory)
+	return OpenStock[int, int](stock.IntEncoder{}, directory)
 }
 
 func openInitFileStock(directory string, items int) (*fileStock[int, int], error) {

@@ -2,6 +2,7 @@ package file
 
 import (
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -422,14 +423,23 @@ func verifyPageSorted(t *testing.T, h *IndexPage[common.Address, uint32]) {
 	for _, entry := range h.getEntries() {
 		keys = append(keys, entry.Key)
 	}
-	common.AssertArraySorted[common.Address](t, keys, common.AddressComparator{})
+	cmp := common.AddressComparator{}
+	if !slices.IsSortedFunc(keys, func(a, b common.Address) int {
+		return cmp.Compare(&a, &b)
+	}) {
+		t.Errorf("array is not sorted: %v", keys)
+	}
 
 	keys = make([]common.Address, 0, h.sizeKeys())
 	h.forEach(func(k common.Address, v uint32) {
 		keys = append(keys, k)
 	})
 
-	common.AssertArraySorted[common.Address](t, keys, common.AddressComparator{})
+	if !slices.IsSortedFunc(keys, func(a, b common.Address) int {
+		return cmp.Compare(&a, &b)
+	}) {
+		t.Errorf("array is not sorted: %v", keys)
+	}
 }
 
 func initPage(capacity int) *IndexPage[common.Address, uint32] {

@@ -7,6 +7,8 @@ import (
 	"sort"
 )
 
+//go:generate mockgen -source update.go -destination update_mocks.go -package common
+
 // Update summarizes the effective changes to the state DB at the end of a block.
 // It combines changes to the account state (created or deleted), balances, nonces
 // codes, and slot updates.

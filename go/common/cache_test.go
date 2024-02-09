@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-func TestEmpty(t *testing.T) {
+func TestCache_Empty(t *testing.T) {
 	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 			_, exists := c.Get(1)
@@ -24,7 +24,7 @@ func TestEmpty(t *testing.T) {
 	}
 }
 
-func TestItemExist(t *testing.T) {
+func TestCache_Get(t *testing.T) {
 	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 
@@ -42,7 +42,30 @@ func TestItemExist(t *testing.T) {
 	}
 }
 
-func TestCacheRemove(t *testing.T) {
+func TestCache_GetOrSet(t *testing.T) {
+	for name, c := range initCaches(128) {
+		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
+
+			c.Set(1, 33)
+			val, exists, _, _, _ := c.GetOrSet(1, 333)
+			if exists == false || val != 33 {
+				t.Errorf("key 1 should exist")
+			}
+
+			val, exists, _, _, _ = c.GetOrSet(2, 22)
+			if exists {
+				t.Errorf("key 2 should not exist")
+			}
+
+			val, exists, _, _, _ = c.GetOrSet(2, 333)
+			if exists == false || val != 22 {
+				t.Errorf("key 1 should exist")
+			}
+		})
+	}
+}
+
+func TestCache_Remove(t *testing.T) {
 	for name, c := range initCaches(128) {
 		t.Run(fmt.Sprintf("cache %s", name), func(t *testing.T) {
 

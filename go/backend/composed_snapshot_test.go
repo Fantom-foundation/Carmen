@@ -2,10 +2,10 @@ package backend_test
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
-	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // This test file contains an example implementation of a data structure
@@ -128,9 +128,15 @@ func TestMyComposedDataStructureSnapshotCanBeCreatedAndRestored(t *testing.T) {
 		return
 	}
 
-	common.AssertArraysEqual(t, recovered.a.Get(1), []byte{1, 2, 3})
-	common.AssertArraysEqual(t, recovered.b.Get(2), []byte{4, 5})
-	common.AssertArraysEqual(t, recovered.a.Get(3), []byte{7, 8, 9})
+	if got, want := recovered.a.Get(1), []byte{1, 2, 3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := recovered.b.Get(2), []byte{4, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := recovered.a.Get(3), []byte{7, 8, 9}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	if err := snapshot.Release(); err != nil {
 		t.Errorf("failed to release snapshot: %v", err)

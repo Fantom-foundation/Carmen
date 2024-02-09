@@ -47,7 +47,7 @@ func TestKeccakC_AddressSpecializationProducesSameHashAsGenericVersion(t *testin
 
 	for _, test := range tests {
 		want := keccak256_Go(test[:])
-		got := keccak256_C_Address(test)
+		got := Keccak256ForAddress(test)
 		if want != got {
 			t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
 		}
@@ -77,7 +77,7 @@ func TestKeccakC_KeySpecializationProducesSameHashAsGenericVersion(t *testing.T)
 
 	for _, test := range tests {
 		want := keccak256_Go(test[:])
-		got := keccak256_C_Key(test)
+		got := Keccak256ForKey(test)
 		if want != got {
 			t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
 		}

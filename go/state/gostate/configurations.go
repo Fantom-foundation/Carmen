@@ -2,6 +2,7 @@ package gostate
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"io"
 	"os"
 	"path/filepath"
@@ -607,7 +608,7 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	db, err := common.OpenLevelDb(params.Directory+string(filepath.Separator)+"live", nil)
+	db, err := backend.OpenLevelDb(params.Directory+string(filepath.Separator)+"live", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -736,7 +737,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 	if params.Schema == 0 {
 		params.Schema = defaultSchema
 	}
-	db, err := common.OpenLevelDb(params.Directory+string(filepath.Separator)+"live", nil)
+	db, err := backend.OpenLevelDb(params.Directory+string(filepath.Separator)+"live", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -903,7 +904,7 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		db, err := common.OpenLevelDb(path, nil)
+		db, err := backend.OpenLevelDb(path, nil)
 		if err != nil {
 			return nil, nil, err
 		}

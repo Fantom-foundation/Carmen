@@ -289,3 +289,9 @@ func HashFromString(str string) Hash {
 	copy(res[:], bytes)
 	return res
 }
+
+func AddressFromNumber(num int) (address Address) {
+	addr := binary.BigEndian.AppendUint32([]byte{}, uint32(num))
+	copy(address[:], addr)
+	return
+}

@@ -15,7 +15,7 @@ import (
 
 // Store is a database-based store.Store implementation. It stores items in a key-value database.
 type Store[I common.Identifier, V any] struct {
-	db              common.LevelDB
+	db              backend.LevelDB
 	hashTree        hashtree.HashTree
 	valueSerializer common.Serializer[V]
 	indexSerializer common.Serializer[I]
@@ -27,7 +27,7 @@ type Store[I common.Identifier, V any] struct {
 
 // NewStore constructs a new instance of the Store.
 func NewStore[I common.Identifier, V any](
-	db common.LevelDB,
+	db backend.LevelDB,
 	table common.TableSpace,
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],
@@ -64,7 +64,7 @@ func (m *Store[I, V]) GetPage(page int) (pageData []byte, err error) {
 }
 
 // getPageFromLdbReader provides the hashing page from given LevelDB reader (snapshot or database)
-func (m *Store[I, V]) getPageFromLdbReader(page int, db common.LevelDBReader) (pageData []byte, err error) {
+func (m *Store[I, V]) getPageFromLdbReader(page int, db backend.LevelDBReader) (pageData []byte, err error) {
 	pageStartKey := page * m.pageSize
 	pageEndKey := pageStartKey + m.pageSize
 	startDbKey := m.convertKey(I(pageStartKey)).ToBytes()
@@ -238,8 +238,8 @@ func (m *Store[I, V]) Close() error {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Store[I, V]) convertKey(idx I) common.DbKey {
-	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
+func (m *Store[I, V]) convertKey(idx I) backend.DbKey {
+	return backend.ToDBKey(m.table, m.indexSerializer.ToBytes(idx))
 }
 
 // GetMemoryFootprint provides the size of the store in memory in bytes

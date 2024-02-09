@@ -2,6 +2,7 @@ package ldb
 
 import (
 	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htmemory"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -238,8 +239,8 @@ func TestInMemoryStoreSnapshotRecovery(t *testing.T) {
 	}
 }
 
-func openStoreDb(t *testing.T, path string) *common.LevelDbMemoryFootprintWrapper {
-	db, err := common.OpenLevelDb(path, nil)
+func openStoreDb(t *testing.T, path string) *backend.LevelDbMemoryFootprintWrapper {
+	db, err := backend.OpenLevelDb(path, nil)
 	if err != nil {
 		t.Fatalf("Cannot open DB, err: %s", err)
 	}
@@ -251,12 +252,12 @@ func openStoreDb(t *testing.T, path string) *common.LevelDbMemoryFootprintWrappe
 	return db
 }
 
-func closeDb[I common.Identifier, K common.Value](db *common.LevelDbMemoryFootprintWrapper, p *Store[I, K]) {
+func closeDb[I common.Identifier, K common.Value](db *backend.LevelDbMemoryFootprintWrapper, p *Store[I, K]) {
 	_ = p.Close()
 	_ = db.Close()
 }
 
-func createNewStore(t *testing.T, db common.LevelDB) *Store[uint32, common.Value] {
+func createNewStore(t *testing.T, db backend.LevelDB) *Store[uint32, common.Value] {
 	hashTree := htmemory.CreateHashTreeFactory(BranchingFactor)
 	s, err := NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, hashTree, PageSize)
 

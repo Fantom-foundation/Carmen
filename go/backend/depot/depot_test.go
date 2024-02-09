@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/cache"
 	"github.com/Fantom-foundation/Carmen/go/backend/depot/file"
@@ -56,7 +57,7 @@ func getDepotsFactories(tb testing.TB, branchingFactor int, groupSize int) (stor
 		{
 			label: "LevelDb",
 			getDepot: func(tempDir string) depot.Depot[uint32] {
-				db, err := common.OpenLevelDb(tempDir, nil)
+				db, err := backend.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}
