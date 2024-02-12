@@ -140,7 +140,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	if precomputedHashes == nil {
 		var hashes *NodeHashes
 		hash, hashes, err = a.head.trie.UpdateHashes()
-		if err == nil {
+		if hashes != nil {
 			hashes.Release()
 		}
 	} else {
@@ -224,7 +224,7 @@ func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot comm
 }
 
 func (a *ArchiveTrie) GetAccountHash(block uint64, account common.Address) (common.Hash, error) {
-	panic("not implemented")
+	return common.Hash{}, fmt.Errorf("not implemented")
 }
 
 func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
@@ -337,15 +337,11 @@ func StoreRoots(filename string, roots []Root) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	writer := bufio.NewWriter(f)
-	if err := storeRootsTo(writer, roots); err != nil {
-		return err
-	}
-	if err := writer.Flush(); err != nil {
-		return err
-	}
-	return f.Close()
+	return errors.Join(
+		storeRootsTo(writer, roots),
+		writer.Flush(),
+		f.Close())
 }
 
 func storeRootsTo(writer io.Writer, roots []Root) error {

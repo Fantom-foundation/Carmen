@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"go.uber.org/mock/gomock"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -60,6 +62,132 @@ func TestArchiveTrie_CanBeReOpened(t *testing.T) {
 		if err := archive.Close(); err != nil {
 			t.Errorf("failed to close the archive: %v", err)
 		}
+	}
+}
+
+func TestArchiveTrie_Open_Fails_Wrong_Roots(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// corrupt the roots
+	if err := os.WriteFile(filepath.Join(dir, "roots.dat"), []byte("Hello, World!"), 0644); err != nil {
+		t.Fatalf("cannot update roots: %v", err)
+	}
+
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		_ = archive.Close()
+		t.Errorf("openning archive should not succeed")
+	}
+}
+
+func TestArchiveTrie_Open_Fails_Too_Short_Roots(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// corrupt the roots
+	if err := os.WriteFile(filepath.Join(dir, "roots.dat"), []byte("H"), 0644); err != nil {
+		t.Fatalf("cannot update roots: %v", err)
+	}
+
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		_ = archive.Close()
+		t.Errorf("openning archive should not succeed")
+	}
+}
+
+func TestArchiveTrie_Open_Fails_CannotOpen_Roots(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// remove read access
+	if err := os.Chmod(filepath.Join(dir, "roots.dat"), 0); err != nil {
+		t.Fatalf("cannot chmod rotos file: %v", err)
+	}
+
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		_ = archive.Close()
+		t.Errorf("openning archive should not succeed")
+	}
+}
+
+func TestArchiveTrie_Open_Fails_Wrong_ForestMeta(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// corrupt the meta
+	if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte("Hello, World!"), 0644); err != nil {
+		t.Fatalf("cannot update meta: %v", err)
+	}
+
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		_ = archive.Close()
+		t.Errorf("openning archive should not succeed")
+	}
+}
+
+func TestArchiveTrie_Open_Fails_Wrong_TrieMeta(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// corrupt the meta
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte("Hello, World!"), 0644); err != nil {
+		t.Fatalf("cannot update meta: %v", err)
+	}
+
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		_ = archive.Close()
+		t.Errorf("openning archive should not succeed")
+	}
+}
+
+func TestArchiveTrie_Open_Fails_Wrong_Codes(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// corrupt the codes
+	if err := os.WriteFile(filepath.Join(dir, "codes.dat"), []byte("Hello, World!"), 0644); err != nil {
+		t.Fatalf("cannot update codes: %v", err)
+	}
+
+	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
+		_ = archive.Close()
+		t.Errorf("openning archive should not succeed")
 	}
 }
 
@@ -143,6 +271,26 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestArchiveTrie_VerifyArchive_Failure_Meta(t *testing.T) {
+	dir := t.TempDir()
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatalf("cannot init archive trie: %v", err)
+	}
+
+	// corrupt the roots
+	if err := os.WriteFile(filepath.Join(dir, "roots.dat"), []byte("Hello, World!"), 0644); err != nil {
+		t.Fatalf("cannot update roots: %v", err)
+	}
+
+	if err := VerifyArchive(dir, S5ArchiveConfig, NilVerificationObserver{}); err == nil {
+		t.Errorf("verification should fail")
 	}
 }
 
@@ -290,6 +438,312 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 			if err := VerifyArchive(dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("a freshly closed archive should be fine, got: %v", err)
 			}
+		})
+	}
+}
+
+func TestArchiveTrie_Add_DuplicatedBlock(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			if err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+			}, nil); err != nil {
+				t.Fatalf("failed to update archive: %v", err)
+			}
+
+			if err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+			}, nil); err == nil {
+				t.Errorf("adding duplicate block should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_Add_HashingFails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 0)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			// inject a failing hasher
+			ctrl := gomock.NewController(t)
+			hasher := NewMockhasher(ctrl)
+			hasher.EXPECT().updateHashes(gomock.Any(), gomock.Any()).AnyTimes().Return(common.Hash{}, nil, errors.New("hashing failed"))
+			archive.head.trie.forest.hasher = hasher
+
+			// fails for computing missing blocks
+			if err = archive.Add(20, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+			}, nil); err == nil {
+				t.Errorf("applying update should fail")
+			}
+
+			// fails for computing this block
+			if err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{{1}, {2}},
+			}, nil); err == nil {
+				t.Errorf("applying update should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 0)
+			if err != nil {
+				t.Fatalf("failed to openarchive, err %v", err)
+			}
+
+			// inject failing stock to trigger an error applying the update
+			ctrl := gomock.NewController(t)
+			stock := stock.NewMockStock[uint64, ValueNode](ctrl)
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, errors.New("failed to get value from stock"))
+			archive.head.trie.forest.values = stock
+			archive.head.trie.root = NewNodeReference(ValueId(123))
+
+			// update to freeze a node fails
+			if err = archive.Add(0, common.Update{}, nil); err == nil {
+				t.Errorf("applying update should fail")
+			}
+
+		})
+	}
+}
+
+func TestArchiveTrie_Add_Failure_Apply_Update(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			// inject failing stock to trigger an error applying the update
+			ctrl := gomock.NewController(t)
+			stock := stock.NewMockStock[uint64, ValueNode](ctrl)
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, errors.New("failed to get value from stock"))
+			archive.head.trie.forest.values = stock
+			archive.head.trie.root = NewNodeReference(ValueId(123))
+
+			// apply each update type in isolation
+			updates := []common.Update{
+				{DeletedAccounts: []common.Address{{1}, {2}}},
+				{CreatedAccounts: []common.Address{{1}, {2}}},
+				{Nonces: []common.NonceUpdate{
+					{Account: common.Address{3}, Nonce: common.ToNonce(3)},
+				}},
+				{Slots: []common.SlotUpdate{
+					{Account: common.Address{3}, Key: common.Key{2}, Value: common.Value{2}},
+				}},
+				{Balances: []common.BalanceUpdate{
+					{Account: common.Address{3}, Balance: common.Balance{3}},
+				}},
+				{Codes: []common.CodeUpdate{
+					{Account: common.Address{3}, Code: make([]byte, 5)},
+				}},
+			}
+
+			for _, update := range updates {
+				if err = archive.Add(0, update, nil); err == nil {
+					t.Errorf("apply should fail")
+				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			if _, err := archive.Exists(100, common.Address{1}); err == nil {
+				t.Errorf("block out of range should fail")
+			}
+			if _, err := archive.GetBalance(100, common.Address{1}); err == nil {
+				t.Errorf("block out of range should fail")
+			}
+			if _, err := archive.GetCode(100, common.Address{1}); err == nil {
+				t.Errorf("block out of range should fail")
+			}
+			if _, err := archive.GetNonce(100, common.Address{1}); err == nil {
+				t.Errorf("block out of range should fail")
+			}
+			if _, err := archive.GetStorage(100, common.Address{1}, common.Key{2}); err == nil {
+				t.Errorf("block out of range should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GettingAccountInfo_Fails(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			{
+				archive, err := OpenArchiveTrie(dir, config, 1024)
+				if err != nil {
+					t.Fatalf("failed to create empty archive, err %v", err)
+				}
+
+				if err = archive.Add(0, common.Update{
+					CreatedAccounts: []common.Address{{1}},
+				}, nil); err != nil {
+					t.Fatalf("cannot apply update: %s", err)
+				}
+
+				if err := archive.Close(); err != nil {
+					t.Fatalf("cannot close archive: %v", err)
+				}
+			}
+
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			// inject failing stock to trigger an error applying the update
+			ctrl := gomock.NewController(t)
+			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to get value from stock"))
+			archive.head.trie.forest.accounts = stock
+
+			if _, err := archive.Exists(0, common.Address{1}); err == nil {
+				t.Errorf("getting account should fail")
+			}
+			if _, err := archive.GetBalance(0, common.Address{1}); err == nil {
+				t.Errorf("getting account should fail")
+			}
+			if _, err := archive.GetCode(0, common.Address{1}); err == nil {
+				t.Errorf("getting account should fail")
+			}
+			if _, err := archive.GetNonce(0, common.Address{1}); err == nil {
+				t.Errorf("getting account should fail")
+			}
+			if _, err := archive.GetStorage(0, common.Address{1}, common.Key{2}); err == nil {
+				t.Errorf("getting account should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetHash(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			{
+				archive, err := OpenArchiveTrie(dir, config, 1024)
+				if err != nil {
+					t.Fatalf("failed to create empty archive, err %v", err)
+				}
+
+				if err = archive.Add(0, common.Update{
+					CreatedAccounts: []common.Address{{1}},
+				}, nil); err != nil {
+					t.Fatalf("cannot apply update: %s", err)
+				}
+
+				if err := archive.Close(); err != nil {
+					t.Fatalf("cannot close archive: %v", err)
+				}
+			}
+
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			hash, err := archive.GetHash(0)
+			if err != nil {
+				t.Errorf("cannot compute hash: %v", err)
+			}
+			var empty common.Hash
+			if hash == empty {
+				t.Errorf("hash is empty")
+			}
+
+			if _, err := archive.GetHash(100); err == nil {
+				t.Errorf("geting hash of non-existing hash should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			if _, err := archive.GetAccountHash(0, common.Address{1}); err == nil {
+				t.Errorf("getting account hash should always fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetMemoryFootprint(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			mf := archive.GetMemoryFootprint()
+			if child := mf.GetChild("head"); child == nil {
+				t.Errorf("memory footprint not provided")
+			}
+			if child := mf.GetChild("roots"); child == nil {
+				t.Errorf("memory footprint not provided")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_Dump(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			if err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{{1}},
+			}, nil); err != nil {
+				t.Fatalf("cannot apply update: %s", err)
+			}
+
+			archive.Dump()
 		})
 	}
 }
@@ -548,4 +1002,48 @@ func TestArchiveTrie_QueryLoadTest(t *testing.T) {
 	if err := archive.Close(); err != nil {
 		t.Fatalf("failed to close archive: %v", err)
 	}
+}
+
+func TestStoreRootsTo_WriterFailures(t *testing.T) {
+	var roots []Root
+	for i := 0; i < 48; i++ {
+		id := NodeId(uint64(1) << i)
+		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
+	}
+
+	ctrl := gomock.NewController(t)
+	osfile := utils.NewMockOsFile(ctrl)
+	osfile.EXPECT().Write(gomock.Any()).Return(0, errors.New("write error"))
+
+	if err := storeRootsTo(osfile, roots); err == nil {
+		t.Errorf("writting roots should fail")
+	}
+}
+
+func TestStoreRootsTo_SecondWriterFailures(t *testing.T) {
+	var roots []Root
+	for i := 0; i < 48; i++ {
+		id := NodeId(uint64(1) << i)
+		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
+	}
+
+	ctrl := gomock.NewController(t)
+	osfile := utils.NewMockOsFile(ctrl)
+	gomock.InOrder(
+		osfile.EXPECT().Write(gomock.Any()).Return(0, nil),
+		osfile.EXPECT().Write(gomock.Any()).Return(0, errors.New("write error")),
+	)
+
+	if err := storeRootsTo(osfile, roots); err == nil {
+		t.Errorf("writting roots should fail")
+	}
+}
+
+func TestStoreRoots_Cannot_Create(t *testing.T) {
+	var roots []Root
+	file := "/roots.dat"
+	if err := StoreRoots(file, roots); err == nil {
+		t.Errorf("writting roots should fail")
+	}
+
 }
