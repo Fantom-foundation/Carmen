@@ -21,10 +21,11 @@ jobs:
       - name: get current path
         run: pwd && ls
 
-      - name: Run clang-format style check.
-        uses: jidicula/clang-format-action@v4.9.0
-        with:
-          clang-format-version: '14'
+      - name: Install clang-format
+        run: sudo apt-get -y install clang-format
+
+      - name: Check C++ code formatting rules
+        run: find cpp/ -iname *.h -o -iname *.cc | xargs clang-format --dry-run -Werror
 
       - name: Run BUILD file style check.
         uses: thompsonja/bazel-buildifier@v0.4.0

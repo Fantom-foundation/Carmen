@@ -16,6 +16,9 @@ jobs:
   tests-check:
     name: Tests Check
     runs-on: [self-hosted, Linux, X64]
+    env:
+        CC: clang
+        CXX: clang++
     steps:
       - name: Collect Workflow Telemetry
         uses: runforesight/workflow-telemetry-action@v1
