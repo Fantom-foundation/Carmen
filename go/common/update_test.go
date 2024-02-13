@@ -2,6 +2,7 @@ package common
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"go.uber.org/mock/gomock"
 	"reflect"
