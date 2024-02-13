@@ -367,7 +367,7 @@ func CreateStateDBUsing(state State) StateDB {
 	return CreateCustomStateDBUsing(state, defaultStoredDataCacheSize)
 }
 
-// CreateCustomStateDBUsing is the same as CreateStateDBUsing but allows to specify
+// CreateCustomStateDBUsing is the same as CreateStateDBUsing but allows the caller to specify
 // the capacity of the stored Data cache used in the resulting instance. The default
 // cache size used by CreateCustomStateDBUsing may be too large if StateDB instances
 // only have a short live time. In such cases, the initialization and destruction of
