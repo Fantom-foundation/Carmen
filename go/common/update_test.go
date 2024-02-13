@@ -520,8 +520,8 @@ func TestUpdate_ApplyTo_Failures(t *testing.T) {
 			target.EXPECT().SetStorage(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(returns[5])
 
 			update := getExampleUpdate()
-			if err := update.ApplyTo(target); err == nil {
-				t.Errorf("apply update shoudl fail")
+			if err := update.ApplyTo(target); !errors.Is(err, returns[i]) {
+				t.Errorf("apply update should fail")
 			}
 		})
 	}
