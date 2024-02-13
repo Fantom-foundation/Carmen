@@ -11,7 +11,7 @@ pipeline {
         
         stage('Build') {
             steps {
-                sh 'cd go && go build ./...'
+                sh 'make'
             }
         }
 
