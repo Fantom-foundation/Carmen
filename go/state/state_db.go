@@ -348,7 +348,7 @@ type codeValue struct {
 	sizeValid bool // < set if size is loaded from the state (or written as dirty)
 }
 
-const storedDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
+const defaultStoredDataCacheSize = 1000000 // ~ 100 MiB of memory for this cache.
 const nonCommittableStoredDataCacheSize = 100
 
 // storedDataCacheValue maintains the cached version of a value in the store. To
@@ -364,6 +364,18 @@ type storedDataCacheValue struct {
 // Note: any StateDB instanced becomes invalid if the underlying state is
 // modified by any other StateDB instance or through any other direct modification.
 func CreateStateDBUsing(state State) StateDB {
+	return CreateCustomStateDBUsing(state, defaultStoredDataCacheSize)
+}
+
+// CreateCustomStateDBUsing is the same as CreateStateDBUsing but allows to specify
+// the capacity of the stored Data cache used in the resulting instance. The default
+// cache size used by CreateCustomStateDBUsing may be too large if StateDB instances
+// only have a short live time. In such cases, the initialization and destruction of
+// the maintained data cache may dominate execution time.
+func CreateCustomStateDBUsing(state State, storedDataCacheSize int) StateDB {
+	if storedDataCacheSize <= 0 {
+		storedDataCacheSize = defaultStoredDataCacheSize
+	}
 	return createStateDBWith(state, storedDataCacheSize, true)
 }
 
