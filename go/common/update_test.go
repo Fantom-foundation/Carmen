@@ -536,7 +536,7 @@ func TestUpdate_ApplyTo_Failures(t *testing.T) {
 
 			update := getExampleUpdate()
 			if err := update.ApplyTo(target); err == nil {
-				t.Errorf("apply update shoudl fail")
+				t.Errorf("apply update should fail")
 			}
 		})
 	}
