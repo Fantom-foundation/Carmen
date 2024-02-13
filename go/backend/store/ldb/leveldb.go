@@ -22,13 +22,13 @@ type Store[I common.Identifier, V any] struct {
 	pageSize        int // the amount of items stored in one database page
 	itemSize        int // the amount of bytes per one value
 	pagesCount      int // the amount of store pages
-	table           common.TableSpace
+	table           backend.TableSpace
 }
 
 // NewStore constructs a new instance of the Store.
 func NewStore[I common.Identifier, V any](
 	db backend.LevelDB,
-	table common.TableSpace,
+	table backend.TableSpace,
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],
 	hashTreeFactory hashtree.Factory,
@@ -117,7 +117,7 @@ func (m *Store[I, V]) Get(id I) (v V, err error) {
 }
 
 // getPagesCountDbKey provides a database key, where should be the amount of pages in the depot stored
-func getPagesCountDbKey(table common.TableSpace) []byte {
+func getPagesCountDbKey(table backend.TableSpace) []byte {
 	return []byte{byte(table)} // suppose the key serializer will never produce empty slice
 }
 

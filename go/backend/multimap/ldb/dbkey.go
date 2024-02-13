@@ -1,13 +1,16 @@
 package ldb
 
-import "github.com/Fantom-foundation/Carmen/go/common"
+import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common"
+)
 
 const KeySize = 8
 const ValueSize = 8
 
 type DbKey[K any, V any] [1 + KeySize + ValueSize]byte
 
-func (k *DbKey[K, V]) SetTableKey(table common.TableSpace, key K, keySerializer common.Serializer[K]) {
+func (k *DbKey[K, V]) SetTableKey(table backend.TableSpace, key K, keySerializer common.Serializer[K]) {
 	k[0] = byte(table)
 	keySerializer.CopyBytes(key, k[1:1+KeySize])
 }

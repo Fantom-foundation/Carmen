@@ -33,7 +33,7 @@ func indexesFactories() map[string]func(t *testing.T) index.Index[common.Address
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}
-			idx, err := ldb.NewIndex[common.Address, uint32](db, common.BalanceStoreKey, keySerializer, idSerializer)
+			idx, err := ldb.NewIndex[common.Address, uint32](db, backend.BalanceStoreKey, keySerializer, idSerializer)
 			if err != nil {
 				t.Fatalf("failed to init index; %s", err)
 			}

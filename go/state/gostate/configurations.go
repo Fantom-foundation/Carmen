@@ -612,30 +612,30 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 	if err != nil {
 		return nil, err
 	}
-	addressIndex, err := ldb.NewIndex[common.Address, uint32](db, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	addressIndex, err := ldb.NewIndex[common.Address, uint32](db, backend.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
-	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
+	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.AccountStoreKey, HashTreeFactor)
+	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, backend.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
-	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
-	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
+	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.NonceStoreKey, HashTreeFactor)
+	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, backend.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
-	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
+	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.BalanceStoreKey, HashTreeFactor)
+	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, backend.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
-	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, backend.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, backend.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -643,19 +643,19 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 	var live LiveDB
 	switch params.Schema {
 	case 1:
-		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
+		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
+		keyIndex, err := ldb.NewIndex[common.Key, uint32](db, backend.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, backend.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, backend.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
 		live = &GoSchema1{
 			addressIndex,
@@ -671,15 +671,15 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 			nil,
 		}
 	case 2:
-		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, backend.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, backend.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
 		live = &GoSchema2{
 			addressIndex,
@@ -694,15 +694,15 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 			nil,
 		}
 	case 3:
-		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		reincarnationsStore, err := ldbstore.NewStore[uint32, common.Reincarnation](db, common.ReincarnationStoreKey, common.ReincarnationSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ReincarnationStoreKey, HashTreeFactor), common.PageSize)
+		reincarnationsStore, err := ldbstore.NewStore[uint32, common.Reincarnation](db, backend.ReincarnationStoreKey, common.ReincarnationSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ReincarnationStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		valuesStore, err := ldbstore.NewStore[uint32, common.SlotReincValue](db, common.ValueStoreKey, common.SlotReincValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		valuesStore, err := ldbstore.NewStore[uint32, common.SlotReincValue](db, backend.ValueStoreKey, common.SlotReincValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
@@ -741,30 +741,30 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 	if err != nil {
 		return nil, err
 	}
-	addressIndex, err := ldb.NewIndex[common.Address, uint32](db, common.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	addressIndex, err := ldb.NewIndex[common.Address, uint32](db, backend.AddressIndexKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		return nil, err
 	}
-	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, common.AccountStoreKey, HashTreeFactor)
-	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, common.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
+	accountHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.AccountStoreKey, HashTreeFactor)
+	accountsStore, err := ldbstore.NewStore[uint32, common.AccountState](db, backend.AccountStoreKey, common.AccountStateSerializer{}, common.Identifier32Serializer{}, accountHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
-	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.NonceStoreKey, HashTreeFactor)
-	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, common.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
+	nonceHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.NonceStoreKey, HashTreeFactor)
+	noncesStore, err := ldbstore.NewStore[uint32, common.Nonce](db, backend.NonceStoreKey, common.NonceSerializer{}, common.Identifier32Serializer{}, nonceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
-	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, common.BalanceStoreKey, HashTreeFactor)
-	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, common.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
+	balanceHashTreeFactory := htldb.CreateHashTreeFactory(db, backend.BalanceStoreKey, HashTreeFactor)
+	balancesStore, err := ldbstore.NewStore[uint32, common.Balance](db, backend.BalanceStoreKey, common.BalanceSerializer{}, common.Identifier32Serializer{}, balanceHashTreeFactory, common.PageSize)
 	if err != nil {
 		return nil, err
 	}
-	codesDepot, err := ldbDepot.NewDepot[uint32](db, common.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
+	codesDepot, err := ldbDepot.NewDepot[uint32](db, backend.DepotCodeKey, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.DepotCodeKey, HashTreeFactor), CodeHashGroupSize)
 	if err != nil {
 		return nil, err
 	}
-	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, common.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
+	codeHashesStore, err := ldbstore.NewStore[uint32, common.Hash](db, backend.CodeHashStoreKey, common.HashSerializer{}, common.Identifier32Serializer{}, hashtree.GetNoHashFactory(), common.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -772,19 +772,19 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 	var live LiveDB
 	switch params.Schema {
 	case 1:
-		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
+		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		keyIndex, err := ldb.NewIndex[common.Key, uint32](db, common.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
+		keyIndex, err := ldb.NewIndex[common.Key, uint32](db, backend.KeyIndexKey, common.KeySerializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, backend.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, backend.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
 		live = &GoSchema1{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
@@ -800,15 +800,15 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 			nil,
 		}
 	case 2:
-		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, common.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		valuesStore, err := ldbstore.NewStore[uint32, common.Value](db, backend.ValueStoreKey, common.ValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
+		addressToSlots := mapldb.NewMultiMap[uint32, uint32](db, backend.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier32Serializer{})
 
 		live = &GoSchema2{
 			cachedIndex.NewIndex[common.Address, uint32](addressIndex, CacheCapacity),
@@ -823,15 +823,15 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 			nil,
 		}
 	case 3:
-		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+		slotIndex, err := ldb.NewIndex[common.SlotIdxKey[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
 		if err != nil {
 			return nil, err
 		}
-		reincarnationsStore, err := ldbstore.NewStore[uint32, common.Reincarnation](db, common.ReincarnationStoreKey, common.ReincarnationSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ReincarnationStoreKey, HashTreeFactor), common.PageSize)
+		reincarnationsStore, err := ldbstore.NewStore[uint32, common.Reincarnation](db, backend.ReincarnationStoreKey, common.ReincarnationSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ReincarnationStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}
-		valuesStore, err := ldbstore.NewStore[uint32, common.SlotReincValue](db, common.ValueStoreKey, common.SlotReincValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, common.ValueStoreKey, HashTreeFactor), common.PageSize)
+		valuesStore, err := ldbstore.NewStore[uint32, common.SlotReincValue](db, backend.ValueStoreKey, common.SlotReincValueSerializer{}, common.Identifier32Serializer{}, htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, HashTreeFactor), common.PageSize)
 		if err != nil {
 			return nil, err
 		}

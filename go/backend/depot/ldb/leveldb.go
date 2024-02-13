@@ -18,7 +18,7 @@ const LengthSize = 4 // uint32
 // Depot is an LevelDB backed store.Depot implementation
 type Depot[I common.Identifier] struct {
 	db              backend.LevelDB
-	table           common.TableSpace
+	table           backend.TableSpace
 	hashTree        hashtree.HashTree
 	indexSerializer common.Serializer[I]
 	groupSize       int // the amount of items in one hashing group
@@ -28,7 +28,7 @@ type Depot[I common.Identifier] struct {
 
 // NewDepot constructs a new instance of Depot.
 func NewDepot[I common.Identifier](db backend.LevelDB,
-	table common.TableSpace,
+	table backend.TableSpace,
 	indexSerializer common.Serializer[I],
 	hashtreeFactory hashtree.Factory,
 	groupSize int,
@@ -166,7 +166,7 @@ func (m *Depot[I]) convertKey(idx I) backend.DbKey {
 }
 
 // getPagesCountDbKey provides a database key, where should be the amount of pages in the depot stored
-func getPagesCountDbKey(table common.TableSpace) []byte {
+func getPagesCountDbKey(table backend.TableSpace) []byte {
 	return []byte{byte(table), 0xC0}
 }
 

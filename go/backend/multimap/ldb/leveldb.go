@@ -11,14 +11,14 @@ import (
 // MultiMap is a LevelDB multimap.MultiMap implementation - it maps IDs to values
 type MultiMap[K any, V any] struct {
 	db              backend.LevelDB
-	table           common.TableSpace
+	table           backend.TableSpace
 	keySerializer   common.Serializer[K]
 	valueSerializer common.Serializer[V]
 }
 
 func NewMultiMap[K any, V any](
 	db backend.LevelDB,
-	table common.TableSpace,
+	table backend.TableSpace,
 	keySerializer common.Serializer[K],
 	valueSerializer common.Serializer[V],
 ) *MultiMap[K, V] {

@@ -2,6 +2,7 @@ package ldb
 
 import (
 	"encoding/binary"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -18,7 +19,7 @@ var limitBlock = []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF} // max r
 type blockKey [1 + blockSize]byte
 
 func (k *blockKey) set(block uint64) {
-	k[0] = byte(common.BlockArchiveKey)
+	k[0] = byte(backend.BlockArchiveKey)
 	binary.BigEndian.PutUint64(k[1:], maxBlock-block)
 }
 
@@ -46,7 +47,7 @@ func getBlockKeyRangeFromHighest() util.Range {
 // * the block number
 type accountBlockKey [1 + common.AddressSize + blockSize]byte
 
-func (k *accountBlockKey) set(table common.TableSpace, account common.Address, block uint64) {
+func (k *accountBlockKey) set(table backend.TableSpace, account common.Address, block uint64) {
 	k[0] = byte(table)
 	copy(k[1:1+common.AddressSize], account[:])
 	binary.BigEndian.PutUint64(k[1+common.AddressSize:], maxBlock-block)
@@ -67,7 +68,7 @@ func (k *accountBlockKey) getRange() util.Range {
 // * the block number
 type accountKeyBlockKey [1 + common.AddressSize + reincSize + common.KeySize + blockSize]byte
 
-func (k *accountKeyBlockKey) set(table common.TableSpace, account common.Address, reincarnation int, slot common.Key, block uint64) {
+func (k *accountKeyBlockKey) set(table backend.TableSpace, account common.Address, reincarnation int, slot common.Key, block uint64) {
 	k[0] = byte(table)
 	copy(k[1:1+common.AddressSize], account[:])
 	binary.BigEndian.PutUint32(k[1+common.AddressSize:], uint32(reincarnation))

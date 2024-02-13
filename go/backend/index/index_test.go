@@ -33,7 +33,7 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}
-			ldbindex, err := ldb.NewIndex[common.Address, uint32](db, common.BalanceStoreKey, keySerializer, idSerializer)
+			ldbindex, err := ldb.NewIndex[common.Address, uint32](db, backend.BalanceStoreKey, keySerializer, idSerializer)
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}
@@ -68,7 +68,7 @@ func initIndexesMap() map[string]func(t *testing.T) index.Index[common.Address, 
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}
-			ldbindex, err := ldb.NewIndex[common.Address, uint32](db, common.BalanceStoreKey, keySerializer, idSerializer)
+			ldbindex, err := ldb.NewIndex[common.Address, uint32](db, backend.BalanceStoreKey, keySerializer, idSerializer)
 			if err != nil {
 				t.Fatalf("failed to init leveldb; %s", err)
 			}

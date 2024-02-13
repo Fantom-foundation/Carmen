@@ -73,8 +73,8 @@ func getStoresFactories[V any](tb testing.TB, serializer common.Serializer[V], b
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
-				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, V](db, common.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				hashTreeFac := htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, V](db, backend.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
@@ -89,8 +89,8 @@ func getStoresFactories[V any](tb testing.TB, serializer common.Serializer[V], b
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
-				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, V](db, common.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				hashTreeFac := htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, V](db, backend.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}

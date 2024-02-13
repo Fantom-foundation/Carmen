@@ -45,13 +45,27 @@ func TestKeccakC_AddressSpecializationProducesSameHashAsGenericVersion(t *testin
 		tests = append(tests, addr)
 	}
 
-	for _, test := range tests {
-		want := keccak256_Go(test[:])
-		got := Keccak256ForAddress(test)
-		if want != got {
-			t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
+	t.Run("keccak256_C_Address", func(t *testing.T) {
+		t.Parallel()
+		for _, test := range tests {
+			want := keccak256_Go(test[:])
+			got := keccak256_C_Address(test)
+			if want != got {
+				t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
+			}
 		}
-	}
+	})
+
+	t.Run("Keccak256ForAddress", func(t *testing.T) {
+		t.Parallel()
+		for _, test := range tests {
+			want := keccak256_Go(test[:])
+			got := Keccak256ForAddress(test)
+			if want != got {
+				t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
+			}
+		}
+	})
 }
 
 func TestKeccakC_KeySpecializationProducesSameHashAsGenericVersion(t *testing.T) {
@@ -75,13 +89,27 @@ func TestKeccakC_KeySpecializationProducesSameHashAsGenericVersion(t *testing.T)
 		tests = append(tests, key)
 	}
 
-	for _, test := range tests {
-		want := keccak256_Go(test[:])
-		got := Keccak256ForKey(test)
-		if want != got {
-			t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
+	t.Run("keccak256_C_Key", func(t *testing.T) {
+		t.Parallel()
+		for _, test := range tests {
+			want := keccak256_Go(test[:])
+			got := keccak256_C_Key(test)
+			if want != got {
+				t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
+			}
 		}
-	}
+	})
+
+	t.Run("Keccak256ForKey", func(t *testing.T) {
+		t.Parallel()
+		for _, test := range tests {
+			want := keccak256_Go(test[:])
+			got := Keccak256ForKey(test)
+			if want != got {
+				t.Errorf("unexpected hash for %v, wanted %v, got %v", test, want, got)
+			}
+		}
+	})
 }
 
 func benchmark(b *testing.B, hasher func([]byte)) {

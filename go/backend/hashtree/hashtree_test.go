@@ -38,7 +38,7 @@ func getHashTreeFactories(tb testing.TB) (factories []hashTreeFactory) {
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}
-				return closingHashtreeWrapper{htldb.CreateHashTreeFactory(db, common.DepotCodeKey, 3).Create(testingPageProvider{pages: pages}), db}
+				return closingHashtreeWrapper{htldb.CreateHashTreeFactory(db, backend.DepotCodeKey, 3).Create(testingPageProvider{pages: pages}), db}
 			},
 		},
 	}

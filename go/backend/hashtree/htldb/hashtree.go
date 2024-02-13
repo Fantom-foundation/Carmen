@@ -23,7 +23,7 @@ const (
 // It obtains hashes of individual data pages and reduce them to a hash of the entire state.
 type HashTree struct {
 	db           backend.LevelDB
-	table        common.TableSpace
+	table        backend.TableSpace
 	factor       int          // the branching factor - amount of child nodes per one parent node
 	dirtyPages   map[int]bool // set of dirty flags of the tree nodes
 	maxPage      int
@@ -33,12 +33,12 @@ type HashTree struct {
 // hashTreeFactory is used for implementation of hashTreeFactory method
 type hashTreeFactory struct {
 	db              backend.LevelDB
-	table           common.TableSpace
+	table           backend.TableSpace
 	branchingFactor int
 }
 
 // CreateHashTreeFactory creates a new instance of the hashTreeFactory
-func CreateHashTreeFactory(db backend.LevelDB, table common.TableSpace, branchingFactor int) *hashTreeFactory {
+func CreateHashTreeFactory(db backend.LevelDB, table backend.TableSpace, branchingFactor int) *hashTreeFactory {
 	return &hashTreeFactory{db: db, table: table, branchingFactor: branchingFactor}
 }
 
@@ -48,7 +48,7 @@ func (f *hashTreeFactory) Create(pageProvider hashtree.PageProvider) hashtree.Ha
 }
 
 // NewHashTree constructs a new HashTree
-func NewHashTree(db backend.LevelDB, table common.TableSpace, branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
+func NewHashTree(db backend.LevelDB, table backend.TableSpace, branchingFactor int, pageProvider hashtree.PageProvider) *HashTree {
 	return &HashTree{
 		db:           db,
 		table:        table,
@@ -108,7 +108,7 @@ func (ht *HashTree) GetPageHash(page int) (common.Hash, error) {
 }
 
 // GetPageHashFromLdb provides a hash of the tree leaf node from given LevelDB snapshot
-func GetPageHashFromLdb(table common.TableSpace, page int, db backend.LevelDBReader) (common.Hash, error) {
+func GetPageHashFromLdb(table backend.TableSpace, page int, db backend.LevelDBReader) (common.Hash, error) {
 	dbKey := getNodeDbKey(table, 0, page).ToBytes()
 	hashBytes, err := db.Get(dbKey, nil)
 	if err != nil {
@@ -275,12 +275,12 @@ func (ht *HashTree) commit() (hash []byte, err error) {
 }
 
 // getNodeDbKey provides the leveldb key, where can be the hash of given node found
-func getNodeDbKey(table common.TableSpace, layer, node int) backend.DbKey {
+func getNodeDbKey(table backend.TableSpace, layer, node int) backend.DbKey {
 	//  the key is: [tableSpace]H[layer][node]
 	// layer is 8bit (256 layers Max)
 	// node is 32bit
 	return dBToDBKey(table,
-		backend.ToDBKey(common.HashKey,
+		backend.ToDBKey(backend.HashKey,
 			binary.BigEndian.AppendUint32([]byte{uint8(layer)}, uint32(node))))
 }
 
@@ -296,7 +296,7 @@ func (ht *HashTree) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 // dBToDBKey converts the input key to its respective table space key
-func dBToDBKey(t common.TableSpace, key backend.DbKey) backend.DbKey {
+func dBToDBKey(t backend.TableSpace, key backend.DbKey) backend.DbKey {
 	var dbKey backend.DbKey
 	dbKey[0] = byte(t)
 	copy(dbKey[1:], key[:])

@@ -480,31 +480,16 @@ func TestUpdate_ApplyTo(t *testing.T) {
 	gomock.InOrder(
 		target.EXPECT().DeleteAccount(Address{0xA1}),
 		target.EXPECT().DeleteAccount(Address{0xA2}),
-	)
-
-	gomock.InOrder(
 		target.EXPECT().CreateAccount(Address{0xB1}),
 		target.EXPECT().CreateAccount(Address{0xB2}),
 		target.EXPECT().CreateAccount(Address{0xB3}),
-	)
-
-	gomock.InOrder(
 		target.EXPECT().SetBalance(Address{0xC1}, Balance{0x01}),
 		target.EXPECT().SetBalance(Address{0xC2}, Balance{0x02}),
-	)
-
-	gomock.InOrder(
 		target.EXPECT().SetNonce(Address{0xD1}, Nonce{0x03}),
 		target.EXPECT().SetNonce(Address{0xD2}, Nonce{0x04}),
-	)
-
-	gomock.InOrder(
 		target.EXPECT().SetCode(Address{0xE1}, []byte{}),
 		target.EXPECT().SetCode(Address{0xE2}, []byte{0x01}),
 		target.EXPECT().SetCode(Address{0xE3}, []byte{0x02, 0x03}),
-	)
-
-	gomock.InOrder(
 		target.EXPECT().SetStorage(Address{0xF1}, Key{0x01}, Value{0xA1}),
 		target.EXPECT().SetStorage(Address{0xF2}, Key{0x02}, Value{0xA2}),
 		target.EXPECT().SetStorage(Address{0xF3}, Key{0x03}, Value{0xB1}),

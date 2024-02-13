@@ -100,7 +100,7 @@ func initHashTreeFactories() []hashTreeFunc {
 				}
 				return err
 			}
-			return &closeableHashTree{"ldb", htldb.NewHashTree(db, common.AccountStoreKey, branchingFactor, newMemSingleItemPage()), cleanup}
+			return &closeableHashTree{"ldb", htldb.NewHashTree(db, backend.AccountStoreKey, branchingFactor, newMemSingleItemPage()), cleanup}
 
 		},
 	}

@@ -97,7 +97,7 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 
 func TestLongKeysIndex(t *testing.T) {
 	db, _ := openIndexTempDb(t)
-	idx, err := NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+	idx, err := NewIndex[common.SlotIdxKey[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)
 	}
@@ -280,7 +280,7 @@ func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *ba
 
 // createIndex creates a new instance of the index using the input database
 func createIndex(t *testing.T, db backend.LevelDB) index.Index[common.Address, uint32] {
-	idx, err := NewIndex[common.Address, uint32](db, common.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+	idx, err := NewIndex[common.Address, uint32](db, backend.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)
 	}

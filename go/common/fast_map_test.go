@@ -518,6 +518,13 @@ func TestFastMap_CopyTo(t *testing.T) {
 			t.Errorf("values do not match: %v -> got %v != want %v", key, shadowVal, val)
 		}
 	})
+
+	// do the same in reverse
+	shadow.ForEach(func(key Key, shadowVal int) {
+		if val, exists := m.Get(key); !exists || shadowVal != val {
+			t.Errorf("values do not match: %v -> got %v != want %v", key, shadowVal, val)
+		}
+	})
 }
 
 func TestMap_Internal_Negative_Position(t *testing.T) {

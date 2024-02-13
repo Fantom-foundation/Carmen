@@ -32,7 +32,7 @@ func getMultiMapFactories(tb testing.TB) (stores []multimapFactory) {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
 
-				mm := ldb.NewMultiMap[uint32, uint64](db, common.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier64Serializer{})
+				mm := ldb.NewMultiMap[uint32, uint64](db, backend.AddressSlotMultiMapKey, common.Identifier32Serializer{}, common.Identifier64Serializer{})
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
