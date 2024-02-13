@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -34,13 +35,10 @@ const (
 const printWarningDefaultNodeFreezing = false
 
 func (m StorageMode) String() string {
-	switch m {
-	case Immutable:
+	if m {
 		return "Immutable"
-	case Mutable:
+	} else {
 		return "Mutable"
-	default:
-		return "?"
 	}
 }
 
@@ -109,43 +107,40 @@ func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig Fore
 	}
 
 	success := false
+	var err error
+	closers := make(closers, 0, 4)
+	defer func() {
+		// if opening the forest was not successful, close all opened stocks.
+		if !success {
+			err = errors.Join(err, closers.CloseAll())
+		}
+	}()
+
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			branches.Close()
-		}
-	}()
+	closers = append(closers, branches)
+
 	extensions, err := memory.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			extensions.Close()
-		}
-	}()
+	closers = append(closers, extensions)
+
 	accounts, err := memory.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			accounts.Close()
-		}
-	}()
+	closers = append(closers, accounts)
+
 	values, err := memory.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			values.Close()
-		}
-	}()
+	closers = append(closers, values)
+
 	success = true
 	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
 }
@@ -156,45 +151,54 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 	}
 
 	success := false
+	var err error
+	closers := make(closers, 0, 4)
+	defer func() {
+		// if opening the forest was not successful, close all opened stocks.
+		if !success {
+			err = errors.Join(err, closers.CloseAll())
+		}
+	}()
+
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			branches.Close()
-		}
-	}()
+	closers = append(closers, branches)
+
 	extensions, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			extensions.Close()
-		}
-	}()
+	closers = append(closers, extensions)
+
 	accounts, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			accounts.Close()
-		}
-	}()
+	closers = append(closers, accounts)
+
 	values, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			values.Close()
-		}
-	}()
+	closers = append(closers, values)
+
 	success = true
 	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+}
+
+// closers is a shortcut for the list of io.Closer.
+type closers []io.Closer
+
+// CloseAll closes all the closers and returns an error if any errors occurred during the closing process.
+func (c closers) CloseAll() error {
+	var errs []error
+	for _, closer := range c {
+		errs = append(errs, closer.Close())
+	}
+	return errors.Join(errs...)
 }
 
 func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (ForestMetadata, error) {
@@ -223,14 +227,7 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 
 	// Update on-disk meta-data.
 	metadata, err := json.Marshal(meta)
-	if err != nil {
-		return meta, err
-	}
-	if err := os.WriteFile(path, metadata, 0600); err != nil {
-		return meta, err
-	}
-
-	return meta, nil
+	return meta, errors.Join(err, os.WriteFile(path, metadata, 0600))
 }
 
 func makeForest(

@@ -1,7 +1,10 @@
 package mpt
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,13 +17,20 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-var variants = []struct {
+type variant struct {
 	name    string
 	factory func(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error)
-}{
+}
+
+var variants = []variant{
 	{"InMemory", OpenInMemoryForest},
 	{"FileBased", OpenFileForest},
 	{"FileShadow", openFileShadowForest},
+}
+
+var fileAndMemVariants = []variant{
+	{"InMemory", OpenInMemoryForest},
+	{"FileBased", OpenFileForest},
 }
 
 var forestConfigs = map[string]ForestConfig{
@@ -28,6 +38,84 @@ var forestConfigs = map[string]ForestConfig{
 	"mutable_128k":   {Mode: Mutable, CacheCapacity: 128 * 1024},
 	"immutable_1k":   {Mode: Immutable, CacheCapacity: 1024},
 	"immutable_128k": {Mode: Immutable, CacheCapacity: 128 * 1024},
+}
+
+func TestForest_Cannot_Open_Corrupted_Stock_Meta(t *testing.T) {
+	for _, variant := range fileAndMemVariants {
+		for _, config := range allMptConfigs {
+			for _, stockDir := range []string{"branches", "extensions", "accounts", "values"} {
+				t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
+					rootDir := t.TempDir()
+					dir := filepath.Join(rootDir, stockDir)
+					// Corrupt metadata to prevent opening
+					if err := os.MkdirAll(dir, 0744); err != nil {
+						t.Fatalf("cannot prepare for test: %s", err)
+					}
+					if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte("Hello"), 0644); err != nil {
+						t.Fatalf("cannot prepare for test: %s", err)
+					}
+
+					if _, err := variant.factory(rootDir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+						t.Errorf("openning forest should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_Cannot_Open_Corrupted_Forest_Meta(t *testing.T) {
+	for _, variant := range fileAndMemVariants {
+		for _, config := range allMptConfigs {
+			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte("Hello"), 0644); err != nil {
+					t.Fatalf("cannot prepare for test: %s", err)
+				}
+
+				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+					t.Errorf("openning forest should fail")
+				}
+			})
+		}
+	}
+}
+
+func TestForest_Cannot_Open_Cannot_Parse_Meta(t *testing.T) {
+	for _, variant := range fileAndMemVariants {
+		for _, config := range allMptConfigs {
+			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
+				dir := t.TempDir()
+				meta := "{\"Configuration\":\"S4-Live\",\"Mutable\":THIS_IS_NOT_BOOLEAN}"
+				if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte(meta), 0644); err != nil {
+					t.Fatalf("cannot prepare for test: %s", err)
+				}
+
+				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+					t.Errorf("openning forest should fail")
+				}
+			})
+		}
+	}
+}
+
+func TestForest_Cannot_Open_Meta_DoesNot_Match(t *testing.T) {
+	for _, variant := range fileAndMemVariants {
+		t.Run(fmt.Sprintf("%s", variant.name), func(t *testing.T) {
+			dir := t.TempDir()
+			meta := "{\"Configuration\":\"S4-Live\",\"Mutable\":true}"
+			if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte(meta), 0644); err != nil {
+				t.Fatalf("cannot prepare for test: %s", err)
+			}
+
+			if _, err := variant.factory(dir, S5LiveConfig, ForestConfig{Mode: Mutable, CacheCapacity: 0}); err == nil {
+				t.Errorf("openning forest should fail")
+			}
+			if _, err := variant.factory(dir, S4LiveConfig, ForestConfig{Mode: Immutable, CacheCapacity: 0}); err == nil {
+				t.Errorf("openning forest should fail")
+			}
+		})
+	}
 }
 
 func TestForest_OpenAndClose(t *testing.T) {
@@ -89,6 +177,249 @@ func TestForest_ClosedAndReOpened(t *testing.T) {
 					if err := reopened.Close(); err != nil {
 						t.Fatalf("failed to close forest: %v", err)
 					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_GettingAccountInfo_Fails(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+					stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to get value from stock"))
+					forest.accounts = stock
+					root := NewNodeReference(AccountId(123))
+
+					if _, err := forest.SetAccountInfo(&root, common.Address{1}, AccountInfo{}); err == nil {
+						t.Errorf("setting account should fail")
+					}
+					if _, _, err := forest.GetAccountInfo(&root, common.Address{1}); err == nil {
+						t.Errorf("getting account should fail")
+					}
+					if _, err := forest.SetValue(&root, common.Address{1}, common.Key{2}, common.Value{}); err == nil {
+						t.Errorf("setting value should fail")
+					}
+					if _, err := forest.GetValue(&root, common.Address{1}, common.Key{2}); err == nil {
+						t.Errorf("getting value should fail")
+					}
+					if _, err := forest.ClearStorage(&root, common.Address{1}); err == nil {
+						t.Errorf("getting account should fail")
+					}
+					nodeVisitor := NewMockNodeVisitor(ctrl)
+					if err := forest.VisitTrie(&root, nodeVisitor); err == nil {
+						t.Errorf("getting account should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, nil)
+					accounts.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+
+					values := stock.NewMockStock[uint64, ValueNode](ctrl)
+					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
+					values.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+
+					forest.accounts = accounts
+					forest.values = values
+					root := NewNodeReference(AccountId(123))
+
+					if _, err := forest.SetAccountInfo(&root, common.Address{1}, AccountInfo{Nonce: common.Nonce{1}}); err == nil {
+						t.Errorf("setting account should fail")
+					}
+					if _, err := forest.SetValue(&root, common.Address{}, common.Key{2}, common.Value{1}); err == nil {
+						t.Errorf("setting value should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
+					forest.accounts = accounts
+					root := NewNodeReference(AccountId(123))
+
+					hashes := NodeHashes{make([]NodeHash, 1)}
+					if err := forest.setHashesFor(&root, &hashes); err == nil {
+						t.Errorf("setting hashes should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_Freeze_Fails(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
+					forest.accounts = accounts
+					root := NewNodeReference(AccountId(123))
+
+					if err := forest.Freeze(&root); err == nil {
+						t.Errorf("freezing node should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_CreatingNodes_Fails(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, nil)
+					accounts.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+
+					values := stock.NewMockStock[uint64, ValueNode](ctrl)
+					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
+					values.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+
+					branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+					branches.EXPECT().Get(gomock.Any()).AnyTimes().Return(BranchNode{}, nil)
+					branches.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+
+					extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+					extensions.EXPECT().Get(gomock.Any()).AnyTimes().Return(ExtensionNode{}, nil)
+					extensions.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+
+					forest.accounts = accounts
+					forest.values = values
+					forest.branches = branches
+					forest.extensions = extensions
+
+					if _, _, err := forest.createAccount(); err == nil {
+						t.Errorf("creating node should fail")
+					}
+					if _, _, err := forest.createValue(); err == nil {
+						t.Errorf("creating node should fail")
+					}
+					if _, _, err := forest.createBranch(); err == nil {
+						t.Errorf("creating node should fail")
+					}
+					if _, _, err := forest.createExtension(); err == nil {
+						t.Errorf("creating node should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_Cannot_Release_Node(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// empty ID cannot be released
+					if err := forest.release(EmptyId()); err == nil {
+						t.Errorf("creating node should fail")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_Dump(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					root := NewNodeReference(AccountId(1))
+					forest.Dump(&root) // ok case
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
+					forest.accounts = accounts
+
+					root2 := NewNodeReference(AccountId(2))
+					forest.Dump(&root2) // trigger error case
 				})
 			}
 		}
@@ -887,5 +1218,21 @@ func TestForest_CheckPassesAfterReopeningDirectory(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestForest_String(t *testing.T) {
+	if got, want := Immutable.String(), "Immutable"; got != want {
+		t.Errorf("names do not match: got: %v != want: %v", got, want)
+	}
+	if got, want := Mutable.String(), "Mutable"; got != want {
+		t.Errorf("names do not match: got: %v != want: %v", got, want)
+	}
+}
+
+func TestForest_ReadForestMetadata_Fails(t *testing.T) {
+	dir := t.TempDir()
+	if _, _, err := ReadForestMetadata(dir); err == nil {
+		t.Errorf("reading file which is directory should fail")
 	}
 }
