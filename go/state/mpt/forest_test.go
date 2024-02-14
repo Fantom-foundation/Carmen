@@ -398,6 +398,72 @@ func TestForest_Cannot_Release_Node(t *testing.T) {
 	}
 }
 
+func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					values := stock.NewMockStock[uint64, ValueNode](ctrl)
+					// first call will succeed on getting the node but fails on releasing it
+					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, errors.New("failed to call Get"))
+					forest.values = values
+
+					forest.releaseQueue <- ValueId(456)
+					<-forest.releaseDone
+
+					if err := forest.collectReleaseWorkerErrors(); err == nil {
+						t.Errorf("error should be produced from the release queue")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				if forestConfig.Mode == Immutable {
+					continue // Immutable configuration cannot fail on releasing a node
+				}
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// inject failing stock to trigger an error applying the update
+					ctrl := gomock.NewController(t)
+					values := stock.NewMockStock[uint64, ValueNode](ctrl)
+					// first call will succeed on getting the node but fails on releasing it
+					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
+					values.EXPECT().Delete(gomock.Any()).AnyTimes().Return(errors.New("failed to call Delete"))
+					forest.values = values
+
+					forest.releaseQueue <- ValueId(456)
+					<-forest.releaseDone
+
+					if err := forest.collectReleaseWorkerErrors(); err == nil {
+						t.Errorf("error should be produced from the release queue")
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestForest_getAccess_Fails(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
