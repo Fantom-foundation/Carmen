@@ -426,6 +426,20 @@ func (s *Forest) Flush() error {
 		}
 	})
 
+	errs = append(errs, s.flushDirtyIds(ids))
+
+	return errors.Join(
+		errors.Join(errs...),
+		s.writeBuffer.Flush(),
+		s.accounts.Flush(),
+		s.branches.Flush(),
+		s.extensions.Flush(),
+		s.values.Flush(),
+	)
+}
+
+func (s *Forest) flushDirtyIds(ids []NodeId) error {
+	var errs []error
 	// Flush dirty keys in order (to avoid excessive seeking).
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
@@ -443,14 +457,7 @@ func (s *Forest) Flush() error {
 		}
 	}
 
-	return errors.Join(
-		errors.Join(errs...),
-		s.writeBuffer.Flush(),
-		s.accounts.Flush(),
-		s.branches.Flush(),
-		s.extensions.Flush(),
-		s.values.Flush(),
-	)
+	return errors.Join(errs...)
 }
 
 func (s *Forest) Close() error {
@@ -584,14 +591,10 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 		node, err = &value, e
 	} else if id.IsEmpty() {
 		node = EmptyNode{}
-	} else {
-		err = fmt.Errorf("unknown node ID: %v", id)
 	}
+
 	if err != nil {
 		return nil, err
-	}
-	if node == nil {
-		return nil, fmt.Errorf("no node with ID %d in storage", id)
 	}
 
 	// Everything loaded from the stock is in sync and thus clean.
@@ -781,11 +784,8 @@ func (s *Forest) flushNode(id NodeId, node Node) error {
 		return s.branches.Set(id.Index(), *node.(*BranchNode))
 	} else if id.IsExtension() {
 		return s.extensions.Set(id.Index(), *node.(*ExtensionNode))
-	} else if id.IsEmpty() {
-		return nil
-	} else {
-		return fmt.Errorf("unknown node ID: %v", id)
 	}
+	return nil
 }
 
 func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error) {
@@ -881,19 +881,7 @@ func getEncoder(config MptConfig) (
 	stock.ValueEncoder[ExtensionNode],
 	stock.ValueEncoder[ValueNode],
 ) {
-	switch config.HashStorageLocation {
-	case HashStoredWithParent:
-		if config.TrackSuffixLengthsInLeafNodes {
-			return AccountNodeWithPathLengthEncoderWithChildHash{},
-				BranchNodeEncoderWithChildHashes{},
-				ExtensionNodeEncoderWithChildHash{},
-				ValueNodeWithPathLengthEncoderWithoutNodeHash{}
-		}
-		return AccountNodeEncoderWithChildHash{},
-			BranchNodeEncoderWithChildHashes{},
-			ExtensionNodeEncoderWithChildHash{},
-			ValueNodeEncoderWithoutNodeHash{}
-	case HashStoredWithNode:
+	if config.HashStorageLocation {
 		if config.TrackSuffixLengthsInLeafNodes {
 			return AccountNodeWithPathLengthEncoderWithNodeHash{},
 				BranchNodeEncoderWithNodeHash{},
@@ -904,10 +892,18 @@ func getEncoder(config MptConfig) (
 			BranchNodeEncoderWithNodeHash{},
 			ExtensionNodeEncoderWithNodeHash{},
 			ValueNodeEncoderWithNodeHash{}
-	default:
-		panic(fmt.Sprintf("unknown mode: %v", config.HashStorageLocation))
+	} else {
+		if config.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithChildHash{},
+				BranchNodeEncoderWithChildHashes{},
+				ExtensionNodeEncoderWithChildHash{},
+				ValueNodeWithPathLengthEncoderWithoutNodeHash{}
+		}
+		return AccountNodeEncoderWithChildHash{},
+			BranchNodeEncoderWithChildHashes{},
+			ExtensionNodeEncoderWithChildHash{},
+			ValueNodeEncoderWithoutNodeHash{}
 	}
-
 }
 
 type writeBufferSink struct {
