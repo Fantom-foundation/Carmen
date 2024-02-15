@@ -190,8 +190,5 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 
 // strToDBKey converts the input key to its respective table space key
 func strToDBKey(t backend.TableSpace, key string) backend.DbKey {
-	var dbKey backend.DbKey
-	dbKey[0] = byte(t)
-	copy(dbKey[1:], key)
-	return dbKey
+	return backend.ToDBKey(t, []byte(key))
 }

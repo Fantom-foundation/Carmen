@@ -279,9 +279,12 @@ func getNodeDbKey(table backend.TableSpace, layer, node int) backend.DbKey {
 	//  the key is: [tableSpace]H[layer][node]
 	// layer is 8bit (256 layers Max)
 	// node is 32bit
-	return dBToDBKey(table,
-		backend.ToDBKey(backend.HashKey,
-			binary.BigEndian.AppendUint32([]byte{uint8(layer)}, uint32(node))))
+	var dbKey backend.DbKey
+	dbKey[0] = byte(table)
+	dbKey[1] = byte(backend.HashKey)
+	dbKey[2] = uint8(layer)
+	binary.BigEndian.PutUint32(dbKey[3:], uint32(node))
+	return dbKey
 }
 
 // GetMemoryFootprint provides the size of the hash-tree in memory in bytes
@@ -293,12 +296,4 @@ func (ht *HashTree) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*ht) + uintptr(len(ht.dirtyPages))*dirtyItemSize)
 	mf.AddChild("levelDb", ht.db.GetMemoryFootprint())
 	return mf
-}
-
-// dBToDBKey converts the input key to its respective table space key
-func dBToDBKey(t backend.TableSpace, key backend.DbKey) backend.DbKey {
-	var dbKey backend.DbKey
-	dbKey[0] = byte(t)
-	copy(dbKey[1:], key[:])
-	return dbKey
 }
