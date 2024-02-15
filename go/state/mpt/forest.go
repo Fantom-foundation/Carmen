@@ -881,18 +881,8 @@ func getEncoder(config MptConfig) (
 	stock.ValueEncoder[ExtensionNode],
 	stock.ValueEncoder[ValueNode],
 ) {
-	if config.HashStorageLocation {
-		if config.TrackSuffixLengthsInLeafNodes {
-			return AccountNodeWithPathLengthEncoderWithNodeHash{},
-				BranchNodeEncoderWithNodeHash{},
-				ExtensionNodeEncoderWithNodeHash{},
-				ValueNodeWithPathLengthEncoderWithNodeHash{}
-		}
-		return AccountNodeEncoderWithNodeHash{},
-			BranchNodeEncoderWithNodeHash{},
-			ExtensionNodeEncoderWithNodeHash{},
-			ValueNodeEncoderWithNodeHash{}
-	} else {
+	switch config.HashStorageLocation {
+	case HashStoredWithParent:
 		if config.TrackSuffixLengthsInLeafNodes {
 			return AccountNodeWithPathLengthEncoderWithChildHash{},
 				BranchNodeEncoderWithChildHashes{},
@@ -903,6 +893,19 @@ func getEncoder(config MptConfig) (
 			BranchNodeEncoderWithChildHashes{},
 			ExtensionNodeEncoderWithChildHash{},
 			ValueNodeEncoderWithoutNodeHash{}
+	case HashStoredWithNode:
+		if config.TrackSuffixLengthsInLeafNodes {
+			return AccountNodeWithPathLengthEncoderWithNodeHash{},
+				BranchNodeEncoderWithNodeHash{},
+				ExtensionNodeEncoderWithNodeHash{},
+				ValueNodeWithPathLengthEncoderWithNodeHash{}
+		}
+		return AccountNodeEncoderWithNodeHash{},
+			BranchNodeEncoderWithNodeHash{},
+			ExtensionNodeEncoderWithNodeHash{},
+			ValueNodeEncoderWithNodeHash{}
+	default:
+		panic(fmt.Sprintf("unknown mode: %v", config.HashStorageLocation))
 	}
 }
 
