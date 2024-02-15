@@ -180,9 +180,37 @@ func TestSerializers(t *testing.T) {
 		testSerializer[uint64](t, a, size, common.Identifier64Serializer{})
 	})
 
+	t.Run("TestSerializers_SlotIdx32Serializer", func(t *testing.T) {
+		var a common.SlotIdx[uint32]
+		a.KeyIdx = uint32(loops)
+		a.AddressIdx = uint32(loops)
+		const size = 4 + 4
+		testSerializer[common.SlotIdx[uint32]](t, a, size, common.SlotIdx32Serializer{})
+	})
+
+	t.Run("TestSerializers_SlotIdx32KeySerializer", func(t *testing.T) {
+		var key common.Key
+		const keySize = 32
+		for i := 1; i < loops; i++ {
+			key[i%keySize]++
+		}
+
+		var a common.SlotIdxKey[uint32]
+		a.Key = key
+		a.AddressIdx = uint32(loops)
+		const size = 4
+		testSerializer[common.SlotIdxKey[uint32]](t, a, keySize+size, common.SlotIdx32KeySerializer{})
+	})
+
+	t.Run("TestSerializers_ReincarnationSerializer", func(t *testing.T) {
+		var a = common.Reincarnation(loops)
+		const size = 4
+		testSerializer[common.Reincarnation](t, a, size, common.ReincarnationSerializer{})
+	})
 }
 
 func testSerializer[T comparable](t *testing.T, val T, size int, serializer common.Serializer[T]) {
+	t.Helper()
 	serialized := serializer.ToBytes(val)
 
 	if got, want := serializer.FromBytes(serialized), val; got != want {

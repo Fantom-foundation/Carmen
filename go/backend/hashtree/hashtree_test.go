@@ -2,6 +2,7 @@ package hashtree_test
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
@@ -33,11 +34,11 @@ func getHashTreeFactories(tb testing.TB) (factories []hashTreeFactory) {
 		{
 			label: "LevelDb",
 			getHashtree: func(tempDir string, pages [][]byte) closingHashtreeWrapper {
-				db, err := common.OpenLevelDb(tempDir, nil)
+				db, err := backend.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to open LevelDB; %s", err)
 				}
-				return closingHashtreeWrapper{htldb.CreateHashTreeFactory(db, common.DepotCodeKey, 3).Create(testingPageProvider{pages: pages}), db}
+				return closingHashtreeWrapper{htldb.CreateHashTreeFactory(db, backend.DepotCodeKey, 3).Create(testingPageProvider{pages: pages}), db}
 			},
 		},
 	}

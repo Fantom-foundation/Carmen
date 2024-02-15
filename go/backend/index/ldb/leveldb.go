@@ -19,8 +19,8 @@ const (
 
 // Index represents a key-value store for holding the index data.
 type Index[K comparable, I common.Identifier] struct {
-	db              common.LevelDB
-	table           common.TableSpace
+	db              backend.LevelDB
+	table           backend.TableSpace
 	keySerializer   common.Serializer[K]
 	indexSerializer common.Serializer[I]
 	hashIndex       *indexhash.IndexHash[K]
@@ -29,14 +29,14 @@ type Index[K comparable, I common.Identifier] struct {
 
 // NewIndex creates a new instance of the index backed by a persisted database
 func NewIndex[K comparable, I common.Identifier](
-	db common.LevelDB,
-	table common.TableSpace,
+	db backend.LevelDB,
+	table backend.TableSpace,
 	keySerializer common.Serializer[K],
 	indexSerializer common.Serializer[I]) (p *Index[K, I], err error) {
 
 	// read the last hash from the database
 	var hash common.Hash
-	hashDbKey := table.StrToDBKey(HashKey).ToBytes()
+	hashDbKey := strToDBKey(table, HashKey).ToBytes()
 	hashBytes, err := db.Get(hashDbKey, nil)
 	if err != nil && err != errors.ErrNotFound {
 		return
@@ -47,7 +47,7 @@ func NewIndex[K comparable, I common.Identifier](
 
 	// read the last index from the database
 	var lastIndex I
-	lastDbKey := table.StrToDBKey(LastIndexKey).ToBytes()
+	lastDbKey := strToDBKey(table, LastIndexKey).ToBytes()
 	lastIndexBytes, err := db.Get(lastDbKey, nil)
 	if err != nil && err != errors.ErrNotFound {
 		return
@@ -168,15 +168,15 @@ func (s *Index[K, I]) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVeri
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Index[K, I]) convertKey(key K) common.DbKey {
-	return m.table.ToDBKey(m.keySerializer.ToBytes(key))
+func (m *Index[K, I]) convertKey(key K) backend.DbKey {
+	return backend.ToDBKey(m.table, m.keySerializer.ToBytes(key))
 }
 
 // convertKeyStr translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // from string
-func (m *Index[K, I]) convertKeyStr(key string) common.DbKey {
-	return m.table.StrToDBKey(key)
+func (m *Index[K, I]) convertKeyStr(key string) backend.DbKey {
+	return strToDBKey(m.table, key)
 }
 
 // GetMemoryFootprint provides the size of the index in memory in bytes
@@ -186,4 +186,9 @@ func (m *Index[K, I]) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("levelDb", m.db.GetMemoryFootprint())
 	mf.SetNote(fmt.Sprintf("(items: %d)", m.lastIndex))
 	return mf
+}
+
+// strToDBKey converts the input key to its respective table space key
+func strToDBKey(t backend.TableSpace, key string) backend.DbKey {
+	return backend.ToDBKey(t, []byte(key))
 }

@@ -500,6 +500,33 @@ func TestMap_Fill_All_Generations(t *testing.T) {
 	}
 }
 
+func TestFastMap_CopyTo(t *testing.T) {
+	m := NewFastMap[Key, int](KeyShortHasher{})
+
+	// fill in data
+	var k Key
+	for i := 0; i < 100; i++ {
+		m.Put(k, i)
+		k[i%32]++
+	}
+
+	shadow := NewFastMap[Key, int](KeyShortHasher{})
+	m.CopyTo(shadow)
+
+	m.ForEach(func(key Key, val int) {
+		if shadowVal, exists := shadow.Get(key); !exists || shadowVal != val {
+			t.Errorf("values do not match: %v -> got %v != want %v", key, shadowVal, val)
+		}
+	})
+
+	// do the same in reverse
+	shadow.ForEach(func(key Key, shadowVal int) {
+		if val, exists := m.Get(key); !exists || shadowVal != val {
+			t.Errorf("values do not match: %v -> got %v != want %v", key, shadowVal, val)
+		}
+	})
+}
+
 func TestMap_Internal_Negative_Position(t *testing.T) {
 	m := NewFastMap[Key, int](KeyShortHasher{})
 

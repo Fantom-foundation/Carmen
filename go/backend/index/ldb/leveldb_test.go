@@ -2,6 +2,7 @@ package ldb
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"testing"
@@ -96,7 +97,7 @@ func TestMultipleAssigningOfOneIndex(t *testing.T) {
 
 func TestLongKeysIndex(t *testing.T) {
 	db, _ := openIndexTempDb(t)
-	idx, err := NewIndex[common.SlotIdxKey[uint32], uint32](db, common.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
+	idx, err := NewIndex[common.SlotIdxKey[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32KeySerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)
 	}
@@ -249,14 +250,14 @@ func TestHashPersistedAndAdded(t *testing.T) {
 }
 
 // openIndexTempDb creates a new database on a new temp file
-func openIndexTempDb(t *testing.T) (*common.LevelDbMemoryFootprintWrapper, string) {
+func openIndexTempDb(t *testing.T) (*backend.LevelDbMemoryFootprintWrapper, string) {
 	path := t.TempDir()
 	return openIndexDb(t, path), path
 }
 
 // openIndexDb opends LevelDB on the input directory path
-func openIndexDb(t *testing.T, path string) *common.LevelDbMemoryFootprintWrapper {
-	db, err := common.OpenLevelDb(path, nil)
+func openIndexDb(t *testing.T, path string) *backend.LevelDbMemoryFootprintWrapper {
+	db, err := backend.OpenLevelDb(path, nil)
 	if err != nil {
 		t.Fatalf("Cannot open Db, err: %s", err)
 	}
@@ -267,7 +268,7 @@ func openIndexDb(t *testing.T, path string) *common.LevelDbMemoryFootprintWrappe
 
 // reopenIndexDb closes database and the index from thw input index wrapper,
 // and creates a new  database pointing to the same location
-func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *common.LevelDbMemoryFootprintWrapper, path string) *common.LevelDbMemoryFootprintWrapper {
+func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *backend.LevelDbMemoryFootprintWrapper, path string) *backend.LevelDbMemoryFootprintWrapper {
 	if err := idx.Close(); err != nil {
 		t.Errorf("Cannot close Index, err? %s", err)
 	}
@@ -278,8 +279,8 @@ func reopenIndexDb(t *testing.T, idx index.Index[common.Address, uint32], db *co
 }
 
 // createIndex creates a new instance of the index using the input database
-func createIndex(t *testing.T, db common.LevelDB) index.Index[common.Address, uint32] {
-	idx, err := NewIndex[common.Address, uint32](db, common.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
+func createIndex(t *testing.T, db backend.LevelDB) index.Index[common.Address, uint32] {
+	idx, err := NewIndex[common.Address, uint32](db, backend.BalanceStoreKey, common.AddressSerializer{}, common.Identifier32Serializer{})
 	if err != nil {
 		t.Fatalf("Cannot open Index, err: %s", err)
 	}

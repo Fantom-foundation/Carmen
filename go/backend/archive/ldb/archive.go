@@ -3,6 +3,7 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"sync"
 	"unsafe"
 
@@ -13,7 +14,7 @@ import (
 )
 
 type Archive struct {
-	db                       *common.LevelDbMemoryFootprintWrapper
+	db                       *backend.LevelDbMemoryFootprintWrapper
 	reincarnationNumberCache map[common.Address]int
 	accountHashCache         *common.LruCache[common.Address, common.Hash]
 	batch                    leveldb.Batch
@@ -21,7 +22,7 @@ type Archive struct {
 	addMutex                 sync.Mutex
 }
 
-func NewArchive(db *common.LevelDbMemoryFootprintWrapper) (*Archive, error) {
+func NewArchive(db *backend.LevelDbMemoryFootprintWrapper) (*Archive, error) {
 	return &Archive{
 		db:                       db,
 		reincarnationNumberCache: map[common.Address]int{},
@@ -84,7 +85,7 @@ func (a *Archive) Add(block uint64, update common.Update, _ any) error {
 			blockHasher.Write(newAccountHash[:])
 
 			var accountK accountBlockKey
-			accountK.set(common.AccountHashArchiveKey, account, block)
+			accountK.set(backend.AccountHashArchiveKey, account, block)
 			a.batch.Put(accountK[:], newAccountHash[:])
 			a.accountHashCache.Set(account, newAccountHash)
 		}
@@ -126,7 +127,7 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
 		var accountK accountBlockKey
-		accountK.set(common.AccountArchiveKey, account, block)
+		accountK.set(backend.AccountArchiveKey, account, block)
 		var accountStatusV accountStatusValue
 		accountStatusV.set(false, reincarnation+1)
 		a.batch.Put(accountK[:], accountStatusV[:])
@@ -139,7 +140,7 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
 		var accountK accountBlockKey
-		accountK.set(common.AccountArchiveKey, account, block)
+		accountK.set(backend.AccountArchiveKey, account, block)
 		var accountStatusV accountStatusValue
 		accountStatusV.set(true, reincarnation+1)
 		a.batch.Put(accountK[:], accountStatusV[:])
@@ -148,19 +149,19 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 
 	for _, balanceUpdate := range update.Balances {
 		var accountK accountBlockKey
-		accountK.set(common.BalanceArchiveKey, balanceUpdate.Account, block)
+		accountK.set(backend.BalanceArchiveKey, balanceUpdate.Account, block)
 		a.batch.Put(accountK[:], balanceUpdate.Balance[:])
 	}
 
 	for _, codeUpdate := range update.Codes {
 		var accountK accountBlockKey
-		accountK.set(common.CodeArchiveKey, codeUpdate.Account, block)
+		accountK.set(backend.CodeArchiveKey, codeUpdate.Account, block)
 		a.batch.Put(accountK[:], codeUpdate.Code[:])
 	}
 
 	for _, nonceUpdate := range update.Nonces {
 		var accountK accountBlockKey
-		accountK.set(common.NonceArchiveKey, nonceUpdate.Account, block)
+		accountK.set(backend.NonceArchiveKey, nonceUpdate.Account, block)
 		a.batch.Put(accountK[:], nonceUpdate.Nonce[:])
 	}
 
@@ -170,7 +171,7 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 			return fmt.Errorf("failed to get status; %s", err)
 		}
 		var slotK accountKeyBlockKey
-		slotK.set(common.StorageArchiveKey, slotUpdate.Account, reincarnation, slotUpdate.Key, block)
+		slotK.set(backend.StorageArchiveKey, slotUpdate.Account, reincarnation, slotUpdate.Key, block)
 		a.batch.Put(slotK[:], slotUpdate.Value[:])
 	}
 
@@ -209,7 +210,7 @@ func (a *Archive) GetBlockHeight() (block uint64, empty bool, err error) {
 
 func (a *Archive) getStatus(block uint64, account common.Address) (exists bool, reincarnation int, err error) {
 	var key accountBlockKey
-	key.set(common.AccountArchiveKey, account, block)
+	key.set(backend.AccountArchiveKey, account, block)
 	keyRange := key.getRange()
 	it := a.db.NewIterator(&keyRange, &opt.ReadOptions{})
 	defer it.Release()
@@ -230,7 +231,7 @@ func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err
 
 func (a *Archive) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
 	var key accountBlockKey
-	key.set(common.BalanceArchiveKey, account, block)
+	key.set(backend.BalanceArchiveKey, account, block)
 	keyRange := key.getRange()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
@@ -244,7 +245,7 @@ func (a *Archive) GetBalance(block uint64, account common.Address) (balance comm
 
 func (a *Archive) GetCode(block uint64, account common.Address) (code []byte, err error) {
 	var key accountBlockKey
-	key.set(common.CodeArchiveKey, account, block)
+	key.set(backend.CodeArchiveKey, account, block)
 	keyRange := key.getRange()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
@@ -259,7 +260,7 @@ func (a *Archive) GetCode(block uint64, account common.Address) (code []byte, er
 
 func (a *Archive) GetNonce(block uint64, account common.Address) (nonce common.Nonce, err error) {
 	var key accountBlockKey
-	key.set(common.NonceArchiveKey, account, block)
+	key.set(backend.NonceArchiveKey, account, block)
 	keyRange := key.getRange()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
@@ -278,7 +279,7 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 	}
 
 	var key accountKeyBlockKey
-	key.set(common.StorageArchiveKey, account, reincarnation, slot, block)
+	key.set(backend.StorageArchiveKey, account, reincarnation, slot, block)
 	keyRange := key.getRange()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()
@@ -311,7 +312,7 @@ func (a *Archive) getLastAccountHash(account common.Address) (hash common.Hash, 
 
 func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash common.Hash, err error) {
 	var key accountBlockKey
-	key.set(common.AccountHashArchiveKey, account, block)
+	key.set(backend.AccountHashArchiveKey, account, block)
 	keyRange := key.getRange()
 	it := a.db.NewIterator(&keyRange, nil)
 	defer it.Release()

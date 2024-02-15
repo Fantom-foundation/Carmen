@@ -3,6 +3,7 @@ package store_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htfile"
 	"github.com/Fantom-foundation/Carmen/go/backend/hashtree/htldb"
@@ -68,12 +69,12 @@ func getStoresFactories[V any](tb testing.TB, serializer common.Serializer[V], b
 		{
 			label: "LevelDb",
 			getStore: func(tempDir string) store.Store[uint32, V] {
-				db, err := common.OpenLevelDb(tempDir, nil)
+				db, err := backend.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
-				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, V](db, common.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				hashTreeFac := htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, V](db, backend.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
@@ -84,12 +85,12 @@ func getStoresFactories[V any](tb testing.TB, serializer common.Serializer[V], b
 			label: "CachedLevelDb",
 			getStore: func(tempDir string) store.Store[uint32, V] {
 				cacheCapacity := 1 << 18
-				db, err := common.OpenLevelDb(tempDir, nil)
+				db, err := backend.OpenLevelDb(tempDir, nil)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}
-				hashTreeFac := htldb.CreateHashTreeFactory(db, common.ValueStoreKey, branchingFactor)
-				str, err := ldb.NewStore[uint32, V](db, common.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
+				hashTreeFac := htldb.CreateHashTreeFactory(db, backend.ValueStoreKey, branchingFactor)
+				str, err := ldb.NewStore[uint32, V](db, backend.ValueStoreKey, serializer, common.Identifier32Serializer{}, hashTreeFac, pageSize)
 				if err != nil {
 					tb.Fatalf("failed to init leveldb store; %s", err)
 				}

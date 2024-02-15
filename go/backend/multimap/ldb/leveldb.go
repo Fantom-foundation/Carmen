@@ -1,6 +1,7 @@
 package ldb
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -9,15 +10,15 @@ import (
 
 // MultiMap is a LevelDB multimap.MultiMap implementation - it maps IDs to values
 type MultiMap[K any, V any] struct {
-	db              common.LevelDB
-	table           common.TableSpace
+	db              backend.LevelDB
+	table           backend.TableSpace
 	keySerializer   common.Serializer[K]
 	valueSerializer common.Serializer[V]
 }
 
 func NewMultiMap[K any, V any](
-	db common.LevelDB,
-	table common.TableSpace,
+	db backend.LevelDB,
+	table backend.TableSpace,
 	keySerializer common.Serializer[K],
 	valueSerializer common.Serializer[V],
 ) *MultiMap[K, V] {

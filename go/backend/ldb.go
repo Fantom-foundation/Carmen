@@ -1,12 +1,76 @@
-package common
+package backend
 
 import (
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
+
+// TableSpace divide key-value storage into spaces by adding a prefix to the key.
+type TableSpace byte
+
+const (
+	// AccountStoreKey is a tablespace for accounts states
+	AccountStoreKey TableSpace = 'C'
+	// BalanceStoreKey is a tablespace for balances
+	BalanceStoreKey TableSpace = 'B'
+	// NonceStoreKey is a tablespace for nonces
+	NonceStoreKey TableSpace = 'N'
+	// ValueStoreKey is a tablespace for slot values
+	ValueStoreKey TableSpace = 'V'
+	// HashKey is a sub-tablespace for a hash tree
+	HashKey TableSpace = 'H'
+	// AddressIndexKey is a tablespace for address index
+	AddressIndexKey TableSpace = 'A'
+	// SlotLocIndexKey is a tablespace for slot index
+	SlotLocIndexKey TableSpace = 'L'
+	// KeyIndexKey is a tablespace for key index
+	KeyIndexKey TableSpace = 'K'
+	// DepotCodeKey is a tablespace for code depot
+	DepotCodeKey TableSpace = 'D'
+	// CodeHashStoreKey is a tablespace for store of codes hashes
+	CodeHashStoreKey TableSpace = 'c'
+	// AddressSlotMultiMapKey is a tablespace for slots-used-by-address multimap
+	AddressSlotMultiMapKey TableSpace = 'M'
+	// ReincarnationStoreKey is a tablespace for accounts reincarnations counters
+	ReincarnationStoreKey TableSpace = 'R'
+
+	// BlockArchiveKey is a tablespace for archive mapping from block numbers to block hashes
+	BlockArchiveKey TableSpace = '1'
+	// AccountArchiveKey is a tablespace for archive account states
+	AccountArchiveKey TableSpace = '2'
+	// BalanceArchiveKey is a tablespace for archive balances
+	BalanceArchiveKey TableSpace = '3'
+	// CodeArchiveKey is a tablespace for archive codes of contracts
+	CodeArchiveKey TableSpace = '4'
+	// NonceArchiveKey is a tablespace for archive nonces
+	NonceArchiveKey TableSpace = '5'
+	// StorageArchiveKey is a tablespace for storage slots values
+	StorageArchiveKey TableSpace = '6'
+	// AccountHashArchiveKey is a tablespace for archive account hashes
+	AccountHashArchiveKey TableSpace = '7'
+)
+
+// DbKey expects max size of the 36B key plus at most two bytes
+// for the table prefix (e.g. balance, nonce, slot, ...) and the domain (e.g. data, hash, ...)
+type DbKey [38]byte
+
+func (d DbKey) ToBytes() []byte {
+	return d[:]
+}
+
+// ToDBKey converts the input key to its respective table space key
+func ToDBKey(t TableSpace, key []byte) DbKey {
+	var dbKey DbKey
+	dbKey[0] = byte(t)
+	if n := copy(dbKey[1:], key); n < len(key) {
+		panic(fmt.Sprintf("input key does not fit into dbkey: len(key) > len(DbKey)-1: %d > %d", len(key), len(dbKey)-1))
+	}
+	return dbKey
+}
 
 // LevelDB is an interface missing in original LevelDB design.
 // It contains methods common for the LevelDB instance and its Transactions.
@@ -79,7 +143,7 @@ type LevelDB interface {
 	// The snapshot must be released after use, by calling Release method.
 	GetSnapshot() (*leveldb.Snapshot, error)
 
-	MemoryFootprintProvider
+	common.MemoryFootprintProvider
 }
 
 // LevelDBReader is an interface missing in original LevelDB design.
@@ -127,24 +191,24 @@ func OpenLevelDb(path string, options *opt.Options) (wrapped *LevelDbMemoryFootp
 	if err != nil {
 		return nil, err
 	}
-	mf := NewMemoryFootprint(0)
-	mf.AddChild("writeBuffer", NewMemoryFootprint(uintptr(options.GetWriteBuffer())))
+	mf := common.NewMemoryFootprint(0)
+	mf.AddChild("writeBuffer", common.NewMemoryFootprint(uintptr(options.GetWriteBuffer())))
 	return &LevelDbMemoryFootprintWrapper{ldb, mf}, nil
 }
 
 // LevelDbMemoryFootprintWrapper is a LevelDB wrapper adding a memory footprint providing method.
 type LevelDbMemoryFootprintWrapper struct {
 	*leveldb.DB
-	mf *MemoryFootprint
+	mf *common.MemoryFootprint
 }
 
-func (wrapper *LevelDbMemoryFootprintWrapper) GetMemoryFootprint() *MemoryFootprint {
+func (wrapper *LevelDbMemoryFootprintWrapper) GetMemoryFootprint() *common.MemoryFootprint {
 	var ldbStats leveldb.DBStats
 	err := wrapper.DB.Stats(&ldbStats)
 	if err != nil {
 		panic(fmt.Errorf("failed to get LevelDB Stats; %s", err))
 	}
-	wrapper.mf.AddChild("blockCache", NewMemoryFootprint(uintptr(ldbStats.BlockCacheSize)))
+	wrapper.mf.AddChild("blockCache", common.NewMemoryFootprint(uintptr(ldbStats.BlockCacheSize)))
 	return wrapper.mf
 }
 
@@ -159,13 +223,13 @@ func (wrapper *LevelDbMemoryFootprintWrapper) OpenTransaction() (*LevelDbTransac
 // LevelDbTransactionMemoryFootprintWrapper is a LevelDB transaction wrapper adding a memory footprint method.
 type LevelDbTransactionMemoryFootprintWrapper struct {
 	*leveldb.Transaction
-	mf *MemoryFootprint
+	mf *common.MemoryFootprint
 }
 
 func (wrapper *LevelDbTransactionMemoryFootprintWrapper) GetSnapshot() (*leveldb.Snapshot, error) {
 	return nil, fmt.Errorf("unable to get snapshot from a transaction")
 }
 
-func (wrapper *LevelDbTransactionMemoryFootprintWrapper) GetMemoryFootprint() *MemoryFootprint {
+func (wrapper *LevelDbTransactionMemoryFootprintWrapper) GetMemoryFootprint() *common.MemoryFootprint {
 	return wrapper.mf
 }

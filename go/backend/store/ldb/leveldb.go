@@ -15,20 +15,20 @@ import (
 
 // Store is a database-based store.Store implementation. It stores items in a key-value database.
 type Store[I common.Identifier, V any] struct {
-	db              common.LevelDB
+	db              backend.LevelDB
 	hashTree        hashtree.HashTree
 	valueSerializer common.Serializer[V]
 	indexSerializer common.Serializer[I]
 	pageSize        int // the amount of items stored in one database page
 	itemSize        int // the amount of bytes per one value
 	pagesCount      int // the amount of store pages
-	table           common.TableSpace
+	table           backend.TableSpace
 }
 
 // NewStore constructs a new instance of the Store.
 func NewStore[I common.Identifier, V any](
-	db common.LevelDB,
-	table common.TableSpace,
+	db backend.LevelDB,
+	table backend.TableSpace,
 	serializer common.Serializer[V],
 	indexSerializer common.Serializer[I],
 	hashTreeFactory hashtree.Factory,
@@ -64,7 +64,7 @@ func (m *Store[I, V]) GetPage(page int) (pageData []byte, err error) {
 }
 
 // getPageFromLdbReader provides the hashing page from given LevelDB reader (snapshot or database)
-func (m *Store[I, V]) getPageFromLdbReader(page int, db common.LevelDBReader) (pageData []byte, err error) {
+func (m *Store[I, V]) getPageFromLdbReader(page int, db backend.LevelDBReader) (pageData []byte, err error) {
 	pageStartKey := page * m.pageSize
 	pageEndKey := pageStartKey + m.pageSize
 	startDbKey := m.convertKey(I(pageStartKey)).ToBytes()
@@ -117,7 +117,7 @@ func (m *Store[I, V]) Get(id I) (v V, err error) {
 }
 
 // getPagesCountDbKey provides a database key, where should be the amount of pages in the depot stored
-func getPagesCountDbKey(table common.TableSpace) []byte {
+func getPagesCountDbKey(table backend.TableSpace) []byte {
 	return []byte{byte(table)} // suppose the key serializer will never produce empty slice
 }
 
@@ -238,8 +238,8 @@ func (m *Store[I, V]) Close() error {
 // convertKey translates the Index representation of the key into a database key.
 // The database key is prepended with the table space prefix, furthermore the input key is converted to bytes
 // by the key serializer
-func (m *Store[I, V]) convertKey(idx I) common.DbKey {
-	return m.table.ToDBKey(m.indexSerializer.ToBytes(idx))
+func (m *Store[I, V]) convertKey(idx I) backend.DbKey {
+	return backend.ToDBKey(m.table, m.indexSerializer.ToBytes(idx))
 }
 
 // GetMemoryFootprint provides the size of the store in memory in bytes

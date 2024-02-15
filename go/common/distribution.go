@@ -2,7 +2,6 @@ package common
 
 import (
 	"math/rand"
-	"time"
 )
 
 // distribution is a type of random probability distribution
@@ -22,7 +21,6 @@ type Distribution struct {
 
 // GetDistributions return a set of distributions
 func GetDistributions(size int) []Distribution {
-	rand.Seed(time.Now().UnixNano())
 	expRate := float64(10) / float64(size)
 	it := 0
 	return []Distribution{

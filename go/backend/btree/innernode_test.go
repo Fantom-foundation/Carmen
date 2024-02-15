@@ -1,7 +1,7 @@
 package btree
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
+	"slices"
 	"testing"
 )
 
@@ -15,7 +15,9 @@ func TestNodeInsertWithinCapacity(t *testing.T) {
 
 	n := initNewInnerNode[uint32](left, nil, 5, 10, comparator)
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5}, getKeys(n))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestNodeInsertInnerNodeTwoLeaf(t *testing.T) {
@@ -30,42 +32,66 @@ func TestNodeInsertInnerNodeTwoLeaf(t *testing.T) {
 	n.insert(3)
 
 	// left child
-	common.AssertArraysEqual[uint32](t, []uint32{2}, getLeafKeys(n.children[0]))
+	if got, want := getLeafKeys(n.children[0]), []uint32{2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right child
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getLeafKeys(n.children[1]))
+	if got, want := getLeafKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// parent
-	common.AssertArraysEqual[uint32](t, []uint32{3, 5}, getInnerKeys(n))
+	if got, want := getInnerKeys(n), []uint32{3, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// insert at the end - it has to create end up in a leaf node
 	n.insert(6)
 
 	// left child
-	common.AssertArraysEqual[uint32](t, []uint32{2}, getLeafKeys(n.children[0]))
+	if got, want := getLeafKeys(n.children[0]), []uint32{2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right child
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getLeafKeys(n.children[1]))
-	common.AssertArraysEqual[uint32](t, []uint32{6}, getLeafKeys(n.children[2]))
+	if got, want := getLeafKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getLeafKeys(n.children[2]), []uint32{6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// parent
-	common.AssertArraysEqual[uint32](t, []uint32{3, 5}, getInnerKeys(n))
+	if got, want := getInnerKeys(n), []uint32{3, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// the new right leaf node overflows into the parent inner node
 	n.insert(7)
 
 	// left child
-	common.AssertArraysEqual[uint32](t, []uint32{2}, getLeafKeys(n.children[0]))
+	if got, want := getLeafKeys(n.children[0]), []uint32{2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right child
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getLeafKeys(n.children[1]))
-	common.AssertArraysEqual[uint32](t, []uint32{6, 7}, getLeafKeys(n.children[2]))
+	if got, want := getLeafKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getLeafKeys(n.children[2]), []uint32{6, 7}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// parent
-	common.AssertArraysEqual[uint32](t, []uint32{3, 5}, getInnerKeys(n))
+	if got, want := getInnerKeys(n), []uint32{3, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// iterate the whole tree
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 4, 5, 6, 7}, getKeys(n))
+	if got, want := getKeys(n), []uint32{2, 3, 4, 5, 6, 7}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestNodeInsertMultiLevelsTree(t *testing.T) {
@@ -78,26 +104,40 @@ func TestNodeInsertMultiLevelsTree(t *testing.T) {
 	n.insert(4)
 
 	// left child
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2}, getLeafKeys(n.children[0]))
+	if got, want := getLeafKeys(n.children[0]), []uint32{1, 2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right child
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getLeafKeys(n.children[1]))
+	if got, want := getLeafKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// parent
-	common.AssertArraysEqual[uint32](t, []uint32{3}, getInnerKeys(n))
+	if got, want := getInnerKeys(n), []uint32{3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	n.insert(6)
 	n.insert(5)
 
 	// left child
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2}, getLeafKeys(n.children[0]))
+	if got, want := getLeafKeys(n.children[0]), []uint32{1, 2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right child
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getLeafKeys(n.children[1]))
-	common.AssertArraysEqual[uint32](t, []uint32{6}, getLeafKeys(n.children[2]))
+	if got, want := getLeafKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getLeafKeys(n.children[2]), []uint32{6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// parent
-	common.AssertArraysEqual[uint32](t, []uint32{3, 5}, getInnerKeys(n))
+	if got, want := getInnerKeys(n), []uint32{3, 5}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	n.insert(7)
 
@@ -108,14 +148,26 @@ func TestNodeInsertMultiLevelsTree(t *testing.T) {
 	}
 
 	// left subtree - original node
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2}, getLeafKeys(n.children[0]))
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getLeafKeys(n.children[1]))
-	common.AssertArraysEqual[uint32](t, []uint32{3}, getInnerKeys(n))
+	if got, want := getLeafKeys(n.children[0]), []uint32{1, 2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getLeafKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getInnerKeys(n), []uint32{3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// right subtree - the new node
-	common.AssertArraysEqual[uint32](t, []uint32{6}, getLeafKeys(upperRight.(*InnerNode[uint32]).children[0]))
-	common.AssertArraysEqual[uint32](t, []uint32{8}, getLeafKeys(upperRight.(*InnerNode[uint32]).children[1]))
-	common.AssertArraysEqual[uint32](t, []uint32{7}, getInnerKeys(upperRight))
+	if got, want := getLeafKeys(upperRight.(*InnerNode[uint32]).children[0]), []uint32{6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getLeafKeys(upperRight.(*InnerNode[uint32]).children[1]), []uint32{8}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getInnerKeys(upperRight), []uint32{7}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// new left value
 	if middle != 5 {
@@ -123,8 +175,12 @@ func TestNodeInsertMultiLevelsTree(t *testing.T) {
 	}
 
 	// test thw new sub-trees
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4}, getKeys(n))
-	common.AssertArraysEqual[uint32](t, []uint32{6, 7, 8}, getKeys(upperRight))
+	if got, want := getKeys(n), []uint32{1, 2, 3, 4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(upperRight), []uint32{6, 7, 8}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeContains(t *testing.T) {
@@ -181,15 +237,23 @@ func TestInnerNodeIterator(t *testing.T) {
 	n.insert(6)
 	n.insert(2)
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4}, getNodeRange(n, 1, 5))
+	if got, want := getNodeRange(n, 1, 5), []uint32{1, 2, 3, 4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{1, 2, 3, 4, 5, 6, 7}, getNodeRange(n, 1, 100)) // above range
+	if got, want := getNodeRange(n, 1, 100), []uint32{1, 2, 3, 4, 5, 6, 7}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// sub-range
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 4, 5, 6}, getNodeRange(n, 2, 7))
+	if got, want := getNodeRange(n, 2, 7), []uint32{2, 3, 4, 5, 6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// not found
-	common.AssertArraysEqual[uint32](t, []uint32{}, getNodeRange(n, 10, 100))
+	if got, want := getNodeRange(n, 10, 100), []uint32{}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeIteratorNextCalledOnly(t *testing.T) {
@@ -287,17 +351,27 @@ func TestInnerNodeNonConsecutiveGetRange(t *testing.T) {
 	n.insert(8)
 	n.insert(2)
 
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3}, getNodeRange(n, 1, 5))
+	if got, want := getNodeRange(n, 1, 5), []uint32{2, 3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 6, 7, 8}, getNodeRange(n, 1, 100)) // above range
+	if got, want := getNodeRange(n, 1, 100), []uint32{2, 3, 6, 7, 8}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// sub-range
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3, 6}, getNodeRange(n, 2, 7))
+	if got, want := getNodeRange(n, 2, 7), []uint32{2, 3, 6}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
-	common.AssertArraysEqual[uint32](t, []uint32{3, 6, 7, 8}, getNodeRange(n, 3, 100))
+	if got, want := getNodeRange(n, 3, 100), []uint32{3, 6, 7, 8}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	// not found
-	common.AssertArraysEqual[uint32](t, []uint32{}, getNodeRange(n, 10, 100))
+	if got, want := getNodeRange(n, 10, 100), []uint32{}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeRemovePred(t *testing.T) {
@@ -311,9 +385,15 @@ func TestInnerNodeRemovePred(t *testing.T) {
 	n.insert(1)
 
 	n.remove(3)
-	common.AssertArraysEqual[uint32](t, []uint32{2}, n.keys)
-	common.AssertArraysEqual[uint32](t, []uint32{1}, getKeys(n.children[0]))
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getKeys(n.children[1]))
+	if got, want := n.keys, []uint32{2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[0]), []uint32{1}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeRemoveSuc(t *testing.T) {
@@ -327,9 +407,15 @@ func TestInnerNodeRemoveSuc(t *testing.T) {
 	n.insert(4)
 
 	n.remove(2)
-	common.AssertArraysEqual[uint32](t, []uint32{3}, n.keys)
-	common.AssertArraysEqual[uint32](t, []uint32{1}, getKeys(n.children[0]))
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getKeys(n.children[1]))
+	if got, want := n.keys, []uint32{3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[0]), []uint32{1}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeRemoveRotateR(t *testing.T) {
@@ -343,9 +429,15 @@ func TestInnerNodeRemoveRotateR(t *testing.T) {
 	n.insert(1)
 
 	n.remove(4)
-	common.AssertArraysEqual[uint32](t, []uint32{2}, n.keys)
-	common.AssertArraysEqual[uint32](t, []uint32{1}, getKeys(n.children[0]))
-	common.AssertArraysEqual[uint32](t, []uint32{3}, getKeys(n.children[1]))
+	if got, want := n.keys, []uint32{2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[0]), []uint32{1}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[1]), []uint32{3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeRemoveRotateL(t *testing.T) {
@@ -359,9 +451,15 @@ func TestInnerNodeRemoveRotateL(t *testing.T) {
 	n.insert(4)
 
 	n.remove(1)
-	common.AssertArraysEqual[uint32](t, []uint32{3}, n.keys)
-	common.AssertArraysEqual[uint32](t, []uint32{2}, getKeys(n.children[0]))
-	common.AssertArraysEqual[uint32](t, []uint32{4}, getKeys(n.children[1]))
+	if got, want := n.keys, []uint32{3}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[0]), []uint32{2}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := getKeys(n.children[1]), []uint32{4}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 }
 
 func TestInnerNodeRemoveMerge(t *testing.T) {
@@ -374,8 +472,12 @@ func TestInnerNodeRemoveMerge(t *testing.T) {
 	n.insert(3)
 
 	n.remove(1)
-	common.AssertArraysEqual[uint32](t, []uint32{}, n.keys)
-	common.AssertArraysEqual[uint32](t, []uint32{2, 3}, getKeys(n.children[0]))
+	if got, want := []uint32{}, n.keys; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
+	if got, want := []uint32{2, 3}, getKeys(n.children[0]); !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 	// one child removed
 	if len(n.children) != 1 {
 		t.Errorf("wrong number of children: %d", len(n.children))
@@ -397,7 +499,9 @@ func TestInnerNodeRemove(t *testing.T) {
 
 	// keys are all there
 	expected := []uint32{1, 2, 3, 4, 5, 6, 7}
-	common.AssertArraysEqual[uint32](t, expected, getNodeRange(n, 1, 50))
+	if got, want := getNodeRange(n, 1, 50), expected; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	var root node[uint32] = n
 	for _, key := range expected {
@@ -427,8 +531,9 @@ func TestInnerNodeThreeLevelsRemove(t *testing.T) {
 	n.insert(51)
 	n.insert(54)
 
-	expected := []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54}
-	common.AssertArraysEqual[uint32](t, expected, getNodeRange(n, 1, 500))
+	if got, want := getNodeRange(n, 1, 500), []uint32{1, 4, 7, 9, 13, 15, 21, 26, 27, 29, 51, 52, 54}; !slices.Equal(got, want) {
+		t.Errorf("slices are not equal: got: %v != want: %v", got, want)
+	}
 
 	n.remove(54) // rotate right middle level: 15 -> 27 -> 52 + rotate right: 51 -> 52 -> 54, and delete 54
 

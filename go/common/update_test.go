@@ -2,7 +2,9 @@ package common
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"go.uber.org/mock/gomock"
 	"reflect"
 	"testing"
 )
@@ -470,4 +472,59 @@ func TestUpdateKnownEncodings(t *testing.T) {
 			t.Errorf("invalid encoding, expected hash %v, got %v", test.hash, hash)
 		}
 	}
+}
+
+func TestUpdate_ApplyTo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	target := NewMockUpdateTarget(ctrl)
+	gomock.InOrder(
+		target.EXPECT().DeleteAccount(Address{0xA1}),
+		target.EXPECT().DeleteAccount(Address{0xA2}),
+		target.EXPECT().CreateAccount(Address{0xB1}),
+		target.EXPECT().CreateAccount(Address{0xB2}),
+		target.EXPECT().CreateAccount(Address{0xB3}),
+		target.EXPECT().SetBalance(Address{0xC1}, Balance{0x01}),
+		target.EXPECT().SetBalance(Address{0xC2}, Balance{0x02}),
+		target.EXPECT().SetNonce(Address{0xD1}, Nonce{0x03}),
+		target.EXPECT().SetNonce(Address{0xD2}, Nonce{0x04}),
+		target.EXPECT().SetCode(Address{0xE1}, []byte{}),
+		target.EXPECT().SetCode(Address{0xE2}, []byte{0x01}),
+		target.EXPECT().SetCode(Address{0xE3}, []byte{0x02, 0x03}),
+		target.EXPECT().SetStorage(Address{0xF1}, Key{0x01}, Value{0xA1}),
+		target.EXPECT().SetStorage(Address{0xF2}, Key{0x02}, Value{0xA2}),
+		target.EXPECT().SetStorage(Address{0xF3}, Key{0x03}, Value{0xB1}),
+	)
+
+	update := getExampleUpdate()
+	if err := update.ApplyTo(target); err != nil {
+		t.Errorf("error to apply update: %s", err)
+	}
+}
+
+func TestUpdate_ApplyTo_Failures(t *testing.T) {
+	const calls = 6
+	for i := 0; i < calls; i++ {
+		i := i
+		t.Run(fmt.Sprintf("applyTo_failure_at_%d", i), func(t *testing.T) {
+			t.Parallel()
+			returns := make([]error, calls)
+			returns[i] = fmt.Errorf("expected error")
+
+			ctrl := gomock.NewController(t)
+			target := NewMockUpdateTarget(ctrl)
+			target.EXPECT().DeleteAccount(gomock.Any()).AnyTimes().Return(returns[0])
+			target.EXPECT().CreateAccount(gomock.Any()).AnyTimes().Return(returns[1])
+			target.EXPECT().SetBalance(gomock.Any(), gomock.Any()).AnyTimes().Return(returns[2])
+			target.EXPECT().SetNonce(gomock.Any(), gomock.Any()).AnyTimes().Return(returns[3])
+			target.EXPECT().SetCode(gomock.Any(), gomock.Any()).AnyTimes().Return(returns[4])
+			target.EXPECT().SetStorage(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(returns[5])
+
+			update := getExampleUpdate()
+			if err := update.ApplyTo(target); !errors.Is(err, returns[i]) {
+				t.Errorf("apply update should fail")
+			}
+		})
+	}
+
 }
