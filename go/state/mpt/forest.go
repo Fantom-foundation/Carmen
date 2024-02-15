@@ -35,7 +35,7 @@ const (
 const printWarningDefaultNodeFreezing = false
 
 func (m StorageMode) String() string {
-	if m {
+	if m == Immutable {
 		return "Immutable"
 	} else {
 		return "Mutable"
