@@ -151,8 +151,10 @@ func (s *LiveTrie) Flush() error {
 		RootHash: hash,
 	})
 
-	if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
-		return err
+	if err == nil {
+		if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
+			return err
+		}
 	}
 
 	return errors.Join(err, s.forest.Flush())
