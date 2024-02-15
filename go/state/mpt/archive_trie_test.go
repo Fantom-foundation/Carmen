@@ -72,7 +72,7 @@ func TestArchiveTrie_Open_Fails_Wrong_Roots(t *testing.T) {
 		t.Fatalf("cannot init archive trie: %v", err)
 	}
 	if err := archive.Close(); err != nil {
-		t.Fatalf("cannot init archive trie: %v", err)
+		t.Fatalf("failed to close archive trie: %v", err)
 	}
 
 	// corrupt the roots
