@@ -197,29 +197,30 @@ func TestForest_GettingAccountInfo_Fails(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to get value from stock")
 					ctrl := gomock.NewController(t)
 					stock := stock.NewMockStock[uint64, AccountNode](ctrl)
-					stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to get value from stock"))
+					stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
 					forest.accounts = stock
 					root := NewNodeReference(AccountId(123))
 
-					if _, err := forest.SetAccountInfo(&root, common.Address{1}, AccountInfo{}); err == nil {
+					if _, err := forest.SetAccountInfo(&root, common.Address{1}, AccountInfo{}); !errors.Is(err, injectedErr) {
 						t.Errorf("setting account should fail")
 					}
-					if _, _, err := forest.GetAccountInfo(&root, common.Address{1}); err == nil {
+					if _, _, err := forest.GetAccountInfo(&root, common.Address{1}); !errors.Is(err, injectedErr) {
 						t.Errorf("getting account should fail")
 					}
-					if _, err := forest.SetValue(&root, common.Address{1}, common.Key{2}, common.Value{}); err == nil {
+					if _, err := forest.SetValue(&root, common.Address{1}, common.Key{2}, common.Value{}); !errors.Is(err, injectedErr) {
 						t.Errorf("setting value should fail")
 					}
-					if _, err := forest.GetValue(&root, common.Address{1}, common.Key{2}); err == nil {
+					if _, err := forest.GetValue(&root, common.Address{1}, common.Key{2}); !errors.Is(err, injectedErr) {
 						t.Errorf("getting value should fail")
 					}
-					if _, err := forest.ClearStorage(&root, common.Address{1}); err == nil {
+					if _, err := forest.ClearStorage(&root, common.Address{1}); !errors.Is(err, injectedErr) {
 						t.Errorf("getting account should fail")
 					}
 					nodeVisitor := NewMockNodeVisitor(ctrl)
-					if err := forest.VisitTrie(&root, nodeVisitor); err == nil {
+					if err := forest.VisitTrie(&root, nodeVisitor); !errors.Is(err, injectedErr) {
 						t.Errorf("getting account should fail")
 					}
 				})
@@ -241,23 +242,24 @@ func TestForest_CreatingAccountInfo_Fails(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call New")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, nil)
-					accounts.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+					accounts.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
 					values := stock.NewMockStock[uint64, ValueNode](ctrl)
 					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
-					values.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+					values.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
 					forest.accounts = accounts
 					forest.values = values
 					root := NewNodeReference(AccountId(123))
 
-					if _, err := forest.SetAccountInfo(&root, common.Address{1}, AccountInfo{Nonce: common.Nonce{1}}); err == nil {
+					if _, err := forest.SetAccountInfo(&root, common.Address{1}, AccountInfo{Nonce: common.Nonce{1}}); !errors.Is(err, injectedErr) {
 						t.Errorf("setting account should fail")
 					}
-					if _, err := forest.SetValue(&root, common.Address{}, common.Key{2}, common.Value{1}); err == nil {
+					if _, err := forest.SetValue(&root, common.Address{}, common.Key{2}, common.Value{1}); !errors.Is(err, injectedErr) {
 						t.Errorf("setting value should fail")
 					}
 				})
@@ -279,14 +281,15 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call Get")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
-					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
 					forest.accounts = accounts
 					root := NewNodeReference(AccountId(123))
 
 					hashes := NodeHashes{make([]NodeHash, 1)}
-					if err := forest.setHashesFor(&root, &hashes); err == nil {
+					if err := forest.setHashesFor(&root, &hashes); !errors.Is(err, injectedErr) {
 						t.Errorf("setting hashes should fail")
 					}
 				})
@@ -298,27 +301,26 @@ func TestForest_setHashesFor_Getting_Node_Fails(t *testing.T) {
 func TestForest_Freeze_Fails(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for forestConfigName, forestConfig := range forestConfigs {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
-					directory := t.TempDir()
+			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
+				directory := t.TempDir()
 
-					forest, err := variant.factory(directory, config, forestConfig)
-					if err != nil {
-						t.Fatalf("failed to open forest: %v", err)
-					}
+				forest, err := variant.factory(directory, config, ForestConfig{Mode: Immutable, CacheCapacity: 1024})
+				if err != nil {
+					t.Fatalf("failed to open forest: %v", err)
+				}
 
-					// inject failing stock to trigger an error applying the update
-					ctrl := gomock.NewController(t)
-					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
-					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
-					forest.accounts = accounts
-					root := NewNodeReference(AccountId(123))
+				// inject failing stock to trigger an error applying the update
+				var injectedErr = errors.New("failed to call Get")
+				ctrl := gomock.NewController(t)
+				accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+				accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+				forest.accounts = accounts
+				root := NewNodeReference(AccountId(123))
 
-					if err := forest.Freeze(&root); err == nil {
-						t.Errorf("freezing node should fail")
-					}
-				})
-			}
+				if err := forest.Freeze(&root); !errors.Is(err, injectedErr) {
+					t.Errorf("freezing node should fail")
+				}
+			})
 		}
 	}
 }
@@ -336,38 +338,39 @@ func TestForest_CreatingNodes_Fails(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call New")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
 					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, nil)
-					accounts.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+					accounts.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
 					values := stock.NewMockStock[uint64, ValueNode](ctrl)
 					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
-					values.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+					values.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
 					branches := stock.NewMockStock[uint64, BranchNode](ctrl)
 					branches.EXPECT().Get(gomock.Any()).AnyTimes().Return(BranchNode{}, nil)
-					branches.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+					branches.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
 					extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
 					extensions.EXPECT().Get(gomock.Any()).AnyTimes().Return(ExtensionNode{}, nil)
-					extensions.EXPECT().New().AnyTimes().Return(uint64(0), errors.New("failed to call New"))
+					extensions.EXPECT().New().AnyTimes().Return(uint64(0), injectedErr)
 
 					forest.accounts = accounts
 					forest.values = values
 					forest.branches = branches
 					forest.extensions = extensions
 
-					if _, _, err := forest.createAccount(); err == nil {
+					if _, _, err := forest.createAccount(); !errors.Is(err, injectedErr) {
 						t.Errorf("creating node should fail")
 					}
-					if _, _, err := forest.createValue(); err == nil {
+					if _, _, err := forest.createValue(); !errors.Is(err, injectedErr) {
 						t.Errorf("creating node should fail")
 					}
-					if _, _, err := forest.createBranch(); err == nil {
+					if _, _, err := forest.createBranch(); !errors.Is(err, injectedErr) {
 						t.Errorf("creating node should fail")
 					}
-					if _, _, err := forest.createExtension(); err == nil {
+					if _, _, err := forest.createExtension(); !errors.Is(err, injectedErr) {
 						t.Errorf("creating node should fail")
 					}
 				})
@@ -411,16 +414,17 @@ func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call Get")
 					ctrl := gomock.NewController(t)
 					values := stock.NewMockStock[uint64, ValueNode](ctrl)
 					// first call will succeed on getting the node but fails on releasing it
-					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, errors.New("failed to call Get"))
+					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, injectedErr)
 					forest.values = values
 
 					forest.releaseQueue <- ValueId(456)
 					<-forest.releaseDone
 
-					if err := forest.collectReleaseWorkerErrors(); err == nil {
+					if err := forest.collectReleaseWorkerErrors(); !errors.Is(err, injectedErr) {
 						t.Errorf("error should be produced from the release queue")
 					}
 				})
@@ -432,34 +436,30 @@ func TestForest_Release_Queue_Error_Get_Node(t *testing.T) {
 func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
-			for forestConfigName, forestConfig := range forestConfigs {
-				if forestConfig.Mode == Immutable {
-					continue // Immutable configuration cannot fail on releasing a node
+			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
+				directory := t.TempDir()
+
+				forest, err := variant.factory(directory, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024})
+				if err != nil {
+					t.Fatalf("failed to open forest: %v", err)
 				}
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
-					directory := t.TempDir()
 
-					forest, err := variant.factory(directory, config, forestConfig)
-					if err != nil {
-						t.Fatalf("failed to open forest: %v", err)
-					}
+				// inject failing stock to trigger an error applying the update
+				var injectedErr = errors.New("failed to call Delete")
+				ctrl := gomock.NewController(t)
+				values := stock.NewMockStock[uint64, ValueNode](ctrl)
+				// first call will succeed on getting the node but fails on releasing it
+				values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
+				values.EXPECT().Delete(gomock.Any()).AnyTimes().Return(injectedErr)
+				forest.values = values
 
-					// inject failing stock to trigger an error applying the update
-					ctrl := gomock.NewController(t)
-					values := stock.NewMockStock[uint64, ValueNode](ctrl)
-					// first call will succeed on getting the node but fails on releasing it
-					values.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, nil)
-					values.EXPECT().Delete(gomock.Any()).AnyTimes().Return(errors.New("failed to call Delete"))
-					forest.values = values
+				forest.releaseQueue <- ValueId(456)
+				<-forest.releaseDone
 
-					forest.releaseQueue <- ValueId(456)
-					<-forest.releaseDone
-
-					if err := forest.collectReleaseWorkerErrors(); err == nil {
-						t.Errorf("error should be produced from the release queue")
-					}
-				})
-			}
+				if err := forest.collectReleaseWorkerErrors(); !errors.Is(err, injectedErr) {
+					t.Errorf("error should be produced from the release queue")
+				}
+			})
 		}
 	}
 }
@@ -477,6 +477,7 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call Get")
 					ctrl := gomock.NewController(t)
 					cache := NewMockNodeCache(ctrl)
 					cache.EXPECT().Get(gomock.Any()).AnyTimes().Return(nil, false)
@@ -490,23 +491,23 @@ func TestForest_getAccess_Fails(t *testing.T) {
 					calls := make([]*gomock.Call, 0, 8)
 					for i := 0; i < 4; i++ {
 						calls = append(calls, accounts.EXPECT().Get(gomock.Any()).Return(AccountNode{}, nil))
-						calls = append(calls, accounts.EXPECT().Get(gomock.Any()).Return(AccountNode{}, errors.New("failed to call Get")))
+						calls = append(calls, accounts.EXPECT().Get(gomock.Any()).Return(AccountNode{}, injectedErr))
 					}
 					gomock.InOrder(calls...)
 					forest.accounts = accounts
 
 					root := NewNodeReference(AccountId(123))
 
-					if _, err := forest.getReadAccess(&root); err == nil {
+					if _, err := forest.getReadAccess(&root); !errors.Is(err, injectedErr) {
 						t.Errorf("getting access should fail")
 					}
-					if _, err := forest.getViewAccess(&root); err == nil {
+					if _, err := forest.getViewAccess(&root); !errors.Is(err, injectedErr) {
 						t.Errorf("getting access should fail")
 					}
-					if _, err := forest.getHashAccess(&root); err == nil {
+					if _, err := forest.getHashAccess(&root); !errors.Is(err, injectedErr) {
 						t.Errorf("getting access should fail")
 					}
-					if _, err := forest.getWriteAccess(&root); err == nil {
+					if _, err := forest.getWriteAccess(&root); !errors.Is(err, injectedErr) {
 						t.Errorf("getting access should fail")
 					}
 				})
@@ -597,9 +598,10 @@ func TestForest_Flush_Fail_CannotReadNode(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call Set")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
-					accounts.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes().Return(errors.New("failed to Set value from stock"))
+					accounts.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes().Return(injectedErr)
 					forest.accounts = accounts
 
 					cache := NewMockNodeCache(ctrl)
@@ -608,7 +610,7 @@ func TestForest_Flush_Fail_CannotReadNode(t *testing.T) {
 					forest.nodeCache = cache
 
 					ids := []NodeId{AccountId(123)}
-					if err := forest.flushDirtyIds(ids); err == nil {
+					if err := forest.flushDirtyIds(ids); !errors.Is(err, injectedErr) {
 						t.Errorf("flush should fail")
 					}
 				})
@@ -651,13 +653,14 @@ func TestForest_getMutableNodeByPath_CannotReadNode(t *testing.T) {
 					}
 
 					// inject failing stock to trigger an error applying the update
+					var injectedErr = errors.New("failed to call Get")
 					ctrl := gomock.NewController(t)
 					accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
-					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to call Get"))
+					accounts.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
 					forest.accounts = accounts
 					root := NewNodeReference(AccountId(123))
 
-					if _, err := forest.getMutableNodeByPath(&root, CreateNodePath([]Nibble{Nibble(1), Nibble(2)}...)); err == nil {
+					if _, err := forest.getMutableNodeByPath(&root, CreateNodePath([]Nibble{Nibble(1), Nibble(2)}...)); !errors.Is(err, injectedErr) {
 						t.Errorf("getting node should fail")
 					}
 				})
