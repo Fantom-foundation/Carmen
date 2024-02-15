@@ -26,13 +26,11 @@ func isDirty(directory string) (bool, error) {
 
 	// Check for the dirty flag.
 	_, err = os.Stat(filepath.Join(directory, dirtyFileName))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
 	}
-	return true, nil
+
+	return true, err
 }
 
 // markDirty marks the given directory as dirty, and thus, potentially

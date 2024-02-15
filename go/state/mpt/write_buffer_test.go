@@ -309,3 +309,36 @@ func TestWriteBuffer_CleanNodesAreNotWritten(t *testing.T) {
 		t.Errorf("failed to flush buffer: %v", err)
 	}
 }
+
+func TestWriteBuffer_ZeroCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sink := NewMockNodeSink(ctrl)
+
+	buffer := makeWriteBuffer(sink, 0)
+	defer buffer.Close()
+
+	if got, want := buffer.(*writeBuffer).capacity, 1; got != want {
+		t.Errorf("default capacity does not match: %d != %d", got, want)
+	}
+}
+
+func TestWriteBuffer_contains(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	sink := NewMockNodeSink(ctrl)
+
+	buffer := makeWriteBuffer(sink, 0)
+	defer buffer.Close()
+
+	buffer.Add(BranchId(123), nil)
+	if got, want := buffer.(*writeBuffer).contains(BranchId(123)), true; got != want {
+		t.Errorf("check for item presence fails")
+	}
+	if got, want := buffer.(*writeBuffer).contains(BranchId(345)), false; got != want {
+		t.Errorf("check for item presence fails")
+	}
+	buffer.Cancel(BranchId(123))
+	if got, want := buffer.(*writeBuffer).contains(BranchId(123)), false; got != want {
+		t.Errorf("check for item presence fails")
+	}
+
+}

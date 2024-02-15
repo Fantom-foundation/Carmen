@@ -13,6 +13,13 @@ func TestPath_DefaultPathIsEmpty(t *testing.T) {
 	}
 }
 
+func TestPath_OutOfRange_Index(t *testing.T) {
+	path := Path{}
+	if got, want := path.Get(-1), Nibble(0); got != want {
+		t.Errorf("out of range index should produce empty nibble: %v != %v", got, want)
+	}
+}
+
 func TestPath_SingleStepPathsAreCorrectlyConstructed(t *testing.T) {
 	for n := Nibble(0); n <= Nibble(15); n++ {
 		path := SingleStepPath(n)
