@@ -478,22 +478,23 @@ func TestArchiveTrie_Add_HashingFails(t *testing.T) {
 			}
 
 			// inject a failing hasher
+			var injectedError = errors.New("hashing failed")
 			ctrl := gomock.NewController(t)
 			hasher := NewMockhasher(ctrl)
-			hasher.EXPECT().updateHashes(gomock.Any(), gomock.Any()).AnyTimes().Return(common.Hash{}, nil, errors.New("hashing failed"))
+			hasher.EXPECT().updateHashes(gomock.Any(), gomock.Any()).AnyTimes().Return(common.Hash{}, nil, injectedError)
 			archive.head.trie.forest.hasher = hasher
 
 			// fails for computing missing blocks
 			if err = archive.Add(20, common.Update{
 				CreatedAccounts: []common.Address{{1}, {2}},
-			}, nil); err == nil {
+			}, nil); !errors.Is(err, injectedError) {
 				t.Errorf("applying update should fail")
 			}
 
 			// fails for computing this block
 			if err = archive.Add(0, common.Update{
 				CreatedAccounts: []common.Address{{1}, {2}},
-			}, nil); err == nil {
+			}, nil); !errors.Is(err, injectedError) {
 				t.Errorf("applying update should fail")
 			}
 		})
@@ -511,14 +512,15 @@ func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
+			var injectedErr = errors.New("failed to get value from stock")
 			ctrl := gomock.NewController(t)
 			stock := stock.NewMockStock[uint64, ValueNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, errors.New("failed to get value from stock"))
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, injectedErr)
 			archive.head.trie.forest.values = stock
 			archive.head.trie.root = NewNodeReference(ValueId(123))
 
 			// update to freeze a node fails
-			if err = archive.Add(0, common.Update{}, nil); err == nil {
+			if err = archive.Add(0, common.Update{}, nil); !errors.Is(err, injectedErr) {
 				t.Errorf("applying update should fail")
 			}
 
@@ -537,9 +539,10 @@ func TestArchiveTrie_Add_Failure_Apply_Update(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
+			var injectedError = errors.New("failed to get value from stock")
 			ctrl := gomock.NewController(t)
 			stock := stock.NewMockStock[uint64, ValueNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, errors.New("failed to get value from stock"))
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, injectedError)
 			archive.head.trie.forest.values = stock
 			archive.head.trie.root = NewNodeReference(ValueId(123))
 
@@ -626,24 +629,25 @@ func TestArchiveTrie_GettingAccountInfo_Fails(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
+			var innjectedError = errors.New("failed to get value from stock")
 			ctrl := gomock.NewController(t)
 			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, errors.New("failed to get value from stock"))
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, innjectedError)
 			archive.head.trie.forest.accounts = stock
 
-			if _, err := archive.Exists(0, common.Address{1}); err == nil {
+			if _, err := archive.Exists(0, common.Address{1}); !errors.Is(err, innjectedError) {
 				t.Errorf("getting account should fail")
 			}
-			if _, err := archive.GetBalance(0, common.Address{1}); err == nil {
+			if _, err := archive.GetBalance(0, common.Address{1}); !errors.Is(err, innjectedError) {
 				t.Errorf("getting account should fail")
 			}
-			if _, err := archive.GetCode(0, common.Address{1}); err == nil {
+			if _, err := archive.GetCode(0, common.Address{1}); !errors.Is(err, innjectedError) {
 				t.Errorf("getting account should fail")
 			}
-			if _, err := archive.GetNonce(0, common.Address{1}); err == nil {
+			if _, err := archive.GetNonce(0, common.Address{1}); !errors.Is(err, innjectedError) {
 				t.Errorf("getting account should fail")
 			}
-			if _, err := archive.GetStorage(0, common.Address{1}, common.Key{2}); err == nil {
+			if _, err := archive.GetStorage(0, common.Address{1}, common.Key{2}); !errors.Is(err, innjectedError) {
 				t.Errorf("getting account should fail")
 			}
 		})
@@ -1011,11 +1015,12 @@ func TestStoreRootsTo_WriterFailures(t *testing.T) {
 		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
 	}
 
+	var injectedErr = errors.New("write error")
 	ctrl := gomock.NewController(t)
 	osfile := utils.NewMockOsFile(ctrl)
-	osfile.EXPECT().Write(gomock.Any()).Return(0, errors.New("write error"))
+	osfile.EXPECT().Write(gomock.Any()).Return(0, injectedErr)
 
-	if err := storeRootsTo(osfile, roots); err == nil {
+	if err := storeRootsTo(osfile, roots); !errors.Is(err, injectedErr) {
 		t.Errorf("writting roots should fail")
 	}
 }
@@ -1027,21 +1032,26 @@ func TestStoreRootsTo_SecondWriterFailures(t *testing.T) {
 		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
 	}
 
+	var injectedErr = errors.New("write error")
 	ctrl := gomock.NewController(t)
 	osfile := utils.NewMockOsFile(ctrl)
 	gomock.InOrder(
 		osfile.EXPECT().Write(gomock.Any()).Return(0, nil),
-		osfile.EXPECT().Write(gomock.Any()).Return(0, errors.New("write error")),
+		osfile.EXPECT().Write(gomock.Any()).Return(0, injectedErr),
 	)
 
-	if err := storeRootsTo(osfile, roots); err == nil {
+	if err := storeRootsTo(osfile, roots); !errors.Is(err, injectedErr) {
 		t.Errorf("writting roots should fail")
 	}
 }
 
 func TestStoreRoots_Cannot_Create(t *testing.T) {
 	var roots []Root
-	file := "/roots.dat"
+	dir := t.TempDir()
+	file := filepath.Join(dir, "roots")
+	if err := os.Mkdir(file, os.FileMode(0644)); err != nil {
+		t.Fatalf("cannot create dir: %s", err)
+	}
 	if err := StoreRoots(file, roots); err == nil {
 		t.Errorf("writting roots should fail")
 	}
