@@ -442,7 +442,7 @@ func TestMptState_GetRootId(t *testing.T) {
 			}
 
 			if got, want := state.GetRootId(), EmptyId(); got != want {
-				t.Errorf("values do not mathc: got %v != want %v", got, want)
+				t.Errorf("values do not match: got %v != want %v", got, want)
 			}
 		})
 	}
