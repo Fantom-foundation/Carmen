@@ -52,7 +52,7 @@ func TestDirectoryLock_CannotLockFile(t *testing.T) {
 		t.Fatalf("failed to create file: %v", err)
 	}
 	if _, err := LockDirectory(file); err == nil {
-		t.Errorf("shuold not be able to lock the dir")
+		t.Errorf("should not be able to lock a file")
 	}
 
 }
