@@ -255,7 +255,7 @@ func TestState_OpenGoMemoryState_Corrupted_Meta(t *testing.T) {
 	}
 }
 
-func TestState_Fail_Read_Write_Data(t *testing.T) {
+func TestState_StateModifications_Failing(t *testing.T) {
 	for name, open := range mptStateFactories {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -325,7 +325,7 @@ func TestState_Fail_Read_Write_Data(t *testing.T) {
 	}
 }
 
-func TestState_Read_Write_Data(t *testing.T) {
+func TestState_StateModificationsWithoutErrorHaveExpectedEffects(t *testing.T) {
 	for name, open := range mptStateFactories {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -474,6 +474,9 @@ func TestState_GetCodes(t *testing.T) {
 			if err != nil {
 				t.Errorf("cannot get codes: %s", err)
 			}
+			if got, want := len(codes), size-1; got != want {
+				t.Errorf("sizes do not much: got: %d != want: %d", got, want)
+			}
 			for i := 1; i < size; i++ {
 				code := make([]byte, i)
 				code[i-1] = byte(i)
@@ -486,21 +489,36 @@ func TestState_GetCodes(t *testing.T) {
 }
 
 func TestState_writeCodes_WriteFailures(t *testing.T) {
-	const size = 10
-	codes := make(map[common.Hash][]byte, size)
-	for i := 1; i < size; i++ {
-		var h common.Hash
-		code := make([]byte, i)
-		h[i%32] = byte(i)
-		code[i-1] = byte(i)
-		codes[h] = code
+	codes := make(map[common.Hash][]byte, 1)
+	var h common.Hash
+	code := make([]byte, 5)
+	h[0] = byte(1)
+	code[0] = byte(5)
+	codes[h] = code
+
+	// execute dry-run to compute the number of calls to io.Writer
+	var count int
+	{
+		ctrl := gomock.NewController(t)
+		osfile := utils.NewMockOsFile(ctrl)
+
+		osfile.EXPECT().Write(gomock.Any()).AnyTimes().DoAndReturn(func([]byte) (int, error) {
+			count++
+			return 1, nil
+		})
+		if err := writeCodesTo(codes, osfile); err != nil {
+			t.Fatalf("cannot execute writeCodesTo: %s", err)
+		}
 	}
 
 	var injectedErr = errors.New("write error")
 	ctrl := gomock.NewController(t)
 	osfile := utils.NewMockOsFile(ctrl)
 
-	for i := 0; i < 3; i++ {
+	// execute the computed number of loops and mock calls to io.Writer so that
+	// the last one is failing.
+	// This way all branches are exercised.
+	for i := 0; i < count; i++ {
 		t.Run(fmt.Sprintf("io_error_%d", i), func(t *testing.T) {
 			calls := make([]*gomock.Call, 0, i+1)
 			for j := 0; j < i; j++ {
@@ -546,24 +564,23 @@ func TestState_parseCodes_ReadFailures(t *testing.T) {
 
 	var h common.Hash
 	sizes := []int{len(h), 4, 100}
+	// execute three times - parseCode calls io.Reader three times to get [<key>, <length>, <code>]
 	for i := 0; i < 3; i++ {
-		t.Run(fmt.Sprintf("io_error_%d", i), func(t *testing.T) {
-			calls := make([]*gomock.Call, 0, i+1)
-			for j := 0; j < i; j++ {
-				pos := j
-				call := osfile.EXPECT().Read(gomock.Any()).DoAndReturn(func(buf []byte) (int, error) {
-					buf[0] = 1             // fill in an non-zero value not to return an empty array
-					return sizes[pos], nil // returning expected size causes this io.Reader is called exactly once
-				})
-				calls = append(calls, call)
-			}
-			calls = append(calls, osfile.EXPECT().Read(gomock.Any()).Return(1, injectedErr))
-			gomock.InOrder(calls...)
+		calls := make([]*gomock.Call, 0, i+1)
+		for j := 0; j < i; j++ {
+			pos := j
+			call := osfile.EXPECT().Read(gomock.Any()).DoAndReturn(func(buf []byte) (int, error) {
+				buf[0] = 1             // fill in an non-zero value not to return an empty array
+				return sizes[pos], nil // returning expected size causes this io.Reader is called exactly once
+			})
+			calls = append(calls, call)
+		}
+		calls = append(calls, osfile.EXPECT().Read(gomock.Any()).Return(1, injectedErr))
+		gomock.InOrder(calls...)
 
-			if _, err := parseCodes(osfile); !errors.Is(err, injectedErr) {
-				t.Errorf("reading codes should fail")
-			}
-		})
+		if _, err := parseCodes(osfile); !errors.Is(err, injectedErr) {
+			t.Errorf("reading codes should fail")
+		}
 
 	}
 }

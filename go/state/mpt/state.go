@@ -77,11 +77,7 @@ func tryMarkDirty(directory string) error {
 	if dirty {
 		return fmt.Errorf("unable to open %s, content is dirty, likely corrupted", directory)
 	}
-	if err := markDirty(directory); err != nil {
-		return err
-	}
-
-	return nil
+	return markDirty(directory)
 }
 
 // OpenGoMemoryState loads state information from the given directory and
