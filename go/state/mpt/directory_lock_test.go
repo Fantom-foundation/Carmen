@@ -45,7 +45,7 @@ func TestDirectoryLock_LockIsExclusive(t *testing.T) {
 	lockA.Release()
 }
 
-func TestDirectoryLock_CannotLock_Already_Exists(t *testing.T) {
+func TestDirectoryLock_CannotLockFile(t *testing.T) {
 	dir := t.TempDir()
 	file := path.Join(dir, "file.txt")
 	if _, err := os.Create(file); err != nil {
