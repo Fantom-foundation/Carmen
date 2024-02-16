@@ -331,7 +331,7 @@ func TestWriteBuffer_contains(t *testing.T) {
 
 	buffer.Add(BranchId(123), nil)
 	if got, want := buffer.(*writeBuffer).contains(BranchId(123)), true; got != want {
-		t.Errorf("check for item presence fails")
+		t.Errorf("check for present item failed")
 	}
 	if got, want := buffer.(*writeBuffer).contains(BranchId(345)), false; got != want {
 		t.Errorf("check for missing item failed")
