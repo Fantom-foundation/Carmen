@@ -338,7 +338,7 @@ func TestWriteBuffer_contains(t *testing.T) {
 	}
 	buffer.Cancel(BranchId(123))
 	if got, want := buffer.(*writeBuffer).contains(BranchId(123)), false; got != want {
-		t.Errorf("check for item presence fails")
+		t.Errorf("check for canceled item failed")
 	}
 
 }
