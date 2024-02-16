@@ -535,7 +535,7 @@ func TestState_writeCodes_WriteFailures(t *testing.T) {
 	}
 }
 
-func TestState_writeCodes_Cannot_Create(t *testing.T) {
+func TestState_writeCodes_CannotCreateTheOutputFile(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "codes")
 	if err := os.Mkdir(file, os.FileMode(0644)); err != nil {
