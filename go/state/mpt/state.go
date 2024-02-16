@@ -62,20 +62,26 @@ func openStateDirectory(directory string) (common.LockFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := tryMarkDirty(directory); err != nil {
+		return nil, errors.Join(err, lock.Release())
+	}
+
+	return lock, nil
+}
+
+func tryMarkDirty(directory string) error {
 	dirty, err := isDirty(directory)
 	if err != nil {
-		return nil, errors.Join(err, lock.Release())
+		return err
 	}
 	if dirty {
-		return nil, errors.Join(
-			fmt.Errorf("unable to open %s, content is dirty, likely corrupted", directory),
-			lock.Release(),
-		)
+		return fmt.Errorf("unable to open %s, content is dirty, likely corrupted", directory)
 	}
 	if err := markDirty(directory); err != nil {
-		return nil, errors.Join(err, lock.Release())
+		return err
 	}
-	return lock, nil
+
+	return nil
 }
 
 // OpenGoMemoryState loads state information from the given directory and
@@ -365,16 +371,18 @@ func parseCodes(reader io.Reader) (map[common.Hash][]byte, error) {
 
 // writeCodes write the given map of codes to the given file.
 func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
-
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		err = errors.Join(err, file.Close())
-	}()
 	writer := bufio.NewWriter(file)
+	return errors.Join(
+		writeCodesTo(codes, writer),
+		writer.Flush(),
+		file.Close())
+}
 
+func writeCodesTo(codes map[common.Hash][]byte, writer io.Writer) (err error) {
 	// The format is simple: [<key>, <length>, <code>]*
 	for key, code := range codes {
 		if _, err := writer.Write(key[:]); err != nil {
@@ -389,8 +397,5 @@ func writeCodes(codes map[common.Hash][]byte, filename string) (err error) {
 			return err
 		}
 	}
-	if err := writer.Flush(); err != nil {
-		return err
-	}
-	return err
+	return nil
 }

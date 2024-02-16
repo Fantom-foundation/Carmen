@@ -5,7 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"go.uber.org/mock/gomock"
+	"golang.org/x/crypto/sha3"
 	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,6 +25,11 @@ var stateFactories = map[string]func(string) (io.Closer, error){
 	"file":    func(dir string) (io.Closer, error) { return OpenGoFileState(dir, S5LiveConfig, 1024) },
 	"archive": func(dir string) (io.Closer, error) { return OpenArchiveTrie(dir, S5ArchiveConfig, 1024) },
 	"verify":  func(dir string) (io.Closer, error) { return openVerificationNodeSource(dir, S5LiveConfig) },
+}
+
+var mptStateFactories = map[string]func(string) (*MptState, error){
+	"memory": func(dir string) (*MptState, error) { return OpenGoMemoryState(dir, S5LiveConfig, 1024) },
+	"file":   func(dir string) (*MptState, error) { return OpenGoFileState(dir, S5LiveConfig, 1024) },
 }
 
 func TestState_CanOnlyBeOpenedOnce(t *testing.T) {
@@ -198,5 +210,360 @@ func TestReadCodes(t *testing.T) {
 
 	if code, exists := res[h3]; !exists || !bytes.Equal(code, code3) {
 		t.Errorf("bytes do not match: %x != %x", code, code1)
+	}
+}
+
+func TestState_tryMarkDirty_Fail_Access_Dir(t *testing.T) {
+	if err := tryMarkDirty("abc"); err == nil {
+		t.Errorf("marking the directory dirty should fail")
+	}
+	dir := path.Join(t.TempDir(), "read-only")
+	if err := os.MkdirAll(dir, os.FileMode(0555)); err != nil {
+		t.Fatalf("cannot create dir: %s", err)
+	}
+	if err := tryMarkDirty(dir); err == nil {
+		t.Errorf("marking the directory dirty should fail")
+	}
+}
+
+func TestState_OpenGoMemoryState_CannotWrite(t *testing.T) {
+	for name, open := range stateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := path.Join(t.TempDir(), "read-only")
+			if err := os.MkdirAll(dir, os.FileMode(0555)); err != nil {
+				t.Fatalf("cannot create dir: %s", err)
+			}
+			if _, err := open(dir); err == nil {
+				t.Errorf("opening a state should fail")
+			}
+		})
+	}
+}
+
+func TestState_OpenGoMemoryState_Corrupted_Meta(t *testing.T) {
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			// corrupt meta
+			if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte("Hello, World!"), 0644); err != nil {
+				t.Fatalf("cannot update meta: %v", err)
+			}
+			if _, err := open(dir); err == nil {
+				t.Errorf("opening a state should fail")
+			}
+		})
+	}
+}
+
+func TestState_Fail_Read_Write_Data(t *testing.T) {
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			state, err := open(dir)
+			if err != nil {
+				t.Fatalf("cannot open state: %s", err)
+			}
+
+			// inject failing stock to trigger an error applying the update
+			var injectedErr = errors.New("failed to get value from stock")
+			ctrl := gomock.NewController(t)
+			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+			state.trie.forest.accounts = stock
+			state.trie.root = NewNodeReference(AccountId(123))
+
+			if _, err := state.Exists(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if err := state.DeleteAccount(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetBalance(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if err := state.SetBalance(common.Address{1}, common.Balance{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetNonce(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if err := state.SetNonce(common.Address{1}, common.Nonce{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetStorage(common.Address{1}, common.Key{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if err := state.SetStorage(common.Address{1}, common.Key{1}, common.Value{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetCode(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if err := state.SetCode(common.Address{1}, make([]byte, 10)); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetCodeHash(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetCodeSize(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			if _, err := state.GetHash(); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			update := common.Update{}
+			update.CreatedAccounts = []common.Address{{1}}
+			if _, err := state.Apply(0, update); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+			nodeVisitor := NewMockNodeVisitor(ctrl)
+			if err := state.Visit(nodeVisitor); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
+		})
+	}
+}
+
+func TestState_Read_Write_Data(t *testing.T) {
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			state, err := open(dir)
+			if err != nil {
+				t.Fatalf("cannot open state: %s", err)
+			}
+
+			balance := common.Balance{1}
+			if err := state.SetBalance(common.Address{1}, balance); err != nil {
+				t.Errorf("error to set balance: %s", err)
+			}
+			if exists, err := state.Exists(common.Address{1}); err != nil || !exists {
+				t.Errorf("account should exist: %v err: %s", exists, err)
+			}
+			if got, err := state.GetBalance(common.Address{1}); err != nil || balance != got {
+				t.Errorf("wrong balance: %v != %v err: %s", got, balance, err)
+			}
+
+			nonce := common.Nonce{1}
+			if err := state.SetNonce(common.Address{1}, nonce); err != nil {
+				t.Errorf("error to set nonce: %s", err)
+			}
+			if got, err := state.GetNonce(common.Address{1}); err != nil || got != nonce {
+				t.Errorf("wrong nonce: %v != %v err: %s", got, nonce, err)
+			}
+
+			value := common.Value{1}
+			if err := state.SetStorage(common.Address{1}, common.Key{1}, value); err != nil {
+				t.Errorf("error to set value: %s", err)
+			}
+			if got, err := state.GetStorage(common.Address{1}, common.Key{1}); err != nil || got != value {
+				t.Errorf("wrong value: %v != %v err: %s", got, value, err)
+			}
+
+			code := []byte{1, 2, 3, 4, 5, 6}
+			if err := state.SetCode(common.Address{1}, code); err != nil {
+				t.Errorf("error to set code: %s", err)
+			}
+			// no change to apply the same code twice
+			if err := state.SetCode(common.Address{1}, code); err != nil {
+				t.Errorf("error to set code: %s", err)
+			}
+			if got, err := state.GetCode(common.Address{1}); err != nil || !slices.Equal(got, code) {
+				t.Errorf("wrong code: %v != %v, err: %s", got, code, err)
+			}
+			if got, err := state.GetCodeSize(common.Address{1}); err != nil || got != len(code) {
+				t.Errorf("wrong code size: %v != %v, err: %s", got, len(code), err)
+			}
+			if got, err := state.GetCodeHash(common.Address{1}); err != nil || got != common.Keccak256(code) {
+				t.Errorf("wrong code hash: %v != %v err: %s", got, common.Keccak256(code), err)
+			}
+
+			if err := state.DeleteAccount(common.Address{1}); err != nil {
+				t.Errorf("error to access data: %s", err)
+			}
+			if exists, err := state.Exists(common.Address{1}); err != nil || exists {
+				t.Errorf("account should not exist: %v err: %s", exists, err)
+			}
+
+			var emptyBalance common.Balance
+			if got, err := state.GetBalance(common.Address{1}); err != nil || got != emptyBalance {
+				t.Errorf("wrong balance: %v != %v err: %s", got, emptyBalance, err)
+			}
+			var emptyNonce common.Nonce
+			if got, err := state.GetNonce(common.Address{1}); err != nil || got != emptyNonce {
+				t.Errorf("wrong nonce: %v != %v err: %s", got, emptyNonce, err)
+			}
+			var emptyValue common.Value
+			if got, err := state.GetStorage(common.Address{1}, common.Key{1}); err != nil || got != emptyValue {
+				t.Errorf("wrong value: %v != %v err: %s", got, emptyValue, err)
+			}
+			if got, err := state.GetCode(common.Address{1}); err != nil || got != nil {
+				t.Errorf("wrong code: %v != nil, err: %s", got, err)
+			}
+			if got, err := state.GetCodeSize(common.Address{1}); err != nil || got != 0 {
+				t.Errorf("wrong code size: %v != 0, err: %s", got, err)
+			}
+			if got, err := state.GetCodeHash(common.Address{1}); err != nil || got != emptyCodeHash {
+				t.Errorf("wrong code hash: %v != %v err: %s", got, emptyCodeHash, err)
+			}
+			// set non-existing empty code is noop
+			if err := state.SetCode(common.Address{1}, make([]byte, 0)); err != nil {
+				t.Errorf("error to set code: %s", err)
+			}
+
+			if _, err := state.GetHash(); err != nil {
+				t.Errorf("error to get hash: %s", err)
+			}
+
+			update := common.Update{}
+			if _, err := state.Apply(0, update); err != nil {
+				t.Errorf("error to apply: %s", err)
+			}
+			if state.GetSnapshotableComponents() != nil {
+				t.Errorf("not implemented method should return nil")
+			}
+			if err := state.RunPostRestoreTasks(); err != nil {
+				t.Errorf("error to access data: %s", err)
+			}
+		})
+	}
+}
+
+func TestMptState_GetRootId(t *testing.T) {
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			state, err := open(dir)
+			if err != nil {
+				t.Fatalf("cannot open state: %s", err)
+			}
+
+			if got, want := state.GetRootId(), EmptyId(); got != want {
+				t.Errorf("values do not mathc: got %v != want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestState_GetCodes(t *testing.T) {
+	hasher := sha3.NewLegacyKeccak256()
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			state, err := open(dir)
+			if err != nil {
+				t.Fatalf("cannot open state: %s", err)
+			}
+
+			const size = 1000
+			for i := 1; i < size; i++ {
+				var address common.Address
+				code := make([]byte, i)
+				address[i%20] = byte(i)
+				code[i-1] = byte(i)
+				if err := state.SetCode(address, code); err != nil {
+					t.Fatalf("cannot set code: %s", err)
+				}
+			}
+
+			codes, err := state.GetCodes()
+			if err != nil {
+				t.Errorf("cannot get codes: %s", err)
+			}
+			for i := 1; i < size; i++ {
+				code := make([]byte, i)
+				code[i-1] = byte(i)
+				if got, want := codes[common.GetHash(hasher, code)], code; !slices.Equal(got, want) {
+					t.Errorf("codes do not match: got: %v != %v", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestState_writeCodes_WriteFailures(t *testing.T) {
+	const size = 10
+	codes := make(map[common.Hash][]byte, size)
+	for i := 1; i < size; i++ {
+		var h common.Hash
+		code := make([]byte, i)
+		h[i%32] = byte(i)
+		code[i-1] = byte(i)
+		codes[h] = code
+	}
+
+	var injectedErr = errors.New("write error")
+	ctrl := gomock.NewController(t)
+	osfile := utils.NewMockOsFile(ctrl)
+
+	for i := 0; i < 3; i++ {
+		t.Run(fmt.Sprintf("io_error_%d", i), func(t *testing.T) {
+			calls := make([]*gomock.Call, 0, i+1)
+			for j := 0; j < i; j++ {
+				calls = append(calls, osfile.EXPECT().Write(gomock.Any()).Return(0, nil))
+			}
+			calls = append(calls, osfile.EXPECT().Write(gomock.Any()).Return(0, injectedErr))
+			gomock.InOrder(calls...)
+
+			if err := writeCodesTo(codes, osfile); !errors.Is(err, injectedErr) {
+				t.Errorf("writting roots should fail")
+			}
+		})
+
+	}
+}
+
+func TestState_writeCodes_Cannot_Create(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "codes")
+	if err := os.Mkdir(file, os.FileMode(0644)); err != nil {
+		t.Fatalf("cannot create dir: %s", err)
+	}
+	if err := writeCodes(make(map[common.Hash][]byte, 1), file); err == nil {
+		t.Errorf("writting roots should fail")
+	}
+}
+
+func TestState_readCodes_Cannot_Read(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "dir")
+	if err := os.Mkdir(file, os.FileMode(0)); err != nil {
+		t.Fatalf("cannot create dir: %s", err)
+	}
+	if _, err := readCodes(file); err == nil {
+		t.Errorf("reading codes should fail")
+	}
+}
+
+func TestState_parseCodes_ReadFailures(t *testing.T) {
+	var injectedErr = errors.New("read error")
+	ctrl := gomock.NewController(t)
+	osfile := utils.NewMockOsFile(ctrl)
+
+	var h common.Hash
+	sizes := []int{len(h), 4, 100}
+	for i := 0; i < 3; i++ {
+		t.Run(fmt.Sprintf("io_error_%d", i), func(t *testing.T) {
+			calls := make([]*gomock.Call, 0, i+1)
+			for j := 0; j < i; j++ {
+				pos := j
+				call := osfile.EXPECT().Read(gomock.Any()).DoAndReturn(func(buf []byte) (int, error) {
+					buf[0] = 1             // fill in an non-zero value not to return an empty array
+					return sizes[pos], nil // returning expected size causes this io.Reader is called exactly once
+				})
+				calls = append(calls, call)
+			}
+			calls = append(calls, osfile.EXPECT().Read(gomock.Any()).Return(1, injectedErr))
+			gomock.InOrder(calls...)
+
+			if _, err := parseCodes(osfile); !errors.Is(err, injectedErr) {
+				t.Errorf("reading codes should fail")
+			}
+		})
+
 	}
 }
