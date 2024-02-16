@@ -9,6 +9,8 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 )
 
+//go:generate mockgen -source node_cache.go -destination node_cache_mocks.go -package mpt
+
 // NodeReference is used to address a node within an MPT. The node is
 // identified by a NodeId and may either be in memory or on disk. In
 // combination with a NodeCache, a reference can be used to resolve and

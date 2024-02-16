@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -34,13 +35,10 @@ const (
 const printWarningDefaultNodeFreezing = false
 
 func (m StorageMode) String() string {
-	switch m {
-	case Immutable:
+	if m == Immutable {
 		return "Immutable"
-	case Mutable:
+	} else {
 		return "Mutable"
-	default:
-		return "?"
 	}
 }
 
@@ -109,43 +107,40 @@ func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig Fore
 	}
 
 	success := false
+	var err error
+	closers := make(closers, 0, 4)
+	defer func() {
+		// if opening the forest was not successful, close all opened stocks.
+		if !success {
+			err = errors.Join(err, closers.CloseAll())
+		}
+	}()
+
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branches, err := memory.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			branches.Close()
-		}
-	}()
+	closers = append(closers, branches)
+
 	extensions, err := memory.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			extensions.Close()
-		}
-	}()
+	closers = append(closers, extensions)
+
 	accounts, err := memory.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			accounts.Close()
-		}
-	}()
+	closers = append(closers, accounts)
+
 	values, err := memory.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			values.Close()
-		}
-	}()
+	closers = append(closers, values)
+
 	success = true
 	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
 }
@@ -156,45 +151,54 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 	}
 
 	success := false
+	var err error
+	closers := make(closers, 0, 4)
+	defer func() {
+		// if opening the forest was not successful, close all opened stocks.
+		if !success {
+			err = errors.Join(err, closers.CloseAll())
+		}
+	}()
+
 	accountEncoder, branchEncoder, extensionEncoder, valueEncoder := getEncoder(mptConfig)
 	branches, err := file.OpenStock[uint64, BranchNode](branchEncoder, directory+"/branches")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			branches.Close()
-		}
-	}()
+	closers = append(closers, branches)
+
 	extensions, err := file.OpenStock[uint64, ExtensionNode](extensionEncoder, directory+"/extensions")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			extensions.Close()
-		}
-	}()
+	closers = append(closers, extensions)
+
 	accounts, err := file.OpenStock[uint64, AccountNode](accountEncoder, directory+"/accounts")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			accounts.Close()
-		}
-	}()
+	closers = append(closers, accounts)
+
 	values, err := file.OpenStock[uint64, ValueNode](valueEncoder, directory+"/values")
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if !success {
-			values.Close()
-		}
-	}()
+	closers = append(closers, values)
+
 	success = true
 	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+}
+
+// closers is a shortcut for the list of io.Closer.
+type closers []io.Closer
+
+// CloseAll closes all the closers and returns an error if any errors occurred during the closing process.
+func (c closers) CloseAll() error {
+	var errs []error
+	for _, closer := range c {
+		errs = append(errs, closer.Close())
+	}
+	return errors.Join(errs...)
 }
 
 func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (ForestMetadata, error) {
@@ -223,14 +227,7 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 
 	// Update on-disk meta-data.
 	metadata, err := json.Marshal(meta)
-	if err != nil {
-		return meta, err
-	}
-	if err := os.WriteFile(path, metadata, 0600); err != nil {
-		return meta, err
-	}
-
-	return meta, nil
+	return meta, errors.Join(err, os.WriteFile(path, metadata, 0600))
 }
 
 func makeForest(
@@ -429,6 +426,20 @@ func (s *Forest) Flush() error {
 		}
 	})
 
+	errs = append(errs, s.flushDirtyIds(ids))
+
+	return errors.Join(
+		errors.Join(errs...),
+		s.writeBuffer.Flush(),
+		s.accounts.Flush(),
+		s.branches.Flush(),
+		s.extensions.Flush(),
+		s.values.Flush(),
+	)
+}
+
+func (s *Forest) flushDirtyIds(ids []NodeId) error {
+	var errs []error
 	// Flush dirty keys in order (to avoid excessive seeking).
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
@@ -446,14 +457,7 @@ func (s *Forest) Flush() error {
 		}
 	}
 
-	return errors.Join(
-		errors.Join(errs...),
-		s.writeBuffer.Flush(),
-		s.accounts.Flush(),
-		s.branches.Flush(),
-		s.extensions.Flush(),
-		s.values.Flush(),
-	)
+	return errors.Join(errs...)
 }
 
 func (s *Forest) Close() error {
@@ -587,14 +591,10 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 		node, err = &value, e
 	} else if id.IsEmpty() {
 		node = EmptyNode{}
-	} else {
-		err = fmt.Errorf("unknown node ID: %v", id)
 	}
+
 	if err != nil {
 		return nil, err
-	}
-	if node == nil {
-		return nil, fmt.Errorf("no node with ID %d in storage", id)
 	}
 
 	// Everything loaded from the stock is in sync and thus clean.
@@ -784,11 +784,8 @@ func (s *Forest) flushNode(id NodeId, node Node) error {
 		return s.branches.Set(id.Index(), *node.(*BranchNode))
 	} else if id.IsExtension() {
 		return s.extensions.Set(id.Index(), *node.(*ExtensionNode))
-	} else if id.IsEmpty() {
-		return nil
-	} else {
-		return fmt.Errorf("unknown node ID: %v", id)
 	}
+	return nil
 }
 
 func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error) {
@@ -910,7 +907,6 @@ func getEncoder(config MptConfig) (
 	default:
 		panic(fmt.Sprintf("unknown mode: %v", config.HashStorageLocation))
 	}
-
 }
 
 type writeBufferSink struct {
