@@ -2,6 +2,8 @@ package mpt
 
 import (
 	"fmt"
+	"os"
+	"path"
 	"testing"
 )
 
@@ -41,4 +43,16 @@ func TestDirectoryLock_LockIsExclusive(t *testing.T) {
 	}
 
 	lockA.Release()
+}
+
+func TestDirectoryLock_CannotLockFile(t *testing.T) {
+	dir := t.TempDir()
+	file := path.Join(dir, "file.txt")
+	if _, err := os.Create(file); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if _, err := LockDirectory(file); err == nil {
+		t.Errorf("should not be able to lock a file")
+	}
+
 }

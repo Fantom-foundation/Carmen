@@ -2,6 +2,7 @@ package rlp
 
 import (
 	"bytes"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"math/big"
 	"testing"
 )
@@ -205,6 +206,35 @@ func TestEncoding_BigInt(t *testing.T) {
 		if got, want := (BigInt{test.input}).getEncodedLength(), len(test.result); got != want {
 			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
 		}
+	}
+}
+
+func TestEncoding_EncodeHash(t *testing.T) {
+	type test struct {
+		input  common.Hash
+		result []byte
+	}
+	const size = 32
+	tests := make([]test, 0, size)
+	var hash common.Hash
+	for i := 0; i < size; i++ {
+		hash[i] = byte(i)
+		tests = append(tests, test{hash, append([]byte{0xA0}, hash[:]...)})
+	}
+
+	for _, test := range tests {
+		if got, want := Encode(Hash{&test.input}), test.result; !bytes.Equal(got, want) {
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
+		}
+		if got, want := (Hash{&test.input}).getEncodedLength(), len(test.result); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
+		}
+	}
+}
+
+func TestEncoding_getNumBytes_Zero(t *testing.T) {
+	if got, want := getNumBytes(0), byte(0); got != want {
+		t.Errorf("invalid result for encoded length, wanted %d, got %d", want, got)
 	}
 }
 

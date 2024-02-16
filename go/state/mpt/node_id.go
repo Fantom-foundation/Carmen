@@ -98,10 +98,7 @@ func (n NodeId) String() string {
 	if n.IsExtension() {
 		return fmt.Sprintf("E-%d", n.Index())
 	}
-	if n.IsValue() {
-		return fmt.Sprintf("V-%d", n.Index())
-	}
-	return "?"
+	return fmt.Sprintf("V-%d", n.Index())
 }
 
 // ----------------------------------------------------------------------------
