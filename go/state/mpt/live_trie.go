@@ -150,14 +150,14 @@ func (s *LiveTrie) Flush() error {
 		RootNode: s.root.Id(),
 		RootHash: hash,
 	})
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
-		return err
+
+	if err == nil {
+		if err := os.WriteFile(s.metadatafile, metadata, 0600); err != nil {
+			return err
+		}
 	}
 
-	return s.forest.Flush()
+	return errors.Join(err, s.forest.Flush())
 }
 
 func (s *LiveTrie) Close() error {

@@ -1,8 +1,11 @@
 package mpt
 
 import (
+	"errors"
+	"go.uber.org/mock/gomock"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -21,6 +24,179 @@ func TestLiveTrie_EmptyTrieIsConsistent(t *testing.T) {
 
 			if err := trie.Check(); err != nil {
 				t.Fatalf("empty try has consistency problems: %v", err)
+			}
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_Open_Memory(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			// corrupt meta
+			if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte("Hello, World!"), 0644); err != nil {
+				t.Fatalf("cannot update meta: %v", err)
+			}
+
+			if _, err := OpenInMemoryLiveTrie(dir, config, 1024); err == nil {
+				t.Errorf("openning trie should fail")
+			}
+
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_Open_File(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			// corrupt meta
+			if err := os.WriteFile(filepath.Join(dir, "forest.json"), []byte("Hello, World!"), 0644); err != nil {
+				t.Fatalf("cannot update meta: %v", err)
+			}
+
+			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
+				t.Errorf("openning trie should fail")
+			}
+
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_MakeTrie_CorruptMeta(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			// corrupt meta
+			if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte("Hello, World!"), 0644); err != nil {
+				t.Fatalf("cannot update meta: %v", err)
+			}
+
+			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
+				t.Errorf("openning trie should fail")
+			}
+
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_MakeTrie_CannotReadMeta(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			// corrupt meta
+			if err := os.Mkdir(filepath.Join(dir, "meta.json"), 0644); err != nil {
+				t.Fatalf("cannot update meta: %v", err)
+			}
+
+			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
+				t.Errorf("openning trie should fail")
+			}
+
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_Verify(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			// corrupt meta
+			if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte("Hello, World!"), 0644); err != nil {
+				t.Fatalf("cannot update roots: %v", err)
+			}
+
+			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+				t.Errorf("openning trie should fail")
+			}
+
+		})
+	}
+}
+
+func TestLiveTrie_Fail_Read_Data(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("cannot open trie: %s", err)
+			}
+
+			// inject failing stock to trigger an error applying the update
+			var injectedErr = errors.New("failed to get value from stock")
+			ctrl := gomock.NewController(t)
+			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+			mpt.forest.accounts = stock
+			mpt.root = NewNodeReference(AccountId(123))
+
+			if err := mpt.SetAccountInfo(common.Address{1}, AccountInfo{}); !errors.Is(err, injectedErr) {
+				t.Errorf("setting account should fail")
+			}
+			if _, _, err := mpt.GetAccountInfo(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("getting account should fail")
+			}
+			if err := mpt.SetValue(common.Address{1}, common.Key{2}, common.Value{}); !errors.Is(err, injectedErr) {
+				t.Errorf("setting value should fail")
+			}
+			if _, err := mpt.GetValue(common.Address{1}, common.Key{2}); !errors.Is(err, injectedErr) {
+				t.Errorf("getting value should fail")
+			}
+			if err := mpt.ClearStorage(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("getting account should fail")
+			}
+			nodeVisitor := NewMockNodeVisitor(ctrl)
+			if err := mpt.VisitTrie(nodeVisitor); !errors.Is(err, injectedErr) {
+				t.Errorf("getting account should fail")
+			}
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_Flush_Metadata(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("openning trie should not fail: %s", err)
+			}
+
+			// corrupt meta
+			if err := os.Mkdir(filepath.Join(dir, "meta.json"), os.FileMode(0644)); err != nil {
+				t.Fatalf("cannot change meta")
+			}
+
+			if err := mpt.Flush(); err == nil {
+				t.Errorf("flush should fail")
+			}
+		})
+	}
+}
+
+func TestLiveTrie_Cannot_Flush_Hashes(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("openning trie should not fail: %s", err)
+			}
+
+			// inject failing stock to trigger an error applying the update
+			var injectedErr = errors.New("failed to get value from stock")
+			ctrl := gomock.NewController(t)
+			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
+			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
+			mpt.forest.accounts = stock
+			mpt.root = NewNodeReference(AccountId(123))
+
+			if err := mpt.Flush(); !errors.Is(err, injectedErr) {
+				t.Errorf("flush should fail")
 			}
 		})
 	}
