@@ -188,6 +188,32 @@ func TestPath_GetCommonPrefixLength(t *testing.T) {
 	}
 }
 
+func TestPath_RemoveLast(t *testing.T) {
+	tests := []struct {
+		path   []Nibble
+		remove int
+		result string
+	}{
+		{[]Nibble{}, 0, "-empty-"},
+		{[]Nibble{}, 1, "-empty-"},
+		{[]Nibble{}, 2, "-empty-"},
+
+		{[]Nibble{1, 2, 3}, 0, "123 : 3"},
+		{[]Nibble{1, 2, 3}, 1, "12 : 2"},
+		{[]Nibble{1, 2, 3}, 2, "1 : 1"},
+		{[]Nibble{1, 2, 3}, 3, "-empty-"},
+		{[]Nibble{1, 2, 3}, 4, "-empty-"},
+	}
+
+	for _, test := range tests {
+		path := CreatePathFromNibbles(test.path)
+		path = *path.RemoveLast(test.remove)
+		if got, want := path.String(), test.result; got != want {
+			t.Errorf("invalid result after removing last %d elements from %v, wanted %s, got %s", test.remove, test.path, want, got)
+		}
+	}
+}
+
 func TestPath_ShiftLeft(t *testing.T) {
 	tests := []struct {
 		path   []Nibble

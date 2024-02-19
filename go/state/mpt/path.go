@@ -135,6 +135,17 @@ func (p *Path) Prepend(n Nibble) *Path {
 	return p
 }
 
+// RemoveLast removes the last n elements from this path. If n > length, the
+// resulting list is empty.
+func (p *Path) RemoveLast(n int) *Path {
+	if n > int(p.length) {
+		p.length = 0
+	} else {
+		p.length -= uint8(n)
+	}
+	return p
+}
+
 // ShiftLeft shifts alle elements in the path by the given number of steps,
 // dropping leading elements and reducing the path length by steps elements.
 func (p *Path) ShiftLeft(steps int) *Path {
