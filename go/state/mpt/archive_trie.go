@@ -239,6 +239,23 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 	return res, nil
 }
 
+// GetDiff computes the difference between the given source and target blocks.
+func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
+	a.rootsMutex.Lock()
+	if srcBlock >= uint64(len(a.roots)) {
+		a.rootsMutex.Unlock()
+		return Diff{}, fmt.Errorf("source block %d not present in archive, highest block is %d", srcBlock, len(a.roots)-1)
+	}
+	if trgBlock >= uint64(len(a.roots)) {
+		a.rootsMutex.Unlock()
+		return Diff{}, fmt.Errorf("target block %d not present in archive, highest block is %d", trgBlock, len(a.roots)-1)
+	}
+	before := a.roots[srcBlock].NodeRef
+	after := a.roots[trgBlock].NodeRef
+	a.rootsMutex.Unlock()
+	return GetDiff(a.head.trie.forest, &before, &after)
+}
+
 func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
 	mf.AddChild("head", a.head.GetMemoryFootprint())
