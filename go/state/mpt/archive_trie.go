@@ -203,6 +203,10 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 	return a.head.GetCodeForHash(info.CodeHash), nil
 }
 
+func (a *ArchiveTrie) GetCodes() (map[common.Hash][]byte, error) {
+	return a.head.GetCodes()
+}
+
 func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce common.Nonce, err error) {
 	view, err := a.getView(block)
 	if err != nil {

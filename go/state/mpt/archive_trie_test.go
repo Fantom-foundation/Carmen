@@ -656,6 +656,59 @@ func TestArchiveTrie_GettingAccountInfo_Fails(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_GetCodes(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			codes, err := archive.GetCodes()
+			if err != nil {
+				t.Fatalf("failed to fetch codes from archive: %v", err)
+			}
+			if len(codes) != 0 {
+				t.Errorf("unexpected number of codes in archive, expected 0, got %d", len(codes))
+			}
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			code1 := []byte{1, 2, 3}
+			code2 := []byte{4, 5}
+			if err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr1, addr2},
+				Codes: []common.CodeUpdate{
+					{Account: addr1, Code: code1},
+					{Account: addr2, Code: code2},
+				},
+			}, nil); err != nil {
+				t.Fatalf("cannot apply update: %s", err)
+			}
+
+			codes, err = archive.GetCodes()
+			if err != nil {
+				t.Fatalf("failed to fetch codes from archive: %v", err)
+			}
+			if len(codes) != 2 {
+				t.Errorf("unexpected number of codes in archive, wanted 2, got %d", len(codes))
+			}
+			if code, found := codes[common.Keccak256(code1)]; !found || !bytes.Equal(code, code1) {
+				t.Errorf("expected code %x in codes, found %t, got %x", code1, found, code)
+			}
+			if code, found := codes[common.Keccak256(code2)]; !found || !bytes.Equal(code, code2) {
+				t.Errorf("expected code %x in codes, found %t, got %x", code2, found, code)
+			}
+
+			if err := archive.Close(); err != nil {
+				t.Fatalf("cannot close archive: %v", err)
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_GetHash(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
