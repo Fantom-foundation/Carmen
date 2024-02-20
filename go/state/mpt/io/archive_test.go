@@ -84,7 +84,7 @@ func fillTestBlocksIntoArchive(t *testing.T, archive *mpt.ArchiveTrie) (blockHei
 	nonce2 := common.Nonce{2}
 	code1 := []byte{1, 2, 3}
 
-	err := archive.Add(1, common.Update{
+	err := archive.Add(0, common.Update{
 		CreatedAccounts: []common.Address{addr1},
 		Balances:        []common.BalanceUpdate{{Account: addr1, Balance: balance1}},
 		Nonces:          []common.NonceUpdate{{Account: addr1, Nonce: nonce1}},

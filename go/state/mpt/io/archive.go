@@ -84,8 +84,8 @@ func ExportArchive(directory string, out io.Writer) error {
 	}
 
 	// Encode diff of each individual block.
-	for block := uint64(1); block <= maxBlock; block++ {
-		diff, err := archive.GetDiff(block-1, block)
+	for block := uint64(0); block <= maxBlock; block++ {
+		diff, err := archive.GetDiffForBlock(block)
 		if err != nil {
 			return fmt.Errorf("failed to get diff for block %d: %w", block, err)
 		}
@@ -236,7 +236,7 @@ func ImportArchive(directory string, in io.Reader) error {
 			return err
 		}
 		if hash != currentBlockHash {
-			return fmt.Errorf("invalid hash for block %d: from input %v, restored hash %v", currentBlock, currentBlockHash, hash)
+			return fmt.Errorf("invalid hash for block %d: from input %x, restored hash %x", currentBlock, currentBlockHash, hash)
 		}
 
 		currentUpdate = common.Update{}
