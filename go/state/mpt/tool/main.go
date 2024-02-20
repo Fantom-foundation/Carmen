@@ -25,6 +25,7 @@ func main() {
 			&InitArchive,
 			&Verify,
 			&Benchmark,
+			&Block,
 		},
 	}
 
