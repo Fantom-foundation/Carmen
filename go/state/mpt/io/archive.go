@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path"
 	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -202,10 +204,24 @@ func ImportArchive(directory string, in io.Reader) error {
 		return fmt.Errorf("invalid format, unsupported version")
 	}
 
+	// Create a live-DB updated in parallel for faster hash computation.
+	liveDbDir := path.Join(directory + "/tmp-live-db")
+	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
+	if err != nil {
+		return fmt.Errorf("failed to create auxiliary live DB: %w", err)
+	}
+	defer func() {
+		err = errors.Join(
+			err,
+			live.Close(),
+			os.RemoveAll(liveDbDir),
+		)
+	}()
+
 	// Create an empty archive.
 	archive, err := mpt.OpenArchiveTrie(directory, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
-		return fmt.Errorf("failed to create empty state: %v", err)
+		return fmt.Errorf("failed to create empty state: %w", err)
 	}
 	defer func() {
 		err = errors.Join(err, archive.Close())
@@ -228,9 +244,14 @@ func ImportArchive(directory string, in io.Reader) error {
 		if !currentBlockHashFound {
 			return fmt.Errorf("input format error: no hash for block %d", currentBlock)
 		}
-		if err := archive.Add(currentBlock, currentUpdate, nil); err != nil {
+		hints, err := live.Apply(currentBlock, currentUpdate)
+		if err != nil {
 			return err
 		}
+		if err := archive.Add(currentBlock, currentUpdate, hints); err != nil {
+			return err
+		}
+		hints.Release()
 		hash, err := archive.GetHash(currentBlock)
 		if err != nil {
 			return err
