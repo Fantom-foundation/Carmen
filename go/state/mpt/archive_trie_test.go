@@ -775,6 +775,7 @@ func TestArchiveTrie_GetDiffProducesValidResults(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
@@ -873,6 +874,7 @@ func TestArchiveTrie_GetDiffDetectsInvalidInput(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create empty archive, err %v", err)
 			}
+			defer archive.Close()
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
@@ -910,6 +912,84 @@ func TestArchiveTrie_GetDiffDetectsInvalidInput(t *testing.T) {
 				} else if !strings.Contains(err.Error(), expectation.errorMessage) {
 					t.Errorf("unexpected error message, wanted string containing '%s', got '%s'", expectation.errorMessage, err.Error())
 				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetDiffForBlockProducesValidResults(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer archive.Close()
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			nonce1 := common.Nonce{1}
+			nonce2 := common.Nonce{2}
+
+			err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Nonces:          []common.NonceUpdate{{Account: addr1, Nonce: nonce1}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{addr2},
+				Nonces:          []common.NonceUpdate{{Account: addr2, Nonce: nonce2}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			expectations := []Diff{
+				Diff{
+					addr1: &AccountDiff{
+						Nonce: &nonce1,
+						Code:  &emptyCodeHash,
+					},
+				},
+				Diff{},
+				Diff{
+					addr2: &AccountDiff{
+						Nonce: &nonce2,
+						Code:  &emptyCodeHash,
+					},
+				},
+			}
+
+			for block, want := range expectations {
+				diff, err := archive.GetDiffForBlock(uint64(block))
+				if err != nil {
+					t.Fatalf("failed to produce diff for block %d: %v", block, err)
+				}
+				if !diff.Equal(want) {
+					t.Fatalf("unexpected diff for block %d, wanted %v, got %v", block, want, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetDiffForBlockDetectsEmptyArchive(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer archive.Close()
+
+			_, err = archive.GetDiffForBlock(0)
+			if err == nil {
+				t.Errorf("expected an error when loading diff for block 0 from an empty archive")
 			}
 		})
 	}

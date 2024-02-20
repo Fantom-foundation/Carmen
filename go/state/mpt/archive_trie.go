@@ -260,6 +260,22 @@ func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 	return GetDiff(a.head.trie.forest, &before, &after)
 }
 
+// GetDiffForBlock computes the diff introduced by the given block compared to its
+// predecessor. Note that this allows to access the changes introduced by block 0.
+func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
+	if block == 0 {
+		a.rootsMutex.Lock()
+		if len(a.roots) == 0 {
+			a.rootsMutex.Unlock()
+			return Diff{}, fmt.Errorf("archive is empty, no diff present for block 0")
+		}
+		after := a.roots[0].NodeRef
+		a.rootsMutex.Unlock()
+		return GetDiff(a.head.trie.forest, &emptyNodeReference, &after)
+	}
+	return a.GetDiff(block-1, block)
+}
+
 func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
 	mf.AddChild("head", a.head.GetMemoryFootprint())
