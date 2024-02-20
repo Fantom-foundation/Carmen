@@ -949,14 +949,14 @@ func TestArchiveTrie_GetDiffForBlockProducesValidResults(t *testing.T) {
 			}
 
 			expectations := []Diff{
-				Diff{
+				{
 					addr1: &AccountDiff{
 						Nonce: &nonce1,
 						Code:  &emptyCodeHash,
 					},
 				},
-				Diff{},
-				Diff{
+				{},
+				{
 					addr2: &AccountDiff{
 						Nonce: &nonce2,
 						Code:  &emptyCodeHash,
