@@ -19,7 +19,8 @@ func main() {
 		Commands: []*cli.Command{
 			&Check,
 			&ExportCmd,
-			&ImportCmd,
+			&ImportLiveDbCmd,
+			&ImportArchiveCmd,
 			&Info,
 			&InitArchive,
 			&Verify,
