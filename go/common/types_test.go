@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestBalance_MaxBalanceIsMaximum(t *testing.T) {
+	balance := GetMaxBalance()
+	for i := range balance {
+		if balance[i] != 255 {
+			t.Errorf("invalid maximum, expected 255, got %d", balance[i])
+		}
+	}
+	asInt := balance.ToBigInt()
+	if asInt.Cmp(maxBalance) != 0 {
+		t.Errorf("maximum constants invalid, expected %v, got %v", asInt, maxBalance)
+	}
+}
+
 var balance_value_pairs = []struct {
 	i *big.Int
 	b Balance
@@ -15,7 +28,7 @@ var balance_value_pairs = []struct {
 	{big.NewInt(2), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2}},
 	{big.NewInt(256), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0}},
 	{big.NewInt(1 << 32), Balance{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0}},
-	{maxBalance, Balance{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}},
+	{maxBalance, GetMaxBalance()},
 }
 
 func TestBigIntToBalance_NilConversion(t *testing.T) {

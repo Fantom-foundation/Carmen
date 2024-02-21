@@ -12,7 +12,131 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+
+	_ "github.com/Fantom-foundation/Carmen/go/state/cppstate"
+	_ "github.com/Fantom-foundation/Carmen/go/state/gostate"
 )
+
+func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
+	addr1 := common.Address{1}
+	addr2 := common.Address{2}
+	addr3 := common.Address{3}
+
+	max := common.GetMaxBalance()
+	minBalance := big.NewInt(0)
+	maxBalance := max.ToBigInt()
+
+	for _, config := range initStates() {
+		config := config
+		t.Run(config.name(), func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			store, err := config.createState(dir)
+			if err != nil {
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
+			}
+			db := state.CreateStateDBUsing(store)
+			defer db.Close()
+
+			// First block: set up some balances.
+			db.BeginBlock()
+			db.BeginTransaction()
+			db.SetNonce(addr1, 1)
+			db.SetNonce(addr2, 1)
+			db.SetNonce(addr3, 1)
+			db.AddBalance(addr1, minBalance)
+			db.AddBalance(addr2, minBalance)
+			db.AddBalance(addr3, maxBalance)
+			db.EndTransaction()
+			db.EndBlock(1)
+
+			// Second block: check balances and modify them.
+			db.BeginBlock()
+			db.BeginTransaction()
+
+			if want, got := minBalance, db.GetBalance(addr1); want.Cmp(got) != 0 {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+			if want, got := minBalance, db.GetBalance(addr2); want.Cmp(got) != 0 {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+			if want, got := maxBalance, db.GetBalance(addr3); want.Cmp(got) != 0 {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+
+			db.AddBalance(addr2, maxBalance)
+			db.SubBalance(addr3, maxBalance)
+
+			db.EndTransaction()
+			db.EndBlock(2)
+
+			// Third block: check modified balances.
+			db.BeginBlock()
+			db.BeginTransaction()
+
+			if want, got := minBalance, db.GetBalance(addr1); want.Cmp(got) != 0 {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+			if want, got := maxBalance, db.GetBalance(addr2); want.Cmp(got) != 0 {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+			if want, got := minBalance, db.GetBalance(addr3); want.Cmp(got) != 0 {
+				t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+			}
+
+			db.EndTransaction()
+			db.EndBlock(3)
+
+			if err := db.Flush(); err != nil {
+				t.Fatalf("failed to flush the DB: %v", err)
+			}
+
+			// Ignore cases without an archive.
+			if config.config.Archive == state.NoArchive {
+				return
+			}
+
+			// Check that the archives managed to record the balances.
+			expectations := []struct {
+				block   uint64
+				account common.Address
+				balance *big.Int
+			}{
+				{1, addr1, minBalance},
+				{1, addr2, minBalance},
+				{1, addr3, maxBalance},
+				{2, addr1, minBalance},
+				{2, addr2, maxBalance},
+				{2, addr3, minBalance},
+				{3, addr1, minBalance},
+				{3, addr2, maxBalance},
+				{3, addr3, minBalance},
+			}
+
+			for _, expectation := range expectations {
+				block, err := store.GetArchiveState(expectation.block)
+				if err != nil {
+					t.Fatalf("failed to fetch block %d from archive: %v", expectation.block, err)
+				}
+
+				got, err := block.GetBalance(expectation.account)
+				if err != nil {
+					t.Errorf("failed to fetch balance for account %v: %v", expectation.account, err)
+				}
+
+				if got.ToBigInt().Cmp(expectation.balance) != 0 {
+					t.Errorf("unexpected balance of account %v at block %d: wanted %v, got %v",
+						expectation.account,
+						expectation.block,
+						expectation.balance,
+						got,
+					)
+				}
+			}
+
+		})
+	}
+}
 
 func TestCarmenThereCanBeMultipleBulkLoadPhasesOnRealState(t *testing.T) {
 	for _, config := range initStates() {

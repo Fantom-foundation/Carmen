@@ -164,6 +164,15 @@ func getMaxBalance() *big.Int {
 	return res
 }
 
+// GetMaxBalance returns the maximum balance that can be stored in a Carmen database.
+func GetMaxBalance() Balance {
+	res := Balance{}
+	for i := range res {
+		res[i] = 0xFF
+	}
+	return res
+}
+
 // ToBalance converts the provided integer value into balance. The function fails with an error if
 //   - the provided integer value is nil
 //   - the provided integer value is negative
@@ -186,7 +195,7 @@ func ToBalance(value *big.Int) (res Balance, err error) {
 // ToBigInt interprets the provide balance as a numeric value and returns it.
 func (b *Balance) ToBigInt() *big.Int {
 	res := &big.Int{}
-	// Interprets bytes in b as a positive integer using big-endion byte order.
+	// Interprets bytes in b as a positive integer using big-endian byte order.
 	return res.SetBytes(b[:])
 }
 

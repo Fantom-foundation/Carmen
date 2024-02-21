@@ -237,7 +237,7 @@ func (s *GoState) Close() (lastErr error) {
 
 func (s *GoState) GetArchiveState(block uint64) (as state.State, err error) {
 	if s.archive == nil {
-		return nil, fmt.Errorf("archive not enabled for this GoState")
+		return nil, state.NoArchiveError
 	}
 	lastBlock, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
@@ -257,7 +257,7 @@ func (s *GoState) GetArchiveState(block uint64) (as state.State, err error) {
 
 func (s *GoState) GetArchiveBlockHeight() (uint64, bool, error) {
 	if s.archive == nil {
-		return 0, false, fmt.Errorf("archive not enabled for this GoState")
+		return 0, false, state.NoArchiveError
 	}
 	lastBlock, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
