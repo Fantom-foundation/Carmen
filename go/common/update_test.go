@@ -463,7 +463,7 @@ func TestUpdateKnownEncodings(t *testing.T) {
 		},
 		{
 			getExampleUpdate(),
-			"5524cf120229bc99ef762303b408900b8998f1d725958e62ac49fea69a5f7901",
+			"d16bcf097cba34ece949ae64db100861c15f0058a1366003ad8f90a0dadf351b",
 		},
 	}
 	for _, test := range testCases {

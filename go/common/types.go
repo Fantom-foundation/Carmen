@@ -59,7 +59,7 @@ const HashSize = 32
 type Hash [HashSize]byte
 
 // BalanceSize is the size of Ethereum-like balance.
-const BalanceSize = 16
+const BalanceSize = 32
 
 // Balance is an Ethereum-like account balance.
 type Balance [BalanceSize]byte

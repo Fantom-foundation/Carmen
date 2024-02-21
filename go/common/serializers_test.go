@@ -2,10 +2,11 @@ package common_test
 
 import (
 	"bytes"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"golang.org/x/exp/rand"
 	"slices"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"golang.org/x/exp/rand"
 )
 
 func TestAddressSerializer(t *testing.T) {
@@ -152,7 +153,7 @@ func TestSerializers(t *testing.T) {
 
 	t.Run("TestSerializers_Balance", func(t *testing.T) {
 		var a common.Balance
-		const size = 16
+		const size = common.BalanceSize
 		for i := 1; i < loops; i++ {
 			a[i%size]++
 		}
@@ -161,7 +162,7 @@ func TestSerializers(t *testing.T) {
 
 	t.Run("TestSerializers_Nonce", func(t *testing.T) {
 		var a common.Nonce
-		const size = 8
+		const size = common.NonceSize
 		for i := 1; i < loops; i++ {
 			a[i%size]++
 		}
