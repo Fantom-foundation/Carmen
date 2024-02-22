@@ -279,6 +279,7 @@ func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
 func (s *MptState) Flush() error {
 	// Flush codes and state trie.
 	return errors.Join(
+		errors.Join(s.trie.forest.GetEncounteredIssues()...),
 		writeCodes(s.code, s.codefile),
 		s.trie.Flush(),
 	)

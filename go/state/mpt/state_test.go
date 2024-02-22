@@ -5,9 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/stock"
-	"go.uber.org/mock/gomock"
-	"golang.org/x/crypto/sha3"
 	"io"
 	"os"
 	"path"
@@ -15,6 +12,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"go.uber.org/mock/gomock"
+	"golang.org/x/crypto/sha3"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -488,6 +489,25 @@ func TestState_GetCodes(t *testing.T) {
 	}
 }
 
+func TestState_ForestErrorIsReportedInFlushAndClose(t *testing.T) {
+
+	dir := t.TempDir()
+	state, err := OpenGoFileState(dir, S4LiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to open test state: %v", err)
+	}
+
+	injectedError := fmt.Errorf("injected error")
+	state.trie.forest.errors = []error{injectedError}
+
+	if want, got := injectedError, state.Flush(); !errors.Is(got, want) {
+		t.Errorf("missing forest error in Flush result, wanted %v, got %v", want, got)
+	}
+	if want, got := injectedError, state.Close(); !errors.Is(got, want) {
+		t.Errorf("missing forest error in Close result, wanted %v, got %v", want, got)
+	}
+}
+
 func TestState_writeCodes_WriteFailures(t *testing.T) {
 	codes := make(map[common.Hash][]byte, 1)
 	var h common.Hash
@@ -528,7 +548,7 @@ func TestState_writeCodes_WriteFailures(t *testing.T) {
 			gomock.InOrder(calls...)
 
 			if err := writeCodesTo(codes, osfile); !errors.Is(err, injectedErr) {
-				t.Errorf("writting roots should fail")
+				t.Errorf("writing roots should fail")
 			}
 		})
 
@@ -542,7 +562,7 @@ func TestState_writeCodes_CannotCreateTheOutputFile(t *testing.T) {
 		t.Fatalf("cannot create dir: %s", err)
 	}
 	if err := writeCodes(make(map[common.Hash][]byte, 1), file); err == nil {
-		t.Errorf("writting roots should fail")
+		t.Errorf("writing roots should fail")
 	}
 }
 

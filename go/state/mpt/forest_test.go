@@ -3,12 +3,14 @@ package mpt
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/shared"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
@@ -57,7 +59,7 @@ func TestForest_Cannot_Open_Corrupted_Stock_Meta(t *testing.T) {
 					}
 
 					if _, err := variant.factory(rootDir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
-						t.Errorf("openning forest should fail")
+						t.Errorf("opening forest should fail")
 					}
 				})
 			}
@@ -75,7 +77,7 @@ func TestForest_Cannot_Open_Corrupted_Forest_Meta(t *testing.T) {
 				}
 
 				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
-					t.Errorf("openning forest should fail")
+					t.Errorf("opening forest should fail")
 				}
 			})
 		}
@@ -93,7 +95,7 @@ func TestForest_Cannot_Open_Cannot_Parse_Meta(t *testing.T) {
 				}
 
 				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
-					t.Errorf("openning forest should fail")
+					t.Errorf("opening forest should fail")
 				}
 			})
 		}
@@ -110,10 +112,10 @@ func TestForest_Cannot_Open_Meta_DoesNot_Match(t *testing.T) {
 			}
 
 			if _, err := variant.factory(dir, S5LiveConfig, ForestConfig{Mode: Mutable, CacheCapacity: 0}); err == nil {
-				t.Errorf("openning forest should fail")
+				t.Errorf("opening forest should fail")
 			}
 			if _, err := variant.factory(dir, S4LiveConfig, ForestConfig{Mode: Immutable, CacheCapacity: 0}); err == nil {
-				t.Errorf("openning forest should fail")
+				t.Errorf("opening forest should fail")
 			}
 		})
 	}
@@ -1561,5 +1563,310 @@ func TestForest_ReadForestMetadata_Fails(t *testing.T) {
 	dir := t.TempDir()
 	if _, _, err := ReadForestMetadata(dir); err == nil {
 		t.Errorf("reading file which is directory should fail")
+	}
+}
+
+func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
+	type mocks struct {
+		branches   *stock.MockStock[uint64, BranchNode]
+		extensions *stock.MockStock[uint64, ExtensionNode]
+		accounts   *stock.MockStock[uint64, AccountNode]
+		values     *stock.MockStock[uint64, ValueNode]
+	}
+
+	injectedError := fmt.Errorf("injected error")
+
+	addr := common.Address{}
+	key := common.Key{}
+
+	accountId := AccountId(10)
+	accountNode := &AccountNode{}
+
+	rootId := BranchId(12)
+	rootRef := NewNodeReference(rootId)
+	rootNode := &BranchNode{}
+	rootNode.children[0] = NewNodeReference(accountId)
+
+	prepareRootLookupFailure := func(m *mocks) {
+		m.branches.EXPECT().Get(rootId.Index()).Return(BranchNode{}, injectedError)
+	}
+
+	prepareTreeNavigationFailure := func(m *mocks) {
+		m.branches.EXPECT().Get(rootId.Index()).Return(*rootNode, nil)
+		m.accounts.EXPECT().Get(accountId.Index()).Return(*accountNode, injectedError)
+	}
+
+	tests := map[string]struct {
+		setExpectations func(*mocks)
+		runOperation    func(*Forest) error
+	}{
+		"GetAccountInfo-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, _, err := f.GetAccountInfo(&rootRef, addr)
+				return err
+			},
+		},
+		"GetAccountInfo-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				_, _, err := f.GetAccountInfo(&rootRef, addr)
+				return err
+			},
+		},
+		"SetAccountInfo-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, err := f.SetAccountInfo(&rootRef, addr, AccountInfo{})
+				return err
+			},
+		},
+		"SetAccountInfo-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				_, err := f.SetAccountInfo(&rootRef, addr, AccountInfo{})
+				return err
+			},
+		},
+		"GetValue-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, err := f.GetValue(&rootRef, addr, key)
+				return err
+			},
+		},
+		"GetValue-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				_, err := f.GetValue(&rootRef, addr, key)
+				return err
+			},
+		},
+		"SetValue-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, err := f.SetValue(&rootRef, addr, key, common.Value{})
+				return err
+			},
+		},
+		"SetValue-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				_, err := f.SetValue(&rootRef, addr, key, common.Value{})
+				return err
+			},
+		},
+		"ClearStorage-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, err := f.ClearStorage(&rootRef, addr)
+				return err
+			},
+		},
+		"ClearStorage-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				_, err := f.ClearStorage(&rootRef, addr)
+				return err
+			},
+		},
+		"Freeze-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				return f.Freeze(&rootRef)
+			},
+		},
+		"Freeze-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				// We need to unfreeze the root node after loading to avoid stopping the freeze
+				// right at the root node.
+				handle, _ := f.getWriteAccess(&rootRef)
+				handle.Get().(*BranchNode).frozen = false
+				handle.Get().(*BranchNode).frozenChildren = 0
+				handle.Release()
+				return f.Freeze(&rootRef)
+			},
+		},
+		"VisitTrie-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				return f.VisitTrie(&rootRef, nil)
+			},
+		},
+		"VisitTrie-Failed-TreeNavigation": {
+			prepareTreeNavigationFailure,
+			func(f *Forest) error {
+				return f.VisitTrie(&rootRef, MakeVisitor(func(Node, NodeInfo) VisitResponse { return VisitResponseContinue }))
+			},
+		},
+		"updateHashesFor-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, _, err := f.updateHashesFor(&rootRef)
+				return err
+			},
+		},
+		"setHashesFor-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				hashes := &NodeHashes{hashes: []NodeHash{{Path: EmptyPath()}}}
+				return f.setHashesFor(&rootRef, hashes)
+			},
+		},
+		"getHashFor-Failed-RootLookup": {
+			prepareRootLookupFailure,
+			func(f *Forest) error {
+				_, err := f.getHashFor(&rootRef)
+				return err
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+			extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+			accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+			values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+			forest, err := makeForest(
+				MptConfig{Hashing: DirectHashing},
+				t.TempDir(),
+				branches,
+				extensions,
+				accounts,
+				values,
+				ForestConfig{
+					Mode: Immutable,
+				},
+			)
+			if err != nil {
+				t.Fatalf("failed to create test forest: %v", err)
+			}
+
+			test.setExpectations(&mocks{branches, extensions, accounts, values})
+			err = test.runOperation(forest)
+			if !errors.Is(err, injectedError) {
+				t.Errorf("missing forwarded error, wanted %v, got %v", injectedError, err)
+			}
+
+			errs := forest.GetEncounteredIssues()
+			found := slices.ContainsFunc(errs, func(cur error) bool {
+				return errors.Is(cur, injectedError)
+			})
+			if !found {
+				t.Errorf("missing injected error, got %v", errs)
+			}
+		})
+	}
+}
+
+func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
+	injectedErrorA := fmt.Errorf("injected error A")
+	injectedErrorB := fmt.Errorf("injected error B")
+
+	ctrl := gomock.NewController(t)
+
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+	values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+	forest, err := makeForest(
+		MptConfig{Hashing: DirectHashing},
+		t.TempDir(),
+		branches,
+		extensions,
+		accounts,
+		values,
+		ForestConfig{
+			Mode: Immutable,
+		},
+	)
+	if err != nil {
+		t.Fatalf("failed to create test forest: %v", err)
+	}
+
+	gomock.InOrder(
+		branches.EXPECT().Get(gomock.Any()).Return(BranchNode{}, injectedErrorA),
+		branches.EXPECT().Get(gomock.Any()).Return(BranchNode{}, injectedErrorB),
+	)
+
+	rootRef := NewNodeReference(BranchId(12))
+	_, _, err = forest.GetAccountInfo(&rootRef, common.Address{})
+	if !errors.Is(err, injectedErrorA) {
+		t.Errorf("unexpected error, wanted %v, got %v", injectedErrorA, err)
+	}
+
+	_, _, err = forest.GetAccountInfo(&rootRef, common.Address{})
+	if !errors.Is(err, injectedErrorB) {
+		t.Errorf("unexpected error, wanted %v, got %v", injectedErrorB, err)
+	}
+
+	issues := forest.GetEncounteredIssues()
+	if len(issues) != 2 {
+		t.Fatalf("missing issues, got %v", issues)
+	}
+
+	if want, got := issues[0], injectedErrorA; !errors.Is(want, got) {
+		t.Errorf("unexpected error, wanted %v, got %v", want, got)
+	}
+	if want, got := issues[1], injectedErrorB; !errors.Is(want, got) {
+		t.Errorf("unexpected error, wanted %v, got %v", want, got)
+	}
+}
+
+func TestForest_CollectedErrorsAreReportedInFlushAndClose(t *testing.T) {
+	injectedError := fmt.Errorf("injected error A")
+
+	ctrl := gomock.NewController(t)
+
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	extensions := stock.NewMockStock[uint64, ExtensionNode](ctrl)
+	accounts := stock.NewMockStock[uint64, AccountNode](ctrl)
+	values := stock.NewMockStock[uint64, ValueNode](ctrl)
+
+	forest, err := makeForest(
+		MptConfig{Hashing: DirectHashing},
+		t.TempDir(),
+		branches,
+		extensions,
+		accounts,
+		values,
+		ForestConfig{
+			Mode: Immutable,
+		},
+	)
+	if err != nil {
+		t.Fatalf("failed to create test forest: %v", err)
+	}
+
+	branches.EXPECT().Get(gomock.Any()).Return(BranchNode{}, injectedError)
+
+	branches.EXPECT().Flush().AnyTimes()
+	accounts.EXPECT().Flush().AnyTimes()
+	extensions.EXPECT().Flush().AnyTimes()
+	values.EXPECT().Flush().AnyTimes()
+
+	branches.EXPECT().Close().AnyTimes()
+	accounts.EXPECT().Close().AnyTimes()
+	extensions.EXPECT().Close().AnyTimes()
+	values.EXPECT().Close().AnyTimes()
+
+	rootRef := NewNodeReference(BranchId(12))
+	_, _, err = forest.GetAccountInfo(&rootRef, common.Address{})
+	if !errors.Is(err, injectedError) {
+		t.Errorf("unexpected error, wanted %v, got %v", injectedError, err)
+	}
+
+	if want, got := injectedError, forest.Flush(); !errors.Is(got, want) {
+		t.Errorf("missing operation error in flush, wanted %v, got %v", want, got)
+	}
+
+	if want, got := injectedError, forest.Close(); !errors.Is(got, want) {
+		t.Errorf("missing operation error in close, wanted %v, got %v", want, got)
 	}
 }
