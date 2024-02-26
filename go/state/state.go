@@ -7,6 +7,10 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+// NoArchiveError is an error returned by implementation of the State interface
+// for archive operations if no archive is maintained by this implementation.
+const NoArchiveError = common.ConstError("state does not maintain archive data")
+
 // State interfaces provides access to accounts and smart contract values memory.
 type State interface {
 	// Exists obtains the current state of the provided account.
