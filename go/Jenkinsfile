@@ -5,7 +5,9 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                stash 'source'
+                dir('go') {
+                   stash 'source'
+                }
             }
         }
         
@@ -27,97 +29,97 @@ pipeline {
                     agent {label 'coordinator'}
                     steps {
                         unstash 'source'
-                        sh 'cd go/backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
-                        sh 'cd go/common && go test ./... -race -run TestNWaysCache_Concurrent_ReadsWrites'
-                        sh 'cd go/common && go test ./... -race -run TestNWaysCache_Concurrent_Sequence'
-                        sh 'cd go/common && go test ./... -race -run TestHash_PassThrough_Parallel'
-                        sh 'cd go/state/mpt && go test ./... -race -run TestWriteBuffer_CheckThatLockedNodesAreWaitedFor'
-                        sh 'cd go/state/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedInParallel'
-                        sh 'cd go/state/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedAndCanceledInParallel'
+                        sh 'cd backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
+                        sh 'cd common && go test ./... -race -run TestNWaysCache_Concurrent_ReadsWrites'
+                        sh 'cd common && go test ./... -race -run TestNWaysCache_Concurrent_Sequence'
+                        sh 'cd common && go test ./... -race -run TestHash_PassThrough_Parallel'
+                        sh 'cd state/mpt && go test ./... -race -run TestWriteBuffer_CheckThatLockedNodesAreWaitedFor'
+                        sh 'cd state/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedInParallel'
+                        sh 'cd state/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedAndCanceledInParallel'
                     }
                 }
                 stage('FastMap') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./common -fuzztime 3h -fuzz=FuzzMapOperations'
+                        sh 'go test ./common -fuzztime 3h -fuzz=FuzzMapOperations'
                     }
                 }
                 stage('Fuzzing NWays Cache') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./common/ -fuzztime 3h -fuzz FuzzLruCache_RandomOps'
+                        sh 'go test ./common/ -fuzztime 3h -fuzz FuzzLruCache_RandomOps'
                     }
                 }
                 stage('Fuzzing LRU Cache') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./common/ -fuzztime 3h -fuzz FuzzNWays_RandomOps'
+                        sh 'go test ./common/ -fuzztime 3h -fuzz FuzzNWays_RandomOps'
                     }
                 }
                 stage('Fuzzing Buffered File') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./backend/utils -fuzztime 3h -fuzz FuzzBufferedFile_RandomOps'
+                        sh 'go test ./backend/utils -fuzztime 3h -fuzz FuzzBufferedFile_RandomOps'
                     }
                 }
                 stage('Fuzzing Buffered Fil - data') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./backend/utils -fuzztime 3h -fuzz FuzzBufferedFile_ReadWrite'
+                        sh 'go test ./backend/utils -fuzztime 3h -fuzz FuzzBufferedFile_ReadWrite'
                     }
                 }
                 stage('Fuzzing Stack') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./backend/stock/file -fuzztime 3h -fuzz FuzzStack_RandomOps'
+                        sh 'go test ./backend/stock/file -fuzztime 3h -fuzz FuzzStack_RandomOps'
                     }
                 }                
                 stage('Fuzzing Stock - file') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./backend/stock/file -fuzztime 3h -fuzz FuzzFileStock_RandomOps'
+                        sh 'go test ./backend/stock/file -fuzztime 3h -fuzz FuzzFileStock_RandomOps'
                     }
                 }                  
                 stage('Fuzzing Stock - synced') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./backend/stock/memory -fuzztime 3h -fuzz FuzzSyncStock_RandomOps'
+                        sh 'go test ./backend/stock/memory -fuzztime 3h -fuzz FuzzSyncStock_RandomOps'
                     }
                 }
                 stage('Fuzzing Live MPT - Accounts') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountOps'
+                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountOps'
                     }
                 }  
                 stage('Fuzzing Live MPT - Storage') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
+                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
                     }
                 }                  
                 stage('Fuzzing Archive MPT - Accounts') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
+                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
                     }
                 }
                 stage('Fuzzing Archive MPT - Storage') {
                     agent {label 'fuzzing'}
                     steps {
                         unstash 'source'
-                        sh 'cd go && go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
+                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
                     }
                 }
             }
