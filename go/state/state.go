@@ -9,7 +9,7 @@ import (
 
 // NoArchiveError is an error returned by implementation of the State interface
 // for archive operations if no archive is maintained by this implementation.
-const NoArchiveError = common.ConstError("the state does not maintain archive data")
+const NoArchiveError = common.ConstError("state does not maintain archive data")
 
 // State interfaces provides access to accounts and smart contract values memory.
 type State interface {
