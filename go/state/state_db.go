@@ -3,7 +3,6 @@ package state
 import (
 	"errors"
 	"fmt"
-	"log"
 	"maps"
 	"math/big"
 	"sync"
@@ -240,7 +239,6 @@ type accountLifeCycleState int
 // transaction, Suicided accounts transition automatically into NonExisting accounts.
 
 const (
-	kUnknown     accountLifeCycleState = 0
 	kNonExisting accountLifeCycleState = 1
 	kExists      accountLifeCycleState = 2
 	kSuicided    accountLifeCycleState = 3 // TODO: rename to self-destructed
@@ -248,8 +246,6 @@ const (
 
 func (s accountLifeCycleState) String() string {
 	switch s {
-	case kUnknown:
-		return "Unknown"
 	case kNonExisting:
 		return "NonExisting"
 	case kExists:
@@ -424,29 +420,16 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 }
 
 func (s *stateDB) setAccountState(addr common.Address, state accountLifeCycleState) {
-	if val, exists := s.accounts[addr]; exists {
-		if val.current == state {
-			return
-		}
-		oldState := val.current
-		val.current = state
-		s.undo = append(s.undo, func() {
-			val.current = oldState
-		})
-	} else {
-		val = &accountState{
-			original: kUnknown,
-			current:  state,
-		}
-		s.accounts[addr] = val
-		s.undo = append(s.undo, func() {
-			if val.original != kUnknown {
-				val.current = val.original
-			} else {
-				delete(s.accounts, addr)
-			}
-		})
+	s.Exist(addr) // < make sure s.accounts[addr] is initialized
+	val := s.accounts[addr]
+	if val.current == state {
+		return
 	}
+	oldState := val.current
+	val.current = state
+	s.undo = append(s.undo, func() {
+		val.current = oldState
+	})
 }
 
 func (s *stateDB) Exist(addr common.Address) bool {
@@ -748,6 +731,7 @@ func (s *stateDB) loadStoredState(sid slotId, val *slotValue) common.Value {
 
 	// Remember the stored value for future accesses.
 	if val != nil {
+		val.committed, val.committedKnown = stored.value, true
 		val.stored, val.storedKnown = stored.value, true
 	} else {
 		s.data.Put(sid, &slotValue{
@@ -1098,8 +1082,9 @@ func (s *stateDB) BeginBlock() {
 
 func (s *stateDB) EndBlock(block uint64) {
 	if !s.canApplyChanges {
-		// TODO: report an error instead once errors are supported
-		log.Printf("warning: ignored EndBlock call on StateDB not allowed to update the underlying state")
+		// TODO: return this error directly once the interface got changed
+		err := fmt.Errorf("unable to process EndBlock event in StateDB without permission to apply changes")
+		s.errors = append(s.errors, err)
 		return
 	}
 	update := common.Update{}
@@ -1129,27 +1114,10 @@ func (s *stateDB) EndBlock(block uint64) {
 
 	// (Re-)create new or resurrected accounts.
 	for addr, value := range s.accounts {
-		// In case we do not know the account state yet, we need to fetch it
-		// from the DB to decide whether the account state has changed.
-		if value.original == kUnknown {
-			exists, err := s.state.Exists(addr)
-			if err != nil {
-				s.errors = append(s.errors, fmt.Errorf("failed to fetch account state from DB for %v: %w", addr, err))
-				break
-			}
-			value.original = kNonExisting
-			if exists {
-				value.original = kExists
-			}
-		}
 		if value.original != value.current {
 			if value.current == kExists {
 				update.AppendCreateAccount(addr)
 				delete(nonExistingAccounts, addr)
-			} else if value.current == kNonExisting {
-				// Accounts have already been registered for deletion in the loop above.
-			} else {
-				s.errors = append(s.errors, fmt.Errorf("unknown account state: %v", value.current))
 			}
 		}
 	}
@@ -1162,7 +1130,7 @@ func (s *stateDB) EndBlock(block uint64) {
 		if value.original == nil || value.original.Cmp(&value.current) != 0 {
 			newBalance, err := common.ToBalance(&value.current)
 			if err != nil {
-				s.errors = append(s.errors, fmt.Errorf("unable to convert big.Int balance to common.Balance: %w", err))
+				s.errors = append(s.errors, fmt.Errorf("unable to convert big.Int balance %v to common.Balance: %w", &value.current, err))
 			} else {
 				update.AppendBalanceUpdate(addr, newBalance)
 			}
@@ -1182,9 +1150,6 @@ func (s *stateDB) EndBlock(block uint64) {
 	// Update storage values in state DB
 	s.data.ForEach(func(slot slotId, value *slotValue) {
 		if !value.storedKnown || value.stored != value.current {
-			if _, found := nonExistingAccounts[slot.addr]; found {
-				return
-			}
 			update.AppendSlotUpdate(slot.addr, slot.key, value.current)
 			s.storedDataCache.Set(slot, storedDataCacheValue{value.current, s.reincarnation[slot.addr]})
 		}
@@ -1198,14 +1163,6 @@ func (s *stateDB) EndBlock(block uint64) {
 		if value.dirty {
 			update.AppendCodeUpdate(addr, s.codes[addr].code)
 		}
-	}
-
-	// Normalize the update to fix the ordering of operations. Note that for some DB implementations,
-	// the state hash depends on the insertion order. Thus, the insertion must be performed in a
-	// deterministic order. Maps in Go have an undefined order and are deliberately randomized. Thus,
-	// updates need to be ordered/normalized before being written to the underlying state.
-	if err := update.Normalize(); err != nil {
-		s.errors = append(s.errors, fmt.Errorf("failed to normalize update for block %d: %v", block, err))
 	}
 
 	// Skip applying changes if there have been any issues.
@@ -1295,6 +1252,7 @@ func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("writtenSlots", common.NewMemoryFootprint(uintptr(len(s.writtenSlots))*(boolSize+unsafe.Sizeof(&slotValue{}))))
 	mf.AddChild("storedDataCache", s.storedDataCache.GetMemoryFootprint(0))
 	mf.AddChild("reincarnation", common.NewMemoryFootprint(uintptr(len(s.reincarnation))*(addressSize+unsafe.Sizeof(uint64(0)))))
+	mf.AddChild("emptyCandidates", common.NewMemoryFootprint(uintptr(len(s.emptyCandidates))*(addressSize)))
 
 	return mf
 }

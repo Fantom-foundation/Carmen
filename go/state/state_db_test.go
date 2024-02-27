@@ -41,7 +41,6 @@ func TestAccountLifeCycleState_CanBePrinted(t *testing.T) {
 		state accountLifeCycleState
 		print string
 	}{
-		{kUnknown, "Unknown"},
 		{kNonExisting, "NonExisting"},
 		{kExists, "Exists"},
 		{kSuicided, "Suicided"},
@@ -77,6 +76,12 @@ func TestAccountClearingState_CanBePrinted(t *testing.T) {
 func TestStateDB_ImplementsStateDbInterface(t *testing.T) {
 	var db stateDB
 	var _ StateDB = &db
+}
+
+func TestStateDB_CanBeCreatedWithDefaultCacheSize(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	CreateCustomStateDBUsing(mock /* request default= */, 0)
 }
 
 func TestStateDB_AccountsCanBeCreatedAndDeleted(t *testing.T) {
@@ -473,6 +478,134 @@ func TestStateDB_StoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	db.EndBlock(3)
 }
 
+func TestStateDB_RollbackToKnownCommittedStateProducesCorrectResult(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(val2, nil)
+
+	s := db.Snapshot()
+	db.SetState(address1, key1, val1)
+
+	if want, got := val2, db.GetCommittedState(address1, key1); want != got {
+		t.Errorf("unexpected committed state, wanted %v, got %v", want, got)
+	}
+
+	if want, got := val1, db.GetState(address1, key1); want != got {
+		t.Errorf("unexpected committed state, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(s)
+
+	if want, got := val2, db.GetState(address1, key1); want != got {
+		t.Errorf("unexpected committed state, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_ClearedAndTaintedAccountsAreTrackedCorrectly(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(true, nil)
+
+	db.SetState(address1, key1, val1)
+
+	if want, got := noClearing, db.(*stateDB).clearedAccounts[address1]; want != got {
+		t.Errorf("unexpected clearing state, wanted %v, got %v", want, got)
+	}
+
+	db.Suicide(address1)
+
+	if want, got := pendingClearing, db.(*stateDB).clearedAccounts[address1]; want != got {
+		t.Errorf("unexpected clearing state, wanted %v, got %v", want, got)
+	}
+
+	db.EndTransaction()
+
+	if want, got := cleared, db.(*stateDB).clearedAccounts[address1]; want != got {
+		t.Errorf("unexpected clearing state, wanted %v, got %v", want, got)
+	}
+
+	backup := db.Snapshot()
+	db.SetState(address1, key1, val2)
+
+	if want, got := clearedAndTainted, db.(*stateDB).clearedAccounts[address1]; want != got {
+		t.Errorf("unexpected clearing state, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(backup)
+
+	if want, got := cleared, db.(*stateDB).clearedAccounts[address1]; want != got {
+		t.Errorf("unexpected clearing state, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_RevertToUnknownSnapshotIsDetected(t *testing.T) {
+	for i := -2; i < 2; i++ {
+		ctrl := gomock.NewController(t)
+		mock := NewMockState(ctrl)
+		db := CreateStateDBUsing(mock)
+
+		if err := db.Check(); err != nil {
+			t.Errorf("initial StateDB is not error free")
+		}
+
+		backup := db.Snapshot()
+		db.RevertToSnapshot(i)
+
+		if i == backup {
+			if err := db.Check(); err != nil {
+				t.Errorf("revert to existing snapshot should be fine, got error %v", err)
+			}
+		} else {
+			if err := db.Check(); err == nil {
+				t.Errorf("Revert to unknown snapshot %d should fail", i)
+			}
+		}
+	}
+}
+
+func TestStateDB_RollingBackSuicideRestoresBalance(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	initialBalance, err := common.ToBalance(big.NewInt(5))
+	if err != nil {
+		t.Fatalf("failed to prepare initial balance: %v", err)
+	}
+
+	// Initially the account exists with a view stored values.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(initialBalance, nil)
+
+	// In the transaction we delete and restore the account.
+	db.BeginTransaction()
+
+	// Initially the old balance should be present.
+	if want, got := big.NewInt(5), db.GetBalance(address1); want.Cmp(got) != 0 {
+		t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+	}
+
+	snapshot := db.Snapshot()
+	db.Suicide(address1)
+
+	// after a suicide the balance should be empty
+	if want, got := big.NewInt(0), db.GetBalance(address1); want.Cmp(got) != 0 {
+		t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+	}
+
+	db.RevertToSnapshot(snapshot)
+
+	// the rollback of the suicide should restore the balance
+	if want, got := big.NewInt(5), db.GetBalance(address1); want.Cmp(got) != 0 {
+		t.Errorf("unexpected balance, wanted %v, got %v", want, got)
+	}
+}
+
 func TestStateDB_RollingBackSuicideRestoresValues(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
@@ -635,6 +768,41 @@ func TestStateDB_CreateAccountCanBeRolledBack(t *testing.T) {
 	db.RevertToSnapshot(snapshot)
 	if db.Exist(address1) {
 		t.Errorf("Account still exists after rollback")
+	}
+}
+
+func TestStateDB_RollingBackAccountCreationRestoresStoredData(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// in this test storage value of a pre-existing account is fetched into the
+	// StateDB, then reset as part of a account creation call, and restored during
+	// a rollback of the account creation.
+	value0 := common.Value{0}
+	value1 := common.Value{1}
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetStorage(address1, key1).Return(value1, nil)
+
+	snapshot := db.Snapshot()
+
+	value := db.GetState(address1, key1)
+	if value != value1 {
+		t.Errorf("unexpected value in slot, wanted %v, got %v", value1, value)
+	}
+
+	db.CreateAccount(address1)
+
+	value = db.GetState(address1, key1)
+	if value != value0 {
+		t.Errorf("unexpected value in slot after deletion, wanted %v, got %v", value0, value)
+	}
+
+	db.RevertToSnapshot(snapshot)
+
+	value = db.GetState(address1, key1)
+	if value != value1 {
+		t.Errorf("unexpected value in slot after rollback, wanted %v, got %v", value1, value)
 	}
 }
 
@@ -1146,6 +1314,103 @@ func TestStateDB_SubtractingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *
 	db.EndBlock(1)
 }
 
+func TestStateDB_AddingNegativeBalancesLeadsToBalanceReduction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	initialBalance, err := common.ToBalance(big.NewInt(5))
+	if err != nil {
+		t.Fatalf("failed to create small balance: %v", err)
+	}
+
+	// Initially the account exists and has a balance of 5 tokens.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(initialBalance, nil)
+
+	balance := db.GetBalance(address1)
+	if got, want := balance, big.NewInt(5); got.Cmp(want) != 0 {
+		t.Errorf("Unexpected balance, wanted %v, got %v", got, want)
+	}
+
+	db.AddBalance(address1, big.NewInt(2))
+	balance = db.GetBalance(address1)
+	if got, want := balance, big.NewInt(7); got.Cmp(want) != 0 {
+		t.Errorf("Unexpected balance, wanted %v, got %v", got, want)
+	}
+
+	db.AddBalance(address1, big.NewInt(-3))
+	balance = db.GetBalance(address1)
+	if got, want := balance, big.NewInt(4); got.Cmp(want) != 0 {
+		t.Errorf("Unexpected balance, wanted %v, got %v", got, want)
+	}
+}
+
+func TestStateDB_SubtractingNegativeBalancesLeadsToBalanceIncrease(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	initialBalance, err := common.ToBalance(big.NewInt(5))
+	if err != nil {
+		t.Fatalf("failed to create small balance: %v", err)
+	}
+
+	// Initially the account exists and has a balance of 5 tokens.
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().GetBalance(address1).Return(initialBalance, nil)
+
+	balance := db.GetBalance(address1)
+	if got, want := balance, big.NewInt(5); got.Cmp(want) != 0 {
+		t.Errorf("Unexpected balance, wanted %v, got %v", got, want)
+	}
+
+	db.SubBalance(address1, big.NewInt(2))
+	balance = db.GetBalance(address1)
+	if got, want := balance, big.NewInt(3); got.Cmp(want) != 0 {
+		t.Errorf("Unexpected balance, wanted %v, got %v", got, want)
+	}
+
+	db.SubBalance(address1, big.NewInt(-3))
+	balance = db.GetBalance(address1)
+	if got, want := balance, big.NewInt(6); got.Cmp(want) != 0 {
+		t.Errorf("Unexpected balance, wanted %v, got %v", got, want)
+	}
+}
+
+func TestStateDB_ProducingANegativeBalanceCausesTheBlockToFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	db.SubBalance(address1, big.NewInt(1))
+
+	db.EndBlock(1)
+
+	if err := db.Check(); err == nil {
+		t.Errorf("expected end of block to fail, but no error was produced")
+	}
+}
+
+func TestStateDB_IncreasingTheBalanceBeyondItsMaximumValueCausesTheBlockToFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	tooHighBalance := new(big.Int).Lsh(big.NewInt(1), common.BalanceSize*8)
+	db.AddBalance(address1, tooHighBalance)
+
+	db.EndBlock(1)
+
+	if err := db.Check(); err == nil {
+		t.Errorf("expected end of block to fail, but no error was produced")
+	}
+}
+
 func TestStateDB_SettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
@@ -1167,6 +1432,29 @@ func TestStateDB_SettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	db.SetNonce(address1, 1)
 	if db.Empty(address1) {
 		t.Errorf("Account with nonce != 0 is still considered empty")
+	}
+	db.EndTransaction()
+	db.EndBlock(1)
+}
+
+func TestStateDB_SettingTheNonceToZeroMakesAccountEmpty(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// An empty account must have its nonce and code set to zero.
+	mock.EXPECT().Exists(address1).AnyTimes().Return(false, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{0}, nil)
+	mock.EXPECT().GetNonce(address1).Return(common.Nonce{0}, nil)
+	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
+	mock.EXPECT().Apply(uint64(1), common.Update{})
+
+	if !db.Empty(address1) {
+		t.Errorf("Empty account not recognized as such")
+	}
+	db.SetNonce(address1, 0)
+	if !db.Empty(address1) {
+		t.Errorf("Account with nonce == 0 should be considered empty")
 	}
 	db.EndTransaction()
 	db.EndBlock(1)
@@ -1907,12 +2195,12 @@ func TestStateDB_UpdatedValuesAreCommittedToStateAtEndBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().Apply(uint64(1), common.Update{
+	mock.EXPECT().Apply(uint64(1), sameEffectAs{common.Update{
 		Slots: []common.SlotUpdate{
 			{Account: address1, Key: key1, Value: val1},
 			{Account: address1, Key: key2, Value: val2},
 		},
-	})
+	}})
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
@@ -1920,7 +2208,7 @@ func TestStateDB_UpdatedValuesAreCommittedToStateAtEndBlock(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestStateDB_RollbackedValuesAreNotCommitted(t *testing.T) {
+func TestStateDB_RevertedValuesAreNotCommitted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2382,6 +2670,31 @@ func TestStateDB_RefundCanBeModified(t *testing.T) {
 	want += 14
 	if got := db.GetRefund(); got != want {
 		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_RefundBelowZeroIsAnError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	var want uint64 = 0
+	if got := db.GetRefund(); got != want {
+		t.Errorf("initial refund is not 0, got: %v", got)
+	}
+	db.AddRefund(12)
+	want += 12
+	if got := db.GetRefund(); got != want {
+		t.Errorf("failed to update refund, wanted %v, got %v", want, got)
+	}
+
+	if err := db.Check(); err != nil {
+		t.Fatalf("unexpected error while handling refunds: %v", err)
+	}
+
+	db.SubRefund(14)
+	if err := db.Check(); err == nil {
+		t.Fatalf("expected an error when reducing refunds below 0, got nothing")
 	}
 }
 
@@ -2861,6 +3174,22 @@ func TestStateDB_SuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	db.EndBlock(1)
 }
 
+func TestStateDB_StateDBCanNotEndABlockIfCommitIsNotAllowed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, 1024, false /*canApplyChanges*/)
+
+	if err := db.Check(); err != nil {
+		t.Errorf("unexpected error in fresh instance: %v", err)
+	}
+
+	db.EndBlock(1)
+
+	if err := db.Check(); err == nil {
+		t.Errorf("expected error after attempt, got %v", err)
+	}
+}
+
 func TestStateDB_Copy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
@@ -2990,6 +3319,30 @@ func TestStateDB_LogsAreCoveredByRollbacks(t *testing.T) {
 	want = []*common.Log{}
 	if got := db.GetLogs(); !reflect.DeepEqual(got, want) {
 		t.Errorf("reported invalid log list, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_BeginAndEndEpochsHaveNoEffect(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// All this test does is making sure that those calls do not trigger
+	// any operation on the underlying state.
+	db.BeginEpoch()
+	db.EndEpoch(1)
+}
+
+func TestStateDB_GetHashObtainsHashFromUnderlyingState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	hash := common.Hash{1, 2, 3}
+	mock.EXPECT().GetHash().Return(hash, nil)
+
+	if want, got := hash, db.GetHash(); want != got {
+		t.Errorf("unexpected hash, wanted %d, got %d", want, got)
 	}
 }
 
@@ -3186,6 +3539,141 @@ func TestStateDB_ErrorsAreReportedDuringClose(t *testing.T) {
 		t.Errorf("close issue not reported by Close()")
 	}
 }
+
+func TestStateDB_GetArchiveStateDbCanProduceArchiveAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	archive := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	state.EXPECT().GetArchiveState(uint64(12)).Return(archive, nil)
+	archive.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
+
+	history, err := db.GetArchiveStateDB(12)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+
+	if want, got := uint64(10), history.GetNonce(address1); want != got {
+		t.Errorf("invalid nonce, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_GetArchiveStateDbProducesDistinctStateDbInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	archive := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	state.EXPECT().GetArchiveState(gomock.Any()).AnyTimes().Return(archive, nil)
+
+	history, err := db.GetArchiveStateDB(12)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbA := history.(*nonCommittableStateDB).stateDB
+
+	history, err = db.GetArchiveStateDB(14)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbB := history.(*nonCommittableStateDB).stateDB
+
+	if dbA == dbB {
+		t.Errorf("StateDB instance in archives are not distinct, got %v and %v", dbA, dbB)
+	}
+}
+
+func TestStateDB_GetArchiveStateDbRecyclesNonCommittableStateDbInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	archive := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	state.EXPECT().GetArchiveState(gomock.Any()).AnyTimes().Return(archive, nil)
+
+	// In this test two NonCommittableStateDBs are created in order, releasing the
+	// first after the other. In such a case, the internal StateDB instance used by
+	// the first should be reused by the second.
+
+	history, err := db.GetArchiveStateDB(12)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbA := history.(*nonCommittableStateDB).stateDB // < remembers the used StateDB instance
+	history.Release()                               // < releases the internal state DB
+
+	history, err = db.GetArchiveStateDB(14)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbB := history.(*nonCommittableStateDB).stateDB // < this should be the reused one
+
+	if dbA != dbB {
+		t.Errorf("StateDB instance in archives not reused, got %v and %v", dbA, dbB)
+	}
+}
+
+func TestStateDB_NonCommittableStateDbCanBeReleasedMultipleTimes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	state := CreateStateDBUsing(mock)
+
+	db := nonCommittableStateDB{state.(*stateDB)}
+	db.Release()
+	if db.stateDB != nil {
+		t.Errorf("state DB was not released")
+	}
+	db.Release()
+}
+
+func TestStateDB_GetArchiveStateDbFailsIfThereTheArchiveAccessFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	injectedError := fmt.Errorf("injected error")
+	mock.EXPECT().GetArchiveState(uint64(12)).Return(nil, injectedError)
+
+	if _, err := db.GetArchiveStateDB(12); !errors.Is(err, injectedError) {
+		t.Errorf("retrieving the archive state should have failed, wanted %v, got %v", injectedError, err)
+	}
+}
+
+func TestStateDB_GetArchiveBlockHeightReturnsHeightOfArchive(t *testing.T) {
+	tests := map[string]struct {
+		height uint64
+		empty  bool
+		err    error
+	}{
+		"empty":     {0, true, nil},
+		"non-empty": {12, false, nil},
+		"missing":   {0, false, NoArchiveError},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			state := NewMockState(ctrl)
+			db := CreateStateDBUsing(state)
+
+			state.EXPECT().GetArchiveBlockHeight().Return(test.height, test.empty, test.err)
+
+			height, empty, err := db.GetArchiveBlockHeight()
+			if want, got := test.height, height; want != got {
+				t.Errorf("unexpected height, wanted %v, got %v", want, got)
+			}
+			if want, got := test.empty, empty; want != got {
+				t.Errorf("unexpected empty flag, wanted %v, got %v", want, got)
+			}
+			if want, got := test.err, err; want != got {
+				t.Errorf("unexpected error, wanted %v, got %v", want, got)
+			}
+
+		})
+	}
+}
+
 func TestStateDB_ProvidesTransactionChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
@@ -3240,6 +3728,138 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 	load.Close()
 }
 
+func TestStateDB_BulkLoadSetBalanceFailsForInvalidBalances(t *testing.T) {
+	tests := map[string]*big.Int{
+		"negative": big.NewInt(-1),
+		"toBig":    big.NewInt(0).Lsh(big.NewInt(1), 256),
+	}
+
+	for name, value := range tests {
+		t.Run(name, func(t *testing.T) {
+			bulk := bulkLoad{}
+			if len(bulk.errs) != 0 {
+				t.Fatalf("initial bulk load instance is not error free")
+			}
+			bulk.SetBalance(address1, value)
+			if len(bulk.errs) == 0 {
+				t.Errorf("balance issue not detected")
+			}
+		})
+	}
+}
+
+func TestStateDB_BulkLoadApplyDetectsInconsistencies(t *testing.T) {
+	bulk := bulkLoad{}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	bulk.SetNonce(address1, 12)
+	bulk.SetNonce(address1, 14)
+	if len(bulk.errs) != 0 {
+		t.Fatalf("unexpected error while writing data to bulk load instance: %v", errors.Join(bulk.errs...))
+	}
+	bulk.apply()
+	if len(bulk.errs) == 0 {
+		t.Errorf("inconsistent update issue not detected")
+	}
+}
+
+func TestStateDB_BulkLoadApplyForwardsUpdateIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{
+		Nonces: []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
+	}).Return(injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	bulk.SetNonce(address1, 14)
+	if len(bulk.errs) != 0 {
+		t.Fatalf("unexpected error while writing data to bulk load instance: %v", errors.Join(bulk.errs...))
+	}
+	bulk.apply()
+	got := errors.Join(bulk.errs...)
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
+func TestStateDB_BulkLoadCloseReportsApplyIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{
+		Nonces: []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
+	}).Return(injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	bulk.SetNonce(address1, 14)
+	if len(bulk.errs) != 0 {
+		t.Fatalf("unexpected error while writing data to bulk load instance: %v", errors.Join(bulk.errs...))
+	}
+	got := bulk.Close()
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
+func TestStateDB_BulkLoadCloseReportsFlushIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{}).Return(nil)
+	state.EXPECT().Flush().Return(injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	got := bulk.Close()
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
+func TestStateDB_BulkLoadCloseReportsHashingIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{}).Return(nil)
+	state.EXPECT().Flush().Return(nil)
+	state.EXPECT().GetHash().Return(common.Hash{}, injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	got := bulk.Close()
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
 func TestStateDB_ThereCanBeMultipleBulkLoadPhases(t *testing.T) {
 	const N = 10
 
@@ -3266,12 +3886,54 @@ func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(0))
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().Exists(address2).Return(false, nil)
+	mock.EXPECT().GetBalance(address1).Return(common.Balance{10}, nil)
+	mock.EXPECT().GetCode(address1).Return([]byte{1, 2, 3}, nil)
+	mock.EXPECT().GetCodeHash(address1).Return(common.Hash{3, 2, 1}, nil)
+	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(12))
+
+	// Make sure that there is some data in the caches.
+	db.AddBalance(address1, big.NewInt(12))
+	db.SetNonce(address1, 12)
+	db.SetNonce(address2, 0)
+	db.GetCode(address1)
+	db.GetCodeHash(address1)
+	db.SetState(address1, key2, val3)
+	db.AddSlotToAccessList(address1, key2)
 
 	fp := db.GetMemoryFootprint()
 	if fp == nil || fp.Total() == 0 {
 		t.Errorf("invalid memory footprint: %v", fp)
 	}
+
+	components := []struct {
+		name       string
+		mayBeEmpty bool
+	}{
+		{"state", false},
+		{"accounts", false},
+		{"balances", false},
+		{"nonces", false},
+		{"codes", false},
+		{"slots", false},
+		{"accessedAddresses", false},
+		{"accessedSlots", false},
+		{"writtenSlots", false},
+		{"storedDataCache", false},
+		{"reincarnation", true},
+		{"emptyCandidates", false},
+	}
+
+	for _, component := range components {
+		child := fp.GetChild(component.name)
+		if child == nil {
+			t.Errorf("missing component %s", component.name)
+		} else if !component.mayBeEmpty && child.Total() == 0 {
+			t.Errorf("empty component %s", component.name)
+		}
+	}
+
 }
 
 func TestSlotIdOrder(t *testing.T) {
@@ -3295,4 +3957,23 @@ func TestSlotIdOrder(t *testing.T) {
 			t.Errorf("Comparison of %v and %v failed, wanted %d, got %d", input.a, input.b, input.want, got)
 		}
 	}
+}
+
+type sameEffectAs struct {
+	want common.Update
+}
+
+func (m sameEffectAs) Matches(x any) bool {
+	got, ok := x.(common.Update)
+	if !ok {
+		return false
+	}
+	if err := got.Normalize(); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(got, m.want)
+}
+
+func (m sameEffectAs) String() string {
+	return fmt.Sprintf("Same effect as %v", m.want)
 }
