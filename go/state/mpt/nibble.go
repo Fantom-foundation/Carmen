@@ -17,7 +17,7 @@ func (n Nibble) Rune() rune {
 	}
 }
 
-// String converts a Nibble in a hexa-decimal stirng (0-9a-f).
+// String converts a Nibble in a hexa-decimal string (0-9a-f).
 func (n Nibble) String() string {
 	return string(n.Rune())
 }

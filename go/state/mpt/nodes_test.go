@@ -7760,6 +7760,14 @@ func (c *nodeContext) Check(t *testing.T, ref NodeReference) {
 	}
 }
 
+func (c *nodeContext) Print(ref NodeReference) string {
+	out := &bytes.Buffer{}
+	handle, _ := c.getReadAccess(&ref)
+	handle.Get().Dump(out, c, &ref, "")
+	handle.Release()
+	return out.String()
+}
+
 func (c *nodeContext) Freeze(ref NodeReference) {
 	handle, _ := c.getWriteAccess(&ref)
 	defer handle.Release()

@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"go.uber.org/mock/gomock"
 	"reflect"
+	"strings"
 	"testing"
+
+	"go.uber.org/mock/gomock"
 )
 
 func TestUpdateEmpty(t *testing.T) {
@@ -525,6 +527,37 @@ func TestUpdate_ApplyTo_Failures(t *testing.T) {
 				t.Errorf("apply update should fail")
 			}
 		})
+	}
+
+}
+
+func TestUpdate_Print(t *testing.T) {
+	update := Update{}
+	if want, got := "Update{}", update.String(); want != got {
+		t.Errorf("Unexpected print of empty update, wanted %s, got %s", want, got)
+	}
+
+	update.AppendDeleteAccount(Address{1})
+	update.AppendCreateAccount(Address{2})
+	update.AppendBalanceUpdate(Address{3}, Balance{1})
+	update.AppendNonceUpdate(Address{4}, Nonce{2})
+	update.AppendCodeUpdate(Address{5}, []byte{1, 2, 3})
+	update.AppendSlotUpdate(Address{6}, Key{1}, Value{2})
+
+	print := update.String()
+
+	expectations := []string{
+		"Deleted Accounts:",
+		"Created Accounts:",
+		"Balances:",
+		"Nonces:",
+		"Slots:",
+	}
+
+	for _, expectation := range expectations {
+		if !strings.Contains(print, expectation) {
+			t.Errorf("expected string to contain '%s', got %s", expectation, print)
+		}
 	}
 
 }

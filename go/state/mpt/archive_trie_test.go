@@ -4,15 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/Fantom-foundation/Carmen/go/backend/stock"
-	"go.uber.org/mock/gomock"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"go.uber.org/mock/gomock"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -654,6 +656,59 @@ func TestArchiveTrie_GettingAccountInfo_Fails(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_GetCodes(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			codes, err := archive.GetCodes()
+			if err != nil {
+				t.Fatalf("failed to fetch codes from archive: %v", err)
+			}
+			if len(codes) != 0 {
+				t.Errorf("unexpected number of codes in archive, expected 0, got %d", len(codes))
+			}
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			code1 := []byte{1, 2, 3}
+			code2 := []byte{4, 5}
+			if err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr1, addr2},
+				Codes: []common.CodeUpdate{
+					{Account: addr1, Code: code1},
+					{Account: addr2, Code: code2},
+				},
+			}, nil); err != nil {
+				t.Fatalf("cannot apply update: %s", err)
+			}
+
+			codes, err = archive.GetCodes()
+			if err != nil {
+				t.Fatalf("failed to fetch codes from archive: %v", err)
+			}
+			if len(codes) != 2 {
+				t.Errorf("unexpected number of codes in archive, wanted 2, got %d", len(codes))
+			}
+			if code, found := codes[common.Keccak256(code1)]; !found || !bytes.Equal(code, code1) {
+				t.Errorf("expected code %x in codes, found %t, got %x", code1, found, code)
+			}
+			if code, found := codes[common.Keccak256(code2)]; !found || !bytes.Equal(code, code2) {
+				t.Errorf("expected code %x in codes, found %t, got %x", code2, found, code)
+			}
+
+			if err := archive.Close(); err != nil {
+				t.Fatalf("cannot close archive: %v", err)
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_GetHash(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
@@ -691,7 +746,7 @@ func TestArchiveTrie_GetHash(t *testing.T) {
 			}
 
 			if _, err := archive.GetHash(100); err == nil {
-				t.Errorf("geting hash of non-existing hash should fail")
+				t.Errorf("getting hash of non-existing hash should fail")
 			}
 		})
 	}
@@ -707,6 +762,234 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 			}
 			if _, err := archive.GetAccountHash(0, common.Address{1}); err == nil {
 				t.Errorf("getting account hash should always fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetDiffProducesValidResults(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer archive.Close()
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			nonce1 := common.Nonce{1}
+			nonce2 := common.Nonce{2}
+
+			err = archive.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Nonces:          []common.NonceUpdate{{Account: addr1, Nonce: nonce1}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			err = archive.Add(3, common.Update{
+				CreatedAccounts: []common.Address{addr2},
+				Nonces:          []common.NonceUpdate{{Account: addr2, Nonce: nonce2}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			expectations := []struct {
+				from, to uint64
+				diff     Diff
+			}{
+				{0, 0, Diff{}},
+				{0, 1, Diff{
+					addr1: &AccountDiff{
+						Nonce: &nonce1,
+						Code:  &emptyCodeHash,
+					},
+				}},
+				{0, 2, Diff{
+					addr1: &AccountDiff{
+						Nonce: &nonce1,
+						Code:  &emptyCodeHash,
+					},
+				}},
+				{0, 3, Diff{
+					addr1: &AccountDiff{
+						Nonce: &nonce1,
+						Code:  &emptyCodeHash,
+					},
+					addr2: &AccountDiff{
+						Nonce: &nonce2,
+						Code:  &emptyCodeHash,
+					},
+				}},
+				{1, 1, Diff{}},
+				{1, 2, Diff{}},
+				{1, 3, Diff{
+					addr2: &AccountDiff{
+						Nonce: &nonce2,
+						Code:  &emptyCodeHash,
+					},
+				}},
+
+				{2, 2, Diff{}},
+				{2, 3, Diff{
+					addr2: &AccountDiff{
+						Nonce: &nonce2,
+						Code:  &emptyCodeHash,
+					},
+				}},
+
+				// The source can also be after the target.
+				{3, 1, Diff{
+					addr2: &AccountDiff{Reset: true},
+				}},
+				{3, 0, Diff{
+					addr1: &AccountDiff{Reset: true},
+					addr2: &AccountDiff{Reset: true},
+				}},
+			}
+
+			for _, expectation := range expectations {
+				diff, err := archive.GetDiff(expectation.from, expectation.to)
+				if err != nil {
+					t.Fatalf("failed to produce diff between block %d and %d: %v", expectation.from, expectation.to, err)
+				}
+				want := expectation.diff
+				if !diff.Equal(want) {
+					t.Fatalf("unexpected diff between block %d and %d, wanted %v, got %v", expectation.from, expectation.to, want, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetDiffDetectsInvalidInput(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer archive.Close()
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			nonce1 := common.Nonce{1}
+			nonce2 := common.Nonce{2}
+
+			err = archive.Add(1, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Nonces:          []common.NonceUpdate{{Account: addr1, Nonce: nonce1}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			err = archive.Add(3, common.Update{
+				CreatedAccounts: []common.Address{addr2},
+				Nonces:          []common.NonceUpdate{{Account: addr2, Nonce: nonce2}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			expectations := []struct {
+				from, to     uint64
+				errorMessage string
+			}{
+				{4, 0, "source block 4 not present in archive, highest block is 3"},
+				{0, 4, "target block 4 not present in archive, highest block is 3"},
+			}
+
+			for _, expectation := range expectations {
+				_, err := archive.GetDiff(expectation.from, expectation.to)
+				if err == nil {
+					t.Errorf("expected operation to fail, but operation passed")
+				} else if !strings.Contains(err.Error(), expectation.errorMessage) {
+					t.Errorf("unexpected error message, wanted string containing '%s', got '%s'", expectation.errorMessage, err.Error())
+				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetDiffForBlockProducesValidResults(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer archive.Close()
+
+			addr1 := common.Address{1}
+			addr2 := common.Address{2}
+			nonce1 := common.Nonce{1}
+			nonce2 := common.Nonce{2}
+
+			err = archive.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr1},
+				Nonces:          []common.NonceUpdate{{Account: addr1, Nonce: nonce1}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			err = archive.Add(2, common.Update{
+				CreatedAccounts: []common.Address{addr2},
+				Nonces:          []common.NonceUpdate{{Account: addr2, Nonce: nonce2}},
+			}, nil)
+			if err != nil {
+				t.Fatalf("failed to create block in archive: %v", err)
+			}
+
+			expectations := []Diff{
+				{
+					addr1: &AccountDiff{
+						Nonce: &nonce1,
+						Code:  &emptyCodeHash,
+					},
+				},
+				{},
+				{
+					addr2: &AccountDiff{
+						Nonce: &nonce2,
+						Code:  &emptyCodeHash,
+					},
+				},
+			}
+
+			for block, want := range expectations {
+				diff, err := archive.GetDiffForBlock(uint64(block))
+				if err != nil {
+					t.Fatalf("failed to produce diff for block %d: %v", block, err)
+				}
+				if !diff.Equal(want) {
+					t.Fatalf("unexpected diff for block %d, wanted %v, got %v", block, want, diff)
+				}
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_GetDiffForBlockDetectsEmptyArchive(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive, err := OpenArchiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer archive.Close()
+
+			_, err = archive.GetDiffForBlock(0)
+			if err == nil {
+				t.Errorf("expected an error when loading diff for block 0 from an empty archive")
 			}
 		})
 	}
@@ -1021,7 +1304,7 @@ func TestStoreRootsTo_WriterFailures(t *testing.T) {
 	osfile.EXPECT().Write(gomock.Any()).Return(0, injectedErr)
 
 	if err := storeRootsTo(osfile, roots); !errors.Is(err, injectedErr) {
-		t.Errorf("writting roots should fail")
+		t.Errorf("writing roots should fail")
 	}
 }
 
@@ -1041,7 +1324,7 @@ func TestStoreRootsTo_SecondWriterFailures(t *testing.T) {
 	)
 
 	if err := storeRootsTo(osfile, roots); !errors.Is(err, injectedErr) {
-		t.Errorf("writting roots should fail")
+		t.Errorf("writing roots should fail")
 	}
 }
 
@@ -1053,7 +1336,7 @@ func TestStoreRoots_Cannot_Create(t *testing.T) {
 		t.Fatalf("cannot create dir: %s", err)
 	}
 	if err := StoreRoots(file, roots); err == nil {
-		t.Errorf("writting roots should fail")
+		t.Errorf("writing roots should fail")
 	}
 
 }

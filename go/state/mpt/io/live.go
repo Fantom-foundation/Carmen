@@ -2,7 +2,6 @@ package io
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -90,15 +89,8 @@ func Export(directory string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve codes: %v", err)
 	}
-	for _, code := range codes {
-		b := []byte{byte('C'), 0, 0}
-		binary.BigEndian.PutUint16(b[1:], uint16(len(code)))
-		if _, err := out.Write(b); err != nil {
-			return fmt.Errorf("output error: %v", err)
-		}
-		if _, err := out.Write(code); err != nil {
-			return fmt.Errorf("output error: %v", err)
-		}
+	if err := writeCodes(codes, out); err != nil {
+		return err
 	}
 
 	// Write out all accounts and values.
@@ -193,7 +185,6 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 		balance common.Balance
 		nonce   common.Nonce
 	)
-	length := []byte{0, 0}
 
 	// Read the rest and build the state.
 	buffer = buffer[0:1]
@@ -272,11 +263,8 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			}
 
 		case 'C':
-			if _, err := io.ReadFull(in, length[:]); err != nil {
-				return root, hash, err
-			}
-			code := make([]byte, binary.BigEndian.Uint16(length))
-			if _, err := io.ReadFull(in, code); err != nil {
+			code, err := readCode(in)
+			if err != nil {
 				return root, hash, err
 			}
 			codes[common.Keccak256(code)] = code
@@ -293,6 +281,8 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 				stateHash = hash
 				hashFound = true
 			}
+		default:
+			return root, hash, fmt.Errorf("format error encountered, unexpected token type: %c", buffer[0])
 		}
 	}
 }

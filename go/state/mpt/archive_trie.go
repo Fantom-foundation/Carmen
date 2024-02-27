@@ -203,6 +203,10 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 	return a.head.GetCodeForHash(info.CodeHash), nil
 }
 
+func (a *ArchiveTrie) GetCodes() (map[common.Hash][]byte, error) {
+	return a.head.GetCodes()
+}
+
 func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce common.Nonce, err error) {
 	view, err := a.getView(block)
 	if err != nil {
@@ -237,6 +241,39 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 	res := a.roots[block].Hash
 	a.rootsMutex.Unlock()
 	return res, nil
+}
+
+// GetDiff computes the difference between the given source and target blocks.
+func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
+	a.rootsMutex.Lock()
+	if srcBlock >= uint64(len(a.roots)) {
+		a.rootsMutex.Unlock()
+		return Diff{}, fmt.Errorf("source block %d not present in archive, highest block is %d", srcBlock, len(a.roots)-1)
+	}
+	if trgBlock >= uint64(len(a.roots)) {
+		a.rootsMutex.Unlock()
+		return Diff{}, fmt.Errorf("target block %d not present in archive, highest block is %d", trgBlock, len(a.roots)-1)
+	}
+	before := a.roots[srcBlock].NodeRef
+	after := a.roots[trgBlock].NodeRef
+	a.rootsMutex.Unlock()
+	return GetDiff(a.head.trie.forest, &before, &after)
+}
+
+// GetDiffForBlock computes the diff introduced by the given block compared to its
+// predecessor. Note that this enables access to the changes introduced by block 0.
+func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
+	if block == 0 {
+		a.rootsMutex.Lock()
+		if len(a.roots) == 0 {
+			a.rootsMutex.Unlock()
+			return Diff{}, fmt.Errorf("archive is empty, no diff present for block 0")
+		}
+		after := a.roots[0].NodeRef
+		a.rootsMutex.Unlock()
+		return GetDiff(a.head.trie.forest, &emptyNodeReference, &after)
+	}
+	return a.GetDiff(block-1, block)
 }
 
 func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {

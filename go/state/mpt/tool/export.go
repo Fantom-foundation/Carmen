@@ -5,10 +5,13 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 	"log"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/Fantom-foundation/Carmen/go/state/mpt"
+	"github.com/Fantom-foundation/Carmen/go/state/mpt/io"
 
 	"github.com/urfave/cli/v2"
 )
@@ -16,8 +19,11 @@ import (
 var ExportCmd = cli.Command{
 	Action:    doExport,
 	Name:      "export",
-	Usage:     "exports a LiveDB instance into a file",
-	ArgsUsage: "<live-db director> <target-file>",
+	Usage:     "exports a LiveDB or Archive instance into a file",
+	ArgsUsage: "<db director> <target-file>",
+	Flags: []cli.Flag{
+		&cpuProfileFlag,
+	},
 }
 
 func doExport(context *cli.Context) error {
@@ -26,6 +32,26 @@ func doExport(context *cli.Context) error {
 	}
 	dir := context.Args().Get(0)
 	trg := context.Args().Get(1)
+
+	// Start profiling ...
+	cpuProfileFileName := context.String(cpuProfileFlag.Name)
+	if strings.TrimSpace(cpuProfileFileName) != "" {
+		if err := startCpuProfiler(cpuProfileFileName); err != nil {
+			return err
+		}
+		defer stopCpuProfiler()
+	}
+
+	// check the type of target database
+	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)
+	if err != nil {
+		return err
+	}
+
+	export := io.Export
+	if mptInfo.Mode == mpt.Immutable {
+		export = io.ExportArchive
+	}
 
 	start := time.Now()
 	logFromStart(start, "export started")
@@ -39,7 +65,7 @@ func doExport(context *cli.Context) error {
 		logFromStart(start, "export done")
 	}()
 	return errors.Join(
-		io.Export(dir, out),
+		export(dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),

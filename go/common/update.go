@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 //go:generate mockgen -source update.go -destination update_mocks.go -package common
@@ -151,6 +152,52 @@ func (u *Update) ApplyTo(s UpdateTarget) error {
 		}
 	}
 	return nil
+}
+
+func (u *Update) String() string {
+	if u.IsEmpty() {
+		return "Update{}"
+	}
+	builder := strings.Builder{}
+	builder.WriteString("Update{\n")
+	if len(u.DeletedAccounts) > 0 {
+		builder.WriteString("\tDeleted Accounts:\n")
+		for _, account := range u.DeletedAccounts {
+			builder.WriteString(fmt.Sprintf("\t\t%v\n", account))
+		}
+	}
+	if len(u.CreatedAccounts) > 0 {
+		builder.WriteString("\tCreated Accounts:\n")
+		for _, account := range u.CreatedAccounts {
+			builder.WriteString(fmt.Sprintf("\t\t%v\n", account))
+		}
+	}
+	if len(u.Balances) > 0 {
+		builder.WriteString("\tBalances:\n")
+		for _, change := range u.Balances {
+			builder.WriteString(fmt.Sprintf("\t\t%v: %x\n", change.Account, change.Balance))
+		}
+	}
+	if len(u.Nonces) > 0 {
+		builder.WriteString("\tNonces:\n")
+		for _, change := range u.Nonces {
+			builder.WriteString(fmt.Sprintf("\t\t%v: %x\n", change.Account, change.Nonce))
+		}
+	}
+	if len(u.Codes) > 0 {
+		builder.WriteString("\tCodes:\n")
+		for _, change := range u.Codes {
+			builder.WriteString(fmt.Sprintf("\t\t%v: %x\n", change.Account, Keccak256(change.Code)))
+		}
+	}
+	if len(u.Slots) > 0 {
+		builder.WriteString("\tSlots:\n")
+		for _, change := range u.Slots {
+			builder.WriteString(fmt.Sprintf("\t\t%v: %v -> %x\n", change.Account, change.Key, change.Value))
+		}
+	}
+	builder.WriteString("}")
+	return builder.String()
 }
 
 // UpdateTarget is an interface for State implementations offering individual
