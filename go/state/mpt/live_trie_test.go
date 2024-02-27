@@ -2,12 +2,14 @@ package mpt
 
 import (
 	"errors"
-	"go.uber.org/mock/gomock"
+	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"go.uber.org/mock/gomock"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -39,7 +41,7 @@ func TestLiveTrie_Cannot_Open_Memory(t *testing.T) {
 			}
 
 			if _, err := OpenInMemoryLiveTrie(dir, config, 1024); err == nil {
-				t.Errorf("openning trie should fail")
+				t.Errorf("opening trie should fail")
 			}
 
 		})
@@ -56,7 +58,7 @@ func TestLiveTrie_Cannot_Open_File(t *testing.T) {
 			}
 
 			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
-				t.Errorf("openning trie should fail")
+				t.Errorf("opening trie should fail")
 			}
 
 		})
@@ -73,7 +75,7 @@ func TestLiveTrie_Cannot_MakeTrie_CorruptMeta(t *testing.T) {
 			}
 
 			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
-				t.Errorf("openning trie should fail")
+				t.Errorf("opening trie should fail")
 			}
 
 		})
@@ -90,7 +92,7 @@ func TestLiveTrie_Cannot_MakeTrie_CannotReadMeta(t *testing.T) {
 			}
 
 			if _, err := OpenFileLiveTrie(dir, config, 1024); err == nil {
-				t.Errorf("openning trie should fail")
+				t.Errorf("opening trie should fail")
 			}
 
 		})
@@ -107,10 +109,27 @@ func TestLiveTrie_Cannot_Verify(t *testing.T) {
 			}
 
 			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
-				t.Errorf("openning trie should fail")
+				t.Errorf("opening trie should fail")
 			}
 
 		})
+	}
+}
+
+func TestLiveTrie_Cannot_MakeTrie_CorruptForest(t *testing.T) {
+	dir := t.TempDir()
+	forest, err := OpenInMemoryForest(dir, S5LiveConfig, ForestConfig{})
+	if err != nil {
+		t.Fatalf("failed to create test forest")
+	}
+	defer forest.Close()
+
+	injectedError := fmt.Errorf("injected error")
+	forest.errors = []error{injectedError}
+
+	_, err = makeTrie(dir, forest)
+	if want, got := injectedError, err; !errors.Is(got, want) {
+		t.Errorf("opening erroneous forest should have failed, wanted %v, got %v", want, got)
 	}
 }
 
@@ -162,7 +181,7 @@ func TestLiveTrie_Cannot_Flush_Metadata(t *testing.T) {
 
 			mpt, err := OpenFileLiveTrie(dir, config, 1024)
 			if err != nil {
-				t.Fatalf("openning trie should not fail: %s", err)
+				t.Fatalf("opening trie should not fail: %s", err)
 			}
 
 			// corrupt meta
@@ -184,7 +203,7 @@ func TestLiveTrie_Cannot_Flush_Hashes(t *testing.T) {
 
 			mpt, err := OpenFileLiveTrie(dir, config, 1024)
 			if err != nil {
-				t.Fatalf("openning trie should not fail: %s", err)
+				t.Fatalf("opening trie should not fail: %s", err)
 			}
 
 			// inject failing stock to trigger an error applying the update

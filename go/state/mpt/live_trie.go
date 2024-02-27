@@ -3,6 +3,7 @@ package mpt
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"unsafe"
 
@@ -70,6 +71,10 @@ func makeTrie(
 	directory string,
 	forest *Forest,
 ) (*LiveTrie, error) {
+	issues := forest.GetEncounteredIssues()
+	if len(issues) != 0 {
+		return nil, fmt.Errorf("unable to open corrupted forest: %w", errors.Join(issues...))
+	}
 	// Parse metadata file.
 	metadatafile := directory + "/meta.json"
 	metadata, _, err := readMetadata(metadatafile)
