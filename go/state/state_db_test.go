@@ -3535,6 +3535,138 @@ func TestStateDB_ErrorsAreReportedDuringClose(t *testing.T) {
 		t.Errorf("close issue not reported by Close()")
 	}
 }
+
+func TestStateDB_GetArchiveStateDbCanProduceArchiveAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	archive := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	state.EXPECT().GetArchiveState(uint64(12)).Return(archive, nil)
+	archive.EXPECT().GetNonce(address1).Return(common.ToNonce(10), nil)
+
+	history, err := db.GetArchiveStateDB(12)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+
+	if want, got := uint64(10), history.GetNonce(address1); want != got {
+		t.Errorf("invalid nonce, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_GetArchiveStateDbProducesDistinctStateDbInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	archive := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	state.EXPECT().GetArchiveState(gomock.Any()).AnyTimes().Return(archive, nil)
+
+	history, err := db.GetArchiveStateDB(12)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbA := history.(*nonCommittableStateDB).stateDB
+
+	history, err = db.GetArchiveStateDB(14)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbB := history.(*nonCommittableStateDB).stateDB
+
+	if dbA == dbB {
+		t.Errorf("StateDB instance in archives are not distinct, got %v and %v", dbA, dbB)
+	}
+}
+
+func TestStateDB_GetArchiveStateDbRecyclesNonCommittableStateDbInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	archive := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	state.EXPECT().GetArchiveState(gomock.Any()).AnyTimes().Return(archive, nil)
+
+	history, err := db.GetArchiveStateDB(12)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbA := history.(*nonCommittableStateDB).stateDB
+	history.Release()
+
+	history, err = db.GetArchiveStateDB(14)
+	if err != nil {
+		t.Fatalf("Unexpected error during archive lookup: %v", err)
+	}
+	dbB := history.(*nonCommittableStateDB).stateDB
+	history.Release()
+
+	if dbA != dbB {
+		t.Errorf("StateDB instance in archives not reused, got %v and %v", dbA, dbB)
+	}
+}
+
+func TestStateDB_NonCommittableStateDbCanBeReleasedMultipleTimes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	state := CreateStateDBUsing(mock)
+
+	db := nonCommittableStateDB{state.(*stateDB)}
+	db.Release()
+	if db.stateDB != nil {
+		t.Errorf("state DB was not released")
+	}
+	db.Release()
+}
+
+func TestStateDB_GetArchiveStateDbFailsIfThereTheArchiveAccessFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	injectedError := fmt.Errorf("injected error")
+	mock.EXPECT().GetArchiveState(uint64(12)).Return(nil, injectedError)
+
+	if _, err := db.GetArchiveStateDB(12); !errors.Is(err, injectedError) {
+		t.Errorf("retrieving the archive state should have failed, wanted %v, got %v", injectedError, err)
+	}
+}
+
+func TestStateDB_GetArchiveBlockHeightReturnsHeightOfArchive(t *testing.T) {
+	tests := map[string]struct {
+		height uint64
+		empty  bool
+		err    error
+	}{
+		"empty":     {0, true, nil},
+		"non-empty": {12, false, nil},
+		"missing":   {0, false, NoArchiveError},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			state := NewMockState(ctrl)
+			db := CreateStateDBUsing(state)
+
+			state.EXPECT().GetArchiveBlockHeight().Return(test.height, test.empty, test.err)
+
+			height, empty, err := db.GetArchiveBlockHeight()
+			if want, got := test.height, height; want != got {
+				t.Errorf("unexpected height, wanted %v, got %v", want, got)
+			}
+			if want, got := test.empty, empty; want != got {
+				t.Errorf("unexpected empty flag, wanted %v, got %v", want, got)
+			}
+			if want, got := test.err, err; want != got {
+				t.Errorf("unexpected error, wanted %v, got %v", want, got)
+			}
+
+		})
+	}
+}
+
 func TestStateDB_ProvidesTransactionChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
@@ -3587,6 +3719,138 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 	load.SetCode(address1, code)
 
 	load.Close()
+}
+
+func TestStateDB_BulkLoadSetBalanceFailsForInvalidBalances(t *testing.T) {
+	tests := map[string]*big.Int{
+		"negative": big.NewInt(-1),
+		"toBig":    big.NewInt(0).Lsh(big.NewInt(1), 256),
+	}
+
+	for name, value := range tests {
+		t.Run(name, func(t *testing.T) {
+			bulk := bulkLoad{}
+			if len(bulk.errs) != 0 {
+				t.Fatalf("initial bulk load instance is not error free")
+			}
+			bulk.SetBalance(address1, value)
+			if len(bulk.errs) == 0 {
+				t.Errorf("balance issue not detected")
+			}
+		})
+	}
+}
+
+func TestStateDB_BulkLoadApplyDetectsInconsistencies(t *testing.T) {
+	bulk := bulkLoad{}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	bulk.SetNonce(address1, 12)
+	bulk.SetNonce(address1, 14)
+	if len(bulk.errs) != 0 {
+		t.Fatalf("unexpected error while writing data to bulk load instance: %v", errors.Join(bulk.errs...))
+	}
+	bulk.apply()
+	if len(bulk.errs) == 0 {
+		t.Errorf("inconsistent update issue not detected")
+	}
+}
+
+func TestStateDB_BulkLoadApplyForwardsUpdateIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{
+		Nonces: []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
+	}).Return(injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	bulk.SetNonce(address1, 14)
+	if len(bulk.errs) != 0 {
+		t.Fatalf("unexpected error while writing data to bulk load instance: %v", errors.Join(bulk.errs...))
+	}
+	bulk.apply()
+	got := errors.Join(bulk.errs...)
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
+func TestStateDB_BulkLoadCloseReportsApplyIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{
+		Nonces: []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
+	}).Return(injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	bulk.SetNonce(address1, 14)
+	if len(bulk.errs) != 0 {
+		t.Fatalf("unexpected error while writing data to bulk load instance: %v", errors.Join(bulk.errs...))
+	}
+	got := bulk.Close()
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
+func TestStateDB_BulkLoadCloseReportsFlushIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{}).Return(nil)
+	state.EXPECT().Flush().Return(injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	got := bulk.Close()
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
+}
+
+func TestStateDB_BulkLoadCloseReportsHashingIssues(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+
+	injectedError := fmt.Errorf("injected error")
+	state.EXPECT().Apply(uint64(12), common.Update{}).Return(nil)
+	state.EXPECT().Flush().Return(nil)
+	state.EXPECT().GetHash().Return(common.Hash{}, injectedError)
+
+	bulk := bulkLoad{
+		block: 12,
+		state: state,
+	}
+	if len(bulk.errs) != 0 {
+		t.Fatalf("initial bulk load instance is not error free")
+	}
+	got := bulk.Close()
+	if !errors.Is(got, injectedError) {
+		t.Errorf("missing expected error, wanted %v, got %v", injectedError, got)
+	}
 }
 
 func TestStateDB_ThereCanBeMultipleBulkLoadPhases(t *testing.T) {
