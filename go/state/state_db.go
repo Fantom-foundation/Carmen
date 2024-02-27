@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -88,6 +89,12 @@ type StateDB interface {
 
 	BeginEpoch()
 	EndEpoch(number uint64)
+
+	// Check checks the state of the DB and reports an error if issues have been
+	// encountered. Check should be called periodically to validate all interactions
+	// with a StateDB instance. If an error is reported, all operations since the
+	// last successful check need to be considered invalid.
+	Check() error
 
 	// Flushes committed state to disk.
 	Flush() error
@@ -202,6 +209,9 @@ type stateDB struct {
 
 	// True, if this state DB is allowed to apply changes to the underlying state, false otherwise.
 	canApplyChanges bool
+
+	// A list of errors encountered during DB interactions.
+	errors []error
 }
 
 type accountLifeCycleState int
@@ -233,7 +243,7 @@ const (
 	kUnknown     accountLifeCycleState = 0
 	kNonExisting accountLifeCycleState = 1
 	kExists      accountLifeCycleState = 2
-	kSuicided    accountLifeCycleState = 3
+	kSuicided    accountLifeCycleState = 3 // TODO: rename to self-destructed
 )
 
 func (s accountLifeCycleState) String() string {
@@ -445,7 +455,8 @@ func (s *stateDB) Exist(addr common.Address) bool {
 	}
 	exists, err := s.state.Exists(addr)
 	if err != nil {
-		panic(fmt.Errorf("failed to get account state for address %v: %v", addr, err))
+		s.errors = append(s.errors, fmt.Errorf("failed to get account state for %v: %w", addr, err))
+		return false
 	}
 	state := kNonExisting
 	if exists {
@@ -574,7 +585,8 @@ func (s *stateDB) GetBalance(addr common.Address) *big.Int {
 	// Since the value is not present, we need to fetch it from the store.
 	balance, err := s.state.GetBalance(addr)
 	if err != nil {
-		panic(fmt.Errorf("failed to load balance for address %v: %v", addr, err))
+		s.errors = append(s.errors, fmt.Errorf("failed to load balance for address %v: %w", addr, err))
+		return new(big.Int) // We need to return something that allows the VM to continue.
 	}
 	res := balance.ToBigInt()
 	s.balances[addr] = &balanceValue{
@@ -659,7 +671,8 @@ func (s *stateDB) GetNonce(addr common.Address) uint64 {
 	// Since the value is not present, we need to fetch it from the store.
 	nonce, err := s.state.GetNonce(addr)
 	if err != nil {
-		panic(fmt.Errorf("failed to load nonce for address %v: %v", addr, err))
+		s.errors = append(s.errors, fmt.Errorf("failed to load nonce for address %v: %w", addr, err))
+		return 0
 	}
 	res := nonce.ToUint64()
 	s.nonces[addr] = &nonceValue{
@@ -721,7 +734,8 @@ func (s *stateDB) loadStoredState(sid slotId, val *slotValue) common.Value {
 		var err error
 		stored.value, err = s.state.GetStorage(sid.addr, sid.key)
 		if err != nil {
-			panic(fmt.Errorf("failed to load storage location %v/%v: %v", sid.addr, sid.key, err))
+			s.errors = append(s.errors, fmt.Errorf("failed to load storage location %v/%v: %w", sid.addr, sid.key, err))
+			return common.Value{}
 		}
 		stored.reincarnation = reincarnation
 		s.storedDataCache.Set(sid, stored)
@@ -802,7 +816,8 @@ func (s *stateDB) GetCode(addr common.Address) []byte {
 	if !val.codeValid {
 		code, err := s.state.GetCode(addr)
 		if err != nil {
-			panic(fmt.Sprintf("Unable to obtain code for %v: %v", addr, err))
+			s.errors = append(s.errors, fmt.Errorf("unable to obtain code for %v: %w", addr, err))
+			return nil
 		}
 		val.code, val.codeValid = code, true
 		val.size, val.sizeValid = len(code), true
@@ -859,7 +874,8 @@ func (s *stateDB) GetCodeHash(addr common.Address) common.Hash {
 		// hash not loaded, code not dirty - needs to load the hash from the state
 		hash, err := s.state.GetCodeHash(addr)
 		if err != nil {
-			panic(fmt.Sprintf("Unable to obtain code hash for %v: %v", addr, err))
+			s.errors = append(s.errors, fmt.Errorf("unable to obtain code hash for %v: %w", addr, err))
+			return common.Hash{}
 		}
 		val.hash = &hash
 	}
@@ -875,7 +891,8 @@ func (s *stateDB) GetCodeSize(addr common.Address) int {
 	if !val.sizeValid {
 		size, err := s.state.GetCodeSize(addr)
 		if err != nil {
-			panic(fmt.Sprintf("Unable to obtain code size for %v: %v", addr, err))
+			s.errors = append(s.errors, fmt.Errorf("unable to obtain code size for %v: %w", addr, err))
+			return 0
 		}
 		val.size, val.sizeValid = size, true
 	}
@@ -891,7 +908,8 @@ func (s *stateDB) AddRefund(amount uint64) {
 }
 func (s *stateDB) SubRefund(amount uint64) {
 	if amount > s.refund {
-		panic(fmt.Sprintf("Refund counter below zero (to be removed: %d > refund: %d)", amount, s.refund))
+		s.errors = append(s.errors, fmt.Errorf("failed to lower refund, attempted to removed %d from current refund %d", amount, s.refund))
+		return
 	}
 	old := s.refund
 	s.refund -= amount
@@ -969,7 +987,8 @@ func (s *stateDB) Snapshot() int {
 
 func (s *stateDB) RevertToSnapshot(id int) {
 	if id < 0 || len(s.undo) < id {
-		panic(fmt.Sprintf("Invalid snapshot id: %d, allowed range 0 - %d", id, len(s.undo)))
+		s.errors = append(s.errors, fmt.Errorf("failed to revert to invalid snapshot id %d, allowed range 0 - %d", id, len(s.undo)))
+		return
 	}
 	for len(s.undo) > id {
 		s.undo[len(s.undo)-1]()
@@ -1115,7 +1134,8 @@ func (s *stateDB) EndBlock(block uint64) {
 		if value.original == kUnknown {
 			exists, err := s.state.Exists(addr)
 			if err != nil {
-				panic(fmt.Sprintf("failed to fetch account state from DB: %v", err))
+				s.errors = append(s.errors, fmt.Errorf("failed to fetch account state from DB for %v: %w", addr, err))
+				break
 			}
 			value.original = kNonExisting
 			if exists {
@@ -1129,7 +1149,7 @@ func (s *stateDB) EndBlock(block uint64) {
 			} else if value.current == kNonExisting {
 				// Accounts have already been registered for deletion in the loop above.
 			} else {
-				panic(fmt.Sprintf("Unknown account state: %v", value.current))
+				s.errors = append(s.errors, fmt.Errorf("unknown account state: %v", value.current))
 			}
 		}
 	}
@@ -1142,9 +1162,10 @@ func (s *stateDB) EndBlock(block uint64) {
 		if value.original == nil || value.original.Cmp(&value.current) != 0 {
 			newBalance, err := common.ToBalance(&value.current)
 			if err != nil {
-				panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
+				s.errors = append(s.errors, fmt.Errorf("unable to convert big.Int balance to common.Balance: %w", err))
+			} else {
+				update.AppendBalanceUpdate(addr, newBalance)
 			}
-			update.AppendBalanceUpdate(addr, newBalance)
 		}
 	}
 
@@ -1179,17 +1200,23 @@ func (s *stateDB) EndBlock(block uint64) {
 		}
 	}
 
-	// Normalize the update to fix the ordering of operations. Note, the store's state hash depends
-	// on the insertion order. Thus, the insertion must be performed in a deterministic order. Maps
-	// in Go have an undefined order and are deliberately randomized. Thus, updates need to be
-	// ordered/normalized before being written to the underlying state.
+	// Normalize the update to fix the ordering of operations. Note that for some DB implementations,
+	// the state hash depends on the insertion order. Thus, the insertion must be performed in a
+	// deterministic order. Maps in Go have an undefined order and are deliberately randomized. Thus,
+	// updates need to be ordered/normalized before being written to the underlying state.
 	if err := update.Normalize(); err != nil {
-		panic(fmt.Sprintf("failed to normalize update: %v", err))
+		s.errors = append(s.errors, fmt.Errorf("failed to normalize update for block %d: %v", block, err))
+	}
+
+	// Skip applying changes if there have been any issues.
+	if err := s.Check(); err != nil {
+		return
 	}
 
 	// Send the update to the state.
 	if err := s.state.Apply(block, update); err != nil {
-		panic(fmt.Sprintf("Failed to apply update: %v", err))
+		s.errors = append(s.errors, fmt.Errorf("failed to apply update for block %d: %w", block, err))
+		return
 	}
 
 	// Reset internal state for next block
@@ -1201,24 +1228,34 @@ func (s *stateDB) BeginEpoch() {
 }
 
 func (s *stateDB) EndEpoch(uint64) {
-	// Simulate the creation of a state snapshot by computing the hash.
-	s.GetHash()
+	// ignored
 }
 
 func (s *stateDB) GetHash() common.Hash {
 	hash, err := s.state.GetHash()
 	if err != nil {
-		panic(fmt.Sprintf("Failed to compute hash: %v", err))
+		s.errors = append(s.errors, fmt.Errorf("failed to compute hash: %w", err))
+		return common.Hash{}
 	}
 	return hash
 }
 
+func (s *stateDB) Check() error {
+	return errors.Join(s.errors...)
+}
+
 func (s *stateDB) Flush() error {
-	return s.state.Flush()
+	return errors.Join(
+		s.Check(),
+		s.state.Flush(),
+	)
 }
 
 func (s *stateDB) Close() error {
-	return s.state.Close()
+	return errors.Join(
+		s.Flush(),
+		s.state.Close(),
+	)
 }
 
 func (s *stateDB) StartBulkLoad(block uint64) BulkLoad {
@@ -1314,7 +1351,8 @@ func (l *bulkLoad) CreateAccount(addr common.Address) {
 func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 	newBalance, err := common.ToBalance(value)
 	if err != nil {
-		panic(fmt.Sprintf("Unable to convert big.Int balance to common.Balance: %v", err))
+		l.errs = append(l.errs, fmt.Errorf("unable to convert big.Int balance to common.Balance: %w", err))
+		return
 	}
 	l.update.AppendBalanceUpdate(addr, newBalance)
 }
@@ -1348,7 +1386,7 @@ func (l *bulkLoad) Close() error {
 	l.apply()
 	// Return if errors occurred
 	if l.errs != nil {
-		return l.errs[0]
+		return errors.Join(l.errs...)
 	}
 
 	// Flush out all inserted data.

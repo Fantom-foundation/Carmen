@@ -2,6 +2,8 @@ package state
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -34,12 +36,50 @@ var (
 	nonce3 = common.Nonce{0x03}
 )
 
-func TestCarmenStateImplementsStateDbInterface(t *testing.T) {
+func TestAccountLifeCycleState_CanBePrinted(t *testing.T) {
+	tests := []struct {
+		state accountLifeCycleState
+		print string
+	}{
+		{kUnknown, "Unknown"},
+		{kNonExisting, "NonExisting"},
+		{kExists, "Exists"},
+		{kSuicided, "Suicided"},
+		{accountLifeCycleState(23), "?"},
+	}
+
+	for _, test := range tests {
+		if want, got := test.print, test.state.String(); want != got {
+			t.Errorf("unexpected print of state %v, wanted %v", got, want)
+		}
+	}
+}
+
+func TestAccountClearingState_CanBePrinted(t *testing.T) {
+	tests := []struct {
+		state accountClearingState
+		print string
+	}{
+		{noClearing, "noClearing"},
+		{pendingClearing, "pendingClearing"},
+		{cleared, "cleared"},
+		{clearedAndTainted, "clearedAndTainted"},
+		{accountClearingState(23), "?"},
+	}
+
+	for _, test := range tests {
+		if want, got := test.print, test.state.String(); want != got {
+			t.Errorf("unexpected print of state %v, wanted %v", got, want)
+		}
+	}
+}
+
+func TestStateDB_ImplementsStateDbInterface(t *testing.T) {
 	var db stateDB
 	var _ StateDB = &db
 }
 
-func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
+func TestStateDB_AccountsCanBeCreatedAndDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -75,7 +115,7 @@ func TestCarmenStateAccountsCanBeCreatedAndDeleted(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
+func TestStateDB_CreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -102,7 +142,7 @@ func TestCarmenStateCreateAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCreateAccountSetsStorageToZero(t *testing.T) {
+func TestStateDB_CreateAccountSetsStorageToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -117,7 +157,7 @@ func TestCarmenStateCreateAccountSetsStorageToZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRecreatingAnAccountSetsStorageToZero(t *testing.T) {
+func TestStateDB_RecreatingAnAccountSetsStorageToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -147,7 +187,7 @@ func TestCarmenStateRecreatingAnAccountSetsStorageToZero(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
+func TestStateDB_RecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -174,7 +214,7 @@ func TestCarmenStateRecreatingAccountSetsNonceCodeAndBalanceToZero(t *testing.T)
 	}
 }
 
-func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
+func TestStateDB_RecreatingAccountResetsStorage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -230,7 +270,7 @@ func TestCarmenStateRecreatingAccountResetsStorage(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.T) {
+func TestStateDB_RecreatingAccountResetsStorageButRetainsNewState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -290,7 +330,7 @@ func TestCarmenStateRecreatingAccountResetsStorageButRetainsNewState(t *testing.
 	db.EndBlock(123)
 }
 
-func TestCarmenStateDestroyingRecreatedAccountIsNotResettingClearingState(t *testing.T) {
+func TestStateDB_DestroyingRecreatedAccountIsNotResettingClearingState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -318,7 +358,7 @@ func TestCarmenStateDestroyingRecreatedAccountIsNotResettingClearingState(t *tes
 	db.GetState(address1, key1) // should not reach the store (no expectation stated above)
 }
 
-func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransaction(t *testing.T) {
+func TestStateDB_StorageOfDestroyedAccountIsStillAccessibleTillEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -370,7 +410,7 @@ func TestCarmenStateStorageOfDestroyedAccountIsStillAccessibleTillEndOfTransacti
 	db.EndTransaction()
 }
 
-func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
+func TestStateDB_StoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -433,7 +473,7 @@ func TestCarmenStateStoreDataCacheIsResetAfterSuicide(t *testing.T) {
 	db.EndBlock(3)
 }
 
-func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
+func TestStateDB_RollingBackSuicideRestoresValues(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -473,7 +513,7 @@ func TestCarmenStateRollingBackSuicideRestoresValues(t *testing.T) {
 	db.EndBlock(1) // < no change is send to the DB
 }
 
-func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDeleteAndCreateAccountOnStateDb(t *testing.T) {
+func TestStateDB_DestroyingAndRecreatingAnAccountInTheSameTransactionCallsDeleteAndCreateAccountOnStateDb(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -506,7 +546,7 @@ func TestCarmenStateDestroyingAndRecreatingAnAccountInTheSameTransactionCallsDel
 	db.EndBlock(1)
 }
 
-func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *testing.T) {
+func TestStateDB_DoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -543,7 +583,7 @@ func TestCarmenStateDoubleDestroyedAccountThatIsOnceRolledBackIsStillCleared(t *
 	db.EndBlock(1)
 }
 
-func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBalance(t *testing.T) {
+func TestStateDB_RecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -577,7 +617,7 @@ func TestCarmenStateRecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesB
 	}
 }
 
-func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
+func TestStateDB_CreateAccountCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -598,7 +638,7 @@ func TestCarmenStateCreateAccountCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) {
+func TestStateDB_SuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -626,7 +666,7 @@ func TestCarmenStateSuicideIndicatesExistingAccountAsBeingDeleted(t *testing.T) 
 	}
 }
 
-func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
+func TestStateDB_SetCodeShouldNotStopSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -653,7 +693,7 @@ func TestCarmenStateSetCodeShouldNotStopSuicide(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRepeatedSuicide(t *testing.T) {
+func TestStateDB_RepeatedSuicide(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -702,7 +742,7 @@ func TestCarmenStateRepeatedSuicide(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateSuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T) {
+func TestStateDB_SuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -721,7 +761,7 @@ func TestCarmenStateSuicideIndicatesUnknownAccountAsNotBeingDeleted(t *testing.T
 	}
 }
 
-func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T) {
+func TestStateDB_SuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -740,7 +780,7 @@ func TestCarmenStateSuicideIndicatesDeletedAccountAsNotBeingDeleted(t *testing.T
 	}
 }
 
-func TestCarmenStateSuicideRemovesBalanceFromAccount(t *testing.T) {
+func TestStateDB_SuicideRemovesBalanceFromAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -766,7 +806,7 @@ func TestCarmenStateSuicideRemovesBalanceFromAccount(t *testing.T) {
 	}
 }
 
-func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
+func TestStateDB_SuicideCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -807,7 +847,7 @@ func TestCarmenStateSuicideCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateSuicideIsExecutedAtEndOfTransaction(t *testing.T) {
+func TestStateDB_SuicideIsExecutedAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -830,7 +870,7 @@ func TestCarmenStateSuicideIsExecutedAtEndOfTransaction(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
+func TestStateDB_SuicideCanBeCanceledThroughRollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -853,7 +893,7 @@ func TestCarmenStateSuicideCanBeCanceledThroughRollback(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
+func TestStateDB_CreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -873,7 +913,7 @@ func TestCarmenStateCreatedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
+func TestStateDB_CreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -895,7 +935,7 @@ func TestCarmenStateCreatedAccountsAreForgottenAtEndOfBlock(t *testing.T) {
 	db.EndBlock(2)
 }
 
-func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *testing.T) {
+func TestStateDB_CreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -911,7 +951,7 @@ func TestCarmenStateCreatedAccountsAreDiscardedOnEndOfAbortedTransaction(t *test
 	db.EndBlock(2)
 }
 
-func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
+func TestStateDB_DeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -930,7 +970,7 @@ func TestCarmenStateDeletedAccountsAreStoredAtEndOfBlock(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T) {
+func TestStateDB_DeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -965,7 +1005,7 @@ func TestCarmenStateDeletedAccountsRetainCodeUntilEndOfTransaction(t *testing.T)
 	db.EndBlock(1)
 }
 
-func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
+func TestStateDB_DeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -979,7 +1019,7 @@ func TestCarmenStateDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) 
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *testing.T) {
+func TestStateDB_CreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -994,7 +1034,7 @@ func TestCarmenStateCreatedAndDeletedAccountsAreDeletedAtEndOfTransaction(t *tes
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
+func TestStateDB_CreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1009,7 +1049,7 @@ func TestCarmenStateCreatedAndDeletedAccountsAreIgnoredAtAbortedTransaction(t *t
 	db.EndBlock(1)
 }
 
-func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
+func TestStateDB_EmptyAccountsAreRecognized(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1024,7 +1064,7 @@ func TestCarmenStateEmptyAccountsAreRecognized(t *testing.T) {
 	}
 }
 
-func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
+func TestStateDB_SettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1044,7 +1084,7 @@ func TestCarmenStateSettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	}
 }
 
-func TestCarmenStateSettingTheBalanceCreatesAccount(t *testing.T) {
+func TestStateDB_SettingTheBalanceCreatesAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1067,7 +1107,7 @@ func TestCarmenStateSettingTheBalanceCreatesAccount(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateAddingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testing.T) {
+func TestStateDB_AddingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1086,7 +1126,7 @@ func TestCarmenStateAddingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *te
 	db.EndBlock(1)
 }
 
-func TestCarmenStateSubtractingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testing.T) {
+func TestStateDB_SubtractingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1106,7 +1146,7 @@ func TestCarmenStateSubtractingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(
 	db.EndBlock(1)
 }
 
-func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
+func TestStateDB_SettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1132,7 +1172,7 @@ func TestCarmenStateSettingTheNonceMakesAccountNonEmpty(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCreatesAccountOnNonceSetting(t *testing.T) {
+func TestStateDB_CreatesAccountOnNonceSetting(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1153,7 +1193,7 @@ func TestCarmenStateCreatesAccountOnNonceSetting(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
+func TestStateDB_GetBalanceReturnsFreshCopy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1185,7 +1225,7 @@ func TestCarmenStateGetBalanceReturnsFreshCopy(t *testing.T) {
 	}
 }
 
-func TestCarmenStateBalancesAreReadFromState(t *testing.T) {
+func TestStateDB_BalancesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1200,7 +1240,7 @@ func TestCarmenStateBalancesAreReadFromState(t *testing.T) {
 	}
 }
 
-func TestCarmenStateBalancesAreOnlyReadOnce(t *testing.T) {
+func TestStateDB_BalancesAreOnlyReadOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1217,7 +1257,7 @@ func TestCarmenStateBalancesAreOnlyReadOnce(t *testing.T) {
 	db.GetBalance(address1)
 }
 
-func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
+func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1269,7 +1309,7 @@ func TestCarmenStateBalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	}
 }
 
-func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
+func TestStateDB_BalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1294,7 +1334,7 @@ func TestCarmenStateBalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	db.EndBlock(2)
 }
 
-func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
+func TestStateDB_BalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1318,7 +1358,7 @@ func TestCarmenStateBalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
+func TestStateDB_BalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1337,7 +1377,7 @@ func TestCarmenStateBalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	db.EndBlock(2)
 }
 
-func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
+func TestStateDB_BalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1354,7 +1394,7 @@ func TestCarmenStateBalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.
 	db.EndBlock(1)
 }
 
-func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
+func TestStateDB_NoncesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1368,7 +1408,7 @@ func TestCarmenStateNoncesAreReadFromState(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNoncesAreOnlyReadOnce(t *testing.T) {
+func TestStateDB_NoncesAreOnlyReadOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1384,7 +1424,7 @@ func TestCarmenStateNoncesAreOnlyReadOnce(t *testing.T) {
 	db.GetNonce(address1)
 }
 
-func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
+func TestStateDB_NoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1404,7 +1444,7 @@ func TestCarmenStateNoncesCanBeWrittenAndReadWithoutStateAccess(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNoncesOfANonExistingAccountIsZero(t *testing.T) {
+func TestStateDB_NoncesOfANonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1418,7 +1458,7 @@ func TestCarmenStateNoncesOfANonExistingAccountIsZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNonceOfADeletedAccountIsZero(t *testing.T) {
+func TestStateDB_NonceOfADeletedAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1465,7 +1505,7 @@ func TestCarmenStateNonceOfADeletedAccountIsZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing.T) {
+func TestStateDB_NonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1502,7 +1542,7 @@ func TestCarmenStateNonceOfADeletedAccountGetsResetAtEndOfTransaction(t *testing
 	}
 }
 
-func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
+func TestStateDB_NoncesCanBeSnapshottedAndReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1551,7 +1591,7 @@ func TestCarmenStateNoncesCanBeSnapshottedAndReverted(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
+func TestStateDB_NoncesOnlySetCanBeReverted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1575,7 +1615,7 @@ func TestCarmenStateNoncesOnlySetCanBeReverted(t *testing.T) {
 	}
 }
 
-func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
+func TestStateDB_NoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1597,7 +1637,7 @@ func TestCarmenStateNoncesIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	db.EndBlock(2)
 }
 
-func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
+func TestStateDB_NoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1617,7 +1657,7 @@ func TestCarmenStateNoncesOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
+func TestStateDB_NoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1634,7 +1674,7 @@ func TestCarmenStateNoncesUnchangedValuesAreNotWritten(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
+func TestStateDB_NoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1648,7 +1688,7 @@ func TestCarmenStateNoncesIsNotWrittenToStateIfTransactionIsAborted(t *testing.T
 	db.EndBlock(1)
 }
 
-func TestCarmenStateValuesAreReadFromState(t *testing.T) {
+func TestStateDB_ValuesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1661,7 +1701,7 @@ func TestCarmenStateValuesAreReadFromState(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCommittedValuesAreReadFromState(t *testing.T) {
+func TestStateDB_CommittedValuesAreReadFromState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1674,7 +1714,7 @@ func TestCarmenStateCommittedValuesAreReadFromState(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCommittedValuesAreOnlyFetchedOnce(t *testing.T) {
+func TestStateDB_CommittedValuesAreOnlyFetchedOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1686,7 +1726,7 @@ func TestCarmenStateCommittedValuesAreOnlyFetchedOnce(t *testing.T) {
 	db.GetCommittedState(address1, key1)
 }
 
-func TestCarmenStateCommittedValuesCanBeFetchedAfterValueBeingWritten(t *testing.T) {
+func TestStateDB_CommittedValuesCanBeFetchedAfterValueBeingWritten(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1703,7 +1743,7 @@ func TestCarmenStateCommittedValuesCanBeFetchedAfterValueBeingWritten(t *testing
 	}
 }
 
-func TestCarmenStateSettingValuesCreatesAccountsImplicitly(t *testing.T) {
+func TestStateDB_SettingValuesCreatesAccountsImplicitly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1716,7 +1756,7 @@ func TestCarmenStateSettingValuesCreatesAccountsImplicitly(t *testing.T) {
 	}
 }
 
-func TestCarmenStateImplicitAccountCreatedBySetStateIsDroppedSinceEmptyIfNothingElseIsSet(t *testing.T) {
+func TestStateDB_ImplicitAccountCreatedBySetStateIsDroppedSinceEmptyIfNothingElseIsSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1732,7 +1772,7 @@ func TestCarmenStateImplicitAccountCreatedBySetStateIsDroppedSinceEmptyIfNothing
 	db.EndBlock(1)
 }
 
-func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
+func TestStateDB_EmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
 	// This issue was discovered using Aida Stochastic fuzzing. State information
 	// was not properly cleaned at the end of consecutive transactions writing
 	// storage values into empty accounts.
@@ -1766,7 +1806,7 @@ func TestCarmenEmptyAccountsDeletedAtEndOfTransactionsAreCleaned(t *testing.T) {
 	db.EndTransaction()
 }
 
-func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
+func TestStateDB_FetchedCommittedValueIsNotResetInRollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1784,7 +1824,7 @@ func TestCarmenStateFetchedCommittedValueIsNotResetInRollback(t *testing.T) {
 	}
 }
 
-func TestCarmenStateWrittenValuesCanBeRead(t *testing.T) {
+func TestStateDB_WrittenValuesCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1797,7 +1837,7 @@ func TestCarmenStateWrittenValuesCanBeRead(t *testing.T) {
 	}
 }
 
-func TestCarmenStateWrittenValuesCanBeUpdated(t *testing.T) {
+func TestStateDB_WrittenValuesCanBeUpdated(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1815,7 +1855,7 @@ func TestCarmenStateWrittenValuesCanBeUpdated(t *testing.T) {
 	}
 }
 
-func TestCarmenStateWrittenValuesCanBeRolledBack(t *testing.T) {
+func TestStateDB_WrittenValuesCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1861,7 +1901,7 @@ func TestCarmenStateWrittenValuesCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateUpdatedValuesAreCommittedToStateAtEndBlock(t *testing.T) {
+func TestStateDB_UpdatedValuesAreCommittedToStateAtEndBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1880,7 +1920,7 @@ func TestCarmenStateUpdatedValuesAreCommittedToStateAtEndBlock(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateRollbackedValuesAreNotCommitted(t *testing.T) {
+func TestStateDB_RollbackedValuesAreNotCommitted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1898,7 +1938,7 @@ func TestCarmenStateRollbackedValuesAreNotCommitted(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateNothingIsCommittedOnTransactionAbort(t *testing.T) {
+func TestStateDB_NothingIsCommittedOnTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1913,7 +1953,7 @@ func TestCarmenStateNothingIsCommittedOnTransactionAbort(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
+func TestStateDB_OnlyFinalValueIsStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1931,7 +1971,7 @@ func TestCarmenStateOnlyFinalValueIsStored(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
+func TestStateDB_UndoneValueUpdateIsNotStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1949,7 +1989,7 @@ func TestCarmenStateUndoneValueUpdateIsNotStored(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
+func TestStateDB_ValueIsCommittedAtEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -1986,7 +2026,7 @@ func TestCarmenStateValueIsCommittedAtEndOfTransaction(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
+func TestStateDB_CanBeUsedForMultipleBlocks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2013,7 +2053,7 @@ func TestCarmenStateCanBeUsedForMultipleBlocks(t *testing.T) {
 	db.EndBlock(3)
 }
 
-func TestCarmenStateCodesCanBeRead(t *testing.T) {
+func TestStateDB_CodesCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2026,7 +2066,7 @@ func TestCarmenStateCodesCanBeRead(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodesCanBeSet(t *testing.T) {
+func TestStateDB_CodesCanBeSet(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2041,7 +2081,7 @@ func TestCarmenStateCodesCanBeSet(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
+func TestStateDB_CodeUpdatesCoveredByRollbacks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2071,7 +2111,7 @@ func TestCarmenStateCodeUpdatesCoveredByRollbacks(t *testing.T) {
 	}
 }
 
-func TestCarmenStateReadCodesAreNotStored(t *testing.T) {
+func TestStateDB_ReadCodesAreNotStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2085,7 +2125,7 @@ func TestCarmenStateReadCodesAreNotStored(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
+func TestStateDB_UpdatedCodesAreStored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2103,7 +2143,7 @@ func TestCarmenStateUpdatedCodesAreStored(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
+func TestStateDB_UpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2125,7 +2165,7 @@ func TestCarmenStateUpdatedCodesAreStoredOnlyOnce(t *testing.T) {
 	db.EndBlock(2)
 }
 
-func TestCarmenStateSettingCodesCreatesAccountsImplicitly(t *testing.T) {
+func TestStateDB_SettingCodesCreatesAccountsImplicitly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2144,7 +2184,7 @@ func TestCarmenStateSettingCodesCreatesAccountsImplicitly(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
+func TestStateDB_CodeSizeCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2157,7 +2197,7 @@ func TestCarmenStateCodeSizeCanBeRead(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
+func TestStateDB_CodeSizeCanBeReadAfterModification(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2173,7 +2213,7 @@ func TestCarmenStateCodeSizeCanBeReadAfterModification(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeSizeOfANonExistingAccountIsZero(t *testing.T) {
+func TestStateDB_CodeSizeOfANonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2186,7 +2226,7 @@ func TestCarmenStateCodeSizeOfANonExistingAccountIsZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *testing.T) {
+func TestStateDB_CodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2212,7 +2252,7 @@ func TestCarmenStateCodeSizeOfADeletedAccountIsZeroAfterEndOfTransaction(t *test
 	}
 }
 
-func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
+func TestStateDB_CodeHashOfNonExistingAccountIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2226,7 +2266,7 @@ func TestCarmenStateCodeHashOfNonExistingAccountIsZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeHashOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testing.T) {
+func TestStateDB_CodeHashOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2241,7 +2281,7 @@ func TestCarmenStateCodeHashOfAnExistingAccountIsTheHashOfTheEmptyCode(t *testin
 	}
 }
 
-func TestCarmenStateCodeHashOfNewlyCreatedAccountIsTheHashOfTheEmptyCode(t *testing.T) {
+func TestStateDB_CodeHashOfNewlyCreatedAccountIsTheHashOfTheEmptyCode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2256,7 +2296,7 @@ func TestCarmenStateCodeHashOfNewlyCreatedAccountIsTheHashOfTheEmptyCode(t *test
 	}
 }
 
-func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
+func TestStateDB_CodeHashCanBeRead(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2270,7 +2310,7 @@ func TestCarmenStateCodeHashCanBeRead(t *testing.T) {
 	}
 }
 
-func TestCarmenStateSetCodeSizeCanBeRolledBack(t *testing.T) {
+func TestStateDB_SetCodeSizeCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2293,7 +2333,7 @@ func TestCarmenStateSetCodeSizeCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
+func TestStateDB_CodeHashCanBeReadAfterModification(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2309,7 +2349,7 @@ func TestCarmenStateCodeHashCanBeReadAfterModification(t *testing.T) {
 	}
 }
 
-func TestCarmenStateInitialRefundIsZero(t *testing.T) {
+func TestStateDB_InitialRefundIsZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2319,7 +2359,7 @@ func TestCarmenStateInitialRefundIsZero(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRefundCanBeModified(t *testing.T) {
+func TestStateDB_RefundCanBeModified(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2345,7 +2385,7 @@ func TestCarmenStateRefundCanBeModified(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAddedRefundCanBeRolledBack(t *testing.T) {
+func TestStateDB_AddedRefundCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2387,7 +2427,7 @@ func TestCarmenStateAddedRefundCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRemovedRefundCanBeRolledBack(t *testing.T) {
+func TestStateDB_RemovedRefundCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2429,7 +2469,7 @@ func TestCarmenStateRemovedRefundCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRefundIsResetAtTransactionEnd(t *testing.T) {
+func TestStateDB_RefundIsResetAtTransactionEnd(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2445,7 +2485,7 @@ func TestCarmenStateRefundIsResetAtTransactionEnd(t *testing.T) {
 	}
 }
 
-func TestCarmenStateRefundIsResetAtTransactionAbort(t *testing.T) {
+func TestStateDB_RefundIsResetAtTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2461,7 +2501,7 @@ func TestCarmenStateRefundIsResetAtTransactionAbort(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedAddressesCanBeAdded(t *testing.T) {
+func TestStateDB_AccessedAddressesCanBeAdded(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2490,7 +2530,7 @@ func TestCarmenStateAccessedAddressesCanBeAdded(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedAddressesCanBeRolledBack(t *testing.T) {
+func TestStateDB_AccessedAddressesCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2526,7 +2566,7 @@ func TestCarmenStateAccessedAddressesCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedAddressesAreResetAtTransactionEnd(t *testing.T) {
+func TestStateDB_AccessedAddressesAreResetAtTransactionEnd(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2538,7 +2578,7 @@ func TestCarmenStateAccessedAddressesAreResetAtTransactionEnd(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedAddressesAreResetAtTransactionAbort(t *testing.T) {
+func TestStateDB_AccessedAddressesAreResetAtTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2550,7 +2590,7 @@ func TestCarmenStateAccessedAddressesAreResetAtTransactionAbort(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedSlotsCanBeAdded(t *testing.T) {
+func TestStateDB_AccessedSlotsCanBeAdded(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2599,7 +2639,7 @@ func TestCarmenStateAccessedSlotsCanBeAdded(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAddingSlotToAccessListAddsAddress(t *testing.T) {
+func TestStateDB_AddingSlotToAccessListAddsAddress(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2613,7 +2653,7 @@ func TestCarmenStateAddingSlotToAccessListAddsAddress(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedSlotsCanBeRolledBack(t *testing.T) {
+func TestStateDB_AccessedSlotsCanBeRolledBack(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2667,7 +2707,7 @@ func TestCarmenStateAccessedSlotsCanBeRolledBack(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedSlotsAreResetAtTransactionEnd(t *testing.T) {
+func TestStateDB_AccessedSlotsAreResetAtTransactionEnd(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2679,7 +2719,7 @@ func TestCarmenStateAccessedSlotsAreResetAtTransactionEnd(t *testing.T) {
 	}
 }
 
-func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
+func TestStateDB_AccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2694,7 +2734,7 @@ func TestCarmenStateAccessedAddressedAreResetAtTransactionAbort(t *testing.T) {
 // EIP-161: At the end of the transaction, any account touched by the execution of that transaction
 // which is now empty SHALL instead become non-existent (i.e. deleted).
 
-func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
+func TestStateDB_DeletesEmptyAccountsEip161(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2730,7 +2770,7 @@ func TestCarmenDeletesEmptyAccountsEip161(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
+func TestStateDB_NeverCreatesEmptyAccountsEip161(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2758,7 +2798,7 @@ func TestCarmenNeverCreatesEmptyAccountsEip161(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
+func TestStateDB_SuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2821,7 +2861,7 @@ func TestCarmenStateSuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	db.EndBlock(1)
 }
 
-func TestCarmenStateCopy(t *testing.T) {
+func TestStateDB_Copy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateNonCommittableStateDBUsing(mock)
@@ -2852,7 +2892,7 @@ func TestCarmenStateCopy(t *testing.T) {
 	}
 }
 
-func TestCarmenStateLogsCanBeAddedAndRetrieved(t *testing.T) {
+func TestStateDB_LogsCanBeAddedAndRetrieved(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2885,7 +2925,7 @@ func TestCarmenStateLogsCanBeAddedAndRetrieved(t *testing.T) {
 	}
 }
 
-func TestCarmenStateLogsAreResettedAtEndOfBlock(t *testing.T) {
+func TestStateDB_LogsAreResetAtEndOfBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2913,7 +2953,7 @@ func TestCarmenStateLogsAreResettedAtEndOfBlock(t *testing.T) {
 	}
 }
 
-func TestCarmenStateLogsAreCoveredByRollbacks(t *testing.T) {
+func TestStateDB_LogsAreCoveredByRollbacks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2953,7 +2993,200 @@ func TestCarmenStateLogsAreCoveredByRollbacks(t *testing.T) {
 	}
 }
 
-func TestCarmenStateProvidesTransactionChanges(t *testing.T) {
+func TestStateDB_CollectsErrorsAndReportsThemDuringACheck(t *testing.T) {
+	injectedError := fmt.Errorf("injected error")
+	tests := map[string]struct {
+		setExpectations func(state *MockState)
+		applyOperation  func(db StateDB)
+	}{
+		"exits": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().Exists(gomock.Any()).Return(false, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.Exist(address1)
+			},
+		},
+		"balance": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().GetBalance(gomock.Any()).Return(common.Balance{}, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetBalance(address1)
+			},
+		},
+		"nonce": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().GetNonce(gomock.Any()).Return(common.Nonce{}, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetNonce(address1)
+			},
+		},
+		"code": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().GetCode(gomock.Any()).Return([]byte{}, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetCode(address1)
+			},
+		},
+		"code-hash": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().Exists(address1).Return(true, nil)
+				state.EXPECT().GetCodeHash(gomock.Any()).Return(common.Hash{}, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetCodeHash(address1)
+			},
+		},
+		"code-size": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().GetCodeSize(gomock.Any()).Return(0, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetCodeSize(address1)
+			},
+		},
+		"storage": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().GetStorage(gomock.Any(), gomock.Any()).Return(common.Value{}, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetState(address1, key1)
+			},
+		},
+		"apply": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().Exists(address1).Return(true, nil)
+				state.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.SetNonce(address1, 12)
+				db.EndBlock(2)
+			},
+		},
+		"get-hash": {
+			setExpectations: func(state *MockState) {
+				state.EXPECT().GetHash().Return(common.Hash{}, injectedError)
+			},
+			applyOperation: func(db StateDB) {
+				db.GetHash()
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			state := NewMockState(ctrl)
+			db := CreateStateDBUsing(state)
+
+			if err := db.Check(); err != nil {
+				t.Errorf("unexpected error at begin of test: %v", err)
+			}
+
+			test.setExpectations(state)
+			test.applyOperation(db)
+			if err := db.Check(); !errors.Is(err, injectedError) {
+				t.Errorf("Failed to capture DB error, wanted %v, got %v", injectedError, err)
+			}
+		})
+	}
+}
+
+func TestStateDB_CanCollectMoreThanOneError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	issue1 := fmt.Errorf("injected issue 1")
+	issue2 := fmt.Errorf("injected issue 2")
+	issue3 := fmt.Errorf("injected issue 3")
+	state.EXPECT().GetNonce(address1).Return(common.Nonce{}, issue1)
+	state.EXPECT().GetNonce(address2).Return(common.Nonce{}, issue2)
+	state.EXPECT().GetNonce(address3).Return(common.Nonce{}, issue3)
+
+	db.GetNonce(address1)
+	db.GetNonce(address2)
+	db.GetNonce(address3)
+
+	err := db.Check()
+	if !errors.Is(err, issue1) {
+		t.Errorf("failed to record issue %v", issue1)
+	}
+	if !errors.Is(err, issue2) {
+		t.Errorf("failed to record issue %v", issue2)
+	}
+	if !errors.Is(err, issue3) {
+		t.Errorf("failed to record issue %v", issue3)
+	}
+}
+
+func TestStateDB_NoApplyWhenErrorsHaveBeenEncountered(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	issue := fmt.Errorf("injected issue")
+	state.EXPECT().GetNonce(address1).Return(common.Nonce{1}, nil)
+	state.EXPECT().GetNonce(address2).Return(common.Nonce{}, issue)
+	state.EXPECT().Apply(uint64(1), gomock.Any()).Return(nil)
+
+	db.GetNonce(address1)
+	db.EndBlock(1)
+
+	db.GetNonce(address2)
+	db.EndBlock(2)
+}
+
+func TestStateDB_ErrorsAreReportedDuringFlush(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	issueA := fmt.Errorf("injected issue A")
+	issueB := fmt.Errorf("injected issue B")
+	state.EXPECT().GetNonce(address1).Return(common.Nonce{}, issueA)
+	state.EXPECT().Flush().Return(issueB)
+
+	db.GetNonce(address1)
+
+	err := db.Flush()
+	if !errors.Is(err, issueA) {
+		t.Errorf("collected issue not reported by Flush()")
+	}
+	if !errors.Is(err, issueB) {
+		t.Errorf("flush issue not reported by Flush()")
+	}
+}
+
+func TestStateDB_ErrorsAreReportedDuringClose(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	db := CreateStateDBUsing(state)
+
+	issueA := fmt.Errorf("injected issue A")
+	issueB := fmt.Errorf("injected issue B")
+	issueC := fmt.Errorf("injected issue C")
+	state.EXPECT().GetNonce(address1).Return(common.Nonce{}, issueA)
+	state.EXPECT().Flush().Return(issueB)
+	state.EXPECT().Close().Return(issueC)
+
+	db.GetNonce(address1)
+
+	err := db.Close()
+	if !errors.Is(err, issueA) {
+		t.Errorf("collected issue not reported by Close()")
+	}
+	if !errors.Is(err, issueB) {
+		t.Errorf("flush issue not reported by Close()")
+	}
+	if !errors.Is(err, issueC) {
+		t.Errorf("close issue not reported by Close()")
+	}
+}
+func TestStateDB_ProvidesTransactionChanges(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -2979,7 +3212,7 @@ func TestCarmenStateProvidesTransactionChanges(t *testing.T) {
 	}
 }
 
-func TestCarmenStateBulkLoadReachesState(t *testing.T) {
+func TestStateDB_BulkLoadReachesState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
@@ -3007,7 +3240,7 @@ func TestCarmenStateBulkLoadReachesState(t *testing.T) {
 	load.Close()
 }
 
-func TestCarmenThereCanBeMultipleBulkLoadPhases(t *testing.T) {
+func TestStateDB_ThereCanBeMultipleBulkLoadPhases(t *testing.T) {
 	const N = 10
 
 	ctrl := gomock.NewController(t)
@@ -3028,7 +3261,7 @@ func TestCarmenThereCanBeMultipleBulkLoadPhases(t *testing.T) {
 	}
 }
 
-func TestCarmenStateGetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
+func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
