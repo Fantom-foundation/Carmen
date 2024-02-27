@@ -23,11 +23,19 @@ pipeline {
             }
         }
 
+        stage('Clean Workspace') {
+            steps {
+                cleanWs() 
+            }
+        }
+
+
         stage('Fuzzing') {
             parallel {
                 stage('Parallelism Test') {
                     agent {label 'coordinator'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'cd backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
                         sh 'cd common && go test ./... -race -run TestNWaysCache_Concurrent_ReadsWrites'
