@@ -261,7 +261,7 @@ func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 }
 
 // GetDiffForBlock computes the diff introduced by the given block compared to its
-// predecessor. Note that this allows to access the changes introduced by block 0.
+// predecessor. Note that this enables access to the changes introduced by block 0.
 func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
 	if block == 0 {
 		a.rootsMutex.Lock()

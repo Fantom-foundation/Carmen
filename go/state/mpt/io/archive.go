@@ -183,7 +183,7 @@ func ExportArchive(directory string, out io.Writer) error {
 	return archive.Close()
 }
 
-func ImportArchive(directory string, in io.Reader) error {
+func ImportArchive(directory string, in io.Reader) (err error) {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return err
@@ -205,7 +205,7 @@ func ImportArchive(directory string, in io.Reader) error {
 	}
 
 	// Create a live-DB updated in parallel for faster hash computation.
-	liveDbDir := path.Join(directory + "/tmp-live-db")
+	liveDbDir := path.Join(directory, "tmp-live-db")
 	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return fmt.Errorf("failed to create auxiliary live DB: %w", err)
