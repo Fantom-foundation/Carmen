@@ -28,6 +28,7 @@ pipeline {
                 stage('Parallelism Test') {
                     agent {label 'coordinator'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'cd backend/stock/synced && go test ./... -race -run TestSyncedStock_CanBeAccessedConcurrently'
                         sh 'cd common && go test ./... -race -run TestNWaysCache_Concurrent_ReadsWrites'
@@ -41,6 +42,7 @@ pipeline {
                 stage('FastMap') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./common -fuzztime 3h -fuzz=FuzzMapOperations'
                     }
@@ -48,6 +50,7 @@ pipeline {
                 stage('Fuzzing NWays Cache') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./common/ -fuzztime 3h -fuzz FuzzLruCache_RandomOps'
                     }
@@ -55,6 +58,7 @@ pipeline {
                 stage('Fuzzing LRU Cache') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./common/ -fuzztime 3h -fuzz FuzzNWays_RandomOps'
                     }
@@ -62,6 +66,7 @@ pipeline {
                 stage('Fuzzing Buffered File') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./backend/utils -fuzztime 3h -fuzz FuzzBufferedFile_RandomOps'
                     }
@@ -69,6 +74,7 @@ pipeline {
                 stage('Fuzzing Buffered Fil - data') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./backend/utils -fuzztime 3h -fuzz FuzzBufferedFile_ReadWrite'
                     }
@@ -76,6 +82,7 @@ pipeline {
                 stage('Fuzzing Stack') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./backend/stock/file -fuzztime 3h -fuzz FuzzStack_RandomOps'
                     }
@@ -83,6 +90,7 @@ pipeline {
                 stage('Fuzzing Stock - file') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./backend/stock/file -fuzztime 3h -fuzz FuzzFileStock_RandomOps'
                     }
@@ -90,6 +98,7 @@ pipeline {
                 stage('Fuzzing Stock - synced') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./backend/stock/memory -fuzztime 3h -fuzz FuzzSyncStock_RandomOps'
                     }
@@ -97,6 +106,7 @@ pipeline {
                 stage('Fuzzing Live MPT - Accounts') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountOps'
                     }
@@ -104,6 +114,7 @@ pipeline {
                 stage('Fuzzing Live MPT - Storage') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
                     }
@@ -111,6 +122,7 @@ pipeline {
                 stage('Fuzzing Archive MPT - Accounts') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
                     }
@@ -118,6 +130,7 @@ pipeline {
                 stage('Fuzzing Archive MPT - Storage') {
                     agent {label 'fuzzing'}
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
                     }
