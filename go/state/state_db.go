@@ -1200,7 +1200,7 @@ func (s *stateDB) EndBlock(block uint64) {
 		}
 	}
 
-	// Normalize the update to fix the ordering of operations. Note, the for some DB implementations
+	// Normalize the update to fix the ordering of operations. Note that for some DB implementations,
 	// the state hash depends on the insertion order. Thus, the insertion must be performed in a
 	// deterministic order. Maps in Go have an undefined order and are deliberately randomized. Thus,
 	// updates need to be ordered/normalized before being written to the underlying state.
