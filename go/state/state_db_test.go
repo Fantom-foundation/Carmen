@@ -2191,12 +2191,12 @@ func TestStateDB_UpdatedValuesAreCommittedToStateAtEndBlock(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().Apply(uint64(1), common.Update{
+	mock.EXPECT().Apply(uint64(1), sameEffectAs{common.Update{
 		Slots: []common.SlotUpdate{
 			{Account: address1, Key: key1, Value: val1},
 			{Account: address1, Key: key2, Value: val2},
 		},
-	})
+	}})
 
 	db.SetState(address1, key1, val1)
 	db.SetState(address1, key2, val2)
@@ -3686,4 +3686,23 @@ func TestSlotIdOrder(t *testing.T) {
 			t.Errorf("Comparison of %v and %v failed, wanted %d, got %d", input.a, input.b, input.want, got)
 		}
 	}
+}
+
+type sameEffectAs struct {
+	want common.Update
+}
+
+func (m sameEffectAs) Matches(x any) bool {
+	got, ok := x.(common.Update)
+	if !ok {
+		return false
+	}
+	if err := got.Normalize(); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(got, m.want)
+}
+
+func (m sameEffectAs) String() string {
+	return fmt.Sprintf("Same effect as %v", m.want)
 }

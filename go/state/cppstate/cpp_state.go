@@ -181,6 +181,9 @@ func (cs *CppState) Apply(block uint64, update common.Update) error {
 	if update.IsEmpty() {
 		return nil
 	}
+	if err := update.Normalize(); err != nil {
+		return err
+	}
 	data := update.ToBytes()
 	dataPtr := unsafe.Pointer(&data[0])
 	C.Carmen_Apply(cs.state, C.uint64_t(block), dataPtr, C.uint64_t(len(data)))
