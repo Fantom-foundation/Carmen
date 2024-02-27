@@ -10,7 +10,9 @@ import (
 	"path"
 	"sort"
 
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 	"golang.org/x/exp/maps"
 )
@@ -228,71 +230,36 @@ func ImportArchive(directory string, in io.Reader) (err error) {
 	}()
 
 	// Restore the archive from the input file.
-	codes := map[common.Hash][]byte{
-		common.Keccak256([]byte{}): {},
-	}
-
-	currentBlock := uint64(0)
-	currentBlockHash := common.Hash{}
-	currentBlockHashFound := false
-	currentUpdate := common.Update{}
-
-	finishCurrentBlock := func() error {
-		if currentUpdate.IsEmpty() {
-			return nil
-		}
-		if !currentBlockHashFound {
-			return fmt.Errorf("input format error: no hash for block %d", currentBlock)
-		}
-		hints, err := live.Apply(currentBlock, currentUpdate)
-		if err != nil {
-			return err
-		}
-		if err := archive.Add(currentBlock, currentUpdate, hints); err != nil {
-			return err
-		}
-		hints.Release()
-		hash, err := archive.GetHash(currentBlock)
-		if err != nil {
-			return err
-		}
-		if hash != currentBlockHash {
-			return fmt.Errorf("invalid hash for block %d: from input %x, restored hash %x", currentBlock, currentBlockHash, hash)
-		}
-
-		currentUpdate = common.Update{}
-		currentBlockHashFound = false
-		return nil
-	}
-
-	currentAccount := common.Address{}
+	context := newImportContext()
 	for {
 		// Read prefix determining the next input marker.
 		if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
 			if err == io.EOF {
-				return finishCurrentBlock()
+				return context.finishCurrentBlock(archive, live)
 			}
 			return err
 		}
 		switch buffer[0] {
 		case 'A':
-			if _, err := io.ReadFull(in, currentAccount[:]); err != nil {
+			address := common.Address{}
+			if _, err := io.ReadFull(in, address[:]); err != nil {
 				return err
 			}
+			context.setAccount(address)
 		case 'C':
 			code, err := readCode(in)
 			if err != nil {
 				return err
 			}
-			codes[common.Keccak256(code)] = code
+			context.addCode(code)
 		case 'U':
-			if err := finishCurrentBlock(); err != nil {
+			if err := context.finishCurrentBlock(archive, live); err != nil {
 				return err
 			}
 			if _, err := io.ReadFull(in, buffer[0:4]); err != nil {
 				return err
 			}
-			currentBlock = uint64(binary.BigEndian.Uint32(buffer))
+			context.setBlock(uint64(binary.BigEndian.Uint32(buffer)))
 
 		case 'H':
 			if _, err := io.ReadFull(in, buffer[0:1]); err != nil {
@@ -304,46 +271,34 @@ func ImportArchive(directory string, in io.Reader) (err error) {
 				return err
 			}
 			if hashType == EthereumHash {
-				currentBlockHash = hash
-				currentBlockHashFound = true
+				context.setBlockHash(hash)
 			}
 
 		case 'R':
-			currentUpdate.DeletedAccounts = append(currentUpdate.DeletedAccounts, currentAccount)
+			context.deleteAccount()
 
 		case 'B':
 			balance := common.Balance{}
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return err
 			}
-			currentUpdate.Balances = append(currentUpdate.Balances, common.BalanceUpdate{
-				Account: currentAccount,
-				Balance: balance,
-			})
+			context.setBalance(balance)
 
 		case 'N':
 			nonce := common.Nonce{}
 			if _, err := io.ReadFull(in, nonce[:]); err != nil {
 				return err
 			}
-			currentUpdate.Nonces = append(currentUpdate.Nonces, common.NonceUpdate{
-				Account: currentAccount,
-				Nonce:   nonce,
-			})
+			context.setNonce(nonce)
 
 		case 'c':
 			hash := common.Hash{}
 			if _, err := io.ReadFull(in, hash[:]); err != nil {
 				return err
 			}
-			code, found := codes[hash]
-			if !found {
-				return fmt.Errorf("missing code for hash %v in input file", hash)
+			if err := context.setCode(hash); err != nil {
+				return err
 			}
-			currentUpdate.Codes = append(currentUpdate.Codes, common.CodeUpdate{
-				Account: currentAccount,
-				Code:    code,
-			})
 
 		case 'V':
 			key := common.Key{}
@@ -354,24 +309,108 @@ func ImportArchive(directory string, in io.Reader) (err error) {
 			if _, err := io.ReadFull(in, value[:]); err != nil {
 				return err
 			}
-			currentUpdate.Slots = append(currentUpdate.Slots, common.SlotUpdate{
-				Account: currentAccount,
-				Key:     key,
-				Value:   value,
-			})
+			context.setSlot(key, value)
 
 		case 'D':
 			key := common.Key{}
 			if _, err := io.ReadFull(in, key[:]); err != nil {
 				return err
 			}
-			currentUpdate.Slots = append(currentUpdate.Slots, common.SlotUpdate{
-				Account: currentAccount,
-				Key:     key,
-			})
+			context.deleteSlot(key)
 
 		default:
 			return fmt.Errorf("format error encountered, unexpected token type: %c", buffer[0])
 		}
 	}
+}
+
+type importContext struct {
+	codes                 map[common.Hash][]byte
+	currentAccount        common.Address
+	currentBlock          uint64
+	currentBlockHash      common.Hash
+	currentBlockHashFound bool
+	currentUpdate         common.Update
+}
+
+func newImportContext() *importContext {
+	return &importContext{
+		codes: map[common.Hash][]byte{
+			common.Keccak256([]byte{}): {},
+		},
+	}
+}
+
+func (c *importContext) addCode(code []byte) {
+	c.codes[common.Keccak256(code)] = code
+}
+
+func (c *importContext) setBlock(block uint64) {
+	c.currentBlock = block
+}
+
+func (c *importContext) setBlockHash(hash common.Hash) {
+	c.currentBlockHash = hash
+	c.currentBlockHashFound = true
+}
+
+func (c *importContext) setAccount(address common.Address) {
+	c.currentAccount = address
+}
+
+func (c *importContext) deleteAccount() {
+	c.currentUpdate.AppendDeleteAccount(c.currentAccount)
+}
+
+func (c *importContext) setBalance(balance common.Balance) {
+	c.currentUpdate.AppendBalanceUpdate(c.currentAccount, balance)
+}
+
+func (c *importContext) setNonce(nonce common.Nonce) {
+	c.currentUpdate.AppendNonceUpdate(c.currentAccount, nonce)
+}
+
+func (c *importContext) setCode(hash common.Hash) error {
+	code, found := c.codes[hash]
+	if !found {
+		return fmt.Errorf("missing code for hash %v in input file", hash)
+	}
+	c.currentUpdate.AppendCodeUpdate(c.currentAccount, code)
+	return nil
+}
+
+func (c *importContext) setSlot(key common.Key, value common.Value) {
+	c.currentUpdate.AppendSlotUpdate(c.currentAccount, key, value)
+}
+
+func (c *importContext) deleteSlot(key common.Key) {
+	c.currentUpdate.AppendSlotUpdate(c.currentAccount, key, common.Value{})
+}
+
+func (c *importContext) finishCurrentBlock(archive archive.Archive, live gostate.LiveDB) error {
+	if c.currentUpdate.IsEmpty() {
+		return nil
+	}
+	if !c.currentBlockHashFound {
+		return fmt.Errorf("input format error: no hash for block %d", c.currentBlock)
+	}
+	hints, err := live.Apply(c.currentBlock, c.currentUpdate)
+	if err != nil {
+		return err
+	}
+	if err := archive.Add(c.currentBlock, c.currentUpdate, hints); err != nil {
+		return err
+	}
+	hints.Release()
+	hash, err := archive.GetHash(c.currentBlock)
+	if err != nil {
+		return err
+	}
+	if hash != c.currentBlockHash {
+		return fmt.Errorf("invalid hash for block %d: from input %x, restored hash %x", c.currentBlock, c.currentBlockHash, hash)
+	}
+
+	c.currentUpdate = common.Update{}
+	c.currentBlockHashFound = false
+	return nil
 }
