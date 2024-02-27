@@ -587,12 +587,12 @@ func TestArchive(t *testing.T) {
 			archiveType := config.config.Archive
 			if archiveType != state.S4Archive && archiveType != state.S5Archive {
 				hash1, err := state1.GetHash()
-				if err != nil || fmt.Sprintf("%x", hash1) != "69ec5bcbe6fd0da76107d64b6e9589a465ecccf5a90a3cb07de1f9cb91e0a28a" {
-					t.Errorf("unexpected archive state hash at block 1: %x, %s", hash1, err)
+				if err != nil || fmt.Sprintf("%x", hash1) != "9f4836302c2a2e89ca09e38e77f6a57b3f09ce94dbbeecd865b841307186e8e5" {
+					t.Errorf("unexpected archive state hash at block 1: %x, %v", hash1, err)
 				}
 				hash2, err := state2.GetHash()
-				if err != nil || fmt.Sprintf("%x", hash2) != "bfafc906d048e39ab3bdd9cf0732a41ce752ce2f9448757d36cc9eb07dd78f29" {
-					t.Errorf("unexpected archive state hash at block 2: %x, %s", hash2, err)
+				if err != nil || fmt.Sprintf("%x", hash2) != "f69f1e69a6512f15b702094c762c5ef5d7d712d9f35d7948d690df9abd192dd3" {
+					t.Errorf("unexpected archive state hash at block 2: %x, %v", hash2, err)
 				}
 			}
 		})

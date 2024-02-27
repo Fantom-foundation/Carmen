@@ -22,7 +22,7 @@ constexpr int kHashLength = 32;
 constexpr int kAddressLength = 20;
 constexpr int kKeyLength = 32;
 constexpr int kValueLength = 32;
-constexpr int kBalanceLength = 16;
+constexpr int kBalanceLength = 32;
 constexpr int kNonceLength = 8;
 
 // Class template for all types based on byte array value. Byte values are

@@ -440,7 +440,7 @@ TEST_P(CStateTest, ArchiveCanBeQueried) {
   Carmen_GetHash(archive1, &hash);
   EXPECT_EQ(
       testing::PrintToString(hash),
-      "0xcfff0617b252767e16f8798deafa1deb3fdbf892aa08a3e53baef043547e9448");
+      "0x2b527ad4da1618171e2ebc65f87fdaf6de89d144d193838e2b4a018119e581bc");
 
   restored_code.clear();
   restored_code.resize(100);

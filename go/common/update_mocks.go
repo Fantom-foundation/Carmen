@@ -5,6 +5,7 @@
 //
 //	mockgen -source update.go -destination update_mocks.go -package common
 //
+
 // Package common is a generated GoMock package.
 package common
 

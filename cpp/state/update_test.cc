@@ -209,7 +209,7 @@ TEST(Update, KnownEncodings) {
   ASSERT_OK_AND_ASSIGN(auto example, GetExampleUpdate().GetHash());
   EXPECT_THAT(
       Print(example),
-      "0x5524cf120229bc99ef762303b408900b8998f1d725958e62ac49fea69a5f7901");
+      "0xd16bcf097cba34ece949ae64db100861c15f0058a1366003ad8f90a0dadf351b");
 }
 
 TEST(AccountUpdate, IsNormalizedDetectsOutOfOrderSlotUpdates) {

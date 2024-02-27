@@ -3,9 +3,10 @@ package archive_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend"
 	"io"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
@@ -168,10 +169,10 @@ func TestAddGet(t *testing.T) {
 			}
 
 			if !factory.customHash {
-				if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "9834327080d1ead8544edff892ae26c6fe0640dc13ded9c15338721081490b04" {
+				if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "583a4ee3118ecc5f542186119a4b23d91e2fd64c92911c4e344d2c190ac5b174" {
 					t.Errorf("unexpected hash of block 1: %x; %v", hash, err)
 				}
-				if hash, err := a.GetHash(5); err != nil || fmt.Sprintf("%x", hash) != "6c616faab374f93e9322e02452da86dbbbf10e84c826afb5b13db0e2ef6e71e8" {
+				if hash, err := a.GetHash(5); err != nil || fmt.Sprintf("%x", hash) != "e5e0c818105b33d1d3b73c7f2c0b55f49729bd733c251224266686d4a77a2188" {
 					t.Errorf("unexpected hash of block 5: %x; %v", hash, err)
 				}
 			}
@@ -236,13 +237,13 @@ func TestAccountDeleteCreate(t *testing.T) {
 			}
 
 			if !factory.customHash {
-				if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "5631163004034afb5bd05e1a8ddfd4b00e26f3ab80da10be86542267a05b1103" {
+				if hash, err := a.GetHash(1); err != nil || fmt.Sprintf("%x", hash) != "e3c7af92b65cab5fc61dd2f1353d2d1111c9141c0a5383150ca56951580144ea" {
 					t.Errorf("unexpected hash of block 1: %x; %v", hash, err)
 				}
-				if hash, err := a.GetHash(5); err != nil || fmt.Sprintf("%x", hash) != "3d97c83a6e0da0fb5ada88bb93d161cd62834e25336b131d51d1a8bd74f7e617" {
+				if hash, err := a.GetHash(5); err != nil || fmt.Sprintf("%x", hash) != "fed5a69996a2b9410200fe256a7d5c09ce5ba47ba51adf9d50fbe8e1b56eb7fd" {
 					t.Errorf("unexpected hash of block 5: %x; %v", hash, err)
 				}
-				if hash, err := a.GetHash(9); err != nil || fmt.Sprintf("%x", hash) != "2be813b99a1b766bbcb9619ed4daa69b6c33397d916f55af6ea11742cec8b391" {
+				if hash, err := a.GetHash(9); err != nil || fmt.Sprintf("%x", hash) != "49a86f0a7e53b6d7411edad398e2f807ffbe79d179eebbd42117425343b38fa9" {
 					t.Errorf("unexpected hash of block 9: %x; %v", hash, err)
 				}
 			}
