@@ -493,6 +493,10 @@ func TestStateDB_RollbackToKnownCommittedStateProducesCorrectResult(t *testing.T
 		t.Errorf("unexpected committed state, wanted %v, got %v", want, got)
 	}
 
+	if want, got := val1, db.GetState(address1, key1); want != got {
+		t.Errorf("unexpected committed state, wanted %v, got %v", want, got)
+	}
+
 	db.RevertToSnapshot(s)
 
 	if want, got := val2, db.GetState(address1, key1); want != got {
@@ -3588,19 +3592,22 @@ func TestStateDB_GetArchiveStateDbRecyclesNonCommittableStateDbInstances(t *test
 
 	state.EXPECT().GetArchiveState(gomock.Any()).AnyTimes().Return(archive, nil)
 
+	// In this test two NonCommittableStateDBs are created in order, releasing the
+	// first after the other. In such a case, the internal StateDB instance used by
+	// the first should be reused by the second.
+
 	history, err := db.GetArchiveStateDB(12)
 	if err != nil {
 		t.Fatalf("Unexpected error during archive lookup: %v", err)
 	}
-	dbA := history.(*nonCommittableStateDB).stateDB
-	history.Release()
+	dbA := history.(*nonCommittableStateDB).stateDB // < remembers the used StateDB instance
+	history.Release()                               // < releases the internal state DB
 
 	history, err = db.GetArchiveStateDB(14)
 	if err != nil {
 		t.Fatalf("Unexpected error during archive lookup: %v", err)
 	}
-	dbB := history.(*nonCommittableStateDB).stateDB
-	history.Release()
+	dbB := history.(*nonCommittableStateDB).stateDB // < this should be the reused one
 
 	if dbA != dbB {
 		t.Errorf("StateDB instance in archives not reused, got %v and %v", dbA, dbB)
