@@ -12,7 +12,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive/sqlite"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
 type archiveFactory struct {

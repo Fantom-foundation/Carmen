@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
-	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/Fantom-foundation/Carmen/go/state/gostate"
+	"github.com/Fantom-foundation/Carmen/go/database"
+	"github.com/Fantom-foundation/Carmen/go/database/gostate"
 )
 
 // Client is a (very) simplified implementation of a client
@@ -22,9 +22,9 @@ type Client interface {
 
 type DemoClient struct {
 	// Block chain state.
-	blockHeight uint64           // the current block height
-	state       state.State      // the current state, expected to be synced among all nodes
-	snapshot    backend.Snapshot // the latest snapshot, if any has been created
+	blockHeight uint64            // the current block height
+	db          database.Database // the current state, expected to be synced among all nodes
+	snapshot    backend.Snapshot  // the latest snapshot, if any has been created
 
 	// Network information.
 	network   Network
@@ -41,23 +41,23 @@ func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 	}()
 
 	// Initialize this client's State DB.
-	state, err := state.NewState(state.Parameters{
+	state, err := database.NewDatabase(database.Parameters{
 		Directory: t.TempDir(),
 		Variant:   gostate.VariantGoFile,
 		Schema:    3,
-		Archive:   state.NoArchive,
+		Archive:   database.NoArchive,
 	})
 	if err != nil {
 		return err
 	}
-	c.state = state
+	c.db = state
 
 	// Sync with network state.
 	addresses := net.GetAllAddresses()
 	if len(addresses) == 0 {
 		// This is the first client, initializing the network.
 		c.blockHeight = 0
-		c.snapshot, err = c.state.CreateSnapshot()
+		c.snapshot, err = c.db.CreateSnapshot()
 		return err
 	}
 
@@ -74,7 +74,7 @@ func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 	}
 
 	// Check format of remote data and obtain verifier from state object.
-	verifier, err := c.state.GetSnapshotVerifier(metadata)
+	verifier, err := c.db.GetSnapshotVerifier(metadata)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 	})
 
 	// Restore the data.
-	if err := c.state.Restore(remoteSnapshotData); err != nil {
+	if err := c.db.Restore(remoteSnapshotData); err != nil {
 		return err
 	}
 
@@ -114,7 +114,7 @@ func (c *DemoClient) Join(t *testing.T, net Network) (err error) {
 }
 
 func (c *DemoClient) GetStateProof() backend.Proof {
-	proof, err := c.state.GetProof()
+	proof, err := c.db.GetProof()
 	if err != nil {
 		panic(fmt.Sprintf("proof should always be available in demo client, but got error %v", err))
 	}
@@ -126,7 +126,7 @@ func (c *DemoClient) Call(request Message) Message {
 	case GetBlockHeightRequest:
 		return GetBlockHeightResponse{c.blockHeight}
 	case GetStateProofRequest:
-		proof, err := c.state.GetProof()
+		proof, err := c.db.GetProof()
 		if err != nil {
 			return ErrorMessage{err}
 		}
@@ -174,10 +174,10 @@ func (c *DemoClient) Observe(message Message) {
 			return
 		}
 		c.blockHeight = msg.block
-		c.state.Apply(msg.block, msg.update)
+		c.db.Apply(msg.block, msg.update)
 	case EndOfEpochBroadcast:
 		var err error
-		c.snapshot, err = c.state.CreateSnapshot()
+		c.snapshot, err = c.db.CreateSnapshot()
 		if err != nil {
 			log.Printf("Failed to create snapshot: %v", err)
 		}

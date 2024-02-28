@@ -1,0 +1,88 @@
+package main
+
+import (
+	"bufio"
+	"compress/gzip"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
+
+	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+
+	"github.com/urfave/cli/v2"
+)
+
+var ImportLiveDbCmd = cli.Command{
+	Action:    doLiveDbImport,
+	Name:      "import-live-db",
+	Usage:     "imports a LiveDB instance from a file",
+	ArgsUsage: "<source-file> <target director>",
+	Flags: []cli.Flag{
+		&cpuProfileFlag,
+	},
+}
+
+var ImportArchiveCmd = cli.Command{
+	Action:    doArchiveImport,
+	Name:      "import-archive",
+	Usage:     "imports an Archive instance from a file",
+	ArgsUsage: "<source-file> <target director>",
+	Flags: []cli.Flag{
+		&cpuProfileFlag,
+	},
+}
+
+func doLiveDbImport(context *cli.Context) error {
+	return doImport(context, false)
+}
+
+func doArchiveImport(context *cli.Context) error {
+	return doImport(context, true)
+}
+
+func doImport(context *cli.Context, isArchive bool) error {
+	if context.Args().Len() != 2 {
+		return fmt.Errorf("missing source file and/or target directory parameter")
+	}
+	src := context.Args().Get(0)
+	dir := context.Args().Get(1)
+
+	// Start profiling ...
+	cpuProfileFileName := context.String(cpuProfileFlag.Name)
+	if strings.TrimSpace(cpuProfileFileName) != "" {
+		if err := startCpuProfiler(cpuProfileFileName); err != nil {
+			return err
+		}
+		defer stopCpuProfiler()
+	}
+
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("error creating output directory: %v", err)
+	}
+
+	runImport := mptIo.ImportLiveDb
+	if isArchive {
+		runImport = mptIo.ImportArchive
+	}
+
+	start := time.Now()
+	logFromStart(start, "import started")
+	file, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	var in io.Reader = bufio.NewReader(file)
+	if in, err = gzip.NewReader(in); err != nil {
+		return err
+	}
+	defer func() {
+		logFromStart(start, "import done")
+	}()
+	return errors.Join(
+		runImport(dir, in),
+		file.Close(),
+	)
+}

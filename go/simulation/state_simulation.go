@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database"
+	"github.com/Fantom-foundation/Carmen/go/database/gostate"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 )
 
 const KeysCacheSize = 256
 
 func main() {
-	memState, err := state.NewState(state.Parameters{
+	memState, err := database.NewDatabase(database.Parameters{
 		Variant: gostate.VariantGoMemory,
 	})
 	if err != nil {
@@ -32,7 +33,7 @@ func main() {
 }
 
 // simulate executes simulation from StartBlock and runs the Markov Chain until EndBlock is reached
-func simulate(stateDB state.StateDB, dist common.Distribution, transitions transitions) {
+func simulate(stateDB state.State, dist common.Distribution, transitions transitions) {
 	sc := newStateContext(stateDB, dist)
 	n := len(transitions.ops)
 
@@ -60,7 +61,7 @@ func simulate(stateDB state.StateDB, dist common.Distribution, transitions trans
 
 // stateContext wraps current state transition of the simulation
 type stateContext struct {
-	stateDB      state.StateDB       // StateDB used for simulation
+	stateDB      state.State         // StateDB used for simulation
 	address      common.Address      // Current account address
 	key          common.Key          // Current contract slot address
 	value        common.Value        // Last returned slot value
@@ -73,7 +74,7 @@ type stateContext struct {
 }
 
 // newStateContext creates a new context, which contains current state of transitions
-func newStateContext(stateDB state.StateDB, randDistribution common.Distribution) stateContext {
+func newStateContext(stateDB state.State, randDistribution common.Distribution) stateContext {
 	rand.Seed(time.Now().UnixNano())
 	return stateContext{
 		stateDB:      stateDB,
