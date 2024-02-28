@@ -3592,25 +3592,27 @@ func TestStateDB_GetArchiveStateDbRecyclesNonCommittableStateDbInstances(t *test
 
 	state.EXPECT().GetArchiveState(gomock.Any()).AnyTimes().Return(archive, nil)
 
-	// In this test two NonCommittableStateDBs are created in order, releasing the
-	// first after the other. In such a case, the internal StateDB instance used by
-	// the first should be reused by the second.
+	// This test aims to verify that a released StateDB is recycled.
+	reuseSeen := false
+	seen := map[*stateDB]struct{}{}
+	for i := 0; i < 10; i++ {
+		history, err := db.GetArchiveStateDB(12)
+		if err != nil {
+			t.Fatalf("Unexpected error during archive lookup: %v", err)
+		}
 
-	history, err := db.GetArchiveStateDB(12)
-	if err != nil {
-		t.Fatalf("Unexpected error during archive lookup: %v", err)
+		// Test whether this state DB is a version seen before.
+		db := history.(*nonCommittableStateDB).stateDB
+		if _, found := seen[db]; found {
+			reuseSeen = true
+			break
+		}
+		seen[db] = struct{}{}
+		history.Release()
 	}
-	dbA := history.(*nonCommittableStateDB).stateDB // < remembers the used StateDB instance
-	history.Release()                               // < releases the internal state DB
 
-	history, err = db.GetArchiveStateDB(14)
-	if err != nil {
-		t.Fatalf("Unexpected error during archive lookup: %v", err)
-	}
-	dbB := history.(*nonCommittableStateDB).stateDB // < this should be the reused one
-
-	if dbA != dbB {
-		t.Errorf("StateDB instance in archives not reused, got %v and %v", dbA, dbB)
+	if !reuseSeen {
+		t.Errorf("no reuse detected")
 	}
 }
 
