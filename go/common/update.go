@@ -104,13 +104,13 @@ func (u *Update) Normalize() error {
 		return fmt.Errorf("balances are not unique: %v", u.Balances)
 	}
 	if !isSortedAndUnique(u.Codes, codeLess) {
-		return fmt.Errorf("balances are not unique: %v", u.Codes)
+		return fmt.Errorf("codes are not unique: %v", u.Codes)
 	}
 	if !isSortedAndUnique(u.Nonces, nonceLess) {
-		return fmt.Errorf("balances are not unique: %v", u.Nonces)
+		return fmt.Errorf("nonces are not unique: %v", u.Nonces)
 	}
 	if !isSortedAndUnique(u.Slots, slotLess) {
-		return fmt.Errorf("balances are not unique: %v", u.Slots)
+		return fmt.Errorf("slots are not unique: %v", u.Slots)
 	}
 
 	return nil
