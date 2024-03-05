@@ -573,11 +573,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 			dir := t.TempDir()
 			s, err := config.createState(dir)
 			if err != nil {
-				if errors.Is(err, UnsupportedConfiguration) {
-					t.Skipf("failed to initialize state %s; %s", config.name(), err)
-				} else {
-					t.Fatalf("failed to initialize state %s; %s", config.name(), err)
-				}
+				t.Fatalf("failed to initialize state %s; %s", config.name(), err)
 			}
 			defer s.Close()
 
