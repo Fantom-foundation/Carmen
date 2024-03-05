@@ -261,7 +261,7 @@ func (cs *CppState) GetArchiveState(block uint64) (state.State, error) {
 }
 
 func (cs *CppState) GetArchiveBlockHeight() (uint64, bool, error) {
-	return 0, false, fmt.Errorf("archive block not available in cpp state")
+	return 0, false, state.NoArchiveError
 }
 
 type objectId struct {

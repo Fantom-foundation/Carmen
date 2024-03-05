@@ -38,7 +38,7 @@ func (p *Properties) GetInteger(name Property, fallback int) (int, error) {
 
 // SetInteger is a utility function for Properties to set numeric values.
 func (p *Properties) SetInteger(name Property, value int) {
-	if p == nil {
+	if *p == nil {
 		*p = map[Property]string{}
 	}
 	(*p)[name] = strconv.Itoa(value)

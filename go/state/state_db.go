@@ -124,6 +124,8 @@ type StateDB interface {
 
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
+
+	ResetBlockContext()
 }
 
 // NonCommittableStateDB is the public interface offered for views on states that can not
@@ -1194,7 +1196,7 @@ func (s *stateDB) EndBlock(block uint64) {
 	}
 
 	// Reset internal state for next block
-	s.resetBlockContext()
+	s.ResetBlockContext()
 }
 
 func (s *stateDB) BeginEpoch() {
@@ -1294,7 +1296,7 @@ func (s *stateDB) resetTransactionContext() {
 	s.logs = s.logs[0:0]
 }
 
-func (s *stateDB) resetBlockContext() {
+func (s *stateDB) ResetBlockContext() {
 	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
@@ -1306,7 +1308,7 @@ func (s *stateDB) resetBlockContext() {
 }
 
 func (s *stateDB) resetState(state State) {
-	s.resetBlockContext()
+	s.ResetBlockContext()
 	s.storedDataCache.Clear()
 	s.reincarnation = map[common.Address]uint64{}
 	s.state = state

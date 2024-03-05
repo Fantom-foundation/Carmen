@@ -5,7 +5,6 @@
 //
 //	mockgen -source state_db.go -destination state_db_mock.go -package state
 //
-
 // Package state is a generated GoMock package.
 package state
 
@@ -1000,6 +999,18 @@ func (m *MockStateDB) IsSlotInAccessList(arg0 common.Address, arg1 common.Key) (
 func (mr *MockStateDBMockRecorder) IsSlotInAccessList(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSlotInAccessList", reflect.TypeOf((*MockStateDB)(nil).IsSlotInAccessList), arg0, arg1)
+}
+
+// ResetBlockContext mocks base method.
+func (m *MockStateDB) ResetBlockContext() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ResetBlockContext")
+}
+
+// ResetBlockContext indicates an expected call of ResetBlockContext.
+func (mr *MockStateDBMockRecorder) ResetBlockContext() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetBlockContext", reflect.TypeOf((*MockStateDB)(nil).ResetBlockContext))
 }
 
 // RevertToSnapshot mocks base method.

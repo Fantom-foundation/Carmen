@@ -36,7 +36,7 @@ func TestCarmen_BlockProcessing(t *testing.T) {
 		t.Fatalf("failed to start block: %v", err)
 	}
 
-	tx, err := block.BeginTransaction(1)
+	tx, err := block.BeginTransaction()
 	if err != nil {
 		t.Fatalf("failed to start transaction: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestCarmen_BlockProcessing(t *testing.T) {
 		t.Fatalf("failed to finish transaction: %v", err)
 	}
 
-	tx, err = block.BeginTransaction(2)
+	tx, err = block.BeginTransaction()
 	if err != nil {
 		t.Fatalf("failed to start transaction: %v", err)
 	}
@@ -76,12 +76,12 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 	err = errors.Join(
 		db.AddBlock(1, func(ctxt HeadBlockContext) error {
 			return errors.Join(
-				ctxt.RunTransaction(1, func(ctxt TransactionContext) error {
+				ctxt.RunTransaction(func(ctxt TransactionContext) error {
 					ctxt.CreateAccount(Address{1})
 					ctxt.SetNonce(Address{1}, 12)
 					return nil
 				}),
-				ctxt.RunTransaction(3, func(ctxt TransactionContext) error {
+				ctxt.RunTransaction(func(ctxt TransactionContext) error {
 					ctxt.CreateAccount(Address{2})
 					ctxt.SetNonce(Address{2}, 14)
 					return nil
@@ -90,7 +90,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 		}),
 		db.AddBlock(3, func(ctxt HeadBlockContext) error {
 			return errors.Join(
-				ctxt.RunTransaction(1, func(ctxt TransactionContext) error {
+				ctxt.RunTransaction(func(ctxt TransactionContext) error {
 					ctxt.CreateAccount(Address{3})
 					ctxt.SetNonce(Address{3}, 16)
 					return nil
@@ -108,7 +108,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 	}
 
 	// Query archive height.
-	height, err := db.GetBlockHeight()
+	height, err := db.GetArchiveBlockHeight()
 	if err != nil {
 		t.Errorf("failed to fetch block height: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get historic block context: %v", err)
 	}
-	transaction, err := block.BeginTransaction(0)
+	transaction, err := block.BeginTransaction()
 	if err != nil {
 		t.Fatalf("failed to start transaction in historic block: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 	// Query archive state information (functional style).
 	err = errors.Join(
 		db.QueryBlock(0, func(ctxt HistoricBlockContext) error {
-			return ctxt.RunTransaction(0, func(ctxt TransactionContext) error {
+			return ctxt.RunTransaction(func(ctxt TransactionContext) error {
 				if want, got := uint64(0), ctxt.GetNonce(Address{1}); want != got {
 					t.Errorf("unexpected nonce, wanted %v, got %v", want, got)
 				}
@@ -152,7 +152,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 			})
 		}),
 		db.QueryBlock(1, func(ctxt HistoricBlockContext) error {
-			return ctxt.RunTransaction(0, func(ctxt TransactionContext) error {
+			return ctxt.RunTransaction(func(ctxt TransactionContext) error {
 				if want, got := uint64(12), ctxt.GetNonce(Address{1}); want != got {
 					t.Errorf("unexpected nonce, wanted %v, got %v", want, got)
 				}
@@ -166,7 +166,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 			})
 		}),
 		db.QueryBlock(2, func(ctxt HistoricBlockContext) error {
-			return ctxt.RunTransaction(0, func(ctxt TransactionContext) error {
+			return ctxt.RunTransaction(func(ctxt TransactionContext) error {
 				if want, got := uint64(12), ctxt.GetNonce(Address{1}); want != got {
 					t.Errorf("unexpected nonce, wanted %v, got %v", want, got)
 				}
@@ -180,7 +180,7 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 			})
 		}),
 		db.QueryBlock(3, func(ctxt HistoricBlockContext) error {
-			return ctxt.RunTransaction(0, func(ctxt TransactionContext) error {
+			return ctxt.RunTransaction(func(ctxt TransactionContext) error {
 				if want, got := uint64(12), ctxt.GetNonce(Address{1}); want != got {
 					t.Errorf("unexpected nonce, wanted %v, got %v", want, got)
 				}

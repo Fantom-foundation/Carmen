@@ -16,7 +16,7 @@ import (
 //   - Schema: defining the data format used for storing the data in the
 //     respective implementation. The format may have an impact on performance
 //     characteristics of the implementation as well as the availability and
-//     format of state hashes and witness proof
+//     format of state hashes and witness proofs
 //   - Archive: defines what type of archive is utilized to store historic
 //     data. In general, tracking historic data is optional in Carmen, and
 //     can be disabled by this option. Alternative archive solutions may be

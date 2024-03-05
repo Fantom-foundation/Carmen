@@ -5,7 +5,6 @@
 //
 //	mockgen -source carmen.go -destination carmen_mock.go -package carmen
 //
-
 // Package carmen is a generated GoMock package.
 package carmen
 
@@ -96,19 +95,19 @@ func (mr *MockDatabaseMockRecorder) Flush() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockDatabase)(nil).Flush))
 }
 
-// GetBlockHeight mocks base method.
-func (m *MockDatabase) GetBlockHeight() (int64, error) {
+// GetArchiveBlockHeight mocks base method.
+func (m *MockDatabase) GetArchiveBlockHeight() (int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlockHeight")
+	ret := m.ctrl.Call(m, "GetArchiveBlockHeight")
 	ret0, _ := ret[0].(int64)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetBlockHeight indicates an expected call of GetBlockHeight.
-func (mr *MockDatabaseMockRecorder) GetBlockHeight() *gomock.Call {
+// GetArchiveBlockHeight indicates an expected call of GetArchiveBlockHeight.
+func (mr *MockDatabaseMockRecorder) GetArchiveBlockHeight() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlockHeight", reflect.TypeOf((*MockDatabase)(nil).GetBlockHeight))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveBlockHeight", reflect.TypeOf((*MockDatabase)(nil).GetArchiveBlockHeight))
 }
 
 // GetHeadStateHash mocks base method.
@@ -170,56 +169,71 @@ func (mr *MockDatabaseMockRecorder) QueryBlock(block, run any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryBlock", reflect.TypeOf((*MockDatabase)(nil).QueryBlock), block, run)
 }
 
-// MockBlockContext is a mock of BlockContext interface.
-type MockBlockContext struct {
+// StartBulkLoad mocks base method.
+func (m *MockDatabase) StartBulkLoad(block uint64) (BulkLoad, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartBulkLoad", block)
+	ret0, _ := ret[0].(BulkLoad)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StartBulkLoad indicates an expected call of StartBulkLoad.
+func (mr *MockDatabaseMockRecorder) StartBulkLoad(block any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartBulkLoad", reflect.TypeOf((*MockDatabase)(nil).StartBulkLoad), block)
+}
+
+// MockblockContext is a mock of blockContext interface.
+type MockblockContext struct {
 	ctrl     *gomock.Controller
-	recorder *MockBlockContextMockRecorder
+	recorder *MockblockContextMockRecorder
 }
 
-// MockBlockContextMockRecorder is the mock recorder for MockBlockContext.
-type MockBlockContextMockRecorder struct {
-	mock *MockBlockContext
+// MockblockContextMockRecorder is the mock recorder for MockblockContext.
+type MockblockContextMockRecorder struct {
+	mock *MockblockContext
 }
 
-// NewMockBlockContext creates a new mock instance.
-func NewMockBlockContext(ctrl *gomock.Controller) *MockBlockContext {
-	mock := &MockBlockContext{ctrl: ctrl}
-	mock.recorder = &MockBlockContextMockRecorder{mock}
+// NewMockblockContext creates a new mock instance.
+func NewMockblockContext(ctrl *gomock.Controller) *MockblockContext {
+	mock := &MockblockContext{ctrl: ctrl}
+	mock.recorder = &MockblockContextMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockBlockContext) EXPECT() *MockBlockContextMockRecorder {
+func (m *MockblockContext) EXPECT() *MockblockContextMockRecorder {
 	return m.recorder
 }
 
 // BeginTransaction mocks base method.
-func (m *MockBlockContext) BeginTransaction(number int) (TransactionContext, error) {
+func (m *MockblockContext) BeginTransaction() (TransactionContext, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTransaction", number)
+	ret := m.ctrl.Call(m, "BeginTransaction")
 	ret0, _ := ret[0].(TransactionContext)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BeginTransaction indicates an expected call of BeginTransaction.
-func (mr *MockBlockContextMockRecorder) BeginTransaction(number any) *gomock.Call {
+func (mr *MockblockContextMockRecorder) BeginTransaction() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockBlockContext)(nil).BeginTransaction), number)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockblockContext)(nil).BeginTransaction))
 }
 
 // RunTransaction mocks base method.
-func (m *MockBlockContext) RunTransaction(number int, run func(TransactionContext) error) error {
+func (m *MockblockContext) RunTransaction(run func(TransactionContext) error) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RunTransaction", number, run)
+	ret := m.ctrl.Call(m, "RunTransaction", run)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RunTransaction indicates an expected call of RunTransaction.
-func (mr *MockBlockContextMockRecorder) RunTransaction(number, run any) *gomock.Call {
+func (mr *MockblockContextMockRecorder) RunTransaction(run any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockBlockContext)(nil).RunTransaction), number, run)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockblockContext)(nil).RunTransaction), run)
 }
 
 // MockHeadBlockContext is a mock of HeadBlockContext interface.
@@ -260,18 +274,18 @@ func (mr *MockHeadBlockContextMockRecorder) Abort() *gomock.Call {
 }
 
 // BeginTransaction mocks base method.
-func (m *MockHeadBlockContext) BeginTransaction(number int) (TransactionContext, error) {
+func (m *MockHeadBlockContext) BeginTransaction() (TransactionContext, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTransaction", number)
+	ret := m.ctrl.Call(m, "BeginTransaction")
 	ret0, _ := ret[0].(TransactionContext)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BeginTransaction indicates an expected call of BeginTransaction.
-func (mr *MockHeadBlockContextMockRecorder) BeginTransaction(number any) *gomock.Call {
+func (mr *MockHeadBlockContextMockRecorder) BeginTransaction() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockHeadBlockContext)(nil).BeginTransaction), number)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockHeadBlockContext)(nil).BeginTransaction))
 }
 
 // Commit mocks base method.
@@ -289,17 +303,17 @@ func (mr *MockHeadBlockContextMockRecorder) Commit() *gomock.Call {
 }
 
 // RunTransaction mocks base method.
-func (m *MockHeadBlockContext) RunTransaction(number int, run func(TransactionContext) error) error {
+func (m *MockHeadBlockContext) RunTransaction(run func(TransactionContext) error) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RunTransaction", number, run)
+	ret := m.ctrl.Call(m, "RunTransaction", run)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RunTransaction indicates an expected call of RunTransaction.
-func (mr *MockHeadBlockContextMockRecorder) RunTransaction(number, run any) *gomock.Call {
+func (mr *MockHeadBlockContextMockRecorder) RunTransaction(run any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockHeadBlockContext)(nil).RunTransaction), number, run)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockHeadBlockContext)(nil).RunTransaction), run)
 }
 
 // MockHistoricBlockContext is a mock of HistoricBlockContext interface.
@@ -326,18 +340,18 @@ func (m *MockHistoricBlockContext) EXPECT() *MockHistoricBlockContextMockRecorde
 }
 
 // BeginTransaction mocks base method.
-func (m *MockHistoricBlockContext) BeginTransaction(number int) (TransactionContext, error) {
+func (m *MockHistoricBlockContext) BeginTransaction() (TransactionContext, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BeginTransaction", number)
+	ret := m.ctrl.Call(m, "BeginTransaction")
 	ret0, _ := ret[0].(TransactionContext)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BeginTransaction indicates an expected call of BeginTransaction.
-func (mr *MockHistoricBlockContextMockRecorder) BeginTransaction(number any) *gomock.Call {
+func (mr *MockHistoricBlockContextMockRecorder) BeginTransaction() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockHistoricBlockContext)(nil).BeginTransaction), number)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BeginTransaction", reflect.TypeOf((*MockHistoricBlockContext)(nil).BeginTransaction))
 }
 
 // Close mocks base method.
@@ -355,17 +369,17 @@ func (mr *MockHistoricBlockContextMockRecorder) Close() *gomock.Call {
 }
 
 // RunTransaction mocks base method.
-func (m *MockHistoricBlockContext) RunTransaction(number int, run func(TransactionContext) error) error {
+func (m *MockHistoricBlockContext) RunTransaction(run func(TransactionContext) error) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RunTransaction", number, run)
+	ret := m.ctrl.Call(m, "RunTransaction", run)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RunTransaction indicates an expected call of RunTransaction.
-func (mr *MockHistoricBlockContextMockRecorder) RunTransaction(number, run any) *gomock.Call {
+func (mr *MockHistoricBlockContextMockRecorder) RunTransaction(run any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockHistoricBlockContext)(nil).RunTransaction), number, run)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockHistoricBlockContext)(nil).RunTransaction), run)
 }
 
 // MockTransactionContext is a mock of TransactionContext interface.
@@ -798,4 +812,101 @@ func (m *MockTransactionContext) SubRefund(arg0 uint64) {
 func (mr *MockTransactionContextMockRecorder) SubRefund(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubRefund", reflect.TypeOf((*MockTransactionContext)(nil).SubRefund), arg0)
+}
+
+// MockBulkLoad is a mock of BulkLoad interface.
+type MockBulkLoad struct {
+	ctrl     *gomock.Controller
+	recorder *MockBulkLoadMockRecorder
+}
+
+// MockBulkLoadMockRecorder is the mock recorder for MockBulkLoad.
+type MockBulkLoadMockRecorder struct {
+	mock *MockBulkLoad
+}
+
+// NewMockBulkLoad creates a new mock instance.
+func NewMockBulkLoad(ctrl *gomock.Controller) *MockBulkLoad {
+	mock := &MockBulkLoad{ctrl: ctrl}
+	mock.recorder = &MockBulkLoadMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBulkLoad) EXPECT() *MockBulkLoadMockRecorder {
+	return m.recorder
+}
+
+// CreateAccount mocks base method.
+func (m *MockBulkLoad) CreateAccount(arg0 Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateAccount", arg0)
+}
+
+// CreateAccount indicates an expected call of CreateAccount.
+func (mr *MockBulkLoadMockRecorder) CreateAccount(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockBulkLoad)(nil).CreateAccount), arg0)
+}
+
+// Finalize mocks base method.
+func (m *MockBulkLoad) Finalize() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Finalize")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Finalize indicates an expected call of Finalize.
+func (mr *MockBulkLoadMockRecorder) Finalize() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Finalize", reflect.TypeOf((*MockBulkLoad)(nil).Finalize))
+}
+
+// SetBalance mocks base method.
+func (m *MockBulkLoad) SetBalance(arg0 Address, arg1 *big.Int) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetBalance", arg0, arg1)
+}
+
+// SetBalance indicates an expected call of SetBalance.
+func (mr *MockBulkLoadMockRecorder) SetBalance(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetBalance", reflect.TypeOf((*MockBulkLoad)(nil).SetBalance), arg0, arg1)
+}
+
+// SetCode mocks base method.
+func (m *MockBulkLoad) SetCode(arg0 Address, arg1 []byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetCode", arg0, arg1)
+}
+
+// SetCode indicates an expected call of SetCode.
+func (mr *MockBulkLoadMockRecorder) SetCode(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetCode", reflect.TypeOf((*MockBulkLoad)(nil).SetCode), arg0, arg1)
+}
+
+// SetNonce mocks base method.
+func (m *MockBulkLoad) SetNonce(arg0 Address, arg1 uint64) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetNonce", arg0, arg1)
+}
+
+// SetNonce indicates an expected call of SetNonce.
+func (mr *MockBulkLoadMockRecorder) SetNonce(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNonce", reflect.TypeOf((*MockBulkLoad)(nil).SetNonce), arg0, arg1)
+}
+
+// SetState mocks base method.
+func (m *MockBulkLoad) SetState(arg0 Address, arg1 Key, arg2 Value) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetState", arg0, arg1, arg2)
+}
+
+// SetState indicates an expected call of SetState.
+func (mr *MockBulkLoadMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockBulkLoad)(nil).SetState), arg0, arg1, arg2)
 }
