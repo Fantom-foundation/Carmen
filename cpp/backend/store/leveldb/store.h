@@ -64,16 +64,15 @@ class LevelDbStore {
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, default value
-  // is returned. The result is valid until the next call to this function.
-  StatusOrRef<const V> Get(const K& key) const {
+  // is returned.
+  absl::StatusOr<V> Get(const K& key) const {
     constexpr static const V default_value{};
-    static V result;
     auto buffer = db_->Get(AsChars(key));
     if (absl::IsNotFound(buffer.status())) {
       return default_value;
     }
     RETURN_IF_ERROR(buffer.status());
-    ASSIGN_OR_RETURN(result, FromChars<V>(*buffer));
+    ASSIGN_OR_RETURN(V result, FromChars<V>(*buffer));
     return result;
   }
 

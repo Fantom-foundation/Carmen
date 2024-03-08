@@ -52,7 +52,7 @@ concept Store = requires(S a, const S b) {
   // next operation on the store.
   {
     b.Get(std::declval<typename S::key_type>())
-    } -> std::same_as<StatusOrRef<const typename S::value_type>>;
+    } -> std::same_as<absl::StatusOr<typename S::value_type>>;
 }
 // Stores must satisfy the requirements for backend data structures.
 &&HashableStructure<S>;

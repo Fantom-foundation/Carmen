@@ -71,7 +71,7 @@ class InMemoryStore {
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, the default
   // value defined during the construction of a store instance is returned.
-  StatusOrRef<const V> Get(const K& key) const {
+  absl::StatusOr<V> Get(const K& key) const {
     constexpr static const V default_value{};
     auto page_number = key / elements_per_page;
     if (page_number >= pages_->size()) {

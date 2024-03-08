@@ -88,9 +88,8 @@ class FileStoreBase {
 
   // Retrieves the value associated to the given key. If no values has
   // been previously set using the Set(..) function above, a zero-initialized
-  // value is returned. The returned reference is only valid until the next
-  // operation on the store.
-  StatusOrRef<const V> Get(const K& key) const;
+  // value is returned.
+  absl::StatusOr<V> Get(const K& key) const;
 
   // Computes a hash over the full content of this store.
   absl::StatusOr<Hash> GetHash() const;
@@ -228,9 +227,8 @@ FileStoreBase<K, V, F, page_size, eager_hashing>::Set(const K& key, V value) {
 
 template <typename K, Trivial V, template <std::size_t> class F,
           std::size_t page_size, bool eager_hashing>
-requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>>
-    StatusOrRef<const V> FileStoreBase<K, V, F, page_size, eager_hashing>::Get(
-        const K& key)
+requires File<F<sizeof(ArrayPage<V, page_size / sizeof(V)>)>> absl::StatusOr<V>
+FileStoreBase<K, V, F, page_size, eager_hashing>::Get(const K& key)
 const {
   static const V kDefault{};
   auto page_id = key / kNumElementsPerPage;
