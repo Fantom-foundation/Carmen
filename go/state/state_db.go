@@ -1,3 +1,4 @@
+// Deprecated: external users should switch to the carmen package as the new top-level API
 package state
 
 import (
@@ -11,8 +12,12 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
+//go:generate mockgen -source state_db.go -destination state_db_mock.go -package state
+
 // VmStateDB defines the basic operations that can be conducted on a StateDB as
 // required by an EVM implementation.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 type VmStateDB interface {
 	// Account management.
 	CreateAccount(common.Address)
@@ -77,9 +82,17 @@ type VmStateDB interface {
 
 	// GetHash obtains a cryptographically unique hash of the committed state.
 	GetHash() common.Hash
+
+	// Check checks the state of the DB and reports an error if issues have been
+	// encountered. Check should be called periodically to validate all interactions
+	// with a StateDB instance. If an error is reported, all operations since the
+	// last successful check need to be considered invalid.
+	Check() error
 }
 
 // StateDB serves as the public interface definition of a Carmen StateDB.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 type StateDB interface {
 	VmStateDB
 
@@ -88,12 +101,6 @@ type StateDB interface {
 
 	BeginEpoch()
 	EndEpoch(number uint64)
-
-	// Check checks the state of the DB and reports an error if issues have been
-	// encountered. Check should be called periodically to validate all interactions
-	// with a StateDB instance. If an error is reported, all operations since the
-	// last successful check need to be considered invalid.
-	Check() error
 
 	// Flushes committed state to disk.
 	Flush() error
@@ -117,12 +124,16 @@ type StateDB interface {
 
 	// GetMemoryFootprint computes an approximation of the memory used by this state.
 	GetMemoryFootprint() *common.MemoryFootprint
+
+	ResetBlockContext()
 }
 
 // NonCommittableStateDB is the public interface offered for views on states that can not
 // be permanently modified. The prime example for those are views on historic blocks backed
 // by an archive. While volatile transaction internal changes are supported, there is no
 // way offered for committing those.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 type NonCommittableStateDB interface {
 	VmStateDB
 
@@ -140,6 +151,8 @@ type NonCommittableStateDB interface {
 }
 
 // BulkLoad serves as the public interface for loading preset data into the state DB.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 type BulkLoad interface {
 	CreateAccount(common.Address)
 	SetBalance(common.Address, *big.Int)
@@ -369,6 +382,8 @@ type storedDataCacheValue struct {
 // all operations including end-of-block operations mutating the underlying state.
 // Note: any StateDB instanced becomes invalid if the underlying state is
 // modified by any other StateDB instance or through any other direct modification.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 func CreateStateDBUsing(state State) StateDB {
 	return CreateCustomStateDBUsing(state, defaultStoredDataCacheSize)
 }
@@ -378,6 +393,8 @@ func CreateStateDBUsing(state State) StateDB {
 // cache size used by CreateCustomStateDBUsing may be too large if StateDB instances
 // only have a short live time. In such cases, the initialization and destruction of
 // the maintained data cache may dominate execution time.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 func CreateCustomStateDBUsing(state State, storedDataCacheSize int) StateDB {
 	if storedDataCacheSize <= 0 {
 		storedDataCacheSize = defaultStoredDataCacheSize
@@ -389,6 +406,8 @@ func CreateCustomStateDBUsing(state State, storedDataCacheSize int) StateDB {
 // the given state supporting all operations specified by the VmStateDB interface.
 // Note: any StateDB instanced becomes invalid if the underlying state is
 // modified by any other StateDB instance or through any other direct modification.
+//
+// Deprecated: external users should switch to the carmen package as the new top-level API
 func CreateNonCommittableStateDBUsing(state State) NonCommittableStateDB {
 	// Since StateDB instances are big objects costly to create we reuse those using
 	// a pool of objects. However, instances need to be properly reset.
@@ -1177,7 +1196,7 @@ func (s *stateDB) EndBlock(block uint64) {
 	}
 
 	// Reset internal state for next block
-	s.resetBlockContext()
+	s.ResetBlockContext()
 }
 
 func (s *stateDB) BeginEpoch() {
@@ -1277,7 +1296,7 @@ func (s *stateDB) resetTransactionContext() {
 	s.logs = s.logs[0:0]
 }
 
-func (s *stateDB) resetBlockContext() {
+func (s *stateDB) ResetBlockContext() {
 	s.accounts = make(map[common.Address]*accountState, len(s.accounts))
 	s.balances = make(map[common.Address]*balanceValue, len(s.balances))
 	s.nonces = make(map[common.Address]*nonceValue, len(s.nonces))
@@ -1289,7 +1308,7 @@ func (s *stateDB) resetBlockContext() {
 }
 
 func (s *stateDB) resetState(state State) {
-	s.resetBlockContext()
+	s.ResetBlockContext()
 	s.storedDataCache.Clear()
 	s.reincarnation = map[common.Address]uint64{}
 	s.state = state

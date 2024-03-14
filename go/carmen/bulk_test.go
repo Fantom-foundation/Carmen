@@ -1,0 +1,89 @@
+package carmen
+
+import (
+	"github.com/Fantom-foundation/Carmen/go/state"
+	"go.uber.org/mock/gomock"
+	"math/big"
+	"sync"
+	"testing"
+)
+
+func TestBulkLoad_Cannot_Finalise_Twice(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	stateDB := state.NewMockBulkLoad(ctrl)
+	stateDB.EXPECT().Close()
+	st := state.NewMockState(ctrl)
+
+	bulk := &bulkLoad{
+		db: &database{
+			db:   st,
+			lock: sync.Mutex{},
+		},
+		nested: stateDB,
+	}
+
+	if err := bulk.Finalize(); err != nil {
+		t.Errorf("cannot finalise block: %v", err)
+	}
+
+	if err := bulk.Finalize(); err == nil {
+		t.Errorf("second call to finalise should fail")
+	}
+}
+
+func TestBulkLoad_Operations_Passthrough(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	stateDB := state.NewMockBulkLoad(ctrl)
+	stateDB.EXPECT().CreateAccount(gomock.Any())
+	stateDB.EXPECT().SetCode(gomock.Any(), gomock.Any())
+	stateDB.EXPECT().SetNonce(gomock.Any(), gomock.Any())
+	stateDB.EXPECT().SetBalance(gomock.Any(), gomock.Any())
+	stateDB.EXPECT().SetState(gomock.Any(), gomock.Any(), gomock.Any())
+	stateDB.EXPECT().Close()
+	st := state.NewMockState(ctrl)
+
+	bulk := &bulkLoad{
+		db: &database{
+			db:   st,
+			lock: sync.Mutex{},
+		},
+		nested: stateDB,
+	}
+
+	bulk.CreateAccount(Address{})
+	bulk.SetCode(Address{}, []byte{})
+	bulk.SetNonce(Address{}, 10)
+	bulk.SetBalance(Address{}, big.NewInt(300))
+	bulk.SetState(Address{}, Key{}, Value{})
+
+	if err := bulk.Finalize(); err != nil {
+		t.Errorf("cannot finalise block: %v", err)
+	}
+
+}
+
+func TestBulkLoad_WriteOperationsOnFinalisedInstanceAreNoops(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	stateDB := state.NewMockBulkLoad(ctrl)
+	stateDB.EXPECT().Close()
+	st := state.NewMockState(ctrl)
+
+	bulk := &bulkLoad{
+		db: &database{
+			db:   st,
+			lock: sync.Mutex{},
+		},
+		nested: stateDB,
+	}
+
+	if err := bulk.Finalize(); err != nil {
+		t.Errorf("cannot finalise block: %v", err)
+	}
+
+	bulk.CreateAccount(Address{})
+	bulk.SetCode(Address{}, []byte{})
+	bulk.SetNonce(Address{}, 10)
+	bulk.SetBalance(Address{}, big.NewInt(300))
+	bulk.SetState(Address{}, Key{}, Value{})
+
+}
