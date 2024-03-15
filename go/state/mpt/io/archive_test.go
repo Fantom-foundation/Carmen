@@ -2,6 +2,7 @@ package io
 
 import (
 	"bytes"
+	"path"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -65,6 +66,90 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	for i, want := range hashes {
 		got, err := target.GetHash(uint64(i))
+		if err != nil {
+			t.Fatalf("failed to fetch hash for block %d: %v", i, err)
+		}
+		if want != got {
+			t.Errorf("wrong hash for block %d, wanted %v, got %v", i, want, got)
+		}
+	}
+}
+
+func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
+
+	// Create a small Archive to be exported.
+	sourceDir := t.TempDir()
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+	blockHeight := fillTestBlocksIntoArchive(t, source)
+
+	hashes := []common.Hash{}
+	for i := 0; i <= blockHeight; i++ {
+		hash, err := source.GetHash(uint64(i))
+		if err != nil {
+			t.Fatalf("failed to fetch hash for block %d: %v", i, err)
+		}
+		hashes = append(hashes, hash)
+	}
+
+	if err := source.Close(); err != nil {
+		t.Fatalf("failed to close source archive: %v", err)
+	}
+
+	// Export the archive into a buffer.
+	buffer := new(bytes.Buffer)
+	if err := ExportArchive(sourceDir, buffer); err != nil {
+		t.Fatalf("failed to export Archive: %v", err)
+	}
+	genesis := buffer.Bytes()
+
+	// Import the archive into a new directory.
+	targetDir := t.TempDir()
+	buffer = bytes.NewBuffer(genesis)
+	if err := ImportLiveAndArchive(targetDir, buffer); err != nil {
+		t.Fatalf("failed to import Archive: %v", err)
+	}
+
+	if err := mpt.VerifyFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, nil); err != nil {
+		t.Fatalf("verification of imported LiveDB failed: %v", err)
+	}
+
+	live, err := mpt.OpenFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("cannot open live trie: %v", err)
+	}
+	defer live.Close()
+	headHash, _, err := live.UpdateHashes()
+	if err != nil {
+		t.Fatalf("cannot get live trie hash: %v", err)
+	}
+
+	if got, want := headHash, hashes[len(hashes)-1]; got != want {
+		t.Errorf("head root hashes do not match: got: %v != want: %v", got, want)
+	}
+
+	if err := mpt.VerifyArchive(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, nil); err != nil {
+		t.Fatalf("verification of imported Archive failed: %v", err)
+	}
+
+	archive, err := mpt.OpenArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to open recovered Archive: %v", err)
+	}
+	defer archive.Close()
+
+	height, _, err := archive.GetBlockHeight()
+	if err != nil {
+		t.Fatalf("failed to get block height from recovered archive: %v", err)
+	}
+	if height != uint64(blockHeight) {
+		t.Fatalf("unexpected block height in recovered Archive, wanted %d, got %d", 3, height)
+	}
+
+	for i, want := range hashes {
+		got, err := archive.GetHash(uint64(i))
 		if err != nil {
 			t.Fatalf("failed to fetch hash for block %d: %v", i, err)
 		}

@@ -21,6 +21,7 @@ func main() {
 			&ExportCmd,
 			&ImportLiveDbCmd,
 			&ImportArchiveCmd,
+			&ImportLiveAndArchiveCmd,
 			&Info,
 			&InitArchive,
 			&Verify,
