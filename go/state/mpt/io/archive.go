@@ -185,12 +185,29 @@ func ExportArchive(directory string, out io.Writer) error {
 	return archive.Close()
 }
 
-func ImportArchive(directory string, in io.Reader) (err error) {
+func ImportArchive(directory string, in io.Reader) error {
 	// check that the destination directory is an empty directory
 	if err := checkEmptyDirectory(directory); err != nil {
 		return err
 	}
+	liveDbDir := path.Join(directory, "tmp-live-db")
+	return errors.Join(
+		importArchive(liveDbDir, directory, in),
+		os.RemoveAll(liveDbDir), // live db is deleted at the end
+	)
+}
 
+func ImportLiveAndArchive(directory string, in io.Reader) error {
+	// check that the destination directory is an empty directory
+	if err := checkEmptyDirectory(directory); err != nil {
+		return err
+	}
+	liveDbDir := path.Join(directory, "live")
+	archiveDbDir := path.Join(directory, "archive")
+	return importArchive(liveDbDir, archiveDbDir, in)
+}
+
+func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	// Start by checking the magic number.
 	buffer := make([]byte, len(archiveMagicNumber))
 	if _, err := io.ReadFull(in, buffer); err != nil {
@@ -207,7 +224,6 @@ func ImportArchive(directory string, in io.Reader) (err error) {
 	}
 
 	// Create a live-DB updated in parallel for faster hash computation.
-	liveDbDir := path.Join(directory, "tmp-live-db")
 	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return fmt.Errorf("failed to create auxiliary live DB: %w", err)
@@ -216,12 +232,11 @@ func ImportArchive(directory string, in io.Reader) (err error) {
 		err = errors.Join(
 			err,
 			live.Close(),
-			os.RemoveAll(liveDbDir),
 		)
 	}()
 
 	// Create an empty archive.
-	archive, err := mpt.OpenArchiveTrie(directory, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		return fmt.Errorf("failed to create empty state: %w", err)
 	}

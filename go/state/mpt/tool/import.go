@@ -35,15 +35,29 @@ var ImportArchiveCmd = cli.Command{
 	},
 }
 
+var ImportLiveAndArchiveCmd = cli.Command{
+	Action:    doLiveAndArchiveImport,
+	Name:      "import",
+	Usage:     "imports both LiveDB and Archive instance from a file",
+	ArgsUsage: "<source-file> <target director>",
+	Flags: []cli.Flag{
+		&cpuProfileFlag,
+	},
+}
+
 func doLiveDbImport(context *cli.Context) error {
-	return doImport(context, false)
+	return doImport(context, mptIo.ImportLiveDb)
 }
 
 func doArchiveImport(context *cli.Context) error {
-	return doImport(context, true)
+	return doImport(context, mptIo.ImportArchive)
 }
 
-func doImport(context *cli.Context, isArchive bool) error {
+func doLiveAndArchiveImport(context *cli.Context) error {
+	return doImport(context, mptIo.ImportLiveAndArchive)
+}
+
+func doImport(context *cli.Context, runImport func(directory string, in io.Reader) error) error {
 	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing source file and/or target directory parameter")
 	}
@@ -61,11 +75,6 @@ func doImport(context *cli.Context, isArchive bool) error {
 
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("error creating output directory: %v", err)
-	}
-
-	runImport := mptIo.ImportLiveDb
-	if isArchive {
-		runImport = mptIo.ImportArchive
 	}
 
 	start := time.Now()
