@@ -241,8 +241,7 @@ func newGoMemoryState(params state.Parameters) (state.State, error) {
 		return nil, err
 	}
 
-	state := newGoState(live, arch, []func(){archiveCleanup})
-	return state, nil
+	return newGoState(live, arch, []func(){archiveCleanup})
 }
 
 // newGoFileState creates File based Index and Store implementations
@@ -422,8 +421,7 @@ func newGoFileState(params state.Parameters) (state.State, error) {
 		return nil, err
 	}
 
-	state := newGoState(live, arch, []func(){archiveCleanup})
-	return state, nil
+	return newGoState(live, arch, []func(){archiveCleanup})
 }
 
 // newGoCachedFileState creates File based Index and Store implementations
@@ -599,8 +597,7 @@ func newGoCachedFileState(params state.Parameters) (state.State, error) {
 		return nil, err
 	}
 
-	state := newGoState(live, arch, []func(){archiveCleanup})
-	return state, nil
+	return newGoState(live, arch, []func(){archiveCleanup})
 }
 
 // newGoLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
@@ -728,8 +725,7 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 		return nil, err
 	}
 
-	state := newGoState(live, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
-	return state, nil
+	return newGoState(live, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 }
 
 // newGoCachedLeveLIndexAndStoreState creates Index and Store both backed up by the leveldb
@@ -857,8 +853,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 		return nil, err
 	}
 
-	state := newGoState(live, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
-	return state, nil
+	return newGoState(live, arch, []func(){archiveCleanup, cleanUpByClosing(db)})
 }
 
 // createSubDirs creates two subdirectories of the given for the Store and the Index

@@ -50,20 +50,41 @@ type LiveDB interface {
 	RunPostRestoreTasks() error
 }
 
-func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) state.State {
-
+func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) (state.State, error) {
 	res := &GoState{
 		live:    live,
 		archive: archive,
 		cleanup: cleanup,
 	}
 
-	// If there is an archive, start an asynchronous archive writer routine.
+	// If there is an archive,
+	// check archive is in-sync with live,
+	// and start an asynchronous archive writer routine.
 	if archive != nil {
+		archiveBlockHeight, empty, err := archive.GetBlockHeight()
+		if err != nil {
+			return nil, err
+		}
+		if !empty {
+			archiveHash, err := archive.GetHash(archiveBlockHeight)
+			if err != nil {
+				return nil, err
+			}
+
+			liveHash, err := live.GetHash()
+			if err != nil {
+				return nil, err
+			}
+
+			if archiveHash != liveHash {
+				return nil, fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash)
+			}
+		}
+
 		in := make(chan archiveUpdate, 10)
 		flush := make(chan bool)
 		done := make(chan bool)
-		err := make(chan error, 10)
+		errors := make(chan error, 10)
 
 		go func() {
 			runtime.LockOSThread()
@@ -75,14 +96,14 @@ func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) state.St
 				// If there is no update, the state is asking for a flush signal.
 				if update.update == nil {
 					if issue := res.archive.Flush(); issue != nil {
-						err <- issue
+						errors <- issue
 					}
 					flush <- true
 				} else {
 					// Otherwise, process the update.
 					issue := res.archive.Add(update.block, *update.update, update.updateHints)
 					if issue != nil {
-						err <- issue
+						errors <- issue
 					}
 					if update.updateHints != nil {
 						update.updateHints.Release()
@@ -94,10 +115,10 @@ func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) state.St
 		res.archiveWriter = in
 		res.archiveWriterDone = done
 		res.archiveWriterFlushDone = flush
-		res.archiveWriterError = err
+		res.archiveWriterError = errors
 	}
 
-	return state.WrapIntoSyncedState(res)
+	return state.WrapIntoSyncedState(res), nil
 }
 
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})

@@ -28,7 +28,7 @@ func newS4State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 	}
 	return newGoState(&goSchema4{
 		MptState: mptState,
-	}, arch, []func(){archiveCleanup}), nil
+	}, arch, []func(){archiveCleanup})
 }
 
 func newGoMemoryS4State(params state.Parameters) (state.State, error) {
