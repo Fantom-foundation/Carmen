@@ -489,25 +489,16 @@ func TestGoState_FlushFlushesLiveDbAndArchive(t *testing.T) {
 	archive := archive.NewMockArchive(ctrl)
 
 	live.EXPECT().Flush()
-	live.EXPECT().GetHash()
-	archive.EXPECT().GetBlockHeight()
-	archive.EXPECT().GetHash(gomock.Any())
 	archive.EXPECT().Flush()
 
-	state, err := newGoState(live, archive, nil)
-	if err != nil {
-		t.Fatalf("cannot create state: %v", err)
-	}
+	state := newGoState(live, archive, nil)
 	state.Flush()
 }
 
 func TestGoState_CloseClosesLiveDbAndArchive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	live := NewMockLiveDB(ctrl)
-	live.EXPECT().GetHash()
 	archive := archive.NewMockArchive(ctrl)
-	archive.EXPECT().GetBlockHeight()
-	archive.EXPECT().GetHash(gomock.Any())
 
 	gomock.InOrder(
 		live.EXPECT().Flush(),
@@ -518,9 +509,6 @@ func TestGoState_CloseClosesLiveDbAndArchive(t *testing.T) {
 		archive.EXPECT().Close(),
 	)
 
-	state, err := newGoState(live, archive, nil)
-	if err != nil {
-		t.Fatalf("cannot create state: %v", err)
-	}
+	state := newGoState(live, archive, nil)
 	state.Close()
 }

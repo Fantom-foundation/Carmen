@@ -51,7 +51,7 @@ func newS5State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 
 	return newGoState(&goSchema5{
 		MptState: mptState,
-	}, arch, []func(){archiveCleanup})
+	}, arch, []func(){archiveCleanup}), nil
 }
 
 func mptStateCapacity(param int64) int {
