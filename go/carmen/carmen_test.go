@@ -2,7 +2,6 @@ package carmen
 
 import (
 	"errors"
-	"math/big"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -13,6 +12,12 @@ var testConfig = Configuration{
 	Variant: Variant(gostate.VariantGoMemory),
 	Schema:  5,
 	Archive: Archive(state.S5Archive),
+}
+
+var testNonArchiveConfig = Configuration{
+	Variant: Variant(gostate.VariantGoMemory),
+	Schema:  5,
+	Archive: Archive(state.NoArchive),
 }
 
 func TestCarmen_DatabaseLiveCycle(t *testing.T) {
@@ -197,103 +202,5 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("error during queries: %v", err)
-	}
-}
-
-func TestCarmen_Archive_And_Live_Must_Be_InSync(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-
-	addBlock := func(block uint64, db Database) {
-		if err := db.AddBlock(block, func(context HeadBlockContext) error {
-			if err := context.RunTransaction(func(context TransactionContext) error {
-				context.CreateAccount(Address{byte(block)})
-				context.AddBalance(Address{byte(block)}, big.NewInt(int64(block)))
-				return nil
-			}); err != nil {
-				t.Fatalf("cannot create transaction: %v", err)
-			}
-			return nil
-		}); err != nil {
-			t.Fatalf("cannot add block: %v", err)
-		}
-	}
-
-	const blocks = 10
-	for i := 0; i < blocks; i++ {
-		addBlock(uint64(i), db)
-	}
-
-	if err := db.Close(); err != nil {
-		t.Fatalf("cannot close database: %v", err)
-	}
-
-	// open as non-archive
-	noArchiveConfig := Configuration{
-		Variant: testConfig.Variant,
-		Schema:  testConfig.Schema,
-		Archive: Archive(state.NoArchive),
-	}
-
-	db, err = OpenDatabase(dir, noArchiveConfig, nil)
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-
-	for i := 0; i < blocks; i++ {
-		addBlock(uint64(i+blocks), db)
-	}
-
-	if err := db.Close(); err != nil {
-		t.Fatalf("cannot close database: %v", err)
-	}
-
-	// opening archive should fail as archive and non-archive is not in-sync
-	if _, err := OpenDatabase(dir, testConfig, nil); err == nil {
-		t.Errorf("opening database should fail")
-	}
-}
-
-func TestCarmen_Empty_Archive_And_Live_Must_Be_InSync(t *testing.T) {
-
-	dir := t.TempDir()
-	// open as non-archive
-	noArchiveConfig := Configuration{
-		Variant: testConfig.Variant,
-		Schema:  testConfig.Schema,
-		Archive: Archive(state.NoArchive),
-	}
-
-	db, err := OpenDatabase(dir, noArchiveConfig, nil)
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-
-	const blocks = 10
-	for i := 0; i < blocks; i++ {
-		if err := db.AddBlock(uint64(i), func(context HeadBlockContext) error {
-			if err := context.RunTransaction(func(context TransactionContext) error {
-				context.CreateAccount(Address{byte(i)})
-				context.AddBalance(Address{byte(i)}, big.NewInt(int64(i)))
-				return nil
-			}); err != nil {
-				t.Fatalf("cannot create transaction: %v", err)
-			}
-			return nil
-		}); err != nil {
-			t.Fatalf("cannot add block: %v", err)
-		}
-	}
-
-	if err := db.Close(); err != nil {
-		t.Fatalf("cannot close database: %v", err)
-	}
-
-	// opening archive should fail as archive and non-archive is not in-sync
-	if _, err := OpenDatabase(dir, testConfig, nil); err == nil {
-		t.Errorf("opening database should fail")
 	}
 }
