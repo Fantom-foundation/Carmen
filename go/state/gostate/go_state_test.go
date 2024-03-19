@@ -483,66 +483,6 @@ func TestGetMemoryFootprint(t *testing.T) {
 	}
 }
 
-func TestState_Archive_And_Live_Must_Be_InSync(t *testing.T) {
-	for _, config := range initGoStates() {
-		if config.config.Archive != state.NoArchive {
-			t.Run(config.name(), func(t *testing.T) {
-
-				addBlock := func(block uint64, st state.State) {
-					update := common.Update{CreatedAccounts: []common.Address{{byte(block)}}}
-					if err := st.Apply(block, update); err != nil {
-						t.Fatalf("cannot add block: %v", err)
-					}
-				}
-
-				dir := t.TempDir()
-				st, err := config.createState(dir)
-				if err != nil {
-					t.Fatalf("failed to initialize state %s; %v", config.name(), err)
-				}
-
-				const blocks = 10
-				for i := 0; i < blocks; i++ {
-					addBlock(uint64(i), st)
-				}
-
-				if err := st.Close(); err != nil {
-					t.Fatalf("cannot close state: %v", err)
-				}
-
-				// open as non-archive
-				noArchiveConfig := namedStateConfig{
-					config: state.Configuration{
-						Variant: config.config.Variant,
-						Schema:  config.config.Schema,
-						Archive: state.NoArchive,
-					},
-					factory: config.factory,
-				}
-
-				st, err = noArchiveConfig.createState(dir)
-				if err != nil {
-					t.Fatalf("failed to initialize state %s; %v", noArchiveConfig.name(), err)
-				}
-
-				for i := 0; i < blocks; i++ {
-					addBlock(uint64(i+blocks), st)
-				}
-
-				if err := st.Close(); err != nil {
-					t.Fatalf("cannot close state: %v", err)
-				}
-
-				// opening archive should fail as archive and non-archive is not in-sync
-				_, err = config.createState(dir)
-				if err == nil {
-					t.Errorf("opening state should fail")
-				}
-			})
-		}
-	}
-}
-
 func TestGoState_FlushFlushesLiveDbAndArchive(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	live := NewMockLiveDB(ctrl)

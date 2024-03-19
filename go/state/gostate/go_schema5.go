@@ -26,6 +26,29 @@ func newS5State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 	if err != nil {
 		return nil, errors.Join(err, mptState.Close())
 	}
+
+	if arch != nil {
+		archiveBlockHeight, empty, err := arch.GetBlockHeight()
+		if err != nil {
+			return nil, err
+		}
+		if !empty {
+			archiveHash, err := arch.GetHash(archiveBlockHeight)
+			if err != nil {
+				return nil, err
+			}
+
+			liveHash, err := mptState.GetHash()
+			if err != nil {
+				return nil, err
+			}
+
+			if archiveHash != liveHash {
+				return nil, fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash)
+			}
+		}
+	}
+
 	return newGoState(&goSchema5{
 		MptState: mptState,
 	}, arch, []func(){archiveCleanup})

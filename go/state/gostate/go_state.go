@@ -61,26 +61,6 @@ func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) (state.S
 	// check archive is in-sync with live,
 	// and start an asynchronous archive writer routine.
 	if archive != nil {
-		archiveBlockHeight, empty, err := archive.GetBlockHeight()
-		if err != nil {
-			return nil, err
-		}
-		if !empty {
-			archiveHash, err := archive.GetHash(archiveBlockHeight)
-			if err != nil {
-				return nil, err
-			}
-
-			liveHash, err := live.GetHash()
-			if err != nil {
-				return nil, err
-			}
-
-			if archiveHash != liveHash {
-				return nil, fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash)
-			}
-		}
-
 		in := make(chan archiveUpdate, 10)
 		flush := make(chan bool)
 		done := make(chan bool)
