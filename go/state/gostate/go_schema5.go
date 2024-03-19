@@ -3,6 +3,7 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"path/filepath"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -35,24 +36,29 @@ func newS5State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 		if err != nil {
 			return nil, errors.Join(err, arch.Close(), mptState.Close())
 		}
-		if !empty {
-			archiveHash, err := arch.GetHash(archiveBlockHeight)
-			if err != nil {
-				return nil, errors.Join(err, arch.Close(), mptState.Close())
-			}
 
-			liveHash, err := mptState.GetHash()
-			if err != nil {
-				return nil, errors.Join(err, arch.Close(), mptState.Close())
-			}
-
-			if archiveHash != liveHash {
-				return nil, errors.Join(
-					fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash),
-					arch.Close(),
-					mptState.Close())
-			}
+		liveHash, err := mptState.GetHash()
+		if err != nil {
+			return nil, errors.Join(err, arch.Close(), mptState.Close())
 		}
+
+		var archiveHash common.Hash
+		if !empty {
+			archiveHash, err = arch.GetHash(archiveBlockHeight)
+			if err != nil {
+				return nil, errors.Join(err, arch.Close(), mptState.Close())
+			}
+		} else {
+			archiveHash = mpt.EmptyNodeEthereumHash
+		}
+
+		if archiveHash != liveHash {
+			return nil, errors.Join(
+				fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash),
+				arch.Close(),
+				mptState.Close())
+		}
+
 	}
 
 	return newGoState(&goSchema5{

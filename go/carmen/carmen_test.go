@@ -256,3 +256,44 @@ func TestCarmen_Archive_And_Live_Must_Be_InSync(t *testing.T) {
 		t.Errorf("opening database should fail")
 	}
 }
+
+func TestCarmen_Empty_Archive_And_Live_Must_Be_InSync(t *testing.T) {
+
+	dir := t.TempDir()
+	// open as non-archive
+	noArchiveConfig := Configuration{
+		Variant: testConfig.Variant,
+		Schema:  testConfig.Schema,
+		Archive: Archive(state.NoArchive),
+	}
+
+	db, err := OpenDatabase(dir, noArchiveConfig, nil)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	const blocks = 10
+	for i := 0; i < blocks; i++ {
+		if err := db.AddBlock(uint64(i), func(context HeadBlockContext) error {
+			if err := context.RunTransaction(func(context TransactionContext) error {
+				context.CreateAccount(Address{byte(i)})
+				context.AddBalance(Address{byte(i)}, big.NewInt(int64(i)))
+				return nil
+			}); err != nil {
+				t.Fatalf("cannot create transaction: %v", err)
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("cannot add block: %v", err)
+		}
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("cannot close database: %v", err)
+	}
+
+	// opening archive should fail as archive and non-archive is not in-sync
+	if _, err := OpenDatabase(dir, testConfig, nil); err == nil {
+		t.Errorf("opening database should fail")
+	}
+}
