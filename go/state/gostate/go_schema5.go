@@ -27,24 +27,30 @@ func newS5State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 		return nil, errors.Join(err, mptState.Close())
 	}
 
-	if arch != nil {
+	if params.Archive == state.S5Archive {
+		// TODO: we can ignore archiveCleanup because it is not used for S5Archive,
+		// It is used for leveldb only, but it should be avoided at all: calling Close() on archive should close
+		// all resources instead
 		archiveBlockHeight, empty, err := arch.GetBlockHeight()
 		if err != nil {
-			return nil, err
+			return nil, errors.Join(err, arch.Close(), mptState.Close())
 		}
 		if !empty {
 			archiveHash, err := arch.GetHash(archiveBlockHeight)
 			if err != nil {
-				return nil, err
+				return nil, errors.Join(err, arch.Close(), mptState.Close())
 			}
 
 			liveHash, err := mptState.GetHash()
 			if err != nil {
-				return nil, err
+				return nil, errors.Join(err, arch.Close(), mptState.Close())
 			}
 
 			if archiveHash != liveHash {
-				return nil, fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash)
+				return nil, errors.Join(
+					fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash),
+					arch.Close(),
+					mptState.Close())
 			}
 		}
 	}
