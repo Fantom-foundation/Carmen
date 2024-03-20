@@ -3,6 +3,7 @@ package gostate
 //go:generate mockgen -source go_state.go -destination go_state_mock.go -package gostate
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -19,6 +20,8 @@ type GoState struct {
 	live    LiveDB
 	archive archive.Archive
 	cleanup []func()
+
+	errors []error // collect errors occurred during operation
 
 	// Channels are only present if archive is enabled.
 	archiveWriter          chan<- archiveUpdate
@@ -56,6 +59,7 @@ func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) state.St
 		live:    live,
 		archive: archive,
 		cleanup: cleanup,
+		errors:  make([]error, 0, 10),
 	}
 
 	// If there is an archive, start an asynchronous archive writer routine.
@@ -109,42 +113,111 @@ type archiveUpdate = struct {
 }
 
 func (s *GoState) Exists(address common.Address) (bool, error) {
-	return s.live.Exists(address)
+	if err := errors.Join(s.errors...); err != nil {
+		return false, err
+	}
+
+	exist, err := s.live.Exists(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return exist, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetBalance(address common.Address) (common.Balance, error) {
-	return s.live.GetBalance(address)
+	if err := errors.Join(s.errors...); err != nil {
+		return common.Balance{}, err
+	}
+
+	balance, err := s.live.GetBalance(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return balance, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetNonce(address common.Address) (common.Nonce, error) {
-	return s.live.GetNonce(address)
+	if err := errors.Join(s.errors...); err != nil {
+		return common.Nonce{}, err
+	}
+
+	nonce, err := s.live.GetNonce(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return nonce, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
-	return s.live.GetStorage(address, key)
+	if err := errors.Join(s.errors...); err != nil {
+		return common.Value{}, err
+	}
+
+	val, err := s.live.GetStorage(address, key)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return val, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetCode(address common.Address) ([]byte, error) {
-	return s.live.GetCode(address)
+	if err := errors.Join(s.errors...); err != nil {
+		return []byte{}, err
+	}
+
+	code, err := s.live.GetCode(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return code, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetCodeSize(address common.Address) (int, error) {
-	return s.live.GetCodeSize(address)
+	if err := errors.Join(s.errors...); err != nil {
+		return 0, err
+	}
+
+	size, err := s.live.GetCodeSize(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return size, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetCodeHash(address common.Address) (common.Hash, error) {
-	return s.live.GetCodeHash(address)
+	if err := errors.Join(s.errors...); err != nil {
+		return common.Hash{}, err
+	}
+
+	h, err := s.live.GetCodeHash(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return h, errors.Join(s.errors...)
 }
 
 func (s *GoState) GetHash() (common.Hash, error) {
-	return s.live.GetHash()
+	if err := errors.Join(s.errors...); err != nil {
+		return common.Hash{}, err
+	}
+
+	h, err := s.live.GetHash()
+	if err != nil {
+		s.errors = append(s.errors, err)
+	}
+	return h, errors.Join(s.errors...)
 }
 
 func (s *GoState) Apply(block uint64, update common.Update) error {
+	if err := errors.Join(s.errors...); err != nil {
+		return err
+	}
+
 	// Apply the changes to the LiveDB.
 	archiveUpdateHints, err := s.live.Apply(block, update)
 	if err != nil {
-		return err
+		s.errors = append(s.errors, err)
+		return errors.Join(s.errors...)
 	}
 
 	if s.archive != nil {
@@ -152,20 +225,19 @@ func (s *GoState) Apply(block uint64, update common.Update) error {
 		s.archiveWriter <- archiveUpdate{block, &update, archiveUpdateHints}
 
 		// Drain potential errors, but do not wait for them.
-		var last error
 		done := false
 		for !done {
 			select {
 			// In case there was an error, process it.
 			case err := <-s.archiveWriterError:
-				last = err
+				s.errors = append(s.errors, err)
 			default:
 				// all errors consumed, moving on
 				done = true
 			}
 		}
-		if last != nil {
-			return last
+		if err := errors.Join(s.errors...); err != nil {
+			return err
 		}
 	} else if archiveUpdateHints != nil {
 		archiveUpdateHints.Release()
@@ -183,10 +255,10 @@ func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 	return mf
 }
 
-func (s *GoState) Flush() (lastErr error) {
+func (s *GoState) Flush() error {
 	err := s.live.Flush()
 	if err != nil {
-		lastErr = err
+		s.errors = append(s.errors, err)
 	}
 
 	// Flush the archive.
@@ -197,16 +269,16 @@ func (s *GoState) Flush() (lastErr error) {
 		<-s.archiveWriterFlushDone
 	}
 
-	return lastErr
+	return s.Check()
 }
 
-func (s *GoState) Close() (lastErr error) {
+func (s *GoState) Close() error {
 	if err := s.Flush(); err != nil {
 		return err
 	}
 
 	if err := s.live.Close(); err != nil {
-		lastErr = err
+		s.errors = append(s.errors, err)
 	}
 
 	// Shut down archive writer background worker.
@@ -221,7 +293,7 @@ func (s *GoState) Close() (lastErr error) {
 	// Close the archive.
 	if s.archive != nil {
 		if err := s.archive.Close(); err != nil {
-			lastErr = err
+			s.errors = append(s.errors, err)
 		}
 	}
 
@@ -232,16 +304,20 @@ func (s *GoState) Close() (lastErr error) {
 			}
 		}
 	}
-	return lastErr
+	return s.Check()
 }
 
 func (s *GoState) GetArchiveState(block uint64) (as state.State, err error) {
 	if s.archive == nil {
 		return nil, state.NoArchiveError
 	}
+	if err := errors.Join(s.errors...); err != nil {
+		return nil, err
+	}
 	lastBlock, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get last block in the archive; %s", err)
+		s.errors = append(s.errors, errors.Join(fmt.Errorf("failed to get last block in the archive"), err))
+		return nil, errors.Join(s.errors...)
 	}
 	if empty {
 		return nil, fmt.Errorf("block %d is not present in the archive (archive is empty)", block)
@@ -259,11 +335,32 @@ func (s *GoState) GetArchiveBlockHeight() (uint64, bool, error) {
 	if s.archive == nil {
 		return 0, false, state.NoArchiveError
 	}
+	if err := errors.Join(s.errors...); err != nil {
+		return 0, false, err
+	}
 	lastBlock, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to get last block in the archive; %s", err)
+		s.errors = append(s.errors, errors.Join(fmt.Errorf("failed to get last block in the archive"), err))
+		return 0, false, errors.Join(s.errors...)
 	}
 	return lastBlock, empty, nil
+}
+
+func (s *GoState) Check() error {
+	// drain errors from archive if present
+	// but does not wait
+	if s.archive != nil {
+		var done bool
+		for !done {
+			select {
+			case err := <-s.archiveWriterError:
+				s.errors = append(s.errors, err)
+			default:
+				done = true
+			}
+		}
+	}
+	return errors.Join(s.errors...)
 }
 
 func (s *GoState) GetProof() (backend.Proof, error) {

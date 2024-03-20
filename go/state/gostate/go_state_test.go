@@ -2,7 +2,9 @@ package gostate
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -422,17 +424,17 @@ func TestFailingStore(t *testing.T) {
 	_ = goSchema.SetStorage(address1, key1, common.Value{})
 
 	_, err = db.GetBalance(address1)
-	if err != errInjectedByTest {
+	if !errors.Is(err, errInjectedByTest) {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 
 	_, err = db.GetNonce(address1)
-	if err != errInjectedByTest {
+	if !errors.Is(err, errInjectedByTest) {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 
 	_, err = db.GetStorage(address1, key1)
-	if err != errInjectedByTest {
+	if !errors.Is(err, errInjectedByTest) {
 		t.Errorf("State service does not return the store err; returned %s", err)
 	}
 }
@@ -450,17 +452,17 @@ func TestFailingIndex(t *testing.T) {
 	goSchema.addressIndex = failingIndex[common.Address, uint32]{goSchema.addressIndex}
 
 	_, err = db.GetBalance(address1)
-	if err != errInjectedByTest {
+	if !errors.Is(err, errInjectedByTest) {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 
 	_, err = db.GetNonce(address1)
-	if err != errInjectedByTest {
+	if !errors.Is(err, errInjectedByTest) {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 
 	_, err = db.GetStorage(address1, key1)
-	if err != errInjectedByTest {
+	if !errors.Is(err, errInjectedByTest) {
 		t.Errorf("State service does not return the index err; returned %s", err)
 	}
 }
@@ -511,4 +513,313 @@ func TestGoState_CloseClosesLiveDbAndArchive(t *testing.T) {
 
 	state := newGoState(live, archive, nil)
 	state.Close()
+}
+
+func TestStateDB_AddBlock_Errors_Propagated_MultipleStateInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := NewMockLiveDB(ctrl)
+
+	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
+
+	injectedErr := fmt.Errorf("injectedError")
+	// The First attempt to call Apply() will fail
+	// while next calls will not happen at all.
+	// The first call is triggered from stateA
+	// while the other call from stateB
+	// will not be executed because the
+	// state is already corrupted.
+	liveDB.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+
+	db := newGoState(liveDB, nil, []func(){})
+
+	stateA := state.CreateStateDBUsing(db)
+	runAddBlock(0, stateA)
+	if err := stateA.Check(); !errors.Is(err, injectedErr) {
+		t.Errorf("first operation should fail: %v", err)
+	}
+
+	stateB := state.CreateStateDBUsing(db)
+	runAddBlock(1, stateB)
+	if err := stateB.Check(); !errors.Is(err, injectedErr) {
+		t.Errorf("second operation should fail: %v", err)
+	}
+}
+
+func TestStateDB_AddBlock_Errors_Propagated_From_Archive_MultipleStateInstances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := NewMockLiveDB(ctrl)
+	archiveDB := archive.NewMockArchive(ctrl)
+
+	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
+	liveDB.EXPECT().Apply(gomock.Any(), gomock.Any())
+
+	archiveDB.EXPECT().Flush().AnyTimes()
+
+	injectedErr := fmt.Errorf("injectedError")
+	// The First attempt to call Add() will fail
+	// while next calls will not happen at all.
+	// The first call is triggered from stateA
+	// while the other call from stateB
+	// will not be executed because the
+	// state is already corrupted.
+	archiveDB.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(injectedErr)
+
+	db := newGoState(liveDB, archiveDB, []func(){})
+	flush := func() {
+		state.UnsafeUnwrapSyncedState(db).(*GoState).archiveWriter <- archiveUpdate{}
+		<-state.UnsafeUnwrapSyncedState(db).(*GoState).archiveWriterFlushDone
+	}
+
+	stateA := state.CreateStateDBUsing(db)
+
+	runAddBlock(0, stateA)
+	flush() // flush db to propagate errors from archive
+	if err := stateA.Check(); !errors.Is(err, injectedErr) {
+		t.Errorf("first operation should fail: %v", err)
+	}
+
+	stateB := state.CreateStateDBUsing(db)
+	runAddBlock(1, stateB)
+	flush() // flush db to propagate errors from archive
+	if err := stateB.Check(); !errors.Is(err, injectedErr) {
+		t.Errorf("second operation should fail: %v", err)
+	}
+}
+
+func TestStateDB_AddBlock_CannotCallRepeatedly_OnError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := NewMockLiveDB(ctrl)
+
+	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
+
+	injectedErr := fmt.Errorf("injectedError")
+
+	// will be called only once as repeated calls will not get triggered.
+	liveDB.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+
+	db := newGoState(liveDB, nil, []func(){})
+
+	stateDB := state.CreateStateDBUsing(db)
+	for i := 0; i < 10; i++ {
+		runAddBlock(uint64(i), stateDB)
+		if err := stateDB.Check(); !errors.Is(err, injectedErr) {
+			t.Errorf("each operation should fail: %v", err)
+		}
+	}
+}
+
+func TestState_Flush_Or_Close_Corrupted_State_Detected(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := NewMockLiveDB(ctrl)
+
+	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
+	liveDB.EXPECT().Flush().AnyTimes()
+
+	injectedErr := fmt.Errorf("injectedError")
+
+	// will be called only once as repeated calls will not get triggered.
+	liveDB.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+
+	db := newGoState(liveDB, nil, []func(){})
+
+	update := common.Update{
+		CreatedAccounts: []common.Address{{0xA}},
+		Balances:        []common.BalanceUpdate{{common.Address{0xA}, common.Balance{0x10}}},
+	}
+
+	// the same result many times
+	for i := 0; i < 10; i++ {
+		if err := db.Apply(uint64(i), update); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+		if err := db.Check(); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+		if err := db.Flush(); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+		if err := db.Close(); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+	}
+}
+
+func TestState_Flush_Or_Close_Corrupted_Archive_Detected(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := NewMockLiveDB(ctrl)
+	archiveDB := archive.NewMockArchive(ctrl)
+
+	injectedErr := fmt.Errorf("injectedError")
+	liveDB.EXPECT().Flush().AnyTimes()
+	liveDB.EXPECT().Close().AnyTimes()
+	archiveDB.EXPECT().Flush().AnyTimes()
+	archiveDB.EXPECT().Close().Return(injectedErr).AnyTimes()
+
+	db := newGoState(liveDB, archiveDB, []func(){})
+
+	// the same result many times
+	for i := 0; i < 10; i++ {
+		if err := db.Close(); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+		if err := db.Check(); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+		if err := db.Flush(); !errors.Is(err, injectedErr) {
+			t.Errorf("operation should fail: %v", err)
+		}
+	}
+}
+
+func TestState_Apply_CannotCallRepeatedly_OnError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := NewMockLiveDB(ctrl)
+
+	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
+
+	injectedErr := fmt.Errorf("injectedError")
+
+	// will be called only once as repeated calls will not get triggered.
+	liveDB.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+
+	db := newGoState(liveDB, nil, []func(){})
+
+	for i := 0; i < 10; i++ {
+		update := common.Update{
+			CreatedAccounts: []common.Address{{0xA}},
+			Balances:        []common.BalanceUpdate{{common.Address{0xA}, common.Balance{0x10}}},
+		}
+		if err := db.Apply(uint64(i), update); !errors.Is(err, injectedErr) {
+			t.Errorf("each operation should fail: %v", err)
+		}
+
+		if err := db.Check(); !errors.Is(err, injectedErr) {
+			t.Errorf("each operation should fail: %v", err)
+		}
+	}
+}
+
+func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
+	addr := common.Address{0xA}
+	key := common.Key{0xB}
+	injectedErr := fmt.Errorf("injectedError")
+
+	const loops = 10
+	for i := 0; i < loops; i++ {
+		t.Run(fmt.Sprintf("operation_%d", i), func(t *testing.T) {
+			results := make([]error, loops)
+			results[i] = injectedErr
+
+			ctrl := gomock.NewController(t)
+			liveDB := NewMockLiveDB(ctrl)
+			liveDB.EXPECT().Exists(addr).Return(false, results[0]).AnyTimes()
+			liveDB.EXPECT().GetBalance(addr).Return(common.Balance{}, results[1]).AnyTimes()
+			liveDB.EXPECT().GetNonce(addr).Return(common.Nonce{}, results[2]).AnyTimes()
+			liveDB.EXPECT().GetStorage(addr, key).Return(common.Value{}, results[3]).AnyTimes()
+			liveDB.EXPECT().GetCode(addr).Return(make([]byte, 0), results[4]).AnyTimes()
+			liveDB.EXPECT().GetCodeSize(addr).Return(0, results[5]).AnyTimes()
+			liveDB.EXPECT().GetCodeHash(addr).Return(common.Hash{}, results[6]).AnyTimes()
+			liveDB.EXPECT().GetHash().Return(common.Hash{}, results[7]).AnyTimes()
+			liveDB.EXPECT().Flush().Return(results[8]).AnyTimes()
+			liveDB.EXPECT().Close().Return(results[9]).AnyTimes()
+
+			db := newGoState(liveDB, nil, []func(){})
+			// calls must succeed until the first failure,
+			// repeated calls must all fail
+			var shouldFail bool
+			for i := 0; i < 2; i++ {
+				shouldFail = shouldFail || errors.Is(results[0], injectedErr)
+				if _, err := db.Exists(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[1], injectedErr)
+				if _, err := db.GetBalance(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[2], injectedErr)
+				if _, err := db.GetNonce(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[3], injectedErr)
+				if _, err := db.GetStorage(addr, key); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[4], injectedErr)
+				if _, err := db.GetCode(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[5], injectedErr)
+				if _, err := db.GetCodeSize(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[6], injectedErr)
+				if _, err := db.GetCodeHash(addr); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[7], injectedErr)
+				if _, err := db.GetHash(); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+				shouldFail = shouldFail || errors.Is(results[8], injectedErr)
+				if err := db.Flush(); shouldFail && !errors.Is(err, injectedErr) {
+					t.Errorf("operation should fail")
+				}
+			}
+
+			if err := db.Close(); !errors.Is(err, injectedErr) {
+				t.Errorf("operation should fail")
+			}
+		})
+	}
+}
+
+func TestState_All_Archive_Operations_May_Cause_Failure(t *testing.T) {
+	injectedErr := fmt.Errorf("injectedError")
+	ctrl := gomock.NewController(t)
+
+	liveDB := NewMockLiveDB(ctrl)
+	liveDB.EXPECT().Flush().AnyTimes()
+
+	archiveDB := archive.NewMockArchive(ctrl)
+	archiveDB.EXPECT().GetBlockHeight().Return(uint64(0), false, injectedErr).Times(2)
+	archiveDB.EXPECT().Flush().AnyTimes()
+
+	db := newGoState(liveDB, archiveDB, []func(){})
+	// repeated calls must all fail
+	for i := 0; i < 2; i++ {
+		if _, err := db.GetArchiveState(0); !errors.Is(err, injectedErr) {
+			t.Errorf("calling archive should fail")
+		}
+		if _, _, err := db.GetArchiveBlockHeight(); !errors.Is(err, injectedErr) {
+			t.Errorf("calling archive should fail")
+		}
+	}
+	// swap calls
+	db = newGoState(liveDB, archiveDB, []func(){})
+	for i := 0; i < 2; i++ {
+		if _, _, err := db.GetArchiveBlockHeight(); !errors.Is(err, injectedErr) {
+			t.Errorf("calling archive should fail")
+		}
+		if _, err := db.GetArchiveState(0); !errors.Is(err, injectedErr) {
+			t.Errorf("calling archive should fail")
+		}
+	}
+
+	if err := db.Close(); !errors.Is(err, injectedErr) {
+		t.Errorf("closing databse should fail")
+	}
+}
+
+func runAddBlock(block uint64, stateDB state.StateDB) {
+	addr := common.Address{byte(block)}
+	key := common.Key{0xA}
+	stateDB.BeginBlock()
+	stateDB.BeginTransaction()
+	stateDB.CreateAccount(addr)
+	stateDB.AddBalance(addr, big.NewInt(100))
+	stateDB.SetState(addr, key, common.Value{123})
+	stateDB.SetCode(addr, make([]byte, 80))
+	stateDB.SetNonce(addr, 1)
+	stateDB.EndTransaction()
+	stateDB.EndBlock(block)
 }

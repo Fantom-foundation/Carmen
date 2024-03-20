@@ -264,6 +264,11 @@ func (cs *CppState) GetArchiveBlockHeight() (uint64, bool, error) {
 	return 0, false, state.NoArchiveError
 }
 
+func (cs *CppState) Check() error {
+	// TODO: implement, see https://github.com/Fantom-foundation/Carmen/issues/313
+	return nil
+}
+
 type objectId struct {
 	obj_loc, obj_type uint64
 }
