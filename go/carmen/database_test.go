@@ -268,23 +268,27 @@ func TestDatabase_OpenFailsForInvalidProperty(t *testing.T) {
 }
 
 func TestHeadBlockContext_CanCreateSequenceOfBlocks(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
+	for _, config := range []Configuration{testConfig, testNonArchiveConfig} {
+		t.Run(fmt.Sprintf("%v", config), func(t *testing.T) {
+			db, err := OpenDatabase(t.TempDir(), config, nil)
+			if err != nil {
+				t.Fatalf("failed to open database: %v", err)
+			}
 
-	for i := 0; i < 10; i++ {
-		block, err := db.BeginBlock(uint64(i))
-		if err != nil {
-			t.Fatalf("failed to create block %d: %v", i, err)
-		}
-		if err := block.Abort(); err != nil {
-			t.Fatalf("failed to abort block %d: %v", i, err)
-		}
-	}
+			for i := 0; i < 10; i++ {
+				block, err := db.BeginBlock(uint64(i))
+				if err != nil {
+					t.Fatalf("failed to create block %d: %v", i, err)
+				}
+				if err := block.Abort(); err != nil {
+					t.Fatalf("failed to abort block %d: %v", i, err)
+				}
+			}
 
-	if err := db.Close(); err != nil {
-		t.Fatalf("failed to close database: %v", err)
+			if err := db.Close(); err != nil {
+				t.Fatalf("failed to close database: %v", err)
+			}
+		})
 	}
 }
 

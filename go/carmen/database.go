@@ -52,7 +52,7 @@ func openStateDb(db state.State, statedb state.StateDB) (Database, error) {
 	}
 
 	lastBlockSig := int64(lastBlock)
-	if empty {
+	if empty || errors.Is(err, state.NoArchiveError) {
 		lastBlockSig = -1
 	}
 	return &database{

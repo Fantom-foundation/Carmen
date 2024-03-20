@@ -14,6 +14,12 @@ var testConfig = Configuration{
 	Archive: Archive(state.S5Archive),
 }
 
+var testNonArchiveConfig = Configuration{
+	Variant: Variant(gostate.VariantGoMemory),
+	Schema:  5,
+	Archive: Archive(state.NoArchive),
+}
+
 func TestCarmen_DatabaseLiveCycle(t *testing.T) {
 	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
 	if err != nil {

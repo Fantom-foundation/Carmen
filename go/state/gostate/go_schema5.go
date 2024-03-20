@@ -3,6 +3,7 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"path/filepath"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -26,6 +27,40 @@ func newS5State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 	if err != nil {
 		return nil, errors.Join(err, mptState.Close())
 	}
+
+	if params.Archive == state.S5Archive {
+		// TODO: we can ignore archiveCleanup because it is not used for S5Archive,
+		// It is used for leveldb only, but it should be avoided at all: calling Close() on archive should close
+		// all resources instead
+		archiveBlockHeight, empty, err := arch.GetBlockHeight()
+		if err != nil {
+			return nil, errors.Join(err, arch.Close(), mptState.Close())
+		}
+
+		liveHash, err := mptState.GetHash()
+		if err != nil {
+			return nil, errors.Join(err, arch.Close(), mptState.Close())
+		}
+
+		var archiveHash common.Hash
+		if !empty {
+			archiveHash, err = arch.GetHash(archiveBlockHeight)
+			if err != nil {
+				return nil, errors.Join(err, arch.Close(), mptState.Close())
+			}
+		} else {
+			archiveHash = mpt.EmptyNodeEthereumHash
+		}
+
+		if archiveHash != liveHash {
+			return nil, errors.Join(
+				fmt.Errorf("archive and live state hashes do not match: archive: 0x%x != live: 0x%x", archiveHash, liveHash),
+				arch.Close(),
+				mptState.Close())
+		}
+
+	}
+
 	return newGoState(&goSchema5{
 		MptState: mptState,
 	}, arch, []func(){archiveCleanup}), nil
