@@ -1,6 +1,7 @@
 package gostate
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -13,54 +14,113 @@ import (
 
 // ArchiveState represents a historical State. Loads data from the Archive.
 type ArchiveState struct {
-	archive archive.Archive
-	block   uint64
+	archive      archive.Archive
+	block        uint64
+	archiveError error
 }
 
 func (s *ArchiveState) Exists(address common.Address) (bool, error) {
-	return s.archive.Exists(s.block, address)
+	if err := s.archiveError; err != nil {
+		return false, err
+	}
+
+	exists, err := s.archive.Exists(s.block, address)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return exists, s.archiveError
 }
 
-func (s *ArchiveState) GetBalance(address common.Address) (balance common.Balance, err error) {
-	return s.archive.GetBalance(s.block, address)
+func (s *ArchiveState) GetBalance(address common.Address) (common.Balance, error) {
+	if err := s.archiveError; err != nil {
+		return common.Balance{}, err
+	}
+
+	balance, err := s.archive.GetBalance(s.block, address)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return balance, s.archiveError
 }
 
-func (s *ArchiveState) GetNonce(address common.Address) (nonce common.Nonce, err error) {
-	return s.archive.GetNonce(s.block, address)
+func (s *ArchiveState) GetNonce(address common.Address) (common.Nonce, error) {
+	if err := s.archiveError; err != nil {
+		return common.Nonce{}, err
+	}
+
+	nonce, err := s.archive.GetNonce(s.block, address)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return nonce, s.archiveError
 }
 
-func (s *ArchiveState) GetStorage(address common.Address, key common.Key) (value common.Value, err error) {
-	return s.archive.GetStorage(s.block, address, key)
+func (s *ArchiveState) GetStorage(address common.Address, key common.Key) (common.Value, error) {
+	if err := s.archiveError; err != nil {
+		return common.Value{}, err
+	}
+
+	storage, err := s.archive.GetStorage(s.block, address, key)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return storage, s.archiveError
 }
 
-func (s *ArchiveState) GetCode(address common.Address) (value []byte, err error) {
-	return s.archive.GetCode(s.block, address)
+func (s *ArchiveState) GetCode(address common.Address) ([]byte, error) {
+	if err := s.archiveError; err != nil {
+		return []byte{}, err
+	}
+
+	code, err := s.archive.GetCode(s.block, address)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return code, s.archiveError
 }
 
 func (s *ArchiveState) GetCodeSize(address common.Address) (size int, err error) {
-	code, err := s.archive.GetCode(s.block, address)
-	if err != nil {
+	if err := s.archiveError; err != nil {
 		return 0, err
 	}
-	return len(code), nil
+
+	code, err := s.archive.GetCode(s.block, address)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+		return 0, s.archiveError
+	}
+	return len(code), s.archiveError
 }
 
 func (s *ArchiveState) GetCodeHash(address common.Address) (hash common.Hash, err error) {
+	if err := s.archiveError; err != nil {
+		return common.Hash{}, err
+	}
+
 	code, err := s.archive.GetCode(s.block, address)
 	if err != nil || len(code) == 0 {
-		return emptyCodeHash, err
+		s.archiveError = errors.Join(s.archiveError, err)
+		return emptyCodeHash, s.archiveError
 	}
 	hasher := sha3.NewLegacyKeccak256()
 	codeHash := common.GetHash(hasher, code)
-	return codeHash, nil
+	return codeHash, s.archiveError
 }
 
 func (s *ArchiveState) Apply(block uint64, update common.Update) error {
 	panic("ArchiveState does not support Apply operation")
 }
 
-func (s *ArchiveState) GetHash() (hash common.Hash, err error) {
-	return s.archive.GetHash(s.block)
+func (s *ArchiveState) GetHash() (common.Hash, error) {
+	if err := s.archiveError; err != nil {
+		return common.Hash{}, err
+	}
+
+	hash, err := s.archive.GetHash(s.block)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return hash, s.archiveError
 }
 
 // GetMemoryFootprint provides sizes of individual components of the state in the memory
@@ -94,28 +154,38 @@ func (s *ArchiveState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVer
 }
 
 func (s *ArchiveState) GetArchiveState(block uint64) (state.State, error) {
+	if err := s.archiveError; err != nil {
+		return nil, err
+	}
+
 	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get block height from the archive; %s", err)
+		s.archiveError = errors.Join(s.archiveError, err)
+		return nil, errors.Join(fmt.Errorf("failed to get block height from the archive"), s.archiveError)
 	}
 	if empty || block > height {
 		return nil, fmt.Errorf("block %d is not present in the archive (height %d)", block, height)
 	}
 	return &ArchiveState{
-		archive: s.archive,
-		block:   block,
-	}, nil
+		archive:      s.archive,
+		block:        block,
+		archiveError: s.archiveError,
+	}, s.archiveError
 }
 
 func (s *ArchiveState) GetArchiveBlockHeight() (uint64, bool, error) {
+	if err := s.archiveError; err != nil {
+		return 0, false, err
+	}
+
 	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
-		return 0, false, fmt.Errorf("failed to get last block in the archive; %s", err)
+		s.archiveError = errors.Join(s.archiveError, err)
+		return 0, false, errors.Join(fmt.Errorf("failed to get last block in the archive"), s.archiveError)
 	}
-	return height, empty, nil
+	return height, empty, s.archiveError
 }
 
 func (s *ArchiveState) Check() error {
-	// TODO implement - collect errors throughout other method calls and return here
-	return nil
+	return s.archiveError
 }
