@@ -161,7 +161,7 @@ func (s *ArchiveState) GetArchiveState(block uint64) (state.State, error) {
 	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
-		return nil, errors.Join(fmt.Errorf("failed to get block height from the archive"), s.archiveError)
+		return nil, errors.Join(fmt.Errorf("failed to get block height from the archive: %w", s.archiveError))
 	}
 	if empty || block > height {
 		return nil, fmt.Errorf("block %d is not present in the archive (height %d)", block, height)
@@ -181,7 +181,7 @@ func (s *ArchiveState) GetArchiveBlockHeight() (uint64, bool, error) {
 	height, empty, err := s.archive.GetBlockHeight()
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
-		return 0, false, errors.Join(fmt.Errorf("failed to get last block in the archive"), s.archiveError)
+		return 0, false, errors.Join(fmt.Errorf("failed to get last block in the archive: %w", s.archiveError))
 	}
 	return height, empty, s.archiveError
 }
