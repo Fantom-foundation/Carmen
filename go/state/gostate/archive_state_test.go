@@ -17,74 +17,82 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 	liveDB := NewMockLiveDB(ctrl)
 	liveDB.EXPECT().Flush().AnyTimes()
 
-	mocks := []func(archive *archive.MockArchive, injectedErr error){
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().GetBlockHeight().Return(uint64(0), false, injectedErr)
+	tests := map[string]struct {
+		setup  func(archive *archive.MockArchive, injectedErr error)
+		action func(stateArchive state.State) error
+	}{
+		"exists": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().Exists(gomock.Any(), gomock.Any()).Return(false, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.Exists(common.Address{})
+				return err
+			},
 		},
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().Exists(gomock.Any(), gomock.Any()).Return(false, injectedErr)
+		"balance": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().GetBalance(gomock.Any(), gomock.Any()).Return(common.Balance{}, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.GetBalance(common.Address{})
+				return err
+			},
 		},
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().GetBalance(gomock.Any(), gomock.Any()).Return(common.Balance{}, injectedErr)
+		"code": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().GetCode(gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.GetCode(common.Address{})
+				return err
+			},
 		},
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().GetCode(gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+		"nonce": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().GetNonce(gomock.Any(), gomock.Any()).Return(common.Nonce{}, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.GetNonce(common.Address{})
+				return err
+			},
 		},
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().GetNonce(gomock.Any(), gomock.Any()).Return(common.Nonce{}, injectedErr)
+		"storage": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().GetStorage(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.GetStorage(common.Address{}, common.Key{})
+				return err
+			},
 		},
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().GetStorage(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr)
+		"hash": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().GetHash(gomock.Any()).Return(common.Hash{}, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.GetHash()
+				return err
+			},
 		},
-		func(archive *archive.MockArchive, injectedErr error) {
-			archive.EXPECT().GetHash(gomock.Any()).Return(common.Hash{}, injectedErr)
+		"blockHeight": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().GetBlockHeight().Return(uint64(0), false, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, _, err := stateArchive.GetArchiveBlockHeight()
+				return err
+			},
 		},
 	}
 
-	calls := []func(stateArchive state.State, expectedErr error){
-		func(stateArchive state.State, expectedErr error) {
-			if _, _, err := stateArchive.GetArchiveBlockHeight(); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
-		func(stateArchive state.State, expectedErr error) {
-			if _, err := stateArchive.Exists(common.Address{}); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
-		func(stateArchive state.State, expectedErr error) {
-			if _, err := stateArchive.GetBalance(common.Address{}); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
-		func(stateArchive state.State, expectedErr error) {
-			if _, err := stateArchive.GetCode(common.Address{}); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
-		func(stateArchive state.State, expectedErr error) {
-			if _, err := stateArchive.GetNonce(common.Address{}); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
-		func(stateArchive state.State, expectedErr error) {
-			if _, err := stateArchive.GetStorage(common.Address{}, common.Key{}); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
-		func(stateArchive state.State, expectedErr error) {
-			if _, err := stateArchive.GetHash(); !errors.Is(err, expectedErr) {
-				t.Errorf("unexpectedErr: %v != %v", err, expectedErr)
-			}
-		},
+	sortedTestNames := make([]string, 0, len(tests))
+	for k := range tests {
+		sortedTestNames = append(sortedTestNames, k)
 	}
 
-	if got, want := len(mocks), len(calls); got != want {
-		t.Fatalf("misconfiguration: %d != %d", got, want)
-	}
-
-	for i := 0; i < len(calls); i++ {
-		t.Run(fmt.Sprintf("operation_%d", i), func(t *testing.T) {
+	for _, name := range sortedTestNames {
+		t.Run(fmt.Sprintf("test_%s", name), func(t *testing.T) {
 			archiveDB := archive.NewMockArchive(ctrl)
 
 			archive := &ArchiveState{
@@ -92,27 +100,35 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 				block:   0,
 			}
 
-			for j, mock := range mocks {
-				if i == j {
-					mock(archiveDB, injectedErr)
+			// mock methods that until current loop it produces no error,
+			// for current loop in injects the error,
+			// and interrupt the loop as further methods will not be tested
+			// during the test, as they are expected to fail
+			for _, subName := range sortedTestNames {
+				if subName == name {
+					tests[subName].setup(archiveDB, injectedErr)
 					break
 				} else {
-					mock(archiveDB, nil)
+					tests[subName].setup(archiveDB, nil)
 				}
 			}
 
 			// call all methods, all must start to fail from the current position
 			var expectedErr error
-			for j, call := range calls {
-				if i == j {
+			for _, subName := range sortedTestNames {
+				if subName == name {
 					expectedErr = injectedErr
 				}
-				call(archive, expectedErr)
+				if got, want := tests[subName].action(archive), expectedErr; !errors.Is(got, want) {
+					t.Errorf("expected error does not match: %v != %v", got, want)
+				}
 			}
 
 			// all must fail when called next time
-			for _, call := range calls {
-				call(archive, injectedErr)
+			for _, test := range tests {
+				if got, want := test.action(archive), expectedErr; !errors.Is(got, want) {
+					t.Errorf("expected error does not match: %v != %v", got, want)
+				}
 			}
 
 			if err := archive.Check(); !errors.Is(err, injectedErr) {
