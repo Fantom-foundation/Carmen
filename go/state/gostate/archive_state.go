@@ -114,3 +114,8 @@ func (s *ArchiveState) GetArchiveBlockHeight() (uint64, bool, error) {
 	}
 	return height, empty, nil
 }
+
+func (s *ArchiveState) Check() error {
+	// TODO implement - collect errors throughout other method calls and return here
+	return nil
+}

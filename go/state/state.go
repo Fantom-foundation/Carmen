@@ -58,6 +58,14 @@ type State interface {
 	// An error is returned if the archive is not enabled or an IO issue occurred.
 	GetArchiveBlockHeight() (height uint64, empty bool, err error)
 
+	// Check checks the state of the DB and reports an error if issues have been
+	// encountered.
+	// Check should be called periodically to validate all interactions
+	// with a State instance.
+	// If an error is reported, all operations since the
+	// last successful check need to be considered invalid.
+	Check() error
+
 	// States can be snapshotted.
 	backend.Snapshotable
 }
