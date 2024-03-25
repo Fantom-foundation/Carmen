@@ -2,10 +2,9 @@ package carmen
 
 import (
 	"fmt"
-	"math/big"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"math/big"
 )
 
 type transactionContext struct {
@@ -146,17 +145,36 @@ func (t *transactionContext) GetRefund() uint64 {
 }
 
 func (t *transactionContext) AddLog(log *Log) {
-	if t.state != nil {
-		t.state.AddLog((*common.Log)(log))
+	if t.state != nil && log != nil {
+		topics := make([]common.Hash, 0, len(log.Topics))
+		for _, topic := range log.Topics {
+			topics = append(topics, common.Hash(topic))
+		}
+		t.state.AddLog(&common.Log{
+			Address: common.Address(log.Address),
+			Topics:  topics,
+			Data:    log.Data,
+			Index:   log.Index,
+		})
 	}
 }
 
 func (t *transactionContext) GetLogs() []*Log {
 	if t.state != nil {
 		logs := t.state.GetLogs()
-		res := make([]*Log, len(logs))
-		for i := 0; i < len(logs); i++ {
-			res[i] = (*Log)(logs[i])
+		res := make([]*Log, 0, len(logs))
+		for _, log := range logs {
+			topics := make([]Hash, 0, len(log.Topics))
+			for _, topic := range log.Topics {
+				topics = append(topics, Hash(topic))
+			}
+
+			res = append(res, &Log{
+				Address: Address(log.Address),
+				Topics:  topics,
+				Data:    log.Data,
+				Index:   log.Index,
+			})
 		}
 		return res
 	}
