@@ -86,12 +86,12 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 		},
 	}
 
-	sortedTestNames := make([]string, 0, len(tests))
+	testNames := make([]string, 0, len(tests))
 	for k := range tests {
-		sortedTestNames = append(sortedTestNames, k)
+		testNames = append(testNames, k)
 	}
 
-	for _, name := range sortedTestNames {
+	for _, name := range testNames {
 		t.Run(fmt.Sprintf("test_%s", name), func(t *testing.T) {
 			archiveDB := archive.NewMockArchive(ctrl)
 
@@ -104,7 +104,7 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 			// for current loop in injects the error,
 			// and interrupt the loop as further methods will not be tested
 			// during the test, as they are expected to fail
-			for _, subName := range sortedTestNames {
+			for _, subName := range testNames {
 				if subName == name {
 					tests[subName].setup(archiveDB, injectedErr)
 					break
@@ -115,7 +115,7 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 
 			// call all methods, all must start to fail from the current position
 			var expectedErr error
-			for _, subName := range sortedTestNames {
+			for _, subName := range testNames {
 				if subName == name {
 					expectedErr = injectedErr
 				}
