@@ -706,7 +706,9 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 
 	const loops = 10
 	for i := 0; i < loops; i++ {
+		i := i
 		t.Run(fmt.Sprintf("operation_%d", i), func(t *testing.T) {
+			t.Parallel()
 			results := make([]error, loops)
 			results[i] = injectedErr
 
