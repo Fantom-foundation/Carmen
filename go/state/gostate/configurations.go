@@ -2,7 +2,10 @@ package gostate
 
 import (
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+
 	"io"
 	"os"
 	"path/filepath"
@@ -19,7 +22,6 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/store/pagedfile"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	archldb "github.com/Fantom-foundation/Carmen/go/backend/archive/ldb"

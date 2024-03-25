@@ -5,6 +5,7 @@
 //
 //	mockgen -source state_db.go -destination state_db_mock.go -package state
 //
+
 // Package state is a generated GoMock package.
 package state
 
