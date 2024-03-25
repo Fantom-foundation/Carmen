@@ -172,6 +172,7 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	tx.SubRefund(100)
 	tx.GetRefund()
 	tx.AddLog(nil)
+	tx.AddLog(&Log{})
 	tx.GetLogs()
 	tx.ClearAccessList()
 	tx.AddAddressToAccessList(address)

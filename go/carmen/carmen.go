@@ -373,4 +373,16 @@ type Value common.Value
 type Hash common.Hash
 
 // Log summarizes a log message recorded during the execution of a contract.
-type Log common.Log
+type Log struct {
+	// -- payload --
+	// Address of the contract that generated the event.
+	Address Address
+	// List of topics the log message should be tagged by.
+	Topics []Hash
+	// The actual log message.
+	Data []byte
+
+	// -- metadata --
+	// Index of the log in the block.
+	Index uint
+}
