@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
-	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
 )
 
@@ -42,14 +42,14 @@ func doExport(context *cli.Context) error {
 	}
 
 	// check the type of target database
-	mptInfo, err := mptIo.CheckMptDirectoryAndGetInfo(dir)
+	mptInfo, err := io.CheckMptDirectoryAndGetInfo(dir)
 	if err != nil {
 		return err
 	}
 
-	export := mptIo.Export
+	export := io.Export
 	if mptInfo.Mode == mpt.Immutable {
-		export = mptIo.ExportArchive
+		export = io.ExportArchive
 	}
 
 	start := time.Now()
