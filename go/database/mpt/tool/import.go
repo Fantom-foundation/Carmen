@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	io2 "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
+	mptIo "github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
 )
 
@@ -45,15 +45,15 @@ var ImportLiveAndArchiveCmd = cli.Command{
 }
 
 func doLiveDbImport(context *cli.Context) error {
-	return doImport(context, io2.ImportLiveDb)
+	return doImport(context, mptIo.ImportLiveDb)
 }
 
 func doArchiveImport(context *cli.Context) error {
-	return doImport(context, io2.ImportArchive)
+	return doImport(context, mptIo.ImportArchive)
 }
 
 func doLiveAndArchiveImport(context *cli.Context) error {
-	return doImport(context, io2.ImportLiveAndArchive)
+	return doImport(context, mptIo.ImportLiveAndArchive)
 }
 
 func doImport(context *cli.Context, runImport func(directory string, in io.Reader) error) error {
