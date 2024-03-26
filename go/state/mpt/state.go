@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"hash"
 	"io"
 	"os"
@@ -15,6 +16,105 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/crypto/sha3"
 )
+
+//go:generate mockgen -source state.go -destination state_mocks.go -package mpt
+
+// Database is a global single access point to Merkle-Patricia-Trie (MPT) data.
+// It contains public methods to retrieve information about accounts
+// and storage slots, furthermore, it allows for private access to single
+// MPT nodes, and their hashing.
+// MPT database maintains a DAG of MPT trees that can be each accessed
+// via a single root node.
+// The database is an appendable storage, where the current state is modified,
+// accessible via the current root node, and eventually sealed and appended
+// to the historical database.
+// Root nodes allow for traversing the respective MPT tree hierarchy
+// to access the history.
+// A Freeze method is provided to seal the current MPT so that further updates
+// will take place on a new version of the MPT.
+// The Current MPT tree may be modified, and the modifications are destructive,
+// until the tree is sealed by Freeze.
+type Database interface {
+	common.FlushAndCloser
+	common.MemoryFootprintProvider
+	NodeSource
+
+	// GetAccountInfo retrieves account information for input root and account address.
+	GetAccountInfo(rootRef *NodeReference, addr common.Address) (AccountInfo, bool, error)
+
+	// SetAccountInfo sets the input account into the storage under the input root and the address.
+	SetAccountInfo(rootRef *NodeReference, addr common.Address, info AccountInfo) (NodeReference, error)
+
+	// GetValue retrieves storage slot for input root, account address, and storage key.
+	GetValue(rootRef *NodeReference, addr common.Address, key common.Key) (common.Value, error)
+
+	// SetValue sets storage slot for input root, account address, and storage key.
+	SetValue(rootRef *NodeReference, addr common.Address, key common.Key, value common.Value) (NodeReference, error)
+
+	// ClearStorage removes all storage slots for the input address and the root.
+	ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error)
+
+	// Freeze seals current trie, preventing further updates to it.
+	Freeze(ref *NodeReference) error
+
+	// VisitTrie allows for travertines the whole trie under the input root
+	VisitTrie(rootRef *NodeReference, visitor NodeVisitor) error
+
+	// Dump provides a debug print of the whole trie under the input root
+	Dump(rootRef *NodeReference)
+
+	// Check verifies internal invariants of the Trie instance. If the trie is
+	// self-consistent, nil is returned and the Trie is ready to be accessed. If
+	// errors are detected, the Trie is to be considered in an invalid state and
+	// the behavior of all other operations is undefined.
+	Check(rootRef *NodeReference) error
+
+	// CheckAll verifies internal invariants of a set of Trie instances rooted by
+	// the given nodes. It is a generalization of the Check() function.
+	CheckAll(rootRefs []*NodeReference) error
+
+	// CheckErrors returns an error that might have been
+	// encountered on this forest in the past.
+	// If the result is not empty, this
+	// Forest is to be considered corrupted and should be discarded.
+	CheckErrors() error
+
+	updateHashesFor(ref *NodeReference) (common.Hash, *NodeHashes, error)
+	setHashesFor(root *NodeReference, hashes *NodeHashes) error
+}
+
+// LiveState represents a single  Merkle-Patricia-Trie (MPT) view to the Database
+// as it was accessed for a single root.
+// It allows for reading and updating state
+// of accounts, storage slots, and codes.
+// Access to the data is provided via a set of getters,
+// while the update is provides via a single Apply function.
+type LiveState interface {
+	common.FlushAndCloser
+	common.UpdateTarget
+	common.MemoryFootprintProvider
+	state.LiveDB
+
+	// GetHash provides hash root of this MPT.
+	// The hash is recomputed if it is not available.
+	GetHash() (hash common.Hash, err error)
+
+	// GetCodeForHash retrieves bytecode stored
+	// under the input hash.
+	GetCodeForHash(hash common.Hash) []byte
+
+	// GetCodes retrieves all codes and their hashes.
+	GetCodes() (map[common.Hash][]byte, error)
+
+	// UpdateHashes recomputes hash root of this trie.
+	UpdateHashes() (common.Hash, *NodeHashes, error)
+
+	// Root provides root of this trie.
+	Root() NodeReference
+
+	closeWithError(externalError error) error
+	setHashes(hashes *NodeHashes) error
+}
 
 // MptState implementation of a state utilizes an MPT based data structure. While
 // functionally equivalent to the Ethereum State MPT, hashes are computed using
@@ -279,7 +379,7 @@ func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
 func (s *MptState) Flush() error {
 	// Flush codes and state trie.
 	return errors.Join(
-		errors.Join(s.trie.forest.GetEncounteredIssues()...),
+		s.trie.forest.CheckErrors(),
 		writeCodes(s.code, s.codefile),
 		s.trie.Flush(),
 	)
@@ -322,6 +422,18 @@ func (s *MptState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf.AddChild("trie", s.trie.GetMemoryFootprint())
 	// TODO: add code store
 	return mf
+}
+
+func (s *MptState) UpdateHashes() (common.Hash, *NodeHashes, error) {
+	return s.trie.UpdateHashes()
+}
+
+func (s *MptState) Root() NodeReference {
+	return s.trie.root
+}
+
+func (s *MptState) setHashes(hashes *NodeHashes) error {
+	return s.trie.setHashes(hashes)
 }
 
 // readCodes parses the content of the given file if it exists or returns

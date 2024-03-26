@@ -144,12 +144,16 @@ func TestLiveTrie_Fail_Read_Data(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("failed to get value from stock")
+			var injectedErr = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
-			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
-			mpt.forest.accounts = stock
-			mpt.root = NewNodeReference(AccountId(123))
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().SetAccountInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
+			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
+			db.EXPECT().SetValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
+			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr)
+			db.EXPECT().ClearStorage(gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr)
+			db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr)
+			mpt.forest = db
 
 			if err := mpt.SetAccountInfo(common.Address{1}, AccountInfo{}); !errors.Is(err, injectedErr) {
 				t.Errorf("setting account should fail")
@@ -207,12 +211,11 @@ func TestLiveTrie_Cannot_Flush_Hashes(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("failed to get value from stock")
+			var injectedErr = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
-			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
-			mpt.forest.accounts = stock
-			mpt.root = NewNodeReference(AccountId(123))
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr)
+			mpt.forest = db
 
 			if err := mpt.Flush(); !errors.Is(err, injectedErr) {
 				t.Errorf("flush should fail")
@@ -667,7 +670,7 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 			}
 
 			// There should be N value nodes now.
-			ids, err := trie.forest.values.GetIds()
+			ids, err := trie.forest.(*Forest).values.GetIds()
 			if err != nil {
 				t.Fatalf("failed to get list of value IDs: %v", err)
 			}
@@ -694,7 +697,7 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 			}
 
 			// check the number of stored nodes to make sure everything but the account got released
-			ids, err = trie.forest.accounts.GetIds()
+			ids, err = trie.forest.(*Forest).accounts.GetIds()
 			if err != nil {
 				t.Fatalf("failed to get list of account IDs: %v", err)
 			}
@@ -702,7 +705,7 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 				t.Errorf("unexpected number of accounts, wanted %d, got %d", want, got)
 			}
 
-			ids, err = trie.forest.branches.GetIds()
+			ids, err = trie.forest.(*Forest).branches.GetIds()
 			if err != nil {
 				t.Fatalf("failed to get list of branch IDs: %v", err)
 			}
@@ -710,7 +713,7 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 				t.Errorf("unexpected number of branches, wanted %d, got %d", want, got)
 			}
 
-			ids, err = trie.forest.extensions.GetIds()
+			ids, err = trie.forest.(*Forest).extensions.GetIds()
 			if err != nil {
 				t.Fatalf("failed to get list of extension IDs: %v", err)
 			}
@@ -718,7 +721,7 @@ func TestLiveTrie_DeleteLargeAccount(t *testing.T) {
 				t.Errorf("unexpected number of extensions, wanted %d, got %d", want, got)
 			}
 
-			ids, err = trie.forest.values.GetIds()
+			ids, err = trie.forest.(*Forest).values.GetIds()
 			if err != nil {
 				t.Fatalf("failed to get list of value IDs: %v", err)
 			}

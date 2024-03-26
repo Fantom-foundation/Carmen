@@ -17,7 +17,7 @@ import (
 // GoState combines a LiveDB and optional Archive implementation into a common
 // Carmen State implementation.
 type GoState struct {
-	live    LiveDB
+	live    state.LiveDB
 	archive archive.Archive
 	cleanup []func()
 
@@ -30,30 +30,7 @@ type GoState struct {
 	archiveWriterError     <-chan error
 }
 
-type LiveDB interface {
-	Exists(address common.Address) (bool, error)
-	GetBalance(address common.Address) (balance common.Balance, err error)
-	GetNonce(address common.Address) (nonce common.Nonce, err error)
-	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
-	GetCode(address common.Address) (value []byte, err error)
-	GetCodeSize(address common.Address) (size int, err error)
-	GetCodeHash(address common.Address) (hash common.Hash, err error)
-	GetHash() (hash common.Hash, err error)
-	Apply(block uint64, update common.Update) (archiveUpdateHints common.Releaser, err error)
-	Flush() error
-	Close() error
-	common.MemoryFootprintProvider
-
-	// getSnapshotableComponents lists all components required to back-up or restore
-	// for snapshotting this schema. Returns nil if snapshotting is not supported.
-	GetSnapshotableComponents() []backend.Snapshotable
-
-	// Called after synching to a new state, requisting the schema to update cached
-	// values or tables not covered by the snapshot synchronization.
-	RunPostRestoreTasks() error
-}
-
-func newGoState(live LiveDB, archive archive.Archive, cleanup []func()) state.State {
+func newGoState(live state.LiveDB, archive archive.Archive, cleanup []func()) state.State {
 
 	res := &GoState{
 		live:    live,

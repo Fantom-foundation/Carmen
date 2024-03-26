@@ -462,11 +462,12 @@ func (f *Forest) Freeze(ref *NodeReference) error {
 	return err
 }
 
-// GetEncounteredIssues returns a list of errors that might have been
-// encountered on this forest in the past. If the result is not empty, this
+// CheckErrors returns an error that might have been
+// encountered on this forest in the past.
+// If the result is not empty, this
 // Forest is to be considered corrupted and should be discarded.
-func (s *Forest) GetEncounteredIssues() []error {
-	return s.errors
+func (s *Forest) CheckErrors() error {
+	return errors.Join(s.errors...)
 }
 
 func (s *Forest) Flush() error {
@@ -476,7 +477,7 @@ func (s *Forest) Flush() error {
 
 	// Consume potential operation and release errors.
 	errs := []error{
-		errors.Join(s.GetEncounteredIssues()...),
+		s.CheckErrors(),
 		s.collectReleaseWorkerErrors(),
 	}
 

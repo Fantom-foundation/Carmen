@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1753,12 +1752,8 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 				t.Errorf("missing forwarded error, wanted %v, got %v", injectedError, err)
 			}
 
-			errs := forest.GetEncounteredIssues()
-			found := slices.ContainsFunc(errs, func(cur error) bool {
-				return errors.Is(cur, injectedError)
-			})
-			if !found {
-				t.Errorf("missing injected error, got %v", errs)
+			if got, want := forest.CheckErrors(), injectedError; !errors.Is(got, want) {
+				t.Errorf("missing injected error, got %v", got)
 			}
 		})
 	}
@@ -1806,7 +1801,7 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 		t.Errorf("unexpected error, wanted %v, got %v", injectedErrorB, err)
 	}
 
-	issues := forest.GetEncounteredIssues()
+	issues := forest.CheckErrors().(interface{ Unwrap() []error }).Unwrap()
 	if len(issues) != 2 {
 		t.Fatalf("missing issues, got %v", issues)
 	}
