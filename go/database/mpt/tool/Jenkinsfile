@@ -53,25 +53,25 @@ pipeline {
 
         stage('Verify sync DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live"
+                sh "cd carmen/go && go run ./database/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live"
             }
         }
 
         stage('Export DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool export ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live ${params.tmpDb}/genesis.dat"
+                sh "cd carmen/go && go run ./database/mpt/tool export ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}/live ${params.tmpDb}/genesis.dat"
             }
         }
 
         stage('Import DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool import ${params.tmpDb}/genesis.dat ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
+                sh "cd carmen/go && go run ./database/mpt/tool import ${params.tmpDb}/genesis.dat ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
             }
         }
 
         stage('Verify recovered DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
+                sh "cd carmen/go && go run ./database/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.firstBlockHeight}-recov/live"
             }
         }
 
@@ -85,7 +85,7 @@ pipeline {
 
         stage('Re-verify DB') {
             steps {
-                sh "cd carmen/go && go run ./state/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.secondBlockHeight}/live"
+                sh "cd carmen/go && go run ./database/mpt/tool verify ${params.tmpDb}/state_db_carmen_go-file_${params.secondBlockHeight}/live"
             }
         }               
     }

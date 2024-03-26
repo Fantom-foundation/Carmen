@@ -34,9 +34,9 @@ pipeline {
                         sh 'cd common && go test ./... -race -run TestNWaysCache_Concurrent_ReadsWrites'
                         sh 'cd common && go test ./... -race -run TestNWaysCache_Concurrent_Sequence'
                         sh 'cd common && go test ./... -race -run TestHash_PassThrough_Parallel'
-                        sh 'cd state/mpt && go test ./... -race -run TestWriteBuffer_CheckThatLockedNodesAreWaitedFor'
-                        sh 'cd state/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedInParallel'
-                        sh 'cd state/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedAndCanceledInParallel'
+                        sh 'cd database/mpt && go test ./... -race -run TestWriteBuffer_CheckThatLockedNodesAreWaitedFor'
+                        sh 'cd database/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedInParallel'
+                        sh 'cd database/mpt && go test ./... -race -run TestWriteBuffer_ElementsCanBeAddedAndCanceledInParallel'
                     }
                 }
                 stage('FastMap') {
@@ -108,7 +108,7 @@ pipeline {
                     steps {
                         deleteDir()
                         unstash 'source'
-                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountOps'
+                        sh 'go test ./database/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountOps'
                     }
                 }  
                 stage('Fuzzing Live MPT - Storage') {
@@ -116,7 +116,7 @@ pipeline {
                     steps {
                         deleteDir()
                         unstash 'source'
-                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
+                        sh 'go test ./database/mpt/ -fuzztime 3h -fuzz FuzzLiveTrie_RandomAccountStorageOps'
                     }
                 }                  
                 stage('Fuzzing Archive MPT - Accounts') {
@@ -124,7 +124,7 @@ pipeline {
                     steps {
                         deleteDir()
                         unstash 'source'
-                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
+                        sh 'go test ./database/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountOps'
                     }
                 }
                 stage('Fuzzing Archive MPT - Storage') {
@@ -132,7 +132,7 @@ pipeline {
                     steps {
                         deleteDir()
                         unstash 'source'
-                        sh 'go test ./state/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
+                        sh 'go test ./database/mpt/ -fuzztime 3h -fuzz FuzzArchiveTrie_RandomAccountStorageOps'
                     }
                 }
             }

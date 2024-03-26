@@ -8,7 +8,7 @@ import (
 )
 
 // Run using
-//  go run ./state/mpt/tool <command> <flags>
+//  go run ./database/mpt/tool <command> <flags>
 
 func main() {
 	app := &cli.App{
