@@ -3854,7 +3854,7 @@ func TestStateDB_BulkLoadApplyForwardsUpdateIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -3881,7 +3881,7 @@ func TestStateDB_BulkLoadCloseReportsApplyIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -3906,7 +3906,7 @@ func TestStateDB_BulkLoadCloseReportsFlushIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -3928,7 +3928,7 @@ func TestStateDB_BulkLoadCloseReportsHashingIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -4011,6 +4011,57 @@ func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 		} else if !component.mayBeEmpty && child.Total() == 0 {
 			t.Errorf("empty component %s", component.name)
 		}
+	}
+
+}
+
+func TestBulkLoad_CloseResetsLocalCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, 0, true)
+
+	gomock.InOrder(
+		mock.EXPECT().Exists(address1),
+		mock.EXPECT().Exists(address2),
+		mock.EXPECT().Exists(address3),
+		mock.EXPECT().Apply(uint64(1), gomock.Any()),
+		mock.EXPECT().Flush().Return(nil),
+		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
+	)
+
+	// fill the db with some accounts
+	db.AddBalance(address1, new(big.Int).SetInt64(100))
+	db.SetNonce(address1, uint64(1))
+	db.SetCode(address1, []byte{1})
+
+	db.AddBalance(address2, new(big.Int).SetInt64(200))
+	db.SetNonce(address2, uint64(2))
+	db.SetCode(address2, []byte{2})
+
+	db.AddBalance(address3, new(big.Int).SetInt64(300))
+	db.SetNonce(address3, uint64(3))
+	db.SetCode(address3, []byte{3})
+
+	bl := db.StartBulkLoad(1)
+	err := bl.Close()
+	if err != nil {
+		t.Errorf("failed to close bulk-load; %v", err)
+	}
+
+	if len(db.accounts) != 0 {
+		t.Fatal("local accounts cache must be empty!")
+	}
+	if len(db.balances) != 0 {
+		t.Fatal("local balances cache must be empty!")
+	}
+	if len(db.nonces) != 0 {
+		t.Fatal("local nonces cache must be empty!")
+	}
+	if len(db.clearedAccounts) != 0 {
+		t.Fatal("local clearedAccounts cache must be empty!")
+	}
+	if len(db.codes) != 0 {
+		t.Fatal("local codes cache must be empty!")
 	}
 
 }
