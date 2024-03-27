@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1395,4 +1397,212 @@ func TestStoreRoots_Cannot_Create(t *testing.T) {
 		t.Errorf("writing roots should fail")
 	}
 
+}
+
+func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
+	injectedErr := fmt.Errorf("injectedError")
+
+	tests := map[string]struct {
+		setup  func(db *MockDatabase, injectedErr error)
+		action func(stateArchive archive.Archive) error
+	}{
+		"exists": {
+			func(db *MockDatabase, injectedErr error) {
+				db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
+			},
+			func(archive archive.Archive) error {
+				_, err := archive.Exists(uint64(0), common.Address{})
+				return err
+			},
+		},
+		"balance": {
+			func(db *MockDatabase, injectedErr error) {
+				db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
+			},
+			func(archive archive.Archive) error {
+				_, err := archive.GetBalance(uint64(0), common.Address{})
+				return err
+			},
+		},
+		"code": {
+			func(db *MockDatabase, injectedErr error) {
+				db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
+			},
+			func(archive archive.Archive) error {
+				_, err := archive.GetCode(uint64(0), common.Address{})
+				return err
+			},
+		},
+		"nonce": {
+			func(db *MockDatabase, injectedErr error) {
+				db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr)
+			},
+			func(archive archive.Archive) error {
+				_, err := archive.GetNonce(uint64(0), common.Address{})
+				return err
+			},
+		},
+		"storage": {
+			func(db *MockDatabase, injectedErr error) {
+				db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(Value{}, injectedErr)
+			},
+			func(archive archive.Archive) error {
+				_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
+				return err
+			},
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("test_%s", name), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			db := NewMockDatabase(ctrl)
+			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, 1000)
+			if err != nil {
+				t.Fatalf("cannot open archive: %v", err)
+			}
+
+			// inject the error to a mock
+			test.setup(db, injectedErr)
+
+			// all operations must fail
+			for subName, test := range tests {
+				if got, want := test.action(archive), injectedErr; !errors.Is(got, want) {
+					t.Errorf("expected error does not match: %v != %v for op: %s", got, want, subName)
+				}
+			}
+
+			// adding an update as well as all flush and close checks must fail
+
+			update := common.Update{
+				CreatedAccounts: []common.Address{{0xB}},
+			}
+
+			if err := archive.Add(0, update, nil); !errors.Is(err, injectedErr) {
+				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
+			}
+			if err := archive.Check(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+			if err := archive.Flush(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+			if err := archive.Close(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
+	injectedErr := fmt.Errorf("injectedError")
+
+	liveStateOps := []func(db *MockLiveState, injectedErr error){
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().GetHash().Return(common.Hash{}, injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().DeleteAccount(gomock.Any()).Return(injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().CreateAccount(gomock.Any()).Return(injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().SetBalance(gomock.Any(), gomock.Any()).Return(injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().SetNonce(gomock.Any(), gomock.Any()).Return(injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().SetCode(gomock.Any(), gomock.Any()).Return(injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().SetStorage(gomock.Any(), gomock.Any(), gomock.Any()).Return(injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().UpdateHashes().Return(common.Hash{}, nil, injectedErr)
+		},
+		func(db *MockLiveState, injectedErr error) {
+			db.EXPECT().setHashes(gomock.Any()).Return(injectedErr)
+		},
+	}
+
+	getters := map[string]func(stateArchive archive.Archive) error{
+		"exists": func(archive archive.Archive) error {
+			_, err := archive.Exists(uint64(0), common.Address{})
+			return err
+		},
+		"balance": func(archive archive.Archive) error {
+			_, err := archive.GetBalance(uint64(0), common.Address{})
+			return err
+		},
+		"code": func(archive archive.Archive) error {
+			_, err := archive.GetCode(uint64(0), common.Address{})
+			return err
+		},
+		"nonce": func(archive archive.Archive) error {
+			_, err := archive.GetNonce(uint64(0), common.Address{})
+			return err
+		},
+		"storage": func(archive archive.Archive) error {
+			_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
+			return err
+		},
+	}
+
+	for i := range liveStateOps {
+		i := i
+		t.Run(fmt.Sprintf("op_%d", i), func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			liveState := NewMockLiveState(ctrl)
+
+			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, 1000)
+			if err != nil {
+				t.Fatalf("cannot open archive: %v", err)
+			}
+
+			// mock up to the current loop
+			for j, liveOp := range liveStateOps {
+				if j == i {
+					liveOp(liveState, injectedErr)
+					break
+				} else {
+					liveOp(liveState, nil)
+				}
+			}
+
+			// trigger error from the livedb
+			update := common.Update{
+				DeletedAccounts: []common.Address{{0xA}},
+				CreatedAccounts: []common.Address{{0xB}},
+				Balances:        []common.BalanceUpdate{{common.Address{0xA}, common.Balance{0x1}}},
+				Nonces:          []common.NonceUpdate{{common.Address{0xA}, common.Nonce{0x1}}},
+				Codes:           []common.CodeUpdate{{common.Address{0xA}, []byte{0x1}}},
+				Slots:           []common.SlotUpdate{{common.Address{0xA}, common.Key{0xB}, common.Value{0x1}}},
+			}
+			if err := archive.Add(0, update, nil); !errors.Is(err, injectedErr) {
+				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
+			}
+
+			// all getters must fail ¨
+			for name, getter := range getters {
+				if err := getter(archive); !errors.Is(err, injectedErr) {
+					t.Errorf("expected error does not match: %v != %v for op: %s", err, injectedErr, name)
+				}
+			}
+
+			if err := archive.Check(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+			if err := archive.Flush(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+			if err := archive.Close(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+		})
+	}
 }
