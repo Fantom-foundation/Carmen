@@ -20,13 +20,15 @@ import (
 // Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
-	head       LiveState // the current head-state
-	forest     Database  // global forest with all versions of LiveState
-	nodeSource NodeSource
-	roots      []Root     // the roots of individual blocks indexed by block height
-	rootsMutex sync.Mutex // protecting access to the roots list
-	rootFile   string     // the file storing the list of roots
-	addMutex   sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
+	head         LiveState // the current head-state
+	forest       Database  // global forest with all versions of LiveState
+	nodeSource   NodeSource
+	roots        []Root     // the roots of individual blocks indexed by block height
+	rootsMutex   sync.Mutex // protecting access to the roots list
+	rootFile     string     // the file storing the list of roots
+	addMutex     sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
+	errorMutex   sync.RWMutex
+	archiveError error // a non-nil error will be stored here should it occur during any archive operation
 }
 
 func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*ArchiveTrie, error) {
@@ -75,6 +77,10 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
+	if err := a.CheckErrors(); err != nil {
+		return err
+	}
+
 	precomputedHashes, _ := hint.(*NodeHashes)
 
 	a.addMutex.Lock()
@@ -91,7 +97,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 		lastHash, err := a.head.GetHash()
 		if err != nil {
 			a.rootsMutex.Unlock()
-			return err
+			return a.addError(err)
 		}
 		for uint64(len(a.roots)) < block {
 			a.roots = append(a.roots, Root{a.head.Root(), lastHash})
@@ -103,39 +109,39 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	// TODO: refactor update infrastructure to use applyUpdate
 	for _, addr := range update.DeletedAccounts {
 		if err := a.head.DeleteAccount(addr); err != nil {
-			return err
+			return a.addError(err)
 		}
 	}
 	for _, addr := range update.CreatedAccounts {
 		if err := a.head.CreateAccount(addr); err != nil {
-			return err
+			return a.addError(err)
 		}
 	}
 	for _, change := range update.Balances {
 		if err := a.head.SetBalance(change.Account, change.Balance); err != nil {
-			return err
+			return a.addError(err)
 		}
 	}
 	for _, change := range update.Nonces {
 		if err := a.head.SetNonce(change.Account, change.Nonce); err != nil {
-			return err
+			return a.addError(err)
 		}
 	}
 	for _, change := range update.Codes {
 		if err := a.head.SetCode(change.Account, change.Code); err != nil {
-			return err
+			return a.addError(err)
 		}
 	}
 	for _, change := range update.Slots {
 		if err := a.head.SetStorage(change.Account, change.Key, change.Value); err != nil {
-			return err
+			return a.addError(err)
 		}
 	}
 
 	// Freeze new state.
 	root := a.head.Root()
 	if err := a.forest.Freeze(&root); err != nil {
-		return err
+		return a.addError(err)
 	}
 
 	// Refresh hashes.
@@ -154,7 +160,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 		}
 	}
 	if err != nil {
-		return err
+		return a.addError(err)
 	}
 
 	// Save new root node.
@@ -180,6 +186,9 @@ func (a *ArchiveTrie) Exists(block uint64, account common.Address) (exists bool,
 		return false, err
 	}
 	_, exists, err = view.GetAccountInfo(account)
+	if err != nil {
+		return false, a.addError(err)
+	}
 	return exists, err
 }
 
@@ -190,7 +199,7 @@ func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance 
 	}
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
-		return common.Balance{}, err
+		return common.Balance{}, a.addError(err)
 	}
 	return info.Balance, nil
 }
@@ -202,7 +211,7 @@ func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte
 	}
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
-		return nil, err
+		return nil, a.addError(err)
 	}
 	return a.head.GetCodeForHash(info.CodeHash), nil
 }
@@ -218,7 +227,7 @@ func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce comm
 	}
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
-		return common.Nonce{}, err
+		return common.Nonce{}, a.addError(err)
 	}
 	return info.Nonce, nil
 }
@@ -226,7 +235,7 @@ func (a *ArchiveTrie) GetNonce(block uint64, account common.Address) (nonce comm
 func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot common.Key) (value common.Value, err error) {
 	view, err := a.getView(block)
 	if err != nil {
-		return common.Value{}, err
+		return common.Value{}, a.addError(err)
 	}
 	return view.GetValue(account, slot)
 }
@@ -294,7 +303,9 @@ func (a *ArchiveTrie) Check() error {
 	for i := 0; i < len(a.roots); i++ {
 		roots[i] = &a.roots[i].NodeRef
 	}
-	return a.forest.CheckAll(roots)
+	return errors.Join(
+		a.CheckErrors(),
+		a.forest.CheckAll(roots))
 }
 
 func (a *ArchiveTrie) Dump() {
@@ -312,6 +323,7 @@ func (a *ArchiveTrie) Flush() error {
 	a.rootsMutex.Lock()
 	defer a.rootsMutex.Unlock()
 	return errors.Join(
+		a.CheckErrors(),
 		a.head.Flush(),
 		StoreRoots(a.rootFile, a.roots),
 	)
@@ -322,6 +334,10 @@ func (a *ArchiveTrie) Close() error {
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
+	if err := a.CheckErrors(); err != nil {
+		return nil, err
+	}
+
 	a.rootsMutex.Lock()
 	length := uint64(len(a.roots))
 	if block >= length {
@@ -331,6 +347,26 @@ func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 	rootRef := a.roots[block].NodeRef
 	a.rootsMutex.Unlock()
 	return getTrieView(rootRef, a.forest), nil
+}
+
+// CheckErrors returns a non-nil error should any error
+// happen during any operation in this archive.
+// In particular, updating this archive or getting
+// values out of it may fail, and in this case,
+// the error is stored and returned in this method.
+// Further calls to this archive produce the same
+// error as this method returns.
+func (a *ArchiveTrie) CheckErrors() error {
+	a.errorMutex.RLock()
+	defer a.errorMutex.RUnlock()
+	return a.archiveError
+}
+
+func (a *ArchiveTrie) addError(err error) error {
+	a.errorMutex.Lock()
+	defer a.errorMutex.Unlock()
+	a.archiveError = errors.Join(a.archiveError, err)
+	return a.archiveError
 }
 
 // ---- Reading and Writing Root Node ID Lists ----

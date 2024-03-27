@@ -583,55 +583,6 @@ func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
 	}
 }
 
-func TestArchiveTrie_Add_Failure_Apply_Update(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
-
-			archive, err := OpenArchiveTrie(dir, config, 1024)
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
-			}
-
-			// inject failing stock to trigger an error applying the update
-			var injectedError = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			live := NewMockLiveState(ctrl)
-			live.EXPECT().DeleteAccount(gomock.Any()).Return(injectedError)
-			live.EXPECT().CreateAccount(gomock.Any()).Return(injectedError)
-			live.EXPECT().SetBalance(gomock.Any(), gomock.Any()).Return(injectedError)
-			live.EXPECT().SetNonce(gomock.Any(), gomock.Any()).Return(injectedError)
-			live.EXPECT().SetCode(gomock.Any(), gomock.Any()).Return(injectedError)
-			live.EXPECT().SetStorage(gomock.Any(), gomock.Any(), gomock.Any()).Return(injectedError)
-			archive.head = live
-
-			// apply each update type in isolation
-			updates := []common.Update{
-				{DeletedAccounts: []common.Address{{1}, {2}}},
-				{CreatedAccounts: []common.Address{{1}, {2}}},
-				{Nonces: []common.NonceUpdate{
-					{Account: common.Address{3}, Nonce: common.ToNonce(3)},
-				}},
-				{Slots: []common.SlotUpdate{
-					{Account: common.Address{3}, Key: common.Key{2}, Value: common.Value{2}},
-				}},
-				{Balances: []common.BalanceUpdate{
-					{Account: common.Address{3}, Balance: common.Balance{3}},
-				}},
-				{Codes: []common.CodeUpdate{
-					{Account: common.Address{3}, Code: make([]byte, 5)},
-				}},
-			}
-
-			for _, update := range updates {
-				if err = archive.Add(0, update, nil); err == nil {
-					t.Errorf("apply should fail")
-				}
-			}
-		})
-	}
-}
-
 func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
@@ -655,60 +606,6 @@ func TestArchiveTrie_GettingView_Block_OutOfRange(t *testing.T) {
 			}
 			if _, err := archive.GetStorage(100, common.Address{1}, common.Key{2}); err == nil {
 				t.Errorf("block out of range should fail")
-			}
-		})
-	}
-}
-
-func TestArchiveTrie_GettingAccountInfo_Fails(t *testing.T) {
-	for _, config := range allMptConfigs {
-		t.Run(config.Name, func(t *testing.T) {
-			dir := t.TempDir()
-
-			{
-				archive, err := OpenArchiveTrie(dir, config, 1024)
-				if err != nil {
-					t.Fatalf("failed to create empty archive, err %v", err)
-				}
-
-				if err = archive.Add(0, common.Update{
-					CreatedAccounts: []common.Address{{1}},
-				}, nil); err != nil {
-					t.Fatalf("cannot apply update: %s", err)
-				}
-
-				if err := archive.Close(); err != nil {
-					t.Fatalf("cannot close archive: %v", err)
-				}
-			}
-
-			archive, err := OpenArchiveTrie(dir, config, 1024)
-			if err != nil {
-				t.Fatalf("failed to create empty archive, err %v", err)
-			}
-
-			// inject failing stock to trigger an error applying the update
-			var innjectedError = errors.New("injectedError")
-			ctrl := gomock.NewController(t)
-			db := NewMockDatabase(ctrl)
-			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, innjectedError).Times(4)
-			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, innjectedError)
-			archive.forest = db
-
-			if _, err := archive.Exists(0, common.Address{1}); !errors.Is(err, innjectedError) {
-				t.Errorf("getting account should fail")
-			}
-			if _, err := archive.GetBalance(0, common.Address{1}); !errors.Is(err, innjectedError) {
-				t.Errorf("getting account should fail")
-			}
-			if _, err := archive.GetCode(0, common.Address{1}); !errors.Is(err, innjectedError) {
-				t.Errorf("getting account should fail")
-			}
-			if _, err := archive.GetNonce(0, common.Address{1}); !errors.Is(err, innjectedError) {
-				t.Errorf("getting account should fail")
-			}
-			if _, err := archive.GetStorage(0, common.Address{1}, common.Key{2}); !errors.Is(err, innjectedError) {
-				t.Errorf("getting account should fail")
 			}
 		})
 	}
@@ -1444,7 +1341,7 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 		},
 		"storage": {
 			func(db *MockDatabase, injectedErr error) {
-				db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(Value{}, injectedErr)
+				db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr)
 			},
 			func(archive archive.Archive) error {
 				_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
@@ -1457,11 +1354,16 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 		test := test
 		t.Run(fmt.Sprintf("test_%s", name), func(t *testing.T) {
 			t.Parallel()
+
 			ctrl := gomock.NewController(t)
 			db := NewMockDatabase(ctrl)
 			archive, err := OpenArchiveTrie(t.TempDir(), S4ArchiveConfig, 1000)
 			if err != nil {
 				t.Fatalf("cannot open archive: %v", err)
+			}
+
+			if err := archive.Add(2, common.Update{CreatedAccounts: []common.Address{{0xA}}}, nil); err != nil {
+				t.Fatalf("failed to update archive: %v", err)
 			}
 
 			// inject the error to a mock
@@ -1482,6 +1384,9 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 
 			if err := archive.Add(0, update, nil); !errors.Is(err, injectedErr) {
 				t.Errorf("expected failure did not happen: got: %v != want: %v", err, injectedErr)
+			}
+			if err := archive.CheckErrors(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
 			}
 			if err := archive.Check(); !errors.Is(err, injectedErr) {
 				t.Errorf("check should fail")
@@ -1595,6 +1500,9 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			}
 
 			if err := archive.Check(); !errors.Is(err, injectedErr) {
+				t.Errorf("check should fail")
+			}
+			if err := archive.CheckErrors(); !errors.Is(err, injectedErr) {
 				t.Errorf("check should fail")
 			}
 			if err := archive.Flush(); !errors.Is(err, injectedErr) {
