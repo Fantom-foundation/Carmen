@@ -20,8 +20,9 @@ import (
 // Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
-	head       LiveState  // the current head-state
-	forest     Database   // global forest with all versions of LiveState
+	head       LiveState // the current head-state
+	forest     Database  // global forest with all versions of LiveState
+	nodeSource NodeSource
 	roots      []Root     // the roots of individual blocks indexed by block height
 	rootsMutex sync.Mutex // protecting access to the roots list
 	rootFile   string     // the file storing the list of roots
@@ -54,10 +55,11 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 		return nil, err
 	}
 	return &ArchiveTrie{
-		head:     state,
-		forest:   forest,
-		roots:    roots,
-		rootFile: rootfile,
+		head:       state,
+		forest:     forest,
+		nodeSource: forest,
+		roots:      roots,
+		rootFile:   rootfile,
 	}, nil
 }
 
@@ -259,7 +261,7 @@ func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 	before := a.roots[srcBlock].NodeRef
 	after := a.roots[trgBlock].NodeRef
 	a.rootsMutex.Unlock()
-	return GetDiff(a.forest, &before, &after)
+	return GetDiff(a.nodeSource, &before, &after)
 }
 
 // GetDiffForBlock computes the diff introduced by the given block compared to its
@@ -273,7 +275,7 @@ func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
 		}
 		after := a.roots[0].NodeRef
 		a.rootsMutex.Unlock()
-		return GetDiff(a.forest, &emptyNodeReference, &after)
+		return GetDiff(a.nodeSource, &emptyNodeReference, &after)
 	}
 	return a.GetDiff(block-1, block)
 }

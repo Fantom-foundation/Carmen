@@ -21,8 +21,7 @@ import (
 
 // Database is a global single access point to Merkle-Patricia-Trie (MPT) data.
 // It contains public methods to retrieve information about accounts
-// and storage slots, furthermore, it allows for private access to single
-// MPT nodes, and their hashing.
+// and storage slots, furthermore, it allows for  MPT nodes hashing.
 // MPT database maintains a DAG of MPT trees that can be each accessed
 // via a single root node.
 // The database is an appendable storage, where the current state is modified,
@@ -37,7 +36,6 @@ import (
 type Database interface {
 	common.FlushAndCloser
 	common.MemoryFootprintProvider
-	NodeSource
 
 	// GetAccountInfo retrieves account information for input root and account address.
 	GetAccountInfo(rootRef *NodeReference, addr common.Address) (AccountInfo, bool, error)
@@ -90,7 +88,6 @@ type Database interface {
 // Access to the data is provided via a set of getters,
 // while the update is provides via a single Apply function.
 type LiveState interface {
-	common.FlushAndCloser
 	common.UpdateTarget
 	common.MemoryFootprintProvider
 	state.LiveDB
