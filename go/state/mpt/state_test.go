@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/sha3"
 
@@ -267,12 +266,16 @@ func TestState_StateModifications_Failing(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
-			var injectedErr = errors.New("failed to get value from stock")
+			var injectedErr = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
-			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, injectedErr)
-			state.trie.forest.accounts = stock
-			state.trie.root = NewNodeReference(AccountId(123))
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().updateHashesFor(gomock.Any()).Return(common.Hash{}, nil, injectedErr).AnyTimes()
+			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, injectedErr).AnyTimes()
+			db.EXPECT().SetAccountInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr).AnyTimes()
+			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, injectedErr).AnyTimes()
+			db.EXPECT().SetValue(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(NodeReference{}, injectedErr).AnyTimes()
+			db.EXPECT().VisitTrie(gomock.Any(), gomock.Any()).Return(injectedErr)
+			state.trie.forest = db
 
 			if _, err := state.Exists(common.Address{1}); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
@@ -498,7 +501,13 @@ func TestState_ForestErrorIsReportedInFlushAndClose(t *testing.T) {
 	}
 
 	injectedError := fmt.Errorf("injected error")
-	state.trie.forest.errors = []error{injectedError}
+	ctrl := gomock.NewController(t)
+	db := NewMockDatabase(ctrl)
+	db.EXPECT().updateHashesFor(gomock.Any()).AnyTimes()
+	db.EXPECT().Flush().AnyTimes()
+	db.EXPECT().Close().AnyTimes()
+	db.EXPECT().CheckErrors().Return(injectedError).Times(2)
+	state.trie.forest = db
 
 	if want, got := injectedError, state.Flush(); !errors.Is(got, want) {
 		t.Errorf("missing forest error in Flush result, wanted %v, got %v", want, got)

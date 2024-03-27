@@ -13,7 +13,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"go.uber.org/mock/gomock"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/utils"
@@ -469,7 +468,7 @@ func TestArchiveTrie_Add_DuplicatedBlock(t *testing.T) {
 	}
 }
 
-func TestArchiveTrie_Add_HashingFails(t *testing.T) {
+func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -480,11 +479,41 @@ func TestArchiveTrie_Add_HashingFails(t *testing.T) {
 			}
 
 			// inject a failing hasher
-			var injectedError = errors.New("hashing failed")
+			var injectedError = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
-			hasher := NewMockhasher(ctrl)
-			hasher.EXPECT().updateHashes(gomock.Any(), gomock.Any()).AnyTimes().Return(common.Hash{}, nil, injectedError)
-			archive.head.trie.forest.hasher = hasher
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().Freeze(gomock.Any())
+			live := NewMockLiveState(ctrl)
+			live.EXPECT().GetHash().Return(common.Hash{}, nil)
+			live.EXPECT().Root().AnyTimes()
+			live.EXPECT().UpdateHashes().Return(common.Hash{}, nil, injectedError)
+			archive.head = live
+			archive.forest = db
+
+			// fails for computing missing blocks
+			if err = archive.Add(20, common.Update{}, nil); !errors.Is(err, injectedError) {
+				t.Errorf("applying update should fail")
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_Add_LiveStateFailsHashing(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 0)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			// inject a failing hasher
+			var injectedError = errors.New("injectedError")
+			ctrl := gomock.NewController(t)
+			live := NewMockLiveState(ctrl)
+			live.EXPECT().GetHash().Return(common.Hash{}, injectedError)
+			archive.head = live
 
 			// fails for computing missing blocks
 			if err = archive.Add(20, common.Update{
@@ -492,6 +521,26 @@ func TestArchiveTrie_Add_HashingFails(t *testing.T) {
 			}, nil); !errors.Is(err, injectedError) {
 				t.Errorf("applying update should fail")
 			}
+		})
+	}
+}
+
+func TestArchiveTrie_Add_LiveStateFailsCreateAccount(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			archive, err := OpenArchiveTrie(dir, config, 0)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+
+			// inject a failing hasher
+			var injectedError = errors.New("injectedError")
+			ctrl := gomock.NewController(t)
+			live := NewMockLiveState(ctrl)
+			live.EXPECT().CreateAccount(gomock.Any()).Return(injectedError)
+			archive.head = live
 
 			// fails for computing this block
 			if err = archive.Add(0, common.Update{
@@ -516,10 +565,12 @@ func TestArchiveTrie_Add_FreezingFails(t *testing.T) {
 			// inject failing stock to trigger an error applying the update
 			var injectedErr = errors.New("failed to get value from stock")
 			ctrl := gomock.NewController(t)
-			stock := stock.NewMockStock[uint64, ValueNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, injectedErr)
-			archive.head.trie.forest.values = stock
-			archive.head.trie.root = NewNodeReference(ValueId(123))
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().Freeze(gomock.Any()).Return(injectedErr)
+			live := NewMockLiveState(ctrl)
+			live.EXPECT().Root().Return(NewNodeReference(ValueId(123)))
+			archive.head = live
+			archive.forest = db
 
 			// update to freeze a node fails
 			if err = archive.Add(0, common.Update{}, nil); !errors.Is(err, injectedErr) {
@@ -541,12 +592,16 @@ func TestArchiveTrie_Add_Failure_Apply_Update(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
-			var injectedError = errors.New("failed to get value from stock")
+			var injectedError = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
-			stock := stock.NewMockStock[uint64, ValueNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(ValueNode{}, injectedError)
-			archive.head.trie.forest.values = stock
-			archive.head.trie.root = NewNodeReference(ValueId(123))
+			live := NewMockLiveState(ctrl)
+			live.EXPECT().DeleteAccount(gomock.Any()).Return(injectedError)
+			live.EXPECT().CreateAccount(gomock.Any()).Return(injectedError)
+			live.EXPECT().SetBalance(gomock.Any(), gomock.Any()).Return(injectedError)
+			live.EXPECT().SetNonce(gomock.Any(), gomock.Any()).Return(injectedError)
+			live.EXPECT().SetCode(gomock.Any(), gomock.Any()).Return(injectedError)
+			live.EXPECT().SetStorage(gomock.Any(), gomock.Any(), gomock.Any()).Return(injectedError)
+			archive.head = live
 
 			// apply each update type in isolation
 			updates := []common.Update{
@@ -631,11 +686,12 @@ func TestArchiveTrie_GettingAccountInfo_Fails(t *testing.T) {
 			}
 
 			// inject failing stock to trigger an error applying the update
-			var innjectedError = errors.New("failed to get value from stock")
+			var innjectedError = errors.New("injectedError")
 			ctrl := gomock.NewController(t)
-			stock := stock.NewMockStock[uint64, AccountNode](ctrl)
-			stock.EXPECT().Get(gomock.Any()).AnyTimes().Return(AccountNode{}, innjectedError)
-			archive.head.trie.forest.accounts = stock
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().GetAccountInfo(gomock.Any(), gomock.Any()).Return(AccountInfo{}, false, innjectedError).Times(4)
+			db.EXPECT().GetValue(gomock.Any(), gomock.Any(), gomock.Any()).Return(common.Value{}, innjectedError)
+			archive.forest = db
 
 			if _, err := archive.Exists(0, common.Address{1}); !errors.Is(err, innjectedError) {
 				t.Errorf("getting account should fail")

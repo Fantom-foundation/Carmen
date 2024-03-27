@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/state"
 	"io"
 	"os"
 	"path"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state/gostate"
 	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 	"golang.org/x/exp/maps"
 )
@@ -402,7 +402,7 @@ func (c *importContext) deleteSlot(key common.Key) {
 	c.currentUpdate.AppendSlotUpdate(c.currentAccount, key, common.Value{})
 }
 
-func (c *importContext) finishCurrentBlock(archive archive.Archive, live gostate.LiveDB) error {
+func (c *importContext) finishCurrentBlock(archive archive.Archive, live state.LiveDB) error {
 	if c.currentUpdate.IsEmpty() {
 		return nil
 	}

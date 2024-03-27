@@ -18,7 +18,7 @@ import (
 // trie view on a forest.
 type LiveTrie struct {
 	// The node structure of the trie.
-	forest *Forest
+	forest Database
 	// The root node of the trie.
 	root NodeReference
 	// The file name for storing trie metadata.
@@ -71,9 +71,8 @@ func makeTrie(
 	directory string,
 	forest *Forest,
 ) (*LiveTrie, error) {
-	issues := forest.GetEncounteredIssues()
-	if len(issues) != 0 {
-		return nil, fmt.Errorf("unable to open corrupted forest: %w", errors.Join(issues...))
+	if err := forest.CheckErrors(); err != nil {
+		return nil, fmt.Errorf("unable to open corrupted forest: %w", err)
 	}
 	// Parse metadata file.
 	metadatafile := directory + "/meta.json"
@@ -89,7 +88,7 @@ func makeTrie(
 }
 
 // getTrieView creates a live trie based on an existing Forest instance.
-func getTrieView(root NodeReference, forest *Forest) *LiveTrie {
+func getTrieView(root NodeReference, forest Database) *LiveTrie {
 	return &LiveTrie{
 		root:   root,
 		forest: forest,
