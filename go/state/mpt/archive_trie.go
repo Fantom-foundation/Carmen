@@ -330,7 +330,9 @@ func (a *ArchiveTrie) Flush() error {
 }
 
 func (a *ArchiveTrie) Close() error {
-	return a.head.closeWithError(a.Flush())
+	return errors.Join(
+		a.CheckErrors(),
+		a.head.closeWithError(a.Flush()))
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
