@@ -4103,7 +4103,7 @@ func TestBulkload_AskingDbForDataAfterStartingBulkloadDoesNotCauseError(t *testi
 
 	// Local cache must be empty
 	if len(db.accounts) != 2 {
-		t.Fatalf("local cache has wrong number of accounts; got: %v, want: %v", len(db.accounts), 2)
+		t.Errorf("local cache has wrong number of accounts; got: %v, want: %v", len(db.accounts), 2)
 	}
 	// Account exists, so we should not need to create it in the bulk-load
 	bl.SetBalance(address1, big.NewInt(100))
