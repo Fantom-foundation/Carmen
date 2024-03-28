@@ -5,11 +5,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/state"
 	"io"
 	"os"
 	"path"
 	"sort"
+
+	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
