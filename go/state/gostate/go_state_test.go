@@ -487,7 +487,7 @@ func TestGetMemoryFootprint(t *testing.T) {
 
 func TestGoState_FlushFlushesLiveDbAndArchive(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	live := NewMockLiveDB(ctrl)
+	live := state.NewMockLiveDB(ctrl)
 	archive := archive.NewMockArchive(ctrl)
 
 	live.EXPECT().Flush()
@@ -499,7 +499,7 @@ func TestGoState_FlushFlushesLiveDbAndArchive(t *testing.T) {
 
 func TestGoState_CloseClosesLiveDbAndArchive(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	live := NewMockLiveDB(ctrl)
+	live := state.NewMockLiveDB(ctrl)
 	archive := archive.NewMockArchive(ctrl)
 
 	gomock.InOrder(
@@ -517,7 +517,7 @@ func TestGoState_CloseClosesLiveDbAndArchive(t *testing.T) {
 
 func TestStateDB_AddBlock_Errors_Propagated_MultipleStateInstances(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 
 	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
 
@@ -547,7 +547,7 @@ func TestStateDB_AddBlock_Errors_Propagated_MultipleStateInstances(t *testing.T)
 
 func TestStateDB_AddBlock_Errors_Propagated_From_Archive_MultipleStateInstances(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 	archiveDB := archive.NewMockArchive(ctrl)
 
 	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
@@ -588,7 +588,7 @@ func TestStateDB_AddBlock_Errors_Propagated_From_Archive_MultipleStateInstances(
 
 func TestStateDB_AddBlock_CannotCallRepeatedly_OnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 
 	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
 
@@ -610,7 +610,7 @@ func TestStateDB_AddBlock_CannotCallRepeatedly_OnError(t *testing.T) {
 
 func TestState_Flush_Or_Close_Corrupted_State_Detected(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 
 	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
 	liveDB.EXPECT().Flush().AnyTimes()
@@ -646,7 +646,7 @@ func TestState_Flush_Or_Close_Corrupted_State_Detected(t *testing.T) {
 
 func TestState_Flush_Or_Close_Corrupted_Archive_Detected(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 	archiveDB := archive.NewMockArchive(ctrl)
 
 	injectedErr := fmt.Errorf("injectedError")
@@ -673,7 +673,7 @@ func TestState_Flush_Or_Close_Corrupted_Archive_Detected(t *testing.T) {
 
 func TestState_Apply_CannotCallRepeatedly_OnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 
 	liveDB.EXPECT().Exists(gomock.Any()).AnyTimes()
 
@@ -713,7 +713,7 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 			results[i] = injectedErr
 
 			ctrl := gomock.NewController(t)
-			liveDB := NewMockLiveDB(ctrl)
+			liveDB := state.NewMockLiveDB(ctrl)
 			liveDB.EXPECT().Exists(addr).Return(false, results[0]).AnyTimes()
 			liveDB.EXPECT().GetBalance(addr).Return(common.Balance{}, results[1]).AnyTimes()
 			liveDB.EXPECT().GetNonce(addr).Return(common.Nonce{}, results[2]).AnyTimes()
@@ -779,7 +779,7 @@ func TestState_All_Archive_Operations_May_Cause_Failure(t *testing.T) {
 	injectedErr := fmt.Errorf("injectedError")
 	ctrl := gomock.NewController(t)
 
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 	liveDB.EXPECT().Flush().AnyTimes()
 
 	archiveDB := archive.NewMockArchive(ctrl)
