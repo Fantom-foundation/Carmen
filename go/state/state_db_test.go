@@ -4025,22 +4025,36 @@ func TestBulkLoad_CloseResetsLocalCache(t *testing.T) {
 		mock.EXPECT().Exists(address2),
 		mock.EXPECT().Exists(address3),
 		mock.EXPECT().Apply(uint64(1), gomock.Any()),
-		mock.EXPECT().Flush().Return(nil),
+		mock.EXPECT().Flush(),
 		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
 	)
 
 	// fill the db with some accounts
-	db.AddBalance(address1, new(big.Int).SetInt64(100))
+	db.AddBalance(address1, big.NewInt(100))
 	db.SetNonce(address1, uint64(1))
 	db.SetCode(address1, []byte{1})
 
-	db.AddBalance(address2, new(big.Int).SetInt64(200))
+	db.AddBalance(address2, big.NewInt(200))
 	db.SetNonce(address2, uint64(2))
 	db.SetCode(address2, []byte{2})
 
-	db.AddBalance(address3, new(big.Int).SetInt64(300))
+	db.AddBalance(address3, big.NewInt(300))
 	db.SetNonce(address3, uint64(3))
 	db.SetCode(address3, []byte{3})
+
+	// Local cache should not be empty after filling the database
+	if len(db.accounts) == 0 {
+		t.Error("local accounts cache must not be empty")
+	}
+	if len(db.balances) == 0 {
+		t.Error("local balances cache must not be empty")
+	}
+	if len(db.nonces) == 0 {
+		t.Error("local nonces cache must not be empty")
+	}
+	if len(db.codes) == 0 {
+		t.Error("local codes cache must not be empty")
+	}
 
 	bl := db.StartBulkLoad(1)
 	err := bl.Close()
@@ -4048,22 +4062,68 @@ func TestBulkLoad_CloseResetsLocalCache(t *testing.T) {
 		t.Errorf("failed to close bulk-load; %v", err)
 	}
 
+	// Local cache must be empty
 	if len(db.accounts) != 0 {
-		t.Fatal("local accounts cache must be empty!")
+		t.Error("local accounts cache must be empty")
 	}
 	if len(db.balances) != 0 {
-		t.Fatal("local balances cache must be empty!")
+		t.Error("local balances cache must be empty")
 	}
 	if len(db.nonces) != 0 {
-		t.Fatal("local nonces cache must be empty!")
-	}
-	if len(db.clearedAccounts) != 0 {
-		t.Fatal("local clearedAccounts cache must be empty!")
+		t.Error("local nonces cache must be empty")
 	}
 	if len(db.codes) != 0 {
-		t.Fatal("local codes cache must be empty!")
+		t.Error("local codes cache must be empty")
+	}
+}
+
+func TestBulkload_AskingDbForDataAfterStartingBulkloadDoesNotCauseError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, 0, true)
+
+	gomock.InOrder(
+		mock.EXPECT().Exists(address2),
+		mock.EXPECT().Exists(address1),
+		mock.EXPECT().Apply(uint64(1), gomock.Any()),
+		mock.EXPECT().Flush(),
+		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
+		mock.EXPECT().Exists(address2),
+		mock.EXPECT().Apply(uint64(1), gomock.Any()),
+		mock.EXPECT().Flush(),
+		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
+	)
+
+	// Pre-inserted one account
+	db.CreateAccount(address2)
+
+	bl := db.StartBulkLoad(1)
+	// Database does not contain account with address1, hence this account is inserted
+	db.Exist(address1)
+
+	// Local cache must be empty
+	if len(db.accounts) != 2 {
+		t.Fatalf("local cache has wrong number of accounts; got: %v, want: %v", len(db.accounts), 2)
+	}
+	// Account exists, so we should not need to create it in the bulk-load
+	bl.SetBalance(address1, big.NewInt(100))
+	bl.SetNonce(address1, uint64(1))
+	bl.SetCode(address1, []byte{1})
+	err := bl.Close()
+	if err != nil {
+		t.Errorf("failed to close bulk-load; %v", err)
 	}
 
+	bl = db.StartBulkLoad(1)
+	db.Exist(address2)
+	// Account exists, so we should not need to create it in the bulk-load
+	bl.SetBalance(address2, big.NewInt(200))
+	bl.SetNonce(address2, uint64(2))
+	bl.SetCode(address2, []byte{2})
+	err = bl.Close()
+	if err != nil {
+		t.Errorf("failed to close bulk-load; %v", err)
+	}
 }
 
 func TestSlotIdOrder(t *testing.T) {
