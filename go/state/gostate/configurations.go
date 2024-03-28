@@ -167,7 +167,7 @@ func newGoMemoryState(params state.Parameters) (state.State, error) {
 		return nil, err
 	}
 
-	var live LiveDB
+	var live state.LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex := indexmem.NewIndex[common.SlotIdx[uint32], uint32](common.SlotIdx32Serializer{})
@@ -324,7 +324,7 @@ func newGoFileState(params state.Parameters) (state.State, error) {
 		return nil, err
 	}
 
-	var live LiveDB
+	var live state.LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdx32Serializer{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
@@ -505,7 +505,7 @@ func newGoCachedFileState(params state.Parameters) (state.State, error) {
 		return nil, err
 	}
 
-	var live LiveDB
+	var live state.LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := file.NewIndex[common.SlotIdx[uint32], uint32](slotsIndexPath, common.SlotIdx32Serializer{}, common.Identifier32Serializer{}, common.SlotIdx32Hasher{}, common.SlotIdx32Comparator{})
@@ -642,7 +642,7 @@ func newGoLeveLIndexAndStoreState(params state.Parameters) (state.State, error) 
 		return nil, err
 	}
 
-	var live LiveDB
+	var live state.LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})
@@ -771,7 +771,7 @@ func newGoCachedLeveLIndexAndStoreState(params state.Parameters) (state.State, e
 		return nil, err
 	}
 
-	var live LiveDB
+	var live state.LiveDB
 	switch params.Schema {
 	case 1:
 		slotIndex, err := ldb.NewIndex[common.SlotIdx[uint32], uint32](db, backend.SlotLocIndexKey, common.SlotIdx32Serializer{}, common.Identifier32Serializer{})

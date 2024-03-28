@@ -5,7 +5,6 @@
 //
 //	mockgen -source go_state.go -destination go_state_mock.go -package gostate
 //
-
 // Package gostate is a generated GoMock package.
 package gostate
 

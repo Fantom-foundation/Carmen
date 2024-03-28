@@ -58,6 +58,37 @@ type State interface {
 	// An error is returned if the archive is not enabled or an IO issue occurred.
 	GetArchiveBlockHeight() (height uint64, empty bool, err error)
 
+	// Check checks the state of the DB and reports an error if issues have been
+	// encountered.
+	// Check should be called periodically to validate all interactions
+	// with a State instance.
+	// If an error is reported, all operations since the
+	// last successful check need to be considered invalid.
+	Check() error
+
 	// States can be snapshotted.
 	backend.Snapshotable
+}
+
+type LiveDB interface {
+	Exists(address common.Address) (bool, error)
+	GetBalance(address common.Address) (balance common.Balance, err error)
+	GetNonce(address common.Address) (nonce common.Nonce, err error)
+	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
+	GetCode(address common.Address) (value []byte, err error)
+	GetCodeSize(address common.Address) (size int, err error)
+	GetCodeHash(address common.Address) (hash common.Hash, err error)
+	GetHash() (hash common.Hash, err error)
+	Apply(block uint64, update common.Update) (archiveUpdateHints common.Releaser, err error)
+	Flush() error
+	Close() error
+	common.MemoryFootprintProvider
+
+	// getSnapshotableComponents lists all components required to back-up or restore
+	// for snapshotting this schema. Returns nil if snapshotting is not supported.
+	GetSnapshotableComponents() []backend.Snapshotable
+
+	// Called after synching to a new state, requisting the schema to update cached
+	// values or tables not covered by the snapshot synchronization.
+	RunPostRestoreTasks() error
 }

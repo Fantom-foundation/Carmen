@@ -20,7 +20,9 @@ import (
 // Its main task is to keep track of state roots and to freeze the head
 // state after each block.
 type ArchiveTrie struct {
-	head       *MptState  // the current head-state
+	head       LiveState // the current head-state
+	forest     Database  // global forest with all versions of LiveState
+	nodeSource NodeSource
 	roots      []Root     // the roots of individual blocks indexed by block height
 	rootsMutex sync.Mutex // protecting access to the roots list
 	rootFile   string     // the file storing the list of roots
@@ -53,9 +55,11 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 		return nil, err
 	}
 	return &ArchiveTrie{
-		head:     state,
-		roots:    roots,
-		rootFile: rootfile,
+		head:       state,
+		forest:     forest,
+		nodeSource: forest,
+		roots:      roots,
+		rootFile:   rootfile,
 	}, nil
 }
 
@@ -90,7 +94,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 			return err
 		}
 		for uint64(len(a.roots)) < block {
-			a.roots = append(a.roots, Root{a.head.trie.root, lastHash})
+			a.roots = append(a.roots, Root{a.head.Root(), lastHash})
 		}
 	}
 	a.rootsMutex.Unlock()
@@ -129,8 +133,8 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	}
 
 	// Freeze new state.
-	trie := a.head.trie
-	if err := trie.forest.Freeze(&trie.root); err != nil {
+	root := a.head.Root()
+	if err := a.forest.Freeze(&root); err != nil {
 		return err
 	}
 
@@ -139,12 +143,12 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	var hash common.Hash
 	if precomputedHashes == nil {
 		var hashes *NodeHashes
-		hash, hashes, err = a.head.trie.UpdateHashes()
+		hash, hashes, err = a.head.UpdateHashes()
 		if hashes != nil {
 			hashes.Release()
 		}
 	} else {
-		err = a.head.trie.setHashes(precomputedHashes)
+		err = a.head.setHashes(precomputedHashes)
 		if err == nil {
 			hash, err = a.head.GetHash()
 		}
@@ -155,7 +159,7 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 
 	// Save new root node.
 	a.rootsMutex.Lock()
-	a.roots = append(a.roots, Root{trie.root, hash})
+	a.roots = append(a.roots, Root{a.head.Root(), hash})
 	a.rootsMutex.Unlock()
 	return nil
 }
@@ -257,7 +261,7 @@ func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 	before := a.roots[srcBlock].NodeRef
 	after := a.roots[trgBlock].NodeRef
 	a.rootsMutex.Unlock()
-	return GetDiff(a.head.trie.forest, &before, &after)
+	return GetDiff(a.nodeSource, &before, &after)
 }
 
 // GetDiffForBlock computes the diff introduced by the given block compared to its
@@ -271,7 +275,7 @@ func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
 		}
 		after := a.roots[0].NodeRef
 		a.rootsMutex.Unlock()
-		return GetDiff(a.head.trie.forest, &emptyNodeReference, &after)
+		return GetDiff(a.nodeSource, &emptyNodeReference, &after)
 	}
 	return a.GetDiff(block-1, block)
 }
@@ -290,7 +294,7 @@ func (a *ArchiveTrie) Check() error {
 	for i := 0; i < len(a.roots); i++ {
 		roots[i] = &a.roots[i].NodeRef
 	}
-	return a.head.trie.forest.CheckAll(roots)
+	return a.forest.CheckAll(roots)
 }
 
 func (a *ArchiveTrie) Dump() {
@@ -298,7 +302,7 @@ func (a *ArchiveTrie) Dump() {
 	defer a.rootsMutex.Unlock()
 	for i, root := range a.roots {
 		fmt.Printf("\nBlock %d: %x\n", i, root.Hash)
-		view := getTrieView(root.NodeRef, a.head.trie.forest)
+		view := getTrieView(root.NodeRef, a.forest)
 		view.Dump()
 		fmt.Printf("\n")
 	}
@@ -326,7 +330,7 @@ func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 	}
 	rootRef := a.roots[block].NodeRef
 	a.rootsMutex.Unlock()
-	return getTrieView(rootRef, a.head.trie.forest), nil
+	return getTrieView(rootRef, a.forest), nil
 }
 
 // ---- Reading and Writing Root Node ID Lists ----

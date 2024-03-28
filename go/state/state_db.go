@@ -103,6 +103,7 @@ type StateDB interface {
 	EndEpoch(number uint64)
 
 	// Flushes committed state to disk.
+	// Deprecated: these methods shuold not be called, one statedb inst should not close/flush global databsae
 	Flush() error
 	Close() error
 
@@ -440,8 +441,9 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 
 func (s *stateDB) setAccountState(addr common.Address, state accountLifeCycleState) {
 	s.Exist(addr) // < make sure s.accounts[addr] is initialized
-	val := s.accounts[addr]
-	if val.current == state {
+	val, exists := s.accounts[addr]
+	// exists will be false when calling s.Exists() did not succeed
+	if !exists || val.current == state {
 		return
 	}
 	oldState := val.current
@@ -1106,6 +1108,12 @@ func (s *stateDB) EndBlock(block uint64) {
 		s.errors = append(s.errors, err)
 		return
 	}
+
+	// Skip applying changes if there have been any issues.
+	if err := s.Check(); err != nil {
+		return
+	}
+
 	update := common.Update{}
 
 	// Clear all accounts that have been deleted at some point during this block.
@@ -1217,7 +1225,9 @@ func (s *stateDB) GetHash() common.Hash {
 }
 
 func (s *stateDB) Check() error {
-	return errors.Join(s.errors...)
+	return errors.Join(
+		errors.Join(s.errors...),
+		s.state.Check())
 }
 
 func (s *stateDB) Flush() error {

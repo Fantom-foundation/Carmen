@@ -5,7 +5,6 @@
 //
 //	mockgen -source state.go -destination state_mock.go -package state
 //
-
 // Package state is a generated GoMock package.
 package state
 
@@ -52,6 +51,20 @@ func (m *MockState) Apply(block uint64, update common.Update) error {
 func (mr *MockStateMockRecorder) Apply(block, update any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockState)(nil).Apply), block, update)
+}
+
+// Check mocks base method.
+func (m *MockState) Check() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Check")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Check indicates an expected call of Check.
+func (mr *MockStateMockRecorder) Check() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockState)(nil).Check))
 }
 
 // Close mocks base method.
