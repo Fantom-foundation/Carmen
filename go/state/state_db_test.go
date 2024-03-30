@@ -4077,52 +4077,34 @@ func TestBulkLoad_CloseResetsLocalCache(t *testing.T) {
 	}
 }
 
-func TestBulkload_AskingDbForDataAfterStartingBulkloadDoesNotCauseError(t *testing.T) {
+func TestStateDB_EffectsOfBulkLoadAreSeenByStateDB(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	mock := NewMockState(ctrl)
-	db := createStateDBWith(mock, 0, true)
+	state := NewMockState(ctrl)
+	db := createStateDBWith(state, 0, true)
 
+	var addr = common.Address{1}
 	gomock.InOrder(
-		mock.EXPECT().Exists(address2),
-		mock.EXPECT().Exists(address1),
-		mock.EXPECT().Apply(uint64(1), gomock.Any()),
-		mock.EXPECT().Flush(),
-		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
-		mock.EXPECT().Exists(address2),
-		mock.EXPECT().Apply(uint64(1), gomock.Any()),
-		mock.EXPECT().Flush(),
-		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
+		state.EXPECT().Exists(addr).Return(false, nil),
+		state.EXPECT().Apply(gomock.Any(), gomock.Any()),
+		state.EXPECT().Flush(),
+		state.EXPECT().GetHash(),
+		state.EXPECT().Exists(addr).Return(true, nil),
 	)
 
-	// Pre-inserted one account
-	db.CreateAccount(address2)
+	// The state is fetched before the bulk-load, causing it to be
+	// cached in the StateDB.
+	db.Exist(addr)
 
-	bl := db.StartBulkLoad(1)
-	// Database does not contain account with address1, hence this account is inserted
-	db.Exist(address1)
-
-	// Local cache must be empty
-	if len(db.accounts) != 2 {
-		t.Errorf("local cache has wrong number of accounts; got: %v, want: %v", len(db.accounts), 2)
-	}
-	// Account exists, so we should not need to create it in the bulk-load
-	bl.SetBalance(address1, big.NewInt(100))
-	bl.SetNonce(address1, uint64(1))
-	bl.SetCode(address1, []byte{1})
-	err := bl.Close()
-	if err != nil {
-		t.Errorf("failed to close bulk-load; %v", err)
+	// In the bulk-load, the account is created.
+	load := db.StartBulkLoad(1)
+	load.CreateAccount(addr)
+	if err := load.Close(); err != nil {
+		t.Errorf("failed to complete bulk-load: %v", err)
 	}
 
-	bl = db.StartBulkLoad(1)
-	db.Exist(address2)
-	// Account exists, so we should not need to create it in the bulk-load
-	bl.SetBalance(address2, big.NewInt(200))
-	bl.SetNonce(address2, uint64(2))
-	bl.SetCode(address2, []byte{2})
-	err = bl.Close()
-	if err != nil {
-		t.Errorf("failed to close bulk-load; %v", err)
+	// The StateDB should be aware of the changes made by te bulk-load.
+	if !db.Exist(addr) {
+		t.Errorf("account should exist after bulk-load")
 	}
 }
 
