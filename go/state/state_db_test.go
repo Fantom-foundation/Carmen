@@ -4102,7 +4102,7 @@ func TestStateDB_EffectsOfBulkLoadAreSeenByStateDB(t *testing.T) {
 		t.Errorf("failed to complete bulk-load: %v", err)
 	}
 
-	// The StateDB should be aware of the changes made by te bulk-load.
+	// The StateDB should be aware of the changes made by the bulk-load.
 	if !db.Exist(addr) {
 		t.Errorf("account should exist after bulk-load")
 	}
