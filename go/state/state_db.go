@@ -1246,7 +1246,7 @@ func (s *stateDB) Close() error {
 
 func (s *stateDB) StartBulkLoad(block uint64) BulkLoad {
 	s.storedDataCache.Clear()
-	return &bulkLoad{s.state, common.Update{}, block, nil}
+	return &bulkLoad{s, common.Update{}, block, nil}
 }
 
 func (s *stateDB) GetMemoryFootprint() *common.MemoryFootprint {
@@ -1325,7 +1325,7 @@ func (s *stateDB) resetState(state State) {
 }
 
 type bulkLoad struct {
-	state  State
+	db     *stateDB
 	update common.Update
 	block  uint64
 	errs   []error
@@ -1362,7 +1362,7 @@ func (l *bulkLoad) apply() {
 		l.errs = append(l.errs, err)
 		return
 	}
-	err := l.state.Apply(l.block, l.update)
+	err := l.db.state.Apply(l.block, l.update)
 	l.update = common.Update{}
 	if err != nil {
 		l.errs = append(l.errs, err)
@@ -1377,11 +1377,13 @@ func (l *bulkLoad) Close() error {
 	}
 
 	// Flush out all inserted data.
-	if err := l.state.Flush(); err != nil {
+	if err := l.db.state.Flush(); err != nil {
 		return err
 	}
 	// Compute hash to bring cached hashes up-to-date.
-	_, err := l.state.GetHash()
+	_, err := l.db.state.GetHash()
+	// Reset state to allow starting bulk-load with existing database.
+	l.db.resetState(l.db.state)
 	return err
 }
 

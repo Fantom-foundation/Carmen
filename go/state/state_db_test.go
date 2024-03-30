@@ -3854,7 +3854,7 @@ func TestStateDB_BulkLoadApplyForwardsUpdateIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -3881,7 +3881,7 @@ func TestStateDB_BulkLoadCloseReportsApplyIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -3906,7 +3906,7 @@ func TestStateDB_BulkLoadCloseReportsFlushIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -3928,7 +3928,7 @@ func TestStateDB_BulkLoadCloseReportsHashingIssues(t *testing.T) {
 
 	bulk := bulkLoad{
 		block: 12,
-		state: state,
+		db:    createStateDBWith(state, 0, true),
 	}
 	if len(bulk.errs) != 0 {
 		t.Fatalf("initial bulk load instance is not error free")
@@ -4013,6 +4013,99 @@ func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 		}
 	}
 
+}
+
+func TestBulkLoad_CloseResetsLocalCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, 0, true)
+
+	gomock.InOrder(
+		mock.EXPECT().Exists(address1),
+		mock.EXPECT().Exists(address2),
+		mock.EXPECT().Exists(address3),
+		mock.EXPECT().Apply(uint64(1), gomock.Any()),
+		mock.EXPECT().Flush(),
+		mock.EXPECT().GetHash().Return(common.Hash{}, nil),
+	)
+
+	// fill the db with some accounts
+	db.AddBalance(address1, big.NewInt(100))
+	db.SetNonce(address1, uint64(1))
+	db.SetCode(address1, []byte{1})
+
+	db.AddBalance(address2, big.NewInt(200))
+	db.SetNonce(address2, uint64(2))
+	db.SetCode(address2, []byte{2})
+
+	db.AddBalance(address3, big.NewInt(300))
+	db.SetNonce(address3, uint64(3))
+	db.SetCode(address3, []byte{3})
+
+	// Local cache should not be empty after filling the database
+	if len(db.accounts) == 0 {
+		t.Error("local accounts cache must not be empty")
+	}
+	if len(db.balances) == 0 {
+		t.Error("local balances cache must not be empty")
+	}
+	if len(db.nonces) == 0 {
+		t.Error("local nonces cache must not be empty")
+	}
+	if len(db.codes) == 0 {
+		t.Error("local codes cache must not be empty")
+	}
+
+	bl := db.StartBulkLoad(1)
+	err := bl.Close()
+	if err != nil {
+		t.Errorf("failed to close bulk-load; %v", err)
+	}
+
+	// Local cache must be empty
+	if len(db.accounts) != 0 {
+		t.Error("local accounts cache must be empty")
+	}
+	if len(db.balances) != 0 {
+		t.Error("local balances cache must be empty")
+	}
+	if len(db.nonces) != 0 {
+		t.Error("local nonces cache must be empty")
+	}
+	if len(db.codes) != 0 {
+		t.Error("local codes cache must be empty")
+	}
+}
+
+func TestStateDB_EffectsOfBulkLoadAreSeenByStateDB(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	db := createStateDBWith(state, 0, true)
+
+	var addr = common.Address{1}
+	gomock.InOrder(
+		state.EXPECT().Exists(addr).Return(false, nil),
+		state.EXPECT().Apply(gomock.Any(), gomock.Any()),
+		state.EXPECT().Flush(),
+		state.EXPECT().GetHash(),
+		state.EXPECT().Exists(addr).Return(true, nil),
+	)
+
+	// The state is fetched before the bulk-load, causing it to be
+	// cached in the StateDB.
+	db.Exist(addr)
+
+	// In the bulk-load, the account is created.
+	load := db.StartBulkLoad(1)
+	load.CreateAccount(addr)
+	if err := load.Close(); err != nil {
+		t.Errorf("failed to complete bulk-load: %v", err)
+	}
+
+	// The StateDB should be aware of the changes made by the bulk-load.
+	if !db.Exist(addr) {
+		t.Errorf("account should exist after bulk-load")
+	}
 }
 
 func TestSlotIdOrder(t *testing.T) {
