@@ -72,6 +72,55 @@ func TestCarmen_BlockProcessing(t *testing.T) {
 	}
 }
 
+func TestCarmen_HeadBlockQuery(t *testing.T) {
+	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	getNonce := func() uint64 {
+		res := uint64(0)
+		err := db.QueryHeadState(func(ctxt QueryContext) {
+			res = ctxt.GetNonce(Address{})
+		})
+		if err != nil {
+			t.Fatalf("failed to retrieve nonce: %v", err)
+		}
+		return res
+	}
+
+	block := uint64(0)
+	incrementNonce := func() {
+		err := db.AddBlock(block, func(ctxt HeadBlockContext) error {
+			return ctxt.RunTransaction(func(ctxt TransactionContext) error {
+				nonce := ctxt.GetNonce(Address{})
+				ctxt.SetNonce(Address{}, nonce+1)
+				return nil
+			})
+		})
+		if err != nil {
+			t.Fatalf("failed to increment nonce: %v", err)
+		}
+		block++
+	}
+
+	if want, got := uint64(0), getNonce(); want != got {
+		t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+	}
+
+	incrementNonce()
+
+	if want, got := uint64(1), getNonce(); want != got {
+		t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+	}
+
+	incrementNonce()
+
+	if want, got := uint64(2), getNonce(); want != got {
+		t.Errorf("unexpected nonce, wanted %d, got %d", want, got)
+	}
+}
+
 func TestCarmen_ArchiveQuery(t *testing.T) {
 	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
 	if err != nil {

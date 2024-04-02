@@ -3,8 +3,9 @@ package carmen
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/state"
 	"sync"
+
+	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
 type commonContext struct {
@@ -59,7 +60,21 @@ func (c *headBlockContext) Commit() error {
 	if c.db == nil {
 		return fmt.Errorf("cannot commit invalid block context")
 	}
+
+	// Obtain exclusive (write) access to the head state.
+	c.db.headStateCommitLock.Lock()
+	headStateCommitLockReleased := false
+	defer func() {
+		// release the lock in case EndBlock panics.
+		if !headStateCommitLockReleased {
+			c.db.headStateCommitLock.Unlock()
+		}
+	}()
+
 	c.state.EndBlock(uint64(c.block))
+	c.db.headStateCommitLock.Unlock()
+	headStateCommitLockReleased = true
+
 	c.db.moveBlockNumber(c.block)
 
 	return c.end() // < invalidates this context

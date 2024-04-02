@@ -36,10 +36,15 @@ func OpenDatabase(directory string, implementation Configuration, properties Pro
 // At any time, only one thread can run a transaction adding a new block.
 // Many threads may, however, query the history at the same time.
 type Database interface {
-
-	// GetHeadStateHash returns state hash root of
-	// the current blockchain head.
-	GetHeadStateHash() (Hash, error)
+	// QueryHeadState provides read-only query access to the current
+	// blockchain head's state. All operations within the query are
+	// guaranteed to be based on a consistent block state. Multiple
+	// queries may be conducted concurrently. However, query operations
+	// should be of short duration, since long-running queries may
+	// prevent the head state from being updated. If this call produces
+	// an error, the data retrieved in the query should be considered
+	// invalid.
+	QueryHeadState(query func(QueryContext)) error
 
 	// BeginBlock starts a new block context, which is used
 	// to access and possibly modify the current world state.
@@ -323,6 +328,42 @@ type TransactionContext interface {
 	// Abort releases underlying resources without committing results. This
 	// invalidates this instance, which should be discarded after this call.
 	Abort() error
+}
+
+// QueryContext is a context provided to query operations for retrieving
+// information for a selected state. All operations are thread-safe and
+// responses are guaranteed to be derived from a consistent state. Thus,
+// access is synchronized regarding potential concurrent updates.
+type QueryContext interface {
+	// GetBalance returns the current balance of an account with
+	// the given address.
+	GetBalance(Address) *big.Int
+
+	// GetNonce returns current nonce of an account with
+	// the given address.
+	GetNonce(Address) uint64
+
+	// GetState returns a value of the input key
+	// stored in the account with the given address.
+	// This method returns an ongoing value that could be
+	// updated in the current transaction.
+	GetState(Address, Key) Value
+
+	// GetCode returns smart contract byte-code
+	// of an account with the given address.
+	GetCode(Address) []byte
+
+	// GetCodeHash returns a hash of smart contract
+	// byte-code for an account with the given address.
+	GetCodeHash(Address) Hash
+
+	// GetCodeSize returns the size of smart contract
+	// byte-code for an account with the given address.
+	GetCodeSize(Address) int
+
+	// GetStateHash get the state root hash for the state queried
+	// by this context.
+	GetStateHash() Hash
 }
 
 // BulkLoad provides a context for fast filling of the database.

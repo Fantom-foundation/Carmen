@@ -3,9 +3,10 @@ package carmen
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"sync"
 )
 
 const errDbClosed = common.ConstError("database is already closed")
@@ -70,6 +71,24 @@ type database struct {
 	headStateInUse bool
 	numQueries     int // number of active history queries
 	lastBlock      int64
+
+	headStateCommitLock sync.RWMutex // < read permission held by queries and write permission held by block commits
+}
+
+func (db *database) QueryHeadState(query func(QueryContext)) error {
+	db.lock.Lock()
+	if db.db == nil {
+		db.lock.Unlock()
+		return errDbClosed
+	}
+
+	context := &queryContext{state: db.db}
+	db.headStateCommitLock.RLock()
+	defer db.headStateCommitLock.RUnlock()
+
+	db.lock.Unlock()
+	query(context)
+	return context.Check()
 }
 
 func (db *database) BeginBlock(block uint64) (HeadBlockContext, error) {

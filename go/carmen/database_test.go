@@ -3,9 +3,6 @@ package carmen
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state"
-	"go.uber.org/mock/gomock"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -13,6 +10,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/state"
+	"go.uber.org/mock/gomock"
 )
 
 func TestDatabase_OpenWorksForFreshDirectory(t *testing.T) {
@@ -1022,7 +1023,7 @@ func TestDatabase_QueryBlock_ClosedDB(t *testing.T) {
 	}
 }
 
-func TestDatabase_GetHeadStateHash_ClosedDB(t *testing.T) {
+func TestDatabase_QueryHeadState_ClosedDB(t *testing.T) {
 	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -1031,7 +1032,7 @@ func TestDatabase_GetHeadStateHash_ClosedDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	if _, err := db.GetHeadStateHash(); !errors.Is(err, errDbClosed) {
+	if err := db.QueryHeadState(nil); !errors.Is(err, errDbClosed) {
 		t.Errorf("should not be able to query closed database")
 	}
 }
@@ -1395,4 +1396,65 @@ func TestDatabase_Async_AddBlock_QueryHistory_Close_ShouldNotThrowUnexpectedErro
 			}
 		}
 	}
+}
+
+func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
+	// This test case checks that query operations see a consistent state
+	// when running concurrent updates.
+	const (
+		numReaders        = 10
+		numReadsPerReader = 10000
+		numBlocks         = 100
+	)
+	dir := t.TempDir()
+	db, err := OpenDatabase(dir, testConfig, nil)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	addr1 := Address{1}
+	addr2 := Address{2}
+
+	// Have a few goroutines testing that nonces are in sync.
+	var group sync.WaitGroup
+	group.Add(numReaders)
+	for i := 0; i < numReaders; i++ {
+		go func() {
+			defer group.Done()
+			for i := 0; i < numReadsPerReader; i++ {
+				err := db.QueryHeadState(func(ctxt QueryContext) {
+					// Readers should always see the same nonces.
+					n1 := ctxt.GetNonce(addr1)
+					n2 := ctxt.GetNonce(addr2)
+					if n1 != n2 {
+						t.Errorf("nonces out of sync: %d vs %d", n1, n2)
+					}
+				})
+				if err != nil {
+					t.Errorf("failed to query head: %v", err)
+				}
+			}
+		}()
+	}
+
+	// Add blocks updating nonces in sync.
+	for i := 0; i < numBlocks; i++ {
+		block := uint64(i)
+		err := db.AddBlock(block, func(context HeadBlockContext) error {
+			if err := context.RunTransaction(func(context TransactionContext) error {
+				// In all blocks the nonces of both accounts are identical.
+				context.SetNonce(addr1, block)
+				context.SetNonce(addr2, block)
+				return nil
+			}); err != nil {
+				t.Fatalf("cannot commit transaction: %v", err)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Errorf("failed to add block %d: %v", i, err)
+		}
+	}
+
+	group.Wait()
 }
