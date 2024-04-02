@@ -3,18 +3,19 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
-	"testing"
 )
 
 func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 	injectedErr := fmt.Errorf("injectedError")
 	ctrl := gomock.NewController(t)
 
-	liveDB := NewMockLiveDB(ctrl)
+	liveDB := state.NewMockLiveDB(ctrl)
 	liveDB.EXPECT().Flush().AnyTimes()
 
 	tests := map[string]struct {
