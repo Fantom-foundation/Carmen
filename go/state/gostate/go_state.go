@@ -1,7 +1,5 @@
 package gostate
 
-//go:generate mockgen -source go_state.go -destination go_state_mock.go -package gostate
-
 import (
 	"errors"
 	"fmt"
