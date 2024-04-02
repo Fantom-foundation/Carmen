@@ -5,7 +5,6 @@
 //
 //	mockgen -source carmen.go -destination carmen_mock.go -package carmen
 //
-
 // Package carmen is a generated GoMock package.
 package carmen
 
