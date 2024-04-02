@@ -1306,10 +1306,7 @@ func TestArchiveTrie_FailingGetterOperation_InvalidatesArchive(t *testing.T) {
 		return append(cp[k:], cp[:k]...)
 	}
 
-	names := make([]string, 0, len(archiveGetters))
-	for name := range archiveGetters {
-		names = append(names, name)
-	}
+	names := maps.Keys(archiveGetters)
 
 	// rotate getters to start the experiment from all existing getters.
 	for i := 0; i < len(archiveGetters); i++ {
