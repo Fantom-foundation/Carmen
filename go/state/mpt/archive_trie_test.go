@@ -1366,8 +1366,8 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 	injectedErr := fmt.Errorf("injectedError")
 
 	liveStateOps := []struct {
-		name string
-		mock func(db *MockLiveState, injectedErr error)
+		name            string
+		addExpectations func(db *MockLiveState, injectedErr error)
 	}{{"DeleteAccount", func(db *MockLiveState, injectedErr error) {
 		db.EXPECT().DeleteAccount(gomock.Any()).Return(injectedErr)
 	},
@@ -1416,10 +1416,10 @@ func TestArchiveTrie_FailingLiveStateUpdate_InvalidatesArchive(t *testing.T) {
 			// mock up to the current loop
 			for j, liveOp := range liveStateOps {
 				if j == i {
-					liveOp.mock(liveState, injectedErr)
+					liveOp.addExpectations(liveState, injectedErr)
 					break
 				} else {
-					liveOp.mock(liveState, nil)
+					liveOp.addExpectations(liveState, nil)
 				}
 			}
 
