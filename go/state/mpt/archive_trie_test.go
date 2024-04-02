@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"golang.org/x/exp/maps"
 	"math/rand"
 	"os"
 	"path/filepath"
