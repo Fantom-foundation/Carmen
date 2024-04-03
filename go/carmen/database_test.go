@@ -191,7 +191,7 @@ func TestDatabase_GetBlockHeight_EmptyArchive(t *testing.T) {
 	}
 
 	if block >= 0 {
-		t.Errorf("non archive databse should return negative block number, was: %d", block)
+		t.Errorf("non archive database should return negative block number, was: %d", block)
 	}
 }
 
@@ -263,7 +263,7 @@ func TestDatabase_OpeningArchiveFails(t *testing.T) {
 	stateDB.EXPECT().Close()
 
 	if _, err := openStateDb(state, stateDB); !errors.Is(err, injectedErr) {
-		t.Errorf("openning archive should fail")
+		t.Errorf("opening archive should fail")
 	}
 }
 
@@ -433,13 +433,13 @@ func TestDatabase_BeginBlock_InvalidBlock(t *testing.T) {
 	// cannot start the same block
 	_, err = db.BeginBlock(5)
 	if err == nil {
-		t.Errorf("begining duplicated block should fail")
+		t.Errorf("beginning duplicated block should fail")
 	}
 
 	// cannot start older block
 	_, err = db.BeginBlock(3)
 	if err == nil {
-		t.Errorf("begining older block should fail")
+		t.Errorf("beginning older block should fail")
 	}
 
 	if err := db.Close(); err != nil {
@@ -474,7 +474,7 @@ func TestDatabase_BeginBlock_InvalidBlock_ReopenDB(t *testing.T) {
 	// cannot start the same block
 	_, err = db.BeginBlock(5)
 	if err == nil {
-		t.Errorf("begining duplicated block should fail")
+		t.Errorf("beginning duplicated block should fail")
 	}
 
 	if err := db.Close(); err != nil {
@@ -489,7 +489,7 @@ func TestDatabase_BeginBlock_InvalidBlock_ReopenDB(t *testing.T) {
 	// cannot start older block
 	_, err = db.BeginBlock(3)
 	if err == nil {
-		t.Errorf("begining older block should fail")
+		t.Errorf("beginning older block should fail")
 	}
 
 	if err := db.Close(); err != nil {
@@ -511,7 +511,7 @@ func TestDatabase_BeginBlock_ClosedDB(t *testing.T) {
 	// cannot start the block
 	_, err = db.BeginBlock(5)
 	if err == nil {
-		t.Errorf("begining block should fail")
+		t.Errorf("beginning block should fail")
 	}
 }
 
@@ -770,7 +770,7 @@ func TestDatabase_CloseDB_Uncommitted_Block(t *testing.T) {
 	}
 
 	if err := db.Close(); !errors.Is(err, errBlockContextRunning) {
-		t.Fatalf("closing database should fail while block is not commited")
+		t.Fatalf("closing database should fail while block is not committed")
 	}
 }
 
@@ -803,7 +803,7 @@ func TestDatabase_CloseDB_Unfinished_Queries(t *testing.T) {
 	// each close should fail as there are running queries
 	for i := 0; i < loops; i++ {
 		if err := db.Close(); !errors.Is(err, errBlockContextRunning) {
-			t.Fatalf("closing database should fail while block is not commited")
+			t.Fatalf("closing database should fail while block is not committed")
 		}
 		if err := ctxs[i].Close(); err != nil {
 			t.Fatalf("cannot close query: %v", err)
@@ -1178,7 +1178,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 	}
 
 	if transactions != loops {
-		t.Errorf("not all historic blocks were visite: %d", transactions)
+		t.Errorf("not all historic blocks were visited: %d", transactions)
 	}
 
 	if err := db.Close(); err != nil {
@@ -1268,7 +1268,7 @@ func TestDatabase_StartBulkLoad_Cannot_Start_Wrong_Block(t *testing.T) {
 	}
 }
 
-func TestDatabase_StartBulkLoad_Cannot_Finalise_Twice(t *testing.T) {
+func TestDatabase_StartBulkLoad_Cannot_Finalize_Twice(t *testing.T) {
 	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -1284,7 +1284,7 @@ func TestDatabase_StartBulkLoad_Cannot_Finalise_Twice(t *testing.T) {
 	}
 
 	if err := ctx.Finalize(); err == nil {
-		t.Errorf("second call to finalise should fail")
+		t.Errorf("second call to finalize should fail")
 	}
 }
 
@@ -1484,4 +1484,54 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 	}
 
 	group.Wait()
+}
+
+func TestDatabase_ActiveHeadQueryBlockDataBaseClose(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenDatabase(dir, testConfig, nil)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	queryStarted := make(chan bool)
+	done := false
+	go db.QueryHeadState(func(QueryContext) {
+		defer wg.Done()
+		queryStarted <- true
+		// keep this alive to block the closing of the database
+		time.Sleep(time.Second)
+		done = true
+	})
+
+	go func() {
+		defer wg.Done()
+		<-queryStarted
+		// This should block until all queries are done
+		db.Close()
+		if !done {
+			t.Errorf("finished closing before queries are complete")
+		}
+	}()
+
+	wg.Wait()
+}
+
+func TestDatabase_QueryCannotBeStartedOnClosedDatabase(t *testing.T) {
+	dir := t.TempDir()
+	db, err := OpenDatabase(dir, testConfig, nil)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close database: %v", err)
+	}
+
+	err = db.QueryHeadState(func(QueryContext) {})
+	if !errors.Is(err, errDbClosed) {
+		t.Errorf("Starting a query on a closed database should have failed, got %v", err)
+	}
 }

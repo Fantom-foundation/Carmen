@@ -248,6 +248,10 @@ func (db *database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
+	// get exclusive access to the head-state commit lock to make sure there are no concurrent queries
+	db.headStateCommitLock.Lock()
+	defer db.headStateCommitLock.Unlock()
+
 	if db.headStateInUse || db.numQueries > 0 {
 		return errBlockContextRunning
 	}
