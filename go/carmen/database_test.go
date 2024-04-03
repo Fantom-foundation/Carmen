@@ -111,21 +111,47 @@ func TestDatabase_QueryBlock_UnderlyingDB_Fails(t *testing.T) {
 	}
 }
 
-func TestDatabase_GetHeadStateHash_UnderlyingDB_Fails(t *testing.T) {
+func TestDatabase_QueryHeadState_UnderlyingDBQuery_Fails(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	stateDB := state.NewMockStateDB(ctrl)
 	state := state.NewMockState(ctrl)
 
 	injectedErr := fmt.Errorf("injectedErr")
 	state.EXPECT().GetHash().Return(common.Hash{}, injectedErr)
+	state.EXPECT().Check()
 
 	db := &database{
 		db:    state,
 		state: stateDB,
 	}
 
-	if _, err := db.GetHeadStateHash(); !errors.Is(err, injectedErr) {
-		t.Errorf("archive query should fail")
+	err := db.QueryHeadState(func(context QueryContext) {
+		context.GetStateHash()
+	})
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("head state query should have failed, got %v", err)
+	}
+}
+
+func TestDatabase_QueryHeadState_UnderlyingDB_Fails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	stateDB := state.NewMockStateDB(ctrl)
+	state := state.NewMockState(ctrl)
+
+	injectedErr := fmt.Errorf("injectedErr")
+	state.EXPECT().GetHash().Return(common.Hash{}, nil)
+	state.EXPECT().Check().Return(injectedErr)
+
+	db := &database{
+		db:    state,
+		state: stateDB,
+	}
+
+	err := db.QueryHeadState(func(context QueryContext) {
+		context.GetStateHash()
+	})
+	if !errors.Is(err, injectedErr) {
+		t.Errorf("head state query should have failed, got %v", err)
 	}
 }
 
@@ -1402,9 +1428,8 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 	// This test case checks that query operations see a consistent state
 	// when running concurrent updates.
 	const (
-		numReaders        = 10
-		numReadsPerReader = 10000
-		numBlocks         = 100
+		numReaders = 10
+		numBlocks  = 100
 	)
 	dir := t.TempDir()
 	db, err := OpenDatabase(dir, testConfig, nil)
@@ -1421,7 +1446,8 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 	for i := 0; i < numReaders; i++ {
 		go func() {
 			defer group.Done()
-			for i := 0; i < numReadsPerReader; i++ {
+			nonce := uint64(0)
+			for nonce < numBlocks {
 				err := db.QueryHeadState(func(ctxt QueryContext) {
 					// Readers should always see the same nonces.
 					n1 := ctxt.GetNonce(addr1)
@@ -1429,6 +1455,7 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 					if n1 != n2 {
 						t.Errorf("nonces out of sync: %d vs %d", n1, n2)
 					}
+					nonce = n1
 				})
 				if err != nil {
 					t.Errorf("failed to query head: %v", err)
@@ -1438,7 +1465,7 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 	}
 
 	// Add blocks updating nonces in sync.
-	for i := 0; i < numBlocks; i++ {
+	for i := 1; i <= numBlocks; i++ {
 		block := uint64(i)
 		err := db.AddBlock(block, func(context HeadBlockContext) error {
 			if err := context.RunTransaction(func(context TransactionContext) error {

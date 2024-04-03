@@ -142,18 +142,6 @@ func (db *database) QueryBlock(block uint64, run func(HistoricBlockContext) erro
 	)
 }
 
-func (db *database) GetHeadStateHash() (Hash, error) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	if db.db == nil {
-		return Hash{}, errDbClosed
-	}
-
-	hash, err := db.db.GetHash()
-	return Hash(hash), err
-}
-
 func (db *database) GetArchiveBlockHeight() (int64, error) {
 	db.lock.Lock()
 	defer db.lock.Unlock()

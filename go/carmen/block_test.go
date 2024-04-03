@@ -283,6 +283,36 @@ func TestDatabase_AbortedBlocksHaveNoEffect(t *testing.T) {
 	}
 }
 
+func TestBlockContext_PanickingCommitsReleaseQueryLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := state.NewMockStateDB(ctrl)
+	context := &headBlockContext{
+		commonContext: commonContext{
+			db: &database{},
+		},
+		state: state,
+	}
+
+	injectedPanic := "injected panic"
+	state.EXPECT().EndBlock(gomock.Any()).Do(func(any) {
+		panic(injectedPanic)
+	})
+
+	defer func() {
+		msg := recover()
+		if got, want := msg, injectedPanic; got != want {
+			t.Fatalf("unexpected panic, wanted %v, got %v", want, got)
+		}
+		if !context.db.headStateCommitLock.TryLock() {
+			t.Errorf("commit lock was not released after panic, which may lead to a deadlock")
+		} else {
+			context.db.headStateCommitLock.Unlock()
+		}
+	}()
+
+	context.Commit()
+}
+
 func initBlockContexts() map[string]func(t *testing.T) blockContext {
 	return map[string]func(t *testing.T) blockContext{
 		"headBlockContext": func(t *testing.T) blockContext {
