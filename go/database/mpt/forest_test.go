@@ -1879,7 +1879,7 @@ func TestForest_CloseMultipleTimes(t *testing.T) {
 					}
 					if err := forest.Close(); err == nil {
 						t.Fatalf("closing forest multiple times should fail")
-					} else if !errors.Is(err, ForestCloseErr) {
+					} else if !errors.Is(err, ForestClosedErr) {
 						t.Fatalf("closing forest multiple times should return ErrClosed, got %v", err)
 					}
 				})
