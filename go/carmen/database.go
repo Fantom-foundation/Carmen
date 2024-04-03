@@ -3,9 +3,10 @@ package carmen
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"sync"
 )
 
 const errDbClosed = common.ConstError("database is already closed")
@@ -70,6 +71,24 @@ type database struct {
 	headStateInUse bool
 	numQueries     int // number of active history queries
 	lastBlock      int64
+
+	headStateCommitLock sync.RWMutex // < read permission held by queries and write permission held by block commits
+}
+
+func (db *database) QueryHeadState(query func(QueryContext)) error {
+	db.lock.Lock()
+	if db.db == nil {
+		db.lock.Unlock()
+		return errDbClosed
+	}
+
+	context := &queryContext{state: db.db}
+	db.headStateCommitLock.RLock()
+	defer db.headStateCommitLock.RUnlock()
+
+	db.lock.Unlock()
+	query(context)
+	return context.Check()
 }
 
 func (db *database) BeginBlock(block uint64) (HeadBlockContext, error) {
@@ -121,18 +140,6 @@ func (db *database) QueryBlock(block uint64, run func(HistoricBlockContext) erro
 		run(ctxt),
 		ctxt.Close(),
 	)
-}
-
-func (db *database) GetHeadStateHash() (Hash, error) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	if db.db == nil {
-		return Hash{}, errDbClosed
-	}
-
-	hash, err := db.db.GetHash()
-	return Hash(hash), err
 }
 
 func (db *database) GetArchiveBlockHeight() (int64, error) {
@@ -240,6 +247,10 @@ func (db *database) flush() error {
 func (db *database) Close() error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
+
+	// get exclusive access to the head-state commit lock to make sure there are no concurrent queries
+	db.headStateCommitLock.Lock()
+	defer db.headStateCommitLock.Unlock()
 
 	if db.headStateInUse || db.numQueries > 0 {
 		return errBlockContextRunning

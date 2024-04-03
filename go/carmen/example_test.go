@@ -2,10 +2,11 @@ package carmen_test
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/carmen"
 	"log"
 	"math/big"
 	"os"
+
+	"github.com/Fantom-foundation/Carmen/go/carmen"
 )
 
 func ExampleDatabase_AddBlock() {
@@ -80,6 +81,31 @@ func ExampleDatabase_BeginBlock() {
 	if err := os.RemoveAll(dir); err != nil {
 		log.Fatalf("cannot remove dir: %v", err)
 	}
+}
+
+func ExampleDatabase_QueryHeadState() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Query state information for the current head block
+	if err := db.QueryHeadState(func(context carmen.QueryContext) {
+		balance := context.GetBalance(carmen.Address{1, 2, 3})
+		fmt.Printf("Account balance: %v", balance)
+	}); err != nil {
+		log.Fatalf("query operation failed: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+
+	// Output: Account balance: 0
 }
 
 func ExampleDatabase_QueryBlock() {
