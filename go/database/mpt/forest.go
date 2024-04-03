@@ -29,8 +29,8 @@ const (
 	// Mutable is the mode of a LiveDB in which the state on the disk can be
 	// modified through destructive updates.
 	Mutable StorageMode = false
-	// ForestClosedErr is an error returned when a forest is already closed.
-	ForestClosedErr = common.ConstError("forest already closed")
+	// forestClosedErr is an error returned when a forest is already closed.
+	forestClosedErr = common.ConstError("forest already closed")
 )
 
 // printWarningDefaultNodeFreezing allows for printing a warning that a node is going to be frozen
@@ -535,7 +535,7 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 func (s *Forest) Close() error {
 	// Ensure that the forest is only closed once.
 	if !s.closed.CompareAndSwap(false, true) {
-		return ForestClosedErr
+		return forestClosedErr
 	}
 
 	var errs []error
