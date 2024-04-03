@@ -1864,3 +1864,26 @@ func TestForest_CollectedErrorsAreReportedInFlushAndClose(t *testing.T) {
 		t.Errorf("missing operation error in close, wanted %v, got %v", want, got)
 	}
 }
+
+func TestForest_CloseMultipleTimes(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+					if err := forest.Close(); err == nil {
+						t.Fatalf("closing forest multiple times should fail")
+					} else if !errors.Is(err, forestClosedErr) {
+						t.Fatalf("closing forest multiple times should return forestClosedErr, got %v", err)
+					}
+				})
+			}
+		}
+	}
+}

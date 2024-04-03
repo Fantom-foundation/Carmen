@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -28,6 +29,8 @@ const (
 	// Mutable is the mode of a LiveDB in which the state on the disk can be
 	// modified through destructive updates.
 	Mutable StorageMode = false
+	// forestClosedErr is an error returned when a forest is already closed.
+	forestClosedErr = common.ConstError("forest already closed")
 )
 
 // printWarningDefaultNodeFreezing allows for printing a warning that a node is going to be frozen
@@ -104,6 +107,9 @@ type Forest struct {
 	// If this list is non-empty, no guarantees are provided on the correctness
 	// of the maintained forest. Thus, it should be considered corrupted.
 	errors []error
+
+	// A flag indicating whether the forest is closed.
+	closed atomic.Bool
 }
 
 func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -527,6 +533,11 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 }
 
 func (s *Forest) Close() error {
+	// Ensure that the forest is only closed once.
+	if !s.closed.CompareAndSwap(false, true) {
+		return forestClosedErr
+	}
+
 	var errs []error
 	errs = append(errs, s.Flush())
 
