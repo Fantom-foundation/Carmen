@@ -3,11 +3,13 @@ package gostate
 import (
 	"errors"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt"
+
 	"path/filepath"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/Fantom-foundation/Carmen/go/state/mpt"
 )
 
 // goSchema5 implements a state utilizes an MPT based data structure that
