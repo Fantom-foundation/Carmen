@@ -73,7 +73,16 @@ type Database interface {
 
 	// GetHistoricStateHash returns state root hash for the input block number.
 	// This value is available only when the archive is enabled.
+	// Deprecated: use QueryHistoricState
 	GetHistoricStateHash(block uint64) (Hash, error)
+
+	// QueryHistoricState provides read-only query access to a historic
+	// state in the block chain in the range [0 .. GetArchiveBlockHeight()].
+	// All operations within the query are guaranteed to be based on a
+	// consistent block state. Multiple queries may be conducted concurrently.
+	// If this call produces an error, the data retrieved in the query should
+	// be considered invalid.
+	QueryHistoricState(block uint64, query func(QueryContext)) error
 
 	// GetHistoricContext returns a block context, which accesses
 	// the world state history as it was for the input block number.
