@@ -2,9 +2,10 @@ package carmen
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"math/big"
 )
 
 type transactionContext struct {
@@ -224,6 +225,10 @@ func (t *transactionContext) RevertToSnapshot(snapshot int) {
 	if t.state != nil {
 		t.state.RevertToSnapshot(snapshot)
 	}
+}
+
+func (t *transactionContext) GetStateHash() Hash {
+	return Hash(t.state.GetHash())
 }
 
 func (t *transactionContext) Commit() error {

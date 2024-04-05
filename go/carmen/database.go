@@ -161,20 +161,20 @@ func (db *database) GetArchiveBlockHeight() (int64, error) {
 }
 
 func (db *database) GetHistoricStateHash(block uint64) (Hash, error) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
+	var hash Hash
+	err := db.QueryHistoricState(block, func(ctxt QueryContext) {
+		hash = ctxt.GetStateHash()
+	})
+	return hash, err
+}
 
-	if db.db == nil {
-		return Hash{}, errDbClosed
-	}
-
-	state, err := db.db.GetArchiveState(block)
-
-	if err != nil {
-		return Hash{}, err
-	}
-	hash, err := state.GetHash()
-	return Hash(hash), err
+func (db *database) QueryHistoricState(block uint64, query func(QueryContext)) error {
+	return db.QueryBlock(block, func(ctxt HistoricBlockContext) error {
+		return ctxt.RunTransaction(func(ctxt TransactionContext) error {
+			query(ctxt.(*transactionContext))
+			return nil
+		})
+	})
 }
 
 func (db *database) GetHistoricContext(block uint64) (HistoricBlockContext, error) {

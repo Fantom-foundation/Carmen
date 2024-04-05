@@ -221,6 +221,7 @@ func TestDatabase_GetHistoricStateHash_UnderlyingDB_FailsGettingHash(t *testing.
 	injectedErr := fmt.Errorf("injectedErr")
 	subSt := state.NewMockState(ctrl)
 	subSt.EXPECT().GetHash().Return(common.Hash{}, injectedErr)
+	subSt.EXPECT().Check().Times(2).Return(nil)
 
 	st.EXPECT().GetArchiveState(gomock.Any()).Return(subSt, nil)
 
