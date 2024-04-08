@@ -7367,7 +7367,7 @@ func (m *errorInjectingNodeManager) createValue() (NodeReference, shared.WriteHa
 	return m.NodeManager.createValue()
 }
 
-func (m *errorInjectingNodeManager) release(id NodeId) error {
+func (m *errorInjectingNodeManager) release(id *NodeReference) error {
 	if m.counter == m.errorPosition {
 		return m.err
 	}
@@ -8110,8 +8110,8 @@ func (c *nodeContext) equalTriesWithConfig(a, b NodeReference, config equalityCo
 	return c.equalWithConfig(nodeA.Get(), nodeB.Get(), config)
 }
 
-func (c *nodeContext) release(id NodeId) error {
-	c.released = append(c.released, id)
+func (c *nodeContext) release(id *NodeReference) error {
+	c.released = append(c.released, id.Id())
 	return c.MockNodeManager.release(id)
 }
 

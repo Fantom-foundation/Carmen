@@ -618,7 +618,7 @@ func (mr *MockNodeManagerMockRecorder) hashKey(arg0 any) *gomock.Call {
 }
 
 // release mocks base method.
-func (m *MockNodeManager) release(arg0 NodeId) error {
+func (m *MockNodeManager) release(arg0 *NodeReference) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "release", arg0)
 	ret0, _ := ret[0].(error)

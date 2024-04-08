@@ -230,7 +230,7 @@ type NodeManager interface {
 	createExtension() (NodeReference, shared.WriteHandle[Node], error)
 	createValue() (NodeReference, shared.WriteHandle[Node], error)
 
-	release(NodeId) error
+	release(*NodeReference) error
 	releaseTrieAsynchronous(NodeReference)
 }
 
@@ -757,7 +757,7 @@ func (n *BranchNode) setNextNode(
 				}
 			}
 			n.nodeBase.Release()
-			return newRoot, !isClone, manager.release(thisRef.Id())
+			return newRoot, !isClone, manager.release(thisRef)
 		}
 	}
 
@@ -815,7 +815,7 @@ func (n *BranchNode) Release(manager NodeManager, thisRef *NodeReference, this s
 			}
 		}
 	}
-	return manager.release(thisRef.Id())
+	return manager.release(thisRef)
 }
 
 func (n *BranchNode) MarkFrozen() {
@@ -1105,7 +1105,7 @@ func (n *ExtensionNode) setNextNode(
 				}
 				n.markDirty()
 				extension.nodeBase.Release()
-				if err := manager.release(newRoot.Id()); err != nil {
+				if err := manager.release(&newRoot); err != nil {
 					return NodeReference{}, false, err
 				}
 			} else if newRoot.Id().IsBranch() {
@@ -1115,7 +1115,7 @@ func (n *ExtensionNode) setNextNode(
 			} else {
 				// If the next node is anything but a branch or extension, remove this extension.
 				n.nodeBase.Release()
-				if err := manager.release(thisRef.Id()); err != nil {
+				if err := manager.release(thisRef); err != nil {
 					return NodeReference{}, false, err
 				}
 
@@ -1239,7 +1239,7 @@ func (n *ExtensionNode) setNextNode(
 	// If this node was not needed any more, we can discard it.
 	if !thisNodeWasReused {
 		n.nodeBase.Release()
-		return newRoot, false, manager.release(thisRef.Id())
+		return newRoot, false, manager.release(thisRef)
 	}
 
 	return newRoot, !isClone, nil
@@ -1291,7 +1291,7 @@ func (n *ExtensionNode) Release(manager NodeManager, thisRef *NodeReference, thi
 	if err != nil {
 		return err
 	}
-	return manager.release(thisRef.Id())
+	return manager.release(thisRef)
 }
 
 func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
@@ -1458,7 +1458,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			}
 			// Release this account node and remove it from the trie.
 			n.nodeBase.Release()
-			return NewNodeReference(EmptyId()), false, manager.release(thisRef.Id())
+			return NewNodeReference(EmptyId()), false, manager.release(thisRef)
 		}
 
 		// If this node is frozen, we need to write the result in
@@ -1690,7 +1690,7 @@ func (n *AccountNode) Release(manager NodeManager, thisRef *NodeReference, this 
 			return err
 		}
 	}
-	return manager.release(thisRef.Id())
+	return manager.release(thisRef)
 }
 
 func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
@@ -1871,7 +1871,7 @@ func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this s
 		if value == (common.Value{}) {
 			if !n.IsFrozen() {
 				n.nodeBase.Release()
-				if err := manager.release(thisRef.Id()); err != nil {
+				if err := manager.release(thisRef); err != nil {
 					return NodeReference{}, false, err
 				}
 			}
@@ -1929,7 +1929,7 @@ func (n *ValueNode) Release(manager NodeManager, thisRef *NodeReference, this sh
 		return nil
 	}
 	n.nodeBase.Release()
-	return manager.release(thisRef.Id())
+	return manager.release(thisRef)
 }
 
 func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {

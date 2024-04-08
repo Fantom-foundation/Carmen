@@ -929,7 +929,14 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	return ref, instance.GetWriteHandle(), err
 }
 
-func (s *Forest) release(id NodeId) error {
+func (s *Forest) release(ref *NodeReference) error {
+	// released node will not be needed, so they are moved in the cache
+	// to the least priority.
+	// this way they do not occupy space for other nodes
+	// written/read in parallel.
+	s.nodeCache.Release(ref)
+
+	id := ref.Id()
 	if id.IsAccount() {
 		return s.accounts.Delete(id.Index())
 	}

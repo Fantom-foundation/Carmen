@@ -392,7 +392,8 @@ func TestForest_Cannot_Release_Node(t *testing.T) {
 					}
 
 					// empty ID cannot be released
-					if err := forest.release(EmptyId()); err == nil {
+					ref := NewNodeReference(EmptyId())
+					if err := forest.release(&ref); err == nil {
 						t.Errorf("creating node should fail")
 					}
 				})
@@ -1894,14 +1895,20 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 	accounts := getTestAddresses(num)
 	keys := getTestKeys(num)
 
-	for _, variant := range variants {
-		for _, config := range allMptConfigs {
+	for _, variant := range fileAndMemVariants {
+		// test for live configs only as archive configs even write deleted
+		// nodes and cache needs to be allocated for those nodes as well.
+		for _, config := range []MptConfig{S5LiveConfig, S4LiveConfig} {
+			//for _, config := range []MptConfig{S5LiveConfig} {
 			config := config
 			t.Run(config.Name, func(t *testing.T) {
-				t.Parallel()
+				//t.Parallel()
 
-				// one storage has 131 nodes, and the tree is shallow - 8 levels to an account.
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 140})
+				// The tree is shallow - 8 levels to an account + 8 levels to storage.
+				// when deleting the same path, 8+8 levels must be used to locate storage nodes.
+				// The size of the cache here is estimated considering the numbers above, but it is not set
+				// exactly as some nodes are created and then deleted while building the tree.
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 25})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -1910,49 +1917,59 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 					t.Fatalf("failed to create empty trie, err %v", err)
 				}
 
-				root0 := NewNodeReference(EmptyId())
+				rootRef := NewNodeReference(EmptyId())
 
 				// Fill the tree.
 				for i, addr := range accounts {
-					root, err := forest.SetAccountInfo(&root0, addr, AccountInfo{Nonce: common.ToNonce(uint64(i) + 1)})
+					root, err := forest.SetAccountInfo(&rootRef, addr, AccountInfo{Nonce: common.ToNonce(uint64(i) + 1)})
 					if err != nil {
 						t.Fatalf("failed to insert account: %v", err)
 					}
-					root0 = root
+					rootRef = root
 					for i, key := range keys {
-						root, err := forest.SetValue(&root0, addr, key, common.Value{byte(i)})
+						root, err := forest.SetValue(&rootRef, addr, key, common.Value{byte(i)})
 						if err != nil {
 							t.Fatalf("failed to insert value: %v", err)
 						}
-						root0 = root
+						rootRef = root
 						// trigger update of dirty hashes
-						if err := forest.Flush(); err != nil {
+						if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
 							t.Fatalf("failed to compute hash: %v", err)
 						}
 					}
 				}
 
+				// clean-up cache by flushing everything
+				if err := forest.Flush(); err != nil {
+					t.Fatalf("cannot flush db: %v", err)
+				}
+
 				// create a dirty path
-				root, err := forest.SetAccountInfo(&root0, common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}, AccountInfo{Balance: common.Balance{0x1}})
+				root, err := forest.SetAccountInfo(&rootRef, common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}, AccountInfo{Balance: common.Balance{0x1}})
 				if err != nil {
 					t.Fatalf("cannot create an account ")
 				}
-				root0 = root
+				rootRef = root
 
 				// delete all accounts
 				for _, addr := range accounts {
-					root, err := forest.ClearStorage(&root0, addr)
+					root, err := forest.ClearStorage(&rootRef, addr)
 					if err != nil {
 						t.Fatalf("cannot delete account")
 					}
-					root0 = root
+					rootRef = root
 				}
 
 				// wait for accounts to be deleted
 				forest.releaseQueue <- EmptyId()
 				<-forest.releaseSync
 
-				// trigger close  - ongoing change of the account addr. 0xABCDEF should not fail
+				// trigger update of dirty hashes - ongoing change of the account addr. 0xABCDEF should not fail
+				if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+					t.Fatalf("failed to compute hash: %v", err)
+				}
+
+				// trigger close - ongoing change of the account addr. 0xABCDEF should not fail
 				if err := forest.Close(); err != nil {
 					t.Fatalf("cannot close db: %v", err)
 				}
