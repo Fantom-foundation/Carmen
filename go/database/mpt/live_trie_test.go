@@ -883,8 +883,6 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
-// This test may need to run with the -count 100 param, e.g.
-// go test ./database/mpt/...  -run TestLiveTrie_AsyncDelete_CacheIsNotExhausted -count 100 -timeout 999999999s
 func TestLiveTrie_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 	const num = 100
 
@@ -897,11 +895,6 @@ func TestLiveTrie_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 			t.Parallel()
 			// one storage has 131 nodes, and the tree is shallow - 8 levels to an account.
 			trie, err := OpenGoMemoryState(t.TempDir(), config, 140)
-			defer func() {
-				if err := trie.Close(); err != nil {
-					t.Fatalf("cannot close db: %v", err)
-				}
-			}()
 
 			if err != nil {
 				t.Fatalf("failed to create empty trie, err %v", err)
@@ -928,16 +921,27 @@ func TestLiveTrie_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 				t.Fatalf("cannot flush trie: %v", err)
 			}
 
+			// create a dirty path
+			if err := trie.CreateAccount(common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}); err != nil {
+				t.Fatalf("cannot create an account ")
+			}
+
 			// now all accounts are deleted which should not trigger an error
 			// of dirty hash
 			for _, addr := range accounts {
 				if err := trie.DeleteAccount(addr); err != nil {
 					t.Fatalf("cannot delete account")
 				}
-				// trigger update of dirty hashes
-				if _, err := trie.GetHash(); err != nil {
-					t.Fatalf("failed to compute hash: %v", err)
-				}
+			}
+
+			// delete causes evictions from the cache
+			forest := trie.trie.forest.(*Forest)
+			forest.releaseQueue <- EmptyId()
+			<-forest.releaseSync
+
+			// trigger update  - ongoing change of the account should not fail
+			if err := trie.Close(); err != nil {
+				t.Fatalf("cannot close db: %v", err)
 			}
 		})
 	}
