@@ -883,69 +883,6 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
-func TestLiveTrie_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
-	const num = 100
-
-	accounts := getTestAddresses(100)
-	keys := getTestKeys(100)
-
-	for _, config := range allMptConfigs {
-		config := config
-		t.Run(config.Name, func(t *testing.T) {
-			t.Parallel()
-			// one storage has 131 nodes, and the tree is shallow - 8 levels to an account.
-			trie, err := OpenGoMemoryState(t.TempDir(), config, 140)
-
-			if err != nil {
-				t.Fatalf("failed to create empty trie, err %v", err)
-			}
-
-			// Fill the tree.
-			for i, addr := range accounts {
-				if err := trie.SetNonce(addr, common.ToNonce(uint64(i)+1)); err != nil {
-					t.Fatalf("failed to insert account: %v", err)
-				}
-				for i, key := range keys {
-					if err := trie.SetStorage(addr, key, common.Value{byte(i)}); err != nil {
-						t.Fatalf("failed to insert value: %v", err)
-					}
-					// trigger update of dirty hashes
-					if _, err := trie.GetHash(); err != nil {
-						t.Fatalf("failed to compute hash: %v", err)
-					}
-				}
-			}
-
-			// make sure write is done before next step
-			if err := trie.Flush(); err != nil {
-				t.Fatalf("cannot flush trie: %v", err)
-			}
-
-			// create a dirty path
-			if err := trie.CreateAccount(common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}); err != nil {
-				t.Fatalf("cannot create an account ")
-			}
-
-			// delete all accounts
-			for _, addr := range accounts {
-				if err := trie.DeleteAccount(addr); err != nil {
-					t.Fatalf("cannot delete account")
-				}
-			}
-
-			// wait for accounts to be deleted
-			forest := trie.trie.forest.(*Forest)
-			forest.releaseQueue <- EmptyId()
-			<-forest.releaseSync
-
-			// trigger close  - ongoing change of the account addr. 0xABCDEF should not fail
-			if err := trie.Close(); err != nil {
-				t.Fatalf("cannot close db: %v", err)
-			}
-		})
-	}
-}
-
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)

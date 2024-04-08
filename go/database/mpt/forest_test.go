@@ -1887,3 +1887,76 @@ func TestForest_CloseMultipleTimes(t *testing.T) {
 		}
 	}
 }
+
+func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
+	const num = 100
+
+	accounts := getTestAddresses(num)
+	keys := getTestKeys(num)
+
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			config := config
+			t.Run(config.Name, func(t *testing.T) {
+				t.Parallel()
+
+				// one storage has 131 nodes, and the tree is shallow - 8 levels to an account.
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 140})
+				if err != nil {
+					t.Fatalf("failed to open forest: %v", err)
+				}
+
+				if err != nil {
+					t.Fatalf("failed to create empty trie, err %v", err)
+				}
+
+				root0 := NewNodeReference(EmptyId())
+
+				// Fill the tree.
+				for i, addr := range accounts {
+					root, err := forest.SetAccountInfo(&root0, addr, AccountInfo{Nonce: common.ToNonce(uint64(i) + 1)})
+					if err != nil {
+						t.Fatalf("failed to insert account: %v", err)
+					}
+					root0 = root
+					for i, key := range keys {
+						root, err := forest.SetValue(&root0, addr, key, common.Value{byte(i)})
+						if err != nil {
+							t.Fatalf("failed to insert value: %v", err)
+						}
+						root0 = root
+						// trigger update of dirty hashes
+						if err := forest.Flush(); err != nil {
+							t.Fatalf("failed to compute hash: %v", err)
+						}
+					}
+				}
+
+				// create a dirty path
+				root, err := forest.SetAccountInfo(&root0, common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}, AccountInfo{Balance: common.Balance{0x1}})
+				if err != nil {
+					t.Fatalf("cannot create an account ")
+				}
+				root0 = root
+
+				// delete all accounts
+				for _, addr := range accounts {
+					root, err := forest.ClearStorage(&root0, addr)
+					if err != nil {
+						t.Fatalf("cannot delete account")
+					}
+					root0 = root
+				}
+
+				// wait for accounts to be deleted
+				forest.releaseQueue <- EmptyId()
+				<-forest.releaseSync
+
+				// trigger close  - ongoing change of the account addr. 0xABCDEF should not fail
+				if err := forest.Close(); err != nil {
+					t.Fatalf("cannot close db: %v", err)
+				}
+			})
+		}
+	}
+}
