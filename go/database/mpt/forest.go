@@ -930,10 +930,12 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 }
 
 func (s *Forest) release(ref *NodeReference) error {
-	// released node will not be needed, so they are moved in the cache
-	// to the least priority.
-	// this way they do not occupy space for other nodes
+	// Released nodes will not be needed,
+	// so they are moved in the cache to the least priority.
+	// This way they do not occupy space for other nodes
 	// written/read in parallel.
+	// Furthermore, it prevents cache exhaustion when
+	// deleting many nodes in parallel.
 	s.nodeCache.Release(ref)
 
 	id := ref.Id()
