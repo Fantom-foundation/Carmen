@@ -926,20 +926,19 @@ func TestLiveTrie_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 				t.Fatalf("cannot create an account ")
 			}
 
-			// now all accounts are deleted which should not trigger an error
-			// of dirty hash
+			// delete all accounts
 			for _, addr := range accounts {
 				if err := trie.DeleteAccount(addr); err != nil {
 					t.Fatalf("cannot delete account")
 				}
 			}
 
-			// delete causes evictions from the cache
+			// wait for accounts to be deleted
 			forest := trie.trie.forest.(*Forest)
 			forest.releaseQueue <- EmptyId()
 			<-forest.releaseSync
 
-			// trigger update  - ongoing change of the account should not fail
+			// trigger close  - ongoing change of the account addr. 0xABCDEF should not fail
 			if err := trie.Close(); err != nil {
 				t.Fatalf("cannot close db: %v", err)
 			}
