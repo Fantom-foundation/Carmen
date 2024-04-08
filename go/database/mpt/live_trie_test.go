@@ -883,6 +883,66 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
+// This test may need to run with the -count 100 param, e.g.
+// go test ./database/mpt/...  -run TestLiveTrie_AsyncDelete_CacheIsNotExhausted -count 100 -timeout 999999999s
+func TestLiveTrie_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
+	const num = 100
+
+	accounts := getTestAddresses(100)
+	keys := getTestKeys(100)
+
+	for _, config := range allMptConfigs {
+		config := config
+		t.Run(config.Name, func(t *testing.T) {
+			t.Parallel()
+			// one storage has 131 nodes, and the tree is shallow - 8 levels to an account.
+			trie, err := OpenGoMemoryState(t.TempDir(), config, 140)
+			defer func() {
+				if err := trie.Close(); err != nil {
+					t.Fatalf("cannot close db: %v", err)
+				}
+			}()
+
+			if err != nil {
+				t.Fatalf("failed to create empty trie, err %v", err)
+			}
+
+			// Fill the tree.
+			for i, addr := range accounts {
+				if err := trie.SetNonce(addr, common.ToNonce(uint64(i)+1)); err != nil {
+					t.Fatalf("failed to insert account: %v", err)
+				}
+				for i, key := range keys {
+					if err := trie.SetStorage(addr, key, common.Value{byte(i)}); err != nil {
+						t.Fatalf("failed to insert value: %v", err)
+					}
+					// trigger update of dirty hashes
+					if _, err := trie.GetHash(); err != nil {
+						t.Fatalf("failed to compute hash: %v", err)
+					}
+				}
+			}
+
+			// make sure write is done before next step
+			if err := trie.Flush(); err != nil {
+				t.Fatalf("cannot flush trie: %v", err)
+			}
+
+			// now all accounts are deleted which should not trigger an error
+			// of dirty hash
+			for _, addr := range accounts {
+				if err := trie.DeleteAccount(addr); err != nil {
+					t.Fatalf("cannot delete account")
+				}
+				// trigger update of dirty hashes
+				if _, err := trie.GetHash(); err != nil {
+					t.Fatalf("failed to compute hash: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)
