@@ -5,7 +5,6 @@
 //
 //	mockgen -source node_cache.go -destination node_cache_mocks.go -package mpt
 //
-
 // Package mpt is a generated GoMock package.
 package mpt
 
@@ -97,6 +96,18 @@ func (m *MockNodeCache) GetOrSet(arg0 *NodeReference, arg1 *shared.Shared[Node])
 func (mr *MockNodeCacheMockRecorder) GetOrSet(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrSet", reflect.TypeOf((*MockNodeCache)(nil).GetOrSet), arg0, arg1)
+}
+
+// Release mocks base method.
+func (m *MockNodeCache) Release(r *NodeReference) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Release", r)
+}
+
+// Release indicates an expected call of Release.
+func (mr *MockNodeCacheMockRecorder) Release(r any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockNodeCache)(nil).Release), r)
 }
 
 // Touch mocks base method.
