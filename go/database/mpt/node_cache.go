@@ -64,9 +64,9 @@ type NodeCache interface {
 	// are used by implementation to manage the eviction order of elements.
 	Touch(r *NodeReference)
 
-	// Release signals the cache that the given node has currently the lower usage.
+	// Release signals the cache that the given node is unlikely to be reused in the near future.
 	// It means that the node still remains in the cache, but it is marked
-	// as the least usaed and tgus next to be evicted when the cache becomes full.
+	// as the least recently used and thus next to be evicted when the cache becomes full.
 	Release(r *NodeReference)
 
 	// ForEach iterates through all elements in this cache.
@@ -239,13 +239,13 @@ func (c *nodeCache) Touch(r *NodeReference) {
 }
 
 func (c *nodeCache) Release(r *NodeReference) {
-	// During a touch we need to update the double-linked list
+	// During a release we need to update the double-linked list
 	// formed by owners such that the referenced node is at the
-	// head position.
+	// tail position.
 	pos := ownerPosition(atomic.LoadUint32(&r.pos))
 	if uint32(pos) >= uint32(len(c.owners)) {
-		// In this reference does not point to a valid owner; the
-		// reference is not extra resolved to perform a touch, and
+		// This reference does not point to a valid owner; the
+		// reference is not extra resolved to perform a release, and
 		// thus the operation can stop here.
 		return
 	}
