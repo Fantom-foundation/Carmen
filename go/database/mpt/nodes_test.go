@@ -660,8 +660,8 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches(t *testing.T) {
 	ctxt.Check(t, after)
 
 	account, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(account.Id()).Return(nil)
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&account).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
@@ -730,11 +730,11 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranches_WithLengthTracking
 	ctxt.Check(t, after)
 
 	accountRef, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&accountRef).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	// The remaining account is updated because its length has changed.
-	accountRef, account := ctxt.Get("R")
+	_, account := ctxt.Get("R")
 	accountHandle := account.GetWriteHandle()
 	accountHandle.Release()
 
@@ -822,8 +822,8 @@ func TestBranchNode_SetAccount_ToDefaultValue_OnlyTwoBranchesWithRemainingExtens
 	ctxt.Check(t, after)
 
 	accountRef, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&accountRef).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
@@ -922,8 +922,8 @@ func TestBranchNode_SetAccount_ToDefaultValue_CausingBranchToBeReplacedByExtensi
 	extensionId, _ := ctxt.ExpectCreateExtension()
 
 	accountRef, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&accountRef).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	empty := AccountInfo{}
 	addr := common.Address{0x82}
@@ -1000,13 +1000,13 @@ func TestBranchNode_Release(t *testing.T) {
 		8: &Tag{"C", &Account{}},
 	}})
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
-	accountRef, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
-	accountRef, _ = ctxt.Get("B")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
-	accountRef, _ = ctxt.Get("C")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
+	accountRefA, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(&accountRefA).Return(nil)
+	accountRefB, _ := ctxt.Get("B")
+	ctxt.EXPECT().release(&accountRefB).Return(nil)
+	accountRefC, _ := ctxt.Get("C")
+	ctxt.EXPECT().release(&accountRefC).Return(nil)
 
 	handle := node.GetWriteHandle()
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
@@ -1805,7 +1805,7 @@ func TestExtensionNode_SetAccount_NewAccount_ExtensionBecomesObsolete(t *testing
 	ctxt.ExpectCreateAccount()
 	branchId, _ := ctxt.ExpectCreateBranch()
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	addr := common.Address{0x20}
 	path := addressToNibbles(addr)
@@ -1916,13 +1916,13 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionFusesWithNextExtension
 	// This case eliminates an account and a branch. Also, it introduces
 	// a temporary extension that is removed again.
 	account, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(account.Id())
+	ctxt.EXPECT().release(&account)
 
 	branch, _ := ctxt.Get("B")
-	ctxt.EXPECT().release(branch.Id())
+	ctxt.EXPECT().release(&branch)
 
 	extension, _ := ctxt.ExpectCreateExtension()
-	ctxt.EXPECT().release(extension.Id()).Return(nil)
+	ctxt.EXPECT().release(&extension).Return(nil)
 
 	addr := common.Address{0x12}
 	path := addressToNibbles(addr)
@@ -1977,7 +1977,7 @@ func TestExtensionNode_Frozen_SetAccount_RemovedAccount_ExtensionFusesWithNextEx
 
 	// It also requires a temporary extension.
 	extension, _ := ctxt.ExpectCreateExtension()
-	ctxt.EXPECT().release(extension.Id())
+	ctxt.EXPECT().release(&extension)
 
 	// And it also creates a new extension that constitutes the result.
 	ctxt.ExpectCreateExtension()
@@ -2022,12 +2022,12 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf(t *test
 	// This case eliminates an account and a branch. Also, it introduces
 	// a temporary extension that is removed again.
 	account, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(account.Id())
+	ctxt.EXPECT().release(&account)
 
 	branch, _ := ctxt.Get("B")
-	ctxt.EXPECT().release(branch.Id())
+	ctxt.EXPECT().release(&branch)
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	resultId, _ := ctxt.Get("R")
 
@@ -2116,12 +2116,12 @@ func TestExtensionNode_SetAccount_RemovedAccount_ExtensionReplacedByLeaf_WithLen
 	// This case eliminates an account and a branch. Also, it introduces
 	// a temporary extension that is removed again.
 	account, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(account.Id())
+	ctxt.EXPECT().release(&account)
 
 	branch, _ := ctxt.Get("B")
-	ctxt.EXPECT().release(branch.Id())
+	ctxt.EXPECT().release(&branch)
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	resultRef, _ := ctxt.Get("R")
 
@@ -2264,13 +2264,13 @@ func TestExtensionNode_Release(t *testing.T) {
 			}}},
 		})
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
-	account, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(account.Id()).Return(nil)
-	account, _ = ctxt.Get("B")
-	ctxt.EXPECT().release(account.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
+	accountA, _ := ctxt.Get("A")
+	ctxt.EXPECT().release(&accountA).Return(nil)
+	accountB, _ := ctxt.Get("B")
+	ctxt.EXPECT().release(&accountB).Return(nil)
 	branch, _ := ctxt.Get("C")
-	ctxt.EXPECT().release(branch.Id()).Return(nil)
+	ctxt.EXPECT().release(&branch).Return(nil)
 
 	handle := node.GetWriteHandle()
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
@@ -2633,7 +2633,7 @@ func TestAccountNode_SetAccount_WithMatchingAccount_ZeroInfo(t *testing.T) {
 	after, _ := ctxt.Build(Empty{})
 
 	id, _ := ctxt.Get("S")
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 	ctxt.EXPECT().releaseTrieAsynchronous(RefTo(id.Id()))
 
 	handle := node.GetWriteHandle()
@@ -3252,7 +3252,7 @@ func TestAccountNode_Release(t *testing.T) {
 
 	ref, node := ctxt.Build(&Account{})
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 	handle := node.GetWriteHandle()
 	defer handle.Release()
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
@@ -3270,7 +3270,7 @@ func TestAccountNode_ReleaseStateTrie(t *testing.T) {
 	})
 
 	storageRef, storageNode := ctxt.Get("A")
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	write := storageNode.GetWriteHandle()
 	storage.EXPECT().Release(ctxt, RefTo(storageRef.Id()), write)
@@ -3971,7 +3971,7 @@ func TestValueNode_SetValue_WithMatchingKey_ZeroValue(t *testing.T) {
 	ref, node := ctxt.Build(&Value{key: key, value: value1})
 	after, _ := ctxt.Build(Empty{})
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 
 	handle := node.GetWriteHandle()
 	if newRoot, changed, err := handle.Get().SetValue(ctxt, &ref, handle, key, path[:], value2); !newRoot.Id().IsEmpty() || !changed || err != nil {
@@ -4306,7 +4306,7 @@ func TestValueNode_Release(t *testing.T) {
 
 	ref, node := ctxt.Build(&Value{})
 
-	ctxt.EXPECT().release(ref.Id()).Return(nil)
+	ctxt.EXPECT().release(&ref).Return(nil)
 	handle := node.GetWriteHandle()
 	if err := handle.Get().Release(ctxt, &ref, handle); err != nil {
 		t.Errorf("failed to release node: %v", err)
@@ -7703,7 +7703,7 @@ func (c *nodeContext) ExpectCreateTemporaryBranch() (NodeReference, *shared.Shar
 	c.EXPECT().createBranch().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
-	c.EXPECT().release(ref.Id()).Return(nil)
+	c.EXPECT().release(&ref).Return(nil)
 	return ref, instance
 }
 
@@ -7722,7 +7722,7 @@ func (c *nodeContext) ExpectCreateTemporaryExtension() (NodeReference, *shared.S
 	c.EXPECT().createExtension().DoAndReturn(func() (NodeReference, shared.WriteHandle[Node], error) {
 		return ref, instance.GetWriteHandle(), nil
 	})
-	c.EXPECT().release(ref.Id()).Return(nil)
+	c.EXPECT().release(&ref).Return(nil)
 	return ref, instance
 }
 
