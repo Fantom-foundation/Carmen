@@ -884,7 +884,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 		childIsFrozen := handle.Get().IsFrozen()
 		handle.Release()
 
-		// rule: flag -> childIsFrozen (implication)
+		// rule: child is marked as frozen -> childIsFrozen (implication)
 		if flag := n.isChildFrozen(byte(i)); flag && !childIsFrozen {
 			errs = append(errs, fmt.Errorf("in node %v the frozen flag for child 0x%X is invalid, flag: %t, actual: %t", thisRef.Id(), i, flag, childIsFrozen))
 		}
@@ -1990,7 +1990,7 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 }
 
 func (n *ValueNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
-	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, hashState: %v): %v - %v\n", indent, thisRef.Id(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.key, n.value)
+	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, hashState: %v): %v - %x\n", indent, thisRef.Id(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.key, n.value)
 	return nil
 }
 
