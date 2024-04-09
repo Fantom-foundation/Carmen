@@ -883,6 +883,37 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
+func TestLiveTrie_LargeNumberOfNodes(t *testing.T) {
+	directory := t.TempDir()
+
+	// create file forest with 1M cache capacity
+	trie, err := OpenFileLiveTrie(directory, S5LiveConfig, 1_000_000)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+
+	// write 2M balances in batches of 100k
+	accounts := getTestAddresses(2_000_000)
+	for i, account := range accounts {
+		// flush the trie every 100k accounts,
+		// so we don't exceed the cache capacity of dirty nodes
+		if i%100_000 == 0 && i > 0 {
+			if err := trie.Flush(); err != nil {
+				t.Fatalf("failed to flush trie: %v", err)
+			}
+		}
+		info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{byte(i)}}
+		if err := trie.SetAccountInfo(account, info); err != nil {
+			t.Fatalf("failed to insert account: %v", err)
+		}
+	}
+
+	// close the forest
+	if err := trie.Close(); err != nil {
+		t.Fatalf("failed to close forest: %v", err)
+	}
+}
+
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)
