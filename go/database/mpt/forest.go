@@ -936,6 +936,9 @@ func (s *Forest) release(ref *NodeReference) error {
 	// written/read in parallel.
 	// Furthermore, it prevents cache exhaustion when
 	// deleting many nodes in parallel.
+	// It fixes: https://github.com/Fantom-foundation/Carmen/issues/691
+	// If this line is removed, this test fails:
+	//  go test ./database/mpt/...  -run TestForest_AsyncDelete_CacheIsNotExhausted
 	s.nodeCache.Release(ref)
 
 	id := ref.Id()
