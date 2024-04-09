@@ -239,9 +239,9 @@ func (c *nodeCache) Touch(r *NodeReference) {
 }
 
 func (c *nodeCache) Release(r *NodeReference) {
-	// During a touch we need to update the double-linked list
+	// During a release we need to update the double-linked list
 	// formed by owners such that the referenced node is at the
-	// head position.
+	// tail position.
 	pos := ownerPosition(atomic.LoadUint32(&r.pos))
 	if uint32(pos) >= uint32(len(c.owners)) {
 		// In this reference does not point to a valid owner; the
