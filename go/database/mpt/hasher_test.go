@@ -360,6 +360,54 @@ func TestEthereumLikeHasher_BranchNode_KnownHash_EmbeddedNode(t *testing.T) {
 	}
 }
 
+func TestEthereumLikeHasher_BranchNode_RecomputesEmbeddedFlagsForHashInNodeMode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContextWithConfig(t, ctrl, S5ArchiveConfig)
+
+	// This test case reconstructs an issue encountered while computing
+	// hashes for archives which are not storing embedded flags on disk.
+	// In those cases, embedded flags in branch nodes have not been updated
+	// if the hashes of the child nodes have been valid.
+
+	key1 := hexToKey("c76547ce3912f8c25a9943819c2992169865dfd500bed5213c8a92ceff5db5e3")
+	key2 := hexToKey("2968f9295ca3ab4960ae553a18f47567e56f2777ad762ee1d639421728926a37")
+
+	val1 := common.Value{}
+	val1[len(val1)-1] = 1
+
+	dirtyHash := hashStatusDirty
+	ref, branch := ctxt.Build(&Branch{
+		children: Children{
+			0x2: &Value{length: 55, key: key1, value: val1}, // the node and its hash are clean
+			0x4: &Value{length: 55, key: key2, value: val1}, // the node and its hash are clean
+		},
+		hashStatus:       &dirtyHash,
+		dirtyChildHashes: []int{0x2, 0x4}, // the branch's hashes are outdated
+	})
+
+	// The embedded mask should contain no 1 bits right now.
+	view := branch.GetViewHandle()
+	embeddedMask := int(view.Get().(*BranchNode).embeddedChildren)
+	view.Release()
+	if want, got := 0, embeddedMask; want != got {
+		t.Errorf("nested nodes not identified as embedded, wanted %016b, got %016b", want, got)
+	}
+
+	hasher := makeEthereumLikeHasher()
+	_, _, err := hasher.updateHashes(&ref, ctxt)
+	if err != nil {
+		t.Fatalf("failed to compute hash for node: %v", err)
+	}
+
+	// The embedded mask should indicate both value nodes as embedded.
+	view = branch.GetViewHandle()
+	embeddedMask = int(view.Get().(*BranchNode).embeddedChildren)
+	view.Release()
+	if want, got := (1<<2)|(1<<4), embeddedMask; want != got {
+		t.Errorf("nested nodes not identified as embedded, wanted %016b, got %016b", want, got)
+	}
+}
+
 // The other node types are tested as part of the overall state hash tests.
 
 func TestEthereumLikeHasher_GetLowerBoundForEmptyNode(t *testing.T) {
