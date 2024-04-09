@@ -15,6 +15,7 @@ import (
 )
 
 var PathLengthTracking = MptConfig{
+	Hashing:                       EthereumLikeHashing,
 	TrackSuffixLengthsInLeafNodes: true,
 }
 
@@ -1154,6 +1155,10 @@ func TestBranchNode_VisitAbortByChild(t *testing.T) {
 }
 
 func TestBranchNode_CheckDetectsIssues(t *testing.T) {
+	emptyValueHash := common.Hash{
+		202, 105, 210, 237, 104, 137, 30, 166, 212, 211, 73, 237, 177, 164, 110, 101,
+		102, 128, 108, 18, 151, 209, 112, 197, 142, 218, 9, 115, 49, 58, 100, 135,
+	}
 	unknownHashStatus := hashStatusUnknown
 	tests := map[string]struct {
 		setup NodeDesc
@@ -1164,11 +1169,11 @@ func TestBranchNode_CheckDetectsIssues(t *testing.T) {
 		"two children":   {&Branch{children: Children{1: &Value{}, 2: &Value{}}}, true},
 		"invalid hash": {&Branch{
 			children:    Children{1: &Value{}, 2: &Value{}},
-			childHashes: ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
+			childHashes: ChildHashes{1: common.Hash{1}, 2: emptyValueHash},
 		}, false},
 		"dirty hashes are ignored": {&Branch{
 			children:         Children{1: &Value{}, 2: &Value{}},
-			childHashes:      ChildHashes{1: common.Hash{1}, 2: common.Hash{}}, // all hashes are 0 in tests
+			childHashes:      ChildHashes{1: common.Hash{1}, 2: emptyValueHash},
 			dirty:            true,
 			dirtyHash:        true,
 			dirtyChildHashes: []int{1},
@@ -2410,8 +2415,8 @@ func TestExtensionNode_CheckDetectsIssues(t *testing.T) {
 		"ok":                                  {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}}, true},
 		"empty path":                          {&Extension{next: &Branch{}}, false},
 		"next not a branch":                   {&Extension{path: []Nibble{1, 2, 3}, next: &Value{}}, false},
-		"invalid hash":                        {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}}, false},
-		"dirty hash is ignored":               {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: common.Hash{1}, dirty: true, hashDirty: true, nextHashDirty: true}, true},
+		"invalid hash":                        {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: &common.Hash{1}}, false},
+		"dirty hash is ignored":               {&Extension{path: []Nibble{1, 2, 3}, next: &Branch{}, nextHash: &common.Hash{1}, dirty: true, hashDirty: true, nextHashDirty: true}, true},
 		"full_frozen":                         {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
 		"partial_frozen":                      {&Extension{frozen: false, path: []Nibble{1, 2, 3}, next: &Branch{frozen: true}}, true},
 		"inconsistent_frozen":                 {&Extension{frozen: true, path: []Nibble{1, 2, 3}, next: &Branch{frozen: false}}, false},
@@ -3676,6 +3681,7 @@ func TestAccountNode_CheckDetectsIssues(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			config := MptConfig{
+				Hashing:                       EthereumLikeHashing,
 				TrackSuffixLengthsInLeafNodes: true,
 			}
 			ctxt := newNodeContextWithConfig(t, ctrl, config)
@@ -4422,6 +4428,7 @@ func TestValueNode_CheckDetectsIssues(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			config := MptConfig{
+				Hashing:                       EthereumLikeHashing,
 				TrackSuffixLengthsInLeafNodes: true,
 			}
 			ctxt := newNodeContextWithConfig(t, ctrl, config)
@@ -6392,6 +6399,13 @@ func TestTransitions_MutableTransitionHaveExpectedEffectWithTrackedPrefixLength(
 	testTransitions_MutableTransitionHaveExpectedEffect(t, config)
 }
 
+func TestTransitions_MutableTransitionHaveExpectedEffectWithEthereumHashing(t *testing.T) {
+	config := S4LiveConfig
+	config.TrackSuffixLengthsInLeafNodes = true
+	config.Hashing = EthereumLikeHashing
+	testTransitions_MutableTransitionHaveExpectedEffect(t, config)
+}
+
 func testTransitions_MutableTransitionHaveExpectedEffect(t *testing.T, config MptConfig) {
 	for _, transition := range getTestTransitions() {
 		transition := transition
@@ -6535,6 +6549,13 @@ func TestTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T) {
 func TestTransitions_ImmutableTransitionHaveExpectedEffectWithTrackedPrefixLength(t *testing.T) {
 	config := S4LiveConfig
 	config.TrackSuffixLengthsInLeafNodes = true
+	testTransitions_ImmutableTransitionHaveExpectedEffect(t, config)
+}
+
+func TestTransitions_ImmutableTransitionHaveExpectedEffectWithEthereumHashing(t *testing.T) {
+	config := S4LiveConfig
+	config.TrackSuffixLengthsInLeafNodes = true
+	config.Hashing = EthereumLikeHashing
 	testTransitions_ImmutableTransitionHaveExpectedEffect(t, config)
 }
 
@@ -7459,8 +7480,9 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	res.nodeBase.clean = !b.dirty
 	res.frozen = b.frozen
 	for i, desc := range b.children {
-		id, _ := ctx.Build(desc)
-		res.children[i] = id
+		ref, _ := ctx.Build(desc)
+		res.children[i] = ref
+		res.hashes[i], _ = ctx.getHashFor(&ref)
 	}
 	for i, hash := range b.childHashes {
 		res.hashes[i] = hash
@@ -7487,7 +7509,7 @@ type Extension struct {
 	path          []Nibble
 	next          NodeDesc
 	hashDirty     bool
-	nextHash      common.Hash
+	nextHash      *common.Hash
 	nextHashDirty bool
 	hashStatus    *hashStatus // overrides dirtyHash flag if set
 }
@@ -7506,8 +7528,12 @@ func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]
 	if e.hashStatus != nil {
 		res.hashStatus = *e.hashStatus
 	}
-	res.nextHash = e.nextHash
 	res.nextHashDirty = e.nextHashDirty
+	if e.nextHash != nil {
+		res.nextHash = *e.nextHash
+	} else if !res.nextHashDirty {
+		res.nextHash, _ = ctx.getHashFor(&res.next)
+	}
 	return ref, shared.MakeShared[Node](res)
 }
 
@@ -7579,7 +7605,22 @@ func newNodeContextWithConfig(t *testing.T, ctrl *gomock.Controller, config MptC
 		config:          config,
 	}
 	res.EXPECT().getConfig().AnyTimes().Return(config)
-	res.EXPECT().getHashFor(gomock.Any()).AnyTimes().Return(common.Hash{}, nil)
+	res.EXPECT().hashAddress(gomock.Any()).AnyTimes().DoAndReturn(common.Keccak256ForAddress)
+	res.EXPECT().hashKey(gomock.Any()).AnyTimes().DoAndReturn(common.Keccak256ForKey)
+	res.EXPECT().getHashFor(gomock.Any()).AnyTimes().DoAndReturn(func(ref *NodeReference) (common.Hash, error) {
+		// Mock nodes have a constant hash of zero.
+		handle, err := res.getViewAccess(ref)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		defer handle.Release()
+		if _, isMock := handle.Get().(*MockNode); isMock {
+			return common.Hash{}, nil
+		}
+		// All others are hashed according to the configuration.
+		hasher := config.Hashing.createHasher()
+		return hasher.getHash(ref, res)
+	})
 
 	// The empty node is always present.
 	res.Build(Empty{})
@@ -7675,6 +7716,21 @@ func (c *nodeContext) Build(desc NodeDesc) (NodeReference, *shared.Shared[Node])
 	})
 	c.index[ref.Id()] = entry{ref, node}
 	c.cache[desc] = entry{ref, node}
+
+	view := node.GetViewHandle()
+	wantsHashDirty := true
+	if _, isMock := view.Get().(*MockNode); !isMock {
+		_, wantsHashDirty = view.Get().GetHash()
+	}
+	view.Release()
+
+	if !wantsHashDirty {
+		hash, _ := c.getHashFor(&ref)
+		write := node.GetWriteHandle()
+		write.Get().SetHash(hash)
+		write.Release()
+	}
+
 	return ref, node
 }
 
