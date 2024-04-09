@@ -64,9 +64,9 @@ type NodeCache interface {
 	// are used by implementation to manage the eviction order of elements.
 	Touch(r *NodeReference)
 
-	// Release signals the cache that the given node has currently the lower usage.
+	// Release signals the cache that the given node is unlikely to be reused in the near future.
 	// It means that the node still remains in the cache, but it is marked
-	// as the least usaed and tgus next to be evicted when the cache becomes full.
+	// as the least recently used and thus next to be evicted when the cache becomes full.
 	Release(r *NodeReference)
 
 	// ForEach iterates through all elements in this cache.
