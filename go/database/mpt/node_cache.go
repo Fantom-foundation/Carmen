@@ -244,8 +244,8 @@ func (c *nodeCache) Release(r *NodeReference) {
 	// tail position.
 	pos := ownerPosition(atomic.LoadUint32(&r.pos))
 	if uint32(pos) >= uint32(len(c.owners)) {
-		// In this reference does not point to a valid owner; the
-		// reference is not extra resolved to perform a touch, and
+		// This reference does not point to a valid owner; the
+		// reference is not extra resolved to perform a release, and
 		// thus the operation can stop here.
 		return
 	}
