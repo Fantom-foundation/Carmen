@@ -585,7 +585,7 @@ func TestBranchNode_SetAccount_ToDefaultValue_MoreThanTwoBranches(t *testing.T) 
 	ctxt.Check(t, after)
 
 	accountRef, _ := ctxt.Get("A")
-	ctxt.EXPECT().release(accountRef.Id()).Return(nil)
+	ctxt.EXPECT().release(&accountRef).Return(nil)
 
 	handle := node.GetWriteHandle()
 
