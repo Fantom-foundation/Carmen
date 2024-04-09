@@ -1,6 +1,8 @@
 package mpt
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -297,4 +299,104 @@ func TestS5RootHash_Values(t *testing.T) {
 			t.Fatalf("invalid hash after delete #%d\nexpected %v\n     got %v", i, want, got)
 		}
 	}
+}
+
+func TestHashing_S5EmbeddedValuesAreHandledCorrectly(t *testing.T) {
+	// This test case covers a bug identified as the cause for issue #769.
+	// In MPT modes where hashes are stored with the nodes, the info
+	// whether nodes are embedded or not is also not stored with the parent.
+	// If a node is loaded, all embedded information needs to be considered
+	// outdated, and to be recomputed, even if the child node itself is not
+	// modified.
+
+	// These keys have a common hash prefix of 4 bytes. Thus, there are only 28 bytes
+	// to be encoded in value nodes if they are stored in a branch node, causing the
+	// values to be small enough to be embedded.
+	key1 := hexToKey("c76547ce3912f8c25a9943819c2992169865dfd500bed5213c8a92ceff5db5e3")
+	key2 := hexToKey("2968f9295ca3ab4960ae553a18f47567e56f2777ad762ee1d639421728926a37")
+
+	hash1 := common.Keccak256ForKey(key1)
+	hash2 := common.Keccak256ForKey(key2)
+	if !bytes.Equal(hash1[:4], hash2[:4]) {
+		t.Fatalf("keys do not have a common hash-prefix")
+	}
+
+	val1 := common.Value{}
+	val1[31] = 1
+	val2 := common.Value{}
+	val2[31] = 2
+
+	// The issue was only found in Archive mode, since in the live mode embedded
+	// node information is stored with the parents. However, for cross-validation,
+	// both modes are tested.
+	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+
+		// -- Setup --
+		// To prepare the stage for the issue, a branch node with two embedded
+		// values is created.
+		directory := t.TempDir()
+		state, err := OpenGoMemoryState(directory, config, 1024)
+		if err != nil {
+			t.Fatalf("failed to open trie: %v", err)
+		}
+
+		addr := common.Address{}
+		state.SetNonce(addr, common.Nonce{1})
+		state.SetStorage(addr, key1, val1)
+		state.SetStorage(addr, key2, val1)
+
+		hash, _, err := state.UpdateHashes()
+		if err != nil {
+			t.Fatalf("failed to update hashes")
+		}
+
+		// This hash certifies that both values are correctly embedded.
+		want := "b58a6f08d2494a88aba8e766cce73e877e6bbd9bccd50732bf298d3969c9892b"
+		if got := fmt.Sprintf("%x", hash[:]); want != got {
+			t.Errorf("invalid hash, wanted %v, got %v", want, got)
+		}
+
+		// We close and re-open the state to clear caches and to force all nodes
+		// to be re-loaded from disk.
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+
+		// --- Error Case Recreation ---
+		// The error causing issue #769 is caused by loading nodes from disk not
+		// including embedded information and not correctly recomputing those when
+		// computing hashes.
+		state, err = OpenGoMemoryState(directory, config, 1024)
+		if err != nil {
+			t.Fatalf("failed to open trie: %v", err)
+		}
+
+		// Only one value is updated, the other remains untouched. The bug was
+		// that the untouched value was incorrectly considered non-embedded as a
+		// side-effect.
+		state.SetStorage(addr, key1, val2)
+
+		hash, _, err = state.UpdateHashes()
+		if err != nil {
+			t.Fatalf("failed to update hashes")
+		}
+
+		// This hash certifies that both values are correctly embedded.
+		want = "19b93a208ed79c5eba88eb748a19f7506dd09423fc66ee41d40fc0b8e8e56aca"
+		if got := fmt.Sprintf("%x", hash[:]); want != got {
+			t.Errorf("invalid hash, wanted %v, got %v", want, got)
+		}
+
+		state.trie.Dump()
+
+		if err := state.Close(); err != nil {
+			t.Fatalf("failed to close state: %v", err)
+		}
+	}
+}
+
+func hexToKey(s string) common.Key {
+	var key common.Key
+	hex.Decode(key[:], []byte(s))
+	return key
 }

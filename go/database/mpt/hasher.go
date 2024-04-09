@@ -261,6 +261,8 @@ func (h ethHasher) updateHashesInternal(
 		path   NodePath
 	}
 
+	storesHashesInNodes := manager.getConfig().HashStorageLocation == HashStoredWithNode
+
 	embedded := map[NodeId]bool{}
 
 	tasks := make([]task, 0, 128)
@@ -286,6 +288,21 @@ func (h ethHasher) updateHashesInternal(
 			dirty := false
 			hash, dirty = node.GetHash()
 			if !dirty {
+
+				if storesHashesInNodes {
+					// If the hashes are stored in nodes, not with the parents, embedded
+					// flags in parent nodes may not be valid even for child nodes with
+					// up-to-date hashes. Thus, whether the nodes is embedded or not
+					// needs to be computed for all child nodes.
+					if res, e := h.isEmbedded(handle.Get(), manager); err != nil {
+						cur.handle.Release()
+						err = e
+						break
+					} else if res {
+						embedded[cur.node.Id()] = true
+					}
+				}
+
 				handle.Release()
 				continue
 			}
