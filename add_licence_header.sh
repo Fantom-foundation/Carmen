@@ -1,5 +1,23 @@
 #!/bin/bash
 
+#
+# This script adds a licence header to all files in this repository.
+# The licence test is read from 'license_header.txt' and added at
+# the beginning of each file.
+# Each line of the license file is prefixed with a comment sign
+# valid for respective source code.
+#
+# The files to extend with the licence header are defined at thh end
+# of this script. Should a new type of file appear in this repository
+# the script must be extended.
+#
+# This script recognises if the header file is already present,
+# and in this case it does not modify the file.
+#
+# However, the script does not allow at the moment for updating
+# the licence header should it change. 
+#
+
 license_file="license_header.txt"
 
 # Extend the license text of input string, each line is prefixed.
