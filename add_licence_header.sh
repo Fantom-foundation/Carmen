@@ -7,7 +7,7 @@
 # Each line of the license file is prefixed with a comment sign
 # valid for respective source code.
 #
-# The files to extend with the licence header are defined at thh end
+# The files to extend with the licence header are defined at the end
 # of this script. Should a new type of file appear in this repository
 # the script must be extended.
 #
