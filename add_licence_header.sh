@@ -1,13 +1,13 @@
 #!/bin/bash
 
 #
-# This script adds a licence header to all files in this repository.
-# The licence test is read from 'license_header.txt' and added at
+# This script adds a license header to all files in this repository.
+# The license test is read from 'license_header.txt' and added at
 # the beginning of each file.
 # Each line of the license file is prefixed with a comment sign
 # valid for respective source code.
 #
-# The files to extend with the licence header are defined at the end
+# The files to extend with the license header are defined at the end
 # of this script. Should a new type of file appear in this repository
 # the script must be extended.
 #
@@ -15,7 +15,7 @@
 # and in this case it does not modify the file.
 #
 # However, the script does not allow at the moment for updating
-# the licence header should it change.
+# the license header should it change.
 #
 
 license_file="license_header.txt"
@@ -44,7 +44,7 @@ extend_license_header() {
 # Add license header to all files in a project
 # Parameters:
 #   file extension, e.g.: .go, .cpp,
-#   a licence text as a string
+#   a license text as a string
 add_license_to_files() {
     local file_extension="$1"
     local license_header="$2"
