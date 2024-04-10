@@ -174,6 +174,109 @@ func TestNodeCache_TouchChangesOrder(t *testing.T) {
 	}
 }
 
+func TestNodeCache_ReleaseChangesOrder(t *testing.T) {
+	cache := NewNodeCache(3).(*nodeCache)
+
+	ref1 := NewNodeReference(ValueId(1))
+	ref2 := NewNodeReference(ValueId(2))
+	ref3 := NewNodeReference(ValueId(3))
+
+	if want, got := "[]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.GetOrSet(&ref1, nil)
+	cache.GetOrSet(&ref2, nil)
+	cache.GetOrSet(&ref3, nil)
+
+	if want, got := "[V-3 V-2 V-1]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.Release(&ref3)
+
+	if want, got := "[V-2 V-1 V-3]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.Release(&ref3)
+
+	if want, got := "[V-2 V-1 V-3]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.Release(&ref1)
+
+	if want, got := "[V-2 V-3 V-1]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+}
+
+func TestNodeCache_Release_NoChange(t *testing.T) {
+	cache := NewNodeCache(3).(*nodeCache)
+
+	ref1 := NewNodeReference(ValueId(1))
+	ref2 := NewNodeReference(ValueId(2))
+	ref3 := NewNodeReference(ValueId(3))
+
+	if want, got := "[]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.GetOrSet(&ref1, nil)
+	cache.GetOrSet(&ref2, nil)
+	cache.GetOrSet(&ref3, nil)
+
+	if want, got := "[V-3 V-2 V-1]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	for i := 0; i < 3; i++ {
+		cache.Release(&ref1)
+		if want, got := "[V-3 V-2 V-1]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+			t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+		}
+	}
+}
+
+func TestNodeCache_ReleaseAndTouch_ChangesOrder(t *testing.T) {
+	cache := NewNodeCache(3).(*nodeCache)
+
+	ref1 := NewNodeReference(ValueId(1))
+	ref2 := NewNodeReference(ValueId(2))
+	ref3 := NewNodeReference(ValueId(3))
+
+	if want, got := "[]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.GetOrSet(&ref1, nil)
+	cache.GetOrSet(&ref2, nil)
+	cache.GetOrSet(&ref3, nil)
+
+	if want, got := "[V-3 V-2 V-1]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.Release(&ref3)
+
+	if want, got := "[V-2 V-1 V-3]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.Touch(&ref3)
+
+	if want, got := "[V-3 V-2 V-1]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+
+	cache.Release(&ref3)
+
+	if want, got := "[V-2 V-1 V-3]", fmt.Sprintf("%v", cache.getIdsInReverseEvictionOrder()); want != got {
+		t.Errorf("unexpected eviction order, wanted %s, got %s", want, got)
+	}
+}
+
 func TestNodeCache_StressTestLruList(t *testing.T) {
 	const Capacity = 10
 	cache := newNodeCache(Capacity)

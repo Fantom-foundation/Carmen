@@ -392,7 +392,8 @@ func TestForest_Cannot_Release_Node(t *testing.T) {
 					}
 
 					// empty ID cannot be released
-					if err := forest.release(EmptyId()); err == nil {
+					ref := NewNodeReference(EmptyId())
+					if err := forest.release(&ref); err == nil {
 						t.Errorf("creating node should fail")
 					}
 				})
@@ -1884,6 +1885,87 @@ func TestForest_CloseMultipleTimes(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
+	const num = 100
+
+	keys := getTestKeys(num)
+	for _, variant := range fileAndMemVariants {
+		// test for live configs only as archive configs even write deleted
+		// nodes and cache needs to be allocated for those nodes as well.
+		for _, config := range []MptConfig{S5LiveConfig, S4LiveConfig} {
+			config := config
+			t.Run(config.Name, func(t *testing.T) {
+				t.Parallel()
+
+				// The tree is shallow - 1 account + 4byte storage addresses.
+				// The size of the cache here is estimated considering the numbers above, but it is not set
+				// exactly as some nodes are created and then deleted while building the tree.
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 10})
+				if err != nil {
+					t.Fatalf("failed to open forest: %v", err)
+				}
+
+				rootRef := NewNodeReference(EmptyId())
+				accountWithStorage := common.Address{0xA}
+				root, err := forest.SetAccountInfo(&rootRef, accountWithStorage, AccountInfo{Balance: common.Balance{0x1}})
+				if err != nil {
+					t.Fatalf("cannot create an account ")
+				}
+				rootRef = root
+
+				for i, key := range keys {
+					root, err := forest.SetValue(&rootRef, accountWithStorage, key, common.Value{byte(i)})
+					if err != nil {
+						t.Fatalf("failed to insert value: %v", err)
+					}
+					rootRef = root
+					// trigger update of dirty hashes
+					if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+						t.Fatalf("failed to compute hash: %v", err)
+					}
+				}
+
+				// flush the write buffer by flushing everything
+				if err := forest.Flush(); err != nil {
+					t.Fatalf("cannot flush db: %v", err)
+				}
+
+				// create a dirty path, which must not be impacted by the delete below
+				root, err = forest.SetAccountInfo(&rootRef, common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}, AccountInfo{Balance: common.Balance{0x1}})
+				if err != nil {
+					t.Fatalf("cannot create an account ")
+				}
+				rootRef = root
+
+				// delete the account's storage, it removes the subtries,
+				// but it cannot evict the account created above.
+				root, err = forest.ClearStorage(&rootRef, accountWithStorage)
+				if err != nil {
+					t.Fatalf("cannot delete account")
+				}
+				rootRef = root
+				if err := forest.writeBuffer.Flush(); err != nil {
+					t.Fatalf("cannot flush write buffer: %v", err)
+				}
+
+				// wait for accounts to be deleted
+				forest.releaseQueue <- EmptyId()
+				<-forest.releaseSync
+
+				// trigger update of dirty hashes - ongoing change of the account addr. 0xABCDEF should not fail
+				if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+					t.Fatalf("failed to compute hash: %v", err)
+				}
+
+				// trigger close - ongoing change of the account addr. 0xABCDEF should not fail
+				if err := forest.Close(); err != nil {
+					t.Fatalf("cannot close db: %v", err)
+				}
+			})
 		}
 	}
 }

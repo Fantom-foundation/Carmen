@@ -14,7 +14,7 @@ func ExampleDatabase_AddBlock() {
 	if err != nil {
 		log.Fatalf("cannot create temporary directory: %v", err)
 	}
-	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithoutArchiveConfiguration(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func ExampleDatabase_BeginBlock() {
 	if err != nil {
 		log.Fatalf("cannot create temporary directory: %v", err)
 	}
-	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithoutArchiveConfiguration(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func ExampleDatabase_QueryHeadState() {
 	if err != nil {
 		log.Fatalf("cannot create temporary directory: %v", err)
 	}
-	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithoutArchiveConfiguration(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}

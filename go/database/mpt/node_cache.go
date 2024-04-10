@@ -64,6 +64,11 @@ type NodeCache interface {
 	// are used by implementation to manage the eviction order of elements.
 	Touch(r *NodeReference)
 
+	// Release signals the cache that the given node is unlikely to be reused in the near future.
+	// It means that the node still remains in the cache, but it is marked
+	// as the least recently used and thus next to be evicted when the cache becomes full.
+	Release(r *NodeReference)
+
 	// ForEach iterates through all elements in this cache.
 	ForEach(func(NodeId, *shared.Shared[Node]))
 
@@ -230,6 +235,36 @@ func (c *nodeCache) Touch(r *NodeReference) {
 	c.owners[c.head].prev = pos
 	target.next = c.head
 	c.head = pos
+	c.mutex.Unlock()
+}
+
+func (c *nodeCache) Release(r *NodeReference) {
+	// During a release we need to update the double-linked list
+	// formed by owners such that the referenced node is at the
+	// tail position.
+	pos := ownerPosition(atomic.LoadUint32(&r.pos))
+	if uint32(pos) >= uint32(len(c.owners)) {
+		// This reference does not point to a valid owner; the
+		// reference is not extra resolved to perform a release, and
+		// thus the operation can stop here.
+		return
+	}
+	target := &c.owners[pos]
+	c.mutex.Lock()
+	if c.tail == pos {
+		c.mutex.Unlock()
+		return
+	}
+	if c.head == pos {
+		c.head = target.next
+	} else {
+		c.owners[target.prev].next = target.next
+	}
+	c.owners[target.next].prev = target.prev
+
+	c.owners[c.tail].next = pos
+	target.prev = c.tail
+	c.tail = pos
 	c.mutex.Unlock()
 }
 
