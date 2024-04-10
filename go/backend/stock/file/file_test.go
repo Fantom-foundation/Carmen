@@ -255,7 +255,7 @@ func TestFile_Get_FailReadFile(t *testing.T) {
 	// inject failing file
 	ctrl := gomock.NewController(t)
 	values := utils.NewMockSeekableFile(ctrl)
-	values.EXPECT().Write(gomock.Any(), gomock.Any()).Return(fmt.Errorf("expected error"))
+	values.EXPECT().WriteAt(gomock.Any(), gomock.Any()).Return(0, fmt.Errorf("expected error"))
 	s.values = values
 
 	if err := s.Set(1, 100); err == nil {

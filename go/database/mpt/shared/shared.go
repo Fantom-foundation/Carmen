@@ -267,7 +267,8 @@ func (h *WriteHandle[T]) Set(value T) {
 // AsReadHandle obtains a view on this write handle proving read access to the
 // shared value. Write access is preserved and must still be released. The
 // resulting read access handle must not be released.
-// TODO: split access permission proofs and handles
+// TODO [cleanup]: split access permission proofs and handles
+// see: https://github.com/Fantom-foundation/Carmen/issues/719
 // See https://github.com/Fantom-foundation/Carmen/issues/719
 func (h *WriteHandle[T]) AsReadHandle() ReadHandle[T] {
 	return ReadHandle[T]{h.handle}
@@ -276,7 +277,8 @@ func (h *WriteHandle[T]) AsReadHandle() ReadHandle[T] {
 // AsViewHandle obtains a view on this write handle proving view access to the
 // shared value. Write access is preserved and must still be released. The
 // resulting view access handle must not be released.
-// TODO: split access permission proofs and handles
+// TODO [cleanup]: split access permission proofs and handles
+// see: https://github.com/Fantom-foundation/Carmen/issues/719
 // See https://github.com/Fantom-foundation/Carmen/issues/719
 func (h *WriteHandle[T]) AsViewHandle() ViewHandle[T] {
 	return ViewHandle[T]{h.handle}

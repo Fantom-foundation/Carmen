@@ -41,9 +41,9 @@ func TestAccountLifeCycleState_CanBePrinted(t *testing.T) {
 		state accountLifeCycleState
 		print string
 	}{
-		{kNonExisting, "NonExisting"},
-		{kExists, "Exists"},
-		{kSuicided, "Suicided"},
+		{accountNonExisting, "NonExisting"},
+		{accountExists, "Exists"},
+		{accountSelfDestructed, "Suicided"},
 		{accountLifeCycleState(23), "?"},
 	}
 

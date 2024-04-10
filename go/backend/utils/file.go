@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"io/fs"
 	"os"
@@ -33,19 +34,8 @@ type FileInfo interface {
 // This interface provides a layer of abstraction
 // between file-level primitives like the buffered file, stock, or stacks
 // and operating system operations to facilitate the effective testing of those constructs.
-// TODO update to match interfaces io.ReaderAt, io.WriterAt
 type SeekableFile interface {
-	io.Closer
-
-	// Write writes the given byte data at the given position in the file. The file
-	// will be extended in case the target position is beyond the file size.
-	Write(position int64, src []byte) error
-
-	// Read reads a slice of bytes from the file starting at the given position.
-	// If the targeted range is partially or fully beyond the range of the file,
-	// uncovered data is zero-padded in the destination slice.
-	Read(position int64, dst []byte) error
-
-	// Flush syncs temporary cached content to the file system.
-	Flush() error
+	io.ReaderAt
+	io.WriterAt
+	common.FlushAndCloser
 }

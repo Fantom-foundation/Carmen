@@ -240,7 +240,7 @@ func (s *fileStock[I, V]) Get(index I) (V, error) {
 	offset := int64(valueSize) * int64(index)
 	buffer := s.bufferPool.Get().(*buffer[V])
 	defer s.bufferPool.Put(buffer)
-	err := s.values.Read(offset, buffer.raw)
+	_, err := s.values.ReadAt(buffer.raw, offset)
 	if err != nil {
 		return res, err
 	}
@@ -273,7 +273,7 @@ func (s *fileStock[I, V]) Set(index I, value V) error {
 
 	// Write a serialized form of the value to disk.
 	offset := int64(valueSize) * int64(index)
-	if err := s.values.Write(offset, buffer.raw); err != nil {
+	if _, err := s.values.WriteAt(buffer.raw, offset); err != nil {
 		return err
 	}
 	if int64(index) >= s.numValuesInFile {

@@ -161,7 +161,7 @@ func (h directHasher) hash(
 		hasher.Write(node.storageHash[:])
 
 	case *BranchNode:
-		// TODO: compute sub-tree hashes in parallel
+		// TODO [perf]: compute sub-tree hashes in parallel
 		if manager != nil {
 			for i, child := range node.children {
 				if !child.Id().IsEmpty() && node.isChildHashDirty(byte(i)) {
@@ -572,7 +572,7 @@ func (h ethHasher) encodeExtension(
 
 	items[0] = &rlp.String{Str: encodePartialPath(packedNibbles, numNibbles, false, pathBuffer)}
 
-	// TODO: the use of the same encoding as for the branch nodes is
+	// TODO [cleanup]: the use of the same encoding as for the branch nodes is
 	// done for symmetry, but there is no unit test for this yet; it
 	// would require to find two keys or address with a very long
 	// common hash prefix.
@@ -738,8 +738,6 @@ func (h ethHasher) isEmbedded(
 	node Node,
 	source NodeSource,
 ) (bool, error) {
-	// TODO: test this function
-
 	// Start by estimating a lower bound for the node size.
 	minSize, err := getLowerBoundForEncodedSize(node, 32, source)
 	if err != nil {

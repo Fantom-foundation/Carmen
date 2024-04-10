@@ -231,7 +231,6 @@ func (ht *HashTree) GetPageHash(page int) (out common.Hash, err error) {
 		}
 	}
 
-	// TODO keep file open?
 	nodesLayer, err := os.OpenFile(ht.layerFile(0), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to open nodes layer file; %s", err)

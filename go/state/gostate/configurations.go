@@ -70,7 +70,7 @@ func init() {
 	}
 
 	// Register all configuration options supported by the Go implementation.
-	// TODO: break this up on a per schema basis
+	// TODO [cleanup]: break this up on a per schema basis
 	for schema := state.Schema(1); schema <= state.Schema(5); schema++ {
 		for _, archive := range generallySupportedArchives {
 			state.RegisterStateFactory(state.Configuration{

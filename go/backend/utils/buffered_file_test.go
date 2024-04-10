@@ -86,7 +86,7 @@ func TestBufferedFile_ReadBeyondSize(t *testing.T) {
 
 	dst := make([]byte, 1)
 	dst[0] = 0xAA
-	if err := bf.Read(2*bufferSize, dst); err != nil {
+	if _, err := bf.ReadAt(dst, 2*bufferSize); err != nil {
 		t.Errorf("reading should not fail: %s", err)
 	}
 	if dst[0] != 0x0 {
@@ -114,7 +114,7 @@ func TestBufferedFile_ReadPartlyBeyondSize(t *testing.T) {
 	}
 
 	got := make([]byte, 3*bufferSize)
-	if err := bf.Read(0.5*bufferSize, got); err != nil {
+	if _, err := bf.ReadAt(got, 0.5*bufferSize); err != nil {
 		t.Errorf("reading should not fail: %s", err)
 	}
 
@@ -152,7 +152,7 @@ func TestBufferedFile_ReadPartlyBeyondSizeFails(t *testing.T) {
 	}
 
 	got := make([]byte, 3*bufferSize)
-	if err := bf.Read(0.5*bufferSize, got); err == nil {
+	if _, err := bf.ReadAt(got, 0.5*bufferSize); err == nil {
 		t.Errorf("reading should fail")
 	}
 
@@ -178,7 +178,7 @@ func TestBufferedFile_ReadSplit(t *testing.T) {
 	}
 
 	got := make([]byte, bufferSize)
-	if err := bf.Read(0.5*bufferSize, got); err != nil {
+	if _, err := bf.ReadAt(got, 0.5*bufferSize); err != nil {
 		t.Errorf("reading should not fail: %s", err)
 	}
 
@@ -207,7 +207,7 @@ func TestBufferedFile_Write_SeekFailing(t *testing.T) {
 		t.Fatalf("cannot open file: %s", err)
 	}
 
-	if err := bf.Write(2*bufferSize, []byte{0xA}); err == nil {
+	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
 		t.Errorf("writing should file")
 	}
 }
@@ -228,7 +228,7 @@ func TestBufferedFile_Write_SeekWrongPosition(t *testing.T) {
 		t.Fatalf("cannot open file: %s", err)
 	}
 
-	if err := bf.Write(2*bufferSize, []byte{0xA}); err == nil {
+	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
 		t.Errorf("writing should file")
 	}
 }
@@ -251,7 +251,7 @@ func TestBufferedFile_Write_Failing(t *testing.T) {
 		t.Fatalf("cannot open file: %s", err)
 	}
 
-	if err := bf.Write(2*bufferSize, []byte{0xA}); err == nil {
+	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
 		t.Errorf("writing should file")
 	}
 }
@@ -274,7 +274,7 @@ func TestBufferedFile_Write_FailingDueToRead(t *testing.T) {
 		t.Fatalf("cannot open file: %s", err)
 	}
 
-	if err := bf.Write(2*bufferSize, []byte{0xA}); err == nil {
+	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
 		t.Errorf("writing should file")
 	}
 }
@@ -296,7 +296,7 @@ func TestBufferedFile_Write_FailingNumOfWrites(t *testing.T) {
 		t.Fatalf("cannot open file: %s", err)
 	}
 
-	if err := bf.Write(2*bufferSize, []byte{0xA}); err == nil {
+	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
 		t.Errorf("writing should file")
 	}
 }
@@ -318,7 +318,7 @@ func TestBufferedFile_ReadNegativePosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open buffered file: %v", err)
 	}
-	if err := file.Read(-1, []byte{}); err == nil {
+	if _, err := file.ReadAt([]byte{}, -1); err == nil {
 		t.Errorf("reading should fail")
 	}
 }
@@ -329,7 +329,7 @@ func TestBufferedFile_WriteNegativePosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open buffered file: %v", err)
 	}
-	if err := file.Write(-1, []byte{0xAA}); err == nil {
+	if _, err := file.WriteAt([]byte{0xAA}, -1); err == nil {
 		t.Errorf("writing should fail")
 	}
 }
@@ -344,14 +344,14 @@ func TestBufferedFile_WrittenDataCanBeRead(t *testing.T) {
 			}
 
 			for i := 0; i < n; i++ {
-				if err := file.Write(int64(i), []byte{byte(i)}); err != nil {
+				if _, err := file.WriteAt([]byte{byte(i)}, int64(i)); err != nil {
 					t.Fatalf("failed to write at position %d: %v", i, err)
 				}
 			}
 
 			for i := 0; i < n; i++ {
 				dst := []byte{0}
-				if err := file.Read(int64(i), dst); err != nil {
+				if _, err := file.ReadAt(dst, int64(i)); err != nil {
 					t.Fatalf("failed to read at position %d: %v", i, err)
 				}
 				if dst[0] != byte(i) {
@@ -376,7 +376,7 @@ func TestBufferedFile_DataIsPersistent(t *testing.T) {
 			}
 
 			for i := 0; i < n; i++ {
-				if err := file.Write(int64(i), []byte{byte(i + 1)}); err != nil {
+				if _, err := file.WriteAt([]byte{byte(i + 1)}, int64(i)); err != nil {
 					t.Fatalf("failed to write at position %d: %v", i, err)
 				}
 			}
@@ -393,7 +393,7 @@ func TestBufferedFile_DataIsPersistent(t *testing.T) {
 
 			for i := 0; i < n; i++ {
 				dst := []byte{0}
-				if err := file.Read(int64(i), dst); err != nil {
+				if _, err := file.ReadAt(dst, int64(i)); err != nil {
 					t.Fatalf("failed to read at position %d: %v", i, err)
 				}
 				if dst[0] != byte(i+1) {
@@ -418,14 +418,14 @@ func TestBufferedFile_ReadAndWriteCanHandleUnalignedData(t *testing.T) {
 	// By writting data of length 3 we are sometimes writing data crossing
 	// the internal aligned buffer-page boundary.
 	for i := 0; i < 1000; i++ {
-		if err := file.Write(int64(i)*3, []byte{byte(i), byte(i + 1), byte(i + 2)}); err != nil {
+		if _, err := file.WriteAt([]byte{byte(i), byte(i + 1), byte(i + 2)}, int64(i)*3); err != nil {
 			t.Fatalf("failed to write at position %d: %v", i, err)
 		}
 	}
 
 	for i := 0; i < 1000; i++ {
 		dst := []byte{0, 0, 0}
-		if err := file.Read(int64(i)*3, dst); err != nil {
+		if _, err := file.ReadAt(dst, int64(i)*3); err != nil {
 			t.Fatalf("failed to read at position %d: %v", i, err)
 		}
 		want := []byte{byte(i), byte(i + 1), byte(i + 2)}
@@ -447,10 +447,10 @@ func TestBufferedFile_WriteAndReadAddBufferBoundary(t *testing.T) {
 	}
 
 	src := []byte{1, 2, 3, 4, 5}
-	file.Write(5*bufferSize-2, src)
+	file.WriteAt(src, 5*bufferSize-2)
 
 	dst := []byte{0, 0, 0, 0, 0}
-	file.Read(5*bufferSize-2, dst)
+	file.ReadAt(dst, 5*bufferSize-2)
 
 	if !bytes.Equal(src, dst) {
 		t.Errorf("failed to read data written across buffer boundary, wanted %v, got %v", src, dst)

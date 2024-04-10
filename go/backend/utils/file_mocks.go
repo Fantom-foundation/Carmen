@@ -5,7 +5,6 @@
 //
 //	mockgen -source file.go -destination file_mocks.go -package utils
 //
-
 // Package utils is a generated GoMock package.
 package utils
 
@@ -301,30 +300,32 @@ func (mr *MockSeekableFileMockRecorder) Flush() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockSeekableFile)(nil).Flush))
 }
 
-// Read mocks base method.
-func (m *MockSeekableFile) Read(position int64, dst []byte) error {
+// ReadAt mocks base method.
+func (m *MockSeekableFile) ReadAt(p []byte, off int64) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Read", position, dst)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "ReadAt", p, off)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// Read indicates an expected call of Read.
-func (mr *MockSeekableFileMockRecorder) Read(position, dst any) *gomock.Call {
+// ReadAt indicates an expected call of ReadAt.
+func (mr *MockSeekableFileMockRecorder) ReadAt(p, off any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read", reflect.TypeOf((*MockSeekableFile)(nil).Read), position, dst)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadAt", reflect.TypeOf((*MockSeekableFile)(nil).ReadAt), p, off)
 }
 
-// Write mocks base method.
-func (m *MockSeekableFile) Write(position int64, src []byte) error {
+// WriteAt mocks base method.
+func (m *MockSeekableFile) WriteAt(p []byte, off int64) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Write", position, src)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "WriteAt", p, off)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// Write indicates an expected call of Write.
-func (mr *MockSeekableFileMockRecorder) Write(position, src any) *gomock.Call {
+// WriteAt indicates an expected call of WriteAt.
+func (mr *MockSeekableFileMockRecorder) WriteAt(p, off any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Write", reflect.TypeOf((*MockSeekableFile)(nil).Write), position, src)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAt", reflect.TypeOf((*MockSeekableFile)(nil).WriteAt), p, off)
 }

@@ -22,7 +22,6 @@ func NewMultiMap[K any, V any](
 	valueComparator common.Comparator[V],
 ) *MultiMap[K, V] {
 
-	// TODO calculate page size including links to children
 	dbKeySize := keySerializer.Size() + valueSerializer.Size()
 	pageItems := common.PageSize / dbKeySize
 	return &MultiMap[K, V]{
@@ -43,7 +42,6 @@ func (m *MultiMap[K, V]) Remove(key K, value V) error {
 }
 
 func (m *MultiMap[K, V]) RemoveAll(key K) error {
-	// TODO - implement btree.RemoveAll(key)
 	it := m.btree.NewIterator(newDbKeyMinVal[K, V](key), newDbKeyMaxVal[K, V](key))
 	keys := make([]dbKey[K, V], 0, 100)
 	for it.HasNext() {

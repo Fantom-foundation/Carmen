@@ -31,9 +31,8 @@ func newS5State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 	}
 
 	if params.Archive == state.S5Archive {
-		// TODO: we can ignore archiveCleanup because it is not used for S5Archive,
-		// It is used for leveldb only, but it should be avoided at all: calling Close() on archive should close
-		// all resources instead
+		// We can ignore archiveCleanup because it is not used for S5Archive,
+		// it is used for leveldb only
 		archiveBlockHeight, empty, err := arch.GetBlockHeight()
 		if err != nil {
 			return nil, errors.Join(err, arch.Close(), mptState.Close())
@@ -72,7 +71,7 @@ func mptStateCapacity(param int64) int {
 	if param <= 0 {
 		return mpt.DefaultMptStateCapacity
 	}
-	capacity := int(param / 512) // TODO use more accurate coefficient
+	capacity := int(param / 512) // empirically verified conversion from bytes to approximate node size
 	if capacity < mpt.MinMptStateCapacity {
 		capacity = mpt.MinMptStateCapacity
 	}

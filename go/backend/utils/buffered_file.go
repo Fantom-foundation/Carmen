@@ -63,19 +63,19 @@ func openBufferedFile(f OsFile) (*BufferedFile, error) {
 	return res, nil
 }
 
-// Write writes the given byte data at the given position in the file. The file
+// WriteAt writes the given byte data at the given position in the file. The file
 // will be extended in case the target position is beyond the file size.
-func (f *BufferedFile) Write(position int64, src []byte) error {
+func (f *BufferedFile) WriteAt(src []byte, position int64) (int, error) {
 	if len(src) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	if len(src) > bufferSize {
-		return fmt.Errorf(fmt.Sprintf("writing data > %d bytes not supported so far, got %d", bufferSize, len(src)))
+		return 0, fmt.Errorf(fmt.Sprintf("writing data > %d bytes not supported so far, got %d", bufferSize, len(src)))
 	}
 
 	if position < 0 {
-		return fmt.Errorf("cannot write at negative position: %d", position)
+		return 0, fmt.Errorf("cannot write at negative position: %d", position)
 	}
 
 	// If the data to be written covers multiple buffer blocks the write needs to be
@@ -84,28 +84,27 @@ func (f *BufferedFile) Write(position int64, src []byte) error {
 	if position/bufferSize != (to-1)/bufferSize {
 		covered := bufferSize - position%bufferSize
 		nextBlock := position + covered
-		return errors.Join(
-			f.Write(position, src[0:covered]),
-			f.Write(nextBlock, src[covered:]),
-		)
+		n1, err1 := f.WriteAt(src[0:covered], position)
+		n2, err2 := f.WriteAt(src[covered:], nextBlock)
+		return n1 + n2, errors.Join(err1, err2)
 	}
 
 	// Check whether the write operation targets the internal buffer.
 	if f.bufferOffset <= from && to <= f.bufferOffset+int64(len(f.buffer)) {
-		copy(f.buffer[int(position-f.bufferOffset):], src)
-		return nil
+		n := copy(f.buffer[int(position-f.bufferOffset):], src)
+		return n, nil
 	}
 
 	// Flush the buffer and load another.
 	if err := f.writeFile(f.bufferOffset, f.buffer[:]); err != nil {
-		return err
+		return 0, err
 	}
 	newOffset := position - position%bufferSize
 	if err := f.readFile(newOffset, f.buffer[:]); err != nil {
-		return err
+		return 0, err
 	}
 	f.bufferOffset = newOffset
-	return f.Write(position, src)
+	return f.WriteAt(src, position)
 }
 
 func (f *BufferedFile) writeFile(position int64, src []byte) error {
@@ -133,12 +132,12 @@ func (f *BufferedFile) writeFile(position int64, src []byte) error {
 	return nil
 }
 
-// Read reads a slice of bytes from the file starting at the given position.
+// ReadAt reads a slice of bytes from the file starting at the given position.
 // If the targeted range is partially or fully beyond the range of the file,
 // uncovered data is zero-padded in the destination slice.
-func (f *BufferedFile) Read(position int64, dst []byte) error {
+func (f *BufferedFile) ReadAt(dst []byte, position int64) (int, error) {
 	if position < 0 {
-		return fmt.Errorf("cannot read at negative index: %d", position)
+		return 0, fmt.Errorf("cannot read at negative index: %d", position)
 	}
 
 	from, to := position, position+int64(len(dst))
@@ -146,29 +145,27 @@ func (f *BufferedFile) Read(position int64, dst []byte) error {
 
 	// Read data from buffer if covered.
 	if bufferFrom <= from && to <= bufferTo {
-		copy(dst, f.buffer[int(from-bufferFrom):])
-		return nil
+		n := copy(dst, f.buffer[int(from-bufferFrom):])
+		return n, nil
 	}
 
 	// Split read if partially covered by write buffer.
 	if from < bufferTo && bufferTo < to {
 		covered := bufferTo - from
-		return errors.Join(
-			f.Read(from, dst[0:covered]),
-			f.Read(bufferTo, dst[covered:]),
-		)
+		n1, err1 := f.ReadAt(dst[0:covered], from)
+		n2, err2 := f.ReadAt(dst[covered:], bufferTo)
+		return n1 + n2, errors.Join(err1, err2)
 	}
 
 	if from < bufferFrom && bufferFrom < to {
 		notCovered := len(dst) - int(to-bufferFrom)
-		return errors.Join(
-			f.Read(from, dst[0:notCovered]),
-			f.Read(bufferFrom, dst[notCovered:]),
-		)
+		n1, err1 := f.ReadAt(dst[0:notCovered], from)
+		n2, err2 := f.ReadAt(dst[notCovered:], bufferFrom)
+		return n1 + n2, errors.Join(err1, err2)
 	}
 
 	// If not covered by the buffer at all, read from the file.
-	return f.readFile(position, dst)
+	return len(dst), f.readFile(position, dst)
 }
 
 func (f *BufferedFile) readFile(position int64, dst []byte) error {

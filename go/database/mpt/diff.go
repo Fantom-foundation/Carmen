@@ -281,8 +281,6 @@ func collectDiffFromLeafs(context *diffContext, before triePosition, after trieP
 			return recordAddedAccount(context, afterNode)
 		}
 
-		// TODO: decide whether it is more efficient to reset the account
-
 		diff := &AccountDiff{}
 		if beforeNode.info.Balance != afterNode.info.Balance {
 			diff.Balance = new(common.Balance)

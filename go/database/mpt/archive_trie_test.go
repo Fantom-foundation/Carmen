@@ -25,7 +25,7 @@ import (
 // Note: most properties of the ArchiveTrie are tested through the common
 // test infrastructure in /backend/archive.
 //
-// TODO: generalize common archive tests in /backend/archive such that they
+// TODO [cleanup]: generalize common archive tests in /backend/archive such that they
 // can be executed as part of this package's test suite
 
 func TestArchiveTrie_OpenAndClose(t *testing.T) {
