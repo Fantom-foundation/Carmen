@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -621,6 +622,40 @@ func (s *Forest) getConfig() MptConfig {
 	return s.config
 }
 
+type nodeCounter struct {
+	numNodes int64
+	maxNodes int64
+	mu       sync.Mutex
+}
+
+var globalNodeCounter = &nodeCounter{}
+
+func GetCurrentNodeCount() int64 {
+	globalNodeCounter.mu.Lock()
+	defer globalNodeCounter.mu.Unlock()
+	return globalNodeCounter.numNodes
+}
+
+func GetMaxNodeCount() int64 {
+	globalNodeCounter.mu.Lock()
+	defer globalNodeCounter.mu.Unlock()
+	return globalNodeCounter.maxNodes
+}
+
+func (c *nodeCounter) register(n any) {
+	c.mu.Lock()
+	c.numNodes++
+	if c.numNodes > c.maxNodes {
+		c.maxNodes = c.numNodes
+	}
+	c.mu.Unlock()
+	runtime.SetFinalizer(n, func(any) {
+		c.mu.Lock()
+		c.numNodes--
+		c.mu.Unlock()
+	})
+}
+
 func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error) {
 	res, found := s.nodeCache.Get(ref)
 	if found {
@@ -657,15 +692,19 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	if id.IsValue() {
 		value, e := s.values.Get(id.Index())
 		node, err = &value, e
+		globalNodeCounter.register(&value)
 	} else if id.IsAccount() {
 		value, e := s.accounts.Get(id.Index())
 		node, err = &value, e
+		globalNodeCounter.register(&value)
 	} else if id.IsBranch() {
 		value, e := s.branches.Get(id.Index())
 		node, err = &value, e
+		globalNodeCounter.register(&value)
 	} else if id.IsExtension() {
 		value, e := s.extensions.Get(id.Index())
 		node, err = &value, e
+		globalNodeCounter.register(&value)
 	} else if id.IsEmpty() {
 		node = EmptyNode{}
 	}
@@ -872,6 +911,7 @@ func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error
 	}
 	ref := NewNodeReference(AccountId(i))
 	node := new(AccountNode)
+	globalNodeCounter.register(node)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
@@ -888,6 +928,7 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	}
 	ref := NewNodeReference(BranchId(i))
 	node := new(BranchNode)
+	globalNodeCounter.register(node)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
@@ -904,6 +945,7 @@ func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], err
 	}
 	ref := NewNodeReference(ExtensionId(i))
 	node := new(ExtensionNode)
+	globalNodeCounter.register(node)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
@@ -920,6 +962,7 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	}
 	ref := NewNodeReference(ValueId(i))
 	node := new(ValueNode)
+	globalNodeCounter.register(node)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
 	if present {
 		write := instance.GetWriteHandle()
