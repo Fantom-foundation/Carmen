@@ -37,7 +37,7 @@ add_license_to_files() {
     # Iterate over each file and add the license header
     for f in "${all_files[@]}"; do
         # Check if the license header is already present
-        if ! grep -q "$license_header" "$f"; then
+        if ! grep -qz "$license_header" "$f"; then
             # Add the license header to the beginning of the file
             echo -e "$license_header\n$(cat "$f")" > "$f"
         fi
