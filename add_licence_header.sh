@@ -15,7 +15,7 @@
 # and in this case it does not modify the file.
 #
 # However, the script does not allow at the moment for updating
-# the licence header should it change. 
+# the licence header should it change.
 #
 
 license_file="license_header.txt"
