@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -19,6 +20,7 @@ type fileStock[I stock.Index, V any] struct {
 	freelist        *fileBasedStack[I]
 	numValueSlots   I
 	numValuesInFile int64
+	bufferPool      sync.Pool
 }
 
 // OpenStock opens a stock retained in the given directory. To that end, meta
@@ -58,6 +60,7 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 	}
 
 	// Create new files
+	valueSize := encoder.GetEncodedSize()
 	return &fileStock[I, V]{
 		encoder:         encoder,
 		directory:       directory,
@@ -65,7 +68,20 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 		freelist:        freelist,
 		numValueSlots:   I(meta.ValueListLength),
 		numValuesInFile: meta.NumValuesInFile,
+		bufferPool: sync.Pool{New: func() any {
+			return &buffer[V]{
+				raw: make([]byte, valueSize),
+			}
+		}},
 	}, nil
+}
+
+// buffer combines a raw data and value buffer required in pairs for Get and Set
+// operations. Instances are cached in sync.Pools to avoid allocations for every
+// single use.
+type buffer[V any] struct {
+	raw   []byte
+	value V
 }
 
 // VerifyStock verifies the consistency of the meta-information maintained for the stock in
@@ -222,16 +238,17 @@ func (s *fileStock[I, V]) Get(index I) (V, error) {
 	// Load value from the file.
 	valueSize := s.encoder.GetEncodedSize()
 	offset := int64(valueSize) * int64(index)
-	buffer := make([]byte, valueSize)
-	err := s.values.Read(offset, buffer)
+	buffer := s.bufferPool.Get().(*buffer[V])
+	defer s.bufferPool.Put(buffer)
+	err := s.values.Read(offset, buffer.raw)
 	if err != nil {
 		return res, err
 	}
 
-	if err := s.encoder.Load(buffer, &res); err != nil {
+	if err := s.encoder.Load(buffer.raw, &buffer.value); err != nil {
 		return res, err
 	}
-	return res, nil
+	return buffer.value, nil
 }
 
 func (s *fileStock[I, V]) Set(index I, value V) error {
@@ -241,20 +258,22 @@ func (s *fileStock[I, V]) Set(index I, value V) error {
 
 	// Encode the value to be written.
 	valueSize := s.encoder.GetEncodedSize()
-	buffer := make([]byte, valueSize)
-	if err := s.encoder.Store(buffer, &value); err != nil {
+	buffer := s.bufferPool.Get().(*buffer[V])
+	defer s.bufferPool.Put(buffer)
+	buffer.value = value
+	if err := s.encoder.Store(buffer.raw, &buffer.value); err != nil {
 		return err
 	}
 
 	// If the new data is beyond the end of the current file and empty, we can skip
 	// the write operation.
-	if index >= I(s.numValuesInFile) && allZero(buffer) {
+	if index >= I(s.numValuesInFile) && allZero(buffer.raw) {
 		return nil
 	}
 
 	// Write a serialized form of the value to disk.
 	offset := int64(valueSize) * int64(index)
-	if err := s.values.Write(offset, buffer); err != nil {
+	if err := s.values.Write(offset, buffer.raw); err != nil {
 		return err
 	}
 	if int64(index) >= s.numValuesInFile {

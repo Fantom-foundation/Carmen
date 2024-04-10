@@ -3,13 +3,13 @@ package file
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/utils"
-	"go.uber.org/mock/gomock"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
+	"go.uber.org/mock/gomock"
 )
 
 func TestFileStock(t *testing.T) {
@@ -536,4 +536,46 @@ func FuzzFileStock_RandomOps(f *testing.F) {
 	}
 
 	stock.FuzzStockRandomOps(f, open, true)
+}
+
+func BenchmarkFileStock_Get(b *testing.B) {
+	dir := b.TempDir()
+	stock, err := openStock[int, int](stock.IntEncoder{}, dir)
+	if err != nil {
+		b.Fatalf("failed to open stock")
+	}
+	defer stock.Close()
+
+	id, err := stock.New()
+	if err != nil {
+		b.Fatalf("failed to create item in stock")
+	}
+	if err := stock.Set(id, 12); err != nil {
+		b.Fatalf("failed to set value in stock")
+	}
+
+	for i := 0; i < b.N; i++ {
+		if _, err := stock.Get(id); err != nil {
+			b.Fatalf("failed to get value: %v", err)
+		}
+	}
+}
+
+func BenchmarkFileStock_Set(b *testing.B) {
+	dir := b.TempDir()
+	stock, err := openStock[int, int](stock.IntEncoder{}, dir)
+	if err != nil {
+		b.Fatalf("failed to open stock")
+	}
+	defer stock.Close()
+
+	id, err := stock.New()
+	if err != nil {
+		b.Fatalf("failed to create item in stock")
+	}
+	for i := 0; i < b.N; i++ {
+		if err := stock.Set(id, 12); err != nil {
+			b.Fatalf("failed to set value: %v", err)
+		}
+	}
 }
