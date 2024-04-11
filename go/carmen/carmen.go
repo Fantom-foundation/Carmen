@@ -379,6 +379,8 @@ type QueryContext interface {
 // It allows for direct insertion of values into the database bypassing all checks.
 // Only one bulk load can run at a time.
 // Methods of this interface are not thread safe.
+// WARNING: One BulkLoad should not exceed 100k updates. Client should
+// break large bulk-loads into smaller ones not exceeding this value.
 type BulkLoad interface {
 
 	// CreateAccount creates a new account with the given address.
