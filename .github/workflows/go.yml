@@ -22,11 +22,11 @@ jobs:
       GOMEMLIMIT: "5GiB"
     steps:
     - name: Collect Workflow Telemetry
-      uses: runforesight/workflow-telemetry-action@v1
+      uses: catchpoint/workflow-telemetry-action@v2
       with:
         comment_on_pr: false
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Check Go sources formatting
       working-directory: ./go
