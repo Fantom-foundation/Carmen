@@ -53,7 +53,7 @@ func SampleAndPrintMemUsageForCall(interval float32, runGc bool, f func()) {
 	SampleMemUsageForCall(interval, runGc, f, printMemUsage)
 }
 
-// PrintMemUsage outputs the current, total and OS memory being used. As well as the number of garage collection cycles completed.
+// PrintMemUsage outputs the current, total and OS memory being used. As well as the number of garbage collection cycles completed.
 // If runGc is true, it will run the garbage collector before printing the stats.
 // It will output the memory usage in the time of the call.
 func PrintMemUsage(runGc bool) {
