@@ -909,14 +909,13 @@ func TestLiveTrie_MemoryConsumptionForLargeNumberOfNodes(t *testing.T) {
 					}
 				}
 				if err := trie.Close(); err != nil {
-					t.Fatalf("failed to close forest: %v", err)
+					t.Fatalf("failed to close trie: %v", err)
 				}
-			}, func(clb *runtime.MemStats) {
-				// average consumption on average is 700-800MB.
-				// let's make some room for fluctuations
-				// if the heap size exceeds 1GB, we have a problem
-				if initialMemory < clb.Alloc && (clb.Alloc-initialMemory) > 1_000_000_000 {
-					t.Fatalf("heap size exceeded 1GB: %v", clb.Alloc)
+			}, func(stats *runtime.MemStats) {
+				// average measured memory consumption is ~800MB
+				// check the memory is in the expected range (+deviation)
+				if initialMemory < stats.Alloc && (stats.Alloc-initialMemory) > 1_000_000_000 {
+					t.Fatalf("heap size exceeded 1GB: %v", stats.Alloc)
 				}
 			})
 		})

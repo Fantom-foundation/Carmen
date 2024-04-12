@@ -24,6 +24,7 @@ func GetMemUsage(runGc bool) runtime.MemStats {
 
 // SampleMemUsageForCall samples the memory usage statistics while the function is running.
 // It will call the callback function with the memory stats at the specified interval in seconds.
+// If runGc is true, it will run the garbage collector before getting the stats.
 func SampleMemUsageForCall(interval float32, runGc bool, f func(), clb MemUsageClb) {
 	// start go-routine that will sample memory usage
 	// while the function is running
@@ -46,18 +47,21 @@ func SampleMemUsageForCall(interval float32, runGc bool, f func(), clb MemUsageC
 	f()
 }
 
-// SampleAndPrintMemUsageForCall samples the memory usage statistics while the function is running.
+// SampleAndPrintMemUsageForCall samples the memory usage statistics and prints them while the function is running.
+// If runGc is true, it will run the garbage collector before printing the stats.
 func SampleAndPrintMemUsageForCall(interval float32, runGc bool, f func()) {
 	SampleMemUsageForCall(interval, runGc, f, printMemUsage)
 }
 
 // PrintMemUsage outputs the current, total and OS memory being used. As well as the number of garage collection cycles completed.
+// If runGc is true, it will run the garbage collector before printing the stats.
 // It will output the memory usage in the time of the call.
 func PrintMemUsage(runGc bool) {
 	m := GetMemUsage(runGc)
 	printMemUsage(&m)
 }
 
+// printMemUsage prints the memory usage statistics.
 func printMemUsage(stats *runtime.MemStats) {
 	sb := strings.Builder{}
 	sb.WriteString("Alloc = ")
