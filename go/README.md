@@ -1,30 +1,76 @@
-# Carmen Go
-This directory contains a prototype Go implementation of the Carmen storage system.
+# Introduction
+
+This directory contains the Go implementation of Carmen.
+It includes the officially supported Merkle Patricia Trie State Root Hash compatible
+implementation. 
+Furthermore, a few experimental implementations are available.   
 
 # Build
-Some parts parts of the system depend on C++ libraries in the repositories cpp directory. To build those, you need to install `clang` and `bazel` as outlined in ./cpp/README.md and run
+
+Carmen is included in other systems as a Go library.
+The Go implementation does not need any C++ dependency, 
+i.e.; no build is required to use the library. 
+
+# Integrate
+
+Carmen is added to another project simply as a dependency:
+
+```
+go get github.com/Fantom-foundation/Carmen/go/
+```
+
+# Running Tests
+
+For development purposes, it may come handy to execute all tests. It needs build of c++ parts.
+
+Either install c++ build environment, see  [C++ build environment instructions](../cpp/Readme),
+or have [Docker installation](https://www.docker.com)
+
+Execute in the root directory: 
+```
+make 
+```
+
+Then execute in this directory: 
+```
+go test ./...  -timeout=60m  
+```
+
+On memory constrained systems, parallelism may need to be reduced
+```
+go test ./... -parallel=1  -timeout 600m   
+```
+all tests should pass. 
+
+## Installing gomock
+
+Tests extensively use mocks. 
+To regenerate mocks, use the command:
+
 ```
 go generate ./...
 ```
-in this work directory. Note that the `go` build tool is not designed to pick up on changes in the generator's dependencies. Thus, updates of the C++ library need to be performed manually every time the C++ implementation evolvs.
 
-## Installing gomock
-If running the generator command above reports that `gomock` is not installed on your system you can install it using the following command:
+If this command reports that `gomock` is not installed, one can install it using the following command:
+
 ```
 go install go.uber.org/mock/mockgen@latest
 ```
 
-# Formatting
-Before commiting any changes in the Go source files into the repository, please ensure they are correctly formatted by running:
+## Formatting
+
+Formatting rules are enforced in the devvelopment process by running:
 ```
 gofmt -s -w .
 ```
 
-# Running benchmarks
-Benchmarks use Go "testing" package. To run for example the Stores benchmark, run:
+## Benchmarks
+
+Some of the key parts may be exercised with benchmarks. 
+For example, the Stores benchmark is executed as:
 ```
 go test ./backend/store -bench=/.*File.*_16
 ```
-For more information about the regex selecting benchmarks to run,
-check [Go testing documentation](https://pkg.go.dev/testing#hdr-Subtests_and_Sub_benchmarks).
+For more information about the running benchmarks see: 
+[Go testing documentation](https://pkg.go.dev/testing#hdr-Benchmarks).
 
