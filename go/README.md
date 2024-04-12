@@ -3,7 +3,6 @@
 This directory contains the Go implementation of Carmen.
 It includes the officially supported Merkle Patricia Trie State Root Hash compatible
 implementation. 
-Furthermore, a few experimental implementations are available.   
 
 # Build
 
