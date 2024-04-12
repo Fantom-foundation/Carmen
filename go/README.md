@@ -69,7 +69,7 @@ gofmt -s -w .
 Some of the key parts may be exercised with benchmarks. 
 For example, the Stores benchmark is executed as:
 ```
-go test ./backend/store -bench=/.*File.*_16
+go test ./backend/store -bench=BenchmarkInsert
 ```
 For more information about the running benchmarks see: 
 [Go testing documentation](https://pkg.go.dev/testing#hdr-Benchmarks).
