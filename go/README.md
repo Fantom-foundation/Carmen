@@ -19,11 +19,11 @@ Carmen is added to another project simply as a dependency:
 go get github.com/Fantom-foundation/Carmen/go/
 ```
 
-# Running Tests
+# Development
 
 For development purposes, it may come handy to execute all tests. It needs build of c++ parts.
 
-Either install c++ build environment, see  [C++ build environment instructions](../cpp/Readme),
+Either install c++ build environment, see [[C++ build environment instructions|../cpp/Readme]],
 or have [Docker installation](https://www.docker.com)
 
 Execute in the root directory: 
