@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -883,34 +884,41 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
-func TestLiveTrie_LargeNumberOfNodes(t *testing.T) {
-	directory := t.TempDir()
-
-	// create file forest with 1M cache capacity
-	trie, err := OpenFileLiveTrie(directory, S5LiveConfig, 1_000_000)
-	if err != nil {
-		t.Fatalf("failed to open trie: %v", err)
-	}
-
-	// write 2M balances in batches of 100k
-	accounts := getTestAddresses(2_000_000)
-	for i, account := range accounts {
-		// flush the trie every 100k accounts,
-		// so we don't exceed the cache capacity of dirty nodes
-		if i%100_000 == 0 && i > 0 {
-			if err := trie.Flush(); err != nil {
-				t.Fatalf("failed to flush trie: %v", err)
-			}
-		}
-		info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{byte(i)}}
-		if err := trie.SetAccountInfo(account, info); err != nil {
-			t.Fatalf("failed to insert account: %v", err)
-		}
-	}
-
-	// close the forest
-	if err := trie.Close(); err != nil {
-		t.Fatalf("failed to close forest: %v", err)
+func TestLiveTrie_MemoryConsumptionForLargeNumberOfNodes(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			common.SampleMemUsageForCall(1, true, func() {
+				dir := t.TempDir()
+				trie, err := OpenFileLiveTrie(dir, config, 1024*1024)
+				if err != nil {
+					t.Fatalf("failed to create empty trie, err %v", err)
+				}
+				accounts := getTestAddresses(2_000_000)
+				for i, account := range accounts {
+					// update hashes every 100k accounts,
+					// so we don't exceed the cache capacity of dirty nodes
+					if i%100_000 == 0 && i > 0 {
+						if _, _, err = trie.UpdateHashes(); err != nil {
+							t.Fatalf("failed to update hashes of trie: %v", err)
+						}
+					}
+					info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{byte(i)}}
+					if err := trie.SetAccountInfo(account, info); err != nil {
+						t.Fatalf("failed to insert account: %v", err)
+					}
+				}
+				if err := trie.Close(); err != nil {
+					t.Fatalf("failed to close forest: %v", err)
+				}
+			}, func(clb *runtime.MemStats) {
+				// average consumption on average is 700-800MB.
+				// let's make some room for fluctuations
+				// if the heap size exceeds 1GB, we have a problem
+				if clb.Alloc > 1_000_000_000 {
+					t.Fatalf("heap size exceeded 1GB: %v", clb.Alloc)
+				}
+			})
+		})
 	}
 }
 
