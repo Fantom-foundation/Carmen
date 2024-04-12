@@ -22,7 +22,7 @@ go get github.com/Fantom-foundation/Carmen/go/
 
 For development purposes, it may come handy to execute all tests. It needs build of c++ parts.
 
-Either install c++ build environment, see [C++ build environment instructions](../cpp/README.md),
+Either install C++ build environment, see [C++ build environment instructions](../cpp/README.md),
 or have [Docker installation](https://www.docker.com)
 
 Execute in the root directory: 
