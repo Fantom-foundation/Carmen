@@ -887,6 +887,7 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 func TestLiveTrie_MemoryConsumptionForLargeNumberOfNodes(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
+			initialMemory := common.GetMemUsage(true).Alloc
 			common.SampleMemUsageForCall(1, true, func() {
 				dir := t.TempDir()
 				trie, err := OpenFileLiveTrie(dir, config, 1024*1024)
@@ -914,7 +915,7 @@ func TestLiveTrie_MemoryConsumptionForLargeNumberOfNodes(t *testing.T) {
 				// average consumption on average is 700-800MB.
 				// let's make some room for fluctuations
 				// if the heap size exceeds 1GB, we have a problem
-				if clb.Alloc > 1_000_000_000 {
+				if initialMemory < clb.Alloc && (clb.Alloc-initialMemory) > 1_000_000_000 {
 					t.Fatalf("heap size exceeded 1GB: %v", clb.Alloc)
 				}
 			})
