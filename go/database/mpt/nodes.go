@@ -291,7 +291,7 @@ func CheckForest(source NodeSource, roots []*NodeReference) error {
 		curId := workList[len(workList)-1]
 		workList = workList[:len(workList)-1]
 
-		// TODO: replace this by an observer
+		// TODO [cleanup]: replace this by an observer
 		count++
 		if count%100000 == 0 {
 			fmt.Printf("Checking %v (%d), |ws| = %d, |contexts| = %d\n", curId, count, len(workList), len(contexts))
@@ -437,7 +437,6 @@ func (n *nodeBase) markDirty() {
 
 func (n *nodeBase) Release() {
 	// The node is disconnected from the disk version and thus clean.
-	// TODO: test that all released nodes are clean!
 	n.clean = true
 	n.hashStatus = hashStatusClean
 }
@@ -726,7 +725,6 @@ func (n *BranchNode) setNextNode(
 				extension.next = remaining
 				extension.nextHashDirty = n.isChildHashDirty(byte(remainingPos))
 				if !extension.nextHashDirty {
-					// TODO: add unit test coverage for this!
 					extension.nextIsEmbedded = n.isEmbedded(byte(remainingPos))
 					extension.nextHash = n.hashes[byte(remainingPos)]
 				}
@@ -1099,7 +1097,6 @@ func (n *ExtensionNode) setNextNode(
 				n.next = extension.next
 				n.nextHashDirty = extension.nextHashDirty
 				if !extension.nextHashDirty {
-					// TODO: add unit test coverage for this!
 					n.nextHash = extension.nextHash
 					n.nextIsEmbedded = extension.nextIsEmbedded
 				}
@@ -1448,7 +1445,6 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			return *thisRef, false, nil
 		}
 		if info.IsEmpty() {
-			// TODO: test this
 			if n.IsFrozen() {
 				return NewNodeReference(EmptyId()), false, nil
 			}
@@ -2006,7 +2002,7 @@ func (n *ValueNode) Visit(source NodeSource, thisRef *NodeReference, depth int, 
 //                               Node Encoders
 // ----------------------------------------------------------------------------
 
-// TODO: move encoder to extra file and clean-up definitions
+// TODO [cleanup]: move encoder to extra file and clean-up definitions
 
 type BranchNodeEncoderWithNodeHash struct{}
 

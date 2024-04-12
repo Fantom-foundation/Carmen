@@ -10,7 +10,6 @@ import (
 type InnerNode[K any] struct {
 	LeafNode[K] // LeafNode is the base for this node, it contains common properties such as the keys, and common methods
 
-	// TODO replace the node list by iIDs and fetch nodes from the pool
 	children []node[K] // children is the array of IDs of child nodes
 }
 
@@ -287,8 +286,6 @@ func (m *InnerNode[K]) merge(index int) {
 	right := m.removeChildAt(index + 1)
 	left := m.children[index]
 	left.append(parentKey, right)
-
-	// TODO - release/delete the "right" node here
 }
 
 func (m *InnerNode[K]) append(k K, sibling node[K]) {

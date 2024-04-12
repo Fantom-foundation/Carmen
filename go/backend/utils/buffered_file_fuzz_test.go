@@ -50,7 +50,7 @@ func FuzzBufferedFile_ReadWrite(f *testing.F) {
 
 		ops := parseUpdates(rawData)
 		for _, op := range ops {
-			if err := file.Write(op.pos, op.data); err != nil {
+			if _, err := file.WriteAt(op.data, op.pos); err != nil {
 				// expected errors in certain situations
 				if len(op.data) >= bufferSize && strings.HasPrefix(err.Error(), "writing data >") {
 					continue
@@ -63,7 +63,7 @@ func FuzzBufferedFile_ReadWrite(f *testing.F) {
 			}
 
 			dst := make([]byte, len(op.data))
-			if err := file.Read(op.pos, dst); err != nil {
+			if _, err := file.ReadAt(dst, op.pos); err != nil {
 				t.Fatalf("error to read from file: %s", err)
 			}
 
@@ -147,7 +147,7 @@ func (op *opRead) Apply(t fuzzing.TestingT, c *buffFileFuzzContext) {
 	// cap to bufferSize, which is maximal supported size
 	size := op.pos / 10 % bufferSize
 	payload := make([]byte, size)
-	if err := c.file.Read(op.pos, payload); err != nil {
+	if _, err := c.file.ReadAt(payload, op.pos); err != nil {
 		// expected errors in certain situations
 		if op.pos < 0 && strings.HasPrefix(err.Error(), "cannot read at negative index:") {
 			return
@@ -181,7 +181,7 @@ func (op *opWrite) Apply(t fuzzing.TestingT, c *buffFileFuzzContext) {
 		payload[i] = byte(i*int(size) + 1)
 	}
 
-	if err := c.file.Write(op.pos, payload); err != nil {
+	if _, err := c.file.WriteAt(payload, op.pos); err != nil {
 		// expected errors in certain situations
 		if len(payload) >= bufferSize && strings.HasPrefix(err.Error(), "writing data >") {
 			return

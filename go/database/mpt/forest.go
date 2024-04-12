@@ -65,7 +65,6 @@ type ForestConfig struct {
 //
 // Forests are thread safe. Thus, read and write operations may be
 // conducted concurrently.
-// TODO: rename to DAG ... since it is not really a Forest
 type Forest struct {
 	config MptConfig
 

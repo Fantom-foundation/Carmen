@@ -106,36 +106,8 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	a.rootsMutex.Unlock()
 
 	// Apply all the changes of the update.
-	// TODO: refactor update infrastructure to use applyUpdate
-	for _, addr := range update.DeletedAccounts {
-		if err := a.head.DeleteAccount(addr); err != nil {
-			return a.addError(err)
-		}
-	}
-	for _, addr := range update.CreatedAccounts {
-		if err := a.head.CreateAccount(addr); err != nil {
-			return a.addError(err)
-		}
-	}
-	for _, change := range update.Balances {
-		if err := a.head.SetBalance(change.Account, change.Balance); err != nil {
-			return a.addError(err)
-		}
-	}
-	for _, change := range update.Nonces {
-		if err := a.head.SetNonce(change.Account, change.Nonce); err != nil {
-			return a.addError(err)
-		}
-	}
-	for _, change := range update.Codes {
-		if err := a.head.SetCode(change.Account, change.Code); err != nil {
-			return a.addError(err)
-		}
-	}
-	for _, change := range update.Slots {
-		if err := a.head.SetStorage(change.Account, change.Key, change.Value); err != nil {
-			return a.addError(err)
-		}
+	if err := update.ApplyTo(a.head); err != nil {
+		return a.addError(err)
 	}
 
 	// Freeze new state.

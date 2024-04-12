@@ -417,7 +417,11 @@ func (s *MptState) RunPostRestoreTasks() error {
 func (s *MptState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
 	mf.AddChild("trie", s.trie.GetMemoryFootprint())
-	// TODO: add code store
+	var sizeCodes uint
+	for k, v := range s.code {
+		sizeCodes += uint(len(k) + len(v))
+	}
+	mf.AddChild("codes", common.NewMemoryFootprint(uintptr(sizeCodes)))
 	return mf
 }
 

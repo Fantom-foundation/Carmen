@@ -81,7 +81,7 @@ type cachedHasherEntry[K comparable] struct {
 	key   K
 	hash  common.Hash
 	mutex sync.Mutex
-	used  bool // TODO: eliminate the used field by initializing the cache
+	used  bool // TODO [perf]: eliminate the used field by initializing the cache
 }
 
 type HitMissTrackingCachedHasher[T any] struct {

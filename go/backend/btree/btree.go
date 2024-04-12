@@ -13,7 +13,6 @@ import (
 // it is split in two, and the keys are distributed into left and right nodes.
 // The middle key is moved to the parent node.
 type BTree[K any] struct {
-	// TODO replace by node ID later and fetch from the page pool
 	root node[K]
 
 	nodeCapacity int

@@ -10,7 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// TODO:
+// TODO [cleanup]:
 //  - rewrite to use a node source instead of an archive (using node test infrastructure)
 
 type diffScenario struct {
