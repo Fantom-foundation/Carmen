@@ -28,6 +28,7 @@ func SampleMemUsageForCall(interval float32, runGc bool, f func(), clb MemUsageC
 	// start go-routine that will sample memory usage
 	// while the function is running
 	done := make(chan struct{})
+	defer close(done)
 	go func() {
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
@@ -43,8 +44,6 @@ func SampleMemUsageForCall(interval float32, runGc bool, f func(), clb MemUsageC
 	}()
 	// run the function
 	f()
-	// stop the go-routine
-	close(done)
 }
 
 // SampleAndPrintMemUsageForCall samples the memory usage statistics while the function is running.
