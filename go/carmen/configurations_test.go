@@ -41,7 +41,7 @@ func TestConfiguration_RegisteredConfigurationsCanBeUsed(t *testing.T) {
 		config := config
 		t.Run(config.String(), func(t *testing.T) {
 			t.Parallel()
-			db, err := OpenDatabase(t.TempDir(), config, nil)
+			db, err := OpenDatabase(t.TempDir(), config, testProperties)
 			if err != nil {
 				t.Fatalf("failed to open database: %v", err)
 			}

@@ -258,12 +258,15 @@ func TestHistoricBlockContext_SecondClose_Noop(t *testing.T) {
 }
 
 func TestDatabase_AbortedBlocksHaveNoEffect(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close database: %v", err)
+		}
+	}()
 
 	block, err := db.BeginBlock(1)
 	if err != nil {
@@ -287,12 +290,21 @@ func TestDatabase_AbortedBlocksHaveNoEffect(t *testing.T) {
 		t.Fatalf("failed to start new block: %v", err)
 	}
 
-	if tx, err = block.BeginTransaction(); err != nil {
+	tx, err = block.BeginTransaction()
+	if err != nil {
 		t.Fatalf("failed to start second transaction: %v", err)
 	}
 	if want, got := uint64(0), tx.GetNonce(Address{}); want != got {
 		t.Errorf("unexpected result after abort, want %d, got %d", want, got)
 	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("unexpected error during commit: %v", err)
+	}
+	if err := block.Abort(); err != nil {
+		t.Fatalf("failed to abort block: %v", err)
+	}
+
 }
 
 func TestBlockContext_PanickingCommitsReleaseQueryLock(t *testing.T) {

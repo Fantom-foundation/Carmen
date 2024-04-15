@@ -32,8 +32,14 @@ var testNonArchiveConfig = Configuration{
 	Archive: Archive(state.NoArchive),
 }
 
+var testProperties = Properties{
+	LiveDBCache:  "2000",
+	ArchiveCache: "2000",
+	StorageCache: "100",
+}
+
 func TestCarmen_DatabaseLiveCycle(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -43,7 +49,7 @@ func TestCarmen_DatabaseLiveCycle(t *testing.T) {
 }
 
 func TestCarmen_BlockProcessing(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -85,10 +91,15 @@ func TestCarmen_BlockProcessing(t *testing.T) {
 }
 
 func TestCarmen_HeadBlockQuery(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	getNonce := func() uint64 {
 		res := uint64(0)
@@ -134,10 +145,15 @@ func TestCarmen_HeadBlockQuery(t *testing.T) {
 }
 
 func TestCarmen_ArchiveQuery(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	// Insert content into DB using functional interface.
 	err = errors.Join(
