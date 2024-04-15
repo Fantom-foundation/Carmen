@@ -1109,6 +1109,11 @@ func TestDatabase_GetHistoricContext_NonExistingBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	if _, err := db.GetHistoricContext(100); err == nil {
 		t.Errorf("should not be able to query non-existing block")
@@ -1286,6 +1291,11 @@ func TestDatabase_StartBulkLoad_Cannot_Finalize_Twice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	ctx, err := db.StartBulkLoad(0)
 	if err != nil {
@@ -1449,6 +1459,11 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	addr1 := Address{1}
 	addr2 := Address{2}
@@ -1510,21 +1525,23 @@ func TestDatabase_ActiveHeadQueryBlockDataBaseClose(t *testing.T) {
 	wg.Add(2)
 
 	queryStarted := make(chan bool)
-	done := false
+	done := &atomic.Bool{}
 	go db.QueryHeadState(func(QueryContext) {
 		defer wg.Done()
 		queryStarted <- true
 		// keep this alive to block the closing of the database
 		time.Sleep(time.Second)
-		done = true
+		done.Store(true)
 	})
 
 	go func() {
 		defer wg.Done()
 		<-queryStarted
 		// This should block until all queries are done
-		db.Close()
-		if !done {
+		if err := db.Close(); err != nil {
+			t.Errorf("cannot close db: %v", err)
+		}
+		if !done.Load() {
 			t.Errorf("finished closing before queries are complete")
 		}
 	}()

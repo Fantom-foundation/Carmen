@@ -89,6 +89,11 @@ func TestCarmen_HeadBlockQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	getNonce := func() uint64 {
 		res := uint64(0)
@@ -138,6 +143,11 @@ func TestCarmen_ArchiveQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	// Insert content into DB using functional interface.
 	err = errors.Join(

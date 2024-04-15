@@ -212,7 +212,6 @@ func (db *database) GetHistoricContext(block uint64) (HistoricBlockContext, erro
 		commonContext: commonContext{
 			db: db,
 		},
-
 		state: state.CreateNonCommittableStateDBUsing(s)}, err
 }
 
