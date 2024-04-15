@@ -1330,6 +1330,7 @@ func (s *stateDB) resetState(state State) {
 	s.ResetBlockContext()
 	s.storedDataCache.Clear()
 	s.reincarnation = map[common.Address]uint64{}
+	s.errors = s.errors[0:0]
 	s.state = state
 }
 
