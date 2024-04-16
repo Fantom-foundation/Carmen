@@ -887,8 +887,8 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 func TestLiveTrie_MemoryConsumptionForLargeNumberOfNodes(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
-			initialMemory := common.GetMemUsage(true).Alloc
-			common.SampleMemUsageForCall(1, true, func() {
+			initialMemory := common.GetMemoryUsage(true).Alloc
+			common.SampleMemoryUsageForCall(1, true, func() {
 				dir := t.TempDir()
 				trie, err := OpenFileLiveTrie(dir, config, 1024*1024)
 				if err != nil {
