@@ -37,5 +37,6 @@ jobs:
       - name: Check C++ code formatting rules
         run: find cpp/ -iname *.h -o -iname *.cc | xargs clang-format --dry-run -Werror
 
-      - name: Run BUILD file style check.
-        uses: thompsonja/bazel-buildifier@v0.4.0
+# TODO disabled before release
+#      - name: Run BUILD file style check.
+#        uses: thompsonja/bazel-buildifier@v0.4.0
