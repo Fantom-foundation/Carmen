@@ -6,8 +6,8 @@
  *
  * Change Date: 2028-4-16
  *
- * On the date above, in accordance with the Business Source License, use
- * of this software will be governed by the GNU Lesser General Public Licence v3.
+ * On the date above, in accordance with the Business Source License, use of
+ * this software will be governed by the GNU Lesser General Public Licence v3.
  */
 
 #ifndef THIRD_PARTY_SNAPPY_OPENSOURCE_CMAKE_CONFIG_H_
