@@ -2,7 +2,7 @@
 // Copyright (c) 2024 Fantom Foundation
 //
 // Use of this software is governed by the Business Source License included
-// in the LICENSE.TXT file and at fantom.foundation/bsl11.
+// in the LICENSE file and at fantom.foundation/bsl11.
 //
 // Change Date: 2028-4-16
 //
