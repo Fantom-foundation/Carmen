@@ -7,9 +7,8 @@
  * Change Date: 2028-4-16
  *
  * On the date above, in accordance with the Business Source License, use of
- * this software will be governed by the GNU Lesser General Public Licence v3.
+ * this software will be governed by the GNU Lesser General Public License v3.
  */
-
 
 #include "backend/common/cache/lru_cache.h"
 #include "benchmark/benchmark.h"
