@@ -120,6 +120,53 @@ func ExampleDatabase_QueryHeadState() {
 	// Output: Account balance: 0
 }
 
+func ExampleDatabase_QueryHistoricState() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Add a new block
+	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
+		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
+			context.CreateAccount(carmen.Address{1, 2, 3})
+			context.AddBalance(carmen.Address{1, 2, 3}, big.NewInt(100))
+			return nil
+		}); err != nil {
+			log.Fatalf("cannot create transaction: %v", err)
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("cannot add block: %v", err)
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	// Query state information for the current head block
+	if err := db.QueryHistoricState(5, func(context carmen.QueryContext) {
+		balance := context.GetBalance(carmen.Address{1, 2, 3})
+		if got, want := balance, big.NewInt(100); got.Cmp(want) != 0 {
+			log.Fatalf("balance does not match: %d != %d", got, want)
+		}
+		fmt.Printf("Balance of %v is %d\n", carmen.Address{1, 2, 3}, balance)
+	}); err != nil {
+		log.Fatalf("query operation failed: %v", err)
+	}
+
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+
+	// Output: Balance of [1 2 3 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] is 100
+}
+
 func ExampleDatabase_QueryBlock() {
 	dir, err := os.MkdirTemp("", "carmen_db_*")
 	if err != nil {
