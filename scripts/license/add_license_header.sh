@@ -20,6 +20,12 @@
 
 license_file="license_header.txt"
 
+# resolve the directory of the script, no matter where it is called from
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+
+# resolve the root directory of the project
+root_dir=$(readlink -f "$script_dir/../..")
+
 # Extend the license text of input string, each line is prefixed.
 # It is used for extending the license text of comments to be inserted
 # in a source file. 
@@ -29,7 +35,7 @@ extend_license_header() {
     local comment_char="$1"    
 
     # Read the license header from the file
-    local license_header=$(cat "$license_file")
+    local license_header=$(cat "$script_dir/$license_file")
 
     # Extend each line of the license header with the specified character
     local extended_license_header=""
@@ -51,7 +57,7 @@ add_license_to_files() {
     local license_header="$2"
 
     # Get a list of all files in the project directory
-    local all_files=($(find "." -type f -name "*$file_extension"))
+    local all_files=($(find $root_dir -type f -name "*$file_extension"))
 
     # Iterate over each file and add the license header
     for f in "${all_files[@]}"; do
