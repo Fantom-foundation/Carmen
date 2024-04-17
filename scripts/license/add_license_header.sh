@@ -47,8 +47,8 @@ extend_license_header() {
     echo "$extended_license_header"
 }
 
-# Add license header to all files in
-# this directory and all sub-directories.
+# Add license header to all files project
+# root directory and all sub-directories.
 # Parameters:
 #   file extension, e.g.: .go, .cpp,
 #   a license text as a string
