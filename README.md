@@ -380,9 +380,9 @@ and further detailed in [a blog post](https://blog.fantom.foundation/3-incredibl
 
 | Configuration | Speed Tx/s |
 | ------------- | ---------- |
-| Realistic       | 2.000 |
-| Token swaps     | 4.000 |
-| Token transfers | 10.000 |
+| Realistic       |  2000 |
+| Token swaps     |  4000 |
+| Token transfers | 10000 |
 
 Processing this traffic, Carmen needed following disk space: 
 * **~60GB** to store 100M transactions 
