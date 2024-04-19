@@ -372,7 +372,7 @@ It is the key component that enables high performance in a disk space conservati
 Carmen was extensively tested as part of the Sonic client (i.e. a blockchain node). 
 Three main scenarios were tested:
 1. **Realistic traffic:** a mix of transactions that resemble realistic traffic, such as token transfers, token mints, and complex multi-step swaps.
-2. **Token swaps:** transactions calling uniswap’s contract, which handles the swap between multiple tokens, demonstrating what the next generation of DEXs can achieve.
+2. **Token swaps:** transactions calling the uniswap’s contract, which handles multi-step swaps between tokens, demonstrating what the next generation of DEXs can achieve.
 3. **Token transfers:** transactions processing only ERC-20 transfers, demonstrating usage for next-generation wallets, payment providers.
 
 The client could process thousands of transactions per second as depicted in the table 
