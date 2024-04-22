@@ -529,8 +529,11 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 		ref := NewNodeReference(id)
 		node, present := s.nodeCache.Get(&ref)
 		if present {
-			handle := node.GetReadHandle()
+			handle := node.GetWriteHandle()
 			err := s.flushNode(id, handle.Get())
+			if err == nil {
+				handle.Get().MarkClean()
+			}
 			handle.Release()
 			if err != nil {
 				errs = append(errs, err)
