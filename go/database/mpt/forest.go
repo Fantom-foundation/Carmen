@@ -526,7 +526,7 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 	// Flush dirty keys in order (to avoid excessive seeking).
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
-		ref := NewNodeReference(id)
+		ref := NodeReference{id: id, pos: uint32(unknownPosition)}
 		node, present := s.nodeCache.Get(&ref)
 		if present {
 			handle := node.GetWriteHandle()
