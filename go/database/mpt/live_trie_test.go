@@ -968,8 +968,8 @@ func BenchmarkLiveTrie_WithHighNumberOfDirtyNodes_Flush(b *testing.B) {
 	// largest nodes have ~512 bytes - we need to create a cache with 18 GB cache,
 	// hence we need ~ 18*2^30/2^9 = 18*2^21 ~ 38 million
 	cacheSize := 38_000_000
-	// number of accounts need to be approximately 1/4 smaller because we store leafs and branches
-	numAccounts := cacheSize - 10_500_000
+	// number of accounts need to be ~1/3 smaller because we store leafs and branches
+	numAccounts := cacheSize - (cacheSize / 3)
 	dir := b.TempDir()
 	state, err := OpenGoFileState(dir, config, cacheSize)
 	if err != nil {
