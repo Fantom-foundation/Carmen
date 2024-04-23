@@ -960,3 +960,34 @@ func BenchmarkValueInsertionInFileTrie(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkLiveTrie_WithHighNumberOfDirtyNodes_Flush(b *testing.B) {
+	// running this test for all configurations at once takes too much time
+	// hence we use only the latest one
+	config := S5ArchiveConfig
+	// largest nodes have ~512 bytes - we need to create a cache with 18 GB cache,
+	// hence we need ~ 18*2^30/2^9 = 18*2^21 ~ 38 million
+	cacheSize := 38_000_000
+	// number of accounts need to be approximately 1/4 smaller because we store leafs and branches
+	numAccounts := cacheSize - 10_500_000
+	dir := b.TempDir()
+	state, err := OpenGoFileState(dir, config, cacheSize)
+	if err != nil {
+		b.Fatalf("failed to open state, err %v", err)
+	}
+	addrs := getTestAddresses(numAccounts)
+	for i, addr := range addrs {
+		err = state.CreateAccount(addr)
+		if err != nil {
+			b.Fatalf("failed to create account: %v", err)
+		}
+		err = state.SetCode(addr, []byte{byte(i)})
+		if err != nil {
+			b.Fatalf("failed to set code: %v", err)
+		}
+
+	}
+	if err := state.Close(); err != nil {
+		b.Fatalf("failed to close state: %v", err)
+	}
+}
