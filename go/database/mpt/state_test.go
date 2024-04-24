@@ -529,6 +529,37 @@ func TestState_ForestErrorIsReportedInFlushAndClose(t *testing.T) {
 	}
 }
 
+func TestState_Flush_WriteDirtyCodesOnly(t *testing.T) {
+	dir := t.TempDir()
+	state, err := OpenGoFileState(dir, S5LiveConfig, 1024)
+	if err != nil {
+		t.Fatalf("failed to open test state: %v", err)
+	}
+	if err := state.SetCode(common.Address{}, []byte{0x12}); err != nil {
+		t.Errorf("SetCode failed: %v", err)
+	}
+	if err := state.Flush(); err != nil {
+		t.Errorf("Flush failed: %v", err)
+	}
+
+	stat1, err := os.Stat(dir + "/codes.dat")
+	if err != nil {
+		t.Errorf("failed to get modtime of codes file before second flush")
+	}
+
+	if err := state.Flush(); err != nil {
+		t.Errorf("Flush failed: %v", err)
+	}
+
+	stat2, err := os.Stat(dir + "/codes.dat")
+	if err != nil {
+		t.Errorf("failed to get modtime of codes file after second flush")
+	}
+	if stat1.ModTime() != stat2.ModTime() {
+		t.Errorf("codes written even when not dirty")
+	}
+}
+
 func TestState_writeCodes_WriteFailures(t *testing.T) {
 	codes := make(map[common.Hash][]byte, 1)
 	var h common.Hash

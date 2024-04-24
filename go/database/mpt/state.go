@@ -20,6 +20,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"hash"
 	"io"
+	"maps"
 	"os"
 	"sync"
 	"unsafe"
@@ -384,7 +385,10 @@ func (s *MptState) Visit(visitor NodeVisitor) error {
 }
 
 func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
-	return s.code, nil
+	s.codeMutex.Lock()
+	res := maps.Clone(s.code)
+	s.codeMutex.Unlock()
+	return res, nil
 }
 
 // Flush codes and state trie
