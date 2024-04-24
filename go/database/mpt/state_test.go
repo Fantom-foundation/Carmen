@@ -625,3 +625,35 @@ func TestState_parseCodes_ReadFailures(t *testing.T) {
 
 	}
 }
+
+func BenchmarkGoFileState_S5Archive_HighNumberOfDirtyNodes_Close(b *testing.B) {
+	// running this test for all configurations at once takes too much time
+	// hence we use only the latest one
+	config := S5ArchiveConfig
+	cacheSize := 1_000_000
+	// number of accounts need to be ~1/10 smaller because we store leafs and branches
+	numAccounts := cacheSize - (cacheSize / 10)
+	dir := b.TempDir()
+	state, err := OpenGoFileState(dir, config, cacheSize)
+	if err != nil {
+		b.Fatalf("failed to open state, err %v", err)
+	}
+
+	addrs := getTestAddresses(numAccounts)
+	for i := 0; i < b.N; i++ {
+		for j, addr := range addrs {
+			err = state.CreateAccount(addr)
+			if err != nil {
+				b.Fatalf("failed to create account: %v", err)
+			}
+			err = state.SetCode(addr, []byte{byte(j)})
+			if err != nil {
+				b.Fatalf("failed to set code: %v", err)
+			}
+
+		}
+		if err := state.Close(); err != nil {
+			b.Fatalf("failed to close state: %v", err)
+		}
+	}
+}
