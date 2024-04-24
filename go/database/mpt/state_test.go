@@ -558,6 +558,21 @@ func TestState_Flush_WriteDirtyCodesOnly(t *testing.T) {
 	if stat1.ModTime() != stat2.ModTime() {
 		t.Errorf("codes written even when not dirty")
 	}
+
+	if err := state.SetCode(common.Address{}, []byte{0x12, 0x34}); err != nil {
+		t.Errorf("SetCode failed: %v", err)
+	}
+	if err := state.Flush(); err != nil {
+		t.Errorf("Flush failed: %v", err)
+	}
+
+	stat3, err := os.Stat(dir + "/codes.dat")
+	if err != nil {
+		t.Errorf("failed to get modtime of codes file after third flush")
+	}
+	if stat2.ModTime() == stat3.ModTime() {
+		t.Errorf("codes not written when dirty")
+	}
 }
 
 func TestState_writeCodes_WriteFailures(t *testing.T) {
