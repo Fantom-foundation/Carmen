@@ -96,8 +96,7 @@ add_license_to_files() {
             if [[ $start_from -gt 1 ]]; then
                 start_from=$((start_from+1))
             fi
-            # shellcheck disable=SC2086
-            echo -e "$license_header\n$(tail -n +$start_from $f)" > "$f"
+            echo -e "$license_header\n$(tail -n +$start_from "$f")" > "$f"
         fi
     done
 }
