@@ -626,7 +626,7 @@ func TestState_parseCodes_ReadFailures(t *testing.T) {
 	}
 }
 
-func BenchmarkGoFileState_S5Archive_HighNumberOfDirtyNodes_Close(b *testing.B) {
+func BenchmarkGoFileState_S5Archive_Flush_HighNumberOfDirtyNodes(b *testing.B) {
 	// running this test for all configurations at once takes too much time
 	// hence we use only the latest one
 	config := S5ArchiveConfig
@@ -638,10 +638,14 @@ func BenchmarkGoFileState_S5Archive_HighNumberOfDirtyNodes_Close(b *testing.B) {
 	if err != nil {
 		b.Fatalf("failed to open state, err %v", err)
 	}
-
 	addrs := getTestAddresses(numAccounts)
 	for i := 0; i < b.N; i++ {
 		for j, addr := range addrs {
+			if i%100_000 == 0 && i > 0 {
+				if _, _, err = state.UpdateHashes(); err != nil {
+					b.Fatalf("failed to update hashes: %v", err)
+				}
+			}
 			err = state.CreateAccount(addr)
 			if err != nil {
 				b.Fatalf("failed to create account: %v", err)
@@ -650,10 +654,15 @@ func BenchmarkGoFileState_S5Archive_HighNumberOfDirtyNodes_Close(b *testing.B) {
 			if err != nil {
 				b.Fatalf("failed to set code: %v", err)
 			}
-
 		}
-		if err := state.Close(); err != nil {
-			b.Fatalf("failed to close state: %v", err)
+
+		if err = state.Flush(); err != nil {
+			b.Fatalf("failed to flush state: %v", err)
 		}
 	}
+
+	if err = state.Close(); err != nil {
+		b.Fatalf("failed to close state: %v", err)
+	}
+
 }
