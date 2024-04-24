@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/sha3"
@@ -655,6 +656,42 @@ func TestState_parseCodes_ReadFailures(t *testing.T) {
 			t.Errorf("reading codes should fail")
 		}
 
+	}
+}
+
+func TestEstimatePerNodeMemoryUsage(t *testing.T) {
+
+	// Use the size of the largest node
+	var maxNodeSize uintptr
+	if cur := unsafe.Sizeof(BranchNode{}); cur > maxNodeSize {
+		maxNodeSize = cur
+	}
+	if cur := unsafe.Sizeof(AccountNode{}); cur > maxNodeSize {
+		maxNodeSize = cur
+	}
+	if cur := unsafe.Sizeof(ExtensionNode{}); cur > maxNodeSize {
+		maxNodeSize = cur
+	}
+	if cur := unsafe.Sizeof(ValueNode{}); cur > maxNodeSize {
+		maxNodeSize = cur
+	}
+
+	ownerSize := unsafe.Sizeof(nodeOwner{})
+	indexEntrySize := unsafe.Sizeof(NodeId(0)) + unsafe.Sizeof(ownerPosition(0))
+	sharedNodeSize := unsafe.Sizeof(shared.Shared[Node]{})
+
+	staticSizes := ownerSize + indexEntrySize
+	dynamicSizes := maxNodeSize + sharedNodeSize
+
+	lowerLimit := staticSizes + dynamicSizes
+	upperLimit := staticSizes + uintptr(float32(dynamicSizes)*1.2)
+
+	got := EstimatePerNodeMemoryUsage()
+	if got < int(lowerLimit) {
+		t.Errorf("Estimated nodes size is too small, wanted at least %d, got %d", lowerLimit, got)
+	}
+	if got > int(upperLimit) {
+		t.Errorf("Estimated nodes size is too big, wanted at most %d, got %d", upperLimit, got)
 	}
 }
 

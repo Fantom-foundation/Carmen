@@ -17,13 +17,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/state"
 	"hash"
 	"io"
 	"maps"
 	"os"
 	"sync"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
+	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -538,4 +540,25 @@ func writeCodesTo(codes map[common.Hash][]byte, writer io.Writer) (err error) {
 		}
 	}
 	return nil
+}
+
+// EstimatePerNodeMemoryUsage returns an estimated upper bound for the
+// amount of memory used per MPT node. This values is provided to facilitate
+// a conversion between memory limits expressed in bytes and MPT cache
+// sizes defined by the number of stored nodes.
+func EstimatePerNodeMemoryUsage() int {
+
+	// The largest node is the BranchNode with ~944 bytes, which is
+	// likely allocated into 1 KB memory slots. Thus, a memory usage
+	// of 1 KB is used for the notes
+	maxNodeSize := 1 << 10
+
+	// Additionally, every node in the node cache needs a owner slot
+	// and a NodeID/ownerPosition entry pair in the index of the cache.
+	nodeCacheSlotSize := unsafe.Sizeof(nodeOwner{}) +
+		unsafe.Sizeof(NodeId(0)) +
+		unsafe.Sizeof(ownerPosition(0)) +
+		unsafe.Sizeof(shared.Shared[Node]{})
+
+	return maxNodeSize + int(nodeCacheSlotSize)
 }
