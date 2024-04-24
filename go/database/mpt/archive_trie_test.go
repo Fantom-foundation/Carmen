@@ -513,6 +513,52 @@ func TestArchiveTrie_Add_UpdateFailsHashing(t *testing.T) {
 	}
 }
 
+func TestArchive_RootsGrowSubLinearly(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, 0)
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Fatalf("cannot close archive: %v", err)
+				}
+			}()
+
+			// Golang slices grow by the factor of 2 when they are small,
+			// while they grow slower when they become huge.
+			// The slice 'archive.roots' contains millions of elements
+			// printed as GiBs in memory.
+			// This test verifies that the slices grow slower for huge arrays
+			// to ensure that memory consumption is not doubled every time
+			// the slice grows.
+			// This feature cannot be customized, i.e., this test verifies
+			// that the described assumption will hold in future versions
+			// of golang and/or runtime configurations.
+
+			const size = 100_000
+			const threshold = 10_000
+			const factor = 1.3
+
+			var prevCap int
+			for i := 0; i < size; i++ {
+				if err := archive.Add(uint64(i), common.Update{}, nil); err != nil {
+					t.Fatalf("failed to add block 1; %s", err)
+				}
+
+				if i > threshold {
+					if got, want := cap(archive.roots), int(factor*float64(prevCap)); got >= want {
+						t.Fatalf("array grows too fast: %d >= %d", got, want)
+					}
+				}
+
+				prevCap = cap(archive.roots)
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_Add_LiveStateFailsHashing(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
