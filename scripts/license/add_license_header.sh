@@ -53,7 +53,7 @@ add_license_to_files() {
     local license_header="$(extend_license_header "$prefix")"
 
     # Get a list of all files in the project directory
-    mapfile -t -d $'\0' all_files < <(find "$root_dir" -type f -name "*$file_extension" -print0)
+    local all_files=($(find "$root_dir" -type f -name "*$file_extension"))
 
     # Iterate over all files and add the license header if needed
     for f in "${all_files[@]}"; do
