@@ -58,7 +58,7 @@ add_license_to_files() {
     local license_header="$(extend_license_header "$prefix")"
 
     # Get a list of all files in the project directory
-    local all_files=($(find $root_dir -type f -name "*$file_extension"))
+    mapfile -t -d $'\0' all_files < <(find "$root_dir" -type f -name "*$file_extension" -print0)
 
     # Iterate over all files and add the license header if needed
     for f in "${all_files[@]}"; do
@@ -71,17 +71,17 @@ add_license_to_files() {
         while read -r line; do
             # compare the line from the license header with the line in the file on the same line number
             # whitespaces are trimmed (from the beginning and end of the line)
-            if [[ "$(sed "$line_number!d" $f | xargs echo -n)" != "$(echo $line | xargs echo -n)" ]]; then
+            if [[ "$(sed "$line_number!d" "$f" | xargs echo -n)" != "$(echo "$line" | xargs echo -n)" ]]; then
                 add_header=true
                 break
             fi
             line_number=$((line_number+1))
-        done <<< "$(echo -e $license_header)"
+        done <<< "$(echo -e "$license_header")"
 
         # if the license header matched so far, check following line in the file,
         # it should be empty or contain only whitespaces
         if [[ $add_header == false ]]; then
-            if [[ -n "$(sed "$line_number!d" $f | xargs echo -n)" ]]; then
+            if [[ -n "$(sed "$line_number!d" "$f" | xargs echo -n)" ]]; then
                 add_header=true
             fi
         fi
@@ -90,12 +90,13 @@ add_license_to_files() {
         if [[ $add_header == true ]]; then
             # extract first line number, that does not match the license header prefix
             # in case obsolete header is present, the script will skip it
-            start_from=$(grep -vnE '^//' $f | cut -d : -f 1 | head -n 1)
+            start_from=$(grep -vnE "^$prefix" "$f" | cut -d : -f 1 | head -n 1)
             # if start_from is greater than 1, then the file contains obsolete header and we should
             # continue from `start_from + 1`, so that we don't leave double line endings
             if [[ $start_from -gt 1 ]]; then
                 start_from=$((start_from+1))
             fi
+            # shellcheck disable=SC2086
             echo -e "$license_header\n$(tail -n +$start_from $f)" > "$f"
         fi
     done
