@@ -83,7 +83,7 @@ func mptStateCapacity(param int64) int {
 	if param <= 0 {
 		return mpt.DefaultMptStateCapacity
 	}
-	capacity := int(param / 512) // empirically verified conversion from bytes to approximate node size
+	capacity := int(param / int64(mpt.EstimatePerNodeMemoryUsage()))
 	if capacity < mpt.MinMptStateCapacity {
 		capacity = mpt.MinMptStateCapacity
 	}
