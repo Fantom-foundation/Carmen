@@ -7,15 +7,10 @@
 # Each line of the license file is prefixed with a comment sign
 # valid for respective source code.
 #
-# The files to extend with the license header are defined at the end
-# of this script. Should a new type of the file appears in this repository
-# the script must be extended.
-#
 # This script recognises if the header file is already present,
-# and in this case it does not modify the file.
-#
-# However, the script does not allow at the moment for updating
-# the license header.
+# and if it is same as the one in 'license_header.txt'. If the
+# header is not present, or is different, the script will
+# add/regenerate the header.
 #
 
 license_file="license_header.txt"
