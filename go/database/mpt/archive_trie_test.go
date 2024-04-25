@@ -529,7 +529,7 @@ func TestArchive_RootsGrowSubLinearly(t *testing.T) {
 			// Golang slices grow by the factor of 2 when they are small,
 			// while they grow slower when they become huge.
 			// The slice 'archive.roots' contains millions of elements
-			// printed as GiBs in memory.
+			// stored as GiBs in memory.
 			// This test verifies that the slices grow slower for huge arrays
 			// to ensure that memory consumption is not doubled every time
 			// the slice grows.
