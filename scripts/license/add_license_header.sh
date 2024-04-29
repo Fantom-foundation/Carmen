@@ -91,7 +91,11 @@ add_license_to_files() {
             if [[ $start_from -gt 1 ]]; then
                 start_from=$((start_from+1))
             fi
-            echo -e "$license_header\n$(tail -n +$start_from "$f")" > "$f"
+            local file_content=$(tail -n +$start_from "$f")
+            # add the license header to the file
+            echo -e "$license_header" > "$f"
+            # append the rest of the file
+            echo "$file_content" >> "$f"
         fi
     done
 }
