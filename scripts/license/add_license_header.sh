@@ -91,6 +91,16 @@ add_license_to_files() {
             if [[ $start_from -gt 1 ]]; then
                 start_from=$((start_from+1))
             fi
+
+            # if start_from is 1, there might be obsolete header for c++ files
+            if [[ $start_from -eq 1 ]]; then
+                # check if the first line is a comment beginning
+                if [[ "$(sed "1!d" "$f" | xargs echo -n)" == "/*" ]]; then
+                    # extract line number with the comment ending
+                    start_from=$(($(grep -n "\*\/" "$f" | cut -d : -f 1 | head -n 1)+2))
+                fi
+            fi
+
             local file_content=$(tail -n +$start_from "$f")
             # add the license header to the file
             echo -e "$license_header" > "$f"
@@ -100,10 +110,10 @@ add_license_to_files() {
     done
 }
 
-add_license_to_files ".go" "//"
-add_license_to_files "Jenkinsfile" "//"
+#add_license_to_files ".go" "//"
+#add_license_to_files "Jenkinsfile" "//"
 add_license_to_files ".h" "//"
 add_license_to_files ".cc" "//"
-add_license_to_files "go.mod" "//"
-add_license_to_files ".yml" "#"
-add_license_to_files "BUILD" "#"
+#add_license_to_files "go.mod" "//"
+#add_license_to_files ".yml" "#"
+#add_license_to_files "BUILD" "#"
