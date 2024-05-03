@@ -632,6 +632,62 @@ func TestForest_Flush_Fail_CannotReadNode(t *testing.T) {
 	}
 }
 
+func TestForest_Flush_Makes_Node_Clean(t *testing.T) {
+	for _, variant := range fileAndMemVariants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+					var err error
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("cannot close forest: %d", err)
+						}
+					}()
+
+					addresses := getTestAddresses(10)
+					keys := getTestKeys(10)
+
+					root := NewNodeReference(EmptyId())
+					for i, address := range addresses {
+						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: common.Balance{0x1}})
+						if err != nil {
+							t.Fatalf("cannot update account: %v", err)
+						}
+						for j, key := range keys {
+							root, err = forest.SetValue(&root, address, key, common.Value{byte(i), byte(j)})
+							if err != nil {
+								t.Fatalf("cannot update storage: %v", err)
+							}
+						}
+					}
+
+					if _, _, err := forest.updateHashesFor(&root); err != nil {
+						t.Fatalf("cannot update hashes: %v", err)
+					}
+
+					if err := forest.Flush(); err != nil {
+						t.Fatalf("cannot flush: %v", err)
+					}
+
+					// all nodes must be clean
+					forest.nodeCache.ForEach(func(id NodeId, s *shared.Shared[Node]) {
+						handle := s.GetReadHandle()
+						defer handle.Release()
+						if handle.Get().IsDirty() {
+							t.Errorf("node %v is dirty", id)
+						}
+					})
+				})
+			}
+		}
+	}
+}
+
 func TestForest_flushNode_EmptyId(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {

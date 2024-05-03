@@ -529,12 +529,15 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 		ref := NewNodeReference(id)
 		node, present := s.nodeCache.Get(&ref)
 		if present {
-			handle := node.GetReadHandle()
-			err := s.flushNode(id, handle.Get())
-			handle.Release()
-			if err != nil {
+			handle := node.GetWriteHandle()
+			node := handle.Get()
+			err := s.flushNode(id, node)
+			if err == nil {
+				node.MarkClean()
+			} else {
 				errs = append(errs, err)
 			}
+			handle.Release()
 		} else {
 			errs = append(errs, fmt.Errorf("missing dirty node %v in node cache", id))
 		}
