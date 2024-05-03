@@ -242,15 +242,17 @@ func (s *GoState) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *GoState) Flush() error {
+	if s.archiveWriter != nil {
+		// Signal to the archive worker that a flush should be conducted.
+		s.archiveWriter <- archiveUpdate{}
+	}
+
 	err := s.live.Flush()
 	if err != nil {
 		s.stateError = errors.Join(s.stateError, err)
 	}
 
-	// Flush the archive.
 	if s.archiveWriter != nil {
-		// Signal to the archive worker that a flush should be conducted.
-		s.archiveWriter <- archiveUpdate{}
 		// Wait until the flush was processed.
 		<-s.archiveWriterFlushDone
 	}
