@@ -3324,7 +3324,9 @@ func TestStateDB_ResetClearsInternalState(t *testing.T) {
 		}
 	}
 
-	db := CreateNonCommittableStateDBUsing(state)
+	db := &nonCommittableStateDB{
+		createStateDBWith(state, nonCommittableStoredDataCacheSize, false),
+	}
 	address1 := common.Address{0xA}
 	address2 := common.Address{0xB}
 	key := common.Key{0xB}
@@ -3342,14 +3344,17 @@ func TestStateDB_ResetClearsInternalState(t *testing.T) {
 
 	checkEmpty(db, false)
 
-	if err := db.Check(); !errors.Is(err, injectedErr) {
-		t.Errorf("db should fail")
+	err := db.Check()
+	if err == nil {
+		t.Errorf("db check should have fail")
+	} else if !errors.Is(err, injectedErr) {
+		t.Errorf("unexpected error, wanted %v, got %v", injectedErr, err)
 	}
 
 	db.EndTransaction()
 
 	// re-cycle the same state
-	db.(*nonCommittableStateDB).resetState(state)
+	db.resetState(state)
 	checkEmpty(db, true) // new instance must be empty
 
 	if err := db.Check(); err != nil {
