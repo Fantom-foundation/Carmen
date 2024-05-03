@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"maps"
 	"os"
 	"sync"
 	"unsafe"
@@ -138,6 +139,7 @@ type MptState struct {
 	lock      common.LockFile
 	trie      *LiveTrie
 	code      map[common.Hash][]byte
+	codeDirty bool
 	codeMutex sync.Mutex
 	codefile  string
 	hasher    hash.Hash
@@ -347,6 +349,7 @@ func (s *MptState) SetCode(address common.Address, code []byte) (err error) {
 	info.CodeHash = codeHash
 	s.codeMutex.Lock()
 	s.code[codeHash] = code
+	s.codeDirty = true
 	s.codeMutex.Unlock()
 	return s.trie.SetAccountInfo(address, info)
 }
@@ -384,14 +387,27 @@ func (s *MptState) Visit(visitor NodeVisitor) error {
 }
 
 func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
-	return s.code, nil
+	s.codeMutex.Lock()
+	res := maps.Clone(s.code)
+	s.codeMutex.Unlock()
+	return res, nil
 }
 
+// Flush codes and state trie
 func (s *MptState) Flush() error {
-	// Flush codes and state trie.
+	// flush codes
+	var err error
+	s.codeMutex.Lock()
+	if s.codeDirty {
+		err = writeCodes(s.code, s.codefile)
+		if err == nil {
+			s.codeDirty = false
+		}
+	}
+	s.codeMutex.Unlock()
 	return errors.Join(
 		s.trie.forest.CheckErrors(),
-		writeCodes(s.code, s.codefile),
+		err,
 		s.trie.Flush(),
 	)
 }
@@ -432,9 +448,11 @@ func (s *MptState) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*s))
 	mf.AddChild("trie", s.trie.GetMemoryFootprint())
 	var sizeCodes uint
+	s.codeMutex.Lock()
 	for k, v := range s.code {
 		sizeCodes += uint(len(k) + len(v))
 	}
+	s.codeMutex.Unlock()
 	mf.AddChild("codes", common.NewMemoryFootprint(uintptr(sizeCodes)))
 	return mf
 }
