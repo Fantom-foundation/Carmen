@@ -3269,6 +3269,99 @@ func TestStateDB_StateDBCanNotEndABlockIfCommitIsNotAllowed(t *testing.T) {
 	}
 }
 
+func TestStateDB_ResetClearsInternalState(t *testing.T) {
+	injectedErr := fmt.Errorf("injectedErr")
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	gomock.InOrder(
+		state.EXPECT().Exists(gomock.Any()),
+		state.EXPECT().Exists(gomock.Any()).Return(true, nil),
+		state.EXPECT().Exists(gomock.Any()).Return(false, injectedErr),
+		state.EXPECT().Exists(gomock.Any()),
+	)
+	state.EXPECT().Check().Times(2)
+
+	checkEmpty := func(db NonCommittableStateDB, expectEmpty bool) {
+		inst := db.(*nonCommittableStateDB)
+		if got, want := len(inst.accounts) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.nonces) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := inst.data.Size() == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.codes) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.accountsToDelete) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.accounts) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.clearedAccounts) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.undo) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := inst.refund == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.accessedAddresses) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.writtenSlots) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.emptyCandidates) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+		if got, want := len(inst.errors) == 0, expectEmpty; got != want {
+			t.Errorf("empty check fails: got %v", got)
+		}
+	}
+
+	db := &nonCommittableStateDB{
+		createStateDBWith(state, nonCommittableStoredDataCacheSize, false),
+	}
+	address1 := common.Address{0xA}
+	address2 := common.Address{0xB}
+	key := common.Key{0xB}
+
+	db.CreateAccount(address1)
+	db.CreateAccount(address2)
+	db.AddRefund(120)
+	db.Suicide(address2)
+	db.BeginTransaction()
+	db.SetState(address1, key, common.Value{0x1})
+	db.SetCode(address1, make([]byte, 10))
+	db.SetNonce(address1, 0x2)
+	db.CreateAccount(common.Address{0xC}) // triggers injected error
+	db.AddAddressToAccessList(common.Address{0xD})
+
+	checkEmpty(db, false)
+
+	err := db.Check()
+	if err == nil {
+		t.Errorf("db check should have fail")
+	} else if !errors.Is(err, injectedErr) {
+		t.Errorf("unexpected error, wanted %v, got %v", injectedErr, err)
+	}
+
+	db.EndTransaction()
+
+	// re-cycle the same state
+	db.resetState(state)
+	checkEmpty(db, true) // new instance must be empty
+
+	if err := db.Check(); err != nil {
+		t.Errorf("db should not fail: %v", err)
+	}
+}
+
 func TestStateDB_Copy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
