@@ -38,6 +38,10 @@ func openDatabase(
 	if err != nil {
 		return nil, err
 	}
+	storageCache, err := properties.GetInteger(StorageCache, 0)
+	if err != nil {
+		return nil, err
+	}
 	params := state.Parameters{
 		Directory:    directory,
 		Variant:      state.Variant(configuration.Variant),
@@ -50,7 +54,7 @@ func openDatabase(
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-	statedb := state.CreateStateDBUsing(db)
+	statedb := state.CreateCustomStateDBUsing(db, storageCache)
 	return openStateDb(db, statedb)
 }
 
@@ -212,7 +216,6 @@ func (db *database) GetHistoricContext(block uint64) (HistoricBlockContext, erro
 		commonContext: commonContext{
 			db: db,
 		},
-
 		state: state.CreateNonCommittableStateDBUsing(s)}, err
 }
 

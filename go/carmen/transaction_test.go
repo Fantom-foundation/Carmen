@@ -88,12 +88,15 @@ func TestTransaction_Second_Abort_Noop(t *testing.T) {
 }
 
 func TestDatabase_AbortedTransactionsHaveNoEffect(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	block, err := db.BeginBlock(1)
 	if err != nil {
@@ -109,11 +112,19 @@ func TestDatabase_AbortedTransactionsHaveNoEffect(t *testing.T) {
 		t.Fatalf("unexpected error during abort: %v", err)
 	}
 
-	if tx, err = block.BeginTransaction(); err != nil {
+	tx, err = block.BeginTransaction()
+	if err != nil {
 		t.Fatalf("failed to start second transaction: %v", err)
 	}
 	if want, got := uint64(0), tx.GetNonce(Address{}); want != got {
 		t.Errorf("unexpected result after abort, want %d, got %d", want, got)
+	}
+
+	if err := tx.Abort(); err != nil {
+		t.Fatalf("unexpected error during abort: %v", err)
+	}
+	if err := block.Abort(); err != nil {
+		t.Fatalf("cannot abort block: %v", err)
 	}
 }
 

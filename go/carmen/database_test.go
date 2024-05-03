@@ -28,8 +28,13 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// openTestDatabase creates database with test configuration in a test directory.
+func openTestDatabase(t *testing.T) (Database, error) {
+	return OpenDatabase(t.TempDir(), testConfig, testProperties)
+}
+
 func TestDatabase_OpenWorksForFreshDirectory(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -43,14 +48,14 @@ func TestDatabase_OpenFailsForInvalidDirectory(t *testing.T) {
 	if err := os.WriteFile(path, []byte("hello"), 0600); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
-	_, err := OpenDatabase(path, testConfig, nil)
+	_, err := OpenDatabase(path, testConfig, testProperties)
 	if err == nil {
 		t.Fatalf("expected an error, got nothing")
 	}
 }
 
 func TestDatabase_CloseTwice_SecondCallFails(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -293,6 +298,10 @@ func TestDatabase_OpenFailsForInvalidProperty(t *testing.T) {
 			property: ArchiveCache,
 			value:    "hello",
 		},
+		"StorageCache-not-an-int": {
+			property: StorageCache,
+			value:    "hello",
+		},
 	}
 
 	for name, test := range tests {
@@ -310,7 +319,7 @@ func TestDatabase_OpenFailsForInvalidProperty(t *testing.T) {
 func TestHeadBlockContext_CanCreateSequenceOfBlocks(t *testing.T) {
 	for _, config := range []Configuration{testConfig, testNonArchiveConfig} {
 		t.Run(fmt.Sprintf("%v", config), func(t *testing.T) {
-			db, err := OpenDatabase(t.TempDir(), config, nil)
+			db, err := OpenDatabase(t.TempDir(), config, testProperties)
 			if err != nil {
 				t.Fatalf("failed to open database: %v", err)
 			}
@@ -333,7 +342,7 @@ func TestHeadBlockContext_CanCreateSequenceOfBlocks(t *testing.T) {
 }
 
 func TestDatabase_CannotStartMultipleBlocksAtOnce(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -367,7 +376,7 @@ func TestDatabase_CannotStartMultipleBlocksAtOnce(t *testing.T) {
 }
 
 func TestDatabase_BulkLoadProducesBlocks(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -430,7 +439,7 @@ func TestDatabase_BulkLoadProducesBlocks(t *testing.T) {
 }
 
 func TestDatabase_BeginBlock_InvalidBlock(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -462,7 +471,7 @@ func TestDatabase_BeginBlock_InvalidBlock(t *testing.T) {
 
 func TestDatabase_BeginBlock_InvalidBlock_ReopenDB(t *testing.T) {
 	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -479,7 +488,7 @@ func TestDatabase_BeginBlock_InvalidBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -494,7 +503,7 @@ func TestDatabase_BeginBlock_InvalidBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -511,8 +520,7 @@ func TestDatabase_BeginBlock_InvalidBlock_ReopenDB(t *testing.T) {
 }
 
 func TestDatabase_BeginBlock_ClosedDB(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -529,7 +537,7 @@ func TestDatabase_BeginBlock_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_BeginBlock_CanStartAbortedBlock(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -558,7 +566,7 @@ func TestDatabase_BeginBlock_CanStartAbortedBlock(t *testing.T) {
 
 func TestDatabase_BeginBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -575,7 +583,7 @@ func TestDatabase_BeginBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -593,7 +601,7 @@ func TestDatabase_BeginBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -613,7 +621,7 @@ func TestDatabase_BeginBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 }
 
 func TestDatabase_AddBlock_InvalidBlock(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -645,7 +653,7 @@ func TestDatabase_AddBlock_InvalidBlock(t *testing.T) {
 
 func TestDatabase_AddBlock_ReopenDB(t *testing.T) {
 	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -660,7 +668,7 @@ func TestDatabase_AddBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -676,7 +684,7 @@ func TestDatabase_AddBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -694,7 +702,7 @@ func TestDatabase_AddBlock_ReopenDB(t *testing.T) {
 }
 
 func TestDatabase_AddBlock_CanStartAbortedBlock(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -719,7 +727,7 @@ func TestDatabase_AddBlock_CanStartAbortedBlock(t *testing.T) {
 
 func TestDatabase_AddBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -734,7 +742,7 @@ func TestDatabase_AddBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 		t.Fatalf("failed to close database: %v", err)
 	}
 
-	db, err = OpenDatabase(dir, testConfig, nil)
+	db, err = OpenDatabase(dir, testConfig, testProperties)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -752,8 +760,7 @@ func TestDatabase_AddBlock_CanStartAbortedBlock_ReopenDB(t *testing.T) {
 }
 
 func TestDatabase_AddBlock_ClosedDB(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -772,23 +779,35 @@ func TestDatabase_AddBlock_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_CloseDB_Uncommitted_Block(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot abort ctx: %v", err)
+		}
+	}()
 
-	_, err = db.BeginBlock(5)
+	ctx, err := db.BeginBlock(5)
 	if err != nil {
 		t.Errorf("cannot begin block: %v", err)
 	}
 
+	defer func() {
+		if err := ctx.Abort(); err != nil {
+			t.Fatalf("cannot abort ctx: %v", err)
+		}
+	}()
+
 	if err := db.Close(); !errors.Is(err, errBlockContextRunning) {
 		t.Fatalf("closing database should fail while block is not committed")
 	}
+
 }
 
 func TestDatabase_CloseDB_Unfinished_Queries(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -832,7 +851,7 @@ func TestDatabase_CloseDB_Unfinished_Queries(t *testing.T) {
 func TestDatabase_BeginBlock_Parallel(t *testing.T) {
 	const loops = 100
 
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -869,7 +888,7 @@ func TestDatabase_BeginBlock_Parallel(t *testing.T) {
 func TestDatabase_AddBlock_Parallel(t *testing.T) {
 	const loops = 100
 
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -903,8 +922,7 @@ func TestDatabase_AddBlock_Parallel(t *testing.T) {
 func TestDatabase_GetHistoricBlock_Parallel(t *testing.T) {
 	const loops = 100
 
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -947,8 +965,7 @@ func TestDatabase_GetHistoricBlock_Parallel(t *testing.T) {
 func TestDatabase_QueryBlock_Parallel(t *testing.T) {
 	const loops = 100
 
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -989,8 +1006,7 @@ func TestDatabase_QueryBlock_Parallel(t *testing.T) {
 func TestDatabase_AddBlock_QueryBlock_Parallel(t *testing.T) {
 	const loops = 100
 
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1047,7 +1063,7 @@ func TestDatabase_AddBlock_QueryBlock_Parallel(t *testing.T) {
 }
 
 func TestDatabase_QueryBlock_ClosedDB(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1063,7 +1079,7 @@ func TestDatabase_QueryBlock_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_QueryHeadState_ClosedDB(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1077,7 +1093,7 @@ func TestDatabase_QueryHeadState_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_GetBlockHeight_ClosedDB(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1091,7 +1107,7 @@ func TestDatabase_GetBlockHeight_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_GetHistoricStateHash_ClosedDB(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1105,10 +1121,15 @@ func TestDatabase_GetHistoricStateHash_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_GetHistoricContext_NonExistingBlock(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	if _, err := db.GetHistoricContext(100); err == nil {
 		t.Errorf("should not be able to query non-existing block")
@@ -1116,7 +1137,7 @@ func TestDatabase_GetHistoricContext_NonExistingBlock(t *testing.T) {
 }
 
 func TestDatabase_GetHistoricContext_ClosedDB(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1130,8 +1151,7 @@ func TestDatabase_GetHistoricContext_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_Historic_Block_Available(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1200,7 +1220,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 }
 
 func TestDatabase_StartBulkLoad_Can_Run_Consecutive(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1221,7 +1241,7 @@ func TestDatabase_StartBulkLoad_Can_Run_Consecutive(t *testing.T) {
 }
 
 func TestDatabase_StartBulkLoad_ClosedDB(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1235,7 +1255,7 @@ func TestDatabase_StartBulkLoad_ClosedDB(t *testing.T) {
 }
 
 func TestDatabase_StartBulkLoad_Cannot_Start_Twice(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1259,7 +1279,7 @@ func TestDatabase_StartBulkLoad_Cannot_Start_Twice(t *testing.T) {
 }
 
 func TestDatabase_StartBulkLoad_Cannot_Start_Wrong_Block(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1282,10 +1302,15 @@ func TestDatabase_StartBulkLoad_Cannot_Start_Wrong_Block(t *testing.T) {
 }
 
 func TestDatabase_StartBulkLoad_Cannot_Finalize_Twice(t *testing.T) {
-	db, err := OpenDatabase(t.TempDir(), testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	ctx, err := db.StartBulkLoad(0)
 	if err != nil {
@@ -1302,8 +1327,7 @@ func TestDatabase_StartBulkLoad_Cannot_Finalize_Twice(t *testing.T) {
 }
 
 func TestDatabase_Async_AddBlock_QueryHistory_Close_ShouldNotThrowUnexpectedError(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1444,11 +1468,15 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 		numReaders = 10
 		numBlocks  = 100
 	)
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
 
 	addr1 := Address{1}
 	addr2 := Address{2}
@@ -1500,8 +1528,7 @@ func TestDatabase_Async_QueryHead_Accesses_ConsistentState(t *testing.T) {
 }
 
 func TestDatabase_ActiveHeadQueryBlockDataBaseClose(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
@@ -1510,21 +1537,23 @@ func TestDatabase_ActiveHeadQueryBlockDataBaseClose(t *testing.T) {
 	wg.Add(2)
 
 	queryStarted := make(chan bool)
-	done := false
+	done := &atomic.Bool{}
 	go db.QueryHeadState(func(QueryContext) {
 		defer wg.Done()
 		queryStarted <- true
 		// keep this alive to block the closing of the database
 		time.Sleep(time.Second)
-		done = true
+		done.Store(true)
 	})
 
 	go func() {
 		defer wg.Done()
 		<-queryStarted
 		// This should block until all queries are done
-		db.Close()
-		if !done {
+		if err := db.Close(); err != nil {
+			t.Errorf("cannot close db: %v", err)
+		}
+		if !done.Load() {
 			t.Errorf("finished closing before queries are complete")
 		}
 	}()
@@ -1533,8 +1562,7 @@ func TestDatabase_ActiveHeadQueryBlockDataBaseClose(t *testing.T) {
 }
 
 func TestDatabase_QueryCannotBeStartedOnClosedDatabase(t *testing.T) {
-	dir := t.TempDir()
-	db, err := OpenDatabase(dir, testConfig, nil)
+	db, err := openTestDatabase(t)
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
