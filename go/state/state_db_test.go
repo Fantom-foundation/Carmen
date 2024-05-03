@@ -3269,7 +3269,7 @@ func TestStateDB_StateDBCanNotEndABlockIfCommitIsNotAllowed(t *testing.T) {
 	}
 }
 
-func TestStateDB_NewCopy_MustBeEmpty(t *testing.T) {
+func TestStateDB_ResetClearsInternalState(t *testing.T) {
 	injectedErr := fmt.Errorf("injectedErr")
 	ctrl := gomock.NewController(t)
 	state := NewMockState(ctrl)
@@ -3324,35 +3324,35 @@ func TestStateDB_NewCopy_MustBeEmpty(t *testing.T) {
 		}
 	}
 
-	db1 := CreateNonCommittableStateDBUsing(state)
+	db := CreateNonCommittableStateDBUsing(state)
 	address1 := common.Address{0xA}
 	address2 := common.Address{0xB}
 	key := common.Key{0xB}
 
-	db1.CreateAccount(address1)
-	db1.CreateAccount(address2)
-	db1.AddRefund(120)
-	db1.Suicide(address2)
-	db1.BeginTransaction()
-	db1.SetState(address1, key, common.Value{0x1})
-	db1.SetCode(address1, make([]byte, 10))
-	db1.SetNonce(address1, 0x2)
-	db1.CreateAccount(common.Address{0xC}) // triggers injected error
-	db1.AddAddressToAccessList(common.Address{0xD})
+	db.CreateAccount(address1)
+	db.CreateAccount(address2)
+	db.AddRefund(120)
+	db.Suicide(address2)
+	db.BeginTransaction()
+	db.SetState(address1, key, common.Value{0x1})
+	db.SetCode(address1, make([]byte, 10))
+	db.SetNonce(address1, 0x2)
+	db.CreateAccount(common.Address{0xC}) // triggers injected error
+	db.AddAddressToAccessList(common.Address{0xD})
 
-	checkEmpty(db1, false)
+	checkEmpty(db, false)
 
-	if err := db1.Check(); !errors.Is(err, injectedErr) {
+	if err := db.Check(); !errors.Is(err, injectedErr) {
 		t.Errorf("db should fail")
 	}
 
-	db1.EndTransaction()
-	db1.Release()
+	db.EndTransaction()
 
-	db2 := CreateNonCommittableStateDBUsing(state)
-	checkEmpty(db2, true) // new instance must be empty
+	// re-cycle the same state
+	db.(*nonCommittableStateDB).resetState(state)
+	checkEmpty(db, true) // new instance must be empty
 
-	if err := db2.Check(); err != nil {
+	if err := db.Check(); err != nil {
 		t.Errorf("db should not fail: %v", err)
 	}
 }
