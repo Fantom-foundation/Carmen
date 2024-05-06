@@ -201,10 +201,6 @@ func (db *database) GetHistoricContext(block uint64) (HistoricBlockContext, erro
 		return nil, errDbClosed
 	}
 
-	if db.lastBlock < int64(block) {
-		return nil, fmt.Errorf("block does not exist: lastBlock: %d block: %d", db.lastBlock, block)
-	}
-
 	s, err := db.db.GetArchiveState(block)
 	if err != nil {
 		return nil, err

@@ -176,7 +176,7 @@ func (s *ArchiveState) GetArchiveState(block uint64) (state.State, error) {
 		return nil, errors.Join(fmt.Errorf("failed to get block height from the archive: %w", s.archiveError))
 	}
 	if empty || block > height {
-		return nil, fmt.Errorf("block %d is not present in the archive (height %d)", block, height)
+		return nil, fmt.Errorf("block %d is not present in the archive (empty: %v, height %d)", block, empty, height)
 	}
 	return &ArchiveState{
 		archive:      s.archive,
