@@ -117,10 +117,10 @@ add_license_to_files() {
     done
 }
 
-#add_license_to_files ".go" "//"
-#add_license_to_files "Jenkinsfile" "//"
-#add_license_to_files ".h" "//"
-#add_license_to_files ".cc" "//"
-#add_license_to_files "go.mod" "//"
-#add_license_to_files ".yml" "#"
+add_license_to_files ".go" "//"
+add_license_to_files "Jenkinsfile" "//"
+add_license_to_files ".h" "//"
+add_license_to_files ".cc" "//"
+add_license_to_files "go.mod" "//"
+add_license_to_files ".yml" "#"
 add_license_to_files "BUILD" "#"
