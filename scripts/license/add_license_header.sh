@@ -21,6 +21,10 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # resolve the root directory of the project
 root_dir=$(readlink -f "$script_dir/../..")
 
+# list of files/directories to ignore
+# paths must be in single quotes to prevent shell expansion (will be expanded later)
+ignore_files=('cpp/third_party/*')
+
 # Extend the license text of input string, each line is prefixed.
 # It is used for extending the license text of comments to be inserted
 # in a source file. 
@@ -52,8 +56,11 @@ add_license_to_files() {
     local prefix="$2"
     local license_header="$(extend_license_header "$prefix")"
 
+    # expand list if ignored files to a single string
+    local ignore=$(printf " ! -path *%s" "${ignore_files[@]}")
+
     # Get a list of all files in the project directory
-    local all_files=($(find "$root_dir" -type f -name "*$file_extension"))
+    local all_files=($(find "$root_dir" -type f -name "*$file_extension" $ignore))
 
     # Iterate over all files and add the license header if needed
     for f in "${all_files[@]}"; do
@@ -110,10 +117,10 @@ add_license_to_files() {
     done
 }
 
-add_license_to_files ".go" "//"
-add_license_to_files "Jenkinsfile" "//"
-add_license_to_files ".h" "//"
-add_license_to_files ".cc" "//"
-add_license_to_files "go.mod" "//"
-add_license_to_files ".yml" "#"
+#add_license_to_files ".go" "//"
+#add_license_to_files "Jenkinsfile" "//"
+#add_license_to_files ".h" "//"
+#add_license_to_files ".cc" "//"
+#add_license_to_files "go.mod" "//"
+#add_license_to_files ".yml" "#"
 add_license_to_files "BUILD" "#"
