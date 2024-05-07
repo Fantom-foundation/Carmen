@@ -311,7 +311,7 @@ func (s *GoState) GetArchiveState(block uint64) (as state.State, err error) {
 		return nil, fmt.Errorf("block %d is not present in the archive (archive is empty)", block)
 	}
 	if block > lastBlock {
-		return nil, fmt.Errorf("block %d is not present in the archive (last block %d)", block, lastBlock)
+		return nil, fmt.Errorf("block %d is not present in the archive (non-empty archive, last block %d)", block, lastBlock)
 	}
 	return &ArchiveState{
 		archive: s.archive,

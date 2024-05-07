@@ -1576,3 +1576,70 @@ func TestDatabase_QueryCannotBeStartedOnClosedDatabase(t *testing.T) {
 		t.Errorf("Starting a query on a closed database should have failed, got %v", err)
 	}
 }
+
+func TestDatabase_ArchiveCanBeAccessedAsync(t *testing.T) {
+	const numBlocks = 1000
+	addr1 := Address{1}
+
+	db, err := openTestDatabase(t)
+	if err != nil {
+		t.Fatalf("cannot open database: %v", err)
+	}
+
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("cannot close db: %v", err)
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// query archive
+	go func() {
+		defer wg.Done()
+		for {
+			height, err := db.GetArchiveBlockHeight()
+			if err != nil {
+				t.Errorf("cannot get archive height: %v", err)
+				return
+			}
+			if height >= 0 {
+				ctx, err := db.GetHistoricContext(uint64(height))
+				if err != nil {
+					t.Errorf("cannot get historic context: height: %d,  %v", height, err)
+					return
+				}
+				if err := ctx.Close(); err != nil {
+					t.Errorf("cannot close ctx: %v", err)
+				}
+			}
+			if height >= numBlocks {
+				return // we are done, all blocks ready in the archive -> no error so far
+			}
+		}
+	}()
+
+	// add blocks
+	go func() {
+		defer wg.Done()
+		for i := 1; i <= numBlocks; i++ {
+			block := uint64(i)
+			err := db.AddBlock(block, func(context HeadBlockContext) error {
+				if err := context.RunTransaction(func(context TransactionContext) error {
+					// In all blocks, the nonces of both accounts are identical.
+					context.SetNonce(addr1, block)
+					return nil
+				}); err != nil {
+					t.Errorf("cannot commit transaction: %v", err)
+				}
+				return nil
+			})
+			if err != nil {
+				t.Errorf("failed to add block %d: %v", i, err)
+			}
+		}
+	}()
+
+	wg.Wait()
+}
