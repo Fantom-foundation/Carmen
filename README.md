@@ -364,6 +364,31 @@ func ExampleDatabase_QueryHistoricState() {
 ```
 </details>
 
+# Performance 
+
+Carmen is the backbone of [Fantom Sonic](https://fantom.foundation/sonicPage) blockchain. 
+It is the key component that enables high performance in a disk space conservative manner. 
+
+Carmen was extensively tested as part of the Sonic client (i.e. a blockchain node). 
+Three main scenarios were tested:
+1. **Realistic traffic:** a mix of transactions that resemble realistic traffic, such as token transfers, token mints, and complex multi-step swaps.
+2. **Token swaps:** transactions calling the uniswap’s contract, which handles multi-step swaps between tokens, demonstrating what the next generation of DEXs can achieve.
+3. **Token transfers:** transactions processing only ERC-20 transfers, demonstrating usage for next-generation wallets, and payment providers.
+
+The client could process thousands of transactions per second as depicted in the table 
+and further detailed in [a blog post](https://blog.fantom.foundation/3-incredible-performances-from-fantom-sonic-closed-testnet/).
+
+| Configuration | Speed Tx/s |
+| ------------- | ---------- |
+| Realistic       |  2000 |
+| Token swaps     |  4000 |
+| Token transfers | 10000 |
+
+Processing this traffic, Carmen needed following disk space: 
+* **~60GB** to store 100M transactions 
+* additional **~160GB** to store historical data for serving RPC queries 
+  
+
 # License 
 
 The license text is available in [LICENSE](LICENSE)
