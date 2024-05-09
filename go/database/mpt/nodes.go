@@ -213,7 +213,7 @@ type Node interface {
 	Visit(source NodeSource, thisRef *NodeReference, depth int, visitor NodeVisitor) (abort bool, err error)
 }
 
-// NodeSource is a interface for any object capable of resolving NodeIds into
+// NodeSource is an interface for any object capable of resolving NodeIds into
 // Nodes. It is intended to be implemented by a Node-governing component
 // handling the life-cycle of nodes and loading/storing nodes to persistent
 // storage. It also serves as a central source for trie configuration flags.
