@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
@@ -44,7 +45,34 @@ type WitnessProof struct {
 // and possibly storage slots of the same account under the input storage keys.
 // This method may return an error when it occurs in the underlying database.
 func CreateWitnessProof(nodeSource NodeSource, root *NodeReference, address common.Address, keys ...common.Key) (WitnessProof, error) {
-	panic("not implemented")
+	proof := proofDb{}
+	visitor := &proofExtractionVisitor{
+		nodeSource: nodeSource,
+		proof:      proof,
+	}
+
+	var innerError error
+
+	_, err := VisitPathToAccount(nodeSource, root, address, MakeVisitor(func(node Node, info NodeInfo) VisitResponse {
+		if res := visitor.Visit(node, info); res == VisitResponseAbort {
+			return VisitResponseAbort
+		}
+		// if account reached, prove storage keys and terminate.
+		if account, ok := node.(*AccountNode); ok {
+			for _, key := range keys {
+				_, err := VisitPathToStorage(nodeSource, &account.storage, key, visitor)
+				if err != nil || visitor.err != nil {
+					innerError = errors.Join(innerError, visitor.err, err)
+					return VisitResponseAbort
+				}
+			}
+			return VisitResponseAbort
+		}
+
+		return VisitResponseContinue
+	}))
+
+	return WitnessProof{proof}, errors.Join(innerError, visitor.err, err)
 }
 
 // Add merges the input witness proof into the current witness proof.
@@ -181,6 +209,33 @@ func (p WitnessProof) AllAddressesEmpty(root common.Hash, from, to common.Addres
 // Equals returns true if the two witness proofs are equal.
 func (p WitnessProof) Equals(other WitnessProof) bool {
 	return maps.EqualFunc(p.proofDb, other.proofDb, rlpEncodedNodeEquals)
+}
+
+// proofExtractionVisitor is a visitor that visits MPT nodes and creates a witness proof.
+// It hashes and encodes the nodes and stores them into the proof database.
+type proofExtractionVisitor struct {
+	proof      proofDb
+	nodeSource NodeSource
+	err        error
+}
+
+// Visit computes RLP and hash of the visited node and puts it to the proof.
+func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
+	if info.embedded {
+		return VisitResponseAbort
+	}
+
+	data := make([]byte, 0, 1024)
+	rlp, err := encodeToRlp(node, p.nodeSource, data)
+	if err != nil {
+		p.err = err
+		return VisitResponseAbort
+	}
+	hash := common.Keccak256(rlp)
+
+	p.proof[hash] = rlp
+
+	return VisitResponseContinue
 }
 
 // String returns a string representation of the witness proof.
