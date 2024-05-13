@@ -39,7 +39,7 @@ extend_license_header() {
     # Extend each line of the license header with the specified character
     local extended_license_header=""
     while IFS= read -r line; do
-        extended_license_header+="$comment_char $line\n"
+        extended_license_header+="$comment_char${line:+ $line}\n"
     done <<< "$license_header"
 
     # return
