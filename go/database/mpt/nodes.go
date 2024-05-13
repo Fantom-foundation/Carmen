@@ -18,11 +18,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
-	"slices"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
+	"io"
+	"slices"
 )
 
 // This file defines the interface and implementation of all node types in a
@@ -249,6 +248,65 @@ type NodeManager interface {
 // ----------------------------------------------------------------------------
 //                               Utilities
 // ----------------------------------------------------------------------------
+
+// IterateAccountNodes visits all nodes from the input root following the input account address.
+// Each encountered node is passed to the visitor.
+// If no more nodes are available on the path, the execution ends.
+// If the account address does not exist, the function returns false.
+// The function returns an error if the path cannot be iterated due to error propagated from the node source.
+func IterateAccountNodes(source NodeSource, root *NodeReference, address common.Address, visitor NodeVisitor) (bool, error) {
+	path := AddressToNibblePath(address, source)
+	nodeId := root
+
+	var last shared.ReadHandle[Node]
+	var found, done bool
+	for !done {
+		handle, err := source.getReadAccess(nodeId)
+		if last.Valid() {
+			last.Release()
+		}
+		if err != nil {
+			return false, err
+		}
+		last = handle
+		node := handle.Get()
+		visitor.Visit(node, NodeInfo{Id: nodeId.Id()})
+
+		switch n := node.(type) {
+		case *ExtensionNode:
+			if len(path) < n.path.Length() {
+				done = true
+			} else {
+				nodeId = &n.next
+				for i := 0; i < n.path.Length(); i++ {
+					if n.path.Get(i) != path[i] {
+						done = true
+					}
+				}
+				path = path[n.path.Length():]
+			}
+		case *BranchNode:
+			if len(path) == 0 {
+				done = true
+			} else {
+				nodeId = &n.children[path[0]]
+				path = path[1:]
+			}
+		case *AccountNode:
+			if n.address == address {
+				found = true
+			}
+			done = true
+		case *EmptyNode:
+			done = true // no more nodes available, we are done, the path does not exist
+		default:
+			done = true
+		}
+	}
+
+	last.Release()
+	return found, nil
+}
 
 // CheckForest evaluates invariants throughout all nodes reachable from the
 // given list of roots. Executed checks include node-specific checks like the
