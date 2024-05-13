@@ -9,7 +9,7 @@
 // of this software will be governed by the GNU Lesser General Public Licence v3
 
 pipeline {
-    agent { label 'db-small-ssd' }
+    agent { label 'db-small-nvme' }
 
     options { 
         timestamps ()
