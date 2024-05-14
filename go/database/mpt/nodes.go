@@ -249,12 +249,12 @@ type NodeManager interface {
 //                               Utilities
 // ----------------------------------------------------------------------------
 
-// IterateAccountNodes visits all nodes from the input root following the input account address.
+// VisitPathToAccount visits all nodes from the input root following the input account address.
 // Each encountered node is passed to the visitor.
 // If no more nodes are available on the path, the execution ends.
 // If the account address does not exist, the function returns false.
 // The function returns an error if the path cannot be iterated due to error propagated from the node source.
-func IterateAccountNodes(source NodeSource, root *NodeReference, address common.Address, visitor NodeVisitor) (bool, error) {
+func VisitPathToAccount(source NodeSource, root *NodeReference, address common.Address, visitor NodeVisitor) (bool, error) {
 	path := AddressToNibblePath(address, source)
 	nodeId := root
 

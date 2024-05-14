@@ -6554,7 +6554,7 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 	handle.Release()
 }
 
-func TestIterateAccountNodes_CanIterateNodesByCorrectAddresses(t *testing.T) {
+func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 	var address common.Address
 	for i := range address {
 		address[i] = byte(i)
@@ -6738,14 +6738,14 @@ func TestIterateAccountNodes_CanIterateNodesByCorrectAddresses(t *testing.T) {
 
 			test.mock(source, nodeVisitor)
 
-			if success, err := IterateAccountNodes(source, &rootId, address, nodeVisitor); err != nil || !success {
+			if success, err := VisitPathToAccount(source, &rootId, address, nodeVisitor); err != nil || !success {
 				t.Fatalf("failed to iterate account nodes: %v", err)
 			}
 		})
 	}
 }
 
-func TestIterateAccountNodes_NonExistingAccount(t *testing.T) {
+func TestVisitPathToAccount_NonExistingAccount(t *testing.T) {
 	var address common.Address
 	for i := range address {
 		address[i] = byte(i)
@@ -6849,7 +6849,7 @@ func TestIterateAccountNodes_NonExistingAccount(t *testing.T) {
 
 			test.mock(source, nodeVisitor)
 
-			if success, _ := IterateAccountNodes(source, &rootId, address, nodeVisitor); success {
+			if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
 				t.Fatalf("expected iteration to fail")
 			}
 		})
@@ -6869,7 +6869,7 @@ func TestIterateAccountNodes_SourceError(t *testing.T) {
 
 	var address common.Address
 	rootId := NewNodeReference(EmptyId())
-	if success, _ := IterateAccountNodes(source, &rootId, address, nodeVisitor); success {
+	if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
 		t.Fatalf("expected iteration to fail")
 	}
 }

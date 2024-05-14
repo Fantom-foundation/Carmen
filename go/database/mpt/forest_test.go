@@ -2038,8 +2038,8 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 	}
 }
 
-func TestForest_IterateAccountNodes(t *testing.T) {
-	const num = 2
+func TestForest_VisitPathToAccount(t *testing.T) {
+	const num = 100
 
 	addresses := getTestAddresses(num)
 	for _, variant := range fileAndMemVariants {
@@ -2059,7 +2059,6 @@ func TestForest_IterateAccountNodes(t *testing.T) {
 
 					rootRef := NewNodeReference(EmptyId())
 					for i, addr := range addresses {
-						fmt.Printf("create: %s\n", addr)
 						root, err := forest.SetAccountInfo(&rootRef, addr, AccountInfo{Balance: common.Balance{byte(i + 1)}, Nonce: common.Nonce{1}})
 						if err != nil {
 							t.Fatalf("cannot create an account: %v", err)
@@ -2080,7 +2079,7 @@ func TestForest_IterateAccountNodes(t *testing.T) {
 					}).AnyTimes()
 
 					for i, addr := range addresses {
-						if found, err := IterateAccountNodes(forest, &rootRef, addr, nodeVisitor); err != nil || !found {
+						if found, err := VisitPathToAccount(forest, &rootRef, addr, nodeVisitor); err != nil || !found {
 							t.Errorf("failed to iterate nodes by address: %v", err)
 						}
 						switch account := lastNode.(type) {
