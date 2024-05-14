@@ -270,9 +270,6 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 		}
 		last = handle
 		node := handle.Get()
-		if res := visitor.Visit(node, NodeInfo{Id: nodeId.Id()}); res == VisitResponseAbort {
-			return false, nil
-		}
 
 		switch n := node.(type) {
 		case *ExtensionNode:
@@ -298,6 +295,13 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 			done = true // no more nodes available, we are done, the path does not exist
 		default:
 			done = true
+		}
+
+		// visit when we are in the middle of the path or when we found the result
+		if !done || found {
+			if res := visitor.Visit(node, NodeInfo{Id: nodeId.Id()}); res == VisitResponseAbort {
+				done = true
+			}
 		}
 	}
 
