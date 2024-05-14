@@ -274,16 +274,11 @@ func IterateAccountNodes(source NodeSource, root *NodeReference, address common.
 
 		switch n := node.(type) {
 		case *ExtensionNode:
-			if len(path) < n.path.Length() {
-				done = true
-			} else {
+			if n.path.IsPrefixOf(path) {
 				nodeId = &n.next
-				for i := 0; i < n.path.Length(); i++ {
-					if n.path.Get(i) != path[i] {
-						done = true
-					}
-				}
 				path = path[n.path.Length():]
+			} else {
+				done = true
 			}
 		case *BranchNode:
 			if len(path) == 0 {
