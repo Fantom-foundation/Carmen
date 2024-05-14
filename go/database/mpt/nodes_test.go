@@ -6555,319 +6555,155 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 }
 
 func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
-	var address common.Address
-	for i := range address {
-		address[i] = byte(i)
+	address := common.Address{0x12, 0x34, 0x56, 0x78}
+
+	tests := map[string]struct {
+		trie NodeDesc // < the structure of the trie
+		path []string // < the path to follow to reach the test account
+	}{
+		"empty": {
+			trie: &Tag{"A", &Empty{}},
+			path: []string{"A"},
+		},
+		"wrong account": {
+			trie: &Tag{"A", &Account{}},
+			path: []string{"A"}, // < this should be empty
+		},
+		"correct account": {
+			trie: &Tag{"A", &Account{address: address}},
+			path: []string{"A"},
+		},
+		"branch without account": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Empty{}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"}, // < this should just be "A"
+		},
+		"branch with wrong account": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Account{}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"}, // < this should just be "A"
+		},
+		"branch with correct account": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Account{address: address}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"},
+		},
+		"extension with common prefix": {
+			trie: &Tag{"A", &Extension{
+				path: []Nibble{1, 2, 3},
+				next: &Tag{"B", &Branch{children: Children{
+					3: &Tag{"C", &Empty{}},
+					4: &Tag{"D", &Empty{}},
+				}},
+				}}},
+			path: []string{"A", "B", "C"}, // < this should just be "A" and "B"
+		},
+		"extension without common prefix": {
+			trie: &Tag{"A", &Extension{path: []Nibble{2, 3}}},
+			path: []string{"A"}, // < this should just be nothing
+		},
+		"branch node short path": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address), // extension node will exhaust the path
+				next: &Tag{"B", &Branch{}},
+			},
+			},
+			path: []string{"A", "B"},
+		},
 	}
 
-	path := addressToNibbles(address)
-	rootId := NewNodeReference(NodeId(500))
-	accountId := NewNodeReference(AccountId(100))
-	account := &AccountNode{address: address}
-
-	tests := []struct {
-		name string
-		mock func(source *MockNodeSource, visitor *MockNodeVisitor)
-	}{{
-		"B-E-B",
-		func(source *MockNodeSource, visitor *MockNodeVisitor) {
-			extensionId := NewNodeReference(ExtensionId(1))
-
-			branch1 := &BranchNode{}
-			branch1.children[path[0]] = extensionId
-
-			branch2Id := NewNodeReference(BranchId(2))
-
-			extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[1 : len(path)-1])}
-			extension1.next = branch2Id
-
-			branch2 := &BranchNode{}
-			branch2.children[path[len(path)-1]] = accountId
-
-			gomock.InOrder(
-				source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-				source.EXPECT().getReadAccess(&extensionId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-				source.EXPECT().getReadAccess(&branch2Id).Return(shared.MakeShared[Node](branch2).GetReadHandle(), nil),
-				source.EXPECT().getReadAccess(&accountId).Return(shared.MakeShared[Node](account).GetReadHandle(), nil),
-			)
-
-			gomock.InOrder(
-				visitor.EXPECT().Visit(branch1, NodeInfo{Id: rootId.Id()}),
-				visitor.EXPECT().Visit(extension1, NodeInfo{Id: extensionId.Id()}),
-				visitor.EXPECT().Visit(branch2, NodeInfo{Id: branch2Id.Id()}),
-				visitor.EXPECT().Visit(account, NodeInfo{Id: accountId.Id()}),
-			)
-		}},
-		{
-			"E-B-E",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				branch1Id := NewNodeReference(BranchId(2))
-				extension2Id := NewNodeReference(ExtensionId(3))
-
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[0 : len(path)/2])}
-				extension1.next = branch1Id
-
-				branch1 := &BranchNode{}
-				branch1.children[path[len(path)/2]] = extension2Id
-
-				extension2 := &ExtensionNode{path: CreatePathFromNibbles(path[len(path)/2+1:])}
-				extension2.next = accountId
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&branch1Id).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&extension2Id).Return(shared.MakeShared[Node](extension2).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&accountId).Return(shared.MakeShared[Node](account).GetReadHandle(), nil),
-				)
-				gomock.InOrder(
-					visitor.EXPECT().Visit(extension1, NodeInfo{Id: rootId.Id()}),
-					visitor.EXPECT().Visit(branch1, NodeInfo{Id: branch1Id.Id()}),
-					visitor.EXPECT().Visit(extension2, NodeInfo{Id: extension2Id.Id()}),
-					visitor.EXPECT().Visit(account, NodeInfo{Id: accountId.Id()}),
-				)
-			}},
-		{
-			"B-E",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				extensionId := NewNodeReference(ExtensionId(1))
-
-				branch1 := &BranchNode{}
-				branch1.children[path[0]] = extensionId
-
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[1:])}
-				extension1.next = accountId
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&extensionId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&accountId).Return(shared.MakeShared[Node](account).GetReadHandle(), nil),
-				)
-				gomock.InOrder(
-					visitor.EXPECT().Visit(branch1, NodeInfo{Id: rootId.Id()}),
-					visitor.EXPECT().Visit(extension1, NodeInfo{Id: extensionId.Id()}),
-					visitor.EXPECT().Visit(account, NodeInfo{Id: accountId.Id()}),
-				)
-			}},
-		{
-			"E-B",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				branch1Id := NewNodeReference(BranchId(2))
-
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[0 : len(path)-1])}
-				extension1.next = branch1Id
-
-				branch1 := &BranchNode{}
-				branch1.children[path[len(path)-1]] = accountId
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&branch1Id).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&accountId).Return(shared.MakeShared[Node](account).GetReadHandle(), nil),
-				)
-				gomock.InOrder(
-					visitor.EXPECT().Visit(extension1, NodeInfo{Id: rootId.Id()}),
-					visitor.EXPECT().Visit(branch1, NodeInfo{Id: branch1Id.Id()}),
-					visitor.EXPECT().Visit(account, NodeInfo{Id: accountId.Id()}),
-				)
-			}},
-		{
-			"B-B-E",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				extensionId := NewNodeReference(ExtensionId(1))
-				branch2Id := NewNodeReference(BranchId(3))
-
-				branch1 := &BranchNode{}
-				branch1.children[path[0]] = branch2Id
-
-				branch2 := &BranchNode{}
-				branch2.children[path[2]] = extensionId
-
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[2:])}
-				extension1.next = accountId
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&branch2Id).Return(shared.MakeShared[Node](branch2).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&extensionId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&accountId).Return(shared.MakeShared[Node](account).GetReadHandle(), nil),
-				)
-				gomock.InOrder(
-					visitor.EXPECT().Visit(branch1, NodeInfo{Id: rootId.Id()}),
-					visitor.EXPECT().Visit(branch2, NodeInfo{Id: branch2Id.Id()}),
-					visitor.EXPECT().Visit(extension1, NodeInfo{Id: extensionId.Id()}),
-					visitor.EXPECT().Visit(account, NodeInfo{Id: accountId.Id()}),
-				)
-			}},
-		{
-			"E-E-B",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				branch1Id := NewNodeReference(BranchId(2))
-				extension2Id := NewNodeReference(ExtensionId(3))
-
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[0 : len(path)/2])}
-				extension1.next = extension2Id
-
-				extension2 := &ExtensionNode{path: CreatePathFromNibbles(path[len(path)/2 : len(path)-1])}
-				extension2.next = branch1Id
-
-				branch1 := &BranchNode{}
-				branch1.children[path[len(path)-1]] = accountId
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&extension2Id).Return(shared.MakeShared[Node](extension2).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&branch1Id).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&accountId).Return(shared.MakeShared[Node](account).GetReadHandle(), nil),
-				)
-				gomock.InOrder(
-					visitor.EXPECT().Visit(extension1, NodeInfo{Id: rootId.Id()}),
-					visitor.EXPECT().Visit(extension2, NodeInfo{Id: extension2Id.Id()}),
-					visitor.EXPECT().Visit(branch1, NodeInfo{Id: branch1Id.Id()}),
-					visitor.EXPECT().Visit(account, NodeInfo{Id: accountId.Id()}),
-				)
-			}},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("Nodes %s-Account", test.name), func(t *testing.T) {
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			source := NewMockNodeSource(ctrl)
-			nodeVisitor := NewMockNodeVisitor(ctrl)
+			ctxt := newNiceNodeContext(t, ctrl)
 
-			source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
+			root, shared := ctxt.Build(test.trie)
+			accountPresent := false
+			handle := shared.GetViewHandle()
+			if _, err := handle.Get().Visit(ctxt, &root, 0, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
+				if node, ok := n.(*AccountNode); ok && node.address == address {
+					accountPresent = true
+				}
+				return VisitResponseContinue
+			})); err != nil {
+				t.Fatalf("unexpected error during final visit: %v", err)
+			}
+			handle.Release()
 
-			test.mock(source, nodeVisitor)
+			visitor := NewMockNodeVisitor(ctrl)
+			var last *gomock.Call
+			for i, label := range test.path {
+				// the visitor does not return incorrect accounts,
+				// i.e., include the last node in the path only when
+				// the account does exist.
+				if i < len(test.path)-1 || accountPresent {
+					ref, shared := ctxt.Get(label)
+					handle := shared.GetViewHandle()
+					cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+					handle.Release()
+					if last != nil {
+						cur.After(last)
+					}
+					last = cur
+				}
+			}
 
-			if success, err := VisitPathToAccount(source, &rootId, address, nodeVisitor); err != nil || !success {
-				t.Fatalf("failed to iterate account nodes: %v", err)
+			found, err := VisitPathToAccount(ctxt, &root, address, visitor)
+			if err != nil {
+				t.Fatalf("unexpected error during path iteration: %v", err)
+			}
+
+			if found != accountPresent {
+				t.Errorf("unexpected found result, wanted %t, got %t", accountPresent, found)
 			}
 		})
 	}
 }
 
-func TestVisitPathToAccount_NonExistingAccount(t *testing.T) {
-	var address common.Address
-	for i := range address {
-		address[i] = byte(i)
-	}
+func TestVisitPathToAccount_SourceError(t *testing.T) {
+	injectedErr := errors.New("injected error")
 
-	path := addressToNibbles(address)
-	rootId := NewNodeReference(NodeId(500))
-
-	tests := []struct {
-		name string
-		mock func(source *MockNodeSource, visitor *MockNodeVisitor)
-	}{{
-		"E - Short Path",
-		func(source *MockNodeSource, visitor *MockNodeVisitor) {
-			extensionId := NewNodeReference(ExtensionId(1))
-
-			branch1 := &BranchNode{}
-			branch1.children[path[0]] = extensionId
-
-			branch2Id := NewNodeReference(BranchId(2))
-
-			extension1 := &ExtensionNode{path: CreatePathFromNibbles(path)}
-			extension1.next = branch2Id
-
-			gomock.InOrder(
-				source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-				source.EXPECT().getReadAccess(&extensionId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-			)
-		}},
-		{
-			"E - Mismatchh Path",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				extensionId := NewNodeReference(ExtensionId(1))
-
-				branch1 := &BranchNode{}
-				branch1.children[path[0]] = extensionId
-
-				branch2Id := NewNodeReference(BranchId(2))
-
-				path := path[1:]
-				wrongPath := make([]Nibble, len(path))
-				copy(wrongPath, path)
-				wrongPath[0]++
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(wrongPath)}
-				extension1.next = branch2Id
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&extensionId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-				)
-			}},
-		{
-			"B - Short Path",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				extensionId := NewNodeReference(ExtensionId(1))
-
-				branch1 := &BranchNode{}
-				branch1.children[path[0]] = extensionId
-
-				branch2Id := NewNodeReference(BranchId(2))
-
-				extension1 := &ExtensionNode{path: CreatePathFromNibbles(path[1:])}
-				extension1.next = branch2Id
-
-				branch2 := &BranchNode{} // unreachable node
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](branch1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&extensionId).Return(shared.MakeShared[Node](extension1).GetReadHandle(), nil),
-					source.EXPECT().getReadAccess(&branch2Id).Return(shared.MakeShared[Node](branch2).GetReadHandle(), nil),
-				)
-			}},
-		{
-			"Empty Node",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				emptyNode := &EmptyNode{}
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](emptyNode).GetReadHandle(), nil),
-				)
-			}},
-		{
-			"Value Node",
-			func(source *MockNodeSource, visitor *MockNodeVisitor) {
-				emptyNode := &ValueNode{}
-
-				gomock.InOrder(
-					source.EXPECT().getReadAccess(&rootId).Return(shared.MakeShared[Node](emptyNode).GetReadHandle(), nil),
-				)
-			}},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("%s", test.name), func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			source := NewMockNodeSource(ctrl)
-			nodeVisitor := NewMockNodeVisitor(ctrl)
-			nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
-
-			source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
-
-			test.mock(source, nodeVisitor)
-
-			if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
-				t.Fatalf("expected iteration to fail")
-			}
-		})
-	}
-}
-
-func TestIterateAccountNodes_SourceError(t *testing.T) {
 	ctrl := gomock.NewController(t)
+
 	source := NewMockNodeSource(ctrl)
+	source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
+	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](EmptyNode{}).GetViewHandle(), injectedErr)
+
 	nodeVisitor := NewMockNodeVisitor(ctrl)
 	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
 
-	source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
+	var address common.Address
+	rootId := NewNodeReference(EmptyId())
+	if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
+		t.Fatalf("expected iteration to fail")
+	}
+}
 
-	injectedErr := errors.New("injected error")
-	source.EXPECT().getReadAccess(gomock.Any()).Return(shared.MakeShared[Node](EmptyNode{}).GetReadHandle(), injectedErr)
+func TestVisitPathToAccount_VisitorAborted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(Node, NodeInfo) VisitResponse {
+		return VisitResponseAbort
+	}) // will be executed only once, then aborted
 
 	var address common.Address
+	extNode := ExtensionNode{path: CreatePathFromNibbles(addressToNibbles(address))}
+
+	source := NewMockNodeSource(ctrl)
+	source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
+
+	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](&extNode).GetViewHandle(), nil)
+
 	rootId := NewNodeReference(EmptyId())
 	if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
 		t.Fatalf("expected iteration to fail")

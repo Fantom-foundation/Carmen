@@ -260,6 +260,7 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 
 	var last shared.ViewHandle[Node]
 	var found, done bool
+	var lastNodeId *NodeReference
 	for !done {
 		handle, err := source.getViewAccess(nodeId)
 		if last.Valid() {
@@ -269,6 +270,7 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 			return false, err
 		}
 		last = handle
+		lastNodeId = nodeId
 		node := handle.Get()
 
 		switch n := node.(type) {
@@ -291,15 +293,13 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 				found = true
 			}
 			done = true
-		case *EmptyNode:
-			done = true // no more nodes available, we are done, the path does not exist
 		default:
 			done = true
 		}
 
 		// visit when we are in the middle of the path or when we found the result
 		if !done || found {
-			if res := visitor.Visit(node, NodeInfo{Id: nodeId.Id()}); res == VisitResponseAbort {
+			if res := visitor.Visit(last.Get(), NodeInfo{Id: lastNodeId.Id()}); res != VisitResponseContinue {
 				done = true
 			}
 		}
