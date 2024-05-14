@@ -258,7 +258,7 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 	path := AddressToNibblePath(address, source)
 	nodeId := root
 
-	var last shared.ReadHandle[Node]
+	var last shared.ViewHandle[Node]
 	var found, done bool
 	for !done {
 		handle, err := source.getViewAccess(nodeId)
