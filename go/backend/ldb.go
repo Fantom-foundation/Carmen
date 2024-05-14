@@ -12,7 +12,6 @@ package backend
 
 import (
 	"fmt"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
