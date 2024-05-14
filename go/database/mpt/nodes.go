@@ -261,7 +261,7 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 	var last shared.ReadHandle[Node]
 	var found, done bool
 	for !done {
-		handle, err := source.getReadAccess(nodeId)
+		handle, err := source.getViewAccess(nodeId)
 		if last.Valid() {
 			last.Release()
 		}
