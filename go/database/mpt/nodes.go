@@ -254,6 +254,7 @@ type NodeManager interface {
 // If no more nodes are available on the path, the execution ends.
 // If the account address does not exist, the function returns false.
 // The function returns an error if the path cannot be iterated due to error propagated from the node source.
+// Nodes provided via the visitor are made available with the view privilege.
 func VisitPathToAccount(source NodeSource, root *NodeReference, address common.Address, visitor NodeVisitor) (bool, error) {
 	path := AddressToNibblePath(address, source)
 	nodeId := root
