@@ -270,7 +270,9 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 		}
 		last = handle
 		node := handle.Get()
-		visitor.Visit(node, NodeInfo{Id: nodeId.Id()})
+		if res := visitor.Visit(node, NodeInfo{Id: nodeId.Id()}); res == VisitResponseAbort {
+			return false, nil
+		}
 
 		switch n := node.(type) {
 		case *ExtensionNode:
