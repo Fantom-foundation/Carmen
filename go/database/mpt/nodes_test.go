@@ -6635,7 +6635,7 @@ func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 				}
 				return VisitResponseContinue
 			})); err != nil {
-				t.Fatalf("unexpected error during final visit: %v", err)
+				t.Fatalf("unexpected error during visit: %v", err)
 			}
 			handle.Release()
 
