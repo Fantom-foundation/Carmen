@@ -6563,11 +6563,11 @@ func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 	}{
 		"empty": {
 			trie: &Tag{"A", &Empty{}},
-			path: []string{"A"},
+			path: []string{},
 		},
 		"wrong account": {
 			trie: &Tag{"A", &Account{}},
-			path: []string{"A"}, // < this should be empty
+			path: []string{},
 		},
 		"correct account": {
 			trie: &Tag{"A", &Account{address: address}},
@@ -6579,7 +6579,7 @@ func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 				1: &Tag{"C", &Empty{}},
 				2: &Tag{"D", &Empty{}},
 			}}},
-			path: []string{"A", "C"}, // < this should just be "A"
+			path: []string{"A"},
 		},
 		"branch with wrong account": {
 			trie: &Tag{"A", &Branch{children: Children{
@@ -6587,7 +6587,7 @@ func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 				1: &Tag{"C", &Account{}},
 				2: &Tag{"D", &Empty{}},
 			}}},
-			path: []string{"A", "C"}, // < this should just be "A"
+			path: []string{"A"},
 		},
 		"branch with correct account": {
 			trie: &Tag{"A", &Branch{children: Children{
@@ -6605,19 +6605,19 @@ func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 					4: &Tag{"D", &Empty{}},
 				}},
 				}}},
-			path: []string{"A", "B", "C"}, // < this should just be "A" and "B"
+			path: []string{"A", "B"},
 		},
 		"extension without common prefix": {
 			trie: &Tag{"A", &Extension{path: []Nibble{2, 3}}},
-			path: []string{"A"}, // < this should just be nothing
+			path: []string{},
 		},
-		"branch node short path": {
+		"branch node too deep": {
 			trie: &Tag{"A", &Extension{
 				path: addressToNibbles(address), // extension node will exhaust the path
 				next: &Tag{"B", &Branch{}},
 			},
 			},
-			path: []string{"A", "B"},
+			path: []string{"A"},
 		},
 	}
 
@@ -6641,20 +6641,15 @@ func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
 
 			visitor := NewMockNodeVisitor(ctrl)
 			var last *gomock.Call
-			for i, label := range test.path {
-				// the visitor does not return incorrect accounts,
-				// i.e., include the last node in the path only when
-				// the account does exist.
-				if i < len(test.path)-1 || accountPresent {
-					ref, shared := ctxt.Get(label)
-					handle := shared.GetViewHandle()
-					cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
-					handle.Release()
-					if last != nil {
-						cur.After(last)
-					}
-					last = cur
+			for _, label := range test.path {
+				ref, shared := ctxt.Get(label)
+				handle := shared.GetViewHandle()
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				handle.Release()
+				if last != nil {
+					cur.After(last)
 				}
+				last = cur
 			}
 
 			found, err := VisitPathToAccount(ctxt, &root, address, visitor)
@@ -6679,33 +6674,24 @@ func TestVisitPathToAccount_SourceError(t *testing.T) {
 	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](EmptyNode{}).GetViewHandle(), injectedErr)
 
 	nodeVisitor := NewMockNodeVisitor(ctrl)
-	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
 
 	var address common.Address
 	rootId := NewNodeReference(EmptyId())
-	if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
+	if found, err := VisitPathToAccount(source, &rootId, address, nodeVisitor); found || !errors.Is(err, injectedErr) {
 		t.Fatalf("expected iteration to fail")
 	}
 }
 
 func TestVisitPathToAccount_VisitorAborted(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
-	nodeVisitor := NewMockNodeVisitor(ctrl)
-	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(Node, NodeInfo) VisitResponse {
-		return VisitResponseAbort
-	}) // will be executed only once, then aborted
+	ctxt := newNiceNodeContext(t, ctrl)
 
 	var address common.Address
-	extNode := ExtensionNode{path: CreatePathFromNibbles(addressToNibbles(address))}
+	root, _ := ctxt.Build(&Extension{path: []Nibble{0}})
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Return(VisitResponseAbort)
 
-	source := NewMockNodeSource(ctrl)
-	source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
-
-	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](&extNode).GetViewHandle(), nil)
-
-	rootId := NewNodeReference(EmptyId())
-	if success, _ := VisitPathToAccount(source, &rootId, address, nodeVisitor); success {
+	if found, _ := VisitPathToAccount(ctxt, &root, address, nodeVisitor); found {
 		t.Fatalf("expected iteration to fail")
 	}
 }

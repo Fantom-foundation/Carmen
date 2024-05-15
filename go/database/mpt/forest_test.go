@@ -2079,6 +2079,7 @@ func TestForest_VisitPathToAccount(t *testing.T) {
 					}).AnyTimes()
 
 					for i, addr := range addresses {
+						lastNode = nil
 						if found, err := VisitPathToAccount(forest, &rootRef, addr, nodeVisitor); err != nil || !found {
 							t.Errorf("failed to iterate nodes by address: %v", err)
 						}
