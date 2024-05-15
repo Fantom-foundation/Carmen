@@ -6692,9 +6692,7 @@ func TestVisitPathToAccount_VisitorAborted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	nodeVisitor := NewMockNodeVisitor(ctrl)
-	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(Node, NodeInfo) VisitResponse {
-		return VisitResponseAbort
-	}) // will be executed only once, then aborted
+	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Return(VisitResponseAbort)
 
 	var address common.Address
 	extNode := ExtensionNode{path: CreatePathFromNibbles(addressToNibbles(address))}
