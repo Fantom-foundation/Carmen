@@ -6676,7 +6676,7 @@ func TestVisitPathToAccount_SourceError(t *testing.T) {
 
 	source := NewMockNodeSource(ctrl)
 	source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
-	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](EmptyNode{}).GetViewHandle(), injectedErr)
+	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.ViewHandle[Node]{}, injectedErr)
 
 	nodeVisitor := NewMockNodeVisitor(ctrl)
 	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).AnyTimes()
