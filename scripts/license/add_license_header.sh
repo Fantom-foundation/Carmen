@@ -12,6 +12,10 @@
 # header is not present, or is different, the script will
 # add/regenerate the header.
 #
+# The script can be run in two modes:
+# 1. Add license headers to all files in the repository (default mode).
+# 2. Check if all files have correct license headers (run with --check flag).
+#
 
 license_file="license_header.txt"
 
@@ -24,6 +28,12 @@ root_dir=$(readlink -f "$script_dir/../..")
 # list of files/directories to ignore
 # paths must be in single quotes to prevent shell expansion (will be expanded later)
 ignore_files=('cpp/third_party/*')
+
+## extract the flag if the script should only check the license headers
+check_only=false
+if [[ "$#" -eq 1 && "$1" == "--check" ]]; then
+    check_only=true
+fi
 
 # Extend the license text of input string, each line is prefixed.
 # It is used for extending the license text of comments to be inserted
@@ -51,10 +61,14 @@ extend_license_header() {
 # Parameters:
 #   file extension, e.g.: .go, .cpp,
 #   comment prefix, e.g.: //, #,
+# Returns:
+#   0 if all files have correct license header,
+#   1 if some files have incorrect or missing license header.
 add_license_to_files() {
     local file_extension="$1"
     local prefix="$2"
     local license_header="$(extend_license_header "$prefix")"
+    local result=0
 
     # expand list if ignored files to a single string
     local ignore=$(printf " ! -path *%s" "${ignore_files[@]}")
@@ -90,6 +104,13 @@ add_license_to_files() {
 
         # header should be added
         if [[ $add_header == true ]]; then
+            # if the script is in check only mode, print the file name and continue
+            if [[ $check_only == true ]]; then
+                echo "Obsolete or missing license header in: $f"
+                result=1
+                continue
+            fi
+
             # extract first line number, that does not match the license header prefix
             # in case obsolete header is present, the script will skip it
             start_from=$(grep -vnE "^$prefix" "$f" | cut -d : -f 1 | head -n 1)
@@ -115,12 +136,16 @@ add_license_to_files() {
             echo "$file_content" >> "$f"
         fi
     done
+
+    return $result
 }
 
-add_license_to_files ".go" "//"
-add_license_to_files "Jenkinsfile" "//"
-add_license_to_files ".h" "//"
-add_license_to_files ".cc" "//"
-add_license_to_files "go.mod" "//"
-add_license_to_files ".yml" "#"
-add_license_to_files "BUILD" "#"
+result=0
+add_license_to_files ".go" "//" || result=1
+add_license_to_files "Jenkinsfile" "//" || result=1
+add_license_to_files ".h" "//" || result=1
+add_license_to_files ".cc" "//" || result=1
+add_license_to_files "go.mod" "//" || result=1
+add_license_to_files ".yml" "#" || result=1
+add_license_to_files "BUILD" "#" || result=1
+exit $result
