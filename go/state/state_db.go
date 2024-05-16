@@ -194,8 +194,8 @@ type stateDB struct {
 	// A transaction local cache of storage values to avoid double-fetches and support rollbacks.
 	data *common.FastMap[slotId, *slotValue]
 
-	// Transient storage
-	transientData *common.FastMap[slotId, common.Value]
+	// Transient storage is a temporary storage that gets deleted after each transaction.
+	transientStorage *common.FastMap[slotId, common.Value]
 
 	// A transaction local cache of contract codes and their properties.
 	codes map[common.Address]*codeValue
@@ -208,9 +208,6 @@ type stateDB struct {
 
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
-
-	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
-	transientUndo []func()
 
 	// The refund accumulated in the current transaction.
 	refund uint64
@@ -444,7 +441,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
-		transientData:     common.NewFastMap[slotId, common.Value](slotHasher{}),
+		transientStorage:  common.NewFastMap[slotId, common.Value](slotHasher{}),
 		storedDataCache:   common.NewLruCache[slotId, storedDataCacheValue](storedDataCacheCapacity),
 		reincarnation:     map[common.Address]uint64{},
 		codes:             map[common.Address]*codeValue{},
@@ -454,7 +451,6 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 		writtenSlots:      map[*slotValue]bool{},
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
-		transientUndo:     make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
 		emptyCandidates:   make([]common.Address, 0, 100),
 		canApplyChanges:   canApplyChanges,
@@ -529,17 +525,6 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 			value.committed = common.Value{}
 			value.committedKnown = true
 			value.current = common.Value{}
-		}
-	})
-
-	// Reset transient storage.
-	s.transientData.ForEach(func(slot slotId, value common.Value) {
-		if slot.addr == addr {
-			// Support rollback of account creation.
-			s.transientUndo = append(s.transientUndo, func() {
-				s.transientData.Put(slot, value)
-			})
-			s.transientData.Remove(slot)
 		}
 	})
 
@@ -846,30 +831,26 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 
 func (s *stateDB) GetTransientState(addr common.Address, key common.Key) common.Value {
 	sid := slotId{addr, key}
-	val, _ := s.transientData.Get(sid)
+	val, _ := s.transientStorage.Get(sid)
 	return val
 }
 
 func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value common.Value) {
-	if s.createAccountIfNotExists(addr) {
-		// The account was implicitly created and may have to be removed at the end of the block.
-		s.emptyCandidates = append(s.emptyCandidates, addr)
-	}
 	sid := slotId{addr, key}
-	if entry, exists := s.transientData.Get(sid); exists {
+	if entry, exists := s.transientStorage.Get(sid); exists {
 		if entry == value {
 			return
 		}
 		oldValue := entry
 		entry = value
-		s.transientUndo = append(s.transientUndo, func() {
-			s.transientData.Put(sid, oldValue)
+		s.undo = append(s.undo, func() {
+			s.transientStorage.Put(sid, oldValue)
 		})
 
 	} else {
-		s.transientData.Put(sid, value)
-		s.transientUndo = append(s.transientUndo, func() {
-			s.transientData.Remove(sid)
+		s.transientStorage.Put(sid, value)
+		s.undo = append(s.undo, func() {
+			s.transientStorage.Remove(sid)
 		})
 	}
 }
@@ -1361,9 +1342,9 @@ func (s *stateDB) GetArchiveBlockHeight() (uint64, bool, error) {
 func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
-	s.transientData.Clear()
+	s.transientStorage.Clear()
 	s.undo = s.undo[0:0]
-	s.transientUndo = s.transientUndo[0:0]
+	s.undo = s.undo[0:0]
 	s.emptyCandidates = s.emptyCandidates[0:0]
 	s.logs = s.logs[0:0]
 }
