@@ -4143,6 +4143,122 @@ func TestSlotIdOrder(t *testing.T) {
 	}
 }
 
+func TestStateDB_TransientStorage_IsClearedAfterCallingCreateAccount(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+	db.SetTransientState(address1, key1, val1)
+
+	db.CreateAccount(address1)
+	got := db.GetTransientState(address1, key1)
+
+	want := common.Value{}
+	if got != want {
+		t.Error("Transient storage should have been cleared.")
+	}
+}
+
+func TestStateDB_SetTransientState_NewValue_UndoRemovesValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	db.CreateAccount(address1)
+	db.SetTransientState(address1, key1, val1)
+
+	// Call undo
+	for _, f := range db.transientUndo {
+		f()
+	}
+
+	got := db.GetTransientState(address1, key1)
+	want := common.Value{}
+	if got != want {
+		t.Errorf("Undo did not reset storage.")
+	}
+
+}
+
+func TestStateDB_SetTransientState_ExistingValue_UndoRollbacksValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	db.SetTransientState(address1, key1, val1)
+	// Save previous value
+	want := db.GetTransientState(address1, key1)
+	db.SetTransientState(address1, key1, val2)
+	// Call undo
+	for _, f := range db.transientUndo {
+		f()
+	}
+
+	got := db.GetTransientState(address1, key1)
+	if got != want {
+		t.Errorf("Undo did not reset storage.")
+	}
+
+}
+
+func TestStateDB_TransientStorage_UndoRollbacksValueAfterAccountIsRecreated(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	db.SetTransientState(address1, key1, val1)
+	db.CreateAccount(address1)
+	got := db.GetTransientState(address1, key1)
+	// Make sure storage was cleared
+	want := common.Value{}
+	if got != want {
+		t.Fatal("Transient storage should have been cleared.")
+	}
+	// Call undo
+	for _, f := range db.transientUndo {
+		f()
+	}
+
+	got = db.GetTransientState(address1, key1)
+	if got != val1 {
+		t.Errorf("Undo did not reset storage.")
+	}
+}
+
+func TestStateDB_TransientStorage_IsClearedAfterCallingEndTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+
+	// Simulate a non-existing account.
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	db.CreateAccount(address1)
+	db.SetTransientState(address1, key1, val1)
+	db.EndTransaction()
+	got := db.GetTransientState(address1, key1)
+
+	want := common.Value{}
+	if got != want {
+		t.Error("Transient storage should have been cleared.")
+	}
+
+	if len(db.transientUndo) > 0 {
+		t.Error("Undo function must not exist.")
+	}
+}
+
 type sameEffectAs struct {
 	want common.Update
 }

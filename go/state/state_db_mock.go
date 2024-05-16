@@ -367,6 +367,20 @@ func (mr *MockVmStateDBMockRecorder) GetTransactionChanges() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionChanges", reflect.TypeOf((*MockVmStateDB)(nil).GetTransactionChanges))
 }
 
+// GetTransientState mocks base method.
+func (m *MockVmStateDB) GetTransientState(arg0 common.Address, arg1 common.Key) common.Value {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransientState", arg0, arg1)
+	ret0, _ := ret[0].(common.Value)
+	return ret0
+}
+
+// GetTransientState indicates an expected call of GetTransientState.
+func (mr *MockVmStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockVmStateDB)(nil).GetTransientState), arg0, arg1)
+}
+
 // HasSuicided mocks base method.
 func (m *MockVmStateDB) HasSuicided(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -456,6 +470,18 @@ func (m *MockVmStateDB) SetState(arg0 common.Address, arg1 common.Key, arg2 comm
 func (mr *MockVmStateDBMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockVmStateDB)(nil).SetState), arg0, arg1, arg2)
+}
+
+// SetTransientState mocks base method.
+func (m *MockVmStateDB) SetTransientState(arg0 common.Address, arg1 common.Key, arg2 common.Value) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTransientState", arg0, arg1, arg2)
+}
+
+// SetTransientState indicates an expected call of SetTransientState.
+func (mr *MockVmStateDBMockRecorder) SetTransientState(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTransientState", reflect.TypeOf((*MockVmStateDB)(nil).SetTransientState), arg0, arg1, arg2)
 }
 
 // Snapshot mocks base method.
@@ -970,6 +996,20 @@ func (mr *MockStateDBMockRecorder) GetTransactionChanges() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionChanges", reflect.TypeOf((*MockStateDB)(nil).GetTransactionChanges))
 }
 
+// GetTransientState mocks base method.
+func (m *MockStateDB) GetTransientState(arg0 common.Address, arg1 common.Key) common.Value {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransientState", arg0, arg1)
+	ret0, _ := ret[0].(common.Value)
+	return ret0
+}
+
+// GetTransientState indicates an expected call of GetTransientState.
+func (mr *MockStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockStateDB)(nil).GetTransientState), arg0, arg1)
+}
+
 // HasSuicided mocks base method.
 func (m *MockStateDB) HasSuicided(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -1071,6 +1111,18 @@ func (m *MockStateDB) SetState(arg0 common.Address, arg1 common.Key, arg2 common
 func (mr *MockStateDBMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockStateDB)(nil).SetState), arg0, arg1, arg2)
+}
+
+// SetTransientState mocks base method.
+func (m *MockStateDB) SetTransientState(arg0 common.Address, arg1 common.Key, arg2 common.Value) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTransientState", arg0, arg1, arg2)
+}
+
+// SetTransientState indicates an expected call of SetTransientState.
+func (mr *MockStateDBMockRecorder) SetTransientState(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTransientState", reflect.TypeOf((*MockStateDB)(nil).SetTransientState), arg0, arg1, arg2)
 }
 
 // Snapshot mocks base method.
@@ -1492,6 +1544,20 @@ func (mr *MockNonCommittableStateDBMockRecorder) GetTransactionChanges() *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactionChanges", reflect.TypeOf((*MockNonCommittableStateDB)(nil).GetTransactionChanges))
 }
 
+// GetTransientState mocks base method.
+func (m *MockNonCommittableStateDB) GetTransientState(arg0 common.Address, arg1 common.Key) common.Value {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransientState", arg0, arg1)
+	ret0, _ := ret[0].(common.Value)
+	return ret0
+}
+
+// GetTransientState indicates an expected call of GetTransientState.
+func (mr *MockNonCommittableStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockNonCommittableStateDB)(nil).GetTransientState), arg0, arg1)
+}
+
 // HasSuicided mocks base method.
 func (m *MockNonCommittableStateDB) HasSuicided(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -1593,6 +1659,18 @@ func (m *MockNonCommittableStateDB) SetState(arg0 common.Address, arg1 common.Ke
 func (mr *MockNonCommittableStateDBMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockNonCommittableStateDB)(nil).SetState), arg0, arg1, arg2)
+}
+
+// SetTransientState mocks base method.
+func (m *MockNonCommittableStateDB) SetTransientState(arg0 common.Address, arg1 common.Key, arg2 common.Value) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTransientState", arg0, arg1, arg2)
+}
+
+// SetTransientState indicates an expected call of SetTransientState.
+func (mr *MockNonCommittableStateDBMockRecorder) SetTransientState(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTransientState", reflect.TypeOf((*MockNonCommittableStateDB)(nil).SetTransientState), arg0, arg1, arg2)
 }
 
 // Snapshot mocks base method.
