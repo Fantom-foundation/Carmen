@@ -2035,3 +2035,64 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 		}
 	}
 }
+
+func TestForest_VisitPathToAccount(t *testing.T) {
+	const num = 100
+
+	addresses := getTestAddresses(num)
+	for _, variant := range fileAndMemVariants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					defer func() {
+						// trigger close - ongoing change of the account addr. 0xABCDEF should not fail
+						if err := forest.Close(); err != nil {
+							t.Fatalf("cannot close db: %v", err)
+						}
+					}()
+
+					rootRef := NewNodeReference(EmptyId())
+					for i, addr := range addresses {
+						root, err := forest.SetAccountInfo(&rootRef, addr, AccountInfo{Balance: common.Balance{byte(i + 1)}, Nonce: common.Nonce{1}})
+						if err != nil {
+							t.Fatalf("cannot create an account: %v", err)
+						}
+						rootRef = root
+					}
+
+					// trigger update of dirty hashes
+					if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+						t.Errorf("failed to compute hash: %v", err)
+					}
+
+					var lastNode Node
+					ctrl := gomock.NewController(t)
+					nodeVisitor := NewMockNodeVisitor(ctrl)
+					nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
+						lastNode = node
+					}).AnyTimes()
+
+					for i, addr := range addresses {
+						lastNode = nil
+						if found, err := VisitPathToAccount(forest, &rootRef, addr, nodeVisitor); err != nil || !found {
+							t.Errorf("failed to iterate nodes by address: %v", err)
+						}
+						switch account := lastNode.(type) {
+						case *AccountNode:
+							want := common.Balance{byte(i + 1)}
+							if got, want := account.info.Balance, want; got != want {
+								t.Errorf("last iterated node is a wrong account node: got %v, want %v", got, want)
+							}
+						default:
+							t.Errorf("unexpected node type, got %T, want *AccountNode", account)
+						}
+					}
+				})
+			}
+		}
+	}
+}

@@ -6552,6 +6552,148 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 	handle.Release()
 }
 
+func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
+	address := common.Address{0x12, 0x34, 0x56, 0x78}
+
+	tests := map[string]struct {
+		trie NodeDesc // < the structure of the trie
+		path []string // < the path to follow to reach the test account
+	}{
+		"empty": {
+			trie: &Tag{"A", &Empty{}},
+			path: []string{},
+		},
+		"wrong account": {
+			trie: &Tag{"A", &Account{}},
+			path: []string{},
+		},
+		"correct account": {
+			trie: &Tag{"A", &Account{address: address}},
+			path: []string{"A"},
+		},
+		"branch without account": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Empty{}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A"},
+		},
+		"branch with wrong account": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Account{}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A"},
+		},
+		"branch with correct account": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Account{address: address}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"},
+		},
+		"extension with common prefix": {
+			trie: &Tag{"A", &Extension{
+				path: []Nibble{1, 2, 3},
+				next: &Tag{"B", &Branch{children: Children{
+					3: &Tag{"C", &Empty{}},
+					4: &Tag{"D", &Empty{}},
+				}},
+				}}},
+			path: []string{"A", "B"},
+		},
+		"extension without common prefix": {
+			trie: &Tag{"A", &Extension{path: []Nibble{2, 3}}},
+			path: []string{},
+		},
+		"branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address), // extension node will exhaust the path
+				next: &Tag{"B", &Branch{}},
+			},
+			},
+			path: []string{"A"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNiceNodeContext(t, ctrl)
+
+			root, shared := ctxt.Build(test.trie)
+			accountPresent := false
+			handle := shared.GetViewHandle()
+			if _, err := handle.Get().Visit(ctxt, &root, 0, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
+				if node, ok := n.(*AccountNode); ok && node.address == address {
+					accountPresent = true
+				}
+				return VisitResponseContinue
+			})); err != nil {
+				t.Fatalf("unexpected error during visit: %v", err)
+			}
+			handle.Release()
+
+			visitor := NewMockNodeVisitor(ctrl)
+			var last *gomock.Call
+			for _, label := range test.path {
+				ref, shared := ctxt.Get(label)
+				handle := shared.GetViewHandle()
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				handle.Release()
+				if last != nil {
+					cur.After(last)
+				}
+				last = cur
+			}
+
+			found, err := VisitPathToAccount(ctxt, &root, address, visitor)
+			if err != nil {
+				t.Fatalf("unexpected error during path iteration: %v", err)
+			}
+
+			if found != accountPresent {
+				t.Errorf("unexpected found result, wanted %t, got %t", accountPresent, found)
+			}
+		})
+	}
+}
+
+func TestVisitPathToAccount_SourceError(t *testing.T) {
+	injectedErr := errors.New("injected error")
+
+	ctrl := gomock.NewController(t)
+
+	source := NewMockNodeSource(ctrl)
+	source.EXPECT().getConfig().Return(S4LiveConfig).AnyTimes()
+	source.EXPECT().getViewAccess(gomock.Any()).Return(shared.ViewHandle[Node]{}, injectedErr)
+
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+
+	var address common.Address
+	rootId := NewNodeReference(EmptyId())
+	if found, err := VisitPathToAccount(source, &rootId, address, nodeVisitor); found || !errors.Is(err, injectedErr) {
+		t.Fatalf("expected iteration to fail")
+	}
+}
+
+func TestVisitPathToAccount_VisitorAborted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	ctxt := newNiceNodeContext(t, ctrl)
+
+	var address common.Address
+	root, _ := ctxt.Build(&Extension{path: []Nibble{0}})
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Return(VisitResponseAbort)
+
+	if found, _ := VisitPathToAccount(ctxt, &root, address, nodeVisitor); found {
+		t.Fatalf("expected iteration to fail")
+	}
+}
+
 func TestTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T) {
 	testTransitions_ImmutableTransitionHaveExpectedEffect(t, S4LiveConfig)
 }
