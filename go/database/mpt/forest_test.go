@@ -2049,7 +2049,6 @@ func TestForest_VisitPathToAccount(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 					defer func() {
-						// trigger close - ongoing change of the account addr. 0xABCDEF should not fail
 						if err := forest.Close(); err != nil {
 							t.Fatalf("cannot close db: %v", err)
 						}
@@ -2093,6 +2092,91 @@ func TestForest_VisitPathToAccount(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestForest_VisitPathToStorage(t *testing.T) {
+	const num = 100
+
+	keys := getTestKeys(num)
+	for _, variant := range fileAndMemVariants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					forest, err := variant.factory(t.TempDir(), config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("cannot close db: %v", err)
+						}
+					}()
+
+					rootRef := NewNodeReference(EmptyId())
+
+					address := common.Address{0xA}
+					root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: common.Balance{byte(0xB)}, Nonce: common.Nonce{1}})
+					if err != nil {
+						t.Fatalf("cannot create an account: %v", err)
+					}
+					rootRef = root
+
+					for i, key := range keys {
+						root, err := forest.SetValue(&rootRef, address, key, common.Value{byte(i + 1)})
+						if err != nil {
+							t.Fatalf("cannot create an account: %v", err)
+						}
+						rootRef = root
+					}
+
+					// trigger update of dirty hashes
+					if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+						t.Errorf("failed to compute hash: %v", err)
+					}
+
+					ctrl := gomock.NewController(t)
+					nodeVisitor := NewMockNodeVisitor(ctrl)
+					nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
+						// trigger storage search from the last account node
+						if account, ok := node.(*AccountNode); ok {
+							testVisitPathToStorage(t, forest, keys, account.storage)
+						}
+					}).AnyTimes()
+
+					// find out account node to start storage search from it.
+					if found, err := VisitPathToAccount(forest, &rootRef, address, nodeVisitor); err != nil || !found {
+						t.Errorf("failed to iterate nodes by address: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+// testVisitPathToStorage iterates over the keys and checks if the value nodes are correct.
+func testVisitPathToStorage(t *testing.T, forest *Forest, keys []common.Key, storageRoot NodeReference) {
+	var lastNode Node
+	ctrl := gomock.NewController(t)
+	nodeVisitor := NewMockNodeVisitor(ctrl)
+	nodeVisitor.EXPECT().Visit(gomock.Any(), gomock.Any()).Do(func(node Node, info NodeInfo) {
+		lastNode = node
+	}).AnyTimes()
+
+	for i, key := range keys {
+		lastNode = nil
+		if found, err := VisitPathToStorage(forest, &storageRoot, key, nodeVisitor); err != nil || !found {
+			t.Errorf("failed to iterate nodes by address: %v", err)
+		}
+		switch value := lastNode.(type) {
+		case *ValueNode:
+			want := common.Value{byte(i + 1)}
+			if got, want := value.value, want; got != want {
+				t.Errorf("wrong value node: got %v, want %v", got, want)
+			}
+		default:
+			t.Errorf("unexpected node type, got %T, want *ValueNode", value)
 		}
 	}
 }

@@ -247,6 +247,17 @@ type NodeManager interface {
 //                               Utilities
 // ----------------------------------------------------------------------------
 
+// VisitPathToStorage visits all nodes from the input storage root following the input storage key.
+// Each encountered node is passed to the visitor.
+// If no more nodes are available on the path, the execution ends.
+// If the key does not exist, the function returns false.
+// The function returns an error if the path cannot be iterated due to error propagated from the node source.
+// Nodes provided via the visitor are made available with the view privilege.
+func VisitPathToStorage(source NodeSource, storageRoot *NodeReference, key common.Key, visitor NodeVisitor) (bool, error) {
+	path := KeyToNibblePath(key, source)
+	return visitPathTo(source, storageRoot, path, nil, &key, visitor)
+}
+
 // VisitPathToAccount visits all nodes from the input root following the input account address.
 // Each encountered node is passed to the visitor.
 // If no more nodes are available on the path, the execution ends.
@@ -255,6 +266,19 @@ type NodeManager interface {
 // Nodes provided via the visitor are made available with the view privilege.
 func VisitPathToAccount(source NodeSource, root *NodeReference, address common.Address, visitor NodeVisitor) (bool, error) {
 	path := AddressToNibblePath(address, source)
+	return visitPathTo(source, root, path, &address, nil, visitor)
+}
+
+// visitPathTo visits all nodes from the input root following the input path.
+// Each encountered node is passed to the visitor.
+// If no more nodes are available on the path, the execution ends.
+// If the path does not exist, the function returns false.
+// The function returns an error if the path cannot be iterated due to error propagated from the node source.
+// When the function reaches either an account node or a value node it is compared to the input address or key.
+// If either the address or key matches the node, this function terminates.
+// It means this function can be used to find either an account node or a value node,
+// but it cannot find both at the same time.
+func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address *common.Address, key *common.Key, visitor NodeVisitor) (bool, error) {
 	nodeId := root
 
 	var last shared.ViewHandle[Node]
@@ -288,7 +312,12 @@ func VisitPathToAccount(source NodeSource, root *NodeReference, address common.A
 				path = path[1:]
 			}
 		case *AccountNode:
-			if n.address == address {
+			if address != nil && n.address == *address {
+				found = true
+			}
+			done = true
+		case *ValueNode:
+			if key != nil && n.key == *key {
 				found = true
 			}
 			done = true

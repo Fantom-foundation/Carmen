@@ -6552,7 +6552,7 @@ func markModifiedAsDirty(t *testing.T, ctxt *nodeContext, before, after NodeRefe
 	handle.Release()
 }
 
-func TestVisitPathToAccount_CanIterateNodesByCorrectAddresses(t *testing.T) {
+func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 	address := common.Address{0x12, 0x34, 0x56, 0x78}
 
 	tests := map[string]struct {
@@ -6691,6 +6691,78 @@ func TestVisitPathToAccount_VisitorAborted(t *testing.T) {
 
 	if found, _ := VisitPathToAccount(ctxt, &root, address, nodeVisitor); found {
 		t.Fatalf("expected iteration to fail")
+	}
+}
+
+func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
+	key := common.Key{0x12, 0x34, 0x56, 0x78}
+
+	tests := map[string]struct {
+		trie NodeDesc // < the structure of the trie
+		path []string // < the path to follow to reach the test account
+	}{
+		"correct storage": {
+			trie: &Tag{"A", &Value{key: key}},
+			path: []string{"A"},
+		},
+		"branch with correct storage": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Value{key: key}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"},
+		},
+		"branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(key), // extension node will exhaust the path
+				next: &Tag{"B", &Branch{}},
+			},
+			},
+			path: []string{"A"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ctxt := newNiceNodeContext(t, ctrl)
+
+			root, shared := ctxt.Build(test.trie)
+			storagePresent := false
+			handle := shared.GetViewHandle()
+			if _, err := handle.Get().Visit(ctxt, &root, 0, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
+				if node, ok := n.(*ValueNode); ok && node.key == key {
+					storagePresent = true
+				}
+				return VisitResponseContinue
+			})); err != nil {
+				t.Fatalf("unexpected error during visit: %v", err)
+			}
+			handle.Release()
+
+			visitor := NewMockNodeVisitor(ctrl)
+			var last *gomock.Call
+			for _, label := range test.path {
+				ref, shared := ctxt.Get(label)
+				handle := shared.GetViewHandle()
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				handle.Release()
+				if last != nil {
+					cur.After(last)
+				}
+				last = cur
+			}
+
+			found, err := VisitPathToStorage(ctxt, &root, key, visitor)
+			if err != nil {
+				t.Fatalf("unexpected error during path iteration: %v", err)
+			}
+
+			if found != storagePresent {
+				t.Errorf("unexpected found result, wanted %t, got %t", storagePresent, found)
+			}
+		})
 	}
 }
 
