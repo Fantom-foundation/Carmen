@@ -34,10 +34,11 @@ var (
 	key2 = common.Key{0x02}
 	key3 = common.Key{0x03}
 
-	val0 = common.Value{0x00}
-	val1 = common.Value{0x01}
-	val2 = common.Value{0x02}
-	val3 = common.Value{0x03}
+	valEmpty = common.Value{}
+	val0     = common.Value{0x00}
+	val1     = common.Value{0x01}
+	val2     = common.Value{0x02}
+	val3     = common.Value{0x03}
 
 	balance1 = common.Balance{0x01}
 	balance2 = common.Balance{0x02}
@@ -4150,9 +4151,13 @@ func TestStateDB_SetTransientState_RollbackRemovesValue(t *testing.T) {
 
 	s := db.Snapshot()
 	db.SetTransientState(address1, key1, val1)
+	// Check that value was correctly set
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
 
 	db.RevertToSnapshot(s)
-	if got, want := db.GetTransientState(address1, key1), val0; got != want {
+	if got, want := db.GetTransientState(address1, key1), valEmpty; got != want {
 		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 }
@@ -4163,11 +4168,21 @@ func TestStateDB_SetTransientState_RollbackToPreviousValue(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	db.SetTransientState(address1, key1, val1)
+	// Check that value was correctly set
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+
 	s := db.Snapshot()
 	// Save previous value
 	want := db.GetTransientState(address1, key1)
 
 	db.SetTransientState(address1, key1, val2)
+	// Check that value was correctly set
+	if got, want := db.GetTransientState(address1, key1), val2; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+
 	db.RevertToSnapshot(s)
 
 	if got, want := db.GetTransientState(address1, key1), want; got != want {
@@ -4180,13 +4195,14 @@ func TestStateDB_TransientStorage_IsClearedAfterCallingEndTransaction(t *testing
 	mock := NewMockState(ctrl)
 	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
 
-	// Simulate a non-existing account.
-	mock.EXPECT().Exists(address1).Return(false, nil)
-
-	db.CreateAccount(address1)
 	db.SetTransientState(address1, key1, val1)
+	// Check that value was correctly set
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+
 	db.EndTransaction()
-	if got, want := db.GetTransientState(address1, key1), val0; got != want {
+	if got, want := db.GetTransientState(address1, key1), valEmpty; got != want {
 		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 
@@ -4201,8 +4217,27 @@ func TestStateDB_SetTransientState_NewestValueCanBeObtained(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	db.SetTransientState(address1, key1, val1)
-	db.SetTransientState(address1, key1, val2)
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
 
+	db.SetTransientState(address1, key1, val2)
+	if got, want := db.GetTransientState(address1, key1), val2; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+}
+
+func TestStateDB_SetTransientState_ValueIsNotSetIfSame(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.SetTransientState(address1, key1, val1)
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+
+	db.SetTransientState(address1, key1, val2)
 	if got, want := db.GetTransientState(address1, key1), val2; got != want {
 		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
