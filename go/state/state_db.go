@@ -841,6 +841,7 @@ func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value c
 		if entry == value {
 			return
 		}
+		// Save previous value for rollbacks
 		oldValue := entry
 		entry = value
 		s.undo = append(s.undo, func() {
@@ -848,11 +849,12 @@ func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value c
 		})
 
 	} else {
-		s.transientStorage.Put(sid, value)
 		s.undo = append(s.undo, func() {
 			s.transientStorage.Remove(sid)
 		})
 	}
+
+	s.transientStorage.Put(sid, value)
 }
 
 func (s *stateDB) GetCode(addr common.Address) []byte {
@@ -1343,7 +1345,6 @@ func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
 	s.transientStorage.Clear()
-	s.undo = s.undo[0:0]
 	s.undo = s.undo[0:0]
 	s.emptyCandidates = s.emptyCandidates[0:0]
 	s.logs = s.logs[0:0]

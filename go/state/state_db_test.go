@@ -4143,45 +4143,36 @@ func TestSlotIdOrder(t *testing.T) {
 	}
 }
 
-func TestStateDB_SetTransientState_NewValue_UndoRemovesValue(t *testing.T) {
+func TestStateDB_SetTransientState_RollbackRemovesValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
-	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+	db := CreateStateDBUsing(mock)
 
+	s := db.Snapshot()
 	db.SetTransientState(address1, key1, val1)
 
-	// Call undo
-	for _, f := range db.undo {
-		f()
+	db.RevertToSnapshot(s)
+	if got, want := db.GetTransientState(address1, key1), val0; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
-
-	got := db.GetTransientState(address1, key1)
-	want := common.Value{}
-	if got != want {
-		t.Errorf("Undo did not reset storage.")
-	}
-
 }
 
-func TestStateDB_SetTransientState_ExistingValue_UndoRollbacksValue(t *testing.T) {
+func TestStateDB_SetTransientState_RollbackToPreviousValue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
-	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+	db := CreateStateDBUsing(mock)
 
 	db.SetTransientState(address1, key1, val1)
+	s := db.Snapshot()
 	// Save previous value
 	want := db.GetTransientState(address1, key1)
+
 	db.SetTransientState(address1, key1, val2)
-	// Call undo
-	for _, f := range db.undo {
-		f()
-	}
+	db.RevertToSnapshot(s)
 
-	got := db.GetTransientState(address1, key1)
-	if got != want {
-		t.Errorf("Undo did not reset storage.")
+	if got, want := db.GetTransientState(address1, key1), want; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
-
 }
 
 func TestStateDB_TransientStorage_IsClearedAfterCallingEndTransaction(t *testing.T) {
@@ -4195,15 +4186,25 @@ func TestStateDB_TransientStorage_IsClearedAfterCallingEndTransaction(t *testing
 	db.CreateAccount(address1)
 	db.SetTransientState(address1, key1, val1)
 	db.EndTransaction()
-	got := db.GetTransientState(address1, key1)
-
-	want := common.Value{}
-	if got != want {
-		t.Error("Transient storage should have been cleared.")
+	if got, want := db.GetTransientState(address1, key1), val0; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 
 	if len(db.undo) > 0 {
-		t.Error("Undo function must not exist.")
+		t.Errorf("unexpected undo len, wanted: 0, got: %v", len(db.undo))
+	}
+}
+
+func TestStateDB_SetTransientState_NewestValueCanBeObtained(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	db.SetTransientState(address1, key1, val1)
+	db.SetTransientState(address1, key1, val2)
+
+	if got, want := db.GetTransientState(address1, key1), val2; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 }
 
