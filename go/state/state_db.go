@@ -836,22 +836,19 @@ func (s *stateDB) GetTransientState(addr common.Address, key common.Key) common.
 }
 
 func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value common.Value) {
+	var oldValue common.Value
 	sid := slotId{addr, key}
 	if currentValue, exists := s.transientStorage.Get(sid); exists {
 		if currentValue == value {
 			return
 		}
 		// Save previous value for rollbacks
-		oldValue := currentValue
-		s.undo = append(s.undo, func() {
-			s.transientStorage.Put(sid, oldValue)
-		})
-
-	} else {
-		s.undo = append(s.undo, func() {
-			s.transientStorage.Remove(sid)
-		})
+		oldValue = currentValue
 	}
+
+	s.undo = append(s.undo, func() {
+		s.transientStorage.Put(sid, oldValue)
+	})
 
 	s.transientStorage.Put(sid, value)
 }
