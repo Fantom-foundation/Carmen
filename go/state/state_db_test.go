@@ -4307,6 +4307,7 @@ func TestNonCommittableStateDB_TransientStorage_DoesNotLeakBetweenInstances(t *t
 		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 
+	db.Release()
 	// TransientStorage must be cleared
 	db2 := CreateNonCommittableStateDBUsing(mock)
 	if got, want := db2.GetTransientState(address1, key1), valEmpty; got != want {
