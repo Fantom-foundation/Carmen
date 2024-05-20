@@ -4243,6 +4243,36 @@ func TestStateDB_SetTransientState_ValueIsNotSetIfSame(t *testing.T) {
 	}
 }
 
+func TestStateDB_SetTransientState_SettingSameValueReturnsEarly(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := createStateDBWith(mock, defaultStoredDataCacheSize, true)
+
+	db.SetTransientState(address1, key1, val1)
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+
+	if got, want := len(db.undo), 1; got != want {
+		t.Errorf("unexpected undo len, wanted: 1, got: %v", len(db.undo))
+	}
+
+	undo := db.undo[0]
+
+	db.SetTransientState(address1, key1, val1)
+	if got, want := db.GetTransientState(address1, key1), val1; got != want {
+		t.Errorf("unexpected value, wanted %v, got %v", want, got)
+	}
+
+	if got, want := len(db.undo), 1; got != want {
+		t.Errorf("unexpected undo len, wanted: 1, got: %v", len(db.undo))
+	}
+
+	if got, want := reflect.ValueOf(db.undo[0]), reflect.ValueOf(undo); got != want {
+		t.Errorf("undo func was changed")
+	}
+}
+
 type sameEffectAs struct {
 	want common.Update
 }
