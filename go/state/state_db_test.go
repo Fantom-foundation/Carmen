@@ -4227,22 +4227,6 @@ func TestStateDB_SetTransientState_NewestValueCanBeObtained(t *testing.T) {
 	}
 }
 
-func TestStateDB_SetTransientState_ValueIsNotSetIfSame(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mock := NewMockState(ctrl)
-	db := CreateStateDBUsing(mock)
-
-	db.SetTransientState(address1, key1, val1)
-	if got, want := db.GetTransientState(address1, key1), val1; got != want {
-		t.Errorf("unexpected value, wanted %v, got %v", want, got)
-	}
-
-	db.SetTransientState(address1, key1, val2)
-	if got, want := db.GetTransientState(address1, key1), val2; got != want {
-		t.Errorf("unexpected value, wanted %v, got %v", want, got)
-	}
-}
-
 func TestStateDB_SetTransientState_SettingSameValueReturnsEarly(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
@@ -4297,7 +4281,7 @@ func TestStateDB_SetTransientState_RollbackWithMultipleSteps(t *testing.T) {
 	}
 }
 
-func TestNonCommittableStateDB_TransientStorage_DoesNotLeakBetweenInstances(t *testing.T) {
+func TestNonCommittableStateDB_resetState_ClearsTransientStorage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)
 	db := CreateNonCommittableStateDBUsing(mock)
@@ -4307,10 +4291,9 @@ func TestNonCommittableStateDB_TransientStorage_DoesNotLeakBetweenInstances(t *t
 		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 
-	db.Release()
+	db.(*nonCommittableStateDB).resetState(mock)
 	// TransientStorage must be cleared
-	db2 := CreateNonCommittableStateDBUsing(mock)
-	if got, want := db2.GetTransientState(address1, key1), valEmpty; got != want {
+	if got, want := db.GetTransientState(address1, key1), valEmpty; got != want {
 		t.Errorf("unexpected value, wanted %v, got %v", want, got)
 	}
 }
