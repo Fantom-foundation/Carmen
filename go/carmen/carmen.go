@@ -272,7 +272,7 @@ type TransactionContext interface {
 	GetTransientState(Address, Key) Value
 
 	// SetTransientState sets a value in the transient state
-	//storage for a specific key at a given address.
+	// storage for a specific key at a given address.
 	SetTransientState(Address, Key, Value)
 
 	// GetCode returns smart contract byte-code
