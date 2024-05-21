@@ -50,6 +50,10 @@ func EncodeInto(dst []byte, item Item) []byte {
 	return item.write(writer)
 }
 
+func Decode(rlp []byte) (Item, error) {
+	return nil, nil
+}
+
 // writer is a specialized writer for this package writing encoded RLP
 // content in a pre-allocated buffer.
 type writer []byte

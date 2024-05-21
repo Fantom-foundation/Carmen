@@ -19,104 +19,63 @@ import (
 )
 
 func TestEncoding_EncodeStrings(t *testing.T) {
-	tests := []struct {
-		input  []byte
-		result []byte
-	}{
-		// empty string
-		{[]byte{}, []byte{0x80}},
-
-		// single values < 0x80
-		{[]byte{0}, []byte{0}},
-		{[]byte{1}, []byte{1}},
-		{[]byte{2}, []byte{2}},
-		{[]byte{0x7f}, []byte{0x7f}},
-
-		// single values >= 0x80
-		{[]byte{0x80}, []byte{0x81, 0x80}},
-		{[]byte{0x81}, []byte{0x81, 0x81}},
-		{[]byte{0xff}, []byte{0x81, 0xff}},
-
-		// more than one element for short strings (< 56 bytes)
-		{[]byte{0, 0}, []byte{0x82, 0, 0}},
-		{[]byte{1, 2, 3}, []byte{0x83, 1, 2, 3}},
-
-		{make([]byte, 55), func() []byte {
-			res := make([]byte, 56)
-			res[0] = 0x80 + 55
-			return res
-		}()},
-
-		// 56 or more bytes
-		{make([]byte, 56), func() []byte {
-			res := make([]byte, 58)
-			res[0] = 0xb7 + 1
-			res[1] = 56
-			return res
-		}()},
-
-		{make([]byte, 1024), func() []byte {
-			res := make([]byte, 1027)
-			res[0] = 0xb7 + 2
-			res[1] = 1024 >> 8
-			res[2] = 1024 & 0xff
-			return res
-		}()},
-
-		{make([]byte, 1<<20), func() []byte {
-			l := 1 << 20
-			res := make([]byte, l+4)
-			res[0] = 0xb7 + 3
-			res[1] = byte(l >> 16)
-			res[2] = byte(l >> 8)
-			res[3] = byte(l)
-			return res
-		}()},
-	}
-
-	for _, test := range tests {
-		if got, want := Encode(String{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
-		}
-		if got, want := (String{test.input}).getEncodedLength(), len(test.result); got != want {
-			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
-		}
-	}
+	testWithRlpStrings(t, func(t *testing.T, rlp []byte, item String) {
+		testEncoder(t, rlp, item)
+	})
 }
 
 func TestEncoding_EncodeList(t *testing.T) {
-	tests := []struct {
-		input  []Item
-		result []byte
-	}{
-		// empty list
-		{[]Item{}, []byte{0xc0}},
-
-		// single element list with short content
-		{[]Item{&String{[]byte{1}}}, []byte{0xc1, 1}},
-		{[]Item{&String{[]byte{1, 2}}}, []byte{0xc3, 0x82, 1, 2}},
-
-		// multi-element list with short content
-		{[]Item{&String{[]byte{1}}, &String{[]byte{2}}}, []byte{0xc2, 1, 2}},
-
-		// list with long content
-		{[]Item{&String{make([]byte, 100)}}, expand([]byte{0xf7 + 1, 102, 184, 100}, 4+100)},
-	}
-
-	for _, test := range tests {
-		if got, want := Encode(List{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
-		}
-		if got, want := (List{test.input}).getEncodedLength(), len(test.result); got != want {
-			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
-		}
-	}
+	testWithRlpLists(t, func(t *testing.T, rlp []byte, item List) {
+		testEncoder(t, rlp, item)
+	})
 }
 
-func expand(prefix []byte, size int) []byte {
-	res := make([]byte, size)
-	copy(res[:], prefix[:])
-	return res
+func TestEncoding_Uint64(t *testing.T) {
+	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item Uint64) {
+		testEncoder(t, rlp, item)
+	})
+}
+
+func TestEncoding_BigInt(t *testing.T) {
+	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item BigInt) {
+		testEncoder(t, rlp, item)
+	})
+}
+
+func TestEncoding_EncodeHash(t *testing.T) {
+	testWithRlpHash(t, func(t *testing.T, rlp []byte, item Hash) {
+		testEncoder(t, rlp, item)
+	})
+}
+
+func TestDecode_List(t *testing.T) {
+	testWithRlpLists(t, func(t *testing.T, rlp []byte, item List) {
+		testDecoder(t, rlp, item)
+	})
+}
+
+func TestDecode_Strings(t *testing.T) {
+	testWithRlpStrings(t, func(t *testing.T, rlp []byte, item String) {
+		testDecoder(t, rlp, item)
+	})
+}
+
+func TestDecode_Uint64(t *testing.T) {
+	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item Uint64) {
+		testDecoder(t, rlp, item)
+	})
+}
+
+func TestDecode_BigInt(t *testing.T) {
+	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item BigInt) {
+		testDecoder(t, rlp, item)
+	})
+}
+
+func TestDecode_Hash(t *testing.T) {
+	testWithRlpHash(t, func(t *testing.T, rlp []byte, item Hash) {
+		testDecoder(t, rlp, item)
+	})
 }
 
 func TestEncoding_EncodeEncoded(t *testing.T) {
@@ -137,93 +96,200 @@ func TestEncoding_EncodeEncoded(t *testing.T) {
 	}
 }
 
-func TestEncoding_Uint64(t *testing.T) {
-	tests := []struct {
-		input  uint64
-		result []byte
-	}{
-		{0, Encode(&String{[]byte{}})},
-		{1, Encode(&String{[]byte{1}})},
-		{2, Encode(&String{[]byte{2}})},
-
-		{255, Encode(&String{[]byte{255}})},
-		{256, Encode(&String{[]byte{1, 0}})},
-		{257, Encode(&String{[]byte{1, 1}})},
-
-		{1<<16 - 1, Encode(&String{[]byte{255, 255}})},
-		{1 << 16, Encode(&String{[]byte{1, 0, 0}})},
-		{1<<16 + 1, Encode(&String{[]byte{1, 0, 1}})},
-
-		{1<<24 - 1, Encode(&String{[]byte{255, 255, 255}})},
-		{1 << 24, Encode(&String{[]byte{1, 0, 0, 0}})},
-		{1<<24 + 1, Encode(&String{[]byte{1, 0, 0, 1}})},
-
-		{1<<32 - 1, Encode(&String{[]byte{255, 255, 255, 255}})},
-		{1 << 32, Encode(&String{[]byte{1, 0, 0, 0, 0}})},
-		{1<<32 + 1, Encode(&String{[]byte{1, 0, 0, 0, 1}})},
-
-		{1<<56 - 1, Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
-		{1 << 56, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
-		{1<<56 + 1, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
-	}
-	for _, test := range tests {
-		if got, want := Encode(Uint64{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
-		}
-		if got, want := (Uint64{test.input}).getEncodedLength(), len(test.result); got != want {
-			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
-		}
+func TestEncoding_getNumBytes_Zero(t *testing.T) {
+	if got, want := getNumBytes(0), byte(0); got != want {
+		t.Errorf("invalid result for encoded length, wanted %d, got %d", want, got)
 	}
 }
 
-func TestEncoding_BigInt(t *testing.T) {
-	tests := []struct {
-		input  *big.Int
-		result []byte
-	}{
-		{big.NewInt(0), Encode(&String{[]byte{}})},
-		{big.NewInt(1), Encode(&String{[]byte{1}})},
-		{big.NewInt(2), Encode(&String{[]byte{2}})},
-
-		{big.NewInt(255), Encode(&String{[]byte{255}})},
-		{big.NewInt(256), Encode(&String{[]byte{1, 0}})},
-		{big.NewInt(257), Encode(&String{[]byte{1, 1}})},
-
-		{big.NewInt(1<<16 - 1), Encode(&String{[]byte{255, 255}})},
-		{big.NewInt(1 << 16), Encode(&String{[]byte{1, 0, 0}})},
-		{big.NewInt(1<<16 + 1), Encode(&String{[]byte{1, 0, 1}})},
-
-		{big.NewInt(1<<24 - 1), Encode(&String{[]byte{255, 255, 255}})},
-		{big.NewInt(1 << 24), Encode(&String{[]byte{1, 0, 0, 0}})},
-		{big.NewInt(1<<24 + 1), Encode(&String{[]byte{1, 0, 0, 1}})},
-
-		{big.NewInt(1<<32 - 1), Encode(&String{[]byte{255, 255, 255, 255}})},
-		{big.NewInt(1 << 32), Encode(&String{[]byte{1, 0, 0, 0, 0}})},
-		{big.NewInt(1<<32 + 1), Encode(&String{[]byte{1, 0, 0, 0, 1}})},
-
-		{big.NewInt(1<<56 - 1), Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
-		{big.NewInt(1 << 56), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
-		{big.NewInt(1<<56 + 1), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
-
-		{new(big.Int).Lsh(big.NewInt(1), 64), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0}})},
-		{new(big.Int).Lsh(big.NewInt(1), 65), Encode(&String{[]byte{2, 0, 0, 0, 0, 0, 0, 0, 0}})},
-		{new(big.Int).Lsh(big.NewInt(1), 66), Encode(&String{[]byte{4, 0, 0, 0, 0, 0, 0, 0, 0}})},
-		{new(big.Int).Lsh(big.NewInt(1), 72), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0}})},
+// testEncoder runs a test for encoding an item.
+func testEncoder(t *testing.T, rlp []byte, item Item) {
+	if got, want := Encode(item), rlp; !bytes.Equal(got, want) {
+		t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
 	}
-	for _, test := range tests {
-		if got, want := Encode(BigInt{test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
-		}
-		if got, want := (BigInt{test.input}).getEncodedLength(), len(test.result); got != want {
-			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
-		}
+	if got, want := item.getEncodedLength(), len(rlp); got != want {
+		t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, rlp)
 	}
 }
 
-func TestEncoding_EncodeHash(t *testing.T) {
+// testDecoder runs a test for decoding an item.
+func testDecoder(t *testing.T, rlp []byte, item Item) {
+	got, err := Decode(rlp)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if got, want := got, item; got != want {
+		t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
+	}
+}
+
+// testWithRlpStrings runs a test function with a set of RLP strings.
+func testWithRlpStrings(t *testing.T, action func(t *testing.T, rlp []byte, item String)) {
+	tests := []struct {
+		rlp  []byte
+		item String
+	}{
+
+		// empty string
+		{[]byte{0x80}, String{}},
+
+		// single values < 0x80
+		{[]byte{0}, String{[]byte{0}}},
+		{[]byte{1}, String{[]byte{1}}},
+		{[]byte{2}, String{[]byte{2}}},
+		{[]byte{0x7f}, String{[]byte{0x7f}}},
+
+		// single values >= 0x80
+		{[]byte{0x81, 0x80}, String{[]byte{0x80}}},
+		{[]byte{0x81, 0x81}, String{[]byte{0x81}}},
+		{[]byte{0x81, 0xff}, String{[]byte{0xff}}},
+
+		// more than one element for short strings (< 56 bytes)
+		{[]byte{0x82, 0, 0}, String{[]byte{0, 0}}},
+		{[]byte{0x83, 1, 2, 3}, String{[]byte{1, 2, 3}}},
+
+		{func() []byte {
+			res := make([]byte, 56)
+			res[0] = 0x80 + 55
+			return res
+		}(), String{make([]byte, 55)}},
+
+		// 56 or more bytes
+		{func() []byte {
+			res := make([]byte, 58)
+			res[0] = 0xb7 + 1
+			res[1] = 56
+			return res
+		}(), String{make([]byte, 56)}},
+
+		{func() []byte {
+			res := make([]byte, 1027)
+			res[0] = 0xb7 + 2
+			res[1] = 1024 >> 8
+			res[2] = 1024 & 0xff
+			return res
+		}(), String{make([]byte, 1024)}},
+
+		{func() []byte {
+			l := 1 << 20
+			res := make([]byte, l+4)
+			res[0] = 0xb7 + 3
+			res[1] = byte(l >> 16)
+			res[2] = byte(l >> 8)
+			res[3] = byte(l)
+			return res
+		}(), String{make([]byte, 1<<20)}},
+	}
+
+	for _, test := range tests {
+		action(t, test.rlp, test.item)
+	}
+}
+
+func testWithRlpLists(t *testing.T, action func(t *testing.T, rlp []byte, item List)) {
+	tests := []struct {
+		item []Item
+		rlp  []byte
+	}{
+		// empty list
+		{[]Item{}, []byte{0xc0}},
+
+		// single element list with short content
+		{[]Item{&String{[]byte{1}}}, []byte{0xc1, 1}},
+		{[]Item{&String{[]byte{1, 2}}}, []byte{0xc3, 0x82, 1, 2}},
+
+		// multi-element list with short content
+		{[]Item{&String{[]byte{1}}, &String{[]byte{2}}}, []byte{0xc2, 1, 2}},
+
+		// list with long content
+		{[]Item{&String{make([]byte, 100)}}, expand([]byte{0xf7 + 1, 102, 184, 100}, 4+100)},
+	}
+
+	for _, test := range tests {
+		action(t, test.rlp, List{test.item})
+	}
+}
+
+// testWithRlpUint64 runs a test function with a set of Uint64 values.
+func testWithRlpUint64(t *testing.T, action func(t *testing.T, rlp []byte, item Uint64)) {
+	tests := []struct {
+		item Uint64
+		rlp  []byte
+	}{
+		{Uint64{0}, Encode(&String{[]byte{}})},
+		{Uint64{1}, Encode(&String{[]byte{1}})},
+		{Uint64{2}, Encode(&String{[]byte{2}})},
+
+		{Uint64{255}, Encode(&String{[]byte{255}})},
+		{Uint64{256}, Encode(&String{[]byte{1, 0}})},
+		{Uint64{257}, Encode(&String{[]byte{1, 1}})},
+
+		{Uint64{1<<16 - 1}, Encode(&String{[]byte{255, 255}})},
+		{Uint64{1 << 16}, Encode(&String{[]byte{1, 0, 0}})},
+		{Uint64{1<<16 + 1}, Encode(&String{[]byte{1, 0, 1}})},
+
+		{Uint64{1<<24 - 1}, Encode(&String{[]byte{255, 255, 255}})},
+		{Uint64{1 << 24}, Encode(&String{[]byte{1, 0, 0, 0}})},
+		{Uint64{1<<24 + 1}, Encode(&String{[]byte{1, 0, 0, 1}})},
+
+		{Uint64{1<<32 - 1}, Encode(&String{[]byte{255, 255, 255, 255}})},
+		{Uint64{1 << 32}, Encode(&String{[]byte{1, 0, 0, 0, 0}})},
+		{Uint64{1<<32 + 1}, Encode(&String{[]byte{1, 0, 0, 0, 1}})},
+
+		{Uint64{1<<56 - 1}, Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
+		{Uint64{1 << 56}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
+		{Uint64{1<<56 + 1}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
+	}
+
+	for _, test := range tests {
+		action(t, test.rlp, test.item)
+	}
+}
+
+func testWithRlpBigInt(t *testing.T, action func(t *testing.T, rlp []byte, item BigInt)) {
+	tests := []struct {
+		item BigInt
+		rlp  []byte
+	}{
+		{BigInt{big.NewInt(0)}, Encode(&String{[]byte{}})},
+		{BigInt{big.NewInt(1)}, Encode(&String{[]byte{1}})},
+		{BigInt{big.NewInt(2)}, Encode(&String{[]byte{2}})},
+
+		{BigInt{big.NewInt(255)}, Encode(&String{[]byte{255}})},
+		{BigInt{big.NewInt(256)}, Encode(&String{[]byte{1, 0}})},
+		{BigInt{big.NewInt(257)}, Encode(&String{[]byte{1, 1}})},
+
+		{BigInt{big.NewInt(1<<16 - 1)}, Encode(&String{[]byte{255, 255}})},
+		{BigInt{big.NewInt(1 << 16)}, Encode(&String{[]byte{1, 0, 0}})},
+		{BigInt{big.NewInt(1<<16 + 1)}, Encode(&String{[]byte{1, 0, 1}})},
+
+		{BigInt{big.NewInt(1<<24 - 1)}, Encode(&String{[]byte{255, 255, 255}})},
+		{BigInt{big.NewInt(1 << 24)}, Encode(&String{[]byte{1, 0, 0, 0}})},
+		{BigInt{big.NewInt(1<<24 + 1)}, Encode(&String{[]byte{1, 0, 0, 1}})},
+
+		{BigInt{big.NewInt(1<<32 - 1)}, Encode(&String{[]byte{255, 255, 255, 255}})},
+		{BigInt{big.NewInt(1 << 32)}, Encode(&String{[]byte{1, 0, 0, 0, 0}})},
+		{BigInt{big.NewInt(1<<32 + 1)}, Encode(&String{[]byte{1, 0, 0, 0, 1}})},
+
+		{BigInt{big.NewInt(1<<56 - 1)}, Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
+		{BigInt{big.NewInt(1 << 56)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
+		{BigInt{big.NewInt(1<<56 + 1)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
+
+		{BigInt{new(big.Int).Lsh(big.NewInt(1), 64)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{BigInt{new(big.Int).Lsh(big.NewInt(1), 65)}, Encode(&String{[]byte{2, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{BigInt{new(big.Int).Lsh(big.NewInt(1), 66)}, Encode(&String{[]byte{4, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{BigInt{new(big.Int).Lsh(big.NewInt(1), 72)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0}})},
+	}
+
+	for _, test := range tests {
+		action(t, test.rlp, test.item)
+	}
+}
+
+func testWithRlpHash(t *testing.T, action func(t *testing.T, rlp []byte, item Hash)) {
 	type test struct {
-		input  common.Hash
-		result []byte
+		item common.Hash
+		rlp  []byte
 	}
 	const size = 32
 	tests := make([]test, 0, size)
@@ -234,19 +300,14 @@ func TestEncoding_EncodeHash(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got, want := Encode(Hash{&test.input}), test.result; !bytes.Equal(got, want) {
-			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, test.input)
-		}
-		if got, want := (Hash{&test.input}).getEncodedLength(), len(test.result); got != want {
-			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, test.input)
-		}
+		action(t, test.rlp, Hash{&test.item})
 	}
 }
 
-func TestEncoding_getNumBytes_Zero(t *testing.T) {
-	if got, want := getNumBytes(0), byte(0); got != want {
-		t.Errorf("invalid result for encoded length, wanted %d, got %d", want, got)
-	}
+func expand(prefix []byte, size int) []byte {
+	res := make([]byte, size)
+	copy(res[:], prefix[:])
+	return res
 }
 
 func BenchmarkListEncoding(b *testing.B) {
