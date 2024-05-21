@@ -50,6 +50,8 @@ type VmStateDB interface {
 	GetCommittedState(common.Address, common.Key) common.Value
 	GetState(common.Address, common.Key) common.Value
 	SetState(common.Address, common.Key, common.Value)
+	GetTransientState(common.Address, common.Key) common.Value
+	SetTransientState(common.Address, common.Key, common.Value)
 
 	// Code management.
 	GetCode(common.Address) []byte
@@ -189,6 +191,9 @@ type stateDB struct {
 
 	// A transaction local cache of storage values to avoid double-fetches and support rollbacks.
 	data *common.FastMap[slotId, *slotValue]
+
+	// Transient storage is a temporary storage that gets deleted after each transaction.
+	transientStorage *common.FastMap[slotId, common.Value]
 
 	// A transaction local cache of contract codes and their properties.
 	codes map[common.Address]*codeValue
@@ -434,6 +439,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 		balances:          map[common.Address]*balanceValue{},
 		nonces:            map[common.Address]*nonceValue{},
 		data:              common.NewFastMap[slotId, *slotValue](slotHasher{}),
+		transientStorage:  common.NewFastMap[slotId, common.Value](slotHasher{}),
 		storedDataCache:   common.NewLruCache[slotId, storedDataCacheValue](storedDataCacheCapacity),
 		reincarnation:     map[common.Address]uint64{},
 		codes:             map[common.Address]*codeValue{},
@@ -819,6 +825,28 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 		s.clearedAccounts[addr] = clearedAndTainted
 		s.undo = append(s.undo, func() { s.clearedAccounts[addr] = oldState })
 	}
+}
+
+func (s *stateDB) GetTransientState(addr common.Address, key common.Key) common.Value {
+	sid := slotId{addr, key}
+	val, _ := s.transientStorage.Get(sid)
+	return val
+}
+
+func (s *stateDB) SetTransientState(addr common.Address, key common.Key, value common.Value) {
+	sid := slotId{addr, key}
+	currentValue, _ := s.transientStorage.Get(sid)
+	if currentValue == value {
+		return
+	}
+
+	// Save previous value for rollbacks
+	oldValue := currentValue
+	s.undo = append(s.undo, func() {
+		s.transientStorage.Put(sid, oldValue)
+	})
+
+	s.transientStorage.Put(sid, value)
 }
 
 func (s *stateDB) GetCode(addr common.Address) []byte {
@@ -1308,6 +1336,7 @@ func (s *stateDB) GetArchiveBlockHeight() (uint64, bool, error) {
 func (s *stateDB) resetTransactionContext() {
 	s.refund = 0
 	s.ClearAccessList()
+	s.transientStorage.Clear()
 	s.undo = s.undo[0:0]
 	s.emptyCandidates = s.emptyCandidates[0:0]
 	s.logs = s.logs[0:0]
