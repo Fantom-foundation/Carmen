@@ -74,7 +74,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 		return String{Str: rlp[0:]}, 1, nil
 	}
 
-	if l >= 0x80 && l < 0xb7 { // short string
+	if l >= 0x80 && l <= 0xb7 { // short string
 		length := int(l - 0x80)
 		if len(rlp) < length+1 {
 			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
@@ -83,7 +83,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 		return String{Str: rlp[1 : length+1]}, 2, nil
 	}
 
-	if l >= 0xb7 && l < 0xc0 { // long string
+	if l > 0xb7 && l <= 0xc0 { // long string
 		bytesLength := uint64(l - 0xb7)
 		length, err := readSize(rlp[1:], byte(bytesLength))
 		if err != nil {
@@ -94,7 +94,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 		return String{Str: rlp[offset : offset+length]}, offset + length, nil
 	}
 
-	if l >= 0xc0 && l < 0xf7 { // short list
+	if l > 0xc0 && l <= 0xf7 { // short list
 		length := int(l - 0xc0)
 		if len(rlp) < length+1 {
 			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
@@ -104,7 +104,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 		return List{Items: items}, uint64(length + 1), err
 	}
 
-	if l >= 0xf7 { // long list
+	if l > 0xf7 { // long list
 		bytesLength := uint64(l - 0xC0)
 		length, err := readSize(rlp[1:], byte(bytesLength))
 		if err != nil {
