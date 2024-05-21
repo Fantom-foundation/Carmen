@@ -12,6 +12,7 @@ package rlp
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -104,23 +105,27 @@ func TestEncoding_getNumBytes_Zero(t *testing.T) {
 
 // testEncoder runs a test for encoding an item.
 func testEncoder(t *testing.T, rlp []byte, item Item) {
-	if got, want := Encode(item), rlp; !bytes.Equal(got, want) {
-		t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
-	}
-	if got, want := item.getEncodedLength(), len(rlp); got != want {
-		t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, rlp)
-	}
+	t.Run(fmt.Sprintf("%x->%x", item, rlp), func(t *testing.T) {
+		if got, want := Encode(item), rlp; !bytes.Equal(got, want) {
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
+		}
+		if got, want := item.getEncodedLength(), len(rlp); got != want {
+			t.Errorf("invalid result for encoded length, wanted %d, got %d, input %v", want, got, rlp)
+		}
+	})
 }
 
 // testDecoder runs a test for decoding an item.
 func testDecoder(t *testing.T, rlp []byte, item Item) {
-	got, err := Decode(rlp)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if got, want := got, item; got != want {
-		t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
-	}
+	t.Run(fmt.Sprintf("%x->%x", rlp, item), func(t *testing.T) {
+		got, err := Decode(rlp)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := got, item; !deepEqual(got, want) {
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
+		}
+	})
 }
 
 // testWithRlpStrings runs a test function with a set of RLP strings.
@@ -308,6 +313,14 @@ func expand(prefix []byte, size int) []byte {
 	res := make([]byte, size)
 	copy(res[:], prefix[:])
 	return res
+}
+
+func deepEqual(a, b Item) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	return bytes.Equal(Encode(a), Encode(b))
 }
 
 func BenchmarkListEncoding(b *testing.B) {

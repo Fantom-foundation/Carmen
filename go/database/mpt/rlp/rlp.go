@@ -12,6 +12,7 @@ package rlp
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -51,7 +52,91 @@ func EncodeInto(dst []byte, item Item) []byte {
 }
 
 func Decode(rlp []byte) (Item, error) {
-	return nil, nil
+	item, _, err := decode(rlp)
+	return item, err
+}
+
+// decode decodes an RLP stream into an item.
+// It checks first byte of the RLP stream to determine the type of the item.
+// Based on the type, it decodes the type.
+// It may recursively call itself to decode nested items.
+func decode(rlp []byte) (Item, uint64, error) {
+	if len(rlp) == 0 {
+		return nil, 0, fmt.Errorf("input RLP is empty")
+	}
+
+	l := rlp[0]
+	if l < 0x80 { // single byte RLP
+		if len(rlp) != 1 {
+			return nil, 0, fmt.Errorf("expected single byte RLP stream, got: %d", len(rlp))
+		}
+
+		return String{Str: rlp[0:]}, 1, nil
+	}
+
+	if l >= 0x80 && l < 0xb7 { // short string
+		length := int(l - 0x80)
+		if len(rlp) < length+1 {
+			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
+		}
+
+		return String{Str: rlp[1 : length+1]}, 2, nil
+	}
+
+	if l >= 0xb7 && l < 0xc0 { // long string
+		bytesLength := uint64(l - 0xb7)
+		length, err := readSize(rlp[1:], byte(bytesLength))
+		if err != nil {
+			return nil, 0, err
+		}
+
+		offset := bytesLength + 1
+		return String{Str: rlp[offset : offset+length]}, offset + length, nil
+	}
+
+	if l >= 0xc0 && l < 0xf7 { // short list
+		length := int(l - 0xc0)
+		if len(rlp) < length+1 {
+			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
+		}
+
+		items, err := decodeList(rlp[1 : length+1])
+		return List{Items: items}, uint64(length + 1), err
+	}
+
+	if l >= 0xf7 { // long list
+		bytesLength := uint64(l - 0xC0)
+		length, err := readSize(rlp[1:], byte(bytesLength))
+		if err != nil {
+			return nil, 0, err
+		}
+		offset := bytesLength + 1
+		items, err := decodeList(rlp[offset : offset+length])
+		return List{Items: items}, offset + length, err
+	}
+
+	return nil, 0, fmt.Errorf("unsupported RLP encoding: %x", l)
+}
+
+// decodeList decodes a list of items from the given RLP stream.
+// The function expects an RLP stream with possibly multiple items encoded
+// while the prefix with the length is already cut out.
+// The consumes chunks of input RLP by passing it to the decoder
+// until the input is empty.
+func decodeList(rlp []byte) ([]Item, error) {
+	items := make([]Item, 0, 17)
+	buf := rlp
+	for len(buf) > 0 {
+		item, offset, err := decode(buf)
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, item)
+		buf = buf[offset:]
+	}
+
+	return items, nil
 }
 
 // writer is a specialized writer for this package writing encoded RLP
@@ -132,9 +217,9 @@ func (l List) write(writer writer) writer {
 	return writer
 }
 
-func (s List) getEncodedLength() int {
+func (l List) getEncodedLength() int {
 	sum := 0
-	for _, item := range s.Items {
+	for _, item := range l.Items {
 		sum += item.getEncodedLength()
 	}
 	return sum + getEncodedLengthLength(sum)
@@ -256,4 +341,31 @@ func (i BigInt) getEncodedLength() int {
 	}
 	length := ((bitlen + 7) & -8) >> 3
 	return getEncodedLengthLength(length) + length
+}
+
+func readSize(b []byte, slen byte) (uint64, error) {
+	if int(slen) > len(b) {
+		return 0, fmt.Errorf("expected %d bytes, got: %d", slen, len(b))
+	}
+	var s uint64
+	switch slen {
+	case 1:
+		s = uint64(b[0])
+	case 2:
+		s = uint64(b[0])<<8 | uint64(b[1])
+	case 3:
+		s = uint64(b[0])<<16 | uint64(b[1])<<8 | uint64(b[2])
+	case 4:
+		s = uint64(b[0])<<24 | uint64(b[1])<<16 | uint64(b[2])<<8 | uint64(b[3])
+	case 5:
+		s = uint64(b[0])<<32 | uint64(b[1])<<24 | uint64(b[2])<<16 | uint64(b[3])<<8 | uint64(b[4])
+	case 6:
+		s = uint64(b[0])<<40 | uint64(b[1])<<32 | uint64(b[2])<<24 | uint64(b[3])<<16 | uint64(b[4])<<8 | uint64(b[5])
+	case 7:
+		s = uint64(b[0])<<48 | uint64(b[1])<<40 | uint64(b[2])<<32 | uint64(b[3])<<24 | uint64(b[4])<<16 | uint64(b[5])<<8 | uint64(b[6])
+	case 8:
+		s = uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 | uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
+	}
+
+	return s, nil
 }
