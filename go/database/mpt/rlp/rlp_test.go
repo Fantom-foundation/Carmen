@@ -103,6 +103,52 @@ func TestEncoding_getNumBytes_Zero(t *testing.T) {
 	}
 }
 
+func TestReadSize_All_Correct_Sizes(t *testing.T) {
+	want := uint64(0)
+	for i := 1; i <= 8; i++ {
+		b := make([]byte, i)
+		for j := 0; j < i; j++ {
+			b[j] = byte(0xFF)
+		}
+		got, err := readSize(b, byte(i))
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		want = want<<8 | 0xFF
+		if got, want := got, want; got != want {
+			t.Errorf("invalid result for readSize, wanted %d, got %d", want, got)
+		}
+	}
+}
+
+func TestReadSize_All_InCorrect_Size(t *testing.T) {
+	b := make([]byte, 1)
+	if _, err := readSize(b, 4); err == nil {
+		t.Errorf("expected error, got nil")
+	}
+}
+
+func TestDecoder_Corrupted_RLPs(t *testing.T) {
+	tests := [][]byte{
+		{},                        // empty
+		{0x80 + 1},                // short string byte with missing payload
+		{0xb7 + 1},                // long string with missing payload
+		{0xc0 + 1},                // short list with missing payload
+		{0xf7 + 1},                // long list with missing payload
+		{0x80, 0x80},              // two short strings
+		{0xc0 + 2, 0xc0 + 2, 0x1}, // short list inner list missing payload
+	}
+
+	for _, rlp := range tests {
+		t.Run(fmt.Sprintf("%x", rlp), func(t *testing.T) {
+			if _, err := Decode(rlp); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
+	}
+}
+
 // testEncoder runs a test for encoding an item.
 func testEncoder(t *testing.T, rlp []byte, item Item) {
 	t.Run(fmt.Sprintf("%x->%x", item, rlp), func(t *testing.T) {
@@ -122,7 +168,7 @@ func testDecoder(t *testing.T, rlp []byte, item Item) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got, want := got, item; !deepEqual(got, want) {
+		if got, want := got, item; !equal(got, want) {
 			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
 		}
 	})
@@ -315,7 +361,7 @@ func expand(prefix []byte, size int) []byte {
 	return res
 }
 
-func deepEqual(a, b Item) bool {
+func equal(a, b Item) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

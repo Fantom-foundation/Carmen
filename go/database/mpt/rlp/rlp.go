@@ -51,8 +51,12 @@ func EncodeInto(dst []byte, item Item) []byte {
 	return item.write(writer)
 }
 
+// Decode decodes an RLP stream into an item.
 func Decode(rlp []byte) (Item, error) {
-	item, _, err := decode(rlp)
+	item, consumed, err := decode(rlp)
+	if consumed < uint64(len(rlp)) {
+		return nil, fmt.Errorf("unexpected trailing data: %x", rlp[consumed:])
+	}
 	return item, err
 }
 
@@ -67,11 +71,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 
 	l := rlp[0]
 	if l < 0x80 { // single byte RLP
-		if len(rlp) != 1 {
-			return nil, 0, fmt.Errorf("expected single byte RLP stream, got: %d", len(rlp))
-		}
-
-		return String{Str: rlp[0:]}, 1, nil
+		return String{Str: rlp[0:1]}, 1, nil
 	}
 
 	if l >= 0x80 && l <= 0xb7 { // short string
@@ -80,10 +80,10 @@ func decode(rlp []byte) (Item, uint64, error) {
 			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
 		}
 
-		return String{Str: rlp[1 : length+1]}, 2, nil
+		return String{Str: rlp[1 : length+1]}, uint64(length + 1), nil
 	}
 
-	if l > 0xb7 && l <= 0xc0 { // long string
+	if l > 0xb7 && l < 0xc0 { // long string
 		bytesLength := uint64(l - 0xb7)
 		length, err := readSize(rlp[1:], byte(bytesLength))
 		if err != nil {
@@ -94,7 +94,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 		return String{Str: rlp[offset : offset+length]}, offset + length, nil
 	}
 
-	if l > 0xc0 && l <= 0xf7 { // short list
+	if l >= 0xc0 && l <= 0xf7 { // short list
 		length := int(l - 0xc0)
 		if len(rlp) < length+1 {
 			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
@@ -104,18 +104,15 @@ func decode(rlp []byte) (Item, uint64, error) {
 		return List{Items: items}, uint64(length + 1), err
 	}
 
-	if l > 0xf7 { // long list
-		bytesLength := uint64(l - 0xC0)
-		length, err := readSize(rlp[1:], byte(bytesLength))
-		if err != nil {
-			return nil, 0, err
-		}
-		offset := bytesLength + 1
-		items, err := decodeList(rlp[offset : offset+length])
-		return List{Items: items}, offset + length, err
+	// l > 0xf7 - long list
+	bytesLength := uint64(l - 0xf7)
+	length, err := readSize(rlp[1:], byte(bytesLength))
+	if err != nil {
+		return nil, 0, err
 	}
-
-	return nil, 0, fmt.Errorf("unsupported RLP encoding: %x", l)
+	offset := bytesLength + 1
+	items, err := decodeList(rlp[offset : offset+length])
+	return List{Items: items}, offset + length, err
 }
 
 // decodeList decodes a list of items from the given RLP stream.
@@ -343,6 +340,21 @@ func (i BigInt) getEncodedLength() int {
 	return getEncodedLengthLength(length) + length
 }
 
+// readSize interprets the first 'slen' bytes of 'b' as a big-endian integer.
+// It returns the resulting integer and any error encountered.
+//
+// The function expects 'slen' to be the size of the integer to be read from 'b'.
+// If 'slen' is greater than the length of 'b', an error is returned.
+//
+// The function supports reading integers of up to 8 bytes (64 bits).
+// The integer is constructed by shifting and OR-ing the bytes from 'b'.
+//
+// Parameters:
+// b:    The byte slice from which to read the integer.
+// slen: The size of the integer to be read from 'b'.
+//
+// Returns:
+// The integer read from 'b' and an error if 'slen' is greater than the length of 'b'.
 func readSize(b []byte, slen byte) (uint64, error) {
 	if int(slen) > len(b) {
 		return 0, fmt.Errorf("expected %d bytes, got: %d", slen, len(b))
