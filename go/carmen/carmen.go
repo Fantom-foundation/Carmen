@@ -269,7 +269,7 @@ type TransactionContext interface {
 
 	// GetTransientState retrieves the value associated with a specific
 	// key within the transient state storage at a given address.
-	// Transient State is quick in memory storage
+	// Transient State is an in-memory storage
 	// that gets reset after each transaction.
 	GetTransientState(Address, Key) Value
 
