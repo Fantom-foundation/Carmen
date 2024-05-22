@@ -411,7 +411,7 @@ func (h ethHasher) updateHashesInternal(
 				embedded[cur.node.Id()] = true
 			} else {
 				// Encode the node using RLP and compute its hash.
-				data, e := h.encode(node, manager, data)
+				data, e := encode(node, manager, data)
 				if e != nil {
 					cur.handle.Release()
 					err = e
@@ -452,7 +452,7 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 
 	// Encode the node in RLP and compute its hash.
 	data := make([]byte, 0, 1024)
-	data, err = h.encode(node, source, data)
+	data, err = encode(node, source, data)
 	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
@@ -467,27 +467,27 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 }
 
 // encode computes the RLP encoding of the given node. If needed, additional nodes are
-// fetched from the given manager/source for deriving the encoding. If the manager is
-// provided, write access to required nodes is obtained and dirty node information like
-// hashes and embedded flags are updated. If the manager is nil, this operation is a
-// read-only operation accepting the current hashes and embedded flags as the true value
-// even if dirty flags are set. The node and source parameter must not be nil.
-func (h ethHasher) encode(
+// fetched from the given source for deriving the encoding.
+// The node and source parameter must not be nil.
+// The result is stored in the input slice, and the slice is returned as well.
+// The reason for having the slice on the input is that the encoding of nodes
+// is a frequent operation and the slice can be reused to reduce memory allocations.
+func encode(
 	node Node,
 	source NodeSource,
 	target []byte,
 ) ([]byte, error) {
 	switch trg := node.(type) {
 	case EmptyNode:
-		return h.encodeEmpty()
+		return encodeEmpty()
 	case *AccountNode:
-		return h.encodeAccount(trg, source, target)
+		return encodeAccount(trg, source, target)
 	case *BranchNode:
-		return h.encodeBranch(trg, source, target)
+		return encodeBranch(trg, source, target)
 	case *ExtensionNode:
-		return h.encodeExtension(trg, source, target)
+		return encodeExtension(trg, source, target)
 	case *ValueNode:
-		return h.encodeValue(trg, source, target)
+		return encodeValue(trg, source, target)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -502,7 +502,7 @@ var rlpEncodingBufferPool = sync.Pool{New: func() any {
 },
 }
 
-func (h ethHasher) encodeEmpty() ([]byte, error) {
+func encodeEmpty() ([]byte, error) {
 	return emptyStringRlpEncoded, nil
 }
 
@@ -515,7 +515,7 @@ var branchRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func (h ethHasher) encodeBranch(
+func encodeBranch(
 	node *BranchNode,
 	source NodeSource,
 	target []byte,
@@ -565,7 +565,7 @@ var extensionRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func (h ethHasher) encodeExtension(
+func encodeExtension(
 	node *ExtensionNode,
 	source NodeSource,
 	target []byte,
@@ -593,7 +593,7 @@ func (h ethHasher) encodeExtension(
 		}
 		defer next.Release()
 		encoded := make([]byte, 0, 1024)
-		encoded, err = h.encode(next.Get(), source, encoded)
+		encoded, err = encode(next.Get(), source, encoded)
 		if err != nil {
 			return nil, err
 		}
@@ -616,7 +616,7 @@ var accountRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func (h *ethHasher) encodeAccount(
+func encodeAccount(
 	node *AccountNode,
 	source NodeSource,
 	target []byte,
@@ -666,7 +666,7 @@ var valueRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func (h *ethHasher) encodeValue(
+func encodeValue(
 	node *ValueNode,
 	source NodeSource,
 	target []byte,
@@ -761,7 +761,7 @@ func (h ethHasher) isEmbedded(
 
 	// We need to encode it to be certain.
 	var encoded = make([]byte, 0, 1024)
-	encoded, err = h.encode(node, source, encoded)
+	encoded, err = encode(node, source, encoded)
 	if err != nil {
 		return false, err
 	}
