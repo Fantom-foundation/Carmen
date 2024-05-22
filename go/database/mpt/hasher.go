@@ -538,7 +538,7 @@ func encodeBranch(
 				return nil, err
 			}
 			var encoded = make([]byte, 0, 1024)
-			encoded, err = h.encode(node.Get(), source, encoded)
+			encoded, err = encode(node.Get(), source, encoded)
 			node.Release()
 			if err != nil {
 				return nil, err

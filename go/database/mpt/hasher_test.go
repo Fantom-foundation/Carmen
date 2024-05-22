@@ -425,8 +425,7 @@ func TestEthereumLikeHasher_GetLowerBoundForEmptyNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get lower bound for encoding: %v", err)
 	}
-	hasher := makeEthereumLikeHasher().(*ethHasher)
-	encoded, _ := hasher.encodeEmpty()
+	encoded, _ := encodeEmpty()
 	if got, want := size, len(encoded); got != want {
 		t.Fatalf("empty code size prediction is off, want %d, got %d", want, got)
 	}
@@ -447,13 +446,12 @@ func TestEthereumLikeHasher_GetLowerBoundForAccountNode(t *testing.T) {
 	nodesSource.EXPECT().getConfig().AnyTimes().Return(S5LiveConfig)
 	nodesSource.EXPECT().hashAddress(gomock.Any()).AnyTimes().Return(common.Hash{})
 
-	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nil)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodesSource, nil)
+		encoded, err := encode(test, nodesSource, nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -490,13 +488,12 @@ func TestEthereumLikeHasher_GetLowerBoundForBranchNode(t *testing.T) {
 		(&BranchNode{children: [16]NodeReference{bigChild}}),
 	}
 
-	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodeManager, nil)
+		encoded, err := encode(test, nodeManager, nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -538,13 +535,12 @@ func TestEthereumLikeHasher_GetLowerBoundForExtensionNode(t *testing.T) {
 		(&ExtensionNode{path: CreatePathFromNibbles([]Nibble{1, 2, 3}), next: bigChild}),
 	}
 
-	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nodeManager)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodeManager, nil)
+		encoded, err := encode(test, nodeManager, nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
@@ -575,13 +571,12 @@ func TestEthereumLikeHasher_GetLowerBoundForValueNode(t *testing.T) {
 	nodeManager := NewMockNodeManager(ctrl)
 	nodeManager.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(common.Hash{})
 
-	hasher := makeEthereumLikeHasher().(*ethHasher)
 	for _, test := range tests {
 		size, err := getLowerBoundForEncodedSize(test, 10000, nil)
 		if err != nil {
 			t.Fatalf("failed to get lower bound for encoding: %v", err)
 		}
-		encoded, err := hasher.encode(test, nodeManager, nil)
+		encoded, err := encode(test, nodeManager, nil)
 		if err != nil {
 			t.Fatalf("failed to encode test value: %v", err)
 		}
