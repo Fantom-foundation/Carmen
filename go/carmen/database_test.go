@@ -1158,7 +1158,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 	if err := db.AddBlock(0, func(context HeadBlockContext) error {
 		if err := context.RunTransaction(func(context TransactionContext) error {
 			context.CreateAccount(addr)
-			context.AddBalance(addr, Uint256(*uint256.NewInt(1000)))
+			context.AddBalance(addr, Amount(*uint256.NewInt(1000)))
 			return nil
 		}); err != nil {
 			t.Fatalf("cannot commit transaction: %v", err)
@@ -1173,7 +1173,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 		// cannot start the same block
 		if err := db.AddBlock(uint64(i), func(context HeadBlockContext) error {
 			if err := context.RunTransaction(func(context TransactionContext) error {
-				context.AddBalance(addr, Uint256(*uint256.NewInt(100)))
+				context.AddBalance(addr, Amount(*uint256.NewInt(100)))
 				return nil
 			}); err != nil {
 				t.Fatalf("cannot commit transaction: %v", err)
@@ -1335,7 +1335,7 @@ func TestDatabase_Async_AddBlock_QueryHistory_Close_ShouldNotThrowUnexpectedErro
 			if err := context.RunTransaction(func(context TransactionContext) error {
 				addr := Address{byte(block)}
 				context.CreateAccount(addr)
-				context.AddBalance(addr, Uint256(*uint256.NewInt(100)))
+				context.AddBalance(addr, Amount(*uint256.NewInt(100)))
 				return nil
 			}); err != nil {
 				t.Fatalf("cannot commit transaction: %v", err)

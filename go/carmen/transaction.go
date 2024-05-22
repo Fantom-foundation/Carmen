@@ -57,25 +57,25 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 	return false
 }
 
-func (t *transactionContext) GetBalance(address Address) Uint256 {
+func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
 		val, err := uint256.FromBig(t.state.GetBalance(common.Address(address)))
 		if val == nil || err {
-			return Uint256(*uint256.NewInt(0))
+			return Amount(*uint256.NewInt(0))
 		}
-		return Uint256(*val)
+		return Amount(*val)
 	}
-	return Uint256(*uint256.NewInt(0))
+	return Amount(*uint256.NewInt(0))
 }
 
-func (t *transactionContext) AddBalance(address Address, value Uint256) {
+func (t *transactionContext) AddBalance(address Address, value Amount) {
 	if t.state != nil {
 		u := uint256.Int(value)
 		t.state.AddBalance(common.Address(address), u.ToBig())
 	}
 }
 
-func (t *transactionContext) SubBalance(address Address, value Uint256) {
+func (t *transactionContext) SubBalance(address Address, value Amount) {
 	if t.state != nil {
 		u := uint256.Int(value)
 		t.state.SubBalance(common.Address(address), u.ToBig())

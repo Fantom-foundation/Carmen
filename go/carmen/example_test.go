@@ -33,7 +33,7 @@ func ExampleDatabase_AddBlock() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, carmen.Uint256(*uint256.NewInt(100)))
+			context.AddBalance(carmen.Address{1}, carmen.Amount(*uint256.NewInt(100)))
 			fmt.Printf("Transaction executed")
 			return nil
 		}); err != nil {
@@ -74,7 +74,7 @@ func ExampleDatabase_BeginBlock() {
 	}
 
 	tctx.CreateAccount(carmen.Address{1})
-	tctx.AddBalance(carmen.Address{1}, carmen.Uint256(*uint256.NewInt(100)))
+	tctx.AddBalance(carmen.Address{1}, carmen.Amount(*uint256.NewInt(100)))
 
 	if err := tctx.Commit(); err != nil {
 		log.Fatalf("cannot commit transaction: %v", err)
@@ -132,7 +132,7 @@ func ExampleDatabase_QueryHistoricState() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1, 2, 3})
-			context.AddBalance(carmen.Address{1, 2, 3}, carmen.Uint256(*uint256.NewInt(100)))
+			context.AddBalance(carmen.Address{1, 2, 3}, carmen.Amount(*uint256.NewInt(100)))
 			return nil
 		}); err != nil {
 			log.Fatalf("cannot create transaction: %v", err)
@@ -179,7 +179,7 @@ func ExampleDatabase_QueryBlock() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, carmen.Uint256(*uint256.NewInt(100)))
+			context.AddBalance(carmen.Address{1}, carmen.Amount(*uint256.NewInt(100)))
 			return nil
 		}); err != nil {
 			log.Fatalf("cannot create transaction: %v", err)
@@ -233,7 +233,7 @@ func ExampleDatabase_GetHistoricContext() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, carmen.Uint256(*uint256.NewInt(100)))
+			context.AddBalance(carmen.Address{1}, carmen.Amount(*uint256.NewInt(100)))
 			return nil
 		}); err != nil {
 			log.Fatalf("cannot create transaction: %v", err)

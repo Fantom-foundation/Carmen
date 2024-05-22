@@ -455,7 +455,7 @@ func (mr *MockTransactionContextMockRecorder) AddAddressToAccessList(arg0 any) *
 }
 
 // AddBalance mocks base method.
-func (m *MockTransactionContext) AddBalance(arg0 Address, arg1 Uint256) {
+func (m *MockTransactionContext) AddBalance(arg0 Address, arg1 Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -569,10 +569,10 @@ func (mr *MockTransactionContextMockRecorder) Exist(arg0 any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockTransactionContext) GetBalance(arg0 Address) Uint256 {
+func (m *MockTransactionContext) GetBalance(arg0 Address) Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(Uint256)
+	ret0, _ := ret[0].(Amount)
 	return ret0
 }
 
@@ -814,7 +814,7 @@ func (mr *MockTransactionContextMockRecorder) Snapshot() *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockTransactionContext) SubBalance(arg0 Address, arg1 Uint256) {
+func (m *MockTransactionContext) SubBalance(arg0 Address, arg1 Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }
@@ -861,10 +861,10 @@ func (m *MockQueryContext) EXPECT() *MockQueryContextMockRecorder {
 }
 
 // GetBalance mocks base method.
-func (m *MockQueryContext) GetBalance(arg0 Address) Uint256 {
+func (m *MockQueryContext) GetBalance(arg0 Address) Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(Uint256)
+	ret0, _ := ret[0].(Amount)
 	return ret0
 }
 
@@ -1008,7 +1008,7 @@ func (mr *MockBulkLoadMockRecorder) Finalize() *gomock.Call {
 }
 
 // SetBalance mocks base method.
-func (m *MockBulkLoad) SetBalance(arg0 Address, arg1 Uint256) {
+func (m *MockBulkLoad) SetBalance(arg0 Address, arg1 Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetBalance", arg0, arg1)
 }
