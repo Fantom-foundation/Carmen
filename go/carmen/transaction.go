@@ -109,6 +109,20 @@ func (t *transactionContext) SetState(address Address, key Key, value Value) {
 	}
 }
 
+func (t *transactionContext) GetTransientState(address Address, key Key) Value {
+	if t.state != nil {
+		return Value(t.state.GetTransientState(common.Address(address), common.Key(key)))
+	}
+
+	return Value{}
+}
+
+func (t *transactionContext) SetTransientState(address Address, key Key, value Value) {
+	if t.state != nil {
+		t.state.SetTransientState(common.Address(address), common.Key(key), common.Value(value))
+	}
+}
+
 func (t *transactionContext) GetCode(address Address) []byte {
 	if t.state != nil {
 		return t.state.GetCode(common.Address(address))

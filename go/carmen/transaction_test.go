@@ -11,11 +11,12 @@
 package carmen
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
-	"math/big"
-	"testing"
 )
 
 func TestTransaction_Cannot_Commit_Twice(t *testing.T) {
@@ -142,6 +143,8 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	stateDB.EXPECT().GetCommittedState(gomock.Any(), gomock.Any())
 	stateDB.EXPECT().GetState(gomock.Any(), gomock.Any())
 	stateDB.EXPECT().SetState(gomock.Any(), gomock.Any(), gomock.Any())
+	stateDB.EXPECT().GetTransientState(gomock.Any(), gomock.Any())
+	stateDB.EXPECT().SetTransientState(gomock.Any(), gomock.Any(), gomock.Any())
 	stateDB.EXPECT().GetCode(gomock.Any())
 	stateDB.EXPECT().SetCode(gomock.Any(), gomock.Any())
 	stateDB.EXPECT().GetCodeHash(gomock.Any())
@@ -185,6 +188,8 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	tx.GetCommittedState(address, key)
 	tx.GetState(address, key)
 	tx.SetState(address, key, value)
+	tx.GetTransientState(address, key)
+	tx.SetTransientState(address, key, value)
 	tx.GetCode(address)
 	tx.SetCode(address, []byte{})
 	tx.GetCodeHash(address)
@@ -242,6 +247,8 @@ func TestTransaction_AfterCommitAllOperationsAreNoops(t *testing.T) {
 	tx.GetCommittedState(address, key)
 	tx.GetState(address, key)
 	tx.SetState(address, key, value)
+	tx.GetTransientState(address, key)
+	tx.SetTransientState(address, key, value)
 	tx.GetCode(address)
 	tx.SetCode(address, []byte{})
 	tx.GetCodeHash(address)
