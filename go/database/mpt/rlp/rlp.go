@@ -385,24 +385,8 @@ func readNumber(b []byte, slen byte) (uint64, error) {
 		return 0, fmt.Errorf("expected %d bytes, got: %d", slen, len(b))
 	}
 	var s uint64
-	switch slen {
-	case 1:
-		s = uint64(b[0])
-	case 2:
-		s = uint64(b[0])<<8 | uint64(b[1])
-	case 3:
-		s = uint64(b[0])<<16 | uint64(b[1])<<8 | uint64(b[2])
-	case 4:
-		s = uint64(b[0])<<24 | uint64(b[1])<<16 | uint64(b[2])<<8 | uint64(b[3])
-	case 5:
-		s = uint64(b[0])<<32 | uint64(b[1])<<24 | uint64(b[2])<<16 | uint64(b[3])<<8 | uint64(b[4])
-	case 6:
-		s = uint64(b[0])<<40 | uint64(b[1])<<32 | uint64(b[2])<<24 | uint64(b[3])<<16 | uint64(b[4])<<8 | uint64(b[5])
-	case 7:
-		s = uint64(b[0])<<48 | uint64(b[1])<<40 | uint64(b[2])<<32 | uint64(b[3])<<24 | uint64(b[4])<<16 | uint64(b[5])<<8 | uint64(b[6])
-	case 8:
-		s = uint64(b[0])<<56 | uint64(b[1])<<48 | uint64(b[2])<<40 | uint64(b[3])<<32 | uint64(b[4])<<24 | uint64(b[5])<<16 | uint64(b[6])<<8 | uint64(b[7])
+	for i := byte(0); i < slen; i++ {
+		s = s<<8 | uint64(b[i])
 	}
-
 	return s, nil
 }
