@@ -12,10 +12,10 @@ package carmen
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/holiman/uint256"
 )
 
 type bulkLoad struct {
@@ -30,9 +30,9 @@ func (l *bulkLoad) CreateAccount(address Address) {
 	}
 }
 
-func (l *bulkLoad) SetBalance(address Address, balance *big.Int) {
+func (l *bulkLoad) SetBalance(address Address, balance uint256.Int) {
 	if l.db != nil {
-		l.nested.SetBalance(common.Address(address), balance)
+		l.nested.SetBalance(common.Address(address), balance.ToBig())
 	}
 }
 

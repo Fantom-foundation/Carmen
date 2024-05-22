@@ -12,10 +12,10 @@ package carmen
 
 import (
 	"errors"
-	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/holiman/uint256"
 )
 
 type queryContext struct {
@@ -23,16 +23,18 @@ type queryContext struct {
 	err   error
 }
 
-func (c *queryContext) GetBalance(address Address) *big.Int {
+func (c *queryContext) GetBalance(address Address) uint256.Int {
+	ret := uint256.NewInt(0)
 	if c.err != nil {
-		return big.NewInt(0)
+		return *ret
 	}
 	res, err := c.state.GetBalance(common.Address(address))
 	if err != nil {
 		c.err = err
-		return big.NewInt(0)
+		return *ret
 	}
-	return new(big.Int).SetBytes(res[:])
+	ret.SetBytes(res[:])
+	return *ret
 }
 
 func (c *queryContext) GetNonce(address Address) uint64 {

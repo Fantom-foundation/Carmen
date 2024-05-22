@@ -12,10 +12,10 @@ package carmen
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/holiman/uint256"
 )
 
 type transactionContext struct {
@@ -57,22 +57,26 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 	return false
 }
 
-func (t *transactionContext) GetBalance(address Address) *big.Int {
+func (t *transactionContext) GetBalance(address Address) uint256.Int {
 	if t.state != nil {
-		return t.state.GetBalance(common.Address(address))
+		val, err := uint256.FromBig(t.state.GetBalance(common.Address(address)))
+		if val == nil || err {
+			return *uint256.NewInt(0)
+		}
+		return *val
 	}
-	return nil
+	return *uint256.NewInt(0)
 }
 
-func (t *transactionContext) AddBalance(address Address, value *big.Int) {
+func (t *transactionContext) AddBalance(address Address, value uint256.Int) {
 	if t.state != nil {
-		t.state.AddBalance(common.Address(address), value)
+		t.state.AddBalance(common.Address(address), value.ToBig())
 	}
 }
 
-func (t *transactionContext) SubBalance(address Address, value *big.Int) {
+func (t *transactionContext) SubBalance(address Address, value uint256.Int) {
 	if t.state != nil {
-		t.state.SubBalance(common.Address(address), value)
+		t.state.SubBalance(common.Address(address), value.ToBig())
 	}
 }
 

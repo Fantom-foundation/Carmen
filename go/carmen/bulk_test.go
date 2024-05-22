@@ -11,11 +11,12 @@
 package carmen
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/state"
-	"go.uber.org/mock/gomock"
-	"math/big"
 	"sync"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/holiman/uint256"
+	"go.uber.org/mock/gomock"
 )
 
 func TestBulkLoad_Cannot_Finalise_Twice(t *testing.T) {
@@ -63,7 +64,7 @@ func TestBulkLoad_Operations_Passthrough(t *testing.T) {
 	bulk.CreateAccount(Address{})
 	bulk.SetCode(Address{}, []byte{})
 	bulk.SetNonce(Address{}, 10)
-	bulk.SetBalance(Address{}, big.NewInt(300))
+	bulk.SetBalance(Address{}, *uint256.NewInt(300))
 	bulk.SetState(Address{}, Key{}, Value{})
 
 	if err := bulk.Finalize(); err != nil {
@@ -93,7 +94,7 @@ func TestBulkLoad_WriteOperationsOnFinalisedInstanceAreNoops(t *testing.T) {
 	bulk.CreateAccount(Address{})
 	bulk.SetCode(Address{}, []byte{})
 	bulk.SetNonce(Address{}, 10)
-	bulk.SetBalance(Address{}, big.NewInt(300))
+	bulk.SetBalance(Address{}, *uint256.NewInt(300))
 	bulk.SetState(Address{}, Key{}, Value{})
 
 }

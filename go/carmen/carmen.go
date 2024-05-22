@@ -11,10 +11,9 @@
 package carmen
 
 import (
-	"math/big"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
+	"github.com/holiman/uint256"
 )
 
 //go:generate mockgen -source carmen.go -destination carmen_mock.go -package carmen
@@ -233,15 +232,15 @@ type TransactionContext interface {
 
 	// GetBalance returns the current balance of an account with
 	// the given address.
-	GetBalance(Address) *big.Int
+	GetBalance(Address) uint256.Int
 
 	// AddBalance increases the balance of an account with
 	// the given address of the input increment.
-	AddBalance(Address, *big.Int)
+	AddBalance(Address, uint256.Int)
 
 	// SubBalance decreases the balance of an account with
 	// the given address of the input decrement.
-	SubBalance(Address, *big.Int)
+	SubBalance(Address, uint256.Int)
 
 	// GetNonce returns current nonce of an account with
 	// the given address.
@@ -356,7 +355,7 @@ type TransactionContext interface {
 type QueryContext interface {
 	// GetBalance returns the current balance of an account with
 	// the given address.
-	GetBalance(Address) *big.Int
+	GetBalance(Address) uint256.Int
 
 	// GetNonce returns current nonce of an account with
 	// the given address.
@@ -401,7 +400,7 @@ type BulkLoad interface {
 
 	// SetBalance sets the balance of the given account address
 	// to the input value.
-	SetBalance(Address, *big.Int)
+	SetBalance(Address, uint256.Int)
 
 	// SetNonce sets the nonce of the given account address
 	// to the input value.
