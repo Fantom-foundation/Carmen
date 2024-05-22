@@ -232,15 +232,15 @@ type TransactionContext interface {
 
 	// GetBalance returns the current balance of an account with
 	// the given address.
-	GetBalance(Address) uint256.Int
+	GetBalance(Address) Uint256
 
 	// AddBalance increases the balance of an account with
 	// the given address of the input increment.
-	AddBalance(Address, uint256.Int)
+	AddBalance(Address, Uint256)
 
 	// SubBalance decreases the balance of an account with
 	// the given address of the input decrement.
-	SubBalance(Address, uint256.Int)
+	SubBalance(Address, Uint256)
 
 	// GetNonce returns current nonce of an account with
 	// the given address.
@@ -355,7 +355,7 @@ type TransactionContext interface {
 type QueryContext interface {
 	// GetBalance returns the current balance of an account with
 	// the given address.
-	GetBalance(Address) uint256.Int
+	GetBalance(Address) Uint256
 
 	// GetNonce returns current nonce of an account with
 	// the given address.
@@ -400,7 +400,7 @@ type BulkLoad interface {
 
 	// SetBalance sets the balance of the given account address
 	// to the input value.
-	SetBalance(Address, uint256.Int)
+	SetBalance(Address, Uint256)
 
 	// SetNonce sets the nonce of the given account address
 	// to the input value.
@@ -432,6 +432,9 @@ type Value common.Value
 
 // Hash is a 32byte hash.
 type Hash common.Hash
+
+// Uint256 is a 32byte unsigned integer.
+type Uint256 uint256.Int
 
 // Log summarizes a log message recorded during the execution of a contract.
 type Log struct {

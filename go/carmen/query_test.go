@@ -35,7 +35,7 @@ func TestQueryContext_QueriesAreForwarded(t *testing.T) {
 			},
 			func(query *queryContext, t *testing.T) {
 				want := uint256.NewInt(12)
-				if got := query.GetBalance(Address{2}); want.Cmp(&got) != 0 {
+				if got := uint256.Int(query.GetBalance(Address{2})); want.Cmp(&got) != 0 {
 					t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 				}
 			},
@@ -126,7 +126,7 @@ func TestQueryContext_ErrorsArePropagated(t *testing.T) {
 			},
 			func(query *queryContext, t *testing.T) {
 				want := uint256.NewInt(0)
-				if got := query.GetBalance(Address{2}); want.Cmp(&got) != 0 {
+				if got := uint256.Int(query.GetBalance(Address{2})); want.Cmp(&got) != 0 {
 					t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 				}
 			},

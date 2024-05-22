@@ -23,18 +23,18 @@ type queryContext struct {
 	err   error
 }
 
-func (c *queryContext) GetBalance(address Address) uint256.Int {
+func (c *queryContext) GetBalance(address Address) Uint256 {
 	ret := uint256.NewInt(0)
 	if c.err != nil {
-		return *ret
+		return Uint256(*ret)
 	}
 	res, err := c.state.GetBalance(common.Address(address))
 	if err != nil {
 		c.err = err
-		return *ret
+		return Uint256(*ret)
 	}
 	ret.SetBytes(res[:])
-	return *ret
+	return Uint256(*ret)
 }
 
 func (c *queryContext) GetNonce(address Address) uint64 {

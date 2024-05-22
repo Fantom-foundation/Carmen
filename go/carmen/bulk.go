@@ -30,9 +30,10 @@ func (l *bulkLoad) CreateAccount(address Address) {
 	}
 }
 
-func (l *bulkLoad) SetBalance(address Address, balance uint256.Int) {
+func (l *bulkLoad) SetBalance(address Address, balance Uint256) {
 	if l.db != nil {
-		l.nested.SetBalance(common.Address(address), balance.ToBig())
+		u := uint256.Int(balance)
+		l.nested.SetBalance(common.Address(address), u.ToBig())
 	}
 }
 
