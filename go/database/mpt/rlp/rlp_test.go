@@ -20,55 +20,55 @@ import (
 )
 
 func TestEncoding_EncodeStrings(t *testing.T) {
-	testWithRlpStrings(t, func(t *testing.T, rlp []byte, item String) {
+	forEachRlpStringTest(t, func(t *testing.T, rlp []byte, item String) {
 		testEncoder(t, rlp, item)
 	})
 }
 
 func TestEncoding_EncodeList(t *testing.T) {
-	testWithRlpLists(t, func(t *testing.T, rlp []byte, item List) {
+	forEachRlpListsTest(t, func(t *testing.T, rlp []byte, item List) {
 		testEncoder(t, rlp, item)
 	})
 }
 
 func TestEncoding_Uint64(t *testing.T) {
-	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item uint64) {
+	forEachRlpUint64Test(t, func(t *testing.T, rlp []byte, item uint64) {
 		testEncoder(t, rlp, Uint64{item})
 	})
 }
 
 func TestEncoding_BigInt(t *testing.T) {
-	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item *big.Int) {
+	forEachRlpBigIntTest(t, func(t *testing.T, rlp []byte, item *big.Int) {
 		testEncoder(t, rlp, BigInt{item})
 	})
 }
 
 func TestEncoding_EncodeHash(t *testing.T) {
-	testWithRlpHash(t, func(t *testing.T, rlp []byte, item Hash) {
+	forEachRlpHashTest(t, func(t *testing.T, rlp []byte, item Hash) {
 		testEncoder(t, rlp, item)
 	})
 }
 
 func TestDecode_List(t *testing.T) {
-	testWithRlpLists(t, func(t *testing.T, rlp []byte, item List) {
+	forEachRlpListsTest(t, func(t *testing.T, rlp []byte, item List) {
 		testDecoder(t, rlp, item)
 	})
 }
 
 func TestDecode_Strings(t *testing.T) {
-	testWithRlpStrings(t, func(t *testing.T, rlp []byte, item String) {
+	forEachRlpStringTest(t, func(t *testing.T, rlp []byte, item String) {
 		testDecoder(t, rlp, item)
 	})
 }
 
 func TestDecode_Uint64_Decoded_As_Strings(t *testing.T) {
-	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item uint64) {
+	forEachRlpUint64Test(t, func(t *testing.T, rlp []byte, item uint64) {
 		testDecoder(t, rlp, Uint64{item})
 	})
 }
 
 func TestDecode_Uint64_Decode_Number(t *testing.T) {
-	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item uint64) {
+	forEachRlpUint64Test(t, func(t *testing.T, rlp []byte, item uint64) {
 		decoded, err := Decode(rlp)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -91,13 +91,13 @@ func TestDecode_Uint64_NotUint64Number(t *testing.T) {
 }
 
 func TestDecode_BigInt_Decoded_As_Strings(t *testing.T) {
-	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item *big.Int) {
+	forEachRlpBigIntTest(t, func(t *testing.T, rlp []byte, item *big.Int) {
 		testDecoder(t, rlp, BigInt{item})
 	})
 }
 
 func TestDecode_BigInt_Decode_Number(t *testing.T) {
-	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item *big.Int) {
+	forEachRlpBigIntTest(t, func(t *testing.T, rlp []byte, item *big.Int) {
 		decoded, err := Decode(rlp)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -109,7 +109,7 @@ func TestDecode_BigInt_Decode_Number(t *testing.T) {
 }
 
 func TestDecode_Hash(t *testing.T) {
-	testWithRlpHash(t, func(t *testing.T, rlp []byte, item Hash) {
+	forEachRlpHashTest(t, func(t *testing.T, rlp []byte, item Hash) {
 		testDecoder(t, rlp, item)
 	})
 }
@@ -209,8 +209,8 @@ func testDecoder(t *testing.T, rlp []byte, item Item) {
 	})
 }
 
-// testWithRlpStrings runs a test function with a set of RLP strings.
-func testWithRlpStrings(t *testing.T, action func(t *testing.T, rlp []byte, item String)) {
+// forEachRlpStringTest runs a test function with a set of RLP strings.
+func forEachRlpStringTest(t *testing.T, action func(t *testing.T, rlp []byte, item String)) {
 	tests := []struct {
 		rlp  []byte
 		item String
@@ -272,7 +272,7 @@ func testWithRlpStrings(t *testing.T, action func(t *testing.T, rlp []byte, item
 	}
 }
 
-func testWithRlpLists(t *testing.T, action func(t *testing.T, rlp []byte, item List)) {
+func forEachRlpListsTest(t *testing.T, action func(t *testing.T, rlp []byte, item List)) {
 	tests := []struct {
 		item []Item
 		rlp  []byte
@@ -296,8 +296,8 @@ func testWithRlpLists(t *testing.T, action func(t *testing.T, rlp []byte, item L
 	}
 }
 
-// testWithRlpUint64 runs a test function with a set of Uint64 values.
-func testWithRlpUint64(t *testing.T, action func(t *testing.T, rlp []byte, item uint64)) {
+// forEachRlpUint64Test runs a test function with a set of Uint64 values.
+func forEachRlpUint64Test(t *testing.T, action func(t *testing.T, rlp []byte, item uint64)) {
 	tests := []struct {
 		item uint64
 		rlp  []byte
@@ -332,7 +332,7 @@ func testWithRlpUint64(t *testing.T, action func(t *testing.T, rlp []byte, item 
 	}
 }
 
-func testWithRlpBigInt(t *testing.T, action func(t *testing.T, rlp []byte, item *big.Int)) {
+func forEachRlpBigIntTest(t *testing.T, action func(t *testing.T, rlp []byte, item *big.Int)) {
 	tests := []struct {
 		item *big.Int
 		rlp  []byte
@@ -372,7 +372,7 @@ func testWithRlpBigInt(t *testing.T, action func(t *testing.T, rlp []byte, item 
 	}
 }
 
-func testWithRlpHash(t *testing.T, action func(t *testing.T, rlp []byte, item Hash)) {
+func forEachRlpHashTest(t *testing.T, action func(t *testing.T, rlp []byte, item Hash)) {
 	type test struct {
 		item common.Hash
 		rlp  []byte

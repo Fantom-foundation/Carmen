@@ -61,13 +61,13 @@ func Decode(rlp []byte) (Item, error) {
 }
 
 // decode decodes an RLP stream into an item.
-// It checks first byte of the RLP stream to determine the type of the item.
-// Based on the type, it decodes the type.
 func decode(rlp []byte) (Item, uint64, error) {
 	if len(rlp) == 0 {
 		return nil, 0, fmt.Errorf("input RLP is empty")
 	}
 
+	// here it checks first byte of the RLP stream to determine the type of the item.
+	// Based on the type, it decodes the type.
 	l := rlp[0]
 	if l < 0x80 { // single byte RLP
 		return String{Str: rlp[0:1]}, 1, nil
@@ -372,7 +372,6 @@ func (i BigInt) getEncodedLength() int {
 // If 'slen' is greater than the length of 'b', an error is returned.
 //
 // The function supports reading integers of up to 8 bytes (64 bits).
-// The integer is constructed by shifting and OR-ing the bytes from 'b'.
 //
 // Parameters:
 // b:    The byte slice from which to read the integer.
