@@ -32,14 +32,14 @@ func TestEncoding_EncodeList(t *testing.T) {
 }
 
 func TestEncoding_Uint64(t *testing.T) {
-	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item Uint64) {
-		testEncoder(t, rlp, item)
+	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item uint64) {
+		testEncoder(t, rlp, Uint64{item})
 	})
 }
 
 func TestEncoding_BigInt(t *testing.T) {
-	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item BigInt) {
-		testEncoder(t, rlp, item)
+	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item *big.Int) {
+		testEncoder(t, rlp, BigInt{item})
 	})
 }
 
@@ -61,15 +61,50 @@ func TestDecode_Strings(t *testing.T) {
 	})
 }
 
-func TestDecode_Uint64(t *testing.T) {
-	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item Uint64) {
-		testDecoder(t, rlp, item)
+func TestDecode_Uint64_Decoded_As_Strings(t *testing.T) {
+	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item uint64) {
+		testDecoder(t, rlp, Uint64{item})
 	})
 }
 
-func TestDecode_BigInt(t *testing.T) {
-	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item BigInt) {
-		testDecoder(t, rlp, item)
+func TestDecode_Uint64_Decode_Number(t *testing.T) {
+	testWithRlpUint64(t, func(t *testing.T, rlp []byte, item uint64) {
+		decoded, err := Decode(rlp)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got, err := decoded.(String).Uint64()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := got, item; got != want {
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
+		}
+	})
+}
+
+func TestDecode_Uint64_NotUint64Number(t *testing.T) {
+	str := String{Str: []byte{0xA, 0xB, 0xC, 0xD, 0xE, 0xF, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19}}
+	if _, err := str.Uint64(); err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestDecode_BigInt_Decoded_As_Strings(t *testing.T) {
+	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item *big.Int) {
+		testDecoder(t, rlp, BigInt{item})
+	})
+}
+
+func TestDecode_BigInt_Decode_Number(t *testing.T) {
+	testWithRlpBigInt(t, func(t *testing.T, rlp []byte, item *big.Int) {
+		decoded, err := Decode(rlp)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := decoded.(String).BigInt(), item; got.Cmp(want) != 0 {
+			t.Errorf("invalid encoding, wanted %v, got %v, input %v", want, got, rlp)
+		}
 	})
 }
 
@@ -110,21 +145,21 @@ func TestReadSize_All_Correct_Sizes(t *testing.T) {
 		for j := 0; j < i; j++ {
 			b[j] = byte(0xFF)
 		}
-		got, err := readSize(b, byte(i))
+		got, err := readNumber(b, byte(i))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 
 		want = want<<8 | 0xFF
 		if got, want := got, want; got != want {
-			t.Errorf("invalid result for readSize, wanted %d, got %d", want, got)
+			t.Errorf("invalid result for readNumber, wanted %d, got %d", want, got)
 		}
 	}
 }
 
 func TestReadSize_All_InCorrect_Size(t *testing.T) {
 	b := make([]byte, 1)
-	if _, err := readSize(b, 4); err == nil {
+	if _, err := readNumber(b, 4); err == nil {
 		t.Errorf("expected error, got nil")
 	}
 }
@@ -262,34 +297,34 @@ func testWithRlpLists(t *testing.T, action func(t *testing.T, rlp []byte, item L
 }
 
 // testWithRlpUint64 runs a test function with a set of Uint64 values.
-func testWithRlpUint64(t *testing.T, action func(t *testing.T, rlp []byte, item Uint64)) {
+func testWithRlpUint64(t *testing.T, action func(t *testing.T, rlp []byte, item uint64)) {
 	tests := []struct {
-		item Uint64
+		item uint64
 		rlp  []byte
 	}{
-		{Uint64{0}, Encode(&String{[]byte{}})},
-		{Uint64{1}, Encode(&String{[]byte{1}})},
-		{Uint64{2}, Encode(&String{[]byte{2}})},
+		{0, Encode(&String{[]byte{}})},
+		{1, Encode(&String{[]byte{1}})},
+		{2, Encode(&String{[]byte{2}})},
 
-		{Uint64{255}, Encode(&String{[]byte{255}})},
-		{Uint64{256}, Encode(&String{[]byte{1, 0}})},
-		{Uint64{257}, Encode(&String{[]byte{1, 1}})},
+		{255, Encode(&String{[]byte{255}})},
+		{256, Encode(&String{[]byte{1, 0}})},
+		{257, Encode(&String{[]byte{1, 1}})},
 
-		{Uint64{1<<16 - 1}, Encode(&String{[]byte{255, 255}})},
-		{Uint64{1 << 16}, Encode(&String{[]byte{1, 0, 0}})},
-		{Uint64{1<<16 + 1}, Encode(&String{[]byte{1, 0, 1}})},
+		{1<<16 - 1, Encode(&String{[]byte{255, 255}})},
+		{1 << 16, Encode(&String{[]byte{1, 0, 0}})},
+		{1<<16 + 1, Encode(&String{[]byte{1, 0, 1}})},
 
-		{Uint64{1<<24 - 1}, Encode(&String{[]byte{255, 255, 255}})},
-		{Uint64{1 << 24}, Encode(&String{[]byte{1, 0, 0, 0}})},
-		{Uint64{1<<24 + 1}, Encode(&String{[]byte{1, 0, 0, 1}})},
+		{1<<24 - 1, Encode(&String{[]byte{255, 255, 255}})},
+		{1 << 24, Encode(&String{[]byte{1, 0, 0, 0}})},
+		{1<<24 + 1, Encode(&String{[]byte{1, 0, 0, 1}})},
 
-		{Uint64{1<<32 - 1}, Encode(&String{[]byte{255, 255, 255, 255}})},
-		{Uint64{1 << 32}, Encode(&String{[]byte{1, 0, 0, 0, 0}})},
-		{Uint64{1<<32 + 1}, Encode(&String{[]byte{1, 0, 0, 0, 1}})},
+		{1<<32 - 1, Encode(&String{[]byte{255, 255, 255, 255}})},
+		{1 << 32, Encode(&String{[]byte{1, 0, 0, 0, 0}})},
+		{1<<32 + 1, Encode(&String{[]byte{1, 0, 0, 0, 1}})},
 
-		{Uint64{1<<56 - 1}, Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
-		{Uint64{1 << 56}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
-		{Uint64{1<<56 + 1}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
+		{1<<56 - 1, Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
+		{1 << 56, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
+		{1<<56 + 1, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
 	}
 
 	for _, test := range tests {
@@ -297,39 +332,39 @@ func testWithRlpUint64(t *testing.T, action func(t *testing.T, rlp []byte, item 
 	}
 }
 
-func testWithRlpBigInt(t *testing.T, action func(t *testing.T, rlp []byte, item BigInt)) {
+func testWithRlpBigInt(t *testing.T, action func(t *testing.T, rlp []byte, item *big.Int)) {
 	tests := []struct {
-		item BigInt
+		item *big.Int
 		rlp  []byte
 	}{
-		{BigInt{big.NewInt(0)}, Encode(&String{[]byte{}})},
-		{BigInt{big.NewInt(1)}, Encode(&String{[]byte{1}})},
-		{BigInt{big.NewInt(2)}, Encode(&String{[]byte{2}})},
+		{big.NewInt(0), Encode(&String{[]byte{}})},
+		{big.NewInt(1), Encode(&String{[]byte{1}})},
+		{big.NewInt(2), Encode(&String{[]byte{2}})},
 
-		{BigInt{big.NewInt(255)}, Encode(&String{[]byte{255}})},
-		{BigInt{big.NewInt(256)}, Encode(&String{[]byte{1, 0}})},
-		{BigInt{big.NewInt(257)}, Encode(&String{[]byte{1, 1}})},
+		{big.NewInt(255), Encode(&String{[]byte{255}})},
+		{big.NewInt(256), Encode(&String{[]byte{1, 0}})},
+		{big.NewInt(257), Encode(&String{[]byte{1, 1}})},
 
-		{BigInt{big.NewInt(1<<16 - 1)}, Encode(&String{[]byte{255, 255}})},
-		{BigInt{big.NewInt(1 << 16)}, Encode(&String{[]byte{1, 0, 0}})},
-		{BigInt{big.NewInt(1<<16 + 1)}, Encode(&String{[]byte{1, 0, 1}})},
+		{big.NewInt(1<<16 - 1), Encode(&String{[]byte{255, 255}})},
+		{big.NewInt(1 << 16), Encode(&String{[]byte{1, 0, 0}})},
+		{big.NewInt(1<<16 + 1), Encode(&String{[]byte{1, 0, 1}})},
 
-		{BigInt{big.NewInt(1<<24 - 1)}, Encode(&String{[]byte{255, 255, 255}})},
-		{BigInt{big.NewInt(1 << 24)}, Encode(&String{[]byte{1, 0, 0, 0}})},
-		{BigInt{big.NewInt(1<<24 + 1)}, Encode(&String{[]byte{1, 0, 0, 1}})},
+		{big.NewInt(1<<24 - 1), Encode(&String{[]byte{255, 255, 255}})},
+		{big.NewInt(1 << 24), Encode(&String{[]byte{1, 0, 0, 0}})},
+		{big.NewInt(1<<24 + 1), Encode(&String{[]byte{1, 0, 0, 1}})},
 
-		{BigInt{big.NewInt(1<<32 - 1)}, Encode(&String{[]byte{255, 255, 255, 255}})},
-		{BigInt{big.NewInt(1 << 32)}, Encode(&String{[]byte{1, 0, 0, 0, 0}})},
-		{BigInt{big.NewInt(1<<32 + 1)}, Encode(&String{[]byte{1, 0, 0, 0, 1}})},
+		{big.NewInt(1<<32 - 1), Encode(&String{[]byte{255, 255, 255, 255}})},
+		{big.NewInt(1 << 32), Encode(&String{[]byte{1, 0, 0, 0, 0}})},
+		{big.NewInt(1<<32 + 1), Encode(&String{[]byte{1, 0, 0, 0, 1}})},
 
-		{BigInt{big.NewInt(1<<56 - 1)}, Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
-		{BigInt{big.NewInt(1 << 56)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
-		{BigInt{big.NewInt(1<<56 + 1)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
+		{big.NewInt(1<<56 - 1), Encode(&String{[]byte{255, 255, 255, 255, 255, 255, 255}})},
+		{big.NewInt(1 << 56), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0}})},
+		{big.NewInt(1<<56 + 1), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 1}})},
 
-		{BigInt{new(big.Int).Lsh(big.NewInt(1), 64)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0}})},
-		{BigInt{new(big.Int).Lsh(big.NewInt(1), 65)}, Encode(&String{[]byte{2, 0, 0, 0, 0, 0, 0, 0, 0}})},
-		{BigInt{new(big.Int).Lsh(big.NewInt(1), 66)}, Encode(&String{[]byte{4, 0, 0, 0, 0, 0, 0, 0, 0}})},
-		{BigInt{new(big.Int).Lsh(big.NewInt(1), 72)}, Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{new(big.Int).Lsh(big.NewInt(1), 64), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{new(big.Int).Lsh(big.NewInt(1), 65), Encode(&String{[]byte{2, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{new(big.Int).Lsh(big.NewInt(1), 66), Encode(&String{[]byte{4, 0, 0, 0, 0, 0, 0, 0, 0}})},
+		{new(big.Int).Lsh(big.NewInt(1), 72), Encode(&String{[]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0}})},
 	}
 
 	for _, test := range tests {

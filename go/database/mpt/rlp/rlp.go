@@ -63,7 +63,6 @@ func Decode(rlp []byte) (Item, error) {
 // decode decodes an RLP stream into an item.
 // It checks first byte of the RLP stream to determine the type of the item.
 // Based on the type, it decodes the type.
-// It may recursively call itself to decode nested items.
 func decode(rlp []byte) (Item, uint64, error) {
 	if len(rlp) == 0 {
 		return nil, 0, fmt.Errorf("input RLP is empty")
@@ -85,7 +84,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 
 	if l > 0xb7 && l < 0xc0 { // long string
 		bytesLength := uint64(l - 0xb7)
-		length, err := readSize(rlp[1:], byte(bytesLength))
+		length, err := readNumber(rlp[1:], byte(bytesLength))
 		if err != nil {
 			return nil, 0, err
 		}
@@ -106,7 +105,7 @@ func decode(rlp []byte) (Item, uint64, error) {
 
 	// l > 0xf7 - long list
 	bytesLength := uint64(l - 0xf7)
-	length, err := readSize(rlp[1:], byte(bytesLength))
+	length, err := readNumber(rlp[1:], byte(bytesLength))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -176,6 +175,32 @@ func (s String) getEncodedLength() int {
 		return 1
 	}
 	return l + getEncodedLengthLength(l)
+}
+
+// BigInt converts the RLP encoded string to a big.Int.
+// It interprets the string as a big-endian integer and returns a new big.Int
+// set to this value.
+//
+// Returns:
+// A pointer to a big.Int that represents the value of the RLP encoded string.
+func (s String) BigInt() *big.Int {
+	return new(big.Int).SetBytes(s.Str)
+}
+
+// Uint64 attempts to convert the RLP encoded string to a uint64.
+// It interprets the string as a big-endian integer and returns the resulting uint64.
+//
+// If the length of the string is greater than 8 (the maximum byte size of a uint64),
+// an error is returned indicating that the string is too long to be converted.
+//
+// Returns:
+// The uint64 representation of the RLP encoded string if the conversion is successful,
+// and an error if the string is too long to be converted to a uint64.
+func (s String) Uint64() (uint64, error) {
+	if len(s.Str) > 8 {
+		return 0, fmt.Errorf("string is too long to be converted to uint64: %d", len(s.Str))
+	}
+	return readNumber(s.Str, byte(len(s.Str)))
 }
 
 // Hash is a used specifically to hold a pointer to hash.
@@ -340,7 +365,7 @@ func (i BigInt) getEncodedLength() int {
 	return getEncodedLengthLength(length) + length
 }
 
-// readSize interprets the first 'slen' bytes of 'b' as a big-endian integer.
+// readNumber interprets the first 'slen' bytes of 'b' as a big-endian integer.
 // It returns the resulting integer and any error encountered.
 //
 // The function expects 'slen' to be the size of the integer to be read from 'b'.
@@ -355,7 +380,7 @@ func (i BigInt) getEncodedLength() int {
 //
 // Returns:
 // The integer read from 'b' and an error if 'slen' is greater than the length of 'b'.
-func readSize(b []byte, slen byte) (uint64, error) {
+func readNumber(b []byte, slen byte) (uint64, error) {
 	if int(slen) > len(b) {
 		return 0, fmt.Errorf("expected %d bytes, got: %d", slen, len(b))
 	}
