@@ -275,7 +275,7 @@ type TransactionContext interface {
 
 	// SetTransientState sets a value in the transient state
 	// storage for a specific key at a given address.
-	// Transient State is quick in memory storage
+	// Transient State is an in-memory storage
 	// that gets reset after each transaction.
 	SetTransientState(Address, Key, Value)
 
