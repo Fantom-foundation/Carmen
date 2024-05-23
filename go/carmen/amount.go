@@ -56,6 +56,9 @@ func NewAmountFromBytes(bytes ...byte) Amount {
 // NewAmountFromBigInt creates a new Amount instance from a big.Int.
 // The constructor panics if the big.Int is negative or has more than 256 bits.
 func NewAmountFromBigInt(b *big.Int) Amount {
+	if b == nil {
+		return NewAmount()
+	}
 	if b.Cmp(big.NewInt(0)) == -1 {
 		panic("Cannot construct Amount from negative big.Int")
 	}
