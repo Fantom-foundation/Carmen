@@ -265,6 +265,18 @@ type TransactionContext interface {
 	// stored in the account with the given address.
 	SetState(Address, Key, Value)
 
+	// GetTransientState retrieves the value associated with a specific
+	// key within the transient state storage at a given address.
+	// Transient State is an in-memory storage
+	// that gets reset after each transaction.
+	GetTransientState(Address, Key) Value
+
+	// SetTransientState sets a value in the transient state
+	// storage for a specific key at a given address.
+	// Transient State is an in-memory storage
+	// that gets reset after each transaction.
+	SetTransientState(Address, Key, Value)
+
 	// GetCode returns smart contract byte-code
 	// of an account with the given address.
 	GetCode(Address) []byte
