@@ -15,7 +15,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/holiman/uint256"
 	"go.uber.org/mock/gomock"
 )
 
@@ -179,8 +178,8 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	tx.SelfDestruct(address)
 	tx.HasSelfDestructed(address)
 	tx.GetBalance(address)
-	tx.AddBalance(address, Amount(*uint256.NewInt(100)))
-	tx.SubBalance(address, Amount(*uint256.NewInt(100)))
+	tx.AddBalance(address, NewAmount(100))
+	tx.SubBalance(address, NewAmount(100))
 	tx.GetNonce(address)
 	tx.SetNonce(address, 100)
 	tx.GetCommittedState(address, key)
@@ -236,8 +235,8 @@ func TestTransaction_AfterCommitAllOperationsAreNoops(t *testing.T) {
 	tx.SelfDestruct(address)
 	tx.HasSelfDestructed(address)
 	tx.GetBalance(address)
-	tx.AddBalance(address, Amount(*uint256.NewInt(100)))
-	tx.SubBalance(address, Amount(*uint256.NewInt(100)))
+	tx.AddBalance(address, NewAmount(100))
+	tx.SubBalance(address, NewAmount(100))
 	tx.GetNonce(address)
 	tx.SetNonce(address, 100)
 	tx.GetCommittedState(address, key)

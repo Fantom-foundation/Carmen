@@ -15,7 +15,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/holiman/uint256"
 )
 
 type transactionContext struct {
@@ -59,26 +58,20 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 
 func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
-		val, err := uint256.FromBig(t.state.GetBalance(common.Address(address)))
-		if val == nil || err {
-			return Amount(*uint256.NewInt(0))
-		}
-		return Amount(*val)
+		return NewAmountFromBigInt(t.state.GetBalance(common.Address(address)))
 	}
-	return Amount(*uint256.NewInt(0))
+	return NewAmount()
 }
 
 func (t *transactionContext) AddBalance(address Address, value Amount) {
 	if t.state != nil {
-		u := uint256.Int(value)
-		t.state.AddBalance(common.Address(address), u.ToBig())
+		t.state.AddBalance(common.Address(address), value.ToBig())
 	}
 }
 
 func (t *transactionContext) SubBalance(address Address, value Amount) {
 	if t.state != nil {
-		u := uint256.Int(value)
-		t.state.SubBalance(common.Address(address), u.ToBig())
+		t.state.SubBalance(common.Address(address), value.ToBig())
 	}
 }
 

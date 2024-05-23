@@ -13,7 +13,6 @@ package carmen
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/holiman/uint256"
 )
 
 //go:generate mockgen -source carmen.go -destination carmen_mock.go -package carmen
@@ -432,9 +431,6 @@ type Value common.Value
 
 // Hash is a 32byte hash.
 type Hash common.Hash
-
-// Amount is a 32byte unsigned integer used for balances.
-type Amount uint256.Int
 
 // Log summarizes a log message recorded during the execution of a contract.
 type Log struct {

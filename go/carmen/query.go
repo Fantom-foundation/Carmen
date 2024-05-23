@@ -15,7 +15,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/holiman/uint256"
 )
 
 type queryContext struct {
@@ -24,17 +23,15 @@ type queryContext struct {
 }
 
 func (c *queryContext) GetBalance(address Address) Amount {
-	ret := uint256.NewInt(0)
 	if c.err != nil {
-		return Amount(*ret)
+		return NewAmount()
 	}
 	res, err := c.state.GetBalance(common.Address(address))
 	if err != nil {
 		c.err = err
-		return Amount(*ret)
+		return NewAmount()
 	}
-	ret.SetBytes(res[:])
-	return Amount(*ret)
+	return NewAmountFromBytes(res[:]...)
 }
 
 func (c *queryContext) GetNonce(address Address) uint64 {

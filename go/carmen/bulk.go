@@ -15,7 +15,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
-	"github.com/holiman/uint256"
 )
 
 type bulkLoad struct {
@@ -32,8 +31,7 @@ func (l *bulkLoad) CreateAccount(address Address) {
 
 func (l *bulkLoad) SetBalance(address Address, balance Amount) {
 	if l.db != nil {
-		u := uint256.Int(balance)
-		l.nested.SetBalance(common.Address(address), u.ToBig())
+		l.nested.SetBalance(common.Address(address), balance.ToBig())
 	}
 }
 
