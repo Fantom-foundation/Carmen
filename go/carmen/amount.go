@@ -94,7 +94,6 @@ func (a Amount) Sub(b Amount) Amount {
 	result := Amount{}
 	result.internal.Sub(&a.internal, &b.internal)
 	return result
-
 }
 
 // String returns the string representation of the amount.
