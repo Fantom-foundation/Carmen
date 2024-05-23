@@ -31,6 +31,7 @@ var forestFiles = []string{
 	"branches/freelist.dat",
 	"branches/meta.json",
 	"branches/values.dat",
+	"codes.dat",
 	"extensions",
 	"extensions/freelist.dat",
 	"extensions/meta.json",
@@ -412,6 +413,75 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 		}
 	})
 }
+
+func TestVerification_ContractCodeVerification_HashNotContainedIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		encoder, _, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+			node.info.CodeHash = common.Hash{1}
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Hash not present in a file should have been detected")
+		}
+	})
+}
+
+func TestVerification_ContractCodeVerification_MissingHashInCodeFileIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		testHash := common.Keccak256([]byte{1})
+		encoder, _, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+			node.info.CodeHash = testHash
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Missing hash in code file should have been detected")
+		}
+	})
+}
+
+func TestVerification_ContractCodeVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		testHash := common.Keccak256([]byte{1})
+		codes := map[common.Hash][]byte{
+			testHash: {2},
+		}
+		if err := writeCodes(codes, dir+"/codes.dat"); err != nil {
+			t.Fatalf("failed to write code file")
+		}
+
+		encoder, _, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+			node.info.CodeHash = testHash
+		})
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("Different hash in code file should have been detected")
+		}
+	})
+}
+
+func TestVerification_ContractCodeVerification_DifferentLeftoverHashInCodeFileIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		testHash := common.Keccak256([]byte{1})
+
+		codes := map[common.Hash][]byte{
+			testHash: {2},
+		}
+		if err := writeCodes(codes, dir+"/codes.dat"); err != nil {
+			t.Fatalf("failed to write code file")
+		}
+
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("found unexpected error in fresh forest: %v", err)
+		}
+	})
+}
+
 func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	// Construct an MPT with some embedded nodes. For this we need some keys
 	// with their hashes sharing a long common prefix. The hashes of the
@@ -478,6 +548,11 @@ func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, con
 				t.Fatalf("failed to create example forest: %v", err)
 			}
 
+			err = writeCodes(nil, dir+"/codes.dat")
+			if err != nil {
+				t.Fatalf("failed to create codes file: %v", err)
+			}
+
 			verify(t, dir, config, roots)
 		})
 	}
@@ -527,7 +602,7 @@ func fillTestForest(dir string, config MptConfig) (roots []Root, err error) {
 	root := NewNodeReference(EmptyId())
 	for i := 0; i < N; i++ {
 		addr := common.Address{byte(i)}
-		root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1)})
+		root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1), CodeHash: emptyCodeHash})
 		if err != nil {
 			return nil, err
 		}

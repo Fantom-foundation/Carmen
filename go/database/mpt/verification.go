@@ -129,6 +129,18 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		return err
 	}
 
+	// ----------------- Second Pass: check Contract Codes --------------------
+	codeFile := directory + "/codes.dat"
+	codes, err := readCodes(codeFile)
+	if err != nil {
+		return err
+	}
+
+	err = verifyContractCodes(codes, source, observer)
+	if err != nil {
+		return err
+	}
+
 	// -------------------- Further Passes: node hashes -----------------------
 
 	hasher := config.Hashing.createHasher()
@@ -570,6 +582,51 @@ func verifyHashesStoredWithParents[N any](
 	return nil
 }
 
+func verifyContractCodes(codes map[common.Hash][]byte, source *verificationNodeSource, observer VerificationObserver) error {
+	observer.Progress(fmt.Sprintf("Checking contract codes ..."))
+
+	check := func(acc *AccountNode) error {
+		accountHash := acc.info.CodeHash
+		// skip accounts that are not contracts
+		if accountHash == emptyCodeHash {
+			return nil
+		}
+		// check that the code hash is present in the code file
+		byteCode, exists := codes[accountHash]
+		if !exists {
+			return fmt.Errorf("the hash %x is present in the forest but missing from the code file", accountHash)
+		}
+		// delete for later to check any leftover hashes
+		delete(codes, acc.info.CodeHash)
+
+		// check correctness of the code hash
+		if got, want := common.Keccak256(byteCode), &accountHash; got.Compare(want) != 0 {
+			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
+		}
+
+		return nil
+	}
+
+	if err := source.forAccountNodes(check); err != nil {
+		return err
+	}
+	// check if there are any contracts within the code file that are not referenced by any account
+	if len(codes) == 0 {
+		return nil
+	}
+
+	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes)))
+
+	for h, bc := range codes {
+		observer.Progress(fmt.Sprintf("%v\n", h))
+		if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
+			return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
+		}
+	}
+
+	return nil
+}
+
 type verificationNodeSource struct {
 	config MptConfig
 
@@ -778,6 +835,24 @@ func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error 
 
 func (s *verificationNodeSource) forAllNodes(check func(NodeId, Node) error) error {
 	return s.forNodes(check, true, true, true, true)
+}
+
+func (s *verificationNodeSource) forAccountNodes(check func(*AccountNode) error) error {
+	var errs []error
+
+	for i := s.accountIds.GetLowerBound(); i < s.accountIds.GetUpperBound(); i++ {
+		if s.accountIds.Contains(i) {
+			account, err := s.accounts.Get(i)
+			if err != nil { // with IO errors => stop immediately
+				return err
+			}
+			if err := check(&account); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (s *verificationNodeSource) forNodes(
