@@ -411,7 +411,7 @@ func (h ethHasher) updateHashesInternal(
 				embedded[cur.node.Id()] = true
 			} else {
 				// Encode the node using RLP and compute its hash.
-				data, e := encode(node, manager, data)
+				data, e := encodeToRlp(node, manager, data)
 				if e != nil {
 					cur.handle.Release()
 					err = e
@@ -452,7 +452,7 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 
 	// Encode the node in RLP and compute its hash.
 	data := make([]byte, 0, 1024)
-	data, err = encode(node, source, data)
+	data, err = encodeToRlp(node, source, data)
 	handle.Release()
 	if err != nil {
 		return common.Hash{}, err
@@ -466,28 +466,28 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 	return common.Keccak256(data), nil
 }
 
-// encode computes the RLP encoding of the given node. If needed, additional nodes are
+// encodeToRlp computes the RLP encoding of the given node. If needed, additional nodes are
 // fetched from the given source for deriving the encoding.
 // The node and source parameter must not be nil.
 // The result is stored in the input slice, and the slice is returned as well.
 // The reason for having the slice on the input is that the encoding of nodes
 // is a frequent operation and the slice can be reused to reduce memory allocations.
-func encode(
+func encodeToRlp(
 	node Node,
 	source NodeSource,
 	target []byte,
 ) ([]byte, error) {
 	switch trg := node.(type) {
 	case EmptyNode:
-		return encodeEmpty()
+		return encodeEmptyToRlp()
 	case *AccountNode:
-		return encodeAccount(trg, source, target)
+		return encodeAccountToRlp(trg, source, target)
 	case *BranchNode:
-		return encodeBranch(trg, source, target)
+		return encodeBranchToRlp(trg, source, target)
 	case *ExtensionNode:
-		return encodeExtension(trg, source, target)
+		return encodeExtensionToRlp(trg, source, target)
 	case *ValueNode:
-		return encodeValue(trg, source, target)
+		return encodeValueToRlp(trg, source, target)
 	default:
 		return nil, fmt.Errorf("unsupported node type: %v", reflect.TypeOf(node))
 	}
@@ -502,7 +502,7 @@ var rlpEncodingBufferPool = sync.Pool{New: func() any {
 },
 }
 
-func encodeEmpty() ([]byte, error) {
+func encodeEmptyToRlp() ([]byte, error) {
 	return emptyStringRlpEncoded, nil
 }
 
@@ -515,7 +515,7 @@ var branchRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func encodeBranch(
+func encodeBranchToRlp(
 	node *BranchNode,
 	source NodeSource,
 	target []byte,
@@ -538,7 +538,7 @@ func encodeBranch(
 				return nil, err
 			}
 			var encoded = make([]byte, 0, 1024)
-			encoded, err = encode(node.Get(), source, encoded)
+			encoded, err = encodeToRlp(node.Get(), source, encoded)
 			node.Release()
 			if err != nil {
 				return nil, err
@@ -565,7 +565,7 @@ var extensionRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func encodeExtension(
+func encodeExtensionToRlp(
 	node *ExtensionNode,
 	source NodeSource,
 	target []byte,
@@ -593,7 +593,7 @@ func encodeExtension(
 		}
 		defer next.Release()
 		encoded := make([]byte, 0, 1024)
-		encoded, err = encode(next.Get(), source, encoded)
+		encoded, err = encodeToRlp(next.Get(), source, encoded)
 		if err != nil {
 			return nil, err
 		}
@@ -616,7 +616,7 @@ var accountRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func encodeAccount(
+func encodeAccountToRlp(
 	node *AccountNode,
 	source NodeSource,
 	target []byte,
@@ -666,7 +666,7 @@ var valueRlpStreamPool = sync.Pool{New: func() any {
 },
 }
 
-func encodeValue(
+func encodeValueToRlp(
 	node *ValueNode,
 	source NodeSource,
 	target []byte,
@@ -759,9 +759,9 @@ func (h ethHasher) isEmbedded(
 		return false, nil
 	}
 
-	// We need to encode it to be certain.
+	// We need to encodeToRlp it to be certain.
 	var encoded = make([]byte, 0, 1024)
-	encoded, err = encode(node, source, encoded)
+	encoded, err = encodeToRlp(node, source, encoded)
 	if err != nil {
 		return false, err
 	}
