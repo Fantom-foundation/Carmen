@@ -12,6 +12,7 @@ package rlp
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -48,6 +49,90 @@ func Encode(item Item) []byte {
 func EncodeInto(dst []byte, item Item) []byte {
 	writer := writer(dst)
 	return item.write(writer)
+}
+
+// Decode decodes an RLP stream into an item.
+func Decode(rlp []byte) (Item, error) {
+	item, consumed, err := decode(rlp)
+	if consumed < uint64(len(rlp)) {
+		return nil, fmt.Errorf("unexpected trailing data: %x", rlp[consumed:])
+	}
+	return item, err
+}
+
+// decode decodes an RLP stream into an item.
+func decode(rlp []byte) (Item, uint64, error) {
+	if len(rlp) == 0 {
+		return nil, 0, fmt.Errorf("input RLP is empty")
+	}
+
+	// here it checks first byte of the RLP stream to determine the type of the item.
+	// Based on the type, it decodes the type.
+	l := rlp[0]
+	if l < 0x80 { // single byte RLP
+		return String{Str: rlp[0:1]}, 1, nil
+	}
+
+	if l >= 0x80 && l <= 0xb7 { // short string
+		length := int(l - 0x80)
+		if len(rlp) < length+1 {
+			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
+		}
+
+		return String{Str: rlp[1 : length+1]}, uint64(length + 1), nil
+	}
+
+	if l > 0xb7 && l < 0xc0 { // long string
+		bytesLength := uint64(l - 0xb7)
+		length, err := readNumber(rlp[1:], byte(bytesLength))
+		if err != nil {
+			return nil, 0, err
+		}
+
+		offset := bytesLength + 1
+		return String{Str: rlp[offset : offset+length]}, offset + length, nil
+	}
+
+	if l >= 0xc0 && l <= 0xf7 { // short list
+		length := int(l - 0xc0)
+		if len(rlp) < length+1 {
+			return nil, 0, fmt.Errorf("expected %d bytes, got: %d", length+1, len(rlp))
+		}
+
+		items, err := decodeList(rlp[1 : length+1])
+		return List{Items: items}, uint64(length + 1), err
+	}
+
+	// l > 0xf7 - long list
+	bytesLength := uint64(l - 0xf7)
+	length, err := readNumber(rlp[1:], byte(bytesLength))
+	if err != nil {
+		return nil, 0, err
+	}
+	offset := bytesLength + 1
+	items, err := decodeList(rlp[offset : offset+length])
+	return List{Items: items}, offset + length, err
+}
+
+// decodeList decodes a list of items from the given RLP stream.
+// The function expects an RLP stream with possibly multiple items encoded
+// while the prefix with the length is already cut out.
+// The consumes chunks of input RLP by passing it to the decoder
+// until the input is empty.
+func decodeList(rlp []byte) ([]Item, error) {
+	items := make([]Item, 0, 17)
+	buf := rlp
+	for len(buf) > 0 {
+		item, offset, err := decode(buf)
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, item)
+		buf = buf[offset:]
+	}
+
+	return items, nil
 }
 
 // writer is a specialized writer for this package writing encoded RLP
@@ -92,6 +177,32 @@ func (s String) getEncodedLength() int {
 	return l + getEncodedLengthLength(l)
 }
 
+// BigInt converts the RLP encoded string to a big.Int.
+// It interprets the string as a big-endian integer and returns a new big.Int
+// set to this value.
+//
+// Returns:
+// A pointer to a big.Int that represents the value of the RLP encoded string.
+func (s String) BigInt() *big.Int {
+	return new(big.Int).SetBytes(s.Str)
+}
+
+// Uint64 attempts to convert the RLP encoded string to a uint64.
+// It interprets the string as a big-endian integer and returns the resulting uint64.
+//
+// If the length of the string is greater than 8 (the maximum byte size of a uint64),
+// an error is returned indicating that the string is too long to be converted.
+//
+// Returns:
+// The uint64 representation of the RLP encoded string if the conversion is successful,
+// and an error if the string is too long to be converted to a uint64.
+func (s String) Uint64() (uint64, error) {
+	if len(s.Str) > 8 {
+		return 0, fmt.Errorf("string is too long to be converted to uint64: %d", len(s.Str))
+	}
+	return readNumber(s.Str, byte(len(s.Str)))
+}
+
 // Hash is a used specifically to hold a pointer to hash.
 // Its usage is similar to rlp.String, but this type should be used for performance reasons.
 // In particular, conversion of common.Hash to rlp.String requires conversion of array
@@ -128,9 +239,9 @@ func (l List) write(writer writer) writer {
 	return writer
 }
 
-func (s List) getEncodedLength() int {
+func (l List) getEncodedLength() int {
 	sum := 0
-	for _, item := range s.Items {
+	for _, item := range l.Items {
 		sum += item.getEncodedLength()
 	}
 	return sum + getEncodedLengthLength(sum)
@@ -252,4 +363,29 @@ func (i BigInt) getEncodedLength() int {
 	}
 	length := ((bitlen + 7) & -8) >> 3
 	return getEncodedLengthLength(length) + length
+}
+
+// readNumber interprets the first 'slen' bytes of 'b' as a big-endian integer.
+// It returns the resulting integer and any error encountered.
+//
+// The function expects 'slen' to be the size of the integer to be read from 'b'.
+// If 'slen' is greater than the length of 'b', an error is returned.
+//
+// The function supports reading integers of up to 8 bytes (64 bits).
+//
+// Parameters:
+// b:    The byte slice from which to read the integer.
+// slen: The size of the integer to be read from 'b'.
+//
+// Returns:
+// The integer read from 'b' and an error if 'slen' is greater than the length of 'b'.
+func readNumber(b []byte, slen byte) (uint64, error) {
+	if int(slen) > len(b) {
+		return 0, fmt.Errorf("expected %d bytes, got: %d", slen, len(b))
+	}
+	var s uint64
+	for i := byte(0); i < slen; i++ {
+		s = s<<8 | uint64(b[i])
+	}
+	return s, nil
 }
