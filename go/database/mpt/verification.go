@@ -15,6 +15,7 @@ package mpt
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -130,12 +131,16 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	// ----------------- Second Pass: check Contract Codes --------------------
+
 	codeFile := directory + "/codes.dat"
+	// make sure the file exists
+	if _, err := os.Stat(codeFile); err != nil {
+		return fmt.Errorf("code file %v does not exist", codeFile)
+	}
 	codes, err := readCodes(codeFile)
 	if err != nil {
 		return err
 	}
-
 	err = verifyContractCodes(codes, source, observer)
 	if err != nil {
 		return err
