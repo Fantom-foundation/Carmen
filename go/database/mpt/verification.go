@@ -623,7 +623,7 @@ func verifyContractCodes(codes map[common.Hash][]byte, source *verificationNodeS
 	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes)))
 
 	for h, bc := range codes {
-		observer.Progress(fmt.Sprintf("%v\n", h))
+		observer.Progress(fmt.Sprintf("%x\n", h))
 		if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
 			return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
 		}

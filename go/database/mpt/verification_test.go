@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
 
@@ -465,18 +466,34 @@ func TestVerification_ContractCodeVerification_DifferentHashInCodeFileIsDetected
 	})
 }
 
-func TestVerification_ContractCodeVerification_DifferentLeftoverHashInCodeFileIsDetected(t *testing.T) {
+func TestVerification_ContractCodeVerification_ExtraHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		testHash := common.Keccak256([]byte{1})
+		ctrl := gomock.NewController(t)
+		observer := NewMockVerificationObserver(ctrl)
 
+		testHash := common.Keccak256([]byte{1})
 		codes := map[common.Hash][]byte{
-			testHash: {2},
+			testHash: {1},
 		}
+
+		gomock.InOrder(
+			observer.EXPECT().StartVerification(),
+			observer.EXPECT().Progress(fmt.Sprintf("Checking forest stored in %s ...", dir)),
+			observer.EXPECT().Progress("Checking meta-data ..."),
+			observer.EXPECT().Progress("Obtaining read access to files ..."),
+			observer.EXPECT().Progress("Checking node references ..."),
+			observer.EXPECT().Progress(fmt.Sprintf("Checking contract codes ...")),
+			observer.EXPECT().Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes))),
+			observer.EXPECT().Progress(fmt.Sprintf("%x\n", testHash)),
+			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
+			observer.EXPECT().EndVerification(gomock.Any()),
+		)
+
 		if err := writeCodes(codes, dir+"/codes.dat"); err != nil {
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
