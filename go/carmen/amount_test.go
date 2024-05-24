@@ -134,19 +134,3 @@ func TestAmount_IsUint64(t *testing.T) {
 		t.Errorf("amount should not be representable as uint64")
 	}
 }
-
-func TestAmount_Add(t *testing.T) {
-	amount := NewAmount(100)
-	res := amount.Add(NewAmount(100))
-	if res != NewAmount(200) {
-		t.Errorf("amount should be 200")
-	}
-}
-
-func TestAmount_Sub(t *testing.T) {
-	amount := NewAmount(100)
-	res := amount.Sub(NewAmount(50))
-	if res != NewAmount(50) {
-		t.Errorf("amount should be 50")
-	}
-}

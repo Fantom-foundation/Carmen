@@ -55,7 +55,6 @@ func NewAmountFromBytes(bytes ...byte) Amount {
 }
 
 // NewAmountFromBigInt creates a new Amount instance from a big.Int.
-// The constructor panics if the big.Int is negative or has more than 256 bits.
 func NewAmountFromBigInt(b *big.Int) (Amount, error) {
 	if b == nil {
 		return NewAmount(), nil
@@ -89,20 +88,6 @@ func (a Amount) IsUint64() bool {
 // ToBig returns a bigInt version of the amount.
 func (a Amount) ToBig() *big.Int {
 	return a.internal.ToBig()
-}
-
-// Add returns the sum of two amounts. Overflows are not checked.
-func (a Amount) Add(b Amount) Amount {
-	result := Amount{}
-	result.internal.Add(&a.internal, &b.internal)
-	return result
-}
-
-// Sub returns the difference of two amounts. Underflows are not checked.
-func (a Amount) Sub(b Amount) Amount {
-	result := Amount{}
-	result.internal.Sub(&a.internal, &b.internal)
-	return result
 }
 
 // String returns the string representation of the amount.
