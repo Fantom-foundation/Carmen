@@ -502,10 +502,15 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 		t.Fatalf("failed to start empty forest: %v", err)
 	}
 
+	err = writeCodes(nil, dir+"/codes.dat")
+	if err != nil {
+		t.Fatalf("failed to create codes file: %v", err)
+	}
+
 	root := NewNodeReference(EmptyId())
 
 	addr := common.Address{}
-	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1)})
+	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1), CodeHash: emptyCodeHash})
 	if err != nil {
 		t.Fatalf("failed to create account: %v", err)
 	}
