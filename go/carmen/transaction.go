@@ -58,7 +58,11 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 
 func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
-		return NewAmountFromBigInt(t.state.GetBalance(common.Address(address)))
+		amount, err := NewAmountFromBigInt(t.state.GetBalance(common.Address(address)))
+		if err != nil {
+			return NewAmount()
+		}
+		return amount
 	}
 	return NewAmount()
 }

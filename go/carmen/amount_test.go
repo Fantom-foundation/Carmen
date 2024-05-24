@@ -18,29 +18,35 @@ import (
 )
 
 func TestAmount_NewAmount(t *testing.T) {
-	// test empty amount
-	empty := NewAmount()
-	if empty.Uint64() != 0 {
-		t.Errorf("empty amount should be zero")
+	tests := []struct {
+		name      string
+		args      []uint64
+		want      Amount
+		wantPanic bool
+	}{
+		{"No arguments", []uint64{}, Amount{[4]uint64{0, 0, 0, 0}}, false},
+		{"One argument", []uint64{1}, Amount{[4]uint64{1, 0, 0, 0}}, false},
+		{"Two arguments", []uint64{1, 2}, Amount{[4]uint64{2, 1, 0, 0}}, false},
+		{"Three arguments", []uint64{1, 2, 3}, Amount{[4]uint64{3, 2, 1, 0}}, false},
+		{"Four arguments", []uint64{1, 2, 3, 4}, Amount{[4]uint64{4, 3, 2, 1}}, false},
+		{"Too many arguments", []uint64{1, 2, 3, 4, 5}, Amount{}, true},
 	}
 
-	// test amount with single value
-	amount := NewAmount(100)
-	if amount.Uint64() != 100 {
-		t.Errorf("amount should be 100")
-	}
-
-	// the amount should be 3*2^64 + 1234
-	amount = NewAmount(3, 1234)
-
-	// instantiate the amount using big.Int
-	high := big.NewInt(3)
-	high.Lsh(high, 64)
-	low := big.NewInt(1234)
-	result := new(big.Int).Add(high, low)
-
-	if amount != NewAmountFromBigInt(result) {
-		t.Errorf("amount should be 3*2^64 + 1234")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					if !test.wantPanic {
+						t.Errorf("NewAmount() panicked unexpectedly: %v", r)
+					}
+				} else if test.wantPanic {
+					t.Errorf("NewAmount() did not panic")
+				}
+			}()
+			if got, want := NewAmount(test.args...), test.want; got != want {
+				t.Errorf("wrong result, got %v, want %v", got, want)
+			}
+		})
 	}
 }
 
@@ -52,12 +58,13 @@ func TestAmount_NewAmountFromUint256(t *testing.T) {
 		{uint256.NewInt(0), NewAmount()},
 		{uint256.NewInt(1), NewAmount(1)},
 		{uint256.NewInt(256), NewAmount(256)},
+		{new(uint256.Int).Lsh(uint256.NewInt(1), 64), NewAmount(1, 0)},
+		{new(uint256.Int).Lsh(uint256.NewInt(1), 128), NewAmount(1, 0, 0)},
+		{new(uint256.Int).Lsh(uint256.NewInt(1), 192), NewAmount(1, 0, 0, 0)},
 	}
 
 	for _, test := range tests {
-		got := NewAmountFromUint256(test.in)
-		want := test.out
-		if want != got {
+		if got, want := NewAmountFromUint256(test.in), test.out; want != got {
 			t.Errorf("failed to convert %v to Amount, wanted %v, got %v", test.in, want, got)
 		}
 	}
@@ -70,16 +77,24 @@ func TestAmount_NewAmountFromBytes(t *testing.T) {
 		t.Errorf("empty amount should be zero")
 	}
 
-	// test amount with single value
-	amount := NewAmountFromBytes([]byte{1, 2, 3, 4}...)
+	amount := NewAmountFromBytes(1, 2, 3, 4)
 	if amount != NewAmount(0x01020304) {
 		t.Errorf("amount should be 0x01020304")
+	}
+
+	// test amount with more than 8 bytes to test word order
+	amount = NewAmountFromBytes(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+	if amount != NewAmountFromUint256(uint256.MustFromHex("0x102030405060708090A0B0C0D0E0F10")) {
+		t.Errorf("amount should be 0x102030405060708090A0B0C0D0E0F10")
 	}
 }
 
 func TestAmount_NewAmountFromBigInt(t *testing.T) {
 	// test amount with single value
-	amount := NewAmountFromBigInt(big.NewInt(100))
+	amount, err := NewAmountFromBigInt(big.NewInt(100))
+	if err != nil {
+		t.Errorf("failed to create amount from big.Int: %v", err)
+	}
 	if amount != NewAmount(100) {
 		t.Errorf("amount should be 100")
 	}
@@ -93,6 +108,18 @@ func TestAmount_IsZero(t *testing.T) {
 	one := NewAmount(1)
 	if one.IsZero() {
 		t.Errorf("one amount should not be zero")
+	}
+}
+
+func TestAmount_IsUint64(t *testing.T) {
+	amount := NewAmount(100)
+	if !amount.IsUint64() {
+		t.Errorf("amount should be representable as uint64")
+	}
+
+	amount = NewAmount(1, 0, 0, 0)
+	if amount.IsUint64() {
+		t.Errorf("amount should not be representable as uint64")
 	}
 }
 
