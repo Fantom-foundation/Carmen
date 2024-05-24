@@ -486,7 +486,7 @@ func TestVerification_ContractCodeVerification_ExtraHashInCodeFileIsDetected(t *
 			observer.EXPECT().Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes))),
 			observer.EXPECT().Progress(fmt.Sprintf("%x\n", testHash)),
 			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
-			observer.EXPECT().EndVerification(gomock.Any()),
+			observer.EXPECT().EndVerification(nil),
 		)
 
 		if err := writeCodes(codes, dir+"/codes.dat"); err != nil {
