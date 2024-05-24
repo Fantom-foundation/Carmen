@@ -98,6 +98,18 @@ func TestAmount_NewAmountFromBigInt(t *testing.T) {
 	if amount != NewAmount(100) {
 		t.Errorf("amount should be 100")
 	}
+
+	// test negativne amount
+	_, err = NewAmountFromBigInt(big.NewInt(-100))
+	if err == nil {
+		t.Errorf("negative amount should not be allowed")
+	}
+
+	// test amount with more than 256 bits
+	_, err = NewAmountFromBigInt(new(big.Int).Lsh(big.NewInt(1), 256))
+	if err == nil {
+		t.Errorf("amount with more than 256 bits should not be allowed")
+	}
 }
 
 func TestAmount_IsZero(t *testing.T) {
