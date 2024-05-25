@@ -43,9 +43,9 @@ var forestFiles = []string{
 	"values/values.dat",
 }
 
-func TestVerification_VerifyValidForest(t *testing.T) {
+func TestVerification_VerifyValidMpt(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err != nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
@@ -63,7 +63,7 @@ func TestVerification_VerificationObserverIsKeptUpdatedOnEvents(t *testing.T) {
 			observer.EXPECT().EndVerification(nil),
 		)
 
-		if err := VerifyFileForest(dir, config, roots, observer); err != nil {
+		if err := VerifyMptState(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
@@ -76,7 +76,7 @@ func TestVerification_MissingFileIsDetected(t *testing.T) {
 				if err := os.RemoveAll(dir + "/" + file); err != nil {
 					t.Fatalf("failed to delete file %v: %v", file, err)
 				}
-				if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+				if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 					t.Errorf("The missing file %v should have been detected", file)
 				}
 			})
@@ -110,7 +110,7 @@ func TestVerification_ModifiedFileIsDetected(t *testing.T) {
 					t.Fatalf("failed to write modified file content: %v", err)
 				}
 
-				if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+				if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 					t.Errorf("Modified file %v should have been detected", file)
 				}
 			})
@@ -159,7 +159,7 @@ func TestVerification_ModifiedRootIsDetected(t *testing.T) {
 			t.Fatalf("failed to close stock: %v", err)
 		}
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified root node should have been detected")
 		}
 	})
@@ -173,7 +173,7 @@ func TestVerification_AccountBalanceModificationIsDetected(t *testing.T) {
 			node.info.Balance[2]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -187,7 +187,7 @@ func TestVerification_AccountNonceModificationIsDetected(t *testing.T) {
 			node.info.Nonce[2]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -201,7 +201,7 @@ func TestVerification_AccountCodeHashModificationIsDetected(t *testing.T) {
 			node.info.CodeHash[2]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -215,7 +215,7 @@ func TestVerification_AccountStorageModificationIsDetected(t *testing.T) {
 			node.storage = NewNodeReference(ValueId(123456789)) // invalid in test forest
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -232,7 +232,7 @@ func TestVerification_AccountNodeHashModificationIsDetected(t *testing.T) {
 			node.hash[3]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -249,7 +249,7 @@ func TestVerification_AccountStorageHashModificationIsDetected(t *testing.T) {
 			node.storageHash[3]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -263,7 +263,7 @@ func TestVerification_BranchChildIdModificationIsDetected(t *testing.T) {
 			node.children[8] = NewNodeReference(ValueId(123456789)) // does not exist in test forest
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -280,7 +280,7 @@ func TestVerification_BranchNodeHashModificationIsDetected(t *testing.T) {
 			node.hash[4]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -302,7 +302,7 @@ func TestVerification_BranchChildHashModificationIsDetected(t *testing.T) {
 			}
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -316,7 +316,7 @@ func TestVerification_ExtensionPathModificationIsDetected(t *testing.T) {
 			node.path.path[0] = ^node.path.path[0]
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -330,7 +330,7 @@ func TestVerification_ExtensionNextModificationIsDetected(t *testing.T) {
 			node.next = NewNodeReference(BranchId(123456789))
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -347,7 +347,7 @@ func TestVerification_ExtensionNodeHashModificationIsDetected(t *testing.T) {
 			node.hash[24]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -364,7 +364,7 @@ func TestVerification_ExtensionNextHashModificationIsDetected(t *testing.T) {
 			node.nextHash[24]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -378,7 +378,7 @@ func TestVerification_ValueKeyModificationIsDetected(t *testing.T) {
 			node.key[5]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -392,7 +392,7 @@ func TestVerification_ValueModificationIsDetected(t *testing.T) {
 			node.value[12]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -409,13 +409,13 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 			node.hash[12]++
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
 }
 
-func TestVerification_ContractCodeVerification_HashNotContainedIsDetected(t *testing.T) {
+func TestVerification_CodeHashNotContainedInMptIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
@@ -423,13 +423,13 @@ func TestVerification_ContractCodeVerification_HashNotContainedIsDetected(t *tes
 			node.info.CodeHash = common.Hash{1}
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Hash not present in a file should have been detected")
 		}
 	})
 }
 
-func TestVerification_ContractCodeVerification_MissingHashInCodeFileIsDetected(t *testing.T) {
+func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		testHash := common.Keccak256([]byte{1})
 		encoder, _, _, _ := getEncoder(config)
@@ -438,7 +438,7 @@ func TestVerification_ContractCodeVerification_MissingHashInCodeFileIsDetected(t
 			node.info.CodeHash = testHash
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Missing hash in code file should have been detected")
 		}
 	})
@@ -460,13 +460,13 @@ func TestVerification_ContractCodeVerification_DifferentHashInCodeFileIsDetected
 			node.info.CodeHash = testHash
 		})
 
-		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Different hash in code file should have been detected")
 		}
 	})
 }
 
-func TestVerification_ContractCodeVerification_ExtraHashInCodeFileIsDetected(t *testing.T) {
+func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		ctrl := gomock.NewController(t)
 		observer := NewMockVerificationObserver(ctrl)
@@ -478,10 +478,7 @@ func TestVerification_ContractCodeVerification_ExtraHashInCodeFileIsDetected(t *
 
 		gomock.InOrder(
 			observer.EXPECT().StartVerification(),
-			observer.EXPECT().Progress(fmt.Sprintf("Checking forest stored in %s ...", dir)),
-			observer.EXPECT().Progress("Checking meta-data ..."),
 			observer.EXPECT().Progress("Obtaining read access to files ..."),
-			observer.EXPECT().Progress("Checking node references ..."),
 			observer.EXPECT().Progress(fmt.Sprintf("Checking contract codes ...")),
 			observer.EXPECT().Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes))),
 			observer.EXPECT().Progress(fmt.Sprintf("%x\n", testHash)),
@@ -493,7 +490,7 @@ func TestVerification_ContractCodeVerification_ExtraHashInCodeFileIsDetected(t *
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyFileForest(dir, config, roots, observer); err != nil {
+		if err := VerifyMptState(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
@@ -552,7 +549,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	}
 
 	// Run the verification for the trie (which includes embedded nodes).
-	if err := VerifyFileForest(dir, S5LiveConfig, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
+	if err := VerifyMptState(dir, S5LiveConfig, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
 		t.Errorf("Unexpected verification error: %v", err)
 	}
 }

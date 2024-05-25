@@ -42,15 +42,11 @@ func (NilVerificationObserver) StartVerification()        {}
 func (NilVerificationObserver) Progress(msg string)       {}
 func (NilVerificationObserver) EndVerification(res error) {}
 
-// VerifyFileForest runs list of validation checks on the forest stored in the given
-// directory. These checks include:
-//   - all required files are present and can be read
-//   - all referenced nodes are present
-//   - all hashes are consistent
-func VerifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
+
 	observer.StartVerification()
 	defer func() {
 		if r := recover(); r != nil {
@@ -59,6 +55,33 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		observer.EndVerification(res)
 	}()
 
+	// Open stock data structures for content verification.
+	observer.Progress("Obtaining read access to files ...")
+	source, err := openVerificationNodeSource(directory, config)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	err = verifyContractCodes(directory, source, observer)
+	if err != nil {
+		return err
+	}
+
+	err = verifyFileForest(directory, config, roots, source, observer)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// verifyFileForest runs list of validation checks on the forest stored in the given
+// directory. These checks include:
+//   - all required files are present and can be read
+//   - all referenced nodes are present
+//   - all hashes are consistent
+func verifyFileForest(directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
 	// ------------------------- Meta-Data Checks -----------------------------
 
 	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...", directory))
@@ -78,14 +101,6 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	if err := file.VerifyStock[uint64](directory+"/values", valueEncoder); err != nil {
 		return err
 	}
-
-	// Open stock data structures for content verification.
-	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
 
 	// ----------------- First Pass: check Node References --------------------
 
@@ -109,7 +124,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		return errors.Join(errs...)
 	}
 
-	err = source.forAllInnerNodes(func(node Node) error {
+	err := source.forAllInnerNodes(func(node Node) error {
 		switch n := node.(type) {
 		case *AccountNode:
 			return checkId(n.storage)
@@ -126,22 +141,6 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	// ----------------- Second Pass: check Contract Codes --------------------
-
-	codeFile := directory + "/codes.dat"
-	// make sure the file exists
-	if _, err := os.Stat(codeFile); err != nil {
-		return fmt.Errorf("code file %v does not exist", codeFile)
-	}
-	codes, err := readCodes(codeFile)
-	if err != nil {
-		return err
-	}
-	err = verifyContractCodes(codes, source, observer)
 	if err != nil {
 		return err
 	}
@@ -587,9 +586,27 @@ func verifyHashesStoredWithParents[N any](
 	return nil
 }
 
-func verifyContractCodes(codes map[common.Hash][]byte, source *verificationNodeSource, observer VerificationObserver) error {
+// verifyContractCodes runs list of validation checks on Mpt and on the
+// code file stored in the given directory. These checks include:
+// 1) Fatal checks
+// - All CodeHashes within the Mpt are present in the code file
+// - All CodeHashes within the code file are correct
+// 2) Non-fatal checks
+// - There are no extra Code Hashes not referenced by any account
+func verifyContractCodes(directory string, source *verificationNodeSource, observer VerificationObserver) error {
 	observer.Progress(fmt.Sprintf("Checking contract codes ..."))
 
+	codeFile := directory + "/codes.dat"
+	// make sure the file exists
+	if _, err := os.Stat(codeFile); err != nil {
+		return fmt.Errorf("code file %v does not exist", codeFile)
+	}
+	codes, err := readCodes(codeFile)
+	if err != nil {
+		return err
+	}
+
+	found := make(map[common.Hash]bool)
 	check := func(acc *AccountNode) error {
 		accountHash := acc.info.CodeHash
 		// skip accounts that are not contracts
@@ -599,15 +616,15 @@ func verifyContractCodes(codes map[common.Hash][]byte, source *verificationNodeS
 		// check that the code hash is present in the code file
 		byteCode, exists := codes[accountHash]
 		if !exists {
-			return fmt.Errorf("the hash %x is present in the forest but missing from the code file", accountHash)
+			return fmt.Errorf("the hash %x is present in the mpt but missing from the code file", accountHash)
 		}
-		// delete for later to check any leftover hashes
-		delete(codes, acc.info.CodeHash)
-
 		// check correctness of the code hash
 		if got, want := common.Keccak256(byteCode), &accountHash; got.Compare(want) != 0 {
 			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
 		}
+
+		// mark a found hash
+		found[accountHash] = true
 
 		return nil
 	}
@@ -616,16 +633,20 @@ func verifyContractCodes(codes map[common.Hash][]byte, source *verificationNodeS
 		return err
 	}
 	// check if there are any contracts within the code file that are not referenced by any account
-	if len(codes) == 0 {
+	if len(found) == len(codes) {
 		return nil
 	}
 
-	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes)))
+	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes)-len(found)))
 
+	// find any extra hashes
 	for h, bc := range codes {
-		observer.Progress(fmt.Sprintf("%x\n", h))
-		if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
-			return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
+		_, exists := found[h]
+		if !exists {
+			observer.Progress(fmt.Sprintf("%x\n", h))
+			if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
+				return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
+			}
 		}
 	}
 

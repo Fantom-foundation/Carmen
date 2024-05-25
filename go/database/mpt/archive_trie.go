@@ -75,7 +75,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 	}, nil
 }
 
-func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) error {
+func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) (res error) {
 	roots, err := loadRoots(directory + "/roots.dat")
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 	if len(roots) == 0 {
 		return nil
 	}
-	return VerifyFileForest(directory, config, roots, observer)
+	return VerifyMptState(directory, config, roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
