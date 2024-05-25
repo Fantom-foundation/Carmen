@@ -76,6 +76,10 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 }
 
 func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) (res error) {
+	if observer == nil {
+		observer = NilVerificationObserver{}
+	}
+
 	roots, err := loadRoots(directory + "/roots.dat")
 	if err != nil {
 		return err
@@ -83,7 +87,23 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 	if len(roots) == 0 {
 		return nil
 	}
-	return VerifyMptState(directory, config, roots, observer)
+	observer.StartVerification()
+	defer func() {
+		if r := recover(); r != nil {
+			panic(r)
+		}
+		observer.EndVerification(res)
+	}()
+
+	// Open stock data structures for content verification.
+	observer.Progress("Obtaining read access to files ...")
+	source, err := openVerificationNodeSource(directory, config)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	return verifyFileForest(directory, config, roots, source, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
