@@ -777,9 +777,9 @@ func TestLiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 			}
 
 			// Add some data.
-			trie.SetAccountInfo(common.Address{1}, AccountInfo{Nonce: common.ToNonce(1)})
-			trie.SetAccountInfo(common.Address{2}, AccountInfo{Nonce: common.ToNonce(2)})
-			trie.SetAccountInfo(common.Address{3}, AccountInfo{Nonce: common.ToNonce(3)})
+			trie.SetAccountInfo(common.Address{1}, AccountInfo{Nonce: common.ToNonce(1), CodeHash: emptyCodeHash})
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{Nonce: common.ToNonce(2), CodeHash: emptyCodeHash})
+			trie.SetAccountInfo(common.Address{3}, AccountInfo{Nonce: common.ToNonce(3), CodeHash: emptyCodeHash})
 
 			trie.SetValue(common.Address{1}, common.Key{1}, common.Value{1})
 
@@ -795,6 +795,11 @@ func TestLiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 
 			if err := trie.Close(); err != nil {
 				t.Fatalf("failed to close trie: %v", err)
+			}
+
+			// create dummy codes.dat file
+			if err := writeCodes(nil, filepath.Join(dir, "codes.dat")); err != nil {
+				t.Fatalf("failed to write dummy code file: %v", err)
 			}
 
 			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
