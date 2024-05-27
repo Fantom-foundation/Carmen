@@ -81,7 +81,7 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 		return err
 	}
 
-	err = verifyFileForest(directory, config, roots, source, observer)
+	err = verifyForest(directory, config, roots, source, observer)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,30 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 //   - all required files are present and can be read
 //   - all referenced nodes are present
 //   - all hashes are consistent
-func verifyFileForest(directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
+func verifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+	if observer == nil {
+		observer = NilVerificationObserver{}
+	}
+
+	observer.StartVerification()
+	defer func() {
+		if r := recover(); r != nil {
+			panic(r)
+		}
+		observer.EndVerification(res)
+	}()
+
+	// Open stock data structures for content verification.
+	observer.Progress("Obtaining read access to files ...")
+	source, err := openVerificationNodeSource(directory, config)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	return verifyForest(directory, config, roots, source, observer)
+}
+
+func verifyForest(directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
 	// ------------------------- Meta-Data Checks -----------------------------
 
 	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...", directory))
