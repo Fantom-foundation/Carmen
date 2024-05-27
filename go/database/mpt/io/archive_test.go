@@ -56,7 +56,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 		t.Fatalf("failed to import Archive: %v", err)
 	}
 
-	if err := mpt.VerifyArchiveTrie(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
+	if err := mpt.VerifyArchive(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 		t.Errorf("head root hashes do not match: got: %v != want: %v", got, want)
 	}
 
-	if err := mpt.VerifyArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, nil); err != nil {
+	if err := mpt.VerifyArchive(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 

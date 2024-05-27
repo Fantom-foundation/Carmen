@@ -75,11 +75,10 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 	}, nil
 }
 
-// VerifyMptStateWithArchive validates Mpt state with file-based archive trie stored
-// in the given directory. If the test passes, the data stored in the respective
-// directory can be considered to be a valid Mpt state of the given configuration.
-// This validation contains both Forest and contract codes checks.
-func VerifyMptStateWithArchive(directory string, config MptConfig, observer VerificationObserver) error {
+// VerifyArchive validates file-based archive stored in the given directory.
+// If the test passes, the data stored in the respective directory
+// can be considered to be a valid Live Trie of the given configuration.
+func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) (res error) {
 	roots, err := loadRoots(directory + "/roots.dat")
 	if err != nil {
 		return err
@@ -88,20 +87,6 @@ func VerifyMptStateWithArchive(directory string, config MptConfig, observer Veri
 		return nil
 	}
 	return VerifyMptState(directory, config, roots, observer)
-}
-
-// VerifyArchiveTrie validates a file-based archive trie stored in the given
-// directory. If the test passes, the data stored in the respective directory
-// can be considered to be a valid Live Trie of the given configuration.
-func VerifyArchiveTrie(directory string, config MptConfig, observer VerificationObserver) (res error) {
-	roots, err := loadRoots(directory + "/roots.dat")
-	if err != nil {
-		return err
-	}
-	if len(roots) == 0 {
-		return nil
-	}
-	return verifyFileForest(directory, config, roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {

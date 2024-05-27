@@ -60,11 +60,11 @@ func OpenFileLiveTrie(directory string, config MptConfig, cacheCapacity int) (*L
 	return makeTrie(directory, forest)
 }
 
-// VerifyMptStateWithLiveTrie validates Mpt state with file-based live trie stored
+// VerifyFileLiveTrie validates Mpt state with file-based live trie stored
 // in the given directory. If the test passes, the data stored in the respective
 // directory can be considered to be a valid Mpt state of the given configuration.
 // This validation contains both Forest and contract codes checks.
-func VerifyMptStateWithLiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
+func VerifyFileLiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
 	metadata, exists, err := readMetadata(directory + "/meta.json")
 	if err != nil {
 		return err
@@ -73,23 +73,6 @@ func VerifyMptStateWithLiveTrie(directory string, config MptConfig, observer Ver
 		return nil
 	}
 	return VerifyMptState(directory, config, []Root{{
-		NewNodeReference(metadata.RootNode),
-		metadata.RootHash,
-	}}, observer)
-}
-
-// VerifyFileLiveTrie validates a file-based live trie stored in the given
-// directory. If the test passes, the data stored in the respective directory
-// can be considered to be a valid Live Trie of the given configuration.
-func VerifyFileLiveTrie(directory string, config MptConfig, observer VerificationObserver) (res error) {
-	metadata, exists, err := readMetadata(directory + "/meta.json")
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return nil
-	}
-	return verifyFileForest(directory, config, []Root{{
 		NewNodeReference(metadata.RootNode),
 		metadata.RootHash,
 	}}, observer)
