@@ -64,10 +64,6 @@ func OpenFileLiveTrie(directory string, config MptConfig, cacheCapacity int) (*L
 // directory. If the test passes, the data stored in the respective directory
 // can be considered to be a valid Live Trie of the given configuration.
 func VerifyFileLiveTrie(directory string, config MptConfig, observer VerificationObserver) (res error) {
-	if observer == nil {
-		observer = NilVerificationObserver{}
-	}
-
 	metadata, exists, err := readMetadata(directory + "/meta.json")
 	if err != nil {
 		return err
@@ -75,26 +71,10 @@ func VerifyFileLiveTrie(directory string, config MptConfig, observer Verificatio
 	if !exists {
 		return nil
 	}
-	observer.StartVerification()
-	defer func() {
-		if r := recover(); r != nil {
-			panic(r)
-		}
-		observer.EndVerification(res)
-	}()
-
-	// Open stock data structures for content verification.
-	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	return verifyFileForest(directory, config, []Root{{
+	return VerifyMptState(directory, config, []Root{{
 		NewNodeReference(metadata.RootNode),
 		metadata.RootHash,
-	}}, source, observer)
+	}}, observer)
 }
 
 func makeTrie(

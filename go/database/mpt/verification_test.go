@@ -43,7 +43,7 @@ var forestFiles = []string{
 	"values/values.dat",
 }
 
-func TestVerification_VerifyValidMpt(t *testing.T) {
+func TestVerification_VerifyValidMptState(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
@@ -415,20 +415,6 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 	})
 }
 
-func TestVerification_CodeHashNotContainedInMptIsDetected(t *testing.T) {
-	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		encoder, _, _, _ := getEncoder(config)
-
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.CodeHash = common.Hash{1}
-		})
-
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
-			t.Errorf("Hash not present in a file should have been detected")
-		}
-	})
-}
-
 func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		testHash := common.Keccak256([]byte{1})
@@ -439,12 +425,12 @@ func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 		})
 
 		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
-			t.Errorf("Missing hash in code file should have been detected")
+			t.Errorf("missing hash in code file should have been detected")
 		}
 	})
 }
 
-func TestVerification_ContractCodeVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
+func TestVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		testHash := common.Keccak256([]byte{1})
 		codes := map[common.Hash][]byte{
@@ -461,7 +447,7 @@ func TestVerification_ContractCodeVerification_DifferentHashInCodeFileIsDetected
 		})
 
 		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
-			t.Errorf("Different hash in code file should have been detected")
+			t.Errorf("different hash in code file should have been detected")
 		}
 	})
 }
@@ -480,7 +466,7 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 			observer.EXPECT().StartVerification(),
 			observer.EXPECT().Progress("Obtaining read access to files ..."),
 			observer.EXPECT().Progress(fmt.Sprintf("Checking contract codes ...")),
-			observer.EXPECT().Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes))),
+			observer.EXPECT().Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", len(codes))),
 			observer.EXPECT().Progress(fmt.Sprintf("%x\n", testHash)),
 			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
 			observer.EXPECT().EndVerification(nil),

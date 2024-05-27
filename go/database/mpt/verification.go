@@ -42,6 +42,19 @@ func (NilVerificationObserver) StartVerification()        {}
 func (NilVerificationObserver) Progress(msg string)       {}
 func (NilVerificationObserver) EndVerification(res error) {}
 
+// VerifyMptState runs validation checks on the forest and code hashes
+// stored in the given directory.
+// Forest checks:
+//   - all required files are present and can be read
+//   - all referenced nodes are present
+//   - all hashes are consistent
+//
+// Code Hashes checks:
+//  1. Fatal checks
+//     - all CodeHashes within the Mpt are present in the code file
+//     - all CodeHashes within the code file are correct
+//  2. Non-fatal checks
+//     - there are no extra Code Hashes not referenced by any account
 func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
@@ -608,23 +621,27 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 
 	found := make(map[common.Hash]bool)
 	check := func(acc *AccountNode) error {
-		accountHash := acc.info.CodeHash
+		codeHash := acc.info.CodeHash
 		// skip accounts that are not contracts
-		if accountHash == emptyCodeHash {
+		if codeHash == emptyCodeHash {
 			return nil
 		}
-		// check that the code hash is present in the code file
-		byteCode, exists := codes[accountHash]
-		if !exists {
-			return fmt.Errorf("the hash %x is present in the mpt but missing from the code file", accountHash)
-		}
-		// check correctness of the code hash
-		if got, want := common.Keccak256(byteCode), &accountHash; got.Compare(want) != 0 {
-			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
+		// no need to check the hash correctness more than once
+		if _, exists := found[codeHash]; exists {
+			return nil
 		}
 
+		// check that the code hash is present in the code file
+		byteCode, exists := codes[codeHash]
+		if !exists {
+			return fmt.Errorf("the hash %x is present in the mpt but missing from the code file", codeHash)
+		}
+		// check correctness of the code hash
+		if got, want := common.Keccak256(byteCode), &codeHash; got.Compare(want) != 0 {
+			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
+		}
 		// mark a found hash
-		found[accountHash] = true
+		found[codeHash] = true
 
 		return nil
 	}
@@ -632,17 +649,16 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 	if err := source.forAccountNodes(check); err != nil {
 		return err
 	}
-	// check if there are any contracts within the code file that are not referenced by any account
+	// check if there are any contracts within the code file that are not referenced by any accounts
 	if len(found) == len(codes) {
 		return nil
 	}
 
-	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any account:", len(codes)-len(found)))
+	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", len(codes)-len(found)))
 
 	// find any extra hashes
 	for h, bc := range codes {
-		_, exists := found[h]
-		if !exists {
+		if _, exists := found[h]; !exists {
 			observer.Progress(fmt.Sprintf("%x\n", h))
 			if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
 				return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
