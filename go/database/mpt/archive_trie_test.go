@@ -389,11 +389,6 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				t.Fatalf("failed to close resources: %v", err)
 			}
 
-			// create dummy codes.dat file
-			if err := writeCodes(nil, filepath.Join(archiveDir, "codes.dat")); err != nil {
-				t.Fatalf("failed to write dummy code file: %v", err)
-			}
-
 			if err := VerifyArchive(archiveDir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("failed to verify archive: %v", err)
 			}
@@ -453,11 +448,6 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 
 			if err := archive.Close(); err != nil {
 				t.Fatalf("failed to close archive: %v", err)
-			}
-
-			// create dummy codes.dat file
-			if err := writeCodes(nil, filepath.Join(dir, "codes.dat")); err != nil {
-				t.Fatalf("failed to write dummy code file: %v", err)
 			}
 
 			if err := VerifyArchive(dir, config, NilVerificationObserver{}); err != nil {

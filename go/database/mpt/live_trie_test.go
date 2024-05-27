@@ -797,11 +797,6 @@ func TestLiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 				t.Fatalf("failed to close trie: %v", err)
 			}
 
-			// create dummy codes.dat file
-			if err := writeCodes(nil, filepath.Join(dir, "codes.dat")); err != nil {
-				t.Fatalf("failed to write dummy code file: %v", err)
-			}
-
 			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("a freshly closed LiveTrie should be fine, got: %v", err)
 			}

@@ -15,7 +15,7 @@ package mpt
 import (
 	"errors"
 	"fmt"
-	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -632,11 +632,7 @@ func verifyHashesStoredWithParents[N any](
 func verifyContractCodes(directory string, source *verificationNodeSource, observer VerificationObserver) error {
 	observer.Progress(fmt.Sprintf("Checking contract codes ..."))
 
-	codeFile := directory + "/codes.dat"
-	// make sure the file exists
-	if _, err := os.Stat(codeFile); err != nil {
-		return fmt.Errorf("code file %v does not exist", codeFile)
-	}
+	codeFile := filepath.Join(directory, "codes.dat")
 	codes, err := readCodes(codeFile)
 	if err != nil {
 		return err

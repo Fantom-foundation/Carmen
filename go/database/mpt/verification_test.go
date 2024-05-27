@@ -32,7 +32,6 @@ var forestFiles = []string{
 	"branches/freelist.dat",
 	"branches/meta.json",
 	"branches/values.dat",
-	"codes.dat",
 	"extensions",
 	"extensions/freelist.dat",
 	"extensions/meta.json",
@@ -43,7 +42,7 @@ var forestFiles = []string{
 	"values/values.dat",
 }
 
-func TestVerification_VerifyValidMptState(t *testing.T) {
+func TestVerification_VerifyValidForest(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
