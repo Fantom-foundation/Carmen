@@ -57,9 +57,9 @@ func verify(context *cli.Context) error {
 	observer := &verificationObserver{}
 
 	if info.Mode == mpt.Immutable {
-		return mpt.VerifyMptStateWithArchive(dir, info.Config, observer)
+		return mpt.VerifyArchive(dir, info.Config, observer)
 	}
-	return mpt.VerifyMptStateWithLiveTrie(dir, info.Config, observer)
+	return mpt.VerifyFileLiveTrie(dir, info.Config, observer)
 }
 
 type verificationObserver struct {
