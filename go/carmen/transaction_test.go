@@ -11,7 +11,6 @@
 package carmen
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -181,8 +180,8 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	tx.SelfDestruct(address)
 	tx.HasSelfDestructed(address)
 	tx.GetBalance(address)
-	tx.AddBalance(address, big.NewInt(100))
-	tx.SubBalance(address, big.NewInt(100))
+	tx.AddBalance(address, NewAmount(100))
+	tx.SubBalance(address, NewAmount(100))
 	tx.GetNonce(address)
 	tx.SetNonce(address, 100)
 	tx.GetCommittedState(address, key)
@@ -240,8 +239,8 @@ func TestTransaction_AfterCommitAllOperationsAreNoops(t *testing.T) {
 	tx.SelfDestruct(address)
 	tx.HasSelfDestructed(address)
 	tx.GetBalance(address)
-	tx.AddBalance(address, big.NewInt(100))
-	tx.SubBalance(address, big.NewInt(100))
+	tx.AddBalance(address, NewAmount(100))
+	tx.SubBalance(address, NewAmount(100))
 	tx.GetNonce(address)
 	tx.SetNonce(address, 100)
 	tx.GetCommittedState(address, key)

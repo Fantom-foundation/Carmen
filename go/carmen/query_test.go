@@ -33,8 +33,8 @@ func TestQueryContext_QueriesAreForwarded(t *testing.T) {
 				mock.EXPECT().GetBalance(common.Address{2}).Return(balance, nil)
 			},
 			func(query *queryContext, t *testing.T) {
-				want := big.NewInt(12)
-				if got := query.GetBalance(Address{2}); want.Cmp(got) != 0 {
+				want := NewAmount(12)
+				if got := query.GetBalance(Address{2}); want != got {
 					t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 				}
 			},
@@ -124,8 +124,8 @@ func TestQueryContext_ErrorsArePropagated(t *testing.T) {
 				mock.EXPECT().GetBalance(common.Address{2}).Return(balance, injectedError)
 			},
 			func(query *queryContext, t *testing.T) {
-				want := big.NewInt(0)
-				if got := query.GetBalance(Address{2}); want.Cmp(got) != 0 {
+				want := NewAmount()
+				if got := query.GetBalance(Address{2}); want != got {
 					t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 				}
 			},

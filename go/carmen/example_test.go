@@ -13,7 +13,6 @@ package carmen_test
 import (
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 
 	"github.com/Fantom-foundation/Carmen/go/carmen"
@@ -33,7 +32,7 @@ func ExampleDatabase_AddBlock() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, big.NewInt(100))
+			context.AddBalance(carmen.Address{1}, carmen.NewAmount(100))
 			fmt.Printf("Transaction executed")
 			return nil
 		}); err != nil {
@@ -74,7 +73,7 @@ func ExampleDatabase_BeginBlock() {
 	}
 
 	tctx.CreateAccount(carmen.Address{1})
-	tctx.AddBalance(carmen.Address{1}, big.NewInt(100))
+	tctx.AddBalance(carmen.Address{1}, carmen.NewAmount(100))
 
 	if err := tctx.Commit(); err != nil {
 		log.Fatalf("cannot commit transaction: %v", err)
@@ -132,7 +131,7 @@ func ExampleDatabase_QueryHistoricState() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1, 2, 3})
-			context.AddBalance(carmen.Address{1, 2, 3}, big.NewInt(100))
+			context.AddBalance(carmen.Address{1, 2, 3}, carmen.NewAmount(100))
 			return nil
 		}); err != nil {
 			log.Fatalf("cannot create transaction: %v", err)
@@ -150,10 +149,10 @@ func ExampleDatabase_QueryHistoricState() {
 	// Query state information for the current head block
 	if err := db.QueryHistoricState(5, func(context carmen.QueryContext) {
 		balance := context.GetBalance(carmen.Address{1, 2, 3})
-		if got, want := balance, big.NewInt(100); got.Cmp(want) != 0 {
+		if got, want := balance, carmen.NewAmount(100); got != want {
 			log.Fatalf("balance does not match: %d != %d", got, want)
 		}
-		fmt.Printf("Balance of %v is %d\n", carmen.Address{1, 2, 3}, balance)
+		fmt.Printf("Balance of %v is %v\n", carmen.Address{1, 2, 3}, balance)
 	}); err != nil {
 		log.Fatalf("query operation failed: %v", err)
 	}
@@ -179,7 +178,7 @@ func ExampleDatabase_QueryBlock() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, big.NewInt(100))
+			context.AddBalance(carmen.Address{1}, carmen.NewAmount(100))
 			return nil
 		}); err != nil {
 			log.Fatalf("cannot create transaction: %v", err)
@@ -198,10 +197,10 @@ func ExampleDatabase_QueryBlock() {
 	if err := db.QueryBlock(5, func(ctxt carmen.HistoricBlockContext) error {
 		return ctxt.RunTransaction(func(ctxt carmen.TransactionContext) error {
 			balance := ctxt.GetBalance(carmen.Address{1})
-			if got, want := balance, big.NewInt(100); got.Cmp(want) != 0 {
+			if got, want := balance, carmen.NewAmount(100); got != want {
 				log.Fatalf("balance does not match: %d != %d", got, want)
 			}
-			fmt.Printf("Balance of %v is %d\n", carmen.Address{1}, balance)
+			fmt.Printf("Balance of %v is %v\n", carmen.Address{1}, balance)
 			return nil
 		})
 	}); err != nil {
@@ -233,7 +232,7 @@ func ExampleDatabase_GetHistoricContext() {
 	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
 		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
 			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, big.NewInt(100))
+			context.AddBalance(carmen.Address{1}, carmen.NewAmount(100))
 			return nil
 		}); err != nil {
 			log.Fatalf("cannot create transaction: %v", err)
@@ -260,10 +259,10 @@ func ExampleDatabase_GetHistoricContext() {
 	}
 
 	balance := tctx.GetBalance(carmen.Address{1})
-	if got, want := balance, big.NewInt(100); got.Cmp(want) != 0 {
+	if got, want := balance, carmen.NewAmount(100); got != want {
 		log.Fatalf("balance does not match: %d != %d", got, want)
 	}
-	fmt.Printf("Balance of %v is %d\n", carmen.Address{1}, balance)
+	fmt.Printf("Balance of %v is %v\n", carmen.Address{1}, balance)
 
 	if err := tctx.Abort(); err != nil {
 		log.Fatalf("cannot abort transaction: %v", err)

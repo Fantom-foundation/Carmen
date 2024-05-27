@@ -12,7 +12,6 @@ package carmen
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -57,22 +56,26 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 	return false
 }
 
-func (t *transactionContext) GetBalance(address Address) *big.Int {
+func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
-		return t.state.GetBalance(common.Address(address))
+		amount, err := NewAmountFromBigInt(t.state.GetBalance(common.Address(address)))
+		if err != nil {
+			return NewAmount()
+		}
+		return amount
 	}
-	return nil
+	return NewAmount()
 }
 
-func (t *transactionContext) AddBalance(address Address, value *big.Int) {
+func (t *transactionContext) AddBalance(address Address, value Amount) {
 	if t.state != nil {
-		t.state.AddBalance(common.Address(address), value)
+		t.state.AddBalance(common.Address(address), value.ToBig())
 	}
 }
 
-func (t *transactionContext) SubBalance(address Address, value *big.Int) {
+func (t *transactionContext) SubBalance(address Address, value Amount) {
 	if t.state != nil {
-		t.state.SubBalance(common.Address(address), value)
+		t.state.SubBalance(common.Address(address), value.ToBig())
 	}
 }
 

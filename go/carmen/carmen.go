@@ -11,8 +11,6 @@
 package carmen
 
 import (
-	"math/big"
-
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
@@ -233,15 +231,15 @@ type TransactionContext interface {
 
 	// GetBalance returns the current balance of an account with
 	// the given address.
-	GetBalance(Address) *big.Int
+	GetBalance(Address) Amount
 
 	// AddBalance increases the balance of an account with
 	// the given address of the input increment.
-	AddBalance(Address, *big.Int)
+	AddBalance(Address, Amount)
 
 	// SubBalance decreases the balance of an account with
 	// the given address of the input decrement.
-	SubBalance(Address, *big.Int)
+	SubBalance(Address, Amount)
 
 	// GetNonce returns current nonce of an account with
 	// the given address.
@@ -368,7 +366,7 @@ type TransactionContext interface {
 type QueryContext interface {
 	// GetBalance returns the current balance of an account with
 	// the given address.
-	GetBalance(Address) *big.Int
+	GetBalance(Address) Amount
 
 	// GetNonce returns current nonce of an account with
 	// the given address.
@@ -413,7 +411,7 @@ type BulkLoad interface {
 
 	// SetBalance sets the balance of the given account address
 	// to the input value.
-	SetBalance(Address, *big.Int)
+	SetBalance(Address, Amount)
 
 	// SetNonce sets the nonce of the given account address
 	// to the input value.

@@ -12,7 +12,6 @@ package carmen
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -30,9 +29,9 @@ func (l *bulkLoad) CreateAccount(address Address) {
 	}
 }
 
-func (l *bulkLoad) SetBalance(address Address, balance *big.Int) {
+func (l *bulkLoad) SetBalance(address Address, balance Amount) {
 	if l.db != nil {
-		l.nested.SetBalance(common.Address(address), balance)
+		l.nested.SetBalance(common.Address(address), balance.ToBig())
 	}
 }
 
