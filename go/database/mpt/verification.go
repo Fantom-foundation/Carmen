@@ -628,7 +628,7 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 		return err
 	}
 
-	found := make(map[common.Hash]bool)
+	checkedHashes := make(map[common.Hash]bool)
 	check := func(acc *AccountNode) error {
 		codeHash := acc.info.CodeHash
 		// skip accounts that are not contracts
@@ -636,22 +636,20 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 			return nil
 		}
 		// no need to check the hash correctness more than once
-		if _, exists := found[codeHash]; exists {
+		if _, exists := checkedHashes[codeHash]; exists {
 			return nil
 		}
-
 		// check that the code hash is present in the code file
 		byteCode, exists := codes[codeHash]
 		if !exists {
 			return fmt.Errorf("hash %x is missing in code file", codeHash)
 		}
+		// mark an already checked hash
+		checkedHashes[codeHash] = true
 		// check correctness of the code hash
 		if got, want := common.Keccak256(byteCode), &codeHash; got.Compare(want) != 0 {
 			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
 		}
-		// mark a found hash
-		found[codeHash] = true
-
 		return nil
 	}
 
@@ -659,15 +657,15 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 		return err
 	}
 	// check if there are any contracts within the code file that are not referenced by any accounts
-	if len(found) == len(codes) {
+	if len(checkedHashes) == len(codes) {
 		return nil
 	}
 
-	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", len(codes)-len(found)))
+	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", len(codes)-len(checkedHashes)))
 
 	// find any extra hashes
 	for h, bc := range codes {
-		if _, exists := found[h]; !exists {
+		if _, exists := checkedHashes[h]; !exists {
 			observer.Progress(fmt.Sprintf("%x\n", h))
 			if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
 				return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
