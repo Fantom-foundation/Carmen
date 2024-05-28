@@ -58,7 +58,7 @@ go install go.uber.org/mock/mockgen@latest
 
 ## Formatting
 
-Formatting rules are enforced in the devvelopment process by running:
+Formatting rules are enforced in the development process by running:
 ```
 gofmt -s -w .
 ```
