@@ -110,7 +110,7 @@ func ExampleDatabase_BeginBlock() {
 		log.Fatalf("cannot begin block: %v", err)
 	}
 
-	// Begin a new transaction withing the block
+	// Begin a new transaction within the block
 	tctx, err := bctx.BeginTransaction()
 	if err != nil {
 		log.Fatalf("cannot begin transaction: %v", err)
