@@ -86,7 +86,7 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 	if len(roots) == 0 {
 		return nil
 	}
-	return VerifyMptState(directory, config, roots, observer)
+	return VerifyCodesAndForest(directory, config, roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {

@@ -42,7 +42,7 @@ func (NilVerificationObserver) StartVerification()        {}
 func (NilVerificationObserver) Progress(msg string)       {}
 func (NilVerificationObserver) EndVerification(res error) {}
 
-// VerifyMptState runs validation checks on the forest and code hashes
+// VerifyCodesAndForest runs validation checks on the forest and code hashes
 // stored in the given directory.
 // Forest checks:
 //   - all required files are present and can be read
@@ -55,7 +55,7 @@ func (NilVerificationObserver) EndVerification(res error) {}
 //     - all byte-codes within the code file matches their hashed representation in accounts
 //  2. Non-fatal checks
 //     - there are no extra Code Hashes not referenced by any account
-func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func VerifyCodesAndForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}

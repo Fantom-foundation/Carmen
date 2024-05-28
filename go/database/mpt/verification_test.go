@@ -63,7 +63,7 @@ func TestVerification_VerificationObserverIsKeptUpdatedOnEvents(t *testing.T) {
 			observer.EXPECT().EndVerification(nil),
 		)
 
-		if err := VerifyMptState(dir, config, roots, observer); err != nil {
+		if err := VerifyCodesAndForest(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
@@ -424,7 +424,7 @@ func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 			node.info.CodeHash = testHash
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("missing hash in code file should have been detected")
 		}
 	})
@@ -446,7 +446,7 @@ func TestVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
 			node.info.CodeHash = testHash
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("different hash in code file should have been detected")
 		}
 	})
@@ -476,7 +476,7 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyMptState(dir, config, roots, observer); err != nil {
+		if err := VerifyCodesAndForest(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
@@ -488,31 +488,34 @@ func TestVerification_UnreadableCodesReturnError(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open codes file: %v", err)
 		}
+		// create code file
+		if err = writeCodes(nil, filepath.Join(dir, "codes.dat")); err != nil {
+			t.Fatalf("failed to create codes file: %v", err)
+		}
+		// corrupt it
 
-		_, err = f.Write([]byte{1})
-		if err != nil {
+		if _, err = f.Write([]byte{1}); err != nil {
 			t.Fatalf("failed to open write to codes file: %v", err)
 		}
-
 		if err = f.Close(); err != nil {
 			t.Fatalf("failed to close codes file: %v", err)
 		}
 
-		if err = VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
-			t.Errorf("different hash in code file should have been detected")
+		if err = VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("unreadable code file should have been detected")
 		}
 	})
 }
 
-func TestVerification_PassingNilAsObserverDoesNotPanic(t *testing.T) {
+func TestVerification_PassingNilAsObserverDoesNotFail(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		if err := VerifyMptState(dir, config, roots, nil); err != nil {
+		if err := VerifyCodesAndForest(dir, config, roots, nil); err != nil {
 			t.Errorf("found unexpected error in verification: %v", err)
 		}
 	})
 }
 
-func TestVerifyFileForest_PassingNilAsObserverDoesNotPanic(t *testing.T) {
+func TestVerifyFileForest_PassingNilAsObserverDoesNotFail(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		if err := VerifyFileForest(dir, config, roots, nil); err != nil {
 			t.Errorf("found unexpected error in verification: %v", err)
@@ -540,7 +543,7 @@ func TestVerification_CodesAreNotCheckedTwice(t *testing.T) {
 			node.info.CodeHash = testHash
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("modified node should have been detected")
 		}
 	})
@@ -556,7 +559,7 @@ func TestVerification_DifferentExtraHashInCodeFileIsDetected(t *testing.T) {
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("different extra hash in code file should have been detected")
 		}
 	})
@@ -582,15 +585,10 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 		t.Fatalf("failed to start empty forest: %v", err)
 	}
 
-	err = writeCodes(nil, dir+"/codes.dat")
-	if err != nil {
-		t.Fatalf("failed to create codes file: %v", err)
-	}
-
 	root := NewNodeReference(EmptyId())
 
 	addr := common.Address{}
-	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1), CodeHash: emptyCodeHash})
+	root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Nonce: common.ToNonce(1)})
 	if err != nil {
 		t.Fatalf("failed to create account: %v", err)
 	}
@@ -631,11 +629,6 @@ func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, con
 			roots, err := fillTestForest(dir, config)
 			if err != nil {
 				t.Fatalf("failed to create example forest: %v", err)
-			}
-
-			err = writeCodes(nil, filepath.Join(dir, "codes.dat"))
-			if err != nil {
-				t.Fatalf("failed to create codes file: %v", err)
 			}
 
 			verify(t, dir, config, roots)
@@ -755,15 +748,10 @@ func getFirstElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
 }
 
 func getLastElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
-	var latestFound uint64
-	for i := set.GetLowerBound(); i < set.GetUpperBound(); i++ {
+	for i := set.GetUpperBound(); i >= set.GetLowerBound(); i-- {
 		if set.Contains(i) {
-			latestFound = i
+			return i, true
 		}
 	}
-	if latestFound == 0 {
-		return 0, false
-	}
-
-	return latestFound, true
+	return 0, false
 }
