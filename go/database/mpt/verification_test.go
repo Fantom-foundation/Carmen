@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -44,7 +45,7 @@ var forestFiles = []string{
 
 func TestVerification_VerifyValidForest(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err != nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})
@@ -75,7 +76,7 @@ func TestVerification_MissingFileIsDetected(t *testing.T) {
 				if err := os.RemoveAll(dir + "/" + file); err != nil {
 					t.Fatalf("failed to delete file %v: %v", file, err)
 				}
-				if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+				if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 					t.Errorf("The missing file %v should have been detected", file)
 				}
 			})
@@ -109,7 +110,7 @@ func TestVerification_ModifiedFileIsDetected(t *testing.T) {
 					t.Fatalf("failed to write modified file content: %v", err)
 				}
 
-				if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+				if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 					t.Errorf("Modified file %v should have been detected", file)
 				}
 			})
@@ -158,7 +159,7 @@ func TestVerification_ModifiedRootIsDetected(t *testing.T) {
 			t.Fatalf("failed to close stock: %v", err)
 		}
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified root node should have been detected")
 		}
 	})
@@ -168,11 +169,11 @@ func TestVerification_AccountBalanceModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.info.Balance[2]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -182,11 +183,11 @@ func TestVerification_AccountNonceModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.info.Nonce[2]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -196,11 +197,11 @@ func TestVerification_AccountCodeHashModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.info.CodeHash[2]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -210,11 +211,11 @@ func TestVerification_AccountStorageModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.storage = NewNodeReference(ValueId(123456789)) // invalid in test forest
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -227,11 +228,11 @@ func TestVerification_AccountNodeHashModificationIsDetected(t *testing.T) {
 		}
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.hash[3]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -244,11 +245,11 @@ func TestVerification_AccountStorageHashModificationIsDetected(t *testing.T) {
 		}
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.storageHash[3]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -258,11 +259,11 @@ func TestVerification_BranchChildIdModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, encoder, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+		modifyFirstNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			node.children[8] = NewNodeReference(ValueId(123456789)) // does not exist in test forest
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -275,11 +276,11 @@ func TestVerification_BranchNodeHashModificationIsDetected(t *testing.T) {
 		}
 		_, encoder, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+		modifyFirstNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			node.hash[4]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -292,7 +293,7 @@ func TestVerification_BranchChildHashModificationIsDetected(t *testing.T) {
 		}
 		_, encoder, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+		modifyFirstNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			for i, child := range node.children {
 				if !child.Id().IsEmpty() {
 					node.hashes[i][4]++
@@ -301,7 +302,7 @@ func TestVerification_BranchChildHashModificationIsDetected(t *testing.T) {
 			}
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -311,11 +312,11 @@ func TestVerification_ExtensionPathModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.path.path[0] = ^node.path.path[0]
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -325,11 +326,11 @@ func TestVerification_ExtensionNextModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.next = NewNodeReference(BranchId(123456789))
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -342,11 +343,11 @@ func TestVerification_ExtensionNodeHashModificationIsDetected(t *testing.T) {
 		}
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.hash[24]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -359,11 +360,11 @@ func TestVerification_ExtensionNextHashModificationIsDetected(t *testing.T) {
 		}
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.nextHash[24]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -373,11 +374,11 @@ func TestVerification_ValueKeyModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, _, encoder := getEncoder(config)
 
-		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
+		modifyFirstNode(t, dir+"/values", encoder, func(node *ValueNode) {
 			node.key[5]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -387,11 +388,11 @@ func TestVerification_ValueModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, _, encoder := getEncoder(config)
 
-		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
+		modifyFirstNode(t, dir+"/values", encoder, func(node *ValueNode) {
 			node.value[12]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -404,11 +405,11 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 		}
 		_, _, _, encoder := getEncoder(config)
 
-		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
+		modifyFirstNode(t, dir+"/values", encoder, func(node *ValueNode) {
 			node.hash[12]++
 		})
 
-		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("Modified node should have been detected")
 		}
 	})
@@ -419,7 +420,7 @@ func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 		testHash := common.Keccak256([]byte{1})
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, filepath.Join(dir, "accounts"), encoder, func(node *AccountNode) {
 			node.info.CodeHash = testHash
 		})
 
@@ -435,13 +436,13 @@ func TestVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
 		codes := map[common.Hash][]byte{
 			testHash: {2},
 		}
-		if err := writeCodes(codes, dir+"/codes.dat"); err != nil {
+		if err := writeCodes(codes, filepath.Join(dir, "codes.dat")); err != nil {
 			t.Fatalf("failed to write code file")
 		}
 
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyFirstNode(t, filepath.Join(dir, "accounts"), encoder, func(node *AccountNode) {
 			node.info.CodeHash = testHash
 		})
 
@@ -477,6 +478,79 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 
 		if err := VerifyMptState(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
+		}
+	})
+}
+
+func TestVerification_UnreadableCodesReturnError(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		f, err := os.OpenFile(filepath.Join(dir, "codes.dat"), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+		if err != nil {
+			t.Fatalf("failed to open codes file: %v", err)
+		}
+
+		_, err = f.Write([]byte{1})
+		if err != nil {
+			t.Fatalf("failed to open write to codes file: %v", err)
+		}
+
+		if err = f.Close(); err != nil {
+			t.Fatalf("failed to close codes file: %v", err)
+		}
+
+		if err = VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("different hash in code file should have been detected")
+		}
+	})
+}
+
+func TestVerification_PassingNilAsObserverDoesNotPanic(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if err := VerifyMptState(dir, config, roots, nil); err != nil {
+			t.Errorf("found unexpected error in verification: %v", err)
+		}
+	})
+}
+
+func TestVerification_CodesAreNotCheckedTwice(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		testHash := common.Keccak256([]byte{1})
+		codes := map[common.Hash][]byte{
+			testHash: {1},
+		}
+		if err := writeCodes(codes, filepath.Join(dir, "codes.dat")); err != nil {
+			t.Fatalf("failed to write code file")
+		}
+
+		encoder, _, _, _ := getEncoder(config)
+
+		// modify two different nodes to append same hash to two accounts
+		modifyFirstNode(t, filepath.Join(dir, "accounts"), encoder, func(node *AccountNode) {
+			node.info.CodeHash = testHash
+		})
+
+		modifyLastNode(t, filepath.Join(dir, "accounts"), encoder, func(node *AccountNode) {
+			node.info.CodeHash = testHash
+		})
+
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("modified node should have been detected")
+		}
+	})
+}
+
+func TestVerification_DifferentExtraHashInCodeFileIsDetected(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		testHash := common.Keccak256([]byte{1})
+		codes := map[common.Hash][]byte{
+			testHash: {2},
+		}
+		if err := writeCodes(codes, filepath.Join(dir, "codes.dat")); err != nil {
+			t.Fatalf("failed to write code file")
+		}
+
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
+			t.Errorf("different extra hash in code file should have been detected")
 		}
 	})
 }
@@ -534,7 +608,7 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	}
 
 	// Run the verification for the trie (which includes embedded nodes).
-	if err := VerifyMptState(dir, S5LiveConfig, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
+	if err := VerifyFileForest(dir, S5LiveConfig, []Root{{root, hash}}, NilVerificationObserver{}); err != nil {
 		t.Errorf("Unexpected verification error: %v", err)
 	}
 }
@@ -552,7 +626,7 @@ func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, con
 				t.Fatalf("failed to create example forest: %v", err)
 			}
 
-			err = writeCodes(nil, dir+"/codes.dat")
+			err = writeCodes(nil, filepath.Join(dir, "codes.dat"))
 			if err != nil {
 				t.Fatalf("failed to create codes file: %v", err)
 			}
@@ -562,7 +636,7 @@ func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, con
 	}
 }
 
-func modifyNode[N any](t *testing.T, directory string, encoder stock.ValueEncoder[N], modify func(n *N)) {
+func modifyFirstNode[N any](t *testing.T, directory string, encoder stock.ValueEncoder[N], modify func(n *N)) {
 	t.Helper()
 	stock, err := file.OpenStock[uint64](encoder, directory)
 	if err != nil {
@@ -579,6 +653,29 @@ func modifyNode[N any](t *testing.T, directory string, encoder stock.ValueEncode
 		t.SkipNow()
 	}
 
+	modifyNode(t, stock, idx, modify)
+}
+func modifyLastNode[N any](t *testing.T, directory string, encoder stock.ValueEncoder[N], modify func(n *N)) {
+	t.Helper()
+	stock, err := file.OpenStock[uint64](encoder, directory)
+	if err != nil {
+		t.Fatalf("failed to open stock")
+	}
+
+	ids, err := stock.GetIds()
+	if err != nil {
+		t.Fatalf("failed to get stock ids: %v", err)
+	}
+
+	idx, found := getLastElementInSet(ids)
+	if !found {
+		t.SkipNow()
+	}
+
+	modifyNode(t, stock, idx, modify)
+}
+
+func modifyNode[N any](t *testing.T, stock stock.Stock[uint64, N], idx uint64, modify func(n *N)) {
 	node, err := stock.Get(idx)
 	if err != nil {
 		t.Fatalf("failed to load node from stock: %v", err)
@@ -648,4 +745,18 @@ func getFirstElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func getLastElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
+	var latestFound uint64
+	for i := set.GetLowerBound(); i < set.GetUpperBound(); i++ {
+		if set.Contains(i) {
+			latestFound = i
+		}
+	}
+	if latestFound == 0 {
+		return 0, false
+	}
+
+	return latestFound, true
 }

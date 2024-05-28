@@ -77,7 +77,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 
 // VerifyArchive validates file-based archive stored in the given directory.
 // If the test passes, the data stored in the respective directory
-// can be considered to be a valid Live Trie of the given configuration.
+// can be considered a valid archive database of the given configuration.
 func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) error {
 	roots, err := loadRoots(directory + "/roots.dat")
 	if err != nil {

@@ -51,8 +51,8 @@ func (NilVerificationObserver) EndVerification(res error) {}
 //
 // Code Hashes checks:
 //  1. Fatal checks
-//     - all CodeHashes within the Mpt are present in the code file
-//     - all CodeHashes within the code file are correct
+//     - all CodeHashes of accounts are present in the code file
+//     - all byte-codes within the code file matches their hashed representation in accounts
 //  2. Non-fatal checks
 //     - there are no extra Code Hashes not referenced by any account
 func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
@@ -61,12 +61,7 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 	}
 
 	observer.StartVerification()
-	defer func() {
-		if r := recover(); r != nil {
-			panic(r)
-		}
-		observer.EndVerification(res)
-	}()
+	defer observer.EndVerification(res)
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
@@ -89,12 +84,12 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 	return nil
 }
 
-// verifyFileForest runs list of validation checks on the forest stored in the given
+// VerifyFileForest runs list of validation checks on the forest stored in the given
 // directory. These checks include:
 //   - all required files are present and can be read
 //   - all referenced nodes are present
 //   - all hashes are consistent
-func verifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func VerifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
@@ -622,11 +617,11 @@ func verifyHashesStoredWithParents[N any](
 	return nil
 }
 
-// verifyContractCodes runs list of validation checks on Mpt and on the
+// verifyContractCodes runs list of validation checks on accounts and on the
 // code file stored in the given directory. These checks include:
 // 1) Fatal checks
-// - All CodeHashes within the Mpt are present in the code file
-// - All CodeHashes within the code file are correct
+// - All CodeHashes within accounts are present in the code file
+// - All CodeHashes within the code file are correct matching the contract byte-codes
 // 2) Non-fatal checks
 // - There are no extra Code Hashes not referenced by any account
 func verifyContractCodes(directory string, source *verificationNodeSource, observer VerificationObserver) error {
@@ -653,7 +648,7 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 		// check that the code hash is present in the code file
 		byteCode, exists := codes[codeHash]
 		if !exists {
-			return fmt.Errorf("the hash %x is present in the mpt but missing from the code file", codeHash)
+			return fmt.Errorf("hash %x is missing in code file", codeHash)
 		}
 		// check correctness of the code hash
 		if got, want := common.Keccak256(byteCode), &codeHash; got.Compare(want) != 0 {
