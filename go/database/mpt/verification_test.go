@@ -512,6 +512,13 @@ func TestVerification_PassingNilAsObserverDoesNotPanic(t *testing.T) {
 	})
 }
 
+func TestVerifyFileForest_PassingNilAsObserverDoesNotPanic(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		if err := VerifyFileForest(dir, config, roots, nil); err != nil {
+			t.Errorf("found unexpected error in verification: %v", err)
+		}
+	})
+}
 func TestVerification_CodesAreNotCheckedTwice(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		testHash := common.Keccak256([]byte{1})

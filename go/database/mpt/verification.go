@@ -95,12 +95,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	observer.StartVerification()
-	defer func() {
-		if r := recover(); r != nil {
-			panic(r)
-		}
-		observer.EndVerification(res)
-	}()
+	defer observer.EndVerification(res)
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
