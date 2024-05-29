@@ -652,28 +652,25 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 		}
 		return nil
 	}
+	err = source.forAccountNodes(check)
 
-	if err := source.forAccountNodes(check); err != nil {
-		return err
-	}
 	// check if there are any contracts within the code file that are not referenced by any accounts
 	if len(checkedHashes) == len(codes) {
-		return nil
+		return err
 	}
 
 	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", len(codes)-len(checkedHashes)))
-
 	// find any extra hashes
 	for h, bc := range codes {
 		if _, exists := checkedHashes[h]; !exists {
 			observer.Progress(fmt.Sprintf("%x\n", h))
 			if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
-				return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
+				err = errors.Join(err, fmt.Errorf("unexpected code hash, got: %x want: %x", got, want))
 			}
 		}
 	}
 
-	return nil
+	return err
 }
 
 type verificationNodeSource struct {

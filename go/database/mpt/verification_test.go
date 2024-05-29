@@ -169,7 +169,7 @@ func TestVerification_AccountBalanceModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.info.Balance[2]++
 		})
 
@@ -183,7 +183,7 @@ func TestVerification_AccountNonceModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.info.Nonce[2]++
 		})
 
@@ -197,7 +197,7 @@ func TestVerification_AccountCodeHashModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.info.CodeHash[2]++
 		})
 
@@ -211,7 +211,7 @@ func TestVerification_AccountStorageModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.storage = NewNodeReference(ValueId(123456789)) // invalid in test forest
 		})
 
@@ -228,7 +228,7 @@ func TestVerification_AccountNodeHashModificationIsDetected(t *testing.T) {
 		}
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.hash[3]++
 		})
 
@@ -245,7 +245,7 @@ func TestVerification_AccountStorageHashModificationIsDetected(t *testing.T) {
 		}
 		encoder, _, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
 			node.storageHash[3]++
 		})
 
@@ -259,7 +259,7 @@ func TestVerification_BranchChildIdModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, encoder, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			node.children[8] = NewNodeReference(ValueId(123456789)) // does not exist in test forest
 		})
 
@@ -276,7 +276,7 @@ func TestVerification_BranchNodeHashModificationIsDetected(t *testing.T) {
 		}
 		_, encoder, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			node.hash[4]++
 		})
 
@@ -293,7 +293,7 @@ func TestVerification_BranchChildHashModificationIsDetected(t *testing.T) {
 		}
 		_, encoder, _, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/branches", encoder, func(node *BranchNode) {
+		modifyNode(t, dir+"/branches", encoder, func(node *BranchNode) {
 			for i, child := range node.children {
 				if !child.Id().IsEmpty() {
 					node.hashes[i][4]++
@@ -312,7 +312,7 @@ func TestVerification_ExtensionPathModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.path.path[0] = ^node.path.path[0]
 		})
 
@@ -326,7 +326,7 @@ func TestVerification_ExtensionNextModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.next = NewNodeReference(BranchId(123456789))
 		})
 
@@ -343,7 +343,7 @@ func TestVerification_ExtensionNodeHashModificationIsDetected(t *testing.T) {
 		}
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.hash[24]++
 		})
 
@@ -360,7 +360,7 @@ func TestVerification_ExtensionNextHashModificationIsDetected(t *testing.T) {
 		}
 		_, _, encoder, _ := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
+		modifyNode(t, dir+"/extensions", encoder, func(node *ExtensionNode) {
 			node.nextHash[24]++
 		})
 
@@ -374,7 +374,7 @@ func TestVerification_ValueKeyModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, _, encoder := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/values", encoder, func(node *ValueNode) {
+		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
 			node.key[5]++
 		})
 
@@ -388,7 +388,7 @@ func TestVerification_ValueModificationIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		_, _, _, encoder := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/values", encoder, func(node *ValueNode) {
+		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
 			node.value[12]++
 		})
 
@@ -405,7 +405,7 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 		}
 		_, _, _, encoder := getEncoder(config)
 
-		modifyFirstNode(t, dir+"/values", encoder, func(node *ValueNode) {
+		modifyNode(t, dir+"/values", encoder, func(node *ValueNode) {
 			node.hash[12]++
 		})
 
@@ -474,16 +474,15 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 
 func TestVerification_UnreadableCodesReturnError(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		// create code file
+		if err := writeCodes(nil, filepath.Join(dir, "codes.dat")); err != nil {
+			t.Fatalf("failed to create codes file: %v", err)
+		}
+		// corrupt it
 		f, err := os.OpenFile(filepath.Join(dir, "codes.dat"), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 		if err != nil {
 			t.Fatalf("failed to open codes file: %v", err)
 		}
-		// create code file
-		if err = writeCodes(nil, filepath.Join(dir, "codes.dat")); err != nil {
-			t.Fatalf("failed to create codes file: %v", err)
-		}
-		// corrupt it
-
 		if _, err = f.Write([]byte{1}); err != nil {
 			t.Fatalf("failed to open write to codes file: %v", err)
 		}
@@ -510,27 +509,10 @@ func TestVerifyFileForest_PassingNilAsObserverDoesNotFail(t *testing.T) {
 		}
 	})
 }
-func TestVerification_CodesAreNotCheckedTwice(t *testing.T) {
-	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		testHash := common.Keccak256([]byte{1})
-		codes := map[common.Hash][]byte{
-			testHash: {1},
-		}
-		if err := writeCodes(codes, filepath.Join(dir, "codes.dat")); err != nil {
-			t.Fatalf("failed to write code file")
-		}
-
-		// TODO - this got broken, but it's not clear what the test is supposed to do
-		// how does it ensure that codes are not checked twice?
-		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
-			t.Errorf("modified node should have been detected")
-		}
-	})
-}
 
 func TestVerification_DifferentExtraHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		testHash := common.Keccak256([]byte{1})
+		testHash := common.Keccak256([]byte{3})
 		codes := map[common.Hash][]byte{
 			testHash: {2},
 		}
@@ -615,7 +597,7 @@ func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, con
 	}
 }
 
-func modifyFirstNode[N any](t *testing.T, directory string, encoder stock.ValueEncoder[N], modify func(n *N)) {
+func modifyNode[N any](t *testing.T, directory string, encoder stock.ValueEncoder[N], modify func(n *N)) {
 	t.Helper()
 	stock, err := file.OpenStock[uint64](encoder, directory)
 	if err != nil {
@@ -632,10 +614,6 @@ func modifyFirstNode[N any](t *testing.T, directory string, encoder stock.ValueE
 		t.SkipNow()
 	}
 
-	modifyNode(t, stock, idx, modify)
-}
-
-func modifyNode[N any](t *testing.T, stock stock.Stock[uint64, N], idx uint64, modify func(n *N)) {
 	node, err := stock.Get(idx)
 	if err != nil {
 		t.Fatalf("failed to load node from stock: %v", err)
@@ -700,15 +678,6 @@ func isDirectory(path string) bool {
 
 func getFirstElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
 	for i := set.GetLowerBound(); i < set.GetUpperBound(); i++ {
-		if set.Contains(i) {
-			return i, true
-		}
-	}
-	return 0, false
-}
-
-func getLastElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
-	for i := set.GetUpperBound(); i >= set.GetLowerBound(); i-- {
 		if set.Contains(i) {
 			return i, true
 		}
