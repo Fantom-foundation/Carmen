@@ -417,13 +417,6 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 
 func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		testHash := common.Keccak256([]byte{1})
-		encoder, _, _, _ := getEncoder(config)
-
-		modifyFirstNode(t, filepath.Join(dir, "accounts"), encoder, func(node *AccountNode) {
-			node.info.CodeHash = testHash
-		})
-
 		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("missing hash in code file should have been detected")
 		}
