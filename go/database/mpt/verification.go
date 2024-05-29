@@ -636,16 +636,16 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 			return nil
 		}
 		// no need to check the hash correctness more than once
-		if _, exists := checkedHashes[codeHash]; exists {
+		if _, isChecked := checkedHashes[codeHash]; isChecked {
 			return nil
 		}
+		// mark an already checked hash
+		checkedHashes[codeHash] = true
 		// check that the code hash is present in the code file
 		byteCode, exists := codes[codeHash]
 		if !exists {
 			return fmt.Errorf("hash %x is missing in code file", codeHash)
 		}
-		// mark an already checked hash
-		checkedHashes[codeHash] = true
 		// check correctness of the code hash
 		if got, want := common.Keccak256(byteCode), &codeHash; got.Compare(want) != 0 {
 			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
@@ -654,16 +654,10 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 	}
 	err = source.forAccountNodes(check)
 
-	// check if there are any contracts within the code file that are not referenced by any accounts
-	if len(checkedHashes) == len(codes) {
-		return err
-	}
-
-	observer.Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", len(codes)-len(checkedHashes)))
 	// find any extra hashes
 	for h, bc := range codes {
 		if _, exists := checkedHashes[h]; !exists {
-			observer.Progress(fmt.Sprintf("%x\n", h))
+			observer.Progress(fmt.Sprintf("Contract %x is not referenced by any account\n", h))
 			if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
 				err = errors.Join(err, fmt.Errorf("unexpected code hash, got: %x want: %x", got, want))
 			}

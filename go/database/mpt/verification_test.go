@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -451,13 +452,11 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 			testHash2: {2},
 		}
 
-		// TODO - this is fragile, it depends on precise strings
 		gomock.InOrder(
 			observer.EXPECT().StartVerification(),
-			observer.EXPECT().Progress("Obtaining read access to files ..."),
-			observer.EXPECT().Progress(fmt.Sprintf("Checking contract codes ...")),
-			observer.EXPECT().Progress(fmt.Sprintf("There are %d contracts not referenced by any accounts:", 1)),
-			observer.EXPECT().Progress(fmt.Sprintf("%x\n", testHash2)),
+			observer.EXPECT().Progress(WithSubstring("Obtaining read access to files")),
+			observer.EXPECT().Progress(WithSubstring("Checking contract codes")),
+			observer.EXPECT().Progress(WithSubstring(fmt.Sprintf("Contract %x is not referenced", testHash2))),
 			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
 			observer.EXPECT().EndVerification(nil),
 		)
@@ -683,4 +682,22 @@ func getFirstElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// WithSubstring matches executor.State instances with the given substate.
+func WithSubstring(substr string) gomock.Matcher {
+	return withSubstring{substr}
+}
+
+type withSubstring struct {
+	substring string
+}
+
+func (m withSubstring) Matches(value any) bool {
+	str, ok := value.(string)
+	return ok && strings.Contains(str, m.substring)
+}
+
+func (m withSubstring) String() string {
+	return fmt.Sprintf("with substring %s", m.substring)
 }
