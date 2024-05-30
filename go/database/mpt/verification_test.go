@@ -12,7 +12,9 @@ package mpt
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -418,8 +420,15 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 
 func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{})
+		if err == nil {
 			t.Errorf("missing hash in code file should have been detected")
+			return
+		}
+		got := err.Error()
+		want := fmt.Sprintf("hash %x is missing in code file", common.Keccak256([]byte{1}))
+		if !strings.Contains(got, want) {
+			t.Errorf("unexpected error, got: %v, want: %v", got, want)
 		}
 	})
 }
@@ -427,15 +436,25 @@ func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 func TestVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
 		testHash := common.Keccak256([]byte{1})
+		byteCode := []byte{2}
 		codes := map[common.Hash][]byte{
-			testHash: {2},
+			testHash: byteCode,
 		}
 		if err := writeCodes(codes, filepath.Join(dir, "codes.dat")); err != nil {
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{})
+		if err == nil {
 			t.Errorf("different hash in code file should have been detected")
+			return
+		}
+
+		got := err.Error()
+		want := fmt.Sprintf("unexpected code hash, got: %x want: %x", common.Keccak256(byteCode), testHash)
+
+		if !strings.Contains(got, want) {
+			t.Errorf("unexpected error, got: %v, want: %v", got, want)
 		}
 	})
 }
@@ -452,14 +471,14 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 			testHash2: {2},
 		}
 
-		gomock.InOrder(
-			observer.EXPECT().StartVerification(),
-			observer.EXPECT().Progress(WithSubstring("Obtaining read access to files")),
-			observer.EXPECT().Progress(WithSubstring("Checking contract codes")),
-			observer.EXPECT().Progress(WithSubstring(fmt.Sprintf("Contract %x is not referenced", testHash2))),
-			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
-			observer.EXPECT().EndVerification(nil),
-		)
+		var triggered bool
+		observer.EXPECT().StartVerification()
+		observer.EXPECT().EndVerification(nil)
+		observer.EXPECT().Progress(gomock.Any()).Do(func(msg string) {
+			if strings.Contains(msg, fmt.Sprintf("Contract %x is not referenced", testHash2)) {
+				triggered = true
+			}
+		}).AnyTimes()
 
 		if err := writeCodes(codes, dir+"/codes.dat"); err != nil {
 			t.Fatalf("failed to write code file")
@@ -467,6 +486,10 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 
 		if err := VerifyCodesAndForest(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
+		}
+
+		if !triggered {
+			t.Errorf("extra hash in code file should have been detected")
 		}
 	})
 }
@@ -491,6 +514,13 @@ func TestVerification_UnreadableCodesReturnError(t *testing.T) {
 
 		if err = VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("unreadable code file should have been detected")
+			return
+		}
+
+		got := err
+		want := io.ErrUnexpectedEOF
+		if !errors.Is(got, want) {
+			t.Errorf("unexpected error, got: %v, want: %v", got, want)
 		}
 	})
 }
@@ -682,22 +712,4 @@ func getFirstElementInSet(set stock.IndexSet[uint64]) (uint64, bool) {
 		}
 	}
 	return 0, false
-}
-
-// WithSubstring matches executor.State instances with the given substate.
-func WithSubstring(substr string) gomock.Matcher {
-	return withSubstring{substr}
-}
-
-type withSubstring struct {
-	substring string
-}
-
-func (m withSubstring) Matches(value any) bool {
-	str, ok := value.(string)
-	return ok && strings.Contains(str, m.substring)
-}
-
-func (m withSubstring) String() string {
-	return fmt.Sprintf("with substring %s", m.substring)
 }

@@ -636,7 +636,7 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 			return nil
 		}
 		// no need to check the hash correctness more than once
-		if _, isChecked := checkedHashes[codeHash]; isChecked {
+		if _, exists := checkedHashes[codeHash]; exists {
 			return nil
 		}
 		// mark an already checked hash
@@ -647,8 +647,8 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 			return fmt.Errorf("hash %x is missing in code file", codeHash)
 		}
 		// check correctness of the code hash
-		if got, want := common.Keccak256(byteCode), &codeHash; got.Compare(want) != 0 {
-			return fmt.Errorf("unexpected code hash for address, got: %x want: %x", got, want)
+		if got, want := common.Keccak256(byteCode), codeHash; got.Compare(&want) != 0 {
+			return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
 		}
 		return nil
 	}
