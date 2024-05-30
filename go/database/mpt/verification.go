@@ -61,7 +61,9 @@ func VerifyCodesAndForest(directory string, config MptConfig, roots []Root, obse
 	}
 
 	observer.StartVerification()
-	defer observer.EndVerification(res)
+	defer func() {
+		observer.EndVerification(res)
+	}()
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
@@ -95,7 +97,9 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	}
 
 	observer.StartVerification()
-	defer observer.EndVerification(res)
+	defer func() {
+		observer.EndVerification(res)
+	}()
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
