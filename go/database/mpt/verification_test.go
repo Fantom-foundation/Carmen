@@ -608,6 +608,53 @@ func TestVerification_HashesOfEmbeddedNodesAreIgnored(t *testing.T) {
 	}
 }
 
+func TestVerification_ForestVerificationObserverReportsError(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+
+		ctrl := gomock.NewController(t)
+		observer := NewMockVerificationObserver(ctrl)
+
+		gomock.InOrder(
+			observer.EXPECT().StartVerification(),
+			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
+			observer.EXPECT().EndVerification(gomock.Not(nil)),
+		)
+
+		encoder, _, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+			node.info.Balance[2]++
+		})
+
+		if err := VerifyFileForest(dir, config, roots, observer); err == nil {
+			t.Errorf("found unexpected error in fresh forest: %v", err)
+		}
+	})
+}
+
+func TestVerification_VerificationObserverReportsError(t *testing.T) {
+	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
+		ctrl := gomock.NewController(t)
+		observer := NewMockVerificationObserver(ctrl)
+
+		gomock.InOrder(
+			observer.EXPECT().StartVerification(),
+			observer.EXPECT().Progress(gomock.Any()).MinTimes(1),
+			observer.EXPECT().EndVerification(gomock.Not(nil)),
+		)
+
+		encoder, _, _, _ := getEncoder(config)
+
+		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
+			node.info.Balance[2]++
+		})
+
+		if err := VerifyCodesAndForest(dir, config, roots, observer); err == nil {
+			t.Errorf("found unexpected error in fresh forest: %v", err)
+		}
+	})
+}
+
 func runVerificationTest(t *testing.T, verify func(t *testing.T, dir string, config MptConfig, roots []Root)) {
 	t.Helper()
 	for _, config := range allMptConfigs {
