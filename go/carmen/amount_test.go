@@ -134,3 +134,10 @@ func TestAmount_IsUint64(t *testing.T) {
 		t.Errorf("amount should not be representable as uint64")
 	}
 }
+
+func TestAmount_ToUint256(t *testing.T) {
+	amount := NewAmount(100)
+	if got, want := amount.Uint256(), uint256.NewInt(100); got.Cmp(want) != 0 {
+		t.Errorf("amount should be 100, got %v", got)
+	}
+}
