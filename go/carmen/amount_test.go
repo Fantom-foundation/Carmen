@@ -138,6 +138,6 @@ func TestAmount_IsUint64(t *testing.T) {
 func TestAmount_ToUint256(t *testing.T) {
 	amount := NewAmount(100)
 	if got, want := amount.Uint256(), uint256.NewInt(100); got.Cmp(want) != 0 {
-		t.Errorf("amount should be 100, got %v", got)
+		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
 	}
 }
