@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -55,8 +56,7 @@ const (
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(directory string, out io.Writer) error {
-
+func Export(directory string, out io.Writer, ctx context.Context) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -104,7 +104,7 @@ func Export(directory string, out io.Writer) error {
 	}
 
 	// Write out all accounts and values.
-	visitor := exportVisitor{out: out}
+	visitor := exportVisitor{out: out, ctx: ctx}
 	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
 		return fmt.Errorf("failed exporting content: %v", errors.Join(err, visitor.err))
 	}
@@ -302,9 +302,24 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 type exportVisitor struct {
 	out io.Writer
 	err error
+	ctx context.Context
+}
+
+func (e *exportVisitor) interrupt() bool {
+	select {
+	case <-e.ctx.Done():
+		e.err = errors.New("export interrupted")
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
+	// outside call to interrupt
+	if e.interrupt() {
+		return mpt.VisitResponseAbort
+	}
 	switch n := node.(type) {
 	case *mpt.AccountNode:
 		addr := n.Address()

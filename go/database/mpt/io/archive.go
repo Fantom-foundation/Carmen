@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -54,8 +55,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(directory string, out io.Writer) error {
-
+func ExportArchive(directory string, out io.Writer, ctx context.Context) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -100,6 +100,9 @@ func ExportArchive(directory string, out io.Writer) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
+		if interrupt(ctx) {
+			return errors.Join(archive.Close(), errors.New("failed exporting content: export interrupted"))
+		}
 		diff, err := archive.GetDiffForBlock(block)
 		if err != nil {
 			return fmt.Errorf("failed to get diff for block %d: %w", block, err)
@@ -194,6 +197,15 @@ func ExportArchive(directory string, out io.Writer) error {
 	}
 
 	return archive.Close()
+}
+
+func interrupt(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 func ImportArchive(directory string, in io.Reader) error {

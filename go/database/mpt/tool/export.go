@@ -13,11 +13,15 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -35,15 +39,15 @@ var ExportCmd = cli.Command{
 	},
 }
 
-func doExport(context *cli.Context) error {
-	if context.Args().Len() != 2 {
+func doExport(cliCtx *cli.Context) error {
+	if cliCtx.Args().Len() != 2 {
 		return fmt.Errorf("missing state directory and/or target file parameter")
 	}
-	dir := context.Args().Get(0)
-	trg := context.Args().Get(1)
+	dir := cliCtx.Args().Get(0)
+	trg := cliCtx.Args().Get(1)
 
 	// Start profiling ...
-	cpuProfileFileName := context.String(cpuProfileFlag.Name)
+	cpuProfileFileName := cliCtx.String(cpuProfileFlag.Name)
 	if strings.TrimSpace(cpuProfileFileName) != "" {
 		if err := startCpuProfiler(cpuProfileFileName); err != nil {
 			return err
@@ -64,6 +68,10 @@ func doExport(context *cli.Context) error {
 
 	start := time.Now()
 	logFromStart(start, "export started")
+
+	ctx, cancel := context.WithCancel(cliCtx.Context)
+	isCanceled := catchInterrupt(ctx, cancel, start)
+
 	file, err := os.Create(trg)
 	if err != nil {
 		return err
@@ -71,14 +79,38 @@ func doExport(context *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 	defer func() {
-		logFromStart(start, "export done")
+		if isCanceled.Load() {
+			logFromStart(start, "export canceled")
+		} else {
+			logFromStart(start, "export done")
+		}
+		cancel()
 	}()
 	return errors.Join(
-		export(dir, out),
+		export(dir, out, ctx),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
 	)
+}
+
+func catchInterrupt(ctx context.Context, cancel context.CancelFunc, start time.Time) *atomic.Bool {
+	isCanceled := new(atomic.Bool)
+	isCanceled.Store(false)
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		defer signal.Stop(c)
+		select {
+		case <-c:
+			logFromStart(start, "Sending close signal...")
+			logFromStart(start, "Do not kill this command, you will end up with corrupted database!")
+			cancel()
+			isCanceled.Store(true)
+		case <-ctx.Done():
+		}
+	}()
+	return isCanceled
 }
 
 func logFromStart(start time.Time, msg string) {

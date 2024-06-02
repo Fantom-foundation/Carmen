@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -138,7 +139,7 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(sourceDir, &buffer); err != nil {
+	if err := Export(sourceDir, &buffer, context.Background()); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
