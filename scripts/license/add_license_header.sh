@@ -73,7 +73,7 @@ add_license_to_files() {
     # Create an array for the find command arguments
     # This approach prevents the shell from expanding the wildcard
     # characters in the ignore_files array, which would happen if
-    # we called the script from a directory containing files/directories
+    # the script was called from a directory containing files/directories
     # that match the wildcard characters.
     local find_args=("$root_dir" -type f -name "*$file_extension")
     for pattern in "${ignore_files[@]}"; do
