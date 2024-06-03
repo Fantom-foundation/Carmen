@@ -307,7 +307,7 @@ type exportVisitor struct {
 
 func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 	// outside call to interrupt
-	if IsInterrupted(e.ctx) {
+	if IsContextDone(e.ctx) {
 		return mpt.VisitResponseAbort
 	}
 	switch n := node.(type) {

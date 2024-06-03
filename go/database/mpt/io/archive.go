@@ -100,7 +100,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
-		if IsInterrupted(ctx) {
+		if IsContextDone(ctx) {
 			return archive.Close()
 		}
 		diff, err := archive.GetDiffForBlock(block)
@@ -199,9 +199,9 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	return archive.Close()
 }
 
-// IsInterrupted returns true if an outside interrupt (SIGINT) has been called.
+// IsContextDone returns true if the givens context CancelFunc has been called.
 // Otherwise, returns false.
-func IsInterrupted(ctx context.Context) bool {
+func IsContextDone(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
 		return true

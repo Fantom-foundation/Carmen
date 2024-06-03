@@ -11,7 +11,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -29,15 +28,18 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 	type testFuncs struct {
 		export   func(context.Context, string, io.Writer) error
 		createDB func(t *testing.T, dir string)
+		check    func(t *testing.T, dir string) error
 	}
 	tests := map[string]testFuncs{
 		"archive": {
 			export:   cio.ExportArchive,
 			createDB: createArchiveTrie,
+			check:    checkExportedArchive,
 		},
 		"live": {
 			export:   cio.Export,
 			createDB: createLiveTrie,
+			check:    checkExportedLiveDB,
 		},
 	}
 
@@ -50,45 +52,74 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			catchInterrupt(ctx, cancel, time.Now())
 
 			success := make(chan any, 1)
+			writer := newMockWriter(t)
+
+			// first find number of writes
+			if err := tf.export(ctx, dir, writer); err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			// save max count and reset number of writes
+			maxCount := writer.numOfWrites
+			writer.numOfWrites = 0
+
 			go func() {
-				time.Sleep(time.Second)
-				err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-				if err != nil {
-					t.Error("failed to create a SIGINT signal")
+				if err := tf.export(ctx, dir, writer); err != nil {
+					t.Errorf("unexpected error: %v", err)
 					return
 				}
-				select {
-				case <-success:
-					return
-				case <-time.After(10 * time.Second):
-					t.Error("export was not interrupted")
-				}
+				close(success)
 			}()
 
-			if err := tf.export(ctx, dir, newMockWriter(t)); err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			time.Sleep(200 * time.Millisecond)
+			err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+			if err != nil {
+				t.Error("failed to create a SIGINT signal")
+				return
 			}
-			close(success)
+			select {
+			case <-success:
+				if maxCount > writer.numOfWrites {
+					break
+				}
+				t.Fatal("export was not interrupted")
+			case <-time.After(10 * time.Second):
+				t.Error("export was not interrupted")
+			}
+
+			err = tf.check(t, dir)
+			if err != nil {
+				t.Fatalf("db is corrupted after export interrupt: %v", err)
+			}
 		})
 	}
 
 }
 
-type mockWriter struct {
-	nested io.Writer
-}
-
-func (m mockWriter) Write(p []byte) (n int, err error) {
-	// slow down writting to be able to interrupt the export
-	time.Sleep(time.Second)
-	return m.nested.Write(p)
-}
-
-func newMockWriter(t *testing.T) io.Writer {
+func checkExportedLiveDB(t *testing.T, dir string) error {
 	t.Helper()
-	return mockWriter{
-		nested: bytes.NewBuffer([]byte{}),
-	}
+	return checkLiveDB(dir, cio.MptInfo{Config: mpt.S5LiveConfig})
+}
+func checkExportedArchive(t *testing.T, dir string) error {
+	t.Helper()
+	return checkLiveDB(dir, cio.MptInfo{Config: mpt.S5ArchiveConfig})
+}
+
+type mockWriter struct {
+	numOfWrites int
+}
+
+func newMockWriter(t *testing.T) *mockWriter {
+	t.Helper()
+	return &mockWriter{}
+}
+
+func (m *mockWriter) Write(_ []byte) (n int, err error) {
+	m.numOfWrites++
+	// slow down writting to be able to interrupt the export
+	time.Sleep(100 * time.Millisecond)
+	return 0, nil
 }
 
 func createLiveTrie(t *testing.T, dir string) {

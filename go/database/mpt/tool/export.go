@@ -78,7 +78,7 @@ func doExport(cliCtx *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 	defer func() {
-		if io.IsInterrupted(ctx) {
+		if io.IsContextDone(ctx) {
 			logFromStart(start, "export canceled")
 			return
 		}
