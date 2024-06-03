@@ -420,7 +420,7 @@ func TestVerification_ValueNodeHashModificationIsDetected(t *testing.T) {
 
 func TestVerification_MissingCodeHashInCodeFileIsDetected(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{})
+		err := VerifyMptState(dir, config, roots, NilVerificationObserver{})
 		if err == nil {
 			t.Errorf("missing hash in code file should have been detected")
 			return
@@ -444,7 +444,7 @@ func TestVerification_DifferentHashInCodeFileIsDetected(t *testing.T) {
 			t.Fatalf("failed to write code file")
 		}
 
-		err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{})
+		err := VerifyMptState(dir, config, roots, NilVerificationObserver{})
 		if err == nil {
 			t.Errorf("different hash in code file should have been detected")
 			return
@@ -484,7 +484,7 @@ func TestVerification_ExtraCodeHashInCodeFileIsDetected(t *testing.T) {
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyCodesAndForest(dir, config, roots, observer); err != nil {
+		if err := VerifyMptState(dir, config, roots, observer); err != nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 
@@ -512,7 +512,7 @@ func TestVerification_UnreadableCodesReturnError(t *testing.T) {
 			t.Fatalf("failed to close codes file: %v", err)
 		}
 
-		if err = VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err = VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("unreadable code file should have been detected")
 			return
 		}
@@ -527,7 +527,7 @@ func TestVerification_UnreadableCodesReturnError(t *testing.T) {
 
 func TestVerification_PassingNilAsObserverDoesNotFail(t *testing.T) {
 	runVerificationTest(t, func(t *testing.T, dir string, config MptConfig, roots []Root) {
-		_ = VerifyCodesAndForest(dir, config, roots, nil)
+		_ = VerifyMptState(dir, config, roots, nil)
 	})
 }
 
@@ -549,7 +549,7 @@ func TestVerification_DifferentExtraHashInCodeFileIsDetected(t *testing.T) {
 			t.Fatalf("failed to write code file")
 		}
 
-		if err := VerifyCodesAndForest(dir, config, roots, NilVerificationObserver{}); err == nil {
+		if err := VerifyMptState(dir, config, roots, NilVerificationObserver{}); err == nil {
 			t.Errorf("different extra hash in code file should have been detected")
 		}
 	})
@@ -649,7 +649,7 @@ func TestVerification_VerificationObserverReportsError(t *testing.T) {
 			node.info.Balance[2]++
 		})
 
-		if err := VerifyCodesAndForest(dir, config, roots, observer); err == nil {
+		if err := VerifyMptState(dir, config, roots, observer); err == nil {
 			t.Errorf("found unexpected error in fresh forest: %v", err)
 		}
 	})

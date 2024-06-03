@@ -62,7 +62,7 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 		t.Fatalf("failed to import DB: %v", err)
 	}
 
-	if err := mpt.VerifyArchive(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
+	if err := mpt.VerifyArchiveTrie(targetDir, mpt.S5ArchiveConfig, nil); err != nil {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
