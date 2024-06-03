@@ -33,6 +33,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 	for name, tf := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			dir := filepath.Join(t.TempDir(), name)
 			tf.createDB(t, dir)
 			ctx, cancel := context.WithCancel(context.Background())
