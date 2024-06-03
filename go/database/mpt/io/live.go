@@ -56,7 +56,7 @@ const (
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(directory string, out io.Writer, ctx context.Context) error {
+func Export(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -305,19 +305,9 @@ type exportVisitor struct {
 	ctx context.Context
 }
 
-func (e *exportVisitor) interrupt() bool {
-	select {
-	case <-e.ctx.Done():
-		e.err = errors.New("export interrupted")
-		return true
-	default:
-		return false
-	}
-}
-
 func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 	// outside call to interrupt
-	if e.interrupt() {
+	if IsInterrupted(e.ctx) {
 		return mpt.VisitResponseAbort
 	}
 	switch n := node.(type) {

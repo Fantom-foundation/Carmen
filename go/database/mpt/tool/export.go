@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -70,7 +69,7 @@ func doExport(cliCtx *cli.Context) error {
 	logFromStart(start, "export started")
 
 	ctx, cancel := context.WithCancel(cliCtx.Context)
-	isCanceled := catchInterrupt(ctx, cancel, start)
+	catchInterrupt(ctx, cancel, start)
 
 	file, err := os.Create(trg)
 	if err != nil {
@@ -79,38 +78,33 @@ func doExport(cliCtx *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 	defer func() {
-		if isCanceled.Load() {
+		if io.IsInterrupted(ctx) {
 			logFromStart(start, "export canceled")
-		} else {
-			logFromStart(start, "export done")
+			return
 		}
+		logFromStart(start, "export done")
 		cancel()
 	}()
 	return errors.Join(
-		export(dir, out, ctx),
+		export(ctx, dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
 	)
 }
 
-func catchInterrupt(ctx context.Context, cancel context.CancelFunc, start time.Time) *atomic.Bool {
-	isCanceled := new(atomic.Bool)
-	isCanceled.Store(false)
+func catchInterrupt(ctx context.Context, cancel context.CancelFunc, start time.Time) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		defer signal.Stop(c)
 		select {
 		case <-c:
-			logFromStart(start, "Sending close signal...")
-			logFromStart(start, "Do not kill this command, you will end up with corrupted database!")
+			logFromStart(start, "Closing, please wait until proper shutdown to prevent database corruption")
 			cancel()
-			isCanceled.Store(true)
 		case <-ctx.Done():
 		}
 	}()
-	return isCanceled
 }
 
 func logFromStart(start time.Time, msg string) {

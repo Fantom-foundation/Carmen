@@ -139,7 +139,7 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(sourceDir, &buffer, context.Background()); err != nil {
+	if err := Export(context.Background(), sourceDir, &buffer); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 

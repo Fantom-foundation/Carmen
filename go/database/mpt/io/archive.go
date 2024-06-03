@@ -55,7 +55,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(directory string, out io.Writer, ctx context.Context) error {
+func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -100,8 +100,8 @@ func ExportArchive(directory string, out io.Writer, ctx context.Context) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
-		if interrupt(ctx) {
-			return errors.Join(archive.Close(), errors.New("failed exporting content: export interrupted"))
+		if IsInterrupted(ctx) {
+			return archive.Close()
 		}
 		diff, err := archive.GetDiffForBlock(block)
 		if err != nil {
@@ -199,7 +199,9 @@ func ExportArchive(directory string, out io.Writer, ctx context.Context) error {
 	return archive.Close()
 }
 
-func interrupt(ctx context.Context) bool {
+// IsInterrupted returns true if an outside interrupt (SIGINT) has been called.
+// Otherwise, returns false.
+func IsInterrupted(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
 		return true
