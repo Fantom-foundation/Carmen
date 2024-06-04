@@ -75,7 +75,10 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 	}, nil
 }
 
-func VerifyArchive(directory string, config MptConfig, observer VerificationObserver) error {
+// VerifyArchiveTrie validates file-based archive stored in the given directory.
+// If the test passes, the data stored in the respective directory
+// can be considered a valid archive database of the given configuration.
+func VerifyArchiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
 	roots, err := loadRoots(directory + "/roots.dat")
 	if err != nil {
 		return err
@@ -83,7 +86,7 @@ func VerifyArchive(directory string, config MptConfig, observer VerificationObse
 	if len(roots) == 0 {
 		return nil
 	}
-	return VerifyFileForest(directory, config, roots, observer)
+	return VerifyMptState(directory, config, roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
