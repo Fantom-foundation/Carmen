@@ -86,12 +86,12 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 	return nil
 }
 
-// VerifyFileForest runs list of validation checks on the forest stored in the given
+// verifyFileForest runs list of validation checks on the forest stored in the given
 // directory. These checks include:
 //   - all required files are present and can be read
 //   - all referenced nodes are present
 //   - all hashes are consistent
-func VerifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func verifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
@@ -632,39 +632,26 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 		return err
 	}
 
-	checkedHashes := make(map[common.Hash]bool)
-	check := func(acc *AccountNode) error {
-		codeHash := acc.info.CodeHash
-		// skip accounts that are not contracts
-		if codeHash == emptyCodeHash {
-			return nil
-		}
-		// no need to check the hash correctness more than once
-		if _, exists := checkedHashes[codeHash]; exists {
-			return nil
-		}
-		// mark an already checked hash
-		checkedHashes[codeHash] = true
-		// check that the code hash is present in the code file
-		byteCode, exists := codes[codeHash]
-		if !exists {
-			return fmt.Errorf("hash %x is missing in code file", codeHash)
-		}
-		// check correctness of the code hash
-		if got, want := common.Keccak256(byteCode), codeHash; got.Compare(&want) != 0 {
+	// Check that the codes are correctly indexed.
+	for hash, code := range codes {
+		if got, want := common.Keccak256(code), hash; got != want {
 			return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
 		}
-		return nil
 	}
-	err = source.forAccountNodes(check)
-
+	// Check that all referenced codes are present in the code file.
+	usedHashes := make(map[common.Hash]struct{})
+	err = source.forAccountNodes(func(acc *AccountNode) error {
+		codeHash := acc.info.CodeHash
+		usedHashes[codeHash] = struct{}{}
+		if _, exists := codes[codeHash]; codeHash != emptyCodeHash && !exists {
+			return fmt.Errorf("hash %x is missing in code file", codeHash)
+		}
+		return nil
+	})
 	// find any extra hashes
-	for h, bc := range codes {
-		if _, exists := checkedHashes[h]; !exists {
-			observer.Progress(fmt.Sprintf("Contract %x is not referenced by any account\n", h))
-			if got, want := common.Keccak256(bc), &h; got.Compare(want) != 0 {
-				err = errors.Join(err, fmt.Errorf("unexpected code hash, got: %x want: %x", got, want))
-			}
+	for hash := range codes {
+		if _, exists := usedHashes[hash]; !exists {
+			observer.Progress(fmt.Sprintf("Contract %x is not referenced by any account\n", hash))
 		}
 	}
 
