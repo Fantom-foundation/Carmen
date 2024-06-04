@@ -645,7 +645,7 @@ func TestVerification_ForestVerificationObserverReportsError(t *testing.T) {
 		})
 
 		if err := verifyFileForest(dir, config, roots, observer); err == nil {
-			t.Errorf("found unexpected error in fresh forest: %v", err)
+			t.Errorf("Modified node should have been detected")
 		}
 	})
 }
@@ -668,7 +668,7 @@ func TestVerification_VerificationObserverReportsError(t *testing.T) {
 		})
 
 		if err := VerifyMptState(dir, config, roots, observer); err == nil {
-			t.Errorf("found unexpected error in fresh forest: %v", err)
+			t.Errorf("Modified node should have been detected")
 		}
 	})
 }
