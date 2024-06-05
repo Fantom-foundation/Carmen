@@ -123,7 +123,7 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 
 	// Check that the test indeed did not modify the state content.
 	if referenceHash != modifiedHash {
-		t.Fatalf("modified state is not equivalent to reference state")
+		t.Fatalf("modified state has different hash than reference state: got: %x, want %x", modifiedHash, expectedHash)
 	}
 
 	// The extra code that was only temporary in the state should no be included
