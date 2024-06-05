@@ -111,6 +111,10 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 	// Modify the state by adding and removing code from an account.
 	// This temporary code should not be included in the resulting exported data.
 	modified, modifiedHash := exportExampleStateWithModification(t, func(s *mpt.MptState) {
+		codesBefore, err := s.GetCodes()
+		if err != nil {
+			t.Fatalf("failed to fetch codes: %v", err)
+		}
 		addr1 := common.Address{1}
 		code, err := s.GetCode(addr1)
 		if err != nil {
@@ -119,11 +123,18 @@ func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
 		modified := append(code, []byte("extra_code")...)
 		s.SetCode(addr1, modified)
 		s.SetCode(addr1, code)
+		codesAfter, err := s.GetCodes()
+		if err != nil {
+			t.Fatalf("failed to fetch codes: %v", err)
+		}
+		if before, after := len(codesBefore), len(codesAfter); before+1 != after {
+			t.Fatalf("modification did not had expected code-altering effect: %d -> %d", before, after)
+		}
 	})
 
 	// Check that the test indeed did not modify the state content.
 	if referenceHash != modifiedHash {
-		t.Fatalf("modified state has different hash than reference state: got: %x, want %x", modifiedHash, expectedHash)
+		t.Fatalf("modified state has different hash than reference state: got: %x, want %x", modifiedHash, referenceHash)
 	}
 
 	// The extra code that was only temporary in the state should no be included
