@@ -12,7 +12,6 @@ package io
 
 import (
 	"bytes"
-	"context"
 	"path"
 	"testing"
 
@@ -45,7 +44,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
+	if err := ExportArchive(sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
@@ -111,7 +110,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
+	if err := ExportArchive(sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()

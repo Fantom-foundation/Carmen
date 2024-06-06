@@ -12,7 +12,6 @@ package io
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -55,7 +54,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
+func ExportArchive(directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -69,6 +68,8 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+
+	ctx := catchInterrupt()
 
 	// Start with the magic number.
 	if _, err := out.Write(archiveMagicNumber); err != nil {
@@ -100,8 +101,8 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
-		if IsContextDone(ctx) {
-			return archive.Close()
+		if isContextDone(ctx) {
+			return errors.Join(errCanceled, archive.Close())
 		}
 		diff, err := archive.GetDiffForBlock(block)
 		if err != nil {
@@ -197,17 +198,6 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	}
 
 	return archive.Close()
-}
-
-// IsContextDone returns true if the givens context CancelFunc has been called.
-// Otherwise, returns false.
-func IsContextDone(ctx context.Context) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	default:
-		return false
-	}
 }
 
 func ImportArchive(directory string, in io.Reader) error {

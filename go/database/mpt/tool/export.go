@@ -13,14 +13,11 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"context"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -38,15 +35,15 @@ var ExportCmd = cli.Command{
 	},
 }
 
-func doExport(cliCtx *cli.Context) error {
-	if cliCtx.Args().Len() != 2 {
+func doExport(context *cli.Context) error {
+	if context.Args().Len() != 2 {
 		return fmt.Errorf("missing state directory and/or target file parameter")
 	}
-	dir := cliCtx.Args().Get(0)
-	trg := cliCtx.Args().Get(1)
+	dir := context.Args().Get(0)
+	trg := context.Args().Get(1)
 
 	// Start profiling ...
-	cpuProfileFileName := cliCtx.String(cpuProfileFlag.Name)
+	cpuProfileFileName := context.String(cpuProfileFlag.Name)
 	if strings.TrimSpace(cpuProfileFileName) != "" {
 		if err := startCpuProfiler(cpuProfileFileName); err != nil {
 			return err
@@ -68,43 +65,23 @@ func doExport(cliCtx *cli.Context) error {
 	start := time.Now()
 	logFromStart(start, "export started")
 
-	ctx, cancel := context.WithCancel(cliCtx.Context)
-	catchInterrupt(ctx, cancel, start)
-
 	file, err := os.Create(trg)
 	if err != nil {
 		return err
 	}
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
-	defer func() {
-		if io.IsContextDone(ctx) {
-			logFromStart(start, "export canceled")
-			return
-		}
-		logFromStart(start, "export done")
-		cancel()
-	}()
-	return errors.Join(
-		export(ctx, dir, out),
+
+	if err = errors.Join(
+		export(dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
-	)
-}
-
-func catchInterrupt(ctx context.Context, cancel context.CancelFunc, start time.Time) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		defer signal.Stop(c)
-		select {
-		case <-c:
-			logFromStart(start, "Closing, please wait until proper shutdown to prevent database corruption")
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
+	); err != nil {
+		return err
+	}
+	logFromStart(start, "export done")
+	return nil
 }
 
 func logFromStart(start time.Time, msg string) {

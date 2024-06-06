@@ -12,7 +12,6 @@ package io
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"os"
 	"strings"
@@ -96,14 +95,12 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 	}
 }
 
-func exportExampleState(t *testing.T) ([]byte, common.Hash) {
+func createExampleLiveDB(t *testing.T, sourceDir string) common.Hash {
 	t.Helper()
-	sourceDir := t.TempDir()
-
 	// Create a small LiveDB.
 	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5LiveConfig, 1024)
 	if err != nil {
-		t.Fatalf("failed to create test DB: %v", err)
+		t.Fatalf("failed to open test DB: %v", err)
 	}
 
 	addr1 := common.Address{1}
@@ -137,9 +134,18 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 		t.Fatalf("failed to close DB: %v", err)
 	}
 
+	return hash
+}
+
+func exportExampleState(t *testing.T) ([]byte, common.Hash) {
+	t.Helper()
+	sourceDir := t.TempDir()
+
+	hash := createExampleLiveDB(t, sourceDir)
+
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(context.Background(), sourceDir, &buffer); err != nil {
+	if err := Export(sourceDir, &buffer); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 
