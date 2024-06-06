@@ -92,7 +92,10 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 func createTestLive(t *testing.T, sourceDir string) {
 	t.Helper()
-	_ = createExampleLiveDB(t, sourceDir)
+	db := createExampleLiveDB(t, sourceDir)
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close example live db: %v", err)
+	}
 }
 
 func createTestArchive(t *testing.T, sourceDir string) {

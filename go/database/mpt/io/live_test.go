@@ -149,14 +149,11 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 	return exportExampleStateWithModification(t, nil)
 }
 
-func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptState)) ([]byte, common.Hash) {
-	t.Helper()
-	sourceDir := t.TempDir()
-
+func createExampleLiveDB(t *testing.T, sourceDir string) *mpt.MptState {
 	// Create a small LiveDB.
 	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5LiveConfig, 1024)
 	if err != nil {
-		t.Fatalf("failed to open test DB: %v", err)
+		t.Fatalf("failed to create test DB: %v", err)
 	}
 
 	addr1 := common.Address{1}
@@ -188,12 +185,21 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 		db.SetCode(addr4, []byte("some_code")),
 	)
 
-	if modify != nil {
-		modify(db)
-	}
-
 	if err != nil {
 		t.Fatalf("failed to seed test DB: %v", err)
+
+	}
+	return db
+}
+
+func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptState)) ([]byte, common.Hash) {
+	t.Helper()
+	sourceDir := t.TempDir()
+
+	db := createExampleLiveDB(t, sourceDir)
+
+	if modify != nil {
+		modify(db)
 	}
 
 	hash, err := db.GetHash()
@@ -203,15 +209,6 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 	if err := db.Close(); err != nil {
 		t.Fatalf("failed to close DB: %v", err)
 	}
-
-	return hash
-}
-
-func exportExampleState(t *testing.T) ([]byte, common.Hash) {
-	t.Helper()
-	sourceDir := t.TempDir()
-
-	hash := createExampleLiveDB(t, sourceDir)
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
