@@ -42,10 +42,14 @@ func DecodeFromRlp(data []byte) (Node, error) {
 			return nil, fmt.Errorf("invalid prefix type: got: %T, wanted: String", list.Items[0])
 		}
 		nibbles := compactPathToNibbles(path.Str)
+		if len(nibbles) > 64 {
+			return nil, fmt.Errorf("invalid path length: got: %v, wanted: <= 64", len(nibbles))
+		}
+		compactPath := CreatePathFromNibbles(nibbles)
 		if isEncodedLeafNode(path.Str) {
-			return decodeLeafNodeFromRlp(nibbles, list.Items[1])
+			return decodeLeafNodeFromRlp(compactPath, list.Items[1])
 		} else {
-			return decodeExtensionNodeFromRlp(nibbles, list.Items[1])
+			return decodeExtensionNodeFromRlp(compactPath, list.Items[1])
 		}
 	case 17:
 		return decodeBranchNodeFromRlp(list)
@@ -84,7 +88,7 @@ func DecodeEmbeddedFromRlp(data []byte) (Node, error) {
 // decodeExtensionNodeFromRlp decodes an extension node from RLP-encoded data.
 // It checks for malformed data and returns an error if the data is not valid.
 // Otherwise, it returns the decoded extension node.
-func decodeExtensionNodeFromRlp(path []Nibble, payload rlp.Item) (Node, error) {
+func decodeExtensionNodeFromRlp(path Path, payload rlp.Item) (Node, error) {
 	next, ok := payload.(rlp.String)
 	if !ok {
 		return nil, fmt.Errorf("invalid next type: got: %T, wanted: String", payload)
@@ -94,12 +98,12 @@ func decodeExtensionNodeFromRlp(path []Nibble, payload rlp.Item) (Node, error) {
 	}
 	var nextNode common.Hash
 	var embedded bool
-	if n := copy(nextNode[:], next.Str); n < common.HashSize {
+	if n := copy(nextNode[:], next.Str); n > 0 && n < common.HashSize {
 		embedded = true
 		nextNode[n] = 0xF // terminal marker
 	}
 
-	return &ExtensionNode{path: CreatePathFromNibbles(path), nextHash: nextNode, nextIsEmbedded: embedded}, nil
+	return &ExtensionNode{path: path, nextHash: nextNode, nextIsEmbedded: embedded}, nil
 }
 
 // decodeLeafNodeFromRlp decodes a leaf node from RLP-encoded data.
@@ -109,18 +113,25 @@ func decodeExtensionNodeFromRlp(path []Nibble, payload rlp.Item) (Node, error) {
 // in other cases, it is an account node.
 // Ths method checks for malformed data and returns an error if the data is not valid.
 // Otherwise, it returns the decoded leaf node.
-func decodeLeafNodeFromRlp(path []Nibble, payload rlp.Item) (Node, error) {
+func decodeLeafNodeFromRlp(path Path, payload rlp.Item) (Node, error) {
 	str, ok := payload.(rlp.String)
 	if !ok {
 		return nil, fmt.Errorf("invalid node payload: got: %T, wanted: String", payload)
 	}
 
-	// payload matches the size of the storage slot
-	if len(str.Str) <= common.ValueSize {
-		return decodeValueNodeFromRlp(path, str)
+	innerPayload, err := rlp.Decode(str.Str)
+	if err != nil {
+		return nil, err
 	}
 
-	return decodeAccountFromRlp(path, str)
+	switch n := innerPayload.(type) {
+	case rlp.String:
+		return decodeValueNodeFromRlp(path, n)
+	case rlp.List:
+		return decodeAccountFromRlp(path, n)
+	}
+
+	return nil, fmt.Errorf("invalid leaf node type: got: %T, wanted: String or List", innerPayload)
 }
 
 // decodeValueNodeFromRlp decodes a value node from RLP-encoded data.
@@ -129,15 +140,15 @@ func decodeLeafNodeFromRlp(path []Nibble, payload rlp.Item) (Node, error) {
 // information is not available in the RLP-encoded data.
 // It checks for malformed data and returns an error if the data is not valid.
 // Otherwise, it returns the decoded value node.
-func decodeValueNodeFromRlp(path []Nibble, payload rlp.String) (Node, error) {
-	if len(path) > common.KeySize {
-		return nil, fmt.Errorf("invalid value path length: got: %v, wanted: <= %v", len(path), common.KeySize)
+func decodeValueNodeFromRlp(path Path, payload rlp.String) (Node, error) {
+	if got, want := path.Length(), 2*common.KeySize; got > want {
+		return nil, fmt.Errorf("invalid value path length: got: %v, wanted: <= %v", got, want)
 	}
 	var key common.Key
-	copy(key[:], string(path)) // it does not cover full key as it is not available in RLP.
+	copy(key[:], path.GetPackedNibbles()) // it does not cover full key as it is not available in RLP.
 	var value common.Value
 	copy(value[:], payload.Str)
-	return &ValueNode{key: key, value: value, pathLength: byte(len(path))}, nil
+	return &ValueNode{key: key, value: value, pathLength: byte(path.Length())}, nil
 }
 
 // decodeAccountFromRlp decodes an account node from RLP-encoded data.
@@ -146,19 +157,9 @@ func decodeValueNodeFromRlp(path []Nibble, payload rlp.String) (Node, error) {
 // information is not available in the RLP-encoded data.
 // It checks for malformed data and returns an error if the data is not valid.
 // Otherwise, it returns the decoded account node.
-func decodeAccountFromRlp(path []Nibble, payload rlp.String) (Node, error) {
-	if len(path) > common.AddressSize {
-		return nil, fmt.Errorf("invalid account path length: got: %v, wanted: <= %v", len(path), common.AddressSize)
-	}
-
-	// may be account node
-	accountPayload, err := rlp.Decode(payload.Str)
-	if err != nil {
-		return nil, err
-	}
-	items, ok := accountPayload.(rlp.List)
-	if !ok {
-		return nil, fmt.Errorf("invalid account payload type: got: %T, wanted: List", accountPayload)
+func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
+	if got, want := path.Length(), 2*common.AddressSize; got > want {
+		return nil, fmt.Errorf("invalid account path length: got: %v, wanted: <= %v", got, want)
 	}
 
 	if len(items.Items) != 4 {
@@ -185,7 +186,7 @@ func decodeAccountFromRlp(path []Nibble, payload rlp.String) (Node, error) {
 	}
 
 	var address common.Address
-	copy(address[:], string(path)) // it does not cover full key as it is not available in RLP.
+	copy(address[:], path.GetPackedNibbles()) // it does not cover full key as it is not available in RLP.
 
 	storageHashStr, ok := items.Items[2].(rlp.String)
 	if !ok {
@@ -211,7 +212,7 @@ func decodeAccountFromRlp(path []Nibble, payload rlp.String) (Node, error) {
 	return &AccountNode{
 		address:     address,
 		storageHash: storageHash,
-		pathLength:  byte(len(path)),
+		pathLength:  byte(path.Length()),
 		info: AccountInfo{
 			Nonce:    common.ToNonce(nonce),
 			Balance:  balanceInt,
@@ -234,7 +235,7 @@ func decodeBranchNodeFromRlp(list rlp.List) (Node, error) {
 		}
 		var hash common.Hash
 		var embedded bool
-		if n := copy(hash[:], child.Str); n < common.HashSize {
+		if n := copy(hash[:], child.Str); n > 0 && n < common.HashSize {
 			embedded = true
 			hash[n] = 0xF // terminal marker
 		}
