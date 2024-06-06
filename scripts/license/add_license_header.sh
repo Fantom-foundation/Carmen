@@ -70,11 +70,18 @@ add_license_to_files() {
     local license_header="$(extend_license_header "$prefix")"
     local result=0
 
-    # expand list if ignored files to a single string
-    local ignore=$(printf " ! -path *%s" "${ignore_files[@]}")
+    # Create an array for the find command arguments
+    # This approach prevents the shell from expanding the wildcard
+    # characters in the ignore_files array, which would happen if
+    # the script was called from a directory containing files/directories
+    # that match the wildcard characters.
+    local find_args=("$root_dir" -type f -name "*$file_extension")
+    for pattern in "${ignore_files[@]}"; do
+        find_args+=(! -path "*$pattern")
+    done
 
     # Get a list of all files in the project directory
-    local all_files=($(find "$root_dir" -type f -name "*$file_extension" $ignore))
+    local all_files=($(find "${find_args[@]}"))
 
     # Iterate over all files and add the license header if needed
     for f in "${all_files[@]}"; do

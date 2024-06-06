@@ -15,6 +15,7 @@ package mpt
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -41,23 +42,76 @@ func (NilVerificationObserver) StartVerification()        {}
 func (NilVerificationObserver) Progress(msg string)       {}
 func (NilVerificationObserver) EndVerification(res error) {}
 
-// VerifyFileForest runs list of validation checks on the forest stored in the given
+// VerifyMptState runs validation checks on the forest and code hashes
+// stored in the given directory.
+// Forest checks:
+//   - all required files are present and can be read
+//   - all referenced nodes are present
+//   - all hashes are consistent
+//
+// Code Hashes checks:
+//  1. Fatal checks
+//     - all CodeHashes of accounts are present in the code file
+//     - all byte-codes within the code file matches their hashed representation in accounts
+//  2. Non-fatal checks
+//     - there are no extra Code Hashes not referenced by any account
+func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+	if observer == nil {
+		observer = NilVerificationObserver{}
+	}
+
+	observer.StartVerification()
+	defer func() {
+		observer.EndVerification(res)
+	}()
+
+	// Open stock data structures for content verification.
+	observer.Progress("Obtaining read access to files ...")
+	source, err := openVerificationNodeSource(directory, config)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	err = verifyContractCodes(directory, source, observer)
+	if err != nil {
+		return err
+	}
+
+	err = verifyForest(directory, config, roots, source, observer)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// verifyFileForest runs list of validation checks on the forest stored in the given
 // directory. These checks include:
 //   - all required files are present and can be read
 //   - all referenced nodes are present
 //   - all hashes are consistent
-func VerifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func verifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
+
 	observer.StartVerification()
 	defer func() {
-		if r := recover(); r != nil {
-			panic(r)
-		}
 		observer.EndVerification(res)
 	}()
 
+	// Open stock data structures for content verification.
+	observer.Progress("Obtaining read access to files ...")
+	source, err := openVerificationNodeSource(directory, config)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	return verifyForest(directory, config, roots, source, observer)
+}
+
+func verifyForest(directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
 	// ------------------------- Meta-Data Checks -----------------------------
 
 	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...", directory))
@@ -77,14 +131,6 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 	if err := file.VerifyStock[uint64](directory+"/values", valueEncoder); err != nil {
 		return err
 	}
-
-	// Open stock data structures for content verification.
-	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
 
 	// ----------------- First Pass: check Node References --------------------
 
@@ -108,7 +154,7 @@ func VerifyFileForest(directory string, config MptConfig, roots []Root, observer
 		return errors.Join(errs...)
 	}
 
-	err = source.forAllInnerNodes(func(node Node) error {
+	err := source.forAllInnerNodes(func(node Node) error {
 		switch n := node.(type) {
 		case *AccountNode:
 			return checkId(n.storage)
@@ -570,6 +616,48 @@ func verifyHashesStoredWithParents[N any](
 	return nil
 }
 
+// verifyContractCodes runs list of validation checks on accounts and on the
+// code file stored in the given directory. These checks include:
+// 1) Fatal checks
+// - All CodeHashes within accounts are present in the code file
+// - All CodeHashes within the code file are correct matching the contract byte-codes
+// 2) Non-fatal checks
+// - There are no extra Code Hashes not referenced by any account
+func verifyContractCodes(directory string, source *verificationNodeSource, observer VerificationObserver) error {
+	observer.Progress(fmt.Sprintf("Checking contract codes ..."))
+
+	codeFile := filepath.Join(directory, "codes.dat")
+	codes, err := readCodes(codeFile)
+	if err != nil {
+		return err
+	}
+
+	// Check that the codes are correctly indexed.
+	for hash, code := range codes {
+		if got, want := common.Keccak256(code), hash; got != want {
+			return fmt.Errorf("unexpected code hash, got: %x want: %x", got, want)
+		}
+	}
+	// Check that all referenced codes are present in the code file.
+	usedHashes := make(map[common.Hash]struct{})
+	err = source.forAccountNodes(func(acc *AccountNode) error {
+		codeHash := acc.info.CodeHash
+		usedHashes[codeHash] = struct{}{}
+		if _, exists := codes[codeHash]; codeHash != emptyCodeHash && !exists {
+			return fmt.Errorf("hash %x is missing in code file", codeHash)
+		}
+		return nil
+	})
+	// find any extra hashes
+	for hash := range codes {
+		if _, exists := usedHashes[hash]; !exists {
+			observer.Progress(fmt.Sprintf("Contract %x is not referenced by any account\n", hash))
+		}
+	}
+
+	return err
+}
+
 type verificationNodeSource struct {
 	config MptConfig
 
@@ -778,6 +866,24 @@ func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error 
 
 func (s *verificationNodeSource) forAllNodes(check func(NodeId, Node) error) error {
 	return s.forNodes(check, true, true, true, true)
+}
+
+func (s *verificationNodeSource) forAccountNodes(check func(*AccountNode) error) error {
+	var errs []error
+
+	for i := s.accountIds.GetLowerBound(); i < s.accountIds.GetUpperBound(); i++ {
+		if s.accountIds.Contains(i) {
+			account, err := s.accounts.Get(i)
+			if err != nil { // with IO errors => stop immediately
+				return err
+			}
+			if err := check(&account); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (s *verificationNodeSource) forNodes(

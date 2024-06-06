@@ -94,3 +94,8 @@ func (a Amount) ToBig() *big.Int {
 func (a Amount) String() string {
 	return a.internal.String()
 }
+
+// Uint256 returns the amount as an uint256.
+func (a Amount) Uint256() uint256.Int {
+	return a.internal
+}
