@@ -12,14 +12,15 @@ package io
 
 import (
 	"context"
-	"errors"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-var errCanceled = errors.New("export was interrupted")
+const ErrCanceled = common.ConstError("export was interrupted")
 
 // isContextDone returns true if the given context CancelFunc has been called.
 // Otherwise, returns false.

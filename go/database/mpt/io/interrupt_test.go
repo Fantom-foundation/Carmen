@@ -11,10 +11,9 @@
 package io
 
 import (
+	"errors"
 	"io"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -47,54 +46,35 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 	for name, tf := range tests {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			// Create a small db to be exported.
 			sourceDir := t.TempDir()
 			tf.createDB(t, sourceDir)
 
-			writerWg := new(sync.WaitGroup)
-			writer := &mockWriter{wg: writerWg, signalWrite: false, waitTime: 0}
-			writerWg.Add(1)
-
+			writer := &mockWriter{signalInterrupt: false}
 			// first find number of writes
-			if err := tf.export(sourceDir, &mockWriter{wg: writerWg}); err != nil {
+			if err := tf.export(sourceDir, writer); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// save max count and reset number of writes
-			maxCount := writer.numOfWrites.Load()
+			maxCount := writer.numOfWrites
 			// reset number of writes, so we can compare
 			// that export was indeed interrupted
-			writer.numOfWrites = atomic.Uint32{}
-			writer.signalWrite = true
-			// give the interrupt some time
-			writer.waitTime = 100 * time.Millisecond
-			hasEnded := sync.WaitGroup{}
-			hasEnded.Add(1)
-			go func() {
+			writer.numOfWrites = 0
+			writer.signalInterrupt = true
 
-				defer hasEnded.Done()
-				if err := tf.export(sourceDir, writer); err != nil {
-					got := err.Error()
-					want := errCanceled.Error()
-					if !strings.Contains(got, want) {
-						t.Errorf("unexpected error: got: %v, want: %v", got, want)
-					}
-					return
-				}
-				t.Error("export was interrupt hence should raise an error")
-			}()
-
-			// wait for first write
-			writerWg.Wait()
-			err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-			if err != nil {
-				t.Fatal("failed to create a SIGINT signal")
+			err := tf.export(sourceDir, writer)
+			if err == nil {
+				t.Fatal("export was interrupted, error must not be nil")
 			}
 
-			// wait for the export to finish
-			hasEnded.Wait()
-			if maxCount == writer.numOfWrites.Load() {
+			got := err.Error()
+			want := ErrCanceled.Error()
+			if !strings.Contains(got, want) {
+				t.Errorf("unexpected error: got: %v, want: %v", got, want)
+			}
+
+			if maxCount == writer.numOfWrites {
 				t.Error("export was not interrupted")
 			}
 
@@ -149,20 +129,21 @@ func checkCanOpenArchive(t *testing.T, sourceDir string) {
 }
 
 type mockWriter struct {
-	numOfWrites atomic.Uint32
-	signalWrite bool
-	waitTime    time.Duration
-	wg          *sync.WaitGroup
+	numOfWrites     int
+	signalInterrupt bool
 }
 
 func (m *mockWriter) Write([]byte) (n int, err error) {
-	m.numOfWrites.Add(1)
+	m.numOfWrites++
 	// inform the test that first write has happened
-	if m.signalWrite {
-		m.signalWrite = false
-		m.wg.Done()
+	if m.numOfWrites > 0 && m.signalInterrupt {
+		m.signalInterrupt = false
+		err = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		if err != nil {
+			return 0, errors.New("failed to create a SIGINT signal")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	// slow down writing to be able to interrupt the export
-	time.Sleep(m.waitTime)
+
 	return 0, nil
 }
