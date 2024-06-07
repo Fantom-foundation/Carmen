@@ -14,6 +14,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -35,12 +36,12 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 		"live": {
 			export:   Export,
 			createDB: createTestLive,
-			check:    checkLive,
+			check:    checkCanOpenLiveDB,
 		},
 		"archive": {
 			export:   ExportArchive,
 			createDB: createTestArchive,
-			check:    checkArchive,
+			check:    checkCanOpenArchive,
 		},
 	}
 
@@ -57,19 +58,23 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 
 			// first find number of writes
 			if err := tf.export(sourceDir, &mockWriter{wg: writerWg}); err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// save max count and reset number of writes
-			maxCount := writer.numOfWrites
+			maxCount := writer.numOfWrites.Load()
+			// reset number of writes, so we can compare
+			// that export was indeed interrupted
+			writer.numOfWrites = atomic.Uint32{}
 			writer.signalWrite = true
+			// give the interrupt some time
 			writer.waitTime = 100 * time.Millisecond
-			hasEnded := new(sync.WaitGroup)
+			hasEnded := sync.WaitGroup{}
+			hasEnded.Add(1)
 			go func() {
-				hasEnded.Add(1)
+
 				defer hasEnded.Done()
-				if err := ExportArchive(sourceDir, writer); err != nil {
+				if err := tf.export(sourceDir, writer); err != nil {
 					got := err.Error()
 					want := errCanceled.Error()
 					if !strings.Contains(got, want) {
@@ -84,13 +89,12 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			writerWg.Wait()
 			err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 			if err != nil {
-				t.Error("failed to create a SIGINT signal")
-				return
+				t.Fatal("failed to create a SIGINT signal")
 			}
 
 			// wait for the export to finish
 			hasEnded.Wait()
-			if maxCount == writer.numOfWrites {
+			if maxCount == writer.numOfWrites.Load() {
 				t.Error("export was not interrupted")
 			}
 
@@ -114,14 +118,15 @@ func createTestArchive(t *testing.T, sourceDir string) {
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
-	_ = fillTestBlocksIntoArchive(t, source)
+	fillTestBlocksIntoArchive(t, source)
 	if err = source.Close(); err != nil {
 		t.Fatalf("failed to close test DB: %v", err)
 	}
 }
 
-func checkLive(t *testing.T, sourceDir string) {
-	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+// checkCanOpenLiveDB makes sure LiveDB is not corrupted and can be opened (and closed)
+func checkCanOpenLiveDB(t *testing.T, sourceDir string) {
+	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -131,7 +136,8 @@ func checkLive(t *testing.T, sourceDir string) {
 	}
 }
 
-func checkArchive(t *testing.T, sourceDir string) {
+// checkCanOpenLiveDB makes sure Archive is not corrupted and can be opened (and closed)
+func checkCanOpenArchive(t *testing.T, sourceDir string) {
 	archive, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
 	if err != nil {
 		t.Fatalf("failed to open archive: %v", err)
@@ -143,14 +149,14 @@ func checkArchive(t *testing.T, sourceDir string) {
 }
 
 type mockWriter struct {
-	numOfWrites int
+	numOfWrites atomic.Uint32
 	signalWrite bool
 	waitTime    time.Duration
 	wg          *sync.WaitGroup
 }
 
-func (m *mockWriter) Write(_ []byte) (n int, err error) {
-	m.numOfWrites++
+func (m *mockWriter) Write([]byte) (n int, err error) {
+	m.numOfWrites.Add(1)
 	// inform the test that first write has happened
 	if m.signalWrite {
 		m.signalWrite = false

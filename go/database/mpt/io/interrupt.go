@@ -32,6 +32,8 @@ func isContextDone(ctx context.Context) bool {
 	}
 }
 
+// catchInterrupt catches SIGTERM and SIGINT signals and
+// prevents export from corrupting database by canceling its context.
 func catchInterrupt() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	c := make(chan os.Signal, 1)
