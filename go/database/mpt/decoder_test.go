@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
+	"go.uber.org/mock/gomock"
 	"slices"
 	"testing"
 )
@@ -22,10 +23,11 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 	hash := common.Keccak256([]byte{0x01, 0x02, 0x03, 0x04})
 
 	value := []byte{0x11, 0x22, 0x33, 0x44}
+	valueRlp := rlp.Encode(rlp.String{Str: value})
 	var commonValue common.Value
 	copy(commonValue[:], value[:])
 
-	valueNode := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: value}}}
+	valueNode := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: valueRlp}}}
 	valueNodeRlp := rlp.Encode(valueNode)
 	var valueNodeRlpAsHash common.Hash
 	copy(valueNodeRlpAsHash[:], valueNodeRlp)
@@ -78,11 +80,11 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 		rlp.String{Str: hash[:]}},
 	}
 
-	key1 := common.Key{0x1, 0x2, 0x3, 0x4}
-	key2 := common.Key{0x1, 0x2, 0x3, 0x4, 0x5}
+	key1 := common.Key{0x12, 0x34}
+	key2 := common.Key{0x01, 0x23, 0x45}
 
-	address1 := common.Address{0x1, 0x2, 0x3, 0x4}
-	address2 := common.Address{0x1, 0x2, 0x3, 0x4, 0x5}
+	address1 := common.Address{0x12, 0x34}
+	address2 := common.Address{0x01, 0x23, 0x45}
 
 	tests := map[string]struct {
 		item     rlp.Item
@@ -109,11 +111,11 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 			&ExtensionNode{path: CreatePathFromNibbles([]Nibble{0x1, 0x2, 0x3, 0x4, 0x5}), nextHash: valueNodeRlpAsHash, nextIsEmbedded: true},
 		},
 		"even value": {
-			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: value}}},
+			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: valueRlp}}},
 			&ValueNode{key: key1, value: commonValue, pathLength: 4},
 		},
 		"odd value": {
-			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.String{Str: value}}},
+			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.String{Str: valueRlp}}},
 			&ValueNode{key: key2, value: commonValue, pathLength: 5},
 		},
 		"branch": {
@@ -153,7 +155,8 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 
 func TestDecoder_DecodeEmbeddedNode_CanDecode(t *testing.T) {
 	value := []byte{0x11, 0x22, 0x33, 0x44}
-	valueNode := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: value}}}
+	valueRlp := rlp.Encode(rlp.String{Str: value})
+	valueNode := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: valueRlp}}}
 	valueNodeRlp := rlp.Encode(valueNode)
 
 	var commonValue common.Value
@@ -171,7 +174,7 @@ func TestDecoder_DecodeEmbeddedNode_CanDecode(t *testing.T) {
 		t.Fatalf("failed to decode node: %v", err)
 	}
 
-	expectedValueNode := ValueNode{key: common.Key{0x1, 0x2, 0x3, 0x4}, value: commonValue, pathLength: 4}
+	expectedValueNode := ValueNode{key: common.Key{0x12, 0x34}, value: commonValue, pathLength: 4}
 	if matchNodesRlpDecoded(t, &expectedValueNode, got); err != nil {
 		t.Fatalf("failed to match nodes: %v", err)
 	}
@@ -219,8 +222,6 @@ func TestDecoder_CorruptedRlp(t *testing.T) {
 	trailingBytes := rlp.Encode(threeItemsList)
 	trailingBytes = append(trailingBytes, 0x01, 0x02, 0x03)
 
-	nonListSubItem := rlp.String{Str: rlp.Encode(strLongerThan32)}
-
 	nonceNotStr := rlp.String{Str: rlp.Encode(rlp.List{Items: []rlp.Item{rlp.List{}, longStr, longStr, longStr}})}
 	nonceWrongNumber := rlp.String{Str: rlp.Encode(rlp.List{Items: []rlp.Item{longStr, longStr, longStr, longStr}})}
 
@@ -243,34 +244,35 @@ func TestDecoder_CorruptedRlp(t *testing.T) {
 		childrenNotStrings[i] = list
 	}
 
-	tests := map[string][]byte{
+	tests := map[string]struct {
+		rlp []byte
+	}{
 		"":                                         {},
-		"single string":                            rlp.EncodeInto([]byte{}, str),
-		"3 items list":                             rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, str, str}}),
-		"two items node, path is list":             rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{list, str}}),
-		"possible value but nested list":           rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.List{}}}),
-		"possible value but too long key":          rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: append([]byte{0x31, 0x23, 0x45}, strLongerThan32.Str...)}, str}}),
-		"possible ext but nested list":             rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, rlp.List{}}}),
-		"possible ext but too long hash":           rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, strLongerThan32}}),
-		"possible account but 3 items nested list": rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, threeItemsList}}),
-		"possible account but nested empty":        rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, rlp.String{Str: trailingBytes}}}),
-		"possible account but nested not list":     rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, nonListSubItem}}),
-		"possible account but nonce not string":    rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, nonceNotStr}}),
-		"possible account but nonce wrong number":  rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, nonceWrongNumber}}),
-		"possible account but balance not string":  rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, balanceNotStr}}),
-		"possible account but balance too long":    rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, balanceWrongNumber}}),
-		"possible account but storage not string":  rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, storageNotStr}}),
-		"possible account but storage too long":    rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, storageTooLong}}),
-		"possible account but codeHash not string": rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, codeHashNotStr}}),
-		"possible account but codeHash too long":   rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, codeHashTooLong}}),
-		"possible account but long address":        rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{tooLongNumberItemsList, strLongerThan32}}),
-		"possible branch too long child":           rlp.EncodeInto([]byte{}, rlp.List{Items: childrenTooLongHashes}),
-		"possible branch child not strings":        rlp.EncodeInto([]byte{}, rlp.List{Items: childrenNotStrings}),
+		"single string":                            {rlp: rlp.EncodeInto([]byte{}, str)},
+		"3 items list":                             {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, str, str}})},
+		"two items node, path is list":             {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{list, str}})},
+		"possible value but nested list":           {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.List{}}})},
+		"possible value but too long key":          {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: append([]byte{0x31, 0x23, 0x45}, strLongerThan32.Str...)}, str}})},
+		"possible ext but nested list":             {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, rlp.List{}}})},
+		"possible ext but too long hash":           {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, strLongerThan32}})},
+		"possible account but 3 items nested list": {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, threeItemsList}})},
+		"possible account but nested empty":        {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, rlp.String{Str: trailingBytes}}})},
+		"possible account but nonce not string":    {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, nonceNotStr}})},
+		"possible account but nonce wrong number":  {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, nonceWrongNumber}})},
+		"possible account but balance not string":  {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, balanceNotStr}})},
+		"possible account but balance too long":    {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, balanceWrongNumber}})},
+		"possible account but storage not string":  {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, storageNotStr}})},
+		"possible account but storage too long":    {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, storageTooLong}})},
+		"possible account but codeHash not string": {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, codeHashNotStr}})},
+		"possible account but codeHash too long":   {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, codeHashTooLong}})},
+		"possible account but long address":        {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{tooLongNumberItemsList, strLongerThan32}})},
+		"possible branch too long child":           {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: childrenTooLongHashes})},
+		"possible branch child not strings":        {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: childrenNotStrings})},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := DecodeFromRlp(test); err == nil {
+			if _, err := DecodeFromRlp(test.rlp); err == nil {
 				t.Fatalf("expected error, got nil")
 			}
 		})
@@ -317,6 +319,70 @@ func Test_compactPathToNibbles(t *testing.T) {
 				t.Errorf("unexpected result, got %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+func Test_Decoder_Decode_Node_Instances(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{0xAB, 0xCD, 0xEF}
+	key := common.Key{0x12, 0x34, 0x56, 0x78}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	tests := map[string]struct {
+		desc NodeDesc
+	}{
+		"branchNode": {&Branch{
+			children: Children{
+				0xA: &Account{address: address, pathLength: 39, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+			}}},
+		"extensionNode": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+		}},
+		"accountNode": {&Account{address: address, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}}},
+		"valueNode":   {&Value{key: key, length: 64, value: common.Value{0x01, 0x02, 0x03, 0x04}}},
+		"emptyNode":   {&Empty{}},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, node := ctxt.Build(test.desc)
+			handle := node.GetReadHandle()
+			defer handle.Release()
+
+			want := handle.Get()
+			rlp, err := encodeToRlp(want, ctxt, []byte{})
+			if err != nil {
+				t.Fatalf("failed to encode node: %v", err)
+			}
+
+			got, err := DecodeFromRlp(rlp)
+			if err != nil {
+				t.Fatalf("failed to decode node: %v", err)
+			}
+
+			// customise input nodes as keys and addresses are different after RLP decoding.
+			// RLP decoded contains hashes of keys and addresses, not the original values.
+			switch want := want.(type) {
+			case *AccountNode:
+				nibbles := AddressToNibblePath(want.address, ctxt)[64-want.pathLength:]
+				path := CreatePathFromNibbles(nibbles)
+				var address common.Address
+				copy(address[:], path.GetPackedNibbles())
+				want.address = address
+			case *ValueNode:
+				nibbles := KeyToNibblePath(want.key, ctxt)
+				path := CreatePathFromNibbles(nibbles)
+				var key common.Key
+				copy(key[:], path.GetPackedNibbles())
+				want.key = key
+			}
+
+			matchNodesRlpDecoded(t, want, got)
+		})
+
 	}
 }
 
