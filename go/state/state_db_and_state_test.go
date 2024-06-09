@@ -33,9 +33,8 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 	addr2 := common.Address{2}
 	addr3 := common.Address{3}
 
-	max := common.GetMaxBalance()
 	minBalance := amount.NewAmount()
-	maxBalance := amount.NewAmountFromBytes(max[:]...)
+	maxBalance := amount.Max()
 
 	for _, config := range initStates() {
 		config := config
