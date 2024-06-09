@@ -8,7 +8,7 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package carmen
+package amount
 
 import (
 	"fmt"
@@ -98,4 +98,42 @@ func (a Amount) String() string {
 // Uint256 returns the amount as an uint256.
 func (a Amount) Uint256() uint256.Int {
 	return a.internal
+}
+
+// Bytes32 returns the amount as a 32 byte array.
+func (a Amount) Bytes32() [32]byte {
+	return a.internal.Bytes32()
+}
+
+// Add returns the sum of two amounts.
+func Add(a, b Amount) Amount {
+	result := Amount{}
+	result.internal.Add(&a.internal, &b.internal)
+	return result
+}
+
+// AddOverflow returns the sum of two amounts and a boolean indicating overflow.
+func AddOverflow(a, b Amount) (Amount, bool) {
+	result := Amount{}
+	_, overflow := result.internal.AddOverflow(&a.internal, &b.internal)
+	return result, overflow
+}
+
+// Sub returns the difference of two amounts.
+func Sub(a, b Amount) Amount {
+	result := Amount{}
+	result.internal.Sub(&a.internal, &b.internal)
+	return result
+}
+
+// SubUnderflow returns the difference of two amounts and a boolean indicating underflow.
+func SubUnderflow(a, b Amount) (Amount, bool) {
+	result := Amount{}
+	_, underflow := result.internal.SubOverflow(&a.internal, &b.internal)
+	return result, underflow
+}
+
+// Max returns the maximum amount.
+func Max() Amount {
+	return NewAmount(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)
 }

@@ -12,6 +12,7 @@ package carmen
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -443,6 +444,9 @@ type Value common.Value
 
 // Hash is a 32byte hash.
 type Hash common.Hash
+
+// Amount is a 256-bit unsigned integer used for token values like balances.
+type Amount = amount.Amount
 
 // Log summarizes a log message recorded during the execution of a contract.
 type Log struct {

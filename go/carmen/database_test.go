@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
@@ -1157,7 +1158,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 	if err := db.AddBlock(0, func(context HeadBlockContext) error {
 		if err := context.RunTransaction(func(context TransactionContext) error {
 			context.CreateAccount(addr)
-			context.AddBalance(addr, NewAmount(1000))
+			context.AddBalance(addr, amount.NewAmount(1000))
 			return nil
 		}); err != nil {
 			t.Fatalf("cannot commit transaction: %v", err)
@@ -1172,7 +1173,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 		// cannot start the same block
 		if err := db.AddBlock(uint64(i), func(context HeadBlockContext) error {
 			if err := context.RunTransaction(func(context TransactionContext) error {
-				context.AddBalance(addr, NewAmount(100))
+				context.AddBalance(addr, amount.NewAmount(100))
 				return nil
 			}); err != nil {
 				t.Fatalf("cannot commit transaction: %v", err)
@@ -1192,7 +1193,7 @@ func TestDatabase_Historic_Block_Available(t *testing.T) {
 	for i := 0; i < loops; i++ {
 		err := db.QueryBlock(uint64(i), func(context HistoricBlockContext) error {
 			if err := context.RunTransaction(func(context TransactionContext) error {
-				if got, want := context.GetBalance(addr), NewAmount(uint64(i*100)+1000); got != want {
+				if got, want := context.GetBalance(addr), amount.NewAmount(uint64(i*100)+1000); got != want {
 					t.Errorf("balance does not match for block: %d, got: %d != wanted: %d", i, got, want)
 				}
 				transactions++
@@ -1334,7 +1335,7 @@ func TestDatabase_Async_AddBlock_QueryHistory_Close_ShouldNotThrowUnexpectedErro
 			if err := context.RunTransaction(func(context TransactionContext) error {
 				addr := Address{byte(block)}
 				context.CreateAccount(addr)
-				context.AddBalance(addr, NewAmount(100))
+				context.AddBalance(addr, amount.NewAmount(100))
 				return nil
 			}); err != nil {
 				t.Fatalf("cannot commit transaction: %v", err)

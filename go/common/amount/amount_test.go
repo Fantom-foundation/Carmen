@@ -8,9 +8,10 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package carmen
+package amount
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -135,9 +136,72 @@ func TestAmount_IsUint64(t *testing.T) {
 	}
 }
 
+func TestAmount_Add(t *testing.T) {
+	if got, want := Add(NewAmount(50), NewAmount(150)), NewAmount(200); got != want {
+		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
+	}
+}
+
+func TestAmount_AddOverflow(t *testing.T) {
+	res, overflow := AddOverflow(NewAmount(1), NewAmount(1))
+	if overflow {
+		t.Errorf("overflow should not happen")
+	}
+	if got, want := res, NewAmount(2); got != want {
+		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
+	}
+
+	_, overflow = AddOverflow(NewAmount(1), Max())
+	if !overflow {
+		t.Errorf("overflow should happen")
+	}
+}
+
+func TestAmount_Sub(t *testing.T) {
+	if got, want := Sub(NewAmount(150), NewAmount(50)), NewAmount(100); got != want {
+		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
+	}
+}
+
+func TestAmount_SubUnderflow(t *testing.T) {
+	res, underflow := SubUnderflow(NewAmount(2), NewAmount(1))
+	if underflow {
+		t.Errorf("underflow should not happen")
+	}
+	if got, want := res, NewAmount(1); got != want {
+		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
+	}
+
+	_, underflow = SubUnderflow(NewAmount(1), NewAmount(2))
+	if !underflow {
+		t.Errorf("underflow should happen")
+	}
+}
+
 func TestAmount_ToUint256(t *testing.T) {
 	amount := NewAmount(100)
 	if got, want := amount.Uint256(), uint256.NewInt(100); got.Cmp(want) != 0 {
+		t.Errorf("wrong amount: got %v, wanted: %v", amount, want)
+	}
+}
+
+func TestAmount_ToBigInt(t *testing.T) {
+	amount := NewAmount(100)
+	if got, want := amount.ToBig(), big.NewInt(100); got.Cmp(want) != 0 {
+		t.Errorf("wrong amount: got %v, wanted: %v", amount, want)
+	}
+}
+
+func TestAmount_Bytes32(t *testing.T) {
+	x := NewAmount(1, 2, 3, 4)
+	xBytes := x.Bytes32()
+	if !bytes.Equal(xBytes[:], []byte{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 4}) {
+		t.Fail()
+	}
+}
+
+func TestAmount_Max(t *testing.T) {
+	if got, want := Max(), NewAmount(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF); got != want {
 		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
 	}
 }

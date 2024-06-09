@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 //go:generate mockgen -source state_db.go -destination state_db_mock.go -package state
@@ -38,9 +39,9 @@ type VmStateDB interface {
 	HasSuicided(common.Address) bool
 
 	// Balance
-	GetBalance(common.Address) *big.Int
-	AddBalance(common.Address, *big.Int)
-	SubBalance(common.Address, *big.Int)
+	GetBalance(common.Address) amount.Amount
+	AddBalance(common.Address, amount.Amount)
+	SubBalance(common.Address, amount.Amount)
 
 	// Nonce
 	GetNonce(common.Address) uint64
@@ -323,9 +324,9 @@ func (s accountClearingState) String() string {
 // balanceVale maintains a balance during a transaction.
 type balanceValue struct {
 	// The committed balance of an account, missing if never fetched.
-	original *big.Int
+	original *amount.Amount
 	// The current value of the account balance visible to the state DB users.
-	current big.Int
+	current amount.Amount
 }
 
 // nonceValue maintains a nonce during a transaction.
@@ -587,7 +588,7 @@ func (s *stateDB) HasSuicided(addr common.Address) bool {
 
 func (s *stateDB) Empty(addr common.Address) bool {
 	// Defined as balance == nonce == code == 0
-	return s.GetBalance(addr).Sign() == 0 && s.GetNonce(addr) == 0 && s.GetCodeSize(addr) == 0
+	return s.GetBalance(addr).IsZero() && s.GetNonce(addr) == 0 && s.GetCodeSize(addr) == 0
 }
 
 func clone(val *big.Int) *big.Int {
@@ -596,76 +597,78 @@ func clone(val *big.Int) *big.Int {
 	return res
 }
 
-func (s *stateDB) GetBalance(addr common.Address) *big.Int {
+func (s *stateDB) GetBalance(addr common.Address) amount.Amount {
 	// Check cache first.
 	if val, exists := s.balances[addr]; exists {
-		return clone(&val.current) // Do not hand out a pointer to the internal copy!
+		return val.current
 	}
 	// Since the value is not present, we need to fetch it from the store.
 	balance, err := s.state.GetBalance(addr)
 	if err != nil {
 		s.errors = append(s.errors, fmt.Errorf("failed to load balance for address %v: %w", addr, err))
-		return new(big.Int) // We need to return something that allows the VM to continue.
+		return amount.NewAmount() // We need to return something that allows the VM to continue.
 	}
-	res := balance.ToBigInt()
+	res := amount.NewAmountFromBytes(balance[:]...)
 	s.balances[addr] = &balanceValue{
-		original: res,
-		current:  *res,
+		original: &res,
+		current:  res,
 	}
-	return clone(res) // Do not hand out a pointer to the internal copy!
+	return res
 }
 
-func (s *stateDB) AddBalance(addr common.Address, diff *big.Int) {
+func (s *stateDB) AddBalance(addr common.Address, diff amount.Amount) {
 	s.createAccountIfNotExists(addr)
 
-	if diff == nil || diff.Sign() == 0 {
+	if diff.IsZero() {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
-		return
-	}
-	if diff.Sign() < 0 {
-		s.SubBalance(addr, diff.Abs(diff))
 		return
 	}
 
 	oldValue := s.GetBalance(addr)
-	newValue := new(big.Int).Add(oldValue, diff)
+	newValue, overflow := amount.AddOverflow(oldValue, diff)
 
-	s.balances[addr].current = *newValue
+	if overflow {
+		s.errors = append(s.errors, fmt.Errorf("failed to add balance for address %v: overflow", addr))
+		return
+	}
+
+	s.balances[addr].current = newValue
 	s.undo = append(s.undo, func() {
-		s.balances[addr].current = *oldValue
+		s.balances[addr].current = oldValue
 	})
 }
 
-func (s *stateDB) SubBalance(addr common.Address, diff *big.Int) {
+func (s *stateDB) SubBalance(addr common.Address, diff amount.Amount) {
 	s.createAccountIfNotExists(addr)
 
-	if diff == nil || diff.Sign() == 0 {
+	if diff.IsZero() {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
-		return
-	}
-	if diff.Sign() < 0 {
-		s.AddBalance(addr, diff.Abs(diff))
 		return
 	}
 
 	oldValue := s.GetBalance(addr)
-	newValue := new(big.Int).Sub(oldValue, diff)
+	newValue, underflow := amount.SubUnderflow(oldValue, diff)
 
-	if newValue.Sign() == 0 {
+	if underflow {
+		s.errors = append(s.errors, fmt.Errorf("failed to subtract balance for address %v: underflow", addr))
+		return
+	}
+
+	if newValue.IsZero() {
 		s.emptyCandidates = append(s.emptyCandidates, addr)
 	}
 
-	s.balances[addr].current = *newValue
+	s.balances[addr].current = newValue
 	s.undo = append(s.undo, func() {
-		s.balances[addr].current = *oldValue
+		s.balances[addr].current = oldValue
 	})
 }
 
 func (s *stateDB) resetBalance(addr common.Address) {
 	if val, exists := s.balances[addr]; exists {
-		if val.current.Sign() != 0 {
+		if !val.current.IsZero() {
 			oldValue := val.current
-			val.current = *big.NewInt(0)
+			val.current = amount.NewAmount()
 			s.undo = append(s.undo, func() {
 				val.current = oldValue
 			})
@@ -673,7 +676,7 @@ func (s *stateDB) resetBalance(addr common.Address) {
 	} else {
 		s.balances[addr] = &balanceValue{
 			original: nil,
-			current:  *big.NewInt(0),
+			current:  amount.NewAmount(),
 		}
 		s.undo = append(s.undo, func() {
 			delete(s.balances, addr)
@@ -1189,13 +1192,8 @@ func (s *stateDB) EndBlock(block uint64) {
 		if _, found := nonExistingAccounts[addr]; found {
 			continue
 		}
-		if value.original == nil || value.original.Cmp(&value.current) != 0 {
-			newBalance, err := common.ToBalance(&value.current)
-			if err != nil {
-				s.errors = append(s.errors, fmt.Errorf("unable to convert big.Int balance %v to common.Balance: %w", &value.current, err))
-			} else {
-				update.AppendBalanceUpdate(addr, newBalance)
-			}
+		if value.original == nil || *value.original != value.current {
+			update.AppendBalanceUpdate(addr, value.current.Bytes32())
 		}
 	}
 

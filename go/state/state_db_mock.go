@@ -15,6 +15,7 @@
 //
 //	mockgen -source state_db.go -destination state_db_mock.go -package state
 //
+
 // Package state is a generated GoMock package.
 package state
 
@@ -23,6 +24,7 @@ import (
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -74,7 +76,7 @@ func (mr *MockVmStateDBMockRecorder) AddAddressToAccessList(arg0 any) *gomock.Ca
 }
 
 // AddBalance mocks base method.
-func (m *MockVmStateDB) AddBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockVmStateDB) AddBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -212,10 +214,10 @@ func (mr *MockVmStateDBMockRecorder) Exist(arg0 any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockVmStateDB) GetBalance(arg0 common.Address) *big.Int {
+func (m *MockVmStateDB) GetBalance(arg0 common.Address) amount.Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(amount.Amount)
 	return ret0
 }
 
@@ -497,7 +499,7 @@ func (mr *MockVmStateDBMockRecorder) Snapshot() *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockVmStateDB) SubBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockVmStateDB) SubBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }
@@ -582,7 +584,7 @@ func (mr *MockStateDBMockRecorder) AddAddressToAccessList(arg0 any) *gomock.Call
 }
 
 // AddBalance mocks base method.
-func (m *MockStateDB) AddBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockStateDB) AddBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -827,10 +829,10 @@ func (mr *MockStateDBMockRecorder) GetArchiveStateDB(block any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockStateDB) GetBalance(arg0 common.Address) *big.Int {
+func (m *MockStateDB) GetBalance(arg0 common.Address) amount.Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(amount.Amount)
 	return ret0
 }
 
@@ -1152,7 +1154,7 @@ func (mr *MockStateDBMockRecorder) StartBulkLoad(block any) *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockStateDB) SubBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockStateDB) SubBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }
@@ -1237,7 +1239,7 @@ func (mr *MockNonCommittableStateDBMockRecorder) AddAddressToAccessList(arg0 any
 }
 
 // AddBalance mocks base method.
-func (m *MockNonCommittableStateDB) AddBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockNonCommittableStateDB) AddBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddBalance", arg0, arg1)
 }
@@ -1389,10 +1391,10 @@ func (mr *MockNonCommittableStateDBMockRecorder) Exist(arg0 any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockNonCommittableStateDB) GetBalance(arg0 common.Address) *big.Int {
+func (m *MockNonCommittableStateDB) GetBalance(arg0 common.Address) amount.Amount {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(amount.Amount)
 	return ret0
 }
 
@@ -1686,7 +1688,7 @@ func (mr *MockNonCommittableStateDBMockRecorder) Snapshot() *gomock.Call {
 }
 
 // SubBalance mocks base method.
-func (m *MockNonCommittableStateDB) SubBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockNonCommittableStateDB) SubBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SubBalance", arg0, arg1)
 }

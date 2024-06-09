@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -58,24 +59,20 @@ func (t *transactionContext) HasSelfDestructed(address Address) bool {
 
 func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
-		amount, err := NewAmountFromBigInt(t.state.GetBalance(common.Address(address)))
-		if err != nil {
-			return NewAmount()
-		}
-		return amount
+		return t.state.GetBalance(common.Address(address))
 	}
-	return NewAmount()
+	return amount.NewAmount()
 }
 
 func (t *transactionContext) AddBalance(address Address, value Amount) {
 	if t.state != nil {
-		t.state.AddBalance(common.Address(address), value.ToBig())
+		t.state.AddBalance(common.Address(address), value)
 	}
 }
 
 func (t *transactionContext) SubBalance(address Address, value Amount) {
 	if t.state != nil {
-		t.state.SubBalance(common.Address(address), value.ToBig())
+		t.state.SubBalance(common.Address(address), value)
 	}
 }
 
