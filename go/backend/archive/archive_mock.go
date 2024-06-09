@@ -225,3 +225,18 @@ func (mr *MockArchiveMockRecorder) GetStorage(block, account, slot any) *gomock.
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockArchive)(nil).GetStorage), block, account, slot)
 }
+
+// HasEmptyStorage mocks base method.
+func (m *MockArchive) HasEmptyStorage(block uint64, address common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", block, address)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockArchiveMockRecorder) HasEmptyStorage(block, address any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockArchive)(nil).HasEmptyStorage), block, address)
+}

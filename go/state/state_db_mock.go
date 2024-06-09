@@ -15,6 +15,7 @@
 //
 //	mockgen -source state_db.go -destination state_db_mock.go -package state
 //
+
 // Package state is a generated GoMock package.
 package state
 
@@ -377,6 +378,20 @@ func (m *MockVmStateDB) GetTransientState(arg0 common.Address, arg1 common.Key) 
 func (mr *MockVmStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockVmStateDB)(nil).GetTransientState), arg0, arg1)
+}
+
+// HasEmptyStorage mocks base method.
+func (m *MockVmStateDB) HasEmptyStorage(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockVmStateDBMockRecorder) HasEmptyStorage(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockVmStateDB)(nil).HasEmptyStorage), arg0)
 }
 
 // HasSuicided mocks base method.
@@ -1008,6 +1023,20 @@ func (mr *MockStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockStateDB)(nil).GetTransientState), arg0, arg1)
 }
 
+// HasEmptyStorage mocks base method.
+func (m *MockStateDB) HasEmptyStorage(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockStateDBMockRecorder) HasEmptyStorage(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockStateDB)(nil).HasEmptyStorage), arg0)
+}
+
 // HasSuicided mocks base method.
 func (m *MockStateDB) HasSuicided(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -1554,6 +1583,20 @@ func (m *MockNonCommittableStateDB) GetTransientState(arg0 common.Address, arg1 
 func (mr *MockNonCommittableStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockNonCommittableStateDB)(nil).GetTransientState), arg0, arg1)
+}
+
+// HasEmptyStorage mocks base method.
+func (m *MockNonCommittableStateDB) HasEmptyStorage(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockNonCommittableStateDBMockRecorder) HasEmptyStorage(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockNonCommittableStateDB)(nil).HasEmptyStorage), arg0)
 }
 
 // HasSuicided mocks base method.

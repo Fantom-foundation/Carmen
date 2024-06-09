@@ -77,6 +77,10 @@ func (s *ArchiveState) GetStorage(address common.Address, key common.Key) (commo
 	return storage, s.archiveError
 }
 
+func (s *ArchiveState) HasEmptyStorage(address common.Address) (bool, error) {
+	return s.archive.HasEmptyStorage(s.block, address)
+}
+
 func (s *ArchiveState) GetCode(address common.Address) ([]byte, error) {
 	if err := s.archiveError; err != nil {
 		return []byte{}, err

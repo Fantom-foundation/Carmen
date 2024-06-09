@@ -55,9 +55,10 @@ const (
 	kAddNonceStmt     = "INSERT INTO nonce(account,block,value) VALUES (?,?,?)"
 	kGetNonceStmt     = "SELECT value FROM nonce WHERE account = ? AND block <= ? ORDER BY block DESC LIMIT 1"
 
-	kCreateValueTable = "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, slot BLOB, block INT, value BLOB, PRIMARY KEY (account,reincarnation,slot,block))"
-	kAddValueStmt     = "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES (?,?,?,?,?)"
-	kGetValueStmt     = "SELECT value FROM storage WHERE account = ? AND reincarnation = ? AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1"
+	kCreateValueTable   = "CREATE TABLE IF NOT EXISTS storage (account BLOB, reincarnation INT, slot BLOB, block INT, value BLOB, PRIMARY KEY (account,reincarnation,slot,block))"
+	kAddValueStmt       = "INSERT INTO storage(account,reincarnation,slot,block,value) VALUES (?,?,?,?,?)"
+	kGetValueStmt       = "SELECT value FROM storage WHERE account = ? AND reincarnation = ? AND slot = ? AND block <= ? ORDER BY block DESC LIMIT 1"
+	kGetStorageSizeStmt = "SELECT COUNT(value) FROM storage WHERE account = ? AND reincarnation = ? AND block <= ?"
 
 	kCreateAccountHashTable = "CREATE TABLE IF NOT EXISTS account_hash (account BLOB, block INT, hash BLOB, PRIMARY KEY(account,block))"
 	kAddAccountHashStmt     = "INSERT INTO account_hash(account, block, hash) VALUES (?,?,?)"
@@ -79,6 +80,7 @@ type Archive struct {
 	getNonceStmt       *sql.Stmt
 	addValueStmt       *sql.Stmt
 	getValueStmt       *sql.Stmt
+	getStorageSize     *sql.Stmt
 	addAccountHashStmt *sql.Stmt
 	getAccountHashStmt *sql.Stmt
 
@@ -177,6 +179,10 @@ func NewArchive(file string) (*Archive, error) {
 	if err != nil {
 		return nil, err
 	}
+	getStorageSize, err := db.Prepare(kGetStorageSizeStmt)
+	if err != nil {
+		return nil, err
+	}
 	addAccountHash, err := db.Prepare(kAddAccountHashStmt)
 	if err != nil {
 		return nil, err
@@ -201,6 +207,7 @@ func NewArchive(file string) (*Archive, error) {
 		getNonceStmt:             getNonce,
 		addValueStmt:             addValue,
 		getValueStmt:             getValue,
+		getStorageSize:           getStorageSize,
 		addAccountHashStmt:       addAccountHash,
 		getAccountHashStmt:       getAccountHash,
 		reincarnationNumberCache: map[common.Address]int{},
@@ -468,6 +475,20 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, err
 	}
 	return common.Value{}, rows.Err()
+}
+
+func (a *Archive) HasEmptyStorage(block uint64, account common.Address) (bool, error) {
+	accountExists, reincarnation, err := a.getStatus(nil, block, account)
+	if !accountExists || err != nil {
+		return true, err
+	}
+
+	var storageSize int
+	err = a.getStorageSize.QueryRow(account[:], reincarnation, block).Scan(&storageSize)
+	if err != nil {
+		return false, err
+	}
+	return storageSize <= 0, nil
 }
 
 func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {

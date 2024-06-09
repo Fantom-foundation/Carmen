@@ -174,6 +174,11 @@ func (s *GoSchema2) SetStorage(address common.Address, key common.Key, value com
 	return err
 }
 
+func (s *GoSchema2) HasEmptyStorage(address common.Address) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *GoSchema2) GetCode(address common.Address) (value []byte, err error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {

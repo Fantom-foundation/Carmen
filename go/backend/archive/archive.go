@@ -27,6 +27,9 @@ type Archive interface {
 	// Add adds the changes of the given block to this archive.
 	Add(block uint64, update common.Update, hints any) error
 
+	// HasEmptyStorage returns true if account has empty storage in given block.
+	HasEmptyStorage(block uint64, address common.Address) (bool, error)
+
 	// GetBlockHeight gets the maximum block height inserted so far. If there
 	// is no block in the archive, the empty flag is set instead.
 	GetBlockHeight() (block uint64, empty bool, err error)

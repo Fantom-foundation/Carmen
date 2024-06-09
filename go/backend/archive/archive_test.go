@@ -565,3 +565,52 @@ func TestBlockHeight(t *testing.T) {
 		})
 	}
 }
+
+func TestHasEmptyStorage(t *testing.T) {
+	addr2 := common.Address{0x02}
+	for _, factory := range getArchiveFactories(t) {
+		t.Run(factory.label, func(t *testing.T) {
+			a := factory.getArchive(t.TempDir())
+			defer a.Close()
+
+			if err := a.Add(0, common.Update{
+				CreatedAccounts: []common.Address{addr1, addr2},
+				Slots: []common.SlotUpdate{
+					{Account: addr1, Key: common.Key{0x05}, Value: common.Value{0x47}},
+				},
+			}, nil); err != nil {
+				t.Fatalf("failed to add block 0; %s", err)
+			}
+
+			// existing account with a storage value
+			isEmpty, err := a.HasEmptyStorage(0, addr1)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage; %s", err)
+			}
+
+			if isEmpty {
+				t.Fatal("storage is not empty but archive returned true")
+			}
+
+			// existing account without a storage value
+			isEmpty, err = a.HasEmptyStorage(0, addr2)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage; %s", err)
+			}
+
+			if !isEmpty {
+				t.Fatal("storage is empty but archive returned false")
+			}
+
+			// non-existent account
+			isEmpty, err = a.HasEmptyStorage(0, common.Address{0x03})
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage; %s", err)
+			}
+
+			if !isEmpty {
+				t.Fatal("account does not exist but archive returned false")
+			}
+		})
+	}
+}

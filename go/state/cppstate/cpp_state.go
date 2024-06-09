@@ -44,6 +44,11 @@ type CppState struct {
 	codeCache *common.LruCache[common.Address, []byte]
 }
 
+func (cs *CppState) HasEmptyStorage(address common.Address) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func newState(impl C.enum_StateImpl, params state.Parameters) (state.State, error) {
 	if err := os.MkdirAll(filepath.Join(params.Directory, "live"), 0700); err != nil {
 		return nil, err

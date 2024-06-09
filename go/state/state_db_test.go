@@ -4389,6 +4389,24 @@ func TestNonCommittableStateDB_resetState_ClearsTransientStorage(t *testing.T) {
 	}
 }
 
+func TestStateDB_HasEmptyStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().HasEmptyStorage(address1).Return(false, nil)
+	mock.EXPECT().HasEmptyStorage(address1).Return(true, nil)
+
+	db.CreateAccount(address1)
+
+	if isEmpty := db.HasEmptyStorage(address1); isEmpty {
+		t.Errorf("unexpected return, got: %v want: %v", isEmpty, false)
+	}
+	if isEmpty := db.HasEmptyStorage(address1); !isEmpty {
+		t.Errorf("unexpected return, got: %v want: %v", isEmpty, true)
+	}
+}
+
 type sameEffectAs struct {
 	want common.Update
 }

@@ -16,10 +16,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"io"
 	"slices"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 )
 
 // This file defines the interface and implementation of all node types in a
@@ -165,6 +166,9 @@ type Node interface {
 	// ClearStorage deletes the entire storage associated to an account. For
 	// parameter information and return values see SetValue().
 	ClearStorage(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble) (newRoot NodeReference, changed bool, err error)
+
+	// HasEmptyStorage returns whether source node has empty storage.
+	HasEmptyStorage(source NodeSource, path []Nibble) (bool, error)
 
 	// Release releases this node and all non-frozen nodes in the sub-tree
 	// rooted by this node. Only non-frozen nodes can be released.
@@ -560,6 +564,10 @@ func (n *nodeBase) check(thisRef *NodeReference) error {
 // creation of new nodes representing the new state.
 type EmptyNode struct{}
 
+func (e EmptyNode) HasEmptyStorage(NodeSource, []Nibble) (bool, error) {
+	return true, nil
+}
+
 func (EmptyNode) GetAccount(source NodeSource, address common.Address, path []Nibble) (AccountInfo, bool, error) {
 	return AccountInfo{}, false, nil
 }
@@ -677,6 +685,15 @@ type BranchNode struct {
 	dirtyHashes      uint16            // a bit mask marking hashes as dirty; 0 .. clean, 1 .. dirty
 	embeddedChildren uint16            // a bit mask marking children as embedded; 0 .. not, 1 .. embedded
 	frozenChildren   uint16            // a bit mask marking frozen children; not persisted
+}
+
+func (n *BranchNode) HasEmptyStorage(source NodeSource, path []Nibble) (bool, error) {
+	handle, rest, err := n.getNextNodeInBranch(source, path)
+	if err != nil {
+		return false, err
+	}
+	defer handle.Release()
+	return handle.Get().HasEmptyStorage(source, rest)
 }
 
 func (n *BranchNode) getNextNodeInBranch(
@@ -1098,6 +1115,15 @@ type ExtensionNode struct {
 	nextIsEmbedded bool
 }
 
+func (n *ExtensionNode) HasEmptyStorage(source NodeSource, path []Nibble) (bool, error) {
+	handle, rest, err := n.getNextNodeInExtension(source, path)
+	if err != nil {
+		return false, err
+	}
+	defer handle.Release()
+	return handle.Get().HasEmptyStorage(source, rest)
+}
+
 func (n *ExtensionNode) getNextNodeInExtension(
 	source NodeSource,
 	path []Nibble,
@@ -1505,6 +1531,9 @@ type AccountNode struct {
 	pathLength byte
 }
 
+func (n *AccountNode) HasEmptyStorage(NodeSource, []Nibble) (bool, error) {
+	return n.storage.Id().IsEmpty(), nil
+}
 func (n *AccountNode) Address() common.Address {
 	return n.address
 }
@@ -1928,6 +1957,10 @@ type ValueNode struct {
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
+}
+
+func (n *ValueNode) HasEmptyStorage(source NodeSource, path []Nibble) (bool, error) {
+	return false, fmt.Errorf("invalid request: account query should not reach values")
 }
 
 func (n *ValueNode) Key() common.Key {

@@ -964,6 +964,46 @@ func TestStateRead(t *testing.T) {
 	}
 }
 
+func TestState_HasEmptyStorage(t *testing.T) {
+	testEachConfiguration(t, func(t *testing.T, config *namedStateConfig, s state.State) {
+		if err := s.Apply(1, common.Update{CreatedAccounts: []common.Address{address1}}); err != nil {
+			t.Errorf("failed to create account: %v", err)
+		}
+
+		isEmpty, err := s.HasEmptyStorage(address1)
+		if err != nil {
+			t.Errorf("failed to ask whether account has empty storage; %s", err)
+		}
+		if !isEmpty {
+			t.Fatal("fresh account has empty storage but state returned true")
+		}
+
+		if err = s.Apply(2, common.Update{Slots: []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}}}); err != nil {
+			t.Errorf("failed to update storage slot: %v", err)
+		}
+
+		isEmpty, err = s.HasEmptyStorage(address1)
+		if err != nil {
+			t.Errorf("failed to ask whether account has empty storage; %s", err)
+		}
+		if isEmpty {
+			t.Fatal("storage is not empty but state returned true")
+		}
+
+		if err := s.Apply(3, common.Update{CreatedAccounts: []common.Address{address1}}); err != nil {
+			t.Fatalf("Error: %s", err)
+		}
+
+		isEmpty, err = s.HasEmptyStorage(address1)
+		if err != nil {
+			t.Errorf("failed to ask whether account has empty storage; %s", err)
+		}
+		if !isEmpty {
+			t.Fatal("fresh account has empty storage but state returned true")
+		}
+	})
+}
+
 func execSubProcessTest(t *testing.T, dir string, stateImpl string, execTestName string) {
 	path, err := os.Executable()
 	if err != nil {

@@ -224,6 +224,13 @@ func (a *ArchiveTrie) GetStorage(block uint64, account common.Address, slot comm
 	}
 	return view.GetValue(account, slot)
 }
+func (a *ArchiveTrie) HasEmptyStorage(block uint64, address common.Address) (bool, error) {
+	view, err := a.getView(block)
+	if err != nil {
+		return false, a.addError(err)
+	}
+	return view.HasEmptyStorage(address)
+}
 
 func (a *ArchiveTrie) GetAccountHash(block uint64, account common.Address) (common.Hash, error) {
 	return common.Hash{}, fmt.Errorf("not implemented")

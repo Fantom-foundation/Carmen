@@ -96,6 +96,18 @@ type archiveUpdate = struct {
 	updateHints common.Releaser // an optional field for passing update hints from the LiveDB to the Archive
 }
 
+func (s *GoState) HasEmptyStorage(address common.Address) (bool, error) {
+	if err := s.stateError; err != nil {
+		return false, err
+	}
+
+	isEmpty, err := s.live.HasEmptyStorage(address)
+	if err != nil {
+		s.stateError = errors.Join(s.stateError, err)
+	}
+	return isEmpty, s.stateError
+}
+
 func (s *GoState) Exists(address common.Address) (bool, error) {
 	if err := s.stateError; err != nil {
 		return false, err

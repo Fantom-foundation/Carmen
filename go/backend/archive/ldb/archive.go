@@ -13,9 +13,10 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend"
 	"sync"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -299,6 +300,10 @@ func (a *Archive) GetStorage(block uint64, account common.Address, slot common.K
 		return value, nil
 	}
 	return common.Value{}, it.Error()
+}
+func (a *Archive) HasEmptyStorage(block uint64, address common.Address) (bool, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (a *Archive) GetHash(block uint64) (hash common.Hash, err error) {
