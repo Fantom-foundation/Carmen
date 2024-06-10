@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -110,6 +111,13 @@ func (t *transactionContext) SetState(address Address, key Key, value Value) {
 	if t.state != nil {
 		t.state.SetState(common.Address(address), common.Key(key), common.Value(value))
 	}
+}
+
+func (t *transactionContext) HasEmptyStorage(address Address) tribool.Tribool {
+	if t.state != nil {
+		return t.state.HasEmptyStorage(common.Address(address))
+	}
+	return tribool.Unknown()
 }
 
 func (t *transactionContext) GetTransientState(address Address, key Key) Value {

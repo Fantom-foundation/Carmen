@@ -12,6 +12,7 @@ package carmen
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -265,6 +266,9 @@ type TransactionContext interface {
 	// stored in the account with the given address.
 	SetState(Address, Key, Value)
 
+	// HasEmptyStorage returns true if account has empty storage.
+	HasEmptyStorage(Address) tribool.Tribool
+
 	// GetTransientState retrieves the value associated with a specific
 	// key within the transient state storage at a given address.
 	// Transient State is an in-memory storage
@@ -377,6 +381,9 @@ type QueryContext interface {
 	// This method returns an ongoing value that could be
 	// updated in the current transaction.
 	GetState(Address, Key) Value
+
+	// HasEmptyStorage returns true if account has empty storage.
+	HasEmptyStorage(Address) tribool.Tribool
 
 	// GetCode returns smart contract byte-code
 	// of an account with the given address.

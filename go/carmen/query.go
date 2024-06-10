@@ -14,6 +14,7 @@ import (
 	"errors"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -56,6 +57,22 @@ func (c *queryContext) GetState(address Address, key Key) Value {
 		return Value{}
 	}
 	return Value(res)
+}
+
+func (c *queryContext) HasEmptyStorage(address Address) tribool.Tribool {
+	if c.err != nil {
+		return tribool.Unknown()
+	}
+
+	isEmpty, err := c.state.HasEmptyStorage(common.Address(address))
+	if err != nil {
+		c.err = err
+		return tribool.Unknown()
+	}
+	if isEmpty {
+		return tribool.True()
+	}
+	return tribool.False()
 }
 
 func (c *queryContext) GetCode(address Address) []byte {
