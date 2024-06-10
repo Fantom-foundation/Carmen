@@ -71,7 +71,7 @@ func VerifyFileLiveTrie(directory string, config MptConfig, observer Verificatio
 	if !exists {
 		return nil
 	}
-	return VerifyFileForest(directory, config, []Root{{
+	return verifyFileForest(directory, config, []Root{{
 		NewNodeReference(metadata.RootNode),
 		metadata.RootHash,
 	}}, observer)

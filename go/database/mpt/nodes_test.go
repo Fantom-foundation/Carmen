@@ -7659,9 +7659,13 @@ type Account struct {
 
 func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	storage := NewNodeReference(EmptyId())
+	var storageHash common.Hash
 	if a.storage != nil {
 		id, _ := ctx.Build(a.storage)
 		storage = id
+		storageHash, _ = ctx.getHashFor(&storage)
+	} else {
+		storageHash = EmptyNodeEthereumHash
 	}
 	hashStatus := hashStatusClean
 	if a.dirtyHash {
@@ -7681,6 +7685,7 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 		pathLength:       a.pathLength,
 		storage:          storage,
 		storageHashDirty: a.storageHashDirty,
+		storageHash:      storageHash,
 	})
 }
 
