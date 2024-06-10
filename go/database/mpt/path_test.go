@@ -299,3 +299,25 @@ func TestPath_EncodingAndDecoding(t *testing.T) {
 		}
 	}
 }
+
+func TestPath_IsEqualTo(t *testing.T) {
+	tests := []struct {
+		a, b []Nibble
+		eq   bool
+	}{
+		{[]Nibble{}, []Nibble{}, true},
+		{[]Nibble{1}, []Nibble{}, false},
+		{[]Nibble{1}, []Nibble{1}, true},
+		{[]Nibble{1, 2, 3}, []Nibble{1, 2, 3}, true},
+		{[]Nibble{1, 2, 3}, []Nibble{1, 2, 4}, false},
+		{[]Nibble{1, 2, 3}, []Nibble{1, 2, 3, 4}, false},
+		{[]Nibble{1, 2, 3}, []Nibble{1, 2}, false},
+	}
+
+	for _, test := range tests {
+		a := CreatePathFromNibbles(test.a)
+		if got, want := a.IsEqualTo(test.b), test.eq; got != want {
+			t.Errorf("invalid comparison, wanted %t, got %t", want, got)
+		}
+	}
+}
