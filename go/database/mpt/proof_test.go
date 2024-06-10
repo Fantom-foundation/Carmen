@@ -11,11 +11,13 @@
 package mpt
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
+	"reflect"
 	"testing"
 )
 
@@ -100,16 +102,16 @@ func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 
 	t.Run("Extract", func(t *testing.T) {
 		// Test proofs can be extracted and that they match the reference proofs
-		extractedProofAddress1Key1, exists := totalProof.Extract(rootHash, address1, key1)
-		if !exists {
+		extractedProofAddress1Key1, complete := totalProof.Extract(rootHash, address1, key1)
+		if !complete {
 			t.Errorf("proof for %v %v %v not found", rootHash, address1, key1)
 		}
 		if got, want := extractedProofAddress1Key1, address1Key1Proof; !got.Equals(want) {
 			t.Errorf("unexpected proof: got %v, want %v", got, want)
 		}
 
-		extractedProofAddress2, exists := totalProof.Extract(rootHash, address2)
-		if !exists {
+		extractedProofAddress2, complete := totalProof.Extract(rootHash, address2)
+		if !complete {
 			t.Errorf("proof for %v %v %v not found", rootHash, address1, key1)
 		}
 		if got, want := extractedProofAddress2, address2Proof; !got.Equals(want) {
@@ -148,11 +150,15 @@ func TestWitnessProof_Extract_Various_NodeTypes_NotFoundProofs(t *testing.T) {
 			path: AddressToNibblePath(address, ctxt)[0:30],
 			next: &Empty{},
 		}},
+		"extensionNode to extra node": {&Extension{
+			path:     AddressToNibblePath(address, ctxt)[0:30],
+			nextHash: &common.Hash{}, // test default branch
+		}},
 		"different accountNode": {&Extension{
 			path: AddressToNibblePath(address, ctxt)[0:31],
 			next: &Branch{
 				children: Children{
-					AddressToNibblePath(address, ctxt)[31]: &Account{address: common.Address{1}, pathLength: 64, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+					AddressToNibblePath(address, ctxt)[31]: &Account{address: common.Address{1}, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
 				}},
 		}},
 		"valueNode key not found": {&Extension{
@@ -164,7 +170,7 @@ func TestWitnessProof_Extract_Various_NodeTypes_NotFoundProofs(t *testing.T) {
 	}
 
 	extraProof := make(proofDb)
-	extraProof[EmptyNodeEthereumHash] = emptyStringRlpEncoded
+	extraProof[common.Hash{}] = emptyStringRlpEncoded
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -172,14 +178,11 @@ func TestWitnessProof_Extract_Various_NodeTypes_NotFoundProofs(t *testing.T) {
 			totalProof := createReferenceProof(t, ctxt, &root, node)
 
 			proofWithEmpty := MergeProofs(totalProof, WitnessProof{extraProof})
-			handle := node.GetViewHandle()
-			defer handle.Release()
-
 			rootHash, _ := ctxt.getHashFor(&root)
 
-			extractedProof, exists := proofWithEmpty.Extract(rootHash, address, key)
-			if exists {
-				t.Fatalf("proof should not exist")
+			extractedProof, complete := proofWithEmpty.Extract(rootHash, address, key)
+			if !complete {
+				t.Errorf("proof should be complete")
 			}
 
 			// cannot be proven, but the proof must be still complete
@@ -272,9 +275,9 @@ func TestWitnessProof_Extract_Can_Extract_Terminal_Nodes_In_Proof(t *testing.T) 
 
 			rootHash, _ := ctxt.getHashFor(&root)
 
-			extractedProof, exists := totalProof.Extract(rootHash, address)
-			if exists {
-				t.Fatalf("proof should not exist")
+			extractedProof, complete := totalProof.Extract(rootHash, address)
+			if !complete {
+				t.Errorf("proof should be complete")
 			}
 
 			// cannot be proven, but the proof must be still complete
@@ -299,9 +302,7 @@ func TestWitnessProof_Extract_MissingNode_In_Proof(t *testing.T) {
 
 	root, node := ctxt.Build(desc)
 	totalProof := createReferenceProof(t, ctxt, &root, node)
-
 	rootHash, _ := ctxt.getHashFor(&root)
-
 	// remove a non-root node from the proof
 	for k := range totalProof.proofDb {
 		if k != rootHash {
@@ -329,9 +330,7 @@ func TestWitnessProof_Extract_CorruptedRlp_In_Proof(t *testing.T) {
 
 	root, node := ctxt.Build(desc)
 	totalProof := createReferenceProof(t, ctxt, &root, node)
-
 	rootHash, _ := ctxt.getHashFor(&root)
-
 	// corrupt non-root node in the proof
 	for k := range totalProof.proofDb {
 		if k != rootHash {
@@ -387,8 +386,8 @@ func TestWitnessProof_Extract_EmbeddedNode_In_Proof(t *testing.T) {
 			// proof excludes the embedded node
 			totalProof := createReferenceProofForLabels(t, ctxt, "A", "B", "C")
 			rootHash, _ := ctxt.getHashFor(&ref)
-			proof, exists := totalProof.Extract(rootHash, address, key)
-			if got, want := exists, test.keyFound; got != want {
+			proof, complete := totalProof.Extract(rootHash, address, key)
+			if got, want := complete, true; got != want {
 				t.Errorf("unexpected proof existence: got %v, want %v", got, want)
 			}
 			if got, want := proof, totalProof; !got.Equals(want) {
@@ -397,6 +396,252 @@ func TestWitnessProof_Extract_EmbeddedNode_In_Proof(t *testing.T) {
 		})
 	}
 
+}
+
+func TestWitnessProof_Access_Proof_Fields(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	address := common.Address{1}
+	key := common.Key{2}
+	value := common.Value{3}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	nonce := common.Nonce{0x01}
+	balance := common.Balance{0x02}
+	hash := common.Hash{0x03}
+	info := AccountInfo{Nonce: nonce, Balance: balance, CodeHash: hash}
+
+	tests := map[string]struct {
+		get  func(WitnessProof, common.Hash) (any, bool, error)
+		want any
+	}{
+		"GetAccountInfo": {
+			get: func(proof WitnessProof, root common.Hash) (any, bool, error) {
+				return proof.GetAccountInfo(root, address)
+			},
+			want: info,
+		},
+		"GetNonce": {
+			get: func(proof WitnessProof, root common.Hash) (any, bool, error) {
+				return proof.GetNonce(root, address)
+			},
+			want: nonce,
+		},
+		"GetBalance": {
+			get: func(proof WitnessProof, root common.Hash) (any, bool, error) {
+				return proof.GetBalance(root, address)
+			},
+			want: balance,
+		},
+		"GetCodeHash": {
+			get: func(proof WitnessProof, root common.Hash) (any, bool, error) {
+				return proof.GetCodeHash(root, address)
+			},
+			want: hash,
+		},
+		"GetValue": {
+			get: func(proof WitnessProof, root common.Hash) (any, bool, error) {
+				return proof.GetState(root, address, key)
+			},
+			want: value,
+		},
+	}
+
+	desc := &Extension{
+		path: AddressToNibblePath(address, ctxt)[0:30],
+		next: &Account{address: address, pathLength: 34, info: info,
+			storage: &Extension{
+				path: KeyToNibblePath(key, ctxt)[0:40],
+				next: &Value{key: key, length: 24, value: value},
+			}},
+	}
+
+	root, node := ctxt.Build(desc)
+	totalProof := createReferenceProof(t, ctxt, &root, node)
+	rootHash, _ := ctxt.getHashFor(&root)
+
+	// corrupt non-root node in the proof
+	corruptedProof := WitnessProof{maps.Clone(totalProof.proofDb)}
+	for k := range corruptedProof.proofDb {
+		if k != rootHash {
+			corruptedProof.proofDb[k] = []byte{0xAA, 0xBB, 0xCC, 0xDD}
+		}
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, complete, err := test.get(totalProof, rootHash)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !complete {
+				t.Fatalf("proof should be complete")
+			}
+			if got, want := got, test.want; !reflect.DeepEqual(got, want) {
+				t.Errorf("unexpected value: got %v, want %v", got, want)
+			}
+		})
+		t.Run(fmt.Sprintf("%s invalid", name), func(t *testing.T) {
+			_, _, err := test.get(corruptedProof, rootHash)
+			if err == nil {
+				t.Fatalf("expected error")
+			}
+		})
+	}
+}
+
+func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherAddress(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	address := common.Address{1}
+	differentAddress := common.Address{2}
+	key := common.Key{2}
+	info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{1}, CodeHash: common.Hash{1}}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	testGetters := map[string]struct {
+		get  func(*testing.T, WitnessProof, common.Hash, common.Address, common.Key) (any, bool, error)
+		want any
+	}{
+		"GetAccountInfo": {get: func(t *testing.T, proof WitnessProof, rootHash common.Hash, address common.Address, key common.Key) (any, bool, error) {
+			return proof.GetAccountInfo(rootHash, address)
+		},
+			want: AccountInfo{},
+		},
+		"GetNonce": {get: func(t *testing.T, proof WitnessProof, rootHash common.Hash, address common.Address, key common.Key) (any, bool, error) {
+			return proof.GetNonce(rootHash, address)
+		},
+			want: common.Nonce{},
+		},
+		"GetBalance": {get: func(t *testing.T, proof WitnessProof, rootHash common.Hash, address common.Address, key common.Key) (any, bool, error) {
+			return proof.GetBalance(rootHash, address)
+		},
+			want: common.Balance{},
+		},
+		"GetCodeHash": {get: func(t *testing.T, proof WitnessProof, rootHash common.Hash, address common.Address, key common.Key) (any, bool, error) {
+			return proof.GetCodeHash(rootHash, address)
+		},
+			want: common.Hash{},
+		},
+	}
+
+	testTrees := map[string]NodeDesc{
+		"empty": &Empty{},
+		"extension to empty": &Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Empty{}},
+		"branch to empty": &Branch{
+			children: Children{
+				AddressToNibblePath(address, ctxt)[0]: &Empty{},
+				0x1: &Account{
+					address: differentAddress, pathLength: 34, info: info}, // ignored, not to have empty child
+			}},
+		"account to different": &Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: differentAddress, pathLength: 34, info: info}},
+		"account to empty info": &Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 34, info: AccountInfo{}}},
+	}
+
+	for trie, desc := range testTrees {
+		for getter, test := range testGetters {
+			t.Run(fmt.Sprintf("%s %s", trie, getter), func(t *testing.T) {
+				root, node := ctxt.Build(desc)
+				totalProof := createReferenceProof(t, ctxt, &root, node)
+				rootHash, _ := ctxt.getHashFor(&root)
+
+				got, complete, err := test.get(t, totalProof, rootHash, address, key)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !complete {
+					t.Errorf("proof should be complete")
+				}
+				if got, want := got, test.want; !reflect.DeepEqual(got, want) {
+					t.Errorf("unexpected value: got %v, want %v", got, want)
+				}
+			})
+		}
+	}
+}
+
+func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherKey(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{1}, CodeHash: common.Hash{1}}
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+	address := common.Address{1}
+	value := common.Value{3}
+
+	// The hashes of the following keys have a 4-byte long common prefix.
+	var key, differentKey common.Key
+	data, _ := hex.DecodeString("965866864f3cc23585ad48a3b4b061c5e1d5a471dbb2360538029046ac528d85")
+	copy(key[:], data)
+	data, _ = hex.DecodeString("c1bb1e5ab6acf1bef1a125f3d60e0941b9a8624288ffd67282484c25519f9e65")
+	copy(differentKey[:], data)
+
+	testTrees := map[string]struct {
+		NodeDesc
+	}{
+		"empty": {&Empty{}},
+		"account to different value": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:31],
+			next: &Account{address: address, pathLength: 33, info: info,
+				storage: &Extension{
+					path: KeyToNibblePath(key, ctxt)[0:41],
+					next: &Value{key: differentKey, length: 23, value: value},
+				}}}},
+		"account to empty path": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 34, info: info,
+				storage: &Extension{
+					path: KeyToNibblePath(key, ctxt)[0:40],
+					next: &Empty{},
+				}}}},
+		"account to different value - ext/branch node": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 34, info: info,
+				storage: &Extension{
+					path: KeyToNibblePath(differentKey, ctxt)[0:8],
+					next: &Branch{
+						children: Children{
+							KeyToNibblePath(differentKey, ctxt)[8]: &Value{key: differentKey, length: 56, value: value},
+						}}},
+			}}},
+		"account to different value - ext node": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 34, info: info,
+				storage: &Extension{
+					path: KeyToNibblePath(differentKey, ctxt)[0:10], // path will differ in ext node
+					next: &Value{key: differentKey, length: 54, value: value}},
+			}}},
+		"account to empty storage": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Account{address: address, pathLength: 34, info: info,
+				storage: &Empty{},
+			}}},
+	}
+
+	for name, desc := range testTrees {
+		t.Run(name, func(t *testing.T) {
+			root, node := ctxt.Build(desc)
+			totalProof := createReferenceProof(t, ctxt, &root, node)
+			rootHash, _ := ctxt.getHashFor(&root)
+
+			got, complete, err := totalProof.GetState(rootHash, address, key)
+
+			var empty common.Value
+			if got, want := got, empty; got != want {
+				t.Errorf("unexpected value: got %v, want %v", got, want)
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !complete {
+				t.Fatalf("proof should be complete")
+			}
+		})
+	}
 }
 
 func TestWitnessProof_String(t *testing.T) {
