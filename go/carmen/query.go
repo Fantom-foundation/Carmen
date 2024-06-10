@@ -14,7 +14,6 @@ import (
 	"errors"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -25,14 +24,14 @@ type queryContext struct {
 
 func (c *queryContext) GetBalance(address Address) Amount {
 	if c.err != nil {
-		return amount.NewAmount()
+		return NewAmount()
 	}
 	res, err := c.state.GetBalance(common.Address(address))
 	if err != nil {
 		c.err = err
-		return amount.NewAmount()
+		return NewAmount()
 	}
-	return amount.NewAmountFromBytes(res[:]...)
+	return NewAmountFromBytes(res[:]...)
 }
 
 func (c *queryContext) GetNonce(address Address) uint64 {

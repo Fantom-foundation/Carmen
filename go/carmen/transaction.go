@@ -14,7 +14,6 @@ import (
 	"fmt"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -61,7 +60,7 @@ func (t *transactionContext) GetBalance(address Address) Amount {
 	if t.state != nil {
 		return t.state.GetBalance(common.Address(address))
 	}
-	return amount.NewAmount()
+	return NewAmount()
 }
 
 func (t *transactionContext) AddBalance(address Address, value Amount) {

@@ -14,7 +14,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
@@ -64,7 +63,7 @@ func TestBulkLoad_Operations_Passthrough(t *testing.T) {
 	bulk.CreateAccount(Address{})
 	bulk.SetCode(Address{}, []byte{})
 	bulk.SetNonce(Address{}, 10)
-	bulk.SetBalance(Address{}, amount.NewAmount(300))
+	bulk.SetBalance(Address{}, NewAmount(300))
 	bulk.SetState(Address{}, Key{}, Value{})
 
 	if err := bulk.Finalize(); err != nil {
@@ -94,7 +93,7 @@ func TestBulkLoad_WriteOperationsOnFinalisedInstanceAreNoops(t *testing.T) {
 	bulk.CreateAccount(Address{})
 	bulk.SetCode(Address{}, []byte{})
 	bulk.SetNonce(Address{}, 10)
-	bulk.SetBalance(Address{}, amount.NewAmount(300))
+	bulk.SetBalance(Address{}, NewAmount(300))
 	bulk.SetState(Address{}, Key{}, Value{})
 
 }
