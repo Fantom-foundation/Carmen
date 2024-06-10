@@ -22,10 +22,10 @@ type Amount struct {
 	internal uint256.Int
 }
 
-// NewAmount creates a new U256 Amount from up to 4 uint64 arguments. The
+// New creates a new Amount from up to 4 uint64 arguments. The
 // arguments are given in the Big Endian order. No argument results in a value of zero.
 // The constructor panics if more than 4 arguments are given.
-func NewAmount(args ...uint64) Amount {
+func New(args ...uint64) Amount {
 	if len(args) > 4 {
 		panic("too many arguments")
 	}
@@ -37,15 +37,15 @@ func NewAmount(args ...uint64) Amount {
 	return result
 }
 
-// NewAmountFromUint256 creates a new amount from an uint256.
-func NewAmountFromUint256(value *uint256.Int) Amount {
+// NewFromUint256 creates a new amount from an uint256.
+func NewFromUint256(value *uint256.Int) Amount {
 	return Amount{internal: *value}
 }
 
-// NewAmountFromBytes creates a new Amount instance from up to 32 byte arguments.
+// NewFromBytes creates a new Amount instance from up to 32 byte arguments.
 // The arguments are given in the Big Endian order. No argument results in a
 // value of zero. The constructor panics if more than 32 arguments are given.
-func NewAmountFromBytes(bytes ...byte) Amount {
+func NewFromBytes(bytes ...byte) Amount {
 	if len(bytes) > 32 {
 		panic("too many arguments")
 	}
@@ -54,10 +54,10 @@ func NewAmountFromBytes(bytes ...byte) Amount {
 	return result
 }
 
-// NewAmountFromBigInt creates a new Amount instance from a big.Int.
-func NewAmountFromBigInt(b *big.Int) (Amount, error) {
+// NewFromBigInt creates a new Amount instance from a big.Int.
+func NewFromBigInt(b *big.Int) (Amount, error) {
 	if b == nil {
-		return NewAmount(), nil
+		return New(), nil
 	}
 	if b.Sign() < 0 {
 		return Amount{}, fmt.Errorf("cannot construct Amount from negative big.Int")
@@ -70,7 +70,7 @@ func NewAmountFromBigInt(b *big.Int) (Amount, error) {
 	return Amount{internal: result}, nil
 }
 
-// Uint64 returns the amount as an uint64.
+// Uint64 returns the amount as an uint64. The result is only valid if `IsUint64()` returns true.
 func (a Amount) Uint64() uint64 {
 	return a.internal.Uint64()
 }
@@ -135,5 +135,5 @@ func SubUnderflow(a, b Amount) (Amount, bool) {
 
 // Max returns the maximum amount.
 func Max() Amount {
-	return NewAmount(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)
+	return New(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF)
 }

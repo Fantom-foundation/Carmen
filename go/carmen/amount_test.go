@@ -29,8 +29,8 @@ func TestAmount_NewAmount(t *testing.T) {
 		{args: []uint64{1, 2, 3, 4}},
 	}
 	for _, tc := range testCases {
-		if want, got := amount.NewAmount(tc.args...), NewAmount(tc.args...); want != got {
-			t.Errorf("NewAmount(%v): expected %v, got %v", tc.args, want, got)
+		if want, got := amount.New(tc.args...), NewAmount(tc.args...); want != got {
+			t.Errorf("New(%v): expected %v, got %v", tc.args, want, got)
 		}
 	}
 }
@@ -47,8 +47,8 @@ func TestAmount_NewAmountFromUint256(t *testing.T) {
 		{arg: new(uint256.Int).Lsh(uint256.NewInt(1), 192)},
 	}
 	for _, tc := range testCases {
-		if want, got := amount.NewAmountFromUint256(tc.arg), NewAmountFromUint256(tc.arg); want != got {
-			t.Errorf("NewAmountFromUint256(%v): expected %v, got %v", tc.arg, want, got)
+		if want, got := amount.NewFromUint256(tc.arg), NewAmountFromUint256(tc.arg); want != got {
+			t.Errorf("NewFromUint256(%v): expected %v, got %v", tc.arg, want, got)
 		}
 	}
 }
@@ -62,25 +62,25 @@ func TestAmount_NewAmountFromBytes(t *testing.T) {
 		{args: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}},
 	}
 	for _, tc := range testCases {
-		if want, got := amount.NewAmountFromBytes(tc.args...), NewAmountFromBytes(tc.args...); want != got {
-			t.Errorf("NewAmountFromBytes(%v): expected %v, got %v", tc.args, want, got)
+		if want, got := amount.NewFromBytes(tc.args...), NewAmountFromBytes(tc.args...); want != got {
+			t.Errorf("NewFromBytes(%v): expected %v, got %v", tc.args, want, got)
 		}
 	}
 }
 
 func TestAmount_NewAmountFromBigInt(t *testing.T) {
 	number := big.NewInt(100)
-	want, err := amount.NewAmountFromBigInt(number)
+	want, err := amount.NewFromBigInt(number)
 	if err != nil {
-		t.Errorf("NewAmountFromBigInt(%v): unexpected error: %v", number, err)
+		t.Errorf("NewFromBigInt(%v): unexpected error: %v", number, err)
 	}
 
 	got, err := NewAmountFromBigInt(number)
 	if err != nil {
-		t.Errorf("NewAmountFromBigInt(%v): unexpected error: %v", number, err)
+		t.Errorf("NewFromBigInt(%v): unexpected error: %v", number, err)
 	}
 
 	if want != got {
-		t.Errorf("NewAmountFromBigInt(%v): expected %v, got %v", number, want, got)
+		t.Errorf("NewFromBigInt(%v): expected %v, got %v", number, want, got)
 	}
 }

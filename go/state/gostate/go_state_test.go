@@ -828,7 +828,7 @@ func runAddBlock(block uint64, stateDB state.StateDB) {
 	stateDB.BeginBlock()
 	stateDB.BeginTransaction()
 	stateDB.CreateAccount(addr)
-	stateDB.AddBalance(addr, amount.NewAmount(100))
+	stateDB.AddBalance(addr, amount.New(100))
 	stateDB.SetState(addr, key, common.Value{123})
 	stateDB.SetCode(addr, make([]byte, 80))
 	stateDB.SetNonce(addr, 1)

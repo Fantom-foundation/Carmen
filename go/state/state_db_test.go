@@ -603,7 +603,7 @@ func TestStateDB_RollingBackSuicideRestoresBalance(t *testing.T) {
 	db.BeginTransaction()
 
 	// Initially the old balance should be present.
-	if want, got := amount.NewAmount(5), db.GetBalance(address1); want != got {
+	if want, got := amount.New(5), db.GetBalance(address1); want != got {
 		t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 	}
 
@@ -611,14 +611,14 @@ func TestStateDB_RollingBackSuicideRestoresBalance(t *testing.T) {
 	db.Suicide(address1)
 
 	// after a suicide the balance should be empty
-	if want, got := amount.NewAmount(), db.GetBalance(address1); want != got {
+	if want, got := amount.New(), db.GetBalance(address1); want != got {
 		t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 	}
 
 	db.RevertToSnapshot(snapshot)
 
 	// the rollback of the suicide should restore the balance
-	if want, got := amount.NewAmount(5), db.GetBalance(address1); want != got {
+	if want, got := amount.New(5), db.GetBalance(address1); want != got {
 		t.Errorf("unexpected balance, wanted %v, got %v", want, got)
 	}
 }
@@ -757,7 +757,7 @@ func TestStateDB_RecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBala
 		t.Errorf("nonce not initialized with zero")
 	}
 
-	if got := db.GetBalance(address1); got != amount.NewAmount(12) {
+	if got := db.GetBalance(address1); got != amount.New(12) {
 		t.Errorf("balance not preserved")
 	}
 
@@ -900,7 +900,7 @@ func TestStateDB_RepeatedSuicide(t *testing.T) {
 	db.BeginTransaction()
 
 	// Adding balance should re-create the account.
-	db.AddBalance(address1, amount.NewAmount(123))
+	db.AddBalance(address1, amount.New(123))
 	db.SetState(address1, key1, val1)
 
 	// Deleting it a second time indicates the account as already deleted.
@@ -913,7 +913,7 @@ func TestStateDB_RepeatedSuicide(t *testing.T) {
 	db.BeginTransaction()
 
 	// Adding balance should re-create the account again.
-	db.AddBalance(address1, amount.NewAmount(456))
+	db.AddBalance(address1, amount.New(456))
 	db.SetState(address1, key2, val2)
 
 	// The original account is expected to be deleted, the last created one is expected to be really created.
@@ -982,13 +982,13 @@ func TestStateDB_SuicideRemovesBalanceFromAccount(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
-	if got, want := db.GetBalance(address1), amount.NewAmount(12); got != want {
+	if got, want := db.GetBalance(address1), amount.New(12); got != want {
 		t.Errorf("invalid initial balance, wanted %v, got %v", want, got)
 	}
 
 	db.Suicide(address1)
 
-	if got, want := db.GetBalance(address1), amount.NewAmount(); got != want {
+	if got, want := db.GetBalance(address1), amount.New(); got != want {
 		t.Errorf("invalid balance after account destruction, wanted %v, got %v", want, got)
 	}
 }
@@ -1029,7 +1029,7 @@ func TestStateDB_SuicideCanBeRolledBack(t *testing.T) {
 	if db.HasSuicided(address1) {
 		t.Errorf("Account is still marked as suicided after rollback")
 	}
-	if got := db.GetBalance(address1); got != amount.NewAmount(12) {
+	if got := db.GetBalance(address1); got != amount.New(12) {
 		t.Errorf("Balance of account not restored")
 	}
 }
@@ -1275,7 +1275,7 @@ func TestStateDB_SettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 	if !db.Empty(address1) {
 		t.Errorf("Empty account not recognized as such")
 	}
-	db.AddBalance(address1, amount.NewAmount(1))
+	db.AddBalance(address1, amount.New(1))
 	if db.Empty(address1) {
 		t.Errorf("Account with balance != 0 is still considered empty")
 	}
@@ -1286,7 +1286,7 @@ func TestStateDB_SettingTheBalanceCreatesAccount(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	addedBalance := amount.NewAmount(5)
+	addedBalance := amount.New(5)
 	balance := addedBalance.Bytes32()
 
 	// The account have not existed - must be created by AddBalance call.
@@ -1317,7 +1317,7 @@ func TestStateDB_AddingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *testi
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{})
 
-	db.AddBalance(address1, amount.NewAmount())
+	db.AddBalance(address1, amount.New())
 	if !db.Exist(address1) {
 		t.Errorf("Account does not exist after adding balance")
 	}
@@ -1337,7 +1337,7 @@ func TestStateDB_SubtractingZeroBalanceCreatesAccountThatIsImplicitlyDeleted(t *
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{})
 
-	db.SubBalance(address1, amount.NewAmount())
+	db.SubBalance(address1, amount.New())
 	if !db.Exist(address1) {
 		t.Errorf("Account does not exist after subtracting balance")
 	}
@@ -1354,7 +1354,7 @@ func TestStateDB_ProducingANegativeBalanceCausesTheBlockToFail(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().Check().AnyTimes()
 
-	db.SubBalance(address1, amount.NewAmount(1))
+	db.SubBalance(address1, amount.New(1))
 
 	db.EndBlock(1)
 
@@ -1371,7 +1371,7 @@ func TestStateDB_IncreasingTheBalanceBeyondItsMaximumValueCausesTheBlockToFail(t
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().Check().AnyTimes()
 
-	db.AddBalance(address1, amount.NewAmount(1))
+	db.AddBalance(address1, amount.New(1))
 	db.AddBalance(address1, amount.Max())
 
 	db.EndBlock(1)
@@ -1460,7 +1460,7 @@ func TestStateDB_BalancesAreReadFromState(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
-	want := amount.NewAmount(12)
+	want := amount.New(12)
 	balance := want.Bytes32()
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
@@ -1475,7 +1475,7 @@ func TestStateDB_BalancesAreOnlyReadOnce(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Set up the expectation that the store will be called once.
-	want := amount.NewAmount(12)
+	want := amount.New(12)
 	balance := want.Bytes32()
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 
@@ -1492,7 +1492,7 @@ func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Balance is initially 10. This should only be fetched once.
-	want := amount.NewAmount(10)
+	want := amount.New(10)
 	balance := want.Bytes32()
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
@@ -1504,7 +1504,7 @@ func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	}
 
 	snapshot1 := db.Snapshot()
-	diff := amount.NewAmount(2)
+	diff := amount.New(2)
 	want = amount.Add(want, diff)
 	db.AddBalance(address1, diff)
 	if got := db.GetBalance(address1); got != want {
@@ -1512,7 +1512,7 @@ func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	}
 
 	snapshot2 := db.Snapshot()
-	diff = amount.NewAmount(3)
+	diff = amount.New(3)
 	want = amount.Sub(want, diff)
 	db.SubBalance(address1, diff)
 	if got := db.GetBalance(address1); got != want {
@@ -1520,13 +1520,13 @@ func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 	}
 
 	db.RevertToSnapshot(snapshot2)
-	want = amount.NewAmount(12)
+	want = amount.New(12)
 	if got := db.GetBalance(address1); got != want {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
 	}
 
 	db.RevertToSnapshot(snapshot1)
-	want = amount.NewAmount(10)
+	want = amount.New(10)
 	if got := db.GetBalance(address1); got != want {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
 	}
@@ -1555,7 +1555,7 @@ func TestStateDB_BalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	})
 	mock.EXPECT().Apply(uint64(2), common.Update{})
 
-	db.AddBalance(address1, amount.NewAmount(2))
+	db.AddBalance(address1, amount.New(2))
 	db.EndTransaction()
 	db.EndBlock(1)
 
@@ -1582,10 +1582,10 @@ func TestStateDB_BalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	})
 	mock.EXPECT().Exists(address1).Return(true, nil)
 
-	db.AddBalance(address1, amount.NewAmount(5))
-	db.SubBalance(address1, amount.NewAmount(3))
+	db.AddBalance(address1, amount.New(5))
+	db.SubBalance(address1, amount.New(3))
 	db.EndTransaction()
-	db.AddBalance(address1, amount.NewAmount(2))
+	db.AddBalance(address1, amount.New(2))
 	db.EndTransaction()
 	db.EndBlock(1)
 }
@@ -1604,9 +1604,9 @@ func TestStateDB_BalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().Apply(uint64(2), common.Update{})
 
-	db.AddBalance(address1, amount.NewAmount(10))
-	db.SubBalance(address1, amount.NewAmount(5))
-	db.SubBalance(address1, amount.NewAmount(5))
+	db.AddBalance(address1, amount.New(10))
+	db.SubBalance(address1, amount.New(5))
+	db.SubBalance(address1, amount.New(5))
 	db.EndTransaction()
 	db.EndBlock(2)
 }
@@ -1625,7 +1625,7 @@ func TestStateDB_BalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) 
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{})
 
-	db.AddBalance(address1, amount.NewAmount(10))
+	db.AddBalance(address1, amount.New(10))
 	db.AbortTransaction()
 	db.EndBlock(1)
 }
@@ -3039,7 +3039,7 @@ func TestStateDB_DeletesEmptyAccountsEip161(t *testing.T) {
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
 	// Set the account balance to zero - the account becomes empty
-	db.SubBalance(address1, amount.NewAmount(12))
+	db.SubBalance(address1, amount.New(12))
 
 	// The account should be deleted at the end of the transaction
 	db.EndTransaction()
@@ -3077,8 +3077,8 @@ func TestStateDB_NeverCreatesEmptyAccountsEip161(t *testing.T) {
 	// create account 1 explicitly, keeping it empty
 	db.CreateAccount(address1)
 	// create account 2 by adding balance, but setting it to zero immediately
-	db.AddBalance(address2, amount.NewAmount(12))
-	db.SubBalance(address2, amount.NewAmount(12))
+	db.AddBalance(address2, amount.New(12))
+	db.SubBalance(address2, amount.New(12))
 	// create account 3 by setting code, but setting it to empty immediately
 	db.SetCode(address3, []byte{0x12})
 	db.SetCode(address3, []byte{})
@@ -3107,7 +3107,7 @@ func TestStateDB_SuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 	// The account is suicided
 	db.Suicide(address1)
 	// Writes into suicided account should be lost, account should not be created
-	db.AddBalance(address1, amount.NewAmount(12))
+	db.AddBalance(address1, amount.New(12))
 	db.SetNonce(address1, 4321)
 	db.SetCode(address1, []byte{0x12, 0x34})
 	db.SetState(address1, key1, val1)
@@ -3117,7 +3117,7 @@ func TestStateDB_SuicidedAccountNotRecreatedBySettingBalance(t *testing.T) {
 		t.Errorf("address is no longer suicided")
 	}
 	// Until the end of transaction, account needs to behave as usual
-	if db.GetBalance(address1) != amount.NewAmount(12) {
+	if db.GetBalance(address1) != amount.New(12) {
 		t.Errorf("changed balance lost")
 	}
 	if db.GetNonce(address1) != 4321 {
@@ -3272,7 +3272,7 @@ func TestStateDB_Copy(t *testing.T) {
 	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
 
 	db.BeginTransaction()
-	db.AddBalance(address1, amount.NewAmount(2))
+	db.AddBalance(address1, amount.New(2))
 	db.SetNonce(address1, 8)
 	db.SetCode(address1, []byte{0x12})
 	db.SetState(address2, key3, val1)
@@ -3280,7 +3280,7 @@ func TestStateDB_Copy(t *testing.T) {
 
 	cp := db.Copy()
 	// state introduced by the previous tx should be readable from the copy
-	if cp.GetBalance(address1) != amount.NewAmount(2) {
+	if cp.GetBalance(address1) != amount.New(2) {
 		t.Errorf("balance not copied")
 	}
 	if cp.GetNonce(address1) != 8 {
@@ -3768,7 +3768,7 @@ func TestStateDB_ProvidesTransactionChanges(t *testing.T) {
 	mock.EXPECT().GetBalance(gomock.Any()).Return(balance1, nil)
 
 	db.BeginTransaction()
-	db.AddBalance(address1, amount.NewAmount(1))
+	db.AddBalance(address1, amount.New(1))
 	db.SetNonce(address2, 2)
 	db.SetCode(address3, []byte{0x12})
 	db.SetState(address4, key1, val1)
@@ -3979,7 +3979,7 @@ func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(12))
 
 	// Make sure that there is some data in the caches.
-	db.AddBalance(address1, amount.NewAmount(12))
+	db.AddBalance(address1, amount.New(12))
 	db.SetNonce(address1, 12)
 	db.SetNonce(address2, 0)
 	db.GetCode(address1)
@@ -4036,15 +4036,15 @@ func TestBulkLoad_CloseResetsLocalCache(t *testing.T) {
 	)
 
 	// fill the db with some accounts
-	db.AddBalance(address1, amount.NewAmount(100))
+	db.AddBalance(address1, amount.New(100))
 	db.SetNonce(address1, uint64(1))
 	db.SetCode(address1, []byte{1})
 
-	db.AddBalance(address2, amount.NewAmount(200))
+	db.AddBalance(address2, amount.New(200))
 	db.SetNonce(address2, uint64(2))
 	db.SetCode(address2, []byte{2})
 
-	db.AddBalance(address3, amount.NewAmount(300))
+	db.AddBalance(address3, amount.New(300))
 	db.SetNonce(address3, uint64(3))
 	db.SetCode(address3, []byte{3})
 

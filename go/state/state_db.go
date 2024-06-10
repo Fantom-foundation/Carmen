@@ -606,9 +606,9 @@ func (s *stateDB) GetBalance(addr common.Address) amount.Amount {
 	balance, err := s.state.GetBalance(addr)
 	if err != nil {
 		s.errors = append(s.errors, fmt.Errorf("failed to load balance for address %v: %w", addr, err))
-		return amount.NewAmount() // We need to return something that allows the VM to continue.
+		return amount.New() // We need to return something that allows the VM to continue.
 	}
-	res := amount.NewAmountFromBytes(balance[:]...)
+	res := amount.NewFromBytes(balance[:]...)
 	s.balances[addr] = &balanceValue{
 		original: &res,
 		current:  res,
@@ -668,7 +668,7 @@ func (s *stateDB) resetBalance(addr common.Address) {
 	if val, exists := s.balances[addr]; exists {
 		if !val.current.IsZero() {
 			oldValue := val.current
-			val.current = amount.NewAmount()
+			val.current = amount.New()
 			s.undo = append(s.undo, func() {
 				val.current = oldValue
 			})
@@ -676,7 +676,7 @@ func (s *stateDB) resetBalance(addr common.Address) {
 	} else {
 		s.balances[addr] = &balanceValue{
 			original: nil,
-			current:  amount.NewAmount(),
+			current:  amount.New(),
 		}
 		s.undo = append(s.undo, func() {
 			delete(s.balances, addr)
