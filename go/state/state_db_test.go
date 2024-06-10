@@ -4394,15 +4394,16 @@ func TestStateDB_HasEmptyStorage(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
+	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().HasEmptyStorage(address1).Return(false, nil)
 	mock.EXPECT().HasEmptyStorage(address1).Return(true, nil)
 
 	db.CreateAccount(address1)
 
-	if isEmpty := db.HasEmptyStorage(address1); isEmpty {
+	if isEmpty := db.HasEmptyStorage(address1); !isEmpty.False() {
 		t.Errorf("unexpected return, got: %v want: %v", isEmpty, false)
 	}
-	if isEmpty := db.HasEmptyStorage(address1); !isEmpty {
+	if isEmpty := db.HasEmptyStorage(address1); !isEmpty.True() {
 		t.Errorf("unexpected return, got: %v want: %v", isEmpty, true)
 	}
 }

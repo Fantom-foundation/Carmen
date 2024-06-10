@@ -24,6 +24,7 @@ import (
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
+	tribool "github.com/Fantom-foundation/Carmen/go/common/tribool"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -381,10 +382,10 @@ func (mr *MockVmStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.C
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockVmStateDB) HasEmptyStorage(arg0 common.Address) bool {
+func (m *MockVmStateDB) HasEmptyStorage(arg0 common.Address) tribool.Tribool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(tribool.Tribool)
 	return ret0
 }
 
@@ -1024,10 +1025,10 @@ func (mr *MockStateDBMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Cal
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockStateDB) HasEmptyStorage(arg0 common.Address) bool {
+func (m *MockStateDB) HasEmptyStorage(arg0 common.Address) tribool.Tribool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(tribool.Tribool)
 	return ret0
 }
 
@@ -1586,10 +1587,10 @@ func (mr *MockNonCommittableStateDBMockRecorder) GetTransientState(arg0, arg1 an
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockNonCommittableStateDB) HasEmptyStorage(arg0 common.Address) bool {
+func (m *MockNonCommittableStateDB) HasEmptyStorage(arg0 common.Address) tribool.Tribool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(tribool.Tribool)
 	return ret0
 }
 
