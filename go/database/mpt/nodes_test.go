@@ -7696,6 +7696,7 @@ type Branch struct {
 	dirty            bool
 	children         Children
 	childHashes      ChildHashes
+	embeddedChildren []bool
 	dirtyChildHashes []int
 	frozen           bool
 	frozenChildren   []int
@@ -7722,6 +7723,9 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	for _, i := range b.frozenChildren {
 		res.setChildFrozen(byte(i), true)
 	}
+	for i, embedded := range b.embeddedChildren {
+		res.setEmbedded(byte(i), embedded)
+	}
 	res.hashStatus = hashStatusClean
 	if b.dirtyHash {
 		res.hashStatus = hashStatusDirty
@@ -7741,6 +7745,7 @@ type Extension struct {
 	nextHash      *common.Hash
 	nextHashDirty bool
 	hashStatus    *hashStatus // overrides dirtyHash flag if set
+	nextEmbedded  bool
 }
 
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -7751,6 +7756,7 @@ func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
 	res.hashStatus = hashStatusClean
+	res.nextIsEmbedded = e.nextEmbedded
 	if e.hashDirty {
 		res.hashStatus = hashStatusDirty
 	}
