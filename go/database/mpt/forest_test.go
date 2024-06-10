@@ -2155,6 +2155,54 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 	}
 }
 
+func TestForest_HasEmptyStorage(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+					var err error
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					key := getTestKeys(1)[0]
+					addr := getTestAddresses(1)[0]
+
+					root := NewNodeReference(EmptyId())
+					root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Balance: common.Balance{0x1}})
+					if err != nil {
+						t.Fatalf("cannot update account: %v", err)
+					}
+
+					isEmpty, err := forest.HasEmptyStorage(&root, addr)
+					if err != nil {
+						t.Fatalf("failed to ask whether account has empty storage: %v", err)
+					}
+					if !isEmpty {
+						t.Error("freshly created account has empty storage, but forest returned true")
+					}
+
+					root, err = forest.SetValue(&root, addr, key, common.Value{1})
+					if err != nil {
+						t.Fatalf("cannot update storage: %v", err)
+					}
+
+					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					if err != nil {
+						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
+					}
+					if isEmpty {
+						t.Error("storage is not empty but forest returned true")
+					}
+
+				})
+			}
+		}
+	}
+}
+
 // testVisitPathToStorage iterates over the keys and checks if the value nodes are correct.
 func testVisitPathToStorage(t *testing.T, forest *Forest, keys []common.Key, storageRoot NodeReference) {
 	var lastNode Node

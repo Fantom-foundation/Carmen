@@ -893,6 +893,57 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
+func TestLiveTrie_HasEmptyStorage(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+			trie, err := OpenFileLiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to create empty trie, err %v", err)
+			}
+
+			addr := common.Address{1}
+			// Add some data.
+			err = trie.SetAccountInfo(addr, AccountInfo{Nonce: common.ToNonce(1), CodeHash: emptyCodeHash})
+			if err != nil {
+				t.Fatalf("failed to set account info: %v", err)
+			}
+
+			isEmpty, err := trie.HasEmptyStorage(addr)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage: %v", err)
+			}
+			if !isEmpty {
+				t.Error("freshly created account has empty storage, but trie returned false")
+			}
+
+			err = trie.SetValue(addr, common.Key{1}, common.Value{1})
+			if err != nil {
+				t.Fatalf("failed to set value: %v", err)
+			}
+
+			isEmpty, err = trie.HasEmptyStorage(addr)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage: %v", err)
+			}
+			if isEmpty {
+				t.Error("storage is not empty, but trie returned false")
+			}
+
+			// Delete some data.
+			trie.SetAccountInfo(common.Address{2}, AccountInfo{})
+
+			if err := trie.Close(); err != nil {
+				t.Fatalf("failed to close trie: %v", err)
+			}
+
+			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+				t.Errorf("a freshly closed LiveTrie should be fine, got: %v", err)
+			}
+		})
+	}
+}
+
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)

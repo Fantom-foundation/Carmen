@@ -16,10 +16,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"io"
 	"slices"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 )
 
 // This file defines the interface and implementation of all node types in a
@@ -165,6 +166,9 @@ type Node interface {
 	// ClearStorage deletes the entire storage associated to an account. For
 	// parameter information and return values see SetValue().
 	ClearStorage(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble) (newRoot NodeReference, changed bool, err error)
+
+	// HasEmptyStorage returns whether source node has empty storage.
+	HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error)
 
 	// Release releases this node and all non-frozen nodes in the sub-tree
 	// rooted by this node. Only non-frozen nodes can be released.
@@ -568,6 +572,10 @@ func (EmptyNode) GetValue(NodeSource, common.Key, []Nibble) (common.Value, bool,
 	return common.Value{}, false, nil
 }
 
+func (e EmptyNode) HasEmptyStorage(NodeSource, common.Address, []Nibble) (bool, error) {
+	return true, nil
+}
+
 func (EmptyNode) GetSlot(NodeSource, common.Address, []Nibble, common.Key) (common.Value, bool, error) {
 	return common.Value{}, false, nil
 }
@@ -707,6 +715,15 @@ func (n *BranchNode) GetValue(source NodeSource, key common.Key, path []Nibble) 
 	}
 	defer next.Release()
 	return next.Get().GetValue(source, key, subPath)
+}
+
+func (n *BranchNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
+	handle, rest, err := n.getNextNodeInBranch(source, path)
+	if err != nil {
+		return false, err
+	}
+	defer handle.Release()
+	return handle.Get().HasEmptyStorage(source, address, rest)
 }
 
 func (n *BranchNode) GetSlot(source NodeSource, address common.Address, path []Nibble, key common.Key) (common.Value, bool, error) {
@@ -1130,6 +1147,14 @@ func (n *ExtensionNode) GetValue(source NodeSource, key common.Key, path []Nibbl
 	defer handle.Release()
 	return handle.Get().GetValue(source, key, rest)
 }
+func (n *ExtensionNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
+	handle, rest, err := n.getNextNodeInExtension(source, path)
+	if err != nil {
+		return false, err
+	}
+	defer handle.Release()
+	return handle.Get().HasEmptyStorage(source, address, rest)
+}
 
 func (n *ExtensionNode) GetSlot(source NodeSource, address common.Address, path []Nibble, key common.Key) (common.Value, bool, error) {
 	handle, rest, err := n.getNextNodeInExtension(source, path)
@@ -1522,6 +1547,13 @@ func (n *AccountNode) GetAccount(source NodeSource, address common.Address, path
 
 func (n *AccountNode) GetValue(NodeSource, common.Key, []Nibble) (common.Value, bool, error) {
 	return common.Value{}, false, fmt.Errorf("invalid request: value query should not reach accounts")
+}
+
+func (n *AccountNode) HasEmptyStorage(_ NodeSource, address common.Address, _ []Nibble) (bool, error) {
+	if n.address == address {
+		return n.storage.Id().IsEmpty(), nil
+	}
+	return true, nil
 }
 
 func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []Nibble, key common.Key) (common.Value, bool, error) {
@@ -1928,6 +1960,10 @@ type ValueNode struct {
 	// by the navigation path to this node. It is only maintained if the
 	// `TrackSuffixLengthsInLeafNodes` of the `MptConfig` is enabled.
 	pathLength byte
+}
+
+func (n *ValueNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
+	return false, fmt.Errorf("invalid request: account query should not reach values")
 }
 
 func (n *ValueNode) Key() common.Key {
