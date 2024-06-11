@@ -392,14 +392,7 @@ func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (i
 		return VisitResponseContinue
 	})
 	exists, err := VisitPathToAccount(s, rootRef, addr, v)
-	if err != nil {
-		return true, err
-	}
-	if !exists {
-		return true, nil
-	}
-
-	return isEmpty, nil
+	return isEmpty || !exists, err
 }
 
 func (s *Forest) ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error) {
