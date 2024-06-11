@@ -263,7 +263,7 @@ func ExampleDatabase_GetHistoricContext() {
 
 
 ## Query API
-LiveDB and Archive can be queried using a **query API** using a functional style callback as shown below:
+LiveDB and Archive can be queried using a **query API** providing a functional style callback as shown below:
 
 <details>
     <summary>Querying a LiveDB</summary>
