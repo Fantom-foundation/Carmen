@@ -95,7 +95,61 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 	}
 }
 
+func TestIO_ExportedDataIsDeterministic(t *testing.T) {
+	reference, _ := exportExampleState(t)
+	for i := 0; i < 10; i++ {
+		data, _ := exportExampleState(t)
+		if !bytes.Equal(data, reference) {
+			t.Fatalf("exported data is not deterministic")
+		}
+	}
+}
+
+func TestIO_ExportedDataDoesNotContainExtraCodes(t *testing.T) {
+	reference, referenceHash := exportExampleState(t)
+
+	// Modify the state by adding and removing code from an account.
+	// This temporary code should not be included in the resulting exported data.
+	modified, modifiedHash := exportExampleStateWithModification(t, func(s *mpt.MptState) {
+		codesBefore, err := s.GetCodes()
+		if err != nil {
+			t.Fatalf("failed to fetch codes: %v", err)
+		}
+		addr1 := common.Address{1}
+		code, err := s.GetCode(addr1)
+		if err != nil {
+			t.Fatalf("failed to fetch code: %v", err)
+		}
+		modified := append(code, []byte("extra_code")...)
+		s.SetCode(addr1, modified)
+		s.SetCode(addr1, code)
+		codesAfter, err := s.GetCodes()
+		if err != nil {
+			t.Fatalf("failed to fetch codes: %v", err)
+		}
+		if before, after := len(codesBefore), len(codesAfter); before+1 != after {
+			t.Fatalf("modification did not had expected code-altering effect: %d -> %d", before, after)
+		}
+	})
+
+	// Check that the test indeed did not modify the state content.
+	if referenceHash != modifiedHash {
+		t.Fatalf("modified state has different hash than reference state: got: %x, want %x", modifiedHash, referenceHash)
+	}
+
+	// The extra code that was only temporary in the state should no be included
+	// in the exported data.
+	if !bytes.Equal(reference, modified) {
+		t.Fatalf("exported data contains extra codes")
+	}
+}
+
 func exportExampleState(t *testing.T) ([]byte, common.Hash) {
+	t.Helper()
+	return exportExampleStateWithModification(t, nil)
+}
+
+func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptState)) ([]byte, common.Hash) {
 	t.Helper()
 	sourceDir := t.TempDir()
 
@@ -107,6 +161,8 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 
 	addr1 := common.Address{1}
 	addr2 := common.Address{2}
+	addr3 := common.Address{3}
+	addr4 := common.Address{4}
 	key1 := common.Key{1}
 	key2 := common.Key{2}
 	value1 := common.Value{1}
@@ -122,7 +178,19 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 		db.SetBalance(addr2, common.Balance{14}),
 		db.SetStorage(addr2, key1, value1),
 		db.SetStorage(addr2, key2, value2),
+		// Third account, with different code as first account.
+		db.SetNonce(addr3, common.ToNonce(3)),
+		db.SetBalance(addr3, common.Balance{16}),
+		db.SetCode(addr3, []byte("some_other_code")),
+		// Fourth account, with same code as first account.
+		db.SetNonce(addr4, common.ToNonce(4)),
+		db.SetBalance(addr4, common.Balance{18}),
+		db.SetCode(addr4, []byte("some_code")),
 	)
+
+	if modify != nil {
+		modify(db)
+	}
 
 	if err != nil {
 		t.Fatalf("failed to seed test DB: %v", err)

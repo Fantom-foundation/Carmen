@@ -95,7 +95,7 @@ func Export(directory string, out io.Writer) error {
 	}
 
 	// Write out codes.
-	codes, err := db.GetCodes()
+	codes, err := getReferencedCodes(db)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve codes: %v", err)
 	}
@@ -295,6 +295,24 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			return root, hash, fmt.Errorf("format error encountered, unexpected token type: %c", buffer[0])
 		}
 	}
+}
+
+// getReferencedCodes returns a map of codes referenced by accounts in the
+// given database. The map is indexed by the code hash.
+func getReferencedCodes(db *mpt.MptState) (map[common.Hash][]byte, error) {
+	codes := make(map[common.Hash][]byte)
+	err := db.Visit(mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+		if n, ok := node.(*mpt.AccountNode); ok {
+			codeHash := n.Info().CodeHash
+			code := db.GetCodeForHash(codeHash)
+			if len(code) > 0 {
+				codes[codeHash] = code
+			}
+			return mpt.VisitResponsePrune // < no need to visit the storage trie
+		}
+		return mpt.VisitResponseContinue
+	}))
+	return codes, err
 }
 
 // exportVisitor is an internal utility used by the Export function to write

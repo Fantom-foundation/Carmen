@@ -694,6 +694,20 @@ func (mr *MockTransactionContextMockRecorder) GetState(arg0, arg1 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetState", reflect.TypeOf((*MockTransactionContext)(nil).GetState), arg0, arg1)
 }
 
+// GetTransientState mocks base method.
+func (m *MockTransactionContext) GetTransientState(arg0 Address, arg1 Key) Value {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransientState", arg0, arg1)
+	ret0, _ := ret[0].(Value)
+	return ret0
+}
+
+// GetTransientState indicates an expected call of GetTransientState.
+func (mr *MockTransactionContextMockRecorder) GetTransientState(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockTransactionContext)(nil).GetTransientState), arg0, arg1)
+}
+
 // HasSelfDestructed mocks base method.
 func (m *MockTransactionContext) HasSelfDestructed(arg0 Address) bool {
 	m.ctrl.T.Helper()
@@ -797,6 +811,18 @@ func (m *MockTransactionContext) SetState(arg0 Address, arg1 Key, arg2 Value) {
 func (mr *MockTransactionContextMockRecorder) SetState(arg0, arg1, arg2 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetState", reflect.TypeOf((*MockTransactionContext)(nil).SetState), arg0, arg1, arg2)
+}
+
+// SetTransientState mocks base method.
+func (m *MockTransactionContext) SetTransientState(arg0 Address, arg1 Key, arg2 Value) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTransientState", arg0, arg1, arg2)
+}
+
+// SetTransientState indicates an expected call of SetTransientState.
+func (mr *MockTransactionContextMockRecorder) SetTransientState(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTransientState", reflect.TypeOf((*MockTransactionContext)(nil).SetTransientState), arg0, arg1, arg2)
 }
 
 // Snapshot mocks base method.
