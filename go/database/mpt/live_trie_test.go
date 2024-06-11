@@ -930,15 +930,34 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 				t.Error("storage is not empty, but trie returned false")
 			}
 
-			// Delete some data.
-			trie.SetAccountInfo(common.Address{2}, AccountInfo{})
+			err = trie.ClearStorage(addr)
+			if err != nil {
+				t.Fatalf("cannot clear storage: %v", err)
+			}
+
+			isEmpty, err = trie.HasEmptyStorage(addr)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage;: %v", err)
+			}
+			if !isEmpty {
+				t.Error("storage was cleared but trie returned false")
+			}
+
+			err = trie.SetValue(addr, common.Key{1}, common.Value{1})
+			if err != nil {
+				t.Fatalf("failed to set value: %v", err)
+			}
+
+			isEmpty, err = trie.HasEmptyStorage(addr)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage: %v", err)
+			}
+			if isEmpty {
+				t.Error("storage is not empty, but trie returned false")
+			}
 
 			if err := trie.Close(); err != nil {
 				t.Fatalf("failed to close trie: %v", err)
-			}
-
-			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
-				t.Errorf("a freshly closed LiveTrie should be fine, got: %v", err)
 			}
 		})
 	}
