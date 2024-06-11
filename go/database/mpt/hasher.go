@@ -458,9 +458,11 @@ func (h ethHasher) getHash(ref *NodeReference, source NodeSource) (common.Hash, 
 		return common.Hash{}, err
 	}
 
-	// The hash for embedded nodes is 0.
+	// The hash for embedded nodes is the node representation.
 	if len(data) < 32 {
-		return common.Hash{}, nil
+		var hash common.Hash
+		copy(hash[:], data)
+		return hash, nil
 	}
 
 	return common.Keccak256(data), nil
