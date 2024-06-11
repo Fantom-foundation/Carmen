@@ -26,7 +26,7 @@ import "github.com/Fantom-foundation/Carmen/go/carmen"
 
 
 # How to Use
-Schema S5 is the only schema compatible with Merkle-Patricia Tries. Carmen has always enabled LiveDB to keep the state of the last block.
+Schema S5 is the only schema compatible with Merkle-Patricia Tries. Carmen enables always LiveDB to keep the state of the last block.
 ArchiveDB can be enabled to retain historical data. If ArchiveDB is enabled, the state of the last block is appended to the archive for later retrieval. 
 
 The Carmen interface is loosely related to the go-ethereum's StateDB interface, though it differs w.r.t. block management and transaction management. 
