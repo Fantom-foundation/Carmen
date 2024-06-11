@@ -2197,6 +2197,18 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						t.Error("storage is not empty but forest returned true")
 					}
 
+					root, err = forest.ClearStorage(&root, addr)
+					if err != nil {
+						t.Fatalf("cannot clear storage: %v", err)
+					}
+
+					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					if err != nil {
+						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
+					}
+					if !isEmpty {
+						t.Error("storage was cleared but forest returned false")
+					}
 				})
 			}
 		}
