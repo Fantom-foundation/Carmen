@@ -22,7 +22,7 @@ import (
 var (
 	address1 = common.Address{0x01}
 	key1     = common.Key{0x01}
-	balance1 = amount.NewFromBytes(0x01)
+	balance1 = amount.New(1)
 	nonce1   = common.Nonce{0x01}
 	val1     = common.Value{0x01}
 )

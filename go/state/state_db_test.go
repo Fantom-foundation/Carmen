@@ -590,10 +590,7 @@ func TestStateDB_RollingBackSuicideRestoresBalance(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	initialBalance, err := common.ToBalance(big.NewInt(5))
-	if err != nil {
-		t.Fatalf("failed to prepare initial balance: %v", err)
-	}
+	initialBalance := amount.New(5)
 
 	// Initially the account exists with a view stored values.
 	mock.EXPECT().Exists(address1).Return(true, nil)
@@ -742,10 +739,8 @@ func TestStateDB_RecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBala
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a previously deleted account.
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("failed to set up test case: %v", err)
-	}
+	b12 := amount.New(12)
+
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 	db.SetNonce(address1, 14)
@@ -917,10 +912,10 @@ func TestStateDB_RepeatedSuicide(t *testing.T) {
 	db.SetState(address1, key2, val2)
 
 	// The original account is expected to be deleted, the last created one is expected to be really created.
-	newBalance, _ := common.ToBalance(big.NewInt(456))
+	newBalance := amount.New(456)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance.Bytes32()}},
 		Nonces:          []common.NonceUpdate{{Account: address1}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: []byte{}}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key2, Value: val2}},
@@ -975,10 +970,8 @@ func TestStateDB_SuicideRemovesBalanceFromAccount(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("error preparing test: %v", err)
-	}
+	b12 := amount.New(12)
+
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
@@ -999,10 +992,7 @@ func TestStateDB_SuicideCanBeRolledBack(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("error preparing test: %v", err)
-	}
+	b12 := amount.New(12)
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
@@ -3783,12 +3773,12 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	code := []byte{1, 2, 3}
 
 	mock.EXPECT().Apply(uint64(0), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
 		Nonces:          []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: code}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
