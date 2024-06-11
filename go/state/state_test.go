@@ -46,9 +46,9 @@ var (
 	val2 = common.Value{0x02}
 	val3 = common.Value{0x03}
 
-	balance1 = amount.New(1)
-	balance2 = amount.New(2)
-	balance3 = amount.New(3)
+	balance1 = amount.NewFromBytes(0x01)
+	balance2 = amount.NewFromBytes(0x02)
+	balance3 = amount.NewFromBytes(0x03)
 
 	nonce1 = common.Nonce{0x01}
 	nonce2 = common.Nonce{0x02}
