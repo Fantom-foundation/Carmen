@@ -903,11 +903,14 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 			}
 
 			addr := common.Address{1}
-			// Add some data.
 			err = trie.SetAccountInfo(addr, AccountInfo{Nonce: common.ToNonce(1), CodeHash: emptyCodeHash})
 			if err != nil {
 				t.Fatalf("failed to set account info: %v", err)
 			}
+
+			// ------------------
+			// Test fresh account
+			// ------------------
 
 			isEmpty, err := trie.HasEmptyStorage(addr)
 			if err != nil {
@@ -916,6 +919,10 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 			if !isEmpty {
 				t.Error("freshly created account has empty storage, but trie returned false")
 			}
+
+			// --------------------
+			// Test cleared storage
+			// --------------------
 
 			err = trie.SetValue(addr, common.Key{1}, common.Value{1})
 			if err != nil {
@@ -943,6 +950,10 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 				t.Error("storage was cleared but trie returned false")
 			}
 
+			// --------------------
+			// Test deleted account
+			// --------------------
+
 			err = trie.SetValue(addr, common.Key{1}, common.Value{1})
 			if err != nil {
 				t.Fatalf("failed to set value: %v", err)
@@ -954,6 +965,19 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 			}
 			if isEmpty {
 				t.Error("storage is not empty, but trie returned false")
+			}
+
+			err = trie.SetAccountInfo(addr, AccountInfo{})
+			if err != nil {
+				t.Fatalf("failed to set account info: %v", err)
+			}
+
+			isEmpty, err = trie.HasEmptyStorage(addr)
+			if err != nil {
+				t.Fatalf("failed to ask whether account has empty storage;: %v", err)
+			}
+			if !isEmpty {
+				t.Error("account was deleted but trie returned false")
 			}
 
 			if err := trie.Close(); err != nil {

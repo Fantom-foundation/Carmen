@@ -2176,6 +2176,10 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						t.Fatalf("cannot update account: %v", err)
 					}
 
+					// ------------------
+					// Test fresh account
+					// ------------------
+
 					isEmpty, err := forest.HasEmptyStorage(&root, addr)
 					if err != nil {
 						t.Fatalf("failed to ask whether account has empty storage: %v", err)
@@ -2186,7 +2190,7 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 
 					root, err = forest.SetValue(&root, addr, key, common.Value{1})
 					if err != nil {
-						t.Fatalf("cannot update storage: %v", err)
+						t.Fatalf("failed to update storage: %v", err)
 					}
 
 					isEmpty, err = forest.HasEmptyStorage(&root, addr)
@@ -2196,6 +2200,10 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 					if isEmpty {
 						t.Error("storage is not empty but forest returned true")
 					}
+
+					// --------------------
+					// Test cleared storage
+					// --------------------
 
 					root, err = forest.ClearStorage(&root, addr)
 					if err != nil {
@@ -2209,6 +2217,37 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 					if !isEmpty {
 						t.Error("storage was cleared but forest returned false")
 					}
+
+					// --------------------
+					// Test deleted account
+					// --------------------
+
+					root, err = forest.SetValue(&root, addr, key, common.Value{1})
+					if err != nil {
+						t.Fatalf("failed to update storage: %v", err)
+					}
+
+					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					if err != nil {
+						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
+					}
+					if isEmpty {
+						t.Error("storage is not empty but forest returned true")
+					}
+
+					root, err = forest.SetAccountInfo(&root, addr, AccountInfo{})
+					if err != nil {
+						t.Fatalf("failed to set account info: %v", err)
+					}
+
+					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					if err != nil {
+						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
+					}
+					if !isEmpty {
+						t.Error("deleted account has empty storage forest returned false")
+					}
+
 				})
 			}
 		}

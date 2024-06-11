@@ -384,12 +384,10 @@ func (s *Forest) SetValue(rootRef *NodeReference, addr common.Address, key commo
 }
 
 func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (isEmpty bool, err error) {
-	v := &lambdaVisitor{
-		visit: func(node Node, info NodeInfo) VisitResponse {
-			isEmpty = node.(*AccountNode).storage.Id().IsEmpty()
-			return VisitResponseAbort
-		},
-	}
+	v := MakeVisitor(func(node Node, info NodeInfo) VisitResponse {
+		isEmpty = node.(*AccountNode).storage.Id().IsEmpty()
+		return VisitResponseAbort
+	})
 	exists, err := VisitPathToAccount(s, rootRef, addr, v)
 	if err != nil {
 		return true, err
