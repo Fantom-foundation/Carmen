@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
@@ -72,8 +73,10 @@ func doExport(context *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 
+	ctx := interrupt.Catch(context.Context)
+
 	if err = errors.Join(
-		export(dir, out),
+		export(ctx, dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),

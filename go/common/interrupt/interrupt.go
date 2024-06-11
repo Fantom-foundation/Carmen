@@ -8,7 +8,7 @@
 // On the date above, in accordance with the Business Source License, use of
 // this software will be governed by the GNU Lesser General Public License v3.
 
-package io
+package interrupt
 
 import (
 	"context"
@@ -22,9 +22,9 @@ import (
 
 const ErrCanceled = common.ConstError("export was interrupted")
 
-// isContextDone returns true if the given context CancelFunc has been called.
+// IsContextDone returns true if the given context CancelFunc has been called.
 // Otherwise, returns false.
-func isContextDone(ctx context.Context) bool {
+func IsContextDone(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
 		return true
@@ -33,10 +33,10 @@ func isContextDone(ctx context.Context) bool {
 	}
 }
 
-// catchInterrupt catches SIGTERM and SIGINT signals and
+// Catch catches SIGTERM and SIGINT signals and
 // prevents export from corrupting database by canceling its context.
-func catchInterrupt() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
+func Catch(parent context.Context) context.Context {
+	ctx, cancel := context.WithCancel(parent)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	go func() {

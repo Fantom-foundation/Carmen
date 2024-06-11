@@ -11,20 +11,21 @@
 package io
 
 import (
+	"context"
 	"errors"
 	"io"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
 func TestExport_CanBeInterrupted(t *testing.T) {
 	type testFuncs struct {
 		// export is the tested export func
-		export func(string, io.Writer) error
+		export func(context.Context, string, io.Writer) error
 		// createDB is an init of the database
 		createDB func(t *testing.T, sourceDir string)
 		// check that the interrupted did not corrupt the db by re-opening it
@@ -50,27 +51,21 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			sourceDir := t.TempDir()
 			tf.createDB(t, sourceDir)
 
-			writer := &mockWriter{signalInterrupt: false}
+			countWriter := &mockWriter{signalInterrupt: false}
 			// first find number of writes
-			if err := tf.export(sourceDir, writer); err != nil {
+			if err := tf.export(context.Background(), sourceDir, countWriter); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
 			// save max count and reset number of writes
-			maxCount := writer.numOfWrites
-			// reset number of writes, so we can compare
-			// that export was indeed interrupted
-			writer.numOfWrites = 0
+			maxCount := countWriter.numOfWrites
+
+			ctx := interrupt.Catch(context.Background())
+
+			writer := &mockWriter{}
 			writer.signalInterrupt = true
-
-			err := tf.export(sourceDir, writer)
-			if err == nil {
-				t.Fatal("export was interrupted, error must not be nil")
-			}
-
-			got := err.Error()
-			want := ErrCanceled.Error()
-			if !strings.Contains(got, want) {
+			err := tf.export(ctx, sourceDir, writer)
+			if got, want := err, interrupt.ErrCanceled; !errors.Is(got, want) {
 				t.Errorf("unexpected error: got: %v, want: %v", got, want)
 			}
 
@@ -142,7 +137,7 @@ func (m *mockWriter) Write([]byte) (n int, err error) {
 		if err != nil {
 			return 0, errors.New("failed to create a SIGINT signal")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	return 0, nil

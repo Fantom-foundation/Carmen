@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"path"
 	"sort"
 
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -54,7 +56,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(directory string, out io.Writer) error {
+func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -68,8 +70,6 @@ func ExportArchive(directory string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-
-	ctx := catchInterrupt()
 
 	// Start with the magic number.
 	if _, err := out.Write(archiveMagicNumber); err != nil {
@@ -101,8 +101,8 @@ func ExportArchive(directory string, out io.Writer) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
-		if isContextDone(ctx) {
-			return errors.Join(ErrCanceled, archive.Close())
+		if interrupt.IsContextDone(ctx) {
+			return errors.Join(interrupt.ErrCanceled, archive.Close())
 		}
 		diff, err := archive.GetDiffForBlock(block)
 		if err != nil {
