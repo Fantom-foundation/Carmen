@@ -33,9 +33,10 @@ func IsCancelled(ctx context.Context) bool {
 	}
 }
 
-// Register catches SIGTERM and SIGINT signals and
-// prevents export from corrupting database by canceling its context.
-func Register(parent context.Context) context.Context {
+// CancelOnInterrupt catches SIGTERM and SIGINT and cancels the returned context.
+// After first signal is caught and cancel is called, this thread is closed and
+// no more signals are getting called, hence any other interrupt kills the app.
+func CancelOnInterrupt(parent context.Context) context.Context {
 	ctx, cancel := context.WithCancel(parent)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)

@@ -17,7 +17,7 @@ import (
 )
 
 func Test_CatchCancelsContextWhenInterrupted(t *testing.T) {
-	ctx := Register(context.Background())
+	ctx := CancelOnInterrupt(context.Background())
 	err := syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	if err != nil {
 		t.Fatal("failed to create a SIGINT signal")

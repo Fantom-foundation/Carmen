@@ -60,7 +60,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			// save max count and reset number of writes
 			maxCount := countWriter.numOfWrites
 
-			ctx := interrupt.Register(context.Background())
+			ctx := interrupt.CancelOnInterrupt(context.Background())
 
 			writer := &interruptSendingWriter{}
 			writer.signalInterrupt = true
