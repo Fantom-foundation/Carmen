@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
@@ -29,7 +30,7 @@ func TestQueryContext_QueriesAreForwarded(t *testing.T) {
 	}{
 		"balance": {
 			func(mock *state.MockState) {
-				balance, _ := common.ToBalance(big.NewInt(12))
+				balance := amount.New(12)
 				mock.EXPECT().GetBalance(common.Address{2}).Return(balance, nil)
 			},
 			func(query *queryContext, t *testing.T) {
