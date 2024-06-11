@@ -43,7 +43,7 @@ func Register(parent context.Context) context.Context {
 		defer signal.Stop(c)
 		select {
 		case <-c:
-			log.Println("closing, please wait until proper shutdown to prevent database corruption")
+			log.Println("shutting down")
 			cancel()
 		case <-ctx.Done():
 		}
