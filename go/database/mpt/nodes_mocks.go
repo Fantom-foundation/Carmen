@@ -173,18 +173,18 @@ func (mr *MockNodeMockRecorder) GetValue(source, key, path any) *gomock.Call {
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockNode) HasEmptyStorage(source NodeSource, path []Nibble) (bool, error) {
+func (m *MockNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasEmptyStorage", source, path)
+	ret := m.ctrl.Call(m, "HasEmptyStorage", source, address, path)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // HasEmptyStorage indicates an expected call of HasEmptyStorage.
-func (mr *MockNodeMockRecorder) HasEmptyStorage(source, path any) *gomock.Call {
+func (mr *MockNodeMockRecorder) HasEmptyStorage(source, address, path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockNode)(nil).HasEmptyStorage), source, path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockNode)(nil).HasEmptyStorage), source, address, path)
 }
 
 // IsDirty mocks base method.
@@ -813,18 +813,18 @@ func (mr *MockleafNodeMockRecorder) GetValue(source, key, path any) *gomock.Call
 }
 
 // HasEmptyStorage mocks base method.
-func (m *MockleafNode) HasEmptyStorage(source NodeSource, path []Nibble) (bool, error) {
+func (m *MockleafNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasEmptyStorage", source, path)
+	ret := m.ctrl.Call(m, "HasEmptyStorage", source, address, path)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // HasEmptyStorage indicates an expected call of HasEmptyStorage.
-func (mr *MockleafNodeMockRecorder) HasEmptyStorage(source, path any) *gomock.Call {
+func (mr *MockleafNodeMockRecorder) HasEmptyStorage(source, address, path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockleafNode)(nil).HasEmptyStorage), source, path)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockleafNode)(nil).HasEmptyStorage), source, address, path)
 }
 
 // IsDirty mocks base method.

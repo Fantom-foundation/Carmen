@@ -244,7 +244,7 @@ func TestEmptyNode_HasEmptyStorage(t *testing.T) {
 
 	empty := EmptyNode{}
 	path := addressToNibbles(addr)
-	if isEmpty, err := empty.HasEmptyStorage(mgr, path[:]); !isEmpty || err != nil {
+	if isEmpty, err := empty.HasEmptyStorage(mgr, addr, path[:]); !isEmpty || err != nil {
 		t.Fatalf("unexpected result, got: %v, want %v, err %v", isEmpty, false, err)
 	}
 }
@@ -2550,13 +2550,13 @@ func TestAccountNode_HasEmptyStorage(t *testing.T) {
 
 	// Case 1: the node does not have a storage reference.
 	path := addressToNibbles(addr)
-	if isEmpty, err := node.HasEmptyStorage(mgr, path[:]); !isEmpty || err != nil {
+	if isEmpty, err := node.HasEmptyStorage(mgr, addr, path[:]); !isEmpty || err != nil {
 		t.Fatalf("unexpected result, got: %v, want: %v, err: %v", isEmpty, true, err)
 	}
 
 	// Case 2: the node has a storage reference.
 	node.storage = NewNodeReference(ValueId(11))
-	if isEmpty, err := node.HasEmptyStorage(mgr, path[:]); isEmpty || err != nil {
+	if isEmpty, err := node.HasEmptyStorage(mgr, addr, path[:]); isEmpty || err != nil {
 		t.Fatalf("unexpected result, got: %v, want: %v, err: %v", isEmpty, false, err)
 	}
 }
@@ -3831,7 +3831,7 @@ func TestValueNode_HasEmptyStorage(t *testing.T) {
 
 	addr := common.Address{}
 	path := addressToNibbles(addr)
-	if _, err := node.HasEmptyStorage(ctxt, path[:]); err == nil {
+	if _, err := node.HasEmptyStorage(ctxt, addr, path[:]); err == nil {
 		t.Fatalf("HasEmptyStorage call should always return an error")
 	}
 }
