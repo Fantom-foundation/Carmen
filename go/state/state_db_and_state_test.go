@@ -134,7 +134,7 @@ func TestCarmen_CanHandleMaximumBalance(t *testing.T) {
 					t.Errorf("failed to fetch balance for account %v: %v", expectation.account, err)
 				}
 
-				if amount.NewFromBytes(got[:]...) != expectation.balance {
+				if got != expectation.balance {
 					t.Errorf("unexpected balance of account %v at block %d: wanted %v, got %v",
 						expectation.account,
 						expectation.block,
@@ -632,7 +632,7 @@ func TestStateDBSupportsConcurrentAccesses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reading the final balance failed")
 			}
-			if got, want := balance.ToBigInt().Int64(), int64(M); got != want {
+			if got, want := balance, amount.New(M); got != want {
 				t.Fatalf("invalid final balance, wanted %d, got %d", want, got)
 			}
 		})
