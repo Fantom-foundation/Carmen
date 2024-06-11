@@ -1,16 +1,6 @@
 # Introduction
 
-Carmen is a fast and space conservative database for blockchains. It outperforms other projects in the
-transaction speed while consuming only a fraction of space of what is standard in other projects.
-
-Carmen maintains the world state known from Ethereum space, modelling accounts and storages. It is a
-versioning database that allows for modification of a current state and querying of historical states.
-
-The implementation enables various schemes and two implementation languages. At the moment, the production
-quality schema is state hash root compatible with Ethereum’s World State, organised in the Merkle Patricia Trie.
-
-A few experimental schemas are provided that utilise fast flat storages with various organisation
-of key value pairs. A version implemented in Golang and C++ is provided for a selection of schemas.
+Carmen is a high-performance data store for Blockchains and manages balances, code, and the persistent storage of smart contracts. Carmen assumes a linear evolution of blocks. Carmen supports two versions of databases: LiveDB, which keeps the last state of the last block only, and ArchiveDB, which keeps all states over all blocks. The Carmen project implements various schemas (currently S1 to S5), including a Merkle-Patricia Tries (MPT) variation as an underlying data structure for storing state.  The storage layer is abstracted, and the schemas can read and write information in memory, a key-value store (LevelDB, etc.), or a native file format. Carmen has implemented schema S1-S3 in the Go and C++ languages. Schema S4 and S5 are implemented only in Go.  The latest Schema S5 is currently used in the Sonic Client.
 
 ***
 
@@ -36,21 +26,17 @@ import "github.com/Fantom-foundation/Carmen/go/carmen"
 
 
 # How to Use
-Carmen is configured for the scheme to use, and if historical data are retained or not. The Merkle-Patricia-Trie 
-compatible scheme is called S5, and it can be either Archive or non-Archive (LiveDB).
+Schema S5 is the only schema compatible with Merkle-Patricia Tries. Carmen has always enabled LiveDB to keep the state of the last block.
+ArchiveDB can be enabled to retain historical data. If ArchiveDB is enabled, the state of the last block is appended to the archive for later retrieval. 
 
-A state of the blockchain may be updated always only at the head of the chain, and it is stored in the LiveDB. 
-The state becomes verbatim as part of a block once appended to the blockchain via the new block. If the Archive mode 
-is enabled, the state of the last block is appended to the archive and it can be retrieved later. If the Archive 
-is not configured, only the head state is available. LiveDB is enabled all the time, while the Archive is tentative.
-
-As a blockchain is a sequence of blocks where each contains a set of transactions, the API is oriented 
-to creation and retrieval of transactions within blocks. Carmen provides an API for accessing both Live 
-and Archive databases to append new blocks to the blockchain and to query history for previous blocks.
+The Carmen interface is loosely related to the go-ethereum's StateDB interface, though it differs w.r.t. block management and transaction management. 
+The functionality contains creating, opening, and closing an instance of Carmen. 
+In addition, we have getter/setter operations for the state (Balance/Nonce/Code/Storage)
+and other operations related to scoping (e.g., Snapshots).
 
 ## LiveDB
 
-The current state can be updated or queried via a new block. Two forms of APIs are provided:
+Below is an example that creates a new account and adds 100 units to the balance:
 
 <details>
     <summary>Functional style API</summary>
@@ -110,7 +96,7 @@ func ExampleDatabase_BeginBlock() {
 		log.Fatalf("cannot begin block: %v", err)
 	}
 
-	// Begin a new transaction withing the block
+	// Begin a new transaction within the block
 	tctx, err := bctx.BeginTransaction()
 	if err != nil {
 		log.Fatalf("cannot begin transaction: %v", err)
@@ -141,7 +127,7 @@ func ExampleDatabase_BeginBlock() {
 
 ## Archive
 
-Historic state can be queried via any previously stored blocks. Two forms of APIs are provided: \
+A historical state can be queried on previously stored blocks. Two forms of APIs are provided: \
 
 <details>
     <summary>Functional style API</summary>
@@ -277,8 +263,7 @@ func ExampleDatabase_GetHistoricContext() {
 
 
 ## Query API
-Both LiveDB and Archive can be queried using a **query API** that avoids hassle packing every request to a block 
-and transaction in previous APIs. It is done via a functional style callback that provides a query:
+LiveDB and Archive can be queried using a **query API** using a functional style callback as shown below:
 
 <details>
     <summary>Querying a LiveDB</summary>
@@ -366,16 +351,15 @@ func ExampleDatabase_QueryHistoricState() {
 
 # Performance 
 
-Carmen is the backbone of [Fantom Sonic](https://fantom.foundation/sonicPage) blockchain. 
-It is the key component that enables high performance in a disk space conservative manner. 
+Carmen is the StateDB of [Fantom Sonic](https://fantom.foundation/sonicPage) blockchain. 
+The data store is the key component for enabling low time-to-finally and high transaction throughput while saving disk space. 
 
-Carmen was extensively tested as part of the Sonic client (i.e. a blockchain node). 
-Three main scenarios were tested:
+Carmen was extensively tested as part of the Sonic client (i.e. a blockchain node).  Three main scenarios were tested:
 1. **Realistic traffic:** a mix of transactions that resemble realistic traffic, such as token transfers, token mints, and complex multi-step swaps.
 2. **Token swaps:** transactions calling the uniswap’s contract, which handles multi-step swaps between tokens, demonstrating what the next generation of DEXs can achieve.
-3. **Token transfers:** transactions processing only ERC-20 transfers, demonstrating usage for next-generation wallets, and payment providers.
+3. **Token transfers:** transactions processing only ERC-20 transfers, demonstrating usage for next-generation wallets and payment providers.
 
-The client could process thousands of transactions per second as depicted in the table 
+The client could process thousands of transactions per second, as listed in the table below
 and further detailed in [a blog post](https://blog.fantom.foundation/3-incredible-performances-from-fantom-sonic-closed-testnet/).
 
 | Configuration | Speed Tx/s |
@@ -384,7 +368,7 @@ and further detailed in [a blog post](https://blog.fantom.foundation/3-incredibl
 | Token swaps     |  4000 |
 | Token transfers | 10000 |
 
-Processing this traffic, Carmen needed following disk space: 
+Processing this workload, Carmen required the following disk space: 
 * **~60GB** to store 100M transactions 
 * additional **~160GB** to store historical data for serving RPC queries 
   
