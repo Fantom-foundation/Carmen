@@ -352,7 +352,7 @@ func ExampleDatabase_QueryHistoricState() {
 # Performance 
 
 Carmen is the StateDB of [Fantom Sonic](https://fantom.foundation/sonicPage) blockchain. 
-The data store is the key component for enabling low time-to-finally and high transaction throughput while saving disk space. 
+The data store is the key component for enabling low time-to-finality and high transaction throughput while saving disk space. 
 
 Carmen was extensively tested as part of the Sonic client (i.e. a blockchain node).  Three main scenarios were tested:
 1. **Realistic traffic:** a mix of transactions that resemble realistic traffic, such as token transfers, token mints, and complex multi-step swaps.
