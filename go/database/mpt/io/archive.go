@@ -101,7 +101,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
-		if interrupt.IsContextDone(ctx) {
+		if interrupt.IsCancelled(ctx) {
 			return errors.Join(interrupt.ErrCanceled, archive.Close())
 		}
 		diff, err := archive.GetDiffForBlock(block)

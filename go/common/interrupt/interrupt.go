@@ -20,11 +20,11 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
-const ErrCanceled = common.ConstError("export was interrupted")
+const ErrCanceled = common.ConstError("interrupted")
 
-// IsContextDone returns true if the given context CancelFunc has been called.
+// IsCancelled returns true if the given context's CancelFunc has been called.
 // Otherwise, returns false.
-func IsContextDone(ctx context.Context) bool {
+func IsCancelled(ctx context.Context) bool {
 	select {
 	case <-ctx.Done():
 		return true
@@ -33,9 +33,9 @@ func IsContextDone(ctx context.Context) bool {
 	}
 }
 
-// Catch catches SIGTERM and SIGINT signals and
+// Register catches SIGTERM and SIGINT signals and
 // prevents export from corrupting database by canceling its context.
-func Catch(parent context.Context) context.Context {
+func Register(parent context.Context) context.Context {
 	ctx, cancel := context.WithCancel(parent)
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)

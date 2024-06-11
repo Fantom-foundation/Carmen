@@ -73,7 +73,7 @@ func doExport(context *cli.Context) error {
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
 
-	ctx := interrupt.Catch(context.Context)
+	ctx := interrupt.Register(context.Context)
 
 	if err = errors.Join(
 		export(ctx, dir, out),

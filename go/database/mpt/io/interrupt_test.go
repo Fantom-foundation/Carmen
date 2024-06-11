@@ -51,7 +51,7 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			sourceDir := t.TempDir()
 			tf.createDB(t, sourceDir)
 
-			countWriter := &mockWriter{signalInterrupt: false}
+			countWriter := &interruptSendingWriter{signalInterrupt: false}
 			// first find number of writes
 			if err := tf.export(context.Background(), sourceDir, countWriter); err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -60,16 +60,16 @@ func TestExport_CanBeInterrupted(t *testing.T) {
 			// save max count and reset number of writes
 			maxCount := countWriter.numOfWrites
 
-			ctx := interrupt.Catch(context.Background())
+			ctx := interrupt.Register(context.Background())
 
-			writer := &mockWriter{}
+			writer := &interruptSendingWriter{}
 			writer.signalInterrupt = true
 			err := tf.export(ctx, sourceDir, writer)
 			if got, want := err, interrupt.ErrCanceled; !errors.Is(got, want) {
 				t.Errorf("unexpected error: got: %v, want: %v", got, want)
 			}
 
-			if maxCount == writer.numOfWrites {
+			if maxCount == writer.numOfWrites || writer.numOfWrites == 0 {
 				t.Error("export was not interrupted")
 			}
 
@@ -123,12 +123,12 @@ func checkCanOpenArchive(t *testing.T, sourceDir string) {
 	}
 }
 
-type mockWriter struct {
+type interruptSendingWriter struct {
 	numOfWrites     int
 	signalInterrupt bool
 }
 
-func (m *mockWriter) Write([]byte) (n int, err error) {
+func (m *interruptSendingWriter) Write([]byte) (n int, err error) {
 	m.numOfWrites++
 	// inform the test that first write has happened
 	if m.numOfWrites > 0 && m.signalInterrupt {
