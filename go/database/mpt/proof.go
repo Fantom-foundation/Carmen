@@ -80,7 +80,16 @@ func (p WitnessProof) Extract(root common.Hash, address common.Address, keys ...
 // IsValid checks that this proof is self-consistent. If the result is true, the proof can be used
 // for extracting verified information. If false, the proof is corrupted and should be discarded.
 func (p WitnessProof) IsValid() bool {
-	panic("not implemented")
+	for k, v := range p.proofDb {
+		if k != common.Keccak256(v) {
+			return false
+		}
+		_, err := DecodeFromRlp(v)
+		if err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // GetAccountInfo extracts an account info from the witness proof for the input root hash and the address.

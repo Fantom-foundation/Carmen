@@ -15,6 +15,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/exp/maps"
 	"testing"
 )
 
@@ -417,6 +418,48 @@ func TestWitnessProof_String(t *testing.T) {
 	if got, want := fmt.Sprintf("%s", WitnessProof{proof}), str; got != want {
 		t.Errorf("unexpected string: got %v, want %v", got, want)
 	}
+}
+
+func TestWitnessProof_Is_Valid(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{0xAB, 0xCD, 0xEF}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	desc := &Extension{
+		path: AddressToNibblePath(address, ctxt)[0:30],
+		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+	}
+
+	root, node := ctxt.Build(desc)
+	totalProof := createReferenceProof(t, ctxt, &root, node)
+
+	t.Run("valid proof", func(t *testing.T) {
+		proof := WitnessProof{maps.Clone(totalProof.proofDb)}
+		if !proof.IsValid() {
+			t.Fatalf("proof should be valid")
+		}
+	})
+
+	t.Run("hash mismatch", func(t *testing.T) {
+		proof := WitnessProof{maps.Clone(totalProof.proofDb)}
+		for k := range proof.proofDb {
+			proof.proofDb[k] = []byte{0xAA, 0xBB, 0xCC, 0xDD}
+		}
+		if proof.IsValid() {
+			t.Fatalf("proof should be invalid")
+		}
+	})
+	t.Run("corruptedRlp", func(t *testing.T) {
+		proof := WitnessProof{maps.Clone(totalProof.proofDb)}
+		corruptRlp := []byte{0xAA, 0xBB, 0xCC, 0xDD}
+		hash := common.Keccak256(corruptRlp)
+		proof.proofDb[hash] = corruptRlp
+		if proof.IsValid() {
+			t.Fatalf("proof should be invalid")
+		}
+	})
 }
 
 // createReferenceProofForLabels creates a reference witness proof for the given root node.
