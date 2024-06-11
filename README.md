@@ -12,7 +12,7 @@ which keeps all states over all blocks.
 The storage layer is abstracted, and the schemas can read and write
 information in memory, a key-value store (LevelDB, etc.), or a native file format.
 
-This project implements various schemas, including a Merkle-Patricia Tries (MPT) variation 
+This project implements various schemas, including a Merkle-Patricia Trie (MPT) variation 
 as an underlying data structure for storing state. Some schemas are implemented in C++, 
 all schemas are implemented in GO.
 
