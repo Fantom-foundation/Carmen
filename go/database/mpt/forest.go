@@ -383,16 +383,22 @@ func (s *Forest) SetValue(rootRef *NodeReference, addr common.Address, key commo
 	return newRoot, err
 }
 
-func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (bool, error) {
-	handle, err := s.getReadAccess(rootRef)
-	if err != nil {
-		err = fmt.Errorf("failed to obtain read access to node %v: %w", rootRef.Id(), err)
-		s.errors = append(s.errors, err)
-		return false, err
+func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (isEmpty bool, err error) {
+	v := &lambdaVisitor{
+		visit: func(node Node, info NodeInfo) VisitResponse {
+			isEmpty = node.(*AccountNode).storage.Id().IsEmpty()
+			return VisitResponseAbort
+		},
 	}
-	defer handle.Release()
-	path := AddressToNibblePath(addr, s)
-	return handle.Get().HasEmptyStorage(s, addr, path)
+	exists, err := VisitPathToAccount(s, rootRef, addr, v)
+	if err != nil {
+		return true, err
+	}
+	if !exists {
+		return true, nil
+	}
+
+	return isEmpty, nil
 }
 
 func (s *Forest) ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error) {

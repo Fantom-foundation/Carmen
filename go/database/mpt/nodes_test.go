@@ -236,19 +236,6 @@ func TestEmptyNode_ChecksDoNotProduceErrors(t *testing.T) {
 	}
 }
 
-func TestEmptyNode_HasEmptyStorage(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mgr := NewMockNodeManager(ctrl)
-
-	addr := common.Address{1}
-
-	empty := EmptyNode{}
-	path := addressToNibbles(addr)
-	if isEmpty, err := empty.HasEmptyStorage(mgr, addr, path[:]); !isEmpty || err != nil {
-		t.Fatalf("unexpected result, got: %v, want %v, err %v", isEmpty, false, err)
-	}
-}
-
 // ----------------------------------------------------------------------------
 //                               Branch Node
 // ----------------------------------------------------------------------------
@@ -2542,25 +2529,6 @@ func TestAccountNode_GetAccount(t *testing.T) {
 	}
 }
 
-func TestAccountNode_HasEmptyStorage(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mgr := NewMockNodeManager(ctrl)
-	addr := common.Address{1}
-	node := &AccountNode{address: addr}
-
-	// Case 1: the node does not have a storage reference.
-	path := addressToNibbles(addr)
-	if isEmpty, err := node.HasEmptyStorage(mgr, addr, path[:]); !isEmpty || err != nil {
-		t.Fatalf("unexpected result, got: %v, want: %v, err: %v", isEmpty, true, err)
-	}
-
-	// Case 2: the node has a storage reference.
-	node.storage = NewNodeReference(ValueId(11))
-	if isEmpty, err := node.HasEmptyStorage(mgr, addr, path[:]); isEmpty || err != nil {
-		t.Fatalf("unexpected result, got: %v, want: %v, err: %v", isEmpty, false, err)
-	}
-}
-
 func TestAccountNode_SetAccount_WithMatchingAccount_SameInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	ctxt := newNodeContext(t, ctrl)
@@ -3820,19 +3788,6 @@ func TestValueNode_SetAccount(t *testing.T) {
 
 	if _, _, err := node.SetAccount(ctxt, &ref, shared.WriteHandle[Node]{}, addr, path[:], info); err == nil {
 		t.Fatalf("SetAccount call should always return an error")
-	}
-}
-
-func TestValueNode_HasEmptyStorage(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	ctxt := newNodeContext(t, ctrl)
-
-	node := &ValueNode{}
-
-	addr := common.Address{}
-	path := addressToNibbles(addr)
-	if _, err := node.HasEmptyStorage(ctxt, addr, path[:]); err == nil {
-		t.Fatalf("HasEmptyStorage call should always return an error")
 	}
 }
 
