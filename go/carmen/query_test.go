@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -121,7 +120,7 @@ func TestQueryContext_ErrorsArePropagated(t *testing.T) {
 	}{
 		"balance": {
 			func(mock *state.MockState) {
-				balance, _ := common.ToBalance(big.NewInt(12))
+				balance := amount.New(12)
 				mock.EXPECT().GetBalance(common.Address{2}).Return(balance, injectedError)
 			},
 			func(query *queryContext, t *testing.T) {
