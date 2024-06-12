@@ -13,6 +13,7 @@ package mpt
 //go:generate mockgen -source verification.go -destination verification_mocks.go -package mpt
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"github.com/pbnjay/memory"
 )
@@ -55,7 +57,7 @@ func (NilVerificationObserver) EndVerification(res error) {}
 //     - all byte-codes within the code file matches their hashed representation in accounts
 //  2. Non-fatal checks
 //     - there are no extra Code Hashes not referenced by any account
-func VerifyMptState(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func VerifyMptState(ctx context.Context, directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
@@ -78,7 +80,12 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 		return err
 	}
 
-	err = verifyForest(directory, config, roots, source, observer)
+	// Check for interrupt after codes verification
+	if interrupt.IsCancelled(ctx) {
+		return interrupt.ErrCanceled
+	}
+
+	err = verifyForest(ctx, directory, config, roots, source, observer)
 	if err != nil {
 		return err
 	}
@@ -91,7 +98,7 @@ func VerifyMptState(directory string, config MptConfig, roots []Root, observer V
 //   - all required files are present and can be read
 //   - all referenced nodes are present
 //   - all hashes are consistent
-func verifyFileForest(directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
+func verifyFileForest(ctx context.Context, directory string, config MptConfig, roots []Root, observer VerificationObserver) (res error) {
 	if observer == nil {
 		observer = NilVerificationObserver{}
 	}
@@ -108,10 +115,10 @@ func verifyFileForest(directory string, config MptConfig, roots []Root, observer
 		return err
 	}
 	defer source.Close()
-	return verifyForest(directory, config, roots, source, observer)
+	return verifyForest(ctx, directory, config, roots, source, observer)
 }
 
-func verifyForest(directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
+func verifyForest(ctx context.Context, directory string, config MptConfig, roots []Root, source *verificationNodeSource, observer VerificationObserver) (res error) {
 	// ------------------------- Meta-Data Checks -----------------------------
 
 	observer.Progress(fmt.Sprintf("Checking forest stored in %s ...", directory))
@@ -130,6 +137,11 @@ func verifyForest(directory string, config MptConfig, roots []Root, source *veri
 	}
 	if err := file.VerifyStock[uint64](directory+"/values", valueEncoder); err != nil {
 		return err
+	}
+
+	// Check for interrupt after each pass
+	if interrupt.IsCancelled(ctx) {
+		return interrupt.ErrCanceled
 	}
 
 	// ----------------- First Pass: check Node References --------------------
@@ -173,6 +185,11 @@ func verifyForest(directory string, config MptConfig, roots []Root, source *veri
 	})
 	if err != nil {
 		return err
+	}
+
+	// Check for interrupt after each pass
+	if interrupt.IsCancelled(ctx) {
+		return interrupt.ErrCanceled
 	}
 
 	// -------------------- Further Passes: node hashes -----------------------
@@ -233,6 +250,11 @@ func verifyForest(directory string, config MptConfig, roots []Root, source *veri
 		return err
 	}
 
+	// Check for interrupt after each pass
+	if interrupt.IsCancelled(ctx) {
+		return interrupt.ErrCanceled
+	}
+
 	err = verifyHashes(
 		"branch", source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
 		func(node *BranchNode) (common.Hash, error) { return hash(node) },
@@ -266,6 +288,11 @@ func verifyForest(directory string, config MptConfig, roots []Root, source *veri
 		return err
 	}
 
+	// Check for interrupt after each pass
+	if interrupt.IsCancelled(ctx) {
+		return interrupt.ErrCanceled
+	}
+
 	err = verifyHashes(
 		"extension", source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
 		func(node *ExtensionNode) (common.Hash, error) { return hash(node) },
@@ -283,6 +310,11 @@ func verifyForest(directory string, config MptConfig, roots []Root, source *veri
 	)
 	if err != nil {
 		return err
+	}
+
+	// Check for interrupt after each pass
+	if interrupt.IsCancelled(ctx) {
+		return interrupt.ErrCanceled
 	}
 
 	err = verifyHashes(
