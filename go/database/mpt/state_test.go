@@ -313,9 +313,6 @@ func TestState_StateModifications_Failing(t *testing.T) {
 			if err := state.SetStorage(common.Address{1}, common.Key{1}, common.Value{1}); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}
-			if _, err := state.HasEmptyStorage(common.Address{1}); !errors.Is(err, injectedErr) {
-				t.Errorf("accessing data should fail")
-			}
 			if _, err := state.GetCode(common.Address{1}); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}

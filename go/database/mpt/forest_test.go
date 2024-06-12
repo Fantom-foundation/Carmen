@@ -2155,6 +2155,36 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 	}
 }
 
+func TestForest_HasEmptyStorage_CastingDoesNotFail(t *testing.T) {
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+					var err error
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					root := NewNodeReference(ExtensionId(11))
+
+					// Test casting
+
+					isEmpty, err := forest.HasEmptyStorage(&root, common.Address{0x1})
+					if err != nil {
+						t.Fatalf("failed to ask whether account has empty storage: %v", err)
+					}
+					if !isEmpty {
+						t.Error("freshly created account has empty storage, but forest returned true")
+					}
+
+				})
+			}
+		}
+	}
+}
+
 func TestForest_HasEmptyStorage(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
@@ -2167,14 +2197,26 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						t.Fatalf("failed to open forest: %v", err)
 					}
 
-					key := getTestKeys(1)[0]
-					addr := getTestAddresses(1)[0]
+					root := NewNodeReference(EmptyId())
 
-					root := NewNodeReference(ExtensionId(11))
+					addresses := getTestAddresses(100)
+					for i, address := range addresses {
+						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: common.Balance{0x1}})
+						if err != nil {
+							t.Fatalf("cannot update account: %v", err)
+						}
+						// fill storage of half of the accounts
+						if i < 50 {
+							continue
+						}
+						root, err = forest.SetValue(&root, address, common.Key{byte(i)}, common.Value{byte(i)})
+						if err != nil {
+							t.Fatalf("cannot update storage: %v", err)
+						}
+					}
 
-					// Test casting
-
-					isEmpty, err := forest.HasEmptyStorage(&root, addr)
+					// Account with empty storage
+					isEmpty, err := forest.HasEmptyStorage(&root, addresses[0])
 					if err != nil {
 						t.Fatalf("failed to ask whether account has empty storage: %v", err)
 					}
@@ -2182,29 +2224,8 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						t.Error("freshly created account has empty storage, but forest returned true")
 					}
 
-					root, err = forest.SetAccountInfo(&root, addr, AccountInfo{Balance: common.Balance{0x1}})
-					if err != nil {
-						t.Fatalf("cannot update account: %v", err)
-					}
-
-					// ------------------
-					// Test fresh account
-					// ------------------
-
-					isEmpty, err = forest.HasEmptyStorage(&root, addr)
-					if err != nil {
-						t.Fatalf("failed to ask whether account has empty storage: %v", err)
-					}
-					if !isEmpty {
-						t.Error("freshly created account has empty storage, but forest returned true")
-					}
-
-					root, err = forest.SetValue(&root, addr, key, common.Value{1})
-					if err != nil {
-						t.Fatalf("failed to update storage: %v", err)
-					}
-
-					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					// Account with not empty storage
+					isEmpty, err = forest.HasEmptyStorage(&root, addresses[99])
 					if err != nil {
 						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
 					}
@@ -2212,16 +2233,14 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						t.Error("storage is not empty but forest returned true")
 					}
 
-					// --------------------
-					// Test cleared storage
-					// --------------------
-
-					root, err = forest.ClearStorage(&root, addr)
+					// Clear storage of an account with not empty storage
+					root, err = forest.ClearStorage(&root, addresses[98])
 					if err != nil {
 						t.Fatalf("cannot clear storage: %v", err)
 					}
 
-					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					// Account with cleared storage
+					isEmpty, err = forest.HasEmptyStorage(&root, addresses[98])
 					if err != nil {
 						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
 					}
@@ -2229,29 +2248,14 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						t.Error("storage was cleared but forest returned false")
 					}
 
-					// --------------------
-					// Test deleted account
-					// --------------------
-
-					root, err = forest.SetValue(&root, addr, key, common.Value{1})
-					if err != nil {
-						t.Fatalf("failed to update storage: %v", err)
-					}
-
-					isEmpty, err = forest.HasEmptyStorage(&root, addr)
-					if err != nil {
-						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
-					}
-					if isEmpty {
-						t.Error("storage is not empty but forest returned true")
-					}
-
-					root, err = forest.SetAccountInfo(&root, addr, AccountInfo{})
+					// Delete account
+					root, err = forest.SetAccountInfo(&root, addresses[97], AccountInfo{})
 					if err != nil {
 						t.Fatalf("failed to set account info: %v", err)
 					}
 
-					isEmpty, err = forest.HasEmptyStorage(&root, addr)
+					// Deleted account
+					isEmpty, err = forest.HasEmptyStorage(&root, addresses[97])
 					if err != nil {
 						t.Fatalf("failed to ask whether account has empty storage;: %v", err)
 					}
