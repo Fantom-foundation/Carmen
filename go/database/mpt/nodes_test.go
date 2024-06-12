@@ -6617,6 +6617,16 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 			},
 			path: []string{"A"},
 		},
+		"nested branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address)[0:39], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Branch{children: Children{
+						0: &Tag{"D", &Account{}},
+					}}}}},
+				}}},
+			path: []string{"A", "B", "C"},
+		},
 		"account node too deep": {
 			trie: &Tag{"A", &Extension{
 				path: addressToNibbles(address)[0:39], // branch node will exhaust the path
@@ -6736,6 +6746,16 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 				next: &Tag{"B", &Branch{}},
 			}},
 			path: []string{"A"},
+		},
+		"nested branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(key)[0:63], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Branch{children: Children{
+						0: &Tag{"D", &Value{}},
+					}}}}},
+				}}},
+			path: []string{"A", "B", "C"},
 		},
 		"value node too deep": {
 			trie: &Tag{"A", &Extension{
