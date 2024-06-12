@@ -39,9 +39,9 @@ var (
 	val2     = common.Value{0x02}
 	val3     = common.Value{0x03}
 
-	balance1 = common.Balance{0x01}
-	balance2 = common.Balance{0x02}
-	balance3 = common.Balance{0x03}
+	balance1 = amount.New(1)
+	balance2 = amount.New(2)
+	balance3 = amount.New(3)
 
 	nonce1 = common.Nonce{0x01}
 	nonce2 = common.Nonce{0x02}
@@ -1242,7 +1242,7 @@ func TestStateDB_EmptyAccountsAreRecognized(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
@@ -1258,7 +1258,7 @@ func TestStateDB_SettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 
 	// An empty account must have its balance and nonce set to zero.
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
@@ -1406,7 +1406,7 @@ func TestStateDB_SettingTheNonceToZeroMakesAccountEmpty(t *testing.T) {
 	// An empty account must have its nonce and code set to zero.
 	mock.EXPECT().Check().AnyTimes()
 	mock.EXPECT().Exists(address1).AnyTimes().Return(false, nil)
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{0}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{0}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{})
@@ -3956,7 +3956,7 @@ func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().Exists(address2).Return(false, nil)
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{10}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(10), nil)
 	mock.EXPECT().GetCode(address1).Return([]byte{1, 2, 3}, nil)
 	mock.EXPECT().GetCodeHash(address1).Return(common.Hash{3, 2, 1}, nil)
 	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(12))
