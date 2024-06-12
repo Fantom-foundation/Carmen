@@ -300,6 +300,7 @@ func (s *MptState) GetStorage(address common.Address, key common.Key) (value com
 func (s *MptState) SetStorage(address common.Address, key common.Key, value common.Value) error {
 	return s.trie.SetValue(address, key, value)
 }
+
 func (s *MptState) HasEmptyStorage(address common.Address) (bool, error) {
 	return s.trie.HasEmptyStorage(address)
 }

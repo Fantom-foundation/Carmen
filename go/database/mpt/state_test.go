@@ -313,6 +313,9 @@ func TestState_StateModifications_Failing(t *testing.T) {
 			if err := state.SetStorage(common.Address{1}, common.Key{1}, common.Value{1}); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}
+			if _, err := state.HasEmptyStorage(common.Address{1}); !errors.Is(err, injectedErr) {
+				t.Errorf("accessing data should fail")
+			}
 			if _, err := state.GetCode(common.Address{1}); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}
@@ -336,6 +339,52 @@ func TestState_StateModifications_Failing(t *testing.T) {
 			nodeVisitor := NewMockNodeVisitor(ctrl)
 			if err := state.Visit(nodeVisitor); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
+			}
+		})
+	}
+}
+
+func TestState_StateModifications_FailingHasEmptyStorage(t *testing.T) {
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			for _, config := range allMptConfigs {
+				t.Run(config.Name, func(t *testing.T) {
+					dir := t.TempDir()
+
+					state, err := open(dir)
+					if err != nil {
+						t.Fatalf("cannot open state: %s", err)
+					}
+
+					addr := common.Address{0x1}
+					injectedErr := errors.New("injected error")
+					ctrl := gomock.NewController(t)
+					db := NewMockDatabase(ctrl)
+					db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(true, nil)
+					db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(false, nil)
+					db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(false, injectedErr)
+
+					state.trie.forest = db
+
+					isEmpty, err := state.HasEmptyStorage(addr)
+					if err != nil {
+						t.Fatalf("unexpected error: %v", err)
+					}
+					if !isEmpty {
+						t.Fatalf("unexpected return, got: %v, want: %v", isEmpty, true)
+					}
+
+					isEmpty, err = state.HasEmptyStorage(addr)
+					if err != nil {
+						t.Fatalf("unexpected error: %v", err)
+					}
+					if isEmpty {
+						t.Fatalf("unexpected return, got: %v, want: %v", isEmpty, true)
+					}
+					if _, err = state.HasEmptyStorage(addr); err == nil {
+						t.Fatalf("call must fail")
+					}
+				})
 			}
 		})
 	}
