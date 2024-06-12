@@ -306,9 +306,11 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 				done = true
 			}
 		case *BranchNode:
+			if len(path) == 0 {
+				done = true
+			}
 			nodeId = &n.children[path[0]]
 			path = path[1:]
-			done = len(path) == 0
 		case *AccountNode:
 			if address != nil && n.address == *address {
 				found = true
