@@ -6565,7 +6565,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 		},
 		"wrong account": {
 			trie: &Tag{"A", &Account{}},
-			path: []string{},
+			path: []string{"A"},
 		},
 		"correct account": {
 			trie: &Tag{"A", &Account{address: address}},
@@ -6585,7 +6585,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 				1: &Tag{"C", &Account{}},
 				2: &Tag{"D", &Empty{}},
 			}}},
-			path: []string{"A"},
+			path: []string{"A", "C"},
 		},
 		"branch with correct account": {
 			trie: &Tag{"A", &Branch{children: Children{
@@ -6607,7 +6607,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 		},
 		"extension without common prefix": {
 			trie: &Tag{"A", &Extension{path: []Nibble{2, 3}}},
-			path: []string{},
+			path: []string{"A"},
 		},
 		"branch node too deep": {
 			trie: &Tag{"A", &Extension{
@@ -6616,6 +6616,25 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 			},
 			},
 			path: []string{"A"},
+		},
+		"nested branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address)[0:39], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Branch{children: Children{
+						0: &Tag{"D", &Account{}},
+					}}}}},
+				}}},
+			path: []string{"A", "B", "C"},
+		},
+		"account node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address)[0:39], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Account{address: address}}},
+				}}},
+			},
+			path: []string{"A", "B", "C"},
 		},
 	}
 
@@ -6713,13 +6732,50 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 			}}},
 			path: []string{"A", "C"},
 		},
+		"branch with incorrect storage": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Value{}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"},
+		},
 		"branch node too deep": {
 			trie: &Tag{"A", &Extension{
 				path: keyToNibbles(key), // extension node will exhaust the path
 				next: &Tag{"B", &Branch{}},
-			},
-			},
+			}},
 			path: []string{"A"},
+		},
+		"nested branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(key)[0:63], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Branch{children: Children{
+						0: &Tag{"D", &Value{}},
+					}}}}},
+				}}},
+			path: []string{"A", "B", "C"},
+		},
+		"value node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(key)[0:63], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Value{key: key}},
+				}}},
+			}},
+			path: []string{"A", "B", "C"},
+		},
+		"wrong extension": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(common.Key{}),
+				next: &Tag{"B", &Branch{}},
+			}},
+			path: []string{"A"},
+		},
+		"empty node ": {
+			trie: &Tag{"A", Empty{}},
+			path: []string{},
 		},
 	}
 
