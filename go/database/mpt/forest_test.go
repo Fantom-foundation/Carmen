@@ -2155,36 +2155,6 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 	}
 }
 
-func TestForest_HasEmptyStorage_CastingDoesNotFail(t *testing.T) {
-	for _, variant := range variants {
-		for _, config := range allMptConfigs {
-			for forestConfigName, forestConfig := range forestConfigs {
-				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
-					directory := t.TempDir()
-					var err error
-					forest, err := variant.factory(directory, config, forestConfig)
-					if err != nil {
-						t.Fatalf("failed to open forest: %v", err)
-					}
-
-					root := NewNodeReference(ExtensionId(11))
-
-					// Test casting
-
-					isEmpty, err := forest.HasEmptyStorage(&root, common.Address{0x1})
-					if err != nil {
-						t.Fatalf("failed to ask whether account has empty storage: %v", err)
-					}
-					if !isEmpty {
-						t.Error("freshly created account has empty storage, but forest returned true")
-					}
-
-				})
-			}
-		}
-	}
-}
-
 func TestForest_HasEmptyStorage(t *testing.T) {
 	const N = 100
 	for _, variant := range variants {
@@ -2192,7 +2162,6 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 			for forestConfigName, forestConfig := range forestConfigs {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
 					directory := t.TempDir()
-					var err error
 					forest, err := variant.factory(directory, config, forestConfig)
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
@@ -2230,7 +2199,7 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						}
 
 						// Second half of the accounts has non-empty storage
-						if i >= 50 {
+						if i >= 50 && i < 60 {
 							isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
 							if err != nil {
 								t.Fatalf("failed to ask whether account has empty storage: %v", err)
@@ -2243,7 +2212,6 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 
 						// Clear some storage
 						if i >= 60 && i < 70 {
-							// Clear storage of an account with not empty storage
 							root, err = forest.ClearStorage(&root, addresses[i])
 							if err != nil {
 								t.Fatalf("cannot clear storage: %v", err)

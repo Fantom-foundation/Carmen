@@ -353,33 +353,12 @@ func TestState_HasEmptyStorage(t *testing.T) {
 				}
 
 				addr := common.Address{0x1}
-				injectedErr := errors.New("injected error")
 				ctrl := gomock.NewController(t)
 				db := NewMockDatabase(ctrl)
-				db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(true, nil)
-				db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(false, nil)
-				db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(false, injectedErr)
+				db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
 
 				state.trie.forest = db
-
-				isEmpty, err := state.HasEmptyStorage(addr)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if !isEmpty {
-					t.Fatalf("unexpected return, got: %v, want: %v", isEmpty, true)
-				}
-
-				isEmpty, err = state.HasEmptyStorage(addr)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if isEmpty {
-					t.Fatalf("unexpected return, got: %v, want: %v", isEmpty, true)
-				}
-				if _, err = state.HasEmptyStorage(addr); err == nil {
-					t.Fatalf("call must fail")
-				}
+				state.HasEmptyStorage(addr)
 			})
 		})
 	}

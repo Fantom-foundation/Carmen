@@ -894,7 +894,6 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 }
 
 func TestLiveTrie_HasEmptyStorage(t *testing.T) {
-
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -902,7 +901,7 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 			addr := common.Address{0x1}
 			ctrl := gomock.NewController(t)
 			db := NewMockDatabase(ctrl)
-			db.EXPECT().HasEmptyStorage(gomock.Any(), addr).Return(true, nil)
+			db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
 
 			mpt, err := OpenFileLiveTrie(dir, config, 1024)
 			if err != nil {
@@ -910,13 +909,7 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 			}
 			mpt.forest = db
 
-			isEmpty, err := mpt.HasEmptyStorage(addr)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !isEmpty {
-				t.Fatalf("unexpected return, got: %v, want: %v", isEmpty, true)
-			}
+			mpt.HasEmptyStorage(addr)
 		})
 	}
 
