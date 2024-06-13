@@ -39,9 +39,9 @@ var (
 	val2     = common.Value{0x02}
 	val3     = common.Value{0x03}
 
-	balance1 = common.Balance{0x01}
-	balance2 = common.Balance{0x02}
-	balance3 = common.Balance{0x03}
+	balance1 = amount.New(1)
+	balance2 = amount.New(2)
+	balance3 = amount.New(3)
 
 	nonce1 = common.Nonce{0x01}
 	nonce2 = common.Nonce{0x02}
@@ -590,10 +590,7 @@ func TestStateDB_RollingBackSuicideRestoresBalance(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	initialBalance, err := common.ToBalance(big.NewInt(5))
-	if err != nil {
-		t.Fatalf("failed to prepare initial balance: %v", err)
-	}
+	initialBalance := amount.New(5)
 
 	// Initially the account exists with a view stored values.
 	mock.EXPECT().Exists(address1).Return(true, nil)
@@ -742,10 +739,8 @@ func TestStateDB_RecreatingExistingAccountSetsNonceAndCodeToZeroAndPreservesBala
 	db := CreateStateDBUsing(mock)
 
 	// Simulate a previously deleted account.
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("failed to set up test case: %v", err)
-	}
+	b12 := amount.New(12)
+
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 	db.SetNonce(address1, 14)
@@ -917,10 +912,10 @@ func TestStateDB_RepeatedSuicide(t *testing.T) {
 	db.SetState(address1, key2, val2)
 
 	// The original account is expected to be deleted, the last created one is expected to be really created.
-	newBalance, _ := common.ToBalance(big.NewInt(456))
+	newBalance := amount.New(456)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance.Bytes32()}},
 		Nonces:          []common.NonceUpdate{{Account: address1}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: []byte{}}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key2, Value: val2}},
@@ -975,10 +970,8 @@ func TestStateDB_SuicideRemovesBalanceFromAccount(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// Simulate an existing account.
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("error preparing test: %v", err)
-	}
+	b12 := amount.New(12)
+
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
@@ -999,10 +992,7 @@ func TestStateDB_SuicideCanBeRolledBack(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// this test will cause one call to the DB to check for the existence of the account
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("error preparing test: %v", err)
-	}
+	b12 := amount.New(12)
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().GetBalance(address1).Return(b12, nil)
 
@@ -1252,7 +1242,7 @@ func TestStateDB_EmptyAccountsAreRecognized(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	// An empty account must have its balance and nonce set to zero.
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
@@ -1268,7 +1258,7 @@ func TestStateDB_SettingTheBalanceMakesAccountNonEmpty(t *testing.T) {
 
 	// An empty account must have its balance and nonce set to zero.
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 
@@ -1416,7 +1406,7 @@ func TestStateDB_SettingTheNonceToZeroMakesAccountEmpty(t *testing.T) {
 	// An empty account must have its nonce and code set to zero.
 	mock.EXPECT().Check().AnyTimes()
 	mock.EXPECT().Exists(address1).AnyTimes().Return(false, nil)
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{0}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 	mock.EXPECT().GetNonce(address1).Return(common.Nonce{0}, nil)
 	mock.EXPECT().GetCodeSize(address1).Return(0, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{})
@@ -1461,8 +1451,7 @@ func TestStateDB_BalancesAreReadFromState(t *testing.T) {
 
 	// Set up the expectation that the store will be called once.
 	want := amount.New(12)
-	balance := want.Bytes32()
-	mock.EXPECT().GetBalance(address1).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(want, nil)
 
 	if got := db.GetBalance(address1); got != want {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
@@ -1476,8 +1465,7 @@ func TestStateDB_BalancesAreOnlyReadOnce(t *testing.T) {
 
 	// Set up the expectation that the store will be called once.
 	want := amount.New(12)
-	balance := want.Bytes32()
-	mock.EXPECT().GetBalance(address1).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(want, nil)
 
 	if got := db.GetBalance(address1); got != want {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
@@ -1493,9 +1481,8 @@ func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 
 	// Balance is initially 10. This should only be fetched once.
 	want := amount.New(10)
-	balance := want.Bytes32()
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().GetBalance(address1).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(want, nil)
 
 	snapshot0 := db.Snapshot()
 
@@ -1545,13 +1532,12 @@ func TestStateDB_BalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().Check().AnyTimes()
 
 	// The balance is expected to be read and the updated value to be written to the state.
-	want := big.NewInt(10)
-	balance, _ := common.ToBalance(want)
+	balance := amount.New(10)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	balance, _ = common.ToBalance(big.NewInt(12))
+	balance = amount.New(12)
 	mock.EXPECT().Apply(uint64(1), common.Update{
-		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance}},
+		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
 	})
 	mock.EXPECT().Apply(uint64(2), common.Update{})
 
@@ -1573,12 +1559,11 @@ func TestStateDB_BalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 
 	// Only the last value is to be written to the state.
 	// The balance is expected to be read and the updated value to be written to the state.
-	want := big.NewInt(10)
-	balance, _ := common.ToBalance(want)
+	balance := amount.New(10)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
-	balance, _ = common.ToBalance(big.NewInt(14))
+	balance = amount.New(14)
 	mock.EXPECT().Apply(uint64(1), common.Update{
-		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance}},
+		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
 	})
 	mock.EXPECT().Exists(address1).Return(true, nil)
 
@@ -1598,8 +1583,7 @@ func TestStateDB_BalanceUnchangedValuesAreNotWritten(t *testing.T) {
 	mock.EXPECT().Check().AnyTimes()
 
 	// Balance is only read, never written.
-	want := big.NewInt(10)
-	balance, _ := common.ToBalance(want)
+	balance := amount.New(10)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().Apply(uint64(2), common.Update{})
@@ -1619,8 +1603,7 @@ func TestStateDB_BalanceIsNotWrittenToStateIfTransactionIsAborted(t *testing.T) 
 	mock.EXPECT().Check().AnyTimes()
 
 	// Balance is only read, never written.
-	want := big.NewInt(10)
-	balance, _ := common.ToBalance(want)
+	balance := amount.New(10)
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{})
@@ -3025,10 +3008,7 @@ func TestStateDB_DeletesEmptyAccountsEip161(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	b12, err := common.ToBalance(big.NewInt(12))
-	if err != nil {
-		t.Fatalf("failed to set up test case: %v", err)
-	}
+	b12 := amount.New(12)
 
 	mock.EXPECT().Check().AnyTimes()
 
@@ -3269,7 +3249,7 @@ func TestStateDB_Copy(t *testing.T) {
 	db := CreateNonCommittableStateDBUsing(mock)
 
 	mock.EXPECT().Exists(gomock.Any()).Return(true, nil).AnyTimes()
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(), nil)
 
 	db.BeginTransaction()
 	db.AddBalance(address1, amount.New(2))
@@ -3436,7 +3416,7 @@ func TestStateDB_CollectsErrorsAndReportsThemDuringACheck(t *testing.T) {
 		},
 		"balance": {
 			setExpectations: func(state *MockState) {
-				state.EXPECT().GetBalance(gomock.Any()).Return(common.Balance{}, injectedError)
+				state.EXPECT().GetBalance(gomock.Any()).Return(amount.New(), injectedError)
 			},
 			applyOperation: func(db StateDB) {
 				db.GetBalance(address1)
@@ -3790,12 +3770,12 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	code := []byte{1, 2, 3}
 
 	mock.EXPECT().Apply(uint64(0), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
 		Nonces:          []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: code}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
@@ -3973,7 +3953,7 @@ func TestStateDB_GetMemoryFootprintIsReturnedAndNotZero(t *testing.T) {
 
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	mock.EXPECT().Exists(address2).Return(false, nil)
-	mock.EXPECT().GetBalance(address1).Return(common.Balance{10}, nil)
+	mock.EXPECT().GetBalance(address1).Return(amount.New(10), nil)
 	mock.EXPECT().GetCode(address1).Return([]byte{1, 2, 3}, nil)
 	mock.EXPECT().GetCodeHash(address1).Return(common.Hash{3, 2, 1}, nil)
 	mock.EXPECT().GetMemoryFootprint().Return(common.NewMemoryFootprint(12))

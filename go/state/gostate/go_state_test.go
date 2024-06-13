@@ -41,9 +41,9 @@ var (
 	val2 = common.Value{0x02}
 	val3 = common.Value{0x03}
 
-	balance1 = common.Balance{0x01}
-	balance2 = common.Balance{0x02}
-	balance3 = common.Balance{0x03}
+	balance1 = amount.New(1)
+	balance2 = amount.New(2)
+	balance3 = amount.New(3)
 
 	nonce1 = common.Nonce{0x01}
 	nonce2 = common.Nonce{0x02}
@@ -93,7 +93,7 @@ func TestMissingKeys(t *testing.T) {
 				t.Errorf("Account must not exist in the initial state, but it exists. err: %s", err)
 			}
 			balance, err := state.GetBalance(address1)
-			if (err != nil || balance != common.Balance{}) {
+			if err != nil || !balance.IsZero() {
 				t.Errorf("Balance must be empty. It is: %s, err: %s", balance, err)
 			}
 			nonce, err := state.GetNonce(address1)
@@ -144,7 +144,7 @@ func TestBasicOperations(t *testing.T) {
 			if val, err := state.GetNonce(address1); (err != nil || val != common.Nonce{123}) {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
-			if val, err := state.GetBalance(address2); (err != nil || val != common.Balance{45}) {
+			if val, err := state.GetBalance(address2); (err != nil || val.Bytes32() != common.Balance{45}) {
 				t.Errorf("Invalid value or error returned: Val: %v, Err: %v", val, err)
 			}
 			if val, err := state.GetStorage(address1, key1); (err != nil || val != common.Value{67}) {
@@ -276,7 +276,7 @@ func TestRecreatingAccountsPreservesEverythingButTheStorage(t *testing.T) {
 			// create an account and set some of its properties
 			update := common.Update{
 				CreatedAccounts: []common.Address{address1},
-				Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance1}},
+				Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance1.Bytes32()}},
 				Nonces:          []common.NonceUpdate{{Account: address1, Nonce: nonce1}},
 				Codes:           []common.CodeUpdate{{Account: address1, Code: code1}},
 				Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
@@ -360,7 +360,7 @@ func TestHashing(t *testing.T) {
 				t.Errorf("hash of changed state not changed")
 			}
 
-			state.Apply(3, common.Update{Balances: []common.BalanceUpdate{{Account: address1, Balance: balance1}}})
+			state.Apply(3, common.Update{Balances: []common.BalanceUpdate{{Account: address1, Balance: balance1.Bytes32()}}})
 			hash3, err := state.GetHash()
 			if err != nil {
 				t.Fatalf("unable to get state hash; %v", err)

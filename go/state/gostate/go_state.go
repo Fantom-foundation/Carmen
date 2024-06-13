@@ -18,6 +18,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
 )
@@ -108,16 +109,17 @@ func (s *GoState) Exists(address common.Address) (bool, error) {
 	return exist, s.stateError
 }
 
-func (s *GoState) GetBalance(address common.Address) (common.Balance, error) {
+func (s *GoState) GetBalance(address common.Address) (amount.Amount, error) {
 	if err := s.stateError; err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 
 	balance, err := s.live.GetBalance(address)
 	if err != nil {
 		s.stateError = errors.Join(s.stateError, err)
 	}
-	return balance, s.stateError
+
+	return amount.NewFromBytes(balance[:]...), s.stateError
 }
 
 func (s *GoState) GetNonce(address common.Address) (common.Nonce, error) {
