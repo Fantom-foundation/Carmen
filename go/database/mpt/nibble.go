@@ -64,6 +64,24 @@ func KeyToNibblePath(key common.Key, source NodeSource) []Nibble {
 	return res
 }
 
+// addressToHashedNibbles converts the given path into a slice of Nibbles.
+// It always hashes the path before converting it.
+func addressToHashedNibbles(address common.Address) []Nibble {
+	path := common.Keccak256(address[:])
+	res := make([]Nibble, len(path)*2)
+	parseNibbles(res, path[:])
+	return res
+}
+
+// keyToHashedPathNibbles converts the given path into a slice of Nibbles.
+// It always hashes the path before converting it.
+func keyToHashedPathNibbles(key common.Key) []Nibble {
+	path := common.Keccak256(key[:])
+	res := make([]Nibble, len(path)*2)
+	parseNibbles(res, path[:])
+	return res
+}
+
 func parseNibbles(dst []Nibble, src []byte) {
 	for i := 0; i < len(src); i++ {
 		dst[2*i] = Nibble(src[i] >> 4)

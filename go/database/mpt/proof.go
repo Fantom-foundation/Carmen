@@ -11,14 +11,24 @@
 package mpt
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
+	"golang.org/x/exp/maps"
+	"sort"
+	"strings"
 )
 
-//go:generate mockgen -source proof.go -destination proof_mocks.go -package witness
+//go:generate mockgen -source proof.go -destination proof_mocks.go -package mpt
 
 // rlpEncodedNode is an RLP encoded MPT node.
 type rlpEncodedNode []byte
+
+// rlpEncodedNodeEquals returns true if the two RLP encoded nodes are equal.
+func rlpEncodedNodeEquals(a, b rlpEncodedNode) bool {
+	return bytes.Equal(a, b)
+}
 
 // proofDb is a database of RLP encoded MPT nodes and their hashes that represent witness proofs.
 type proofDb map[common.Hash]rlpEncodedNode
@@ -38,7 +48,9 @@ func CreateWitnessProof(nodeSource NodeSource, root *NodeReference, address comm
 
 // Add merges the input witness proof into the current witness proof.
 func (p WitnessProof) Add(other WitnessProof) {
-	panic("not implemented")
+	for k, v := range other.proofDb {
+		p.proofDb[k] = v
+	}
 }
 
 // Extract extracts a sub-proof for a given account and selected storage locations from this proof.
@@ -47,7 +59,22 @@ func (p WitnessProof) Add(other WitnessProof) {
 // and the properties covered by this proof. The second return parameter indicates whether everything that was requested could be covered. If so
 // it is set to true, otherwise it is set to false.
 func (p WitnessProof) Extract(root common.Hash, address common.Address, keys ...common.Key) (WitnessProof, bool) {
-	panic("not implemented")
+	result := proofDb{}
+	visitor := &proofCollectingVisitor{visited: result}
+	found, err := visitWitnessPathTo(p.proofDb, root, addressToHashedNibbles(address), visitor)
+	if err != nil || !found {
+		return WitnessProof{result}, found
+	}
+
+	storageRoot := visitor.visitedAccount.storageHash
+	for _, key := range keys {
+		foundKey, err := visitWitnessPathTo(p.proofDb, storageRoot, keyToHashedPathNibbles(key), visitor)
+		if err != nil || !foundKey {
+			found = false
+		}
+	}
+
+	return WitnessProof{result}, found
 }
 
 // IsValid checks that this proof is self-consistent. If the result is true, the proof can be used
@@ -114,4 +141,150 @@ func (p WitnessProof) AllStatesZero(root common.Hash, address common.Address, fr
 // that is not a correct account node.
 func (p WitnessProof) AllAddressesEmpty(root common.Hash, from, to common.Address) (tribool.Tribool, error) {
 	panic("not implemented")
+}
+
+// Equals returns true if the two witness proofs are equal.
+func (p WitnessProof) Equals(other WitnessProof) bool {
+	return maps.EqualFunc(p.proofDb, other.proofDb, rlpEncodedNodeEquals)
+}
+
+// String returns a string representation of the witness proof.
+// The representation contains all nodes sorted by their hash.
+func (p WitnessProof) String() string {
+	// Extract keys and sort them
+	keys := maps.Keys(p.proofDb)
+	cmp := common.HashComparator{}
+	sort.Slice(keys, func(i, j int) bool {
+		return cmp.Compare(&keys[i], &keys[j]) <= 0
+	})
+
+	// Build the string representation
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(fmt.Sprintf("0x%x->0x%x\n", k, p.proofDb[k]))
+	}
+	return b.String()
+}
+
+// MergeProofs merges the input witness proofs and returns the resulting witness proof.
+func MergeProofs(others ...WitnessProof) WitnessProof {
+	res := WitnessProof{make(proofDb)}
+	for _, other := range others {
+		res.Add(other)
+	}
+
+	return res
+}
+
+// visitWitnessPathTo visits all nodes from the input root following the input path.
+// Each encountered node is passed to the visitor.
+// If no more nodes are available on the path, the execution ends.
+// If the path does not exist, the function returns false.
+// The function returns an error if the path cannot be iterated due to error propagated from the input proof.
+// When the function reaches either an account node or a value node it is compared to the remaining input path
+// that was not iterated yet.
+// If the path matches, the function terminates and returns true.
+// It means this function can be used to find either an account node or a value node,
+// but it cannot find both at the same time.
+func visitWitnessPathTo(source proofDb, root common.Hash, path []Nibble, visitor witnessProofVisitor) (bool, error) {
+	nodeHash := root
+
+	var nextEmbedded bool
+	var found, done bool
+	for !done {
+		var rlpNode rlpEncodedNode
+		if nextEmbedded {
+			rlpNode = nodeHash[:]
+		} else {
+			var exists bool
+			rlpNode, exists = source[nodeHash]
+			if !exists {
+				return false, nil
+			}
+		}
+		node, err := DecodeFromRlp(rlpNode)
+		if err != nil {
+			return false, err
+		}
+
+		var nextHash common.Hash
+		switch n := node.(type) {
+		case *ExtensionNode:
+			if n.path.IsPrefixOf(path) {
+				nextHash = n.nextHash
+				path = path[n.path.Length():]
+				nextEmbedded = n.nextIsEmbedded
+				done = len(path) == 0
+			} else {
+				done = true
+			}
+		case *BranchNode:
+			if len(path) == 0 {
+				done = true
+			} else {
+				nextHash = n.hashes[path[0]]
+				nextEmbedded = n.isEmbedded(byte(path[0]))
+				path = path[1:]
+			}
+		case *AccountNode:
+			addressPath := createPathFromAddressPrefix(n.address, n.pathLength)
+			if addressPath.IsEqualTo(path) {
+				found = true
+			}
+			done = true
+		case *ValueNode:
+			keyPath := createPathFromKeyPrefix(n.key, n.pathLength)
+			if keyPath.IsEqualTo(path) {
+				found = true
+			}
+			done = true
+		default:
+			return false, nil // EmptyNode -> do not visit, and terminate
+		}
+
+		visitor.Visit(nodeHash, rlpNode, node, found && nextEmbedded)
+		nodeHash = nextHash
+	}
+
+	return found, nil
+}
+
+// witnessProofVisitor is a visitor that visits witness proof nodes.
+// It visits the proof element and provides hash of the element,
+// the RLP encoded node and the encoded node itself.
+type witnessProofVisitor interface {
+
+	// Visit visits the witness proof node.
+	// It provides the hash of the node, the RLP encoded node and the node itself.
+	Visit(hash common.Hash, rlpNode rlpEncodedNode, node Node, isEmbedded bool)
+}
+
+type proofCollectingVisitor struct {
+	visited        proofDb     // all visited nodes
+	visitedAccount AccountNode // the last visited account node
+}
+
+func (v *proofCollectingVisitor) Visit(hash common.Hash, rlpNode rlpEncodedNode, node Node, isEmbedded bool) {
+	if !isEmbedded {
+		v.visited[hash] = rlpNode
+	}
+	if account, ok := node.(*AccountNode); ok {
+		v.visitedAccount = *account
+	}
+}
+
+// createPathFromAddressPrefix creates a path from an address with the given number
+// of nibbles to use from the beginning of the address.
+func createPathFromAddressPrefix(address common.Address, nibbles uint8) Path {
+	res := Path{length: nibbles}
+	copy(res.path[:], address[:])
+	return res
+}
+
+// createPathFromKeyPrefix creates a path from a key with the given number of nibbles
+// to use from the beginning of the key.
+func createPathFromKeyPrefix(key common.Key, nibbles uint8) Path {
+	res := Path{length: nibbles}
+	copy(res.path[:], key[:])
+	return res
 }
