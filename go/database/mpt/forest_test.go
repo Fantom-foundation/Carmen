@@ -2185,66 +2185,65 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						}
 					}
 
-					for i := 0; i < N; i++ {
-						// First half of the accounts has empty storage
-						if i < 50 {
-							isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-							if err != nil {
-								t.Fatalf("failed to ask whether account has empty storage: %v", err)
-							}
-							if !isEmpty {
-								t.Error("freshly created account has empty storage, but forest returned true")
-							}
-							continue
+					// First half of the accounts has empty storage
+					for i := 0; i < N/2; i++ {
+						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
+						if err != nil {
+							t.Fatalf("failed to ask whether account has empty storage: %v", err)
+						}
+						if !isEmpty {
+							t.Error("freshly created account has empty storage, but forest returned true")
+						}
+						continue
+					}
+
+					// Second half of the accounts has non-empty storage
+					for i := N / 2; i < N; i++ {
+						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
+						if err != nil {
+							t.Fatalf("failed to ask whether account has empty storage: %v", err)
+						}
+						if isEmpty {
+							t.Error("storage is not empty but forest returned true")
+						}
+					}
+
+					// Clear some storage
+					for i := N / 2; i < 65; i++ {
+						root, err = forest.ClearStorage(&root, addresses[i])
+						if err != nil {
+							t.Fatalf("cannot clear storage: %v", err)
 						}
 
-						// Second half of the accounts has non-empty storage
-						if i >= 50 && i < 60 {
-							isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-							if err != nil {
-								t.Fatalf("failed to ask whether account has empty storage: %v", err)
-							}
-							if isEmpty {
-								t.Error("storage is not empty but forest returned true")
-							}
-							continue
+						// Account with cleared storage
+						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
+						if err != nil {
+							t.Fatalf("failed to ask whether account has empty storage: %v", err)
 						}
-
-						// Clear some storage
-						if i >= 60 && i < 70 {
-							root, err = forest.ClearStorage(&root, addresses[i])
-							if err != nil {
-								t.Fatalf("cannot clear storage: %v", err)
-							}
-
-							// Account with cleared storage
-							isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-							if err != nil {
-								t.Fatalf("failed to ask whether account has empty storage: %v", err)
-							}
-							if !isEmpty {
-								t.Error("storage was cleared but forest returned false")
-							}
-							continue
+						if !isEmpty {
+							t.Error("storage was cleared but forest returned false")
 						}
+						continue
+					}
 
-						// Delete some accounts
-						if i >= 70 && i < 80 {
-							root, err = forest.SetAccountInfo(&root, addresses[i], AccountInfo{})
-							if err != nil {
-								t.Fatalf("failed to set account info: %v", err)
-							}
-							isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-							if err != nil {
-								t.Fatalf("failed to ask whether account has empty storage: %v", err)
-							}
-							if !isEmpty {
-								t.Error("deleted account has empty storage forest returned false")
-							}
-							continue
+					// Delete some accounts
+					for i := 65; i < 80; i++ {
+						root, err = forest.SetAccountInfo(&root, addresses[i], AccountInfo{})
+						if err != nil {
+							t.Fatalf("failed to set account info: %v", err)
 						}
+						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
+						if err != nil {
+							t.Fatalf("failed to ask whether account has empty storage: %v", err)
+						}
+						if !isEmpty {
+							t.Error("deleted account has empty storage forest returned false")
+						}
+						continue
+					}
 
-						// Set empty storage for the rest
+					// Set empty storage for the rest
+					for i := 80; i < N; i++ {
 						root, err = forest.SetValue(&root, addresses[i], common.Key{byte(i)}, common.Value{})
 						if err != nil {
 							t.Fatalf("failed to set storage: %v", err)
