@@ -1451,8 +1451,7 @@ func TestStateDB_BalancesAreReadFromState(t *testing.T) {
 
 	// Set up the expectation that the store will be called once.
 	want := amount.New(12)
-	balance := want.Bytes32()
-	mock.EXPECT().GetBalance(address1).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(want, nil)
 
 	if got := db.GetBalance(address1); got != want {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
@@ -1466,8 +1465,7 @@ func TestStateDB_BalancesAreOnlyReadOnce(t *testing.T) {
 
 	// Set up the expectation that the store will be called once.
 	want := amount.New(12)
-	balance := want.Bytes32()
-	mock.EXPECT().GetBalance(address1).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(want, nil)
 
 	if got := db.GetBalance(address1); got != want {
 		t.Errorf("error retrieving balance, wanted %v, got %v", want, got)
@@ -1483,9 +1481,8 @@ func TestStateDB_BalancesCanBeSnapshottedAndReverted(t *testing.T) {
 
 	// Balance is initially 10. This should only be fetched once.
 	want := amount.New(10)
-	balance := want.Bytes32()
 	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().GetBalance(address1).Return(balance, nil)
+	mock.EXPECT().GetBalance(address1).Return(want, nil)
 
 	snapshot0 := db.Snapshot()
 
