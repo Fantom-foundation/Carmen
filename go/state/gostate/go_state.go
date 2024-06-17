@@ -119,7 +119,7 @@ func (s *GoState) GetBalance(address common.Address) (amount.Amount, error) {
 		s.stateError = errors.Join(s.stateError, err)
 	}
 
-	return amount.NewFromBytes(balance[:]...), s.stateError
+	return balance, s.stateError
 }
 
 func (s *GoState) GetNonce(address common.Address) (common.Nonce, error) {
