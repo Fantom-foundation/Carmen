@@ -51,7 +51,7 @@ func (s *ArchiveState) GetBalance(address common.Address) (amount.Amount, error)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 	}
-	return amount.NewFromBytes(balance[:]...), s.archiveError
+	return balance, s.archiveError
 }
 
 func (s *ArchiveState) GetNonce(address common.Address) (common.Nonce, error) {
