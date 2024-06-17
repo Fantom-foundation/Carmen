@@ -781,6 +781,67 @@ func TestArchiveTrie_CannotGet_AccountHash(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
+	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+		t.Run(config.Name, func(t *testing.T) {
+			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			defer func() {
+				if err := arch.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			if err := arch.Add(1, common.Update{
+				CreatedAccounts: []common.Address{{1}},
+				Balances: []common.BalanceUpdate{
+					{Account: common.Address{1}, Balance: common.Balance{0x12}},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
+				},
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+
+			proof, err := arch.CreateWitnessProof(1, common.Address{1}, common.Key{2})
+			if err != nil {
+				if errors.Is(err, archive.ErrWitnessProofNotSupported) {
+					t.Skip(err)
+				}
+				t.Fatalf("failed to create witness proof; %s", err)
+			}
+			if !proof.IsValid() {
+				t.Errorf("invalid proof")
+			}
+
+			hash, err := arch.GetHash(1)
+			if err != nil {
+				t.Fatalf("failed to get hash; %s", err)
+			}
+			balance, complete, err := proof.GetBalance(hash, common.Address{1})
+			if err != nil {
+				t.Fatalf("failed to get balance; %s", err)
+			}
+			if !complete {
+				t.Errorf("balance proof is incomplete")
+			}
+			if got, want := balance, (common.Balance{0x12}); got != want {
+				t.Errorf("unexpected balance; got: %x, want: %x", got, want)
+			}
+			value, complete, err := proof.GetState(hash, common.Address{1}, common.Key{2})
+			if err != nil {
+				t.Fatalf("failed to get state; %s", err)
+			}
+			if !complete {
+				t.Errorf("state proof is incomplete")
+			}
+			if got, want := value, (common.Value{3}); got != want {
+				t.Errorf("unexpected value; got: %x, want: %x", got, want)
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_GetDiffProducesValidResults(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {

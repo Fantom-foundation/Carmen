@@ -14,6 +14,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"sync"
 	"unsafe"
 
@@ -332,6 +333,10 @@ func (a *Archive) GetAccountHash(block uint64, account common.Address) (hash com
 		return hash, nil
 	}
 	return common.Hash{}, it.Error()
+}
+
+func (a *Archive) CreateWitnessProof(_ uint64, _ common.Address, _ ...common.Key) (witness.Proof, error) {
+	return nil, archive.ErrWitnessProofNotSupported
 }
 
 // GetMemoryFootprint provides the size of the archive in memory in bytes

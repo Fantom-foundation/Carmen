@@ -274,6 +274,46 @@ func TestCreateWitnessProof_CannotCreateProof_FailingNodeSources(t *testing.T) {
 	}
 }
 
+func TestCreateWitnessProof_Serialize_And_Deserialize(t *testing.T) {
+	address := common.Address{1}
+	key := common.Key{2}
+	value := common.Value{3}
+
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	desc := &Extension{
+		path: AddressToNibblePath(address, ctxt)[0:30],
+		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+			storage: &Extension{
+				path: KeyToNibblePath(key, ctxt)[0:40],
+				next: &Value{key: key, length: 24, value: value},
+			}},
+	}
+
+	root, node := ctxt.Build(desc)
+	proof, err := CreateWitnessProof(ctxt, &root, address, key, key)
+	if err != nil {
+		t.Fatalf("failed to create proof: %v", err)
+	}
+
+	referenceProof := createReferenceProof(t, ctxt, &root, node)
+
+	serialized := proof.GetElements()
+	if got, want := len(serialized), len(referenceProof.proofDb); got != want {
+		t.Fatalf("unexpected serialized proof size: got %v, want %v", got, want)
+	}
+
+	recoveredProof := CreateWitnessProofFromNodes(serialized)
+	if !recoveredProof.IsValid() {
+		t.Errorf("recovered proof is not valid")
+	}
+
+	if got, want := recoveredProof, proof; !got.Equals(want) {
+		t.Errorf("unexpected proof: got %v, want %v", got, want)
+	}
+}
+
 func TestCreateWitnessProof_SourceError_All_Paths(t *testing.T) {
 	injectedErr := errors.New("injected error")
 	address := common.Address{1}
