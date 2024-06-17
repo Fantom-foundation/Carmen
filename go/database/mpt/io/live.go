@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
@@ -55,8 +57,7 @@ const (
 // its content to the given output writer. The result contains all the
 // information required by the Import function below to reconstruct the full
 // state of the LiveDB.
-func Export(directory string, out io.Writer) error {
-
+func Export(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -104,9 +105,9 @@ func Export(directory string, out io.Writer) error {
 	}
 
 	// Write out all accounts and values.
-	visitor := exportVisitor{out: out}
+	visitor := exportVisitor{out: out, ctx: ctx}
 	if err := db.Visit(&visitor); err != nil || visitor.err != nil {
-		return fmt.Errorf("failed exporting content: %v", errors.Join(err, visitor.err))
+		return fmt.Errorf("failed exporting content: %w", errors.Join(err, visitor.err))
 	}
 
 	return nil
@@ -320,9 +321,15 @@ func getReferencedCodes(db *mpt.MptState) (map[common.Hash][]byte, error) {
 type exportVisitor struct {
 	out io.Writer
 	err error
+	ctx context.Context
 }
 
 func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
+	// outside call to interrupt
+	if interrupt.IsCancelled(e.ctx) {
+		e.err = interrupt.ErrCanceled
+		return mpt.VisitResponseAbort
+	}
 	switch n := node.(type) {
 	case *mpt.AccountNode:
 		addr := n.Address()

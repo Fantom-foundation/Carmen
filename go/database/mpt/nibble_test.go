@@ -10,7 +10,11 @@
 
 package mpt
 
-import "testing"
+import (
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"slices"
+	"testing"
+)
 
 func TestNibble_Print(t *testing.T) {
 	tests := []struct {
@@ -112,4 +116,56 @@ func TestNibbles_IsPrefixOf(t *testing.T) {
 			t.Errorf("invalid is-prefix-of result for %v and %v, got %t, wanted %t", a, b, got, want)
 		}
 	}
+}
+
+func TestNibbles_addressToHashedPath(t *testing.T) {
+	tests := map[string]struct {
+		input common.Address
+	}{
+		"EmptyAddress": {
+			input: common.Address{},
+		},
+		"NonEmptyAddress": {
+			input: common.Address{1, 2, 3, 4, 5},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got, want := addressToHashedNibbles(test.input), hashAndConvertToNibbles(test.input[:]); !slices.Equal(got, want) {
+				t.Errorf("invalid result, got %v, wanted %v", got, want)
+			}
+		})
+	}
+}
+
+func TestNibbles_keyToHashedPath(t *testing.T) {
+	tests := map[string]struct {
+		input common.Key
+	}{
+		"EmptyKey": {
+			input: common.Key{},
+		},
+		"NonEmptyKey": {
+			input: common.Key{1, 2, 3, 4, 5},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got, want := keyToHashedPathNibbles(test.input), hashAndConvertToNibbles(test.input[:]); !slices.Equal(got, want) {
+				t.Errorf("invalid result, got %v, wanted %v", got, want)
+			}
+		})
+	}
+}
+
+func hashAndConvertToNibbles(src []byte) []Nibble {
+	hashed := common.Keccak256(src)
+	res := make([]Nibble, len(hashed)*2)
+	for i := 0; i < len(hashed); i++ {
+		res[2*i] = Nibble(hashed[i] >> 4)
+		res[2*i+1] = Nibble(hashed[i] & 0xF)
+	}
+	return res
 }

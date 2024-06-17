@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
@@ -64,21 +65,26 @@ func doExport(context *cli.Context) error {
 
 	start := time.Now()
 	logFromStart(start, "export started")
+
 	file, err := os.Create(trg)
 	if err != nil {
 		return err
 	}
 	bufferedWriter := bufio.NewWriter(file)
 	out := gzip.NewWriter(bufferedWriter)
-	defer func() {
-		logFromStart(start, "export done")
-	}()
-	return errors.Join(
-		export(dir, out),
+
+	ctx := interrupt.CancelOnInterrupt(context.Context)
+
+	if err = errors.Join(
+		export(ctx, dir, out),
 		out.Close(),
 		bufferedWriter.Flush(),
 		file.Close(),
-	)
+	); err != nil {
+		return err
+	}
+	logFromStart(start, "export done")
+	return nil
 }
 
 func logFromStart(start time.Time, msg string) {

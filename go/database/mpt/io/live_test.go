@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -149,10 +150,7 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 	return exportExampleStateWithModification(t, nil)
 }
 
-func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptState)) ([]byte, common.Hash) {
-	t.Helper()
-	sourceDir := t.TempDir()
-
+func createExampleLiveDB(t *testing.T, sourceDir string) *mpt.MptState {
 	// Create a small LiveDB.
 	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5LiveConfig, 1024)
 	if err != nil {
@@ -188,12 +186,21 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 		db.SetCode(addr4, []byte("some_code")),
 	)
 
-	if modify != nil {
-		modify(db)
-	}
-
 	if err != nil {
 		t.Fatalf("failed to seed test DB: %v", err)
+
+	}
+	return db
+}
+
+func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptState)) ([]byte, common.Hash) {
+	t.Helper()
+	sourceDir := t.TempDir()
+
+	db := createExampleLiveDB(t, sourceDir)
+
+	if modify != nil {
+		modify(db)
 	}
 
 	hash, err := db.GetHash()
@@ -206,7 +213,7 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 
 	// Export database to buffer.
 	var buffer bytes.Buffer
-	if err := Export(sourceDir, &buffer); err != nil {
+	if err := Export(context.Background(), sourceDir, &buffer); err != nil {
 		t.Fatalf("failed to export DB: %v", err)
 	}
 

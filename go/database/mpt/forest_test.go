@@ -2115,25 +2115,26 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 					}()
 
 					rootRef := NewNodeReference(EmptyId())
-
-					address := common.Address{0xA}
-					root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: common.Balance{byte(0xB)}, Nonce: common.Nonce{1}})
-					if err != nil {
-						t.Fatalf("cannot create an account: %v", err)
-					}
-					rootRef = root
-
-					for i, key := range keys {
-						root, err := forest.SetValue(&rootRef, address, key, common.Value{byte(i + 1)})
+					addresses := getTestAddresses(num)
+					for _, address := range addresses {
+						root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: common.Balance{byte(0xB)}, Nonce: common.Nonce{1}})
 						if err != nil {
 							t.Fatalf("cannot create an account: %v", err)
 						}
 						rootRef = root
-					}
 
-					// trigger update of dirty hashes
-					if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
-						t.Errorf("failed to compute hash: %v", err)
+						for i, key := range keys {
+							root, err := forest.SetValue(&rootRef, address, key, common.Value{byte(i + 1)})
+							if err != nil {
+								t.Fatalf("cannot create an account: %v", err)
+							}
+							rootRef = root
+						}
+
+						// trigger update of dirty hashes
+						if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+							t.Errorf("failed to compute hash: %v", err)
+						}
 					}
 
 					ctrl := gomock.NewController(t)
@@ -2145,9 +2146,11 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 						}
 					}).AnyTimes()
 
-					// find out account node to start storage search from it.
-					if found, err := VisitPathToAccount(forest, &rootRef, address, nodeVisitor); err != nil || !found {
-						t.Errorf("failed to iterate nodes by address: %v", err)
+					for _, address := range addresses {
+						// find out account node to start storage search from it.
+						if found, err := VisitPathToAccount(forest, &rootRef, address, nodeVisitor); err != nil || !found {
+							t.Errorf("failed to iterate nodes by address: %v", err)
+						}
 					}
 				})
 			}

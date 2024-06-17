@@ -302,6 +302,7 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 			if n.path.IsPrefixOf(path) {
 				nodeId = &n.next
 				path = path[n.path.Length():]
+				done = len(path) == 0
 			} else {
 				done = true
 			}
@@ -323,14 +324,12 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 			}
 			done = true
 		default:
-			done = true
+			last.Release()
+			return false, nil
 		}
 
-		// visit when we are in the middle of the path or when we found the result
-		if !done || found {
-			if res := visitor.Visit(last.Get(), NodeInfo{Id: lastNodeId.Id()}); res != VisitResponseContinue {
-				done = true
-			}
+		if res := visitor.Visit(last.Get(), NodeInfo{Id: lastNodeId.Id()}); res != VisitResponseContinue {
+			done = true
 		}
 	}
 
