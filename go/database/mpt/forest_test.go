@@ -2156,7 +2156,31 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 }
 
 func TestForest_HasEmptyStorage(t *testing.T) {
-	const N = 100
+	strategies := []struct {
+		delete func(*Forest, *NodeReference, common.Address, []common.Key) (NodeReference, error)
+	}{
+		{delete: func(forest *Forest, root *NodeReference, address common.Address, keys []common.Key) (NodeReference, error) {
+			return forest.ClearStorage(root, address)
+		}},
+		{delete: func(forest *Forest, root *NodeReference, address common.Address, keys []common.Key) (NodeReference, error) {
+			return forest.SetAccountInfo(root, address, AccountInfo{})
+		}},
+		{delete: func(forest *Forest, root *NodeReference, address common.Address, keys []common.Key) (NodeReference, error) {
+			ref := *root
+			var err error
+			for _, key := range keys {
+				ref, err = forest.SetValue(&ref, address, key, common.Value{})
+				if err != nil {
+					return ref, err
+				}
+			}
+			return ref, err
+		}},
+	}
+
+	addresses := getTestAddresses(50)
+	keys := getTestKeys(15)
+
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			for forestConfigName, forestConfig := range forestConfigs {
@@ -2166,73 +2190,76 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 					if err != nil {
 						t.Fatalf("failed to open forest: %v", err)
 					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("cannot close db: %v", err)
+						}
+					}()
 
 					root := NewNodeReference(EmptyId())
 
-					addresses := getTestAddresses(N)
-					for i, address := range addresses {
+					checkEmpty := func(address []common.Address, want bool) {
+						t.Helper()
+						for _, address := range addresses {
+							isEmpty, err := forest.HasEmptyStorage(&root, address)
+							if err != nil {
+								t.Fatalf("unexpected error: %v", err)
+							}
+							if got := isEmpty; got != want {
+								t.Errorf("unexpected result for empty account %x: got %v, want %v", address, got, want)
+							}
+						}
+					}
+
+					// empty for all non existing accounts
+					checkEmpty(addresses, true)
+
+					for _, address := range addresses {
 						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: common.Balance{0x1}})
 						if err != nil {
 							t.Fatalf("cannot update account: %v", err)
 						}
+					}
 
-						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-						if err != nil {
-							t.Fatalf("failed to ask whether account has empty storage: %v", err)
-						}
-						if !isEmpty {
-							t.Error("freshly created account has empty storage, but forest returned true")
-						}
-						// fill storage of half of the accounts
-						if i < N/2 {
-							continue
-						}
-						root, err = forest.SetValue(&root, address, common.Key{byte(i)}, common.Value{byte(i)})
-						if err != nil {
-							t.Fatalf("cannot update storage: %v", err)
-						}
+					// empty for all accounts with empty storage
+					checkEmpty(addresses, true)
 
-						isEmpty, err = forest.HasEmptyStorage(&root, addresses[i])
-						if err != nil {
-							t.Fatalf("failed to ask whether account has empty storage: %v", err)
+					for i, address := range addresses {
+						for j, key := range keys {
+							root, err = forest.SetValue(&root, address, key, common.Value{byte(i + 1), byte(j + 1)})
+							if err != nil {
+								t.Fatalf("cannot update storage: %v", err)
+							}
 						}
-						if isEmpty {
-							t.Error("storage is not empty but forest returned true")
+						_, _, err := forest.updateHashesFor(&root)
+						if err != nil {
+							t.Fatalf("cannot update hashes: %v", err)
 						}
 					}
 
-					size := N / 2
-					for i, address := range addresses[size:] {
-						// Clear some storage
-						if i < size/3 {
-							root, err = forest.ClearStorage(&root, address)
-							if err != nil {
-								t.Fatalf("cannot clear storage: %v", err)
-							}
-						}
-						// Delete some accounts
-						if i >= size/3 && i < size/2 {
-							root, err = forest.SetAccountInfo(&root, address, AccountInfo{})
-							if err != nil {
-								t.Fatalf("failed to set account info: %v", err)
-							}
-						}
-						// Set empty storage for the rest
-						if i >= size/2 {
-							root, err = forest.SetValue(&root, address, common.Key{byte(size + i)}, common.Value{})
-							if err != nil {
-								t.Fatalf("failed to set storage: %v", err)
-							}
-						}
-						// Check emptiness of account
-						isEmpty, err := forest.HasEmptyStorage(&root, address)
-						if err != nil {
-							t.Fatalf("failed to ask whether account has empty storage: %v", err)
-						}
-						if !isEmpty {
-							t.Error("storage is empty but forest returned false")
-						}
+					// non-empty for existing slots
+					checkEmpty(addresses, false)
 
+					// clear by various strategies
+					groups := len(strategies)
+					for i, address := range addresses {
+						strategy := strategies[i%groups]
+						root, err = strategy.delete(forest, &root, address, keys)
+						if err != nil {
+							t.Fatalf("cannot delete storage: %v", err)
+						}
+						_, _, err := forest.updateHashesFor(&root)
+						if err != nil {
+							t.Fatalf("cannot update hashes: %v", err)
+						}
+					}
+
+					// becomes empty
+					checkEmpty(addresses, true)
+
+					_, _, err = forest.updateHashesFor(&root)
+					if err != nil {
+						t.Fatalf("cannot update hashes: %v", err)
 					}
 				})
 			}
