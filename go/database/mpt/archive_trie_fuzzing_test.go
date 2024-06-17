@@ -113,7 +113,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 		if err != nil {
 			t.Errorf("cannot get balance: %s", err)
 		}
-		if balance != shadowAccount.Balance {
+		if balance.Bytes32() != shadowAccount.Balance {
 			t.Errorf("balances do not match: got %v != want: %v", balance, shadowAccount.Balance)
 		}
 
@@ -327,7 +327,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 				if err != nil {
 					t.Errorf("cannot get code: %s", err)
 				}
-				if balance != account.Balance {
+				if balance.Bytes32() != account.Balance {
 					t.Errorf("balances do not match: got %v != want: %v", balance, account.Balance)
 				}
 

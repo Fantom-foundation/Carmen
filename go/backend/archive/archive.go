@@ -14,6 +14,7 @@ package archive
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 // An Archive retains a history of state mutations in a blockchain on a
@@ -35,7 +36,7 @@ type Archive interface {
 	Exists(block uint64, account common.Address) (exists bool, err error)
 
 	// GetBalance allows to fetch a historic balance values for a given account.
-	GetBalance(block uint64, account common.Address) (balance common.Balance, err error)
+	GetBalance(block uint64, account common.Address) (balance amount.Amount, err error)
 
 	// GetCode allows to fetch a historic code values for a given account.
 	GetCode(block uint64, account common.Address) (code []byte, err error)
