@@ -2175,18 +2175,7 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						if err != nil {
 							t.Fatalf("cannot update account: %v", err)
 						}
-						// fill storage of half of the accounts
-						if i < 50 {
-							continue
-						}
-						root, err = forest.SetValue(&root, address, common.Key{byte(i)}, common.Value{byte(i)})
-						if err != nil {
-							t.Fatalf("cannot update storage: %v", err)
-						}
-					}
 
-					// First half of the accounts has empty storage
-					for i := 0; i < N/2; i++ {
 						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
 						if err != nil {
 							t.Fatalf("failed to ask whether account has empty storage: %v", err)
@@ -2194,12 +2183,16 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						if !isEmpty {
 							t.Error("freshly created account has empty storage, but forest returned true")
 						}
-						continue
-					}
+						// fill storage of half of the accounts
+						if i < N/2 {
+							continue
+						}
+						root, err = forest.SetValue(&root, address, common.Key{byte(i)}, common.Value{byte(i)})
+						if err != nil {
+							t.Fatalf("cannot update storage: %v", err)
+						}
 
-					// Second half of the accounts has non-empty storage
-					for i := N / 2; i < N; i++ {
-						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
+						isEmpty, err = forest.HasEmptyStorage(&root, addresses[i])
 						if err != nil {
 							t.Fatalf("failed to ask whether account has empty storage: %v", err)
 						}
@@ -2208,55 +2201,39 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						}
 					}
 
-					// Clear some storage
-					for i := N / 2; i < 65; i++ {
-						root, err = forest.ClearStorage(&root, addresses[i])
-						if err != nil {
-							t.Fatalf("cannot clear storage: %v", err)
+					size := N / 2
+					for i, address := range addresses[size:] {
+						// Clear some storage
+						if i < size/3 {
+							root, err = forest.ClearStorage(&root, address)
+							if err != nil {
+								t.Fatalf("cannot clear storage: %v", err)
+							}
 						}
-
-						// Account with cleared storage
-						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-						if err != nil {
-							t.Fatalf("failed to ask whether account has empty storage: %v", err)
+						// Delete some accounts
+						if i >= size/3 && i < size/2 {
+							root, err = forest.SetAccountInfo(&root, address, AccountInfo{})
+							if err != nil {
+								t.Fatalf("failed to set account info: %v", err)
+							}
 						}
-						if !isEmpty {
-							t.Error("storage was cleared but forest returned false")
+						// Set empty storage for the rest
+						if i >= size/2 {
+							root, err = forest.SetValue(&root, address, common.Key{byte(size + i)}, common.Value{})
+							if err != nil {
+								t.Fatalf("failed to set storage: %v", err)
+							}
 						}
-						continue
-					}
-
-					// Delete some accounts
-					for i := 65; i < 80; i++ {
-						root, err = forest.SetAccountInfo(&root, addresses[i], AccountInfo{})
-						if err != nil {
-							t.Fatalf("failed to set account info: %v", err)
-						}
-						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
-						if err != nil {
-							t.Fatalf("failed to ask whether account has empty storage: %v", err)
-						}
-						if !isEmpty {
-							t.Error("deleted account has empty storage forest returned false")
-						}
-						continue
-					}
-
-					// Set empty storage for the rest
-					for i := 80; i < N; i++ {
-						root, err = forest.SetValue(&root, addresses[i], common.Key{byte(i)}, common.Value{})
-						if err != nil {
-							t.Fatalf("failed to set storage: %v", err)
-						}
-						isEmpty, err := forest.HasEmptyStorage(&root, addresses[i])
+						// Check emptiness of account
+						isEmpty, err := forest.HasEmptyStorage(&root, address)
 						if err != nil {
 							t.Fatalf("failed to ask whether account has empty storage: %v", err)
 						}
 						if !isEmpty {
-							t.Error("storage has been emptied but forest returned false")
+							t.Error("storage is empty but forest returned false")
 						}
-					}
 
+					}
 				})
 			}
 		}
