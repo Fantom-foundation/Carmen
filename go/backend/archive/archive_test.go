@@ -140,14 +140,14 @@ func TestAddGet(t *testing.T) {
 				t.Fatalf("failed to add block 7; %v", err)
 			}
 
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %v", balance, err)
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+				t.Errorf("unexpected balance at block 1: %v; %v", balance, err)
 			}
-			if balance, err := a.GetBalance(3, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 3: %x; %v", balance, err)
+			if balance, err := a.GetBalance(3, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+				t.Errorf("unexpected balance at block 3: %v; %v", balance, err)
 			}
-			if balance, err := a.GetBalance(5, addr1); err != nil || balance != (common.Balance{0x34}) {
-				t.Errorf("unexpected balance at block 5: %x; %v", balance, err)
+			if balance, err := a.GetBalance(5, addr1); err != nil || balance.Bytes32() != (common.Balance{0x34}) {
+				t.Errorf("unexpected balance at block 5: %v; %v", balance, err)
 			}
 
 			if code, err := a.GetCode(3, addr1); err != nil || code != nil {
@@ -313,12 +313,12 @@ func TestBalanceOnly(t *testing.T) {
 				t.Fatalf("failed to add block 400; %s", err)
 			}
 
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+				t.Errorf("unexpected balance at block 1: %v; %s", balance, err)
 			}
 
-			if balance, err := a.GetBalance(300, addr1); err != nil || balance != (common.Balance{0x34}) {
-				t.Errorf("unexpected balance at block 3: %x; %s", balance, err)
+			if balance, err := a.GetBalance(300, addr1); err != nil || balance.Bytes32() != (common.Balance{0x34}) {
+				t.Errorf("unexpected balance at block 3: %v; %s", balance, err)
 			}
 		})
 	}
@@ -489,11 +489,11 @@ func TestZeroBlock(t *testing.T) {
 			if exists, err := a.Exists(1, addr1); err != nil || !exists {
 				t.Errorf("unexpected account status at block 1: %t; %s", exists, err)
 			}
-			if balance, err := a.GetBalance(0, addr1); err != nil || balance != (common.Balance{0x11}) {
-				t.Errorf("unexpected balance at block 0: %x; %s", balance, err)
+			if balance, err := a.GetBalance(0, addr1); err != nil || balance.Bytes32() != (common.Balance{0x11}) {
+				t.Errorf("unexpected balance at block 0: %v; %s", balance, err)
 			}
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance != (common.Balance{0x12}) {
-				t.Errorf("unexpected balance at block 1: %x; %s", balance, err)
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+				t.Errorf("unexpected balance at block 1: %v; %s", balance, err)
 			}
 		})
 	}

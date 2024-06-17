@@ -13,7 +13,10 @@ package ldb
 import (
 	"crypto/sha256"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+
 	"sync"
 	"unsafe"
 
@@ -239,7 +242,7 @@ func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err
 	return exists, err
 }
 
-func (a *Archive) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
+func (a *Archive) GetBalance(block uint64, account common.Address) (balance amount.Amount, err error) {
 	var key accountBlockKey
 	key.set(backend.BalanceArchiveKey, account, block)
 	keyRange := key.getRange()
@@ -247,10 +250,10 @@ func (a *Archive) GetBalance(block uint64, account common.Address) (balance comm
 	defer it.Release()
 
 	if it.Next() {
-		copy(balance[:], it.Value())
+		balance = amount.NewFromBytes(it.Value()[:]...)
 		return balance, nil
 	}
-	return common.Balance{}, it.Error()
+	return amount.New(), it.Error()
 }
 
 func (a *Archive) GetCode(block uint64, account common.Address) (code []byte, err error) {

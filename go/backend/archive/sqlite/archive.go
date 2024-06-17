@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	_ "github.com/mattn/go-sqlite3"
@@ -407,19 +408,19 @@ func (a *Archive) Exists(block uint64, account common.Address) (exists bool, err
 	return exists, err
 }
 
-func (a *Archive) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
+func (a *Archive) GetBalance(block uint64, account common.Address) (balance amount.Amount, err error) {
 	rows, err := a.getBalanceStmt.Query(account[:], block)
 	if err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 	defer rows.Close()
 	if rows.Next() {
 		var bytes sql.RawBytes
 		err = rows.Scan(&bytes)
-		copy(balance[:], bytes)
+		balance = amount.NewFromBytes(bytes[:]...)
 		return balance, err
 	}
-	return common.Balance{}, rows.Err()
+	return amount.New(), rows.Err()
 }
 
 func (a *Archive) GetCode(block uint64, account common.Address) (code []byte, err error) {
