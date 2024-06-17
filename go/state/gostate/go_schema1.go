@@ -21,6 +21,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/multimap"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -99,15 +100,16 @@ func (s *GoSchema1) clearAccount(idx uint32) error {
 	return s.addressToSlots.RemoveAll(idx)
 }
 
-func (s *GoSchema1) GetBalance(address common.Address) (balance common.Balance, err error) {
+func (s *GoSchema1) GetBalance(address common.Address) (balance amount.Amount, err error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {
 		if err == index.ErrNotFound {
-			return common.Balance{}, nil
+			return amount.New(), nil
 		}
 		return
 	}
-	return s.balancesStore.Get(idx)
+	res, err := s.balancesStore.Get(idx)
+	return amount.NewFromBytes(res[:]...), err
 }
 
 func (s *GoSchema1) SetBalance(address common.Address, balance common.Balance) (err error) {

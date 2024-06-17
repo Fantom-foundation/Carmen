@@ -725,7 +725,7 @@ func TestState_All_Live_Operations_May_Cause_Failure(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			liveDB := state.NewMockLiveDB(ctrl)
 			liveDB.EXPECT().Exists(addr).Return(false, results[0]).AnyTimes()
-			liveDB.EXPECT().GetBalance(addr).Return(common.Balance{}, results[1]).AnyTimes()
+			liveDB.EXPECT().GetBalance(addr).Return(amount.New(), results[1]).AnyTimes()
 			liveDB.EXPECT().GetNonce(addr).Return(common.Nonce{}, results[2]).AnyTimes()
 			liveDB.EXPECT().GetStorage(addr, key).Return(common.Value{}, results[3]).AnyTimes()
 			liveDB.EXPECT().GetCode(addr).Return(make([]byte, 0), results[4]).AnyTimes()
