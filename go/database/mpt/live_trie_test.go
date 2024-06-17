@@ -893,6 +893,28 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 	}
 }
 
+func TestLiveTrie_HasEmptyStorage(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			addr := common.Address{0x1}
+			ctrl := gomock.NewController(t)
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
+
+			mpt, err := OpenFileLiveTrie(dir, config, 1024)
+			if err != nil {
+				t.Fatalf("failed to open live trie: %v", err)
+			}
+			mpt.forest = db
+
+			mpt.HasEmptyStorage(addr)
+		})
+	}
+
+}
+
 func benchmarkValueInsertion(trie *LiveTrie, b *testing.B) {
 	accounts := getTestAddresses(100)
 	keys := getTestKeys(100)

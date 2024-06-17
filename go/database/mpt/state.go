@@ -65,6 +65,9 @@ type Database interface {
 	// ClearStorage removes all storage slots for the input address and the root.
 	ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error)
 
+	// HasEmptyStorage returns true if account has empty storage.
+	HasEmptyStorage(rootRef *NodeReference, addr common.Address) (bool, error)
+
 	// Freeze seals current trie, preventing further updates to it.
 	Freeze(ref *NodeReference) error
 
@@ -298,6 +301,9 @@ func (s *MptState) SetStorage(address common.Address, key common.Key, value comm
 	return s.trie.SetValue(address, key, value)
 }
 
+func (s *MptState) HasEmptyStorage(address common.Address) (bool, error) {
+	return s.trie.HasEmptyStorage(address)
+}
 func (s *MptState) GetCode(address common.Address) (value []byte, err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {

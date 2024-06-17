@@ -16,10 +16,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"io"
 	"slices"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 )
 
 // This file defines the interface and implementation of all node types in a

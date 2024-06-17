@@ -105,6 +105,11 @@ func getTrieView(root NodeReference, forest Database) *LiveTrie {
 	}
 }
 
+// HasEmptyStorage returns true if account has empty storage.
+func (s *LiveTrie) HasEmptyStorage(addr common.Address) (bool, error) {
+	return s.forest.HasEmptyStorage(&s.root, addr)
+}
+
 func (s *LiveTrie) GetAccountInfo(addr common.Address) (AccountInfo, bool, error) {
 	return s.forest.GetAccountInfo(&s.root, addr)
 }

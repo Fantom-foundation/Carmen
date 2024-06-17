@@ -383,6 +383,18 @@ func (s *Forest) SetValue(rootRef *NodeReference, addr common.Address, key commo
 	return newRoot, err
 }
 
+func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (isEmpty bool, err error) {
+	v := MakeVisitor(func(node Node, info NodeInfo) VisitResponse {
+		if a, ok := node.(*AccountNode); ok {
+			isEmpty = a.storage.Id().IsEmpty()
+			return VisitResponseAbort
+		}
+		return VisitResponseContinue
+	})
+	exists, err := VisitPathToAccount(s, rootRef, addr, v)
+	return isEmpty || !exists, err
+}
+
 func (s *Forest) ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error) {
 	root, err := s.getWriteAccess(rootRef)
 	if err != nil {

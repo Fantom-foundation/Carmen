@@ -341,6 +341,29 @@ func TestState_StateModifications_Failing(t *testing.T) {
 	}
 }
 
+func TestState_HasEmptyStorage(t *testing.T) {
+	for name, open := range mptStateFactories {
+		t.Run(name, func(t *testing.T) {
+			t.Run(name, func(t *testing.T) {
+				dir := t.TempDir()
+
+				state, err := open(dir)
+				if err != nil {
+					t.Fatalf("cannot open state: %s", err)
+				}
+
+				addr := common.Address{0x1}
+				ctrl := gomock.NewController(t)
+				db := NewMockDatabase(ctrl)
+				db.EXPECT().HasEmptyStorage(gomock.Any(), addr)
+
+				state.trie.forest = db
+				state.HasEmptyStorage(addr)
+			})
+		})
+	}
+}
+
 func TestState_StateModificationsWithoutErrorHaveExpectedEffects(t *testing.T) {
 	for name, open := range mptStateFactories {
 		t.Run(name, func(t *testing.T) {

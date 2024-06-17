@@ -172,6 +172,21 @@ func (mr *MockNodeMockRecorder) GetValue(source, key, path any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockNode)(nil).GetValue), source, key, path)
 }
 
+// HasEmptyStorage mocks base method.
+func (m *MockNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", source, address, path)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockNodeMockRecorder) HasEmptyStorage(source, address, path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockNode)(nil).HasEmptyStorage), source, address, path)
+}
+
 // IsDirty mocks base method.
 func (m *MockNode) IsDirty() bool {
 	m.ctrl.T.Helper()
@@ -795,6 +810,21 @@ func (m *MockleafNode) GetValue(source NodeSource, key common.Key, path []Nibble
 func (mr *MockleafNodeMockRecorder) GetValue(source, key, path any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValue", reflect.TypeOf((*MockleafNode)(nil).GetValue), source, key, path)
+}
+
+// HasEmptyStorage mocks base method.
+func (m *MockleafNode) HasEmptyStorage(source NodeSource, address common.Address, path []Nibble) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", source, address, path)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockleafNodeMockRecorder) HasEmptyStorage(source, address, path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockleafNode)(nil).HasEmptyStorage), source, address, path)
 }
 
 // IsDirty mocks base method.
