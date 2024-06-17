@@ -13,6 +13,7 @@ package carmen
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/state"
@@ -111,7 +112,8 @@ func (c *headBlockContext) end() error {
 
 type archiveBlockContext struct {
 	commonContext
-	state state.NonCommittableStateDB
+	state        state.NonCommittableStateDB
+	archiveState state.State
 }
 
 func (c *archiveBlockContext) BeginTransaction() (TransactionContext, error) {
@@ -135,6 +137,27 @@ func (c *archiveBlockContext) BeginTransaction() (TransactionContext, error) {
 
 func (c *archiveBlockContext) RunTransaction(run func(TransactionContext) error) error {
 	return runTransaction(c, run)
+}
+
+func (c *archiveBlockContext) GetProof(address Address, keys ...Key) (WitnessProof, error) {
+	c.lock.Lock()
+	if c.db == nil {
+		c.lock.Unlock()
+		return nil, fmt.Errorf("cannot get proof in invalid block context")
+	}
+	c.lock.Unlock()
+
+	commonKeys := make([]common.Key, len(keys))
+	for i, k := range keys {
+		commonKeys[i] = common.Key(k)
+	}
+
+	proof, err := c.archiveState.CreateWitnessProof(common.Address(address), commonKeys...)
+	if err != nil {
+		return nil, err
+	}
+
+	return witnessProof{proof}, nil
 }
 
 func (c *archiveBlockContext) Close() error {
