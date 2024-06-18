@@ -306,16 +306,34 @@ func TestDecoder_Decode_Node_Instances(t *testing.T) {
 
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
 
+	childHashes := ChildHashes{}
+	for i := 0; i < 16; i++ {
+		if i == 0xA {
+			continue
+		}
+		childHashes[Nibble(i)] = EmptyNodeEthereumHash
+	}
+
 	tests := map[string]struct {
 		desc NodeDesc
 	}{
 		"branchNode": {&Branch{
 			children: Children{
 				0xA: &Account{address: address, pathLength: 39, info: AccountInfo{Nonce: common.Nonce{0x00, 0x01}, Balance: common.Balance{0x00, 0x02}, CodeHash: common.Hash{0x00, 0x03}}},
-			}}},
+			},
+			childHashes: childHashes,
+		}},
 		"extensionNode": {&Extension{
 			path: AddressToNibblePath(address, ctxt)[0:30],
 			next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x00, 0x01}, Balance: common.Balance{0x00, 0x02}, CodeHash: common.Hash{0x00, 0x03}}},
+		}},
+		"extensionNode - next empty hash": {&Extension{
+			path:     AddressToNibblePath(address, ctxt)[0:30],
+			nextHash: &EmptyNodeEthereumHash,
+		}},
+		"extensionNode - next empty node": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Empty{},
 		}},
 		"accountNode": {&Account{address: address, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x00, 0x01}, Balance: common.Balance{0x00, 0x02}, CodeHash: common.Hash{0x00, 0x03}}}},
 		"valueNode":   {&Value{key: key, length: 64, value: shortValue}},
