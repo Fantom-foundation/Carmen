@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 //go:generate mockgen -source update.go -destination update_mocks.go -package common
@@ -81,7 +83,7 @@ func (u *Update) AppendCreateAccounts(addr []Address) {
 }
 
 // AppendBalanceUpdate registers a balance update to be conducted.
-func (u *Update) AppendBalanceUpdate(addr Address, balance Balance) {
+func (u *Update) AppendBalanceUpdate(addr Address, balance amount.Amount) {
 	u.Balances = append(u.Balances, BalanceUpdate{addr, balance})
 }
 
@@ -223,7 +225,7 @@ type UpdateTarget interface {
 	DeleteAccount(address Address) error
 
 	// SetBalance provides balance for the input account address.
-	SetBalance(address Address, balance Balance) error
+	SetBalance(address Address, balance amount.Amount) error
 
 	// SetNonce updates nonce of the account for the  input account address.
 	SetNonce(address Address, nonce Nonce) error
@@ -283,15 +285,15 @@ func UpdateFromBytes(data []byte) (Update, error) {
 
 	// Read list of balance updates
 	if balancesSize > 0 {
-		if len(data) < int(balancesSize)*(len(Address{})+len(Balance{})) {
+		if len(data) < int(balancesSize)*(len(Address{})+len(amount.Amount{}.Bytes32())) {
 			return res, fmt.Errorf("invalid encoding, balance list truncated")
 		}
 		res.Balances = make([]BalanceUpdate, balancesSize)
 		for i := 0; i < int(balancesSize); i++ {
 			copy(res.Balances[i].Account[:], data[:])
 			data = data[len(Address{}):]
-			copy(res.Balances[i].Balance[:], data[:])
-			data = data[len(Balance{}):]
+			res.Balances[i].Balance = amount.NewFromBytes(data[:]...)
+			data = data[len(amount.Amount{}.Bytes32()):]
 		}
 	}
 
@@ -353,7 +355,7 @@ func (u *Update) ToBytes() []byte {
 	size := 1 + 6*4 // version + sizes
 	size += len(u.DeletedAccounts) * addrLength
 	size += len(u.CreatedAccounts) * addrLength
-	size += len(u.Balances) * (addrLength + len(Balance{}))
+	size += len(u.Balances) * (addrLength + len(amount.Amount{}.Bytes32()))
 	size += len(u.Nonces) * (addrLength + len(Nonce{}))
 	size += len(u.Slots) * (addrLength + len(Key{}) + len(Value{}))
 	for _, cur := range u.Codes {
@@ -378,7 +380,8 @@ func (u *Update) ToBytes() []byte {
 	}
 	for _, cur := range u.Balances {
 		res = append(res, cur.Account[:]...)
-		res = append(res, cur.Balance[:]...)
+		b := cur.Balance.Bytes32()
+		res = append(res, b[:]...)
 	}
 	for _, cur := range u.Codes {
 		res = append(res, cur.Account[:]...)
@@ -498,7 +501,7 @@ func slotEqual(a, b *SlotUpdate) bool {
 
 type BalanceUpdate struct {
 	Account Address
-	Balance Balance
+	Balance amount.Amount
 }
 
 type NonceUpdate struct {
