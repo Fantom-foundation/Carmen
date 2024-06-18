@@ -915,7 +915,7 @@ func TestStateDB_RepeatedSuicide(t *testing.T) {
 	newBalance := amount.New(456)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance.Bytes32()}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: newBalance}},
 		Nonces:          []common.NonceUpdate{{Account: address1}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: []byte{}}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key2, Value: val2}},
@@ -1277,14 +1277,13 @@ func TestStateDB_SettingTheBalanceCreatesAccount(t *testing.T) {
 	db := CreateStateDBUsing(mock)
 
 	addedBalance := amount.New(5)
-	balance := addedBalance.Bytes32()
 
 	// The account have not existed - must be created by AddBalance call.
 	mock.EXPECT().Check().AnyTimes()
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: amount.New()}},
 	})
 
 	db.AddBalance(address1, addedBalance)
@@ -1537,7 +1536,7 @@ func TestStateDB_BalanceIsWrittenToStateIfChangedAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(true, nil)
 	balance = amount.New(12)
 	mock.EXPECT().Apply(uint64(1), common.Update{
-		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
+		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance}},
 	})
 	mock.EXPECT().Apply(uint64(2), common.Update{})
 
@@ -1563,7 +1562,7 @@ func TestStateDB_BalanceOnlyFinalValueIsWrittenAtEndOfBlock(t *testing.T) {
 	mock.EXPECT().GetBalance(address1).Return(balance, nil)
 	balance = amount.New(14)
 	mock.EXPECT().Apply(uint64(1), common.Update{
-		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
+		Balances: []common.BalanceUpdate{{Account: address1, Balance: balance}},
 	})
 	mock.EXPECT().Exists(address1).Return(true, nil)
 
@@ -3775,7 +3774,7 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 
 	mock.EXPECT().Apply(uint64(0), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance.Bytes32()}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: balance}},
 		Nonces:          []common.NonceUpdate{{Account: address1, Nonce: common.ToNonce(14)}},
 		Codes:           []common.CodeUpdate{{Account: address1, Code: code}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},

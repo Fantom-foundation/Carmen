@@ -111,7 +111,7 @@ func (cs *CppState) GetBalance(address common.Address) (amount.Amount, error) {
 	return amount.NewFromBytes(balance[:]...), nil
 }
 
-func (cs *CppState) SetBalance(address common.Address, balance common.Balance) error {
+func (cs *CppState) SetBalance(address common.Address, balance amount.Amount) error {
 	update := common.Update{}
 	update.AppendBalanceUpdate(address, balance)
 	return cs.Apply(0, update)

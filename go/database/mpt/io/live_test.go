@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
@@ -170,21 +171,21 @@ func exportExampleStateWithModification(t *testing.T, modify func(s *mpt.MptStat
 	err = errors.Join(
 		// First account, with code.
 		db.SetNonce(addr1, common.ToNonce(1)),
-		db.SetBalance(addr1, common.Balance{12}),
+		db.SetBalance(addr1, amount.New(12)),
 		db.SetStorage(addr1, key1, value1),
 		db.SetCode(addr1, []byte("some_code")),
 		// Second account, without code.
 		db.SetNonce(addr2, common.ToNonce(2)),
-		db.SetBalance(addr2, common.Balance{14}),
+		db.SetBalance(addr2, amount.New(14)),
 		db.SetStorage(addr2, key1, value1),
 		db.SetStorage(addr2, key2, value2),
 		// Third account, with different code as first account.
 		db.SetNonce(addr3, common.ToNonce(3)),
-		db.SetBalance(addr3, common.Balance{16}),
+		db.SetBalance(addr3, amount.New(16)),
 		db.SetCode(addr3, []byte("some_other_code")),
 		// Fourth account, with same code as first account.
 		db.SetNonce(addr4, common.ToNonce(4)),
-		db.SetBalance(addr4, common.Balance{18}),
+		db.SetBalance(addr4, amount.New(18)),
 		db.SetCode(addr4, []byte("some_code")),
 	)
 

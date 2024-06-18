@@ -581,7 +581,7 @@ func (mr *MockLiveStateMockRecorder) RunPostRestoreTasks() *gomock.Call {
 }
 
 // SetBalance mocks base method.
-func (m *MockLiveState) SetBalance(address common.Address, balance common.Balance) error {
+func (m *MockLiveState) SetBalance(address common.Address, balance amount.Amount) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetBalance", address, balance)
 	ret0, _ := ret[0].(error)

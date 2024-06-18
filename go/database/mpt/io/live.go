@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
@@ -189,11 +190,10 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	}()
 
 	var (
-		addr    common.Address
-		key     common.Key
-		value   common.Value
-		balance common.Balance
-		nonce   common.Nonce
+		addr  common.Address
+		key   common.Key
+		value common.Value
+		nonce common.Nonce
 	)
 
 	// Read the rest and build the state.
@@ -238,10 +238,11 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 			if _, err := io.ReadFull(in, addr[:]); err != nil {
 				return root, hash, err
 			}
-			if _, err := io.ReadFull(in, balance[:]); err != nil {
+			b := amount.New().Bytes32()
+			if _, err := io.ReadFull(in, b[:]); err != nil {
 				return root, hash, err
 			}
-			if err := db.SetBalance(addr, balance); err != nil {
+			if err := db.SetBalance(addr, amount.NewFromBytes(b[:]...)); err != nil {
 				return root, hash, err
 			}
 			if _, err := io.ReadFull(in, nonce[:]); err != nil {

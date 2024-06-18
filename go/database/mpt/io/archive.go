@@ -20,6 +20,7 @@ import (
 	"path"
 	"sort"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -304,11 +305,11 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			context.deleteAccount()
 
 		case 'B':
-			balance := common.Balance{}
+			balance := amount.New().Bytes32()
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return err
 			}
-			context.setBalance(balance)
+			context.setBalance(amount.NewFromBytes(balance[:]...))
 
 		case 'N':
 			nonce := common.Nonce{}
@@ -388,7 +389,7 @@ func (c *importContext) deleteAccount() {
 	c.currentUpdate.AppendDeleteAccount(c.currentAccount)
 }
 
-func (c *importContext) setBalance(balance common.Balance) {
+func (c *importContext) setBalance(balance amount.Amount) {
 	c.currentUpdate.AppendBalanceUpdate(c.currentAccount, balance)
 }
 
