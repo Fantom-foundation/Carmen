@@ -203,7 +203,11 @@ func decodeEmbeddedOrHashedNode(payload rlp.Item) (node common.Hash, embedded bo
 		if len(item.Str) > common.HashSize {
 			return common.Hash{}, false, fmt.Errorf("node hash is too long: got: %v, wanted: <= 32", len(item.Str))
 		}
-		copy(hash[:], item.Str)
+		if len(item.Str) == 0 {
+			hash = EmptyNodeEthereumHash
+		} else {
+			copy(hash[:], item.Str)
+		}
 	case rlp.List: // embedded node is a two item list of a value node.
 		arr := make([]byte, 0, common.HashSize)
 		if n := copy(hash[:], rlp.EncodeInto(arr, item)); n > 0 && n < common.HashSize {
