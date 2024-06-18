@@ -4372,6 +4372,43 @@ func TestStateDB_SetTransientState_RollbackWithMultipleSteps(t *testing.T) {
 	}
 }
 
+func TestStateDB_HasEmptyStorage_NonExistentAccountReturnsTrue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(false, nil)
+
+	if !db.HasEmptyStorage(address1) {
+		t.Errorf("account does not exist but database returned false")
+	}
+}
+
+func TestStateDB_HasEmptyStorage_CachedStorageIsChecked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	// No call HasEmptyStorage to mock is expected, this should be resolved from cache
+
+	db.SetState(address1, key1, val1)
+	if db.HasEmptyStorage(address1) {
+		t.Errorf("account storage cache is filled, but db returned true")
+	}
+}
+
+func TestStateDB_HasEmptyStorage_StateIsCheckedIfNotFoundInCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	mock.EXPECT().HasEmptyStorage(address1)
+
+	db.HasEmptyStorage(address1)
+}
+
 func TestNonCommittableStateDB_resetState_ClearsTransientStorage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mock := NewMockState(ctrl)

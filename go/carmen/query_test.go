@@ -59,6 +59,16 @@ func TestQueryContext_QueriesAreForwarded(t *testing.T) {
 				}
 			},
 		},
+		"has-empty-storage": {
+			func(mock *state.MockState) {
+				mock.EXPECT().HasEmptyStorage(common.Address{5}).Return(true, nil)
+			},
+			func(query *queryContext, t *testing.T) {
+				if isEmpty := query.HasEmptyStorage(Address{5}); !isEmpty {
+					t.Errorf("unexpected value, wanted %v, got %v", true, isEmpty)
+				}
+			},
+		},
 		"code": {
 			func(mock *state.MockState) {
 				mock.EXPECT().GetCode(common.Address{1}).Return([]byte{1, 2, 3}, nil)
@@ -147,6 +157,16 @@ func TestQueryContext_ErrorsArePropagated(t *testing.T) {
 			func(query *queryContext, t *testing.T) {
 				if want, got := (Value{}), query.GetState(Address{5}, Key{7}); want != got {
 					t.Errorf("unexpected storage value, wanted %v, got %v", want, got)
+				}
+			},
+		},
+		"has-empty-storage": {
+			func(mock *state.MockState) {
+				mock.EXPECT().HasEmptyStorage(common.Address{5}).Return(false, injectedError)
+			},
+			func(query *queryContext, t *testing.T) {
+				if isEmpty := query.HasEmptyStorage(Address{5}); isEmpty {
+					t.Errorf("unexpected value, wanted %v, got %v", false, isEmpty)
 				}
 			},
 		},

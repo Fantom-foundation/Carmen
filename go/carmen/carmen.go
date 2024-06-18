@@ -278,7 +278,7 @@ type TransactionContext interface {
 	SetTransientState(Address, Key, Value)
 
 	// HasEmptyStorage returns true if account has empty storage.
-	HasEmptyStorage(address Address) Tribool
+	HasEmptyStorage(address Address) bool
 
 	// GetCode returns smart contract byte-code
 	// of an account with the given address.
@@ -382,7 +382,7 @@ type QueryContext interface {
 	GetState(Address, Key) Value
 
 	// HasEmptyStorage returns true if account has empty storage.
-	HasEmptyStorage(Address) Tribool
+	HasEmptyStorage(Address) bool
 
 	// GetCode returns smart contract byte-code
 	// of an account with the given address.

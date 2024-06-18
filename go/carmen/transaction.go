@@ -126,12 +126,12 @@ func (t *transactionContext) SetTransientState(address Address, key Key, value V
 	}
 }
 
-func (t *transactionContext) HasEmptyStorage(address Address) Tribool {
+func (t *transactionContext) HasEmptyStorage(address Address) bool {
 	if t.state != nil {
-		return Tribool{t.state.HasEmptyStorage(common.Address(address))}
+		return t.state.HasEmptyStorage(common.Address(address))
 	}
 
-	return TriboolUnknown()
+	return false
 }
 
 func (t *transactionContext) GetCode(address Address) []byte {

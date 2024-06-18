@@ -20,7 +20,6 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 )
 
 //go:generate mockgen -source state_db.go -destination state_db_mock.go -package state
@@ -53,7 +52,7 @@ type VmStateDB interface {
 	SetState(common.Address, common.Key, common.Value)
 	GetTransientState(common.Address, common.Key) common.Value
 	SetTransientState(common.Address, common.Key, common.Value)
-	HasEmptyStorage(common.Address) tribool.Tribool
+	HasEmptyStorage(common.Address) bool
 
 	// Code management.
 	GetCode(common.Address) []byte
@@ -829,13 +828,31 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 	}
 }
 
-func (s *stateDB) HasEmptyStorage(address common.Address) tribool.Tribool {
+func (s *stateDB) HasEmptyStorage(address common.Address) bool {
+	var (
+		isEmpty, shouldReturn bool
+	)
+	if !s.Exist(address) {
+		return true
+	}
+
+	s.data.ForEach(func(id slotId, val *slotValue) {
+		if id.addr == address && val.current != (common.Value{}) {
+			isEmpty = false
+			shouldReturn = true
+			return
+		}
+	})
+	if shouldReturn {
+		return isEmpty
+	}
+
 	isEmpty, err := s.state.HasEmptyStorage(address)
 	if err != nil {
 		s.errors = append(s.errors, err)
-		return tribool.Unknown()
+		return false
 	}
-	return tribool.New(isEmpty)
+	return isEmpty
 }
 
 func (s *stateDB) GetTransientState(addr common.Address, key common.Key) common.Value {
