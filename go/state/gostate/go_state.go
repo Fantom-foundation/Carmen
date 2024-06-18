@@ -144,6 +144,14 @@ func (s *GoState) GetStorage(address common.Address, key common.Key) (common.Val
 	return val, s.stateError
 }
 
+func (s *GoState) HasEmptyStorage(address common.Address) (bool, error) {
+	if err := s.stateError; err != nil {
+		return false, err
+	}
+
+	return s.live.HasEmptyStorage(address)
+}
+
 func (s *GoState) GetCode(address common.Address) ([]byte, error) {
 	if err := s.stateError; err != nil {
 		return []byte{}, err

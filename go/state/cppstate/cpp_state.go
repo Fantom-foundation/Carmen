@@ -139,7 +139,9 @@ func (cs *CppState) SetStorage(address common.Address, key common.Key, value com
 	update.AppendSlotUpdate(address, key, value)
 	return cs.Apply(0, update)
 }
-
+func (cs *CppState) HasEmptyStorage(common.Address) (bool, error) {
+	panic("HasEmptyStorage: not implemented for CppState")
+}
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 	// Try to obtain the code from the cache
 	code, exists := cs.codeCache.Get(address)

@@ -45,6 +45,14 @@ func (t Tribool) String() string {
 	}
 }
 
+// New creates a new Tribool with value depending on b.
+func New(b bool) Tribool {
+	if b {
+		return True()
+	}
+	return False()
+}
+
 // Unknown creates a new Tribool with unknown value.
 func Unknown() Tribool {
 	return Tribool{}

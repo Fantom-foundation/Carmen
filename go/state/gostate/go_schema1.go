@@ -187,6 +187,10 @@ func (s *GoSchema1) SetStorage(address common.Address, key common.Key, value com
 	return err
 }
 
+func (s *GoSchema1) HasEmptyStorage(common.Address) (bool, error) {
+	panic("HasEmptyStorage: not implemented for GoSchema1")
+}
+
 func (s *GoSchema1) GetCode(address common.Address) (value []byte, err error) {
 	idx, err := s.addressIndex.Get(address)
 	if err != nil {

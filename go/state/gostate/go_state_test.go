@@ -822,6 +822,16 @@ func TestState_All_Archive_Operations_May_Cause_Failure(t *testing.T) {
 	}
 }
 
+func TestGoState_HasEmptyStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := state.NewMockLiveDB(ctrl)
+	db := newGoState(liveDB, nil, []func(){})
+
+	liveDB.EXPECT().HasEmptyStorage(address1)
+
+	db.HasEmptyStorage(address1)
+}
+
 func runAddBlock(block uint64, stateDB state.StateDB) {
 	addr := common.Address{byte(block)}
 	key := common.Key{0xA}

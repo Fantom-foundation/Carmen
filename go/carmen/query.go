@@ -58,6 +58,16 @@ func (c *queryContext) GetState(address Address, key Key) Value {
 	return Value(res)
 }
 
+func (c *queryContext) HasEmptyStorage(address Address) Tribool {
+	isEmpty, err := c.state.HasEmptyStorage(common.Address(address))
+	if err != nil {
+		c.err = err
+		return TriboolUnknown()
+	}
+
+	return NewTribool(isEmpty)
+}
+
 func (c *queryContext) GetCode(address Address) []byte {
 	if c.err != nil {
 		return nil

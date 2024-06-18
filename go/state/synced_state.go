@@ -71,6 +71,11 @@ func (s *syncedState) GetStorage(address common.Address, key common.Key) (common
 	defer s.mu.Unlock()
 	return s.state.GetStorage(address, key)
 }
+func (s *syncedState) HasEmptyStorage(address common.Address) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state.HasEmptyStorage(address)
+}
 
 func (s *syncedState) GetCode(address common.Address) ([]byte, error) {
 	s.mu.Lock()

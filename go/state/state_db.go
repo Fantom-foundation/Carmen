@@ -20,6 +20,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 )
 
 //go:generate mockgen -source state_db.go -destination state_db_mock.go -package state
@@ -52,6 +53,7 @@ type VmStateDB interface {
 	SetState(common.Address, common.Key, common.Value)
 	GetTransientState(common.Address, common.Key) common.Value
 	SetTransientState(common.Address, common.Key, common.Value)
+	HasEmptyStorage(common.Address) tribool.Tribool
 
 	// Code management.
 	GetCode(common.Address) []byte
@@ -827,6 +829,15 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 	}
 }
 
+func (s *stateDB) HasEmptyStorage(address common.Address) tribool.Tribool {
+	isEmpty, err := s.state.HasEmptyStorage(address)
+	if err != nil {
+		s.errors = append(s.errors, err)
+		return tribool.Unknown()
+	}
+	return tribool.New(isEmpty)
+}
+
 func (s *stateDB) GetTransientState(addr common.Address, key common.Key) common.Value {
 	sid := slotId{addr, key}
 	val, _ := s.transientStorage.Get(sid)
@@ -1436,6 +1447,15 @@ var nonCommittableStateDbPool = sync.Pool{
 type nonCommittableStateDB struct {
 	*stateDB
 }
+
+//func (db *nonCommittableStateDB) HasEmptyStorage(address common.Address) tribool.Tribool {
+//	isEmpty, err := db.state.HasEmptyStorage(address)
+//	if err != nil {
+//		db.errors = append(db.errors, err)
+//		return tribool.Unknown()
+//	}
+//	return tribool.New(isEmpty)
+//}
 
 func (db *nonCommittableStateDB) Copy() NonCommittableStateDB {
 	cp := nonCommittableStateDbPool.Get().(*stateDB)

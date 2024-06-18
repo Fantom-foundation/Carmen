@@ -316,6 +316,21 @@ func (mr *MockStateMockRecorder) GetStorage(address, key any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockState)(nil).GetStorage), address, key)
 }
 
+// HasEmptyStorage mocks base method.
+func (m *MockState) HasEmptyStorage(arg0 common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockStateMockRecorder) HasEmptyStorage(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockState)(nil).HasEmptyStorage), arg0)
+}
+
 // Restore mocks base method.
 func (m *MockState) Restore(data backend.SnapshotData) error {
 	m.ctrl.T.Helper()
@@ -542,6 +557,21 @@ func (m *MockLiveDB) GetStorage(address common.Address, key common.Key) (common.
 func (mr *MockLiveDBMockRecorder) GetStorage(address, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStorage", reflect.TypeOf((*MockLiveDB)(nil).GetStorage), address, key)
+}
+
+// HasEmptyStorage mocks base method.
+func (m *MockLiveDB) HasEmptyStorage(address common.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyStorage", address)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEmptyStorage indicates an expected call of HasEmptyStorage.
+func (mr *MockLiveDBMockRecorder) HasEmptyStorage(address any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyStorage", reflect.TypeOf((*MockLiveDB)(nil).HasEmptyStorage), address)
 }
 
 // RunPostRestoreTasks mocks base method.

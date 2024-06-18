@@ -35,6 +35,9 @@ type State interface {
 	// GetStorage returns the memory slot for the account address (i.e. the contract) and the memory location key.
 	GetStorage(address common.Address, key common.Key) (common.Value, error)
 
+	// HasEmptyStorage returns true if account has empty storage.
+	HasEmptyStorage(common.Address) (bool, error)
+
 	// GetCode returns code of the contract for the input contract address.
 	GetCode(address common.Address) ([]byte, error)
 
@@ -85,6 +88,8 @@ type LiveDB interface {
 	GetBalance(address common.Address) (balance common.Balance, err error)
 	GetNonce(address common.Address) (nonce common.Nonce, err error)
 	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
+	// HasEmptyStorage returns true if account has empty storage.
+	HasEmptyStorage(address common.Address) (bool, error)
 	GetCode(address common.Address) (value []byte, err error)
 	GetCodeSize(address common.Address) (size int, err error)
 	GetCodeHash(address common.Address) (hash common.Hash, err error)
