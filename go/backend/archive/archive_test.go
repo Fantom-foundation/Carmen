@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -30,6 +31,11 @@ type archiveFactory struct {
 	getArchive func(tempDir string) archive.Archive
 	customHash bool
 }
+
+var (
+	balance1 = amount.New(0x12<<56, 0, 0, 0)
+	balance2 = amount.New(0x34<<56, 0, 0, 0)
+)
 
 func getArchiveFactories(tb testing.TB) []archiveFactory {
 	return []archiveFactory{
@@ -109,7 +115,7 @@ func TestAddGet(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 				Codes:  nil,
 				Nonces: nil,
@@ -122,7 +128,7 @@ func TestAddGet(t *testing.T) {
 
 			if err := a.Add(5, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x34}},
+					{Account: addr1, Balance: balance2},
 				},
 				Codes: []common.CodeUpdate{
 					{Account: addr1, Code: []byte{0x12, 0x23}},
@@ -140,13 +146,13 @@ func TestAddGet(t *testing.T) {
 				t.Fatalf("failed to add block 7; %v", err)
 			}
 
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != balance1 {
 				t.Errorf("unexpected balance at block 1: %v; %v", balance, err)
 			}
-			if balance, err := a.GetBalance(3, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+			if balance, err := a.GetBalance(3, addr1); err != nil || balance != balance1 {
 				t.Errorf("unexpected balance at block 3: %v; %v", balance, err)
 			}
-			if balance, err := a.GetBalance(5, addr1); err != nil || balance.Bytes32() != (common.Balance{0x34}) {
+			if balance, err := a.GetBalance(5, addr1); err != nil || balance != balance2 {
 				t.Errorf("unexpected balance at block 5: %v; %v", balance, err)
 			}
 
@@ -199,7 +205,7 @@ func TestAccountDeleteCreate(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 				Codes: []common.CodeUpdate{
 					{Account: addr1, Code: []byte{0x12, 0x23}},
@@ -295,7 +301,7 @@ func TestBalanceOnly(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -303,7 +309,7 @@ func TestBalanceOnly(t *testing.T) {
 
 			if err := a.Add(200, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x34}},
+					{Account: addr1, Balance: balance2},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 200; %s", err)
@@ -313,11 +319,11 @@ func TestBalanceOnly(t *testing.T) {
 				t.Fatalf("failed to add block 400; %s", err)
 			}
 
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != balance1 {
 				t.Errorf("unexpected balance at block 1: %v; %s", balance, err)
 			}
 
-			if balance, err := a.GetBalance(300, addr1); err != nil || balance.Bytes32() != (common.Balance{0x34}) {
+			if balance, err := a.GetBalance(300, addr1); err != nil || balance != balance2 {
 				t.Errorf("unexpected balance at block 3: %v; %s", balance, err)
 			}
 		})
@@ -469,7 +475,7 @@ func TestZeroBlock(t *testing.T) {
 			if err := a.Add(0, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x11}},
+					{Account: addr1, Balance: balance1},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 0; %s", err)
@@ -477,7 +483,7 @@ func TestZeroBlock(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance2},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -489,10 +495,10 @@ func TestZeroBlock(t *testing.T) {
 			if exists, err := a.Exists(1, addr1); err != nil || !exists {
 				t.Errorf("unexpected account status at block 1: %t; %s", exists, err)
 			}
-			if balance, err := a.GetBalance(0, addr1); err != nil || balance.Bytes32() != (common.Balance{0x11}) {
+			if balance, err := a.GetBalance(0, addr1); err != nil || balance != balance1 {
 				t.Errorf("unexpected balance at block 0: %v; %s", balance, err)
 			}
-			if balance, err := a.GetBalance(1, addr1); err != nil || balance.Bytes32() != (common.Balance{0x12}) {
+			if balance, err := a.GetBalance(1, addr1); err != nil || balance != balance2 {
 				t.Errorf("unexpected balance at block 1: %v; %s", balance, err)
 			}
 		})
@@ -517,7 +523,7 @@ func TestTwinProtection(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x12}},
+					{Account: addr1, Balance: balance1},
 				},
 			}, nil); err != nil {
 				t.Fatalf("failed to add block 1; %s", err)
@@ -525,7 +531,7 @@ func TestTwinProtection(t *testing.T) {
 
 			if err := a.Add(1, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: common.Balance{0x34}},
+					{Account: addr1, Balance: balance2},
 				},
 			}, nil); err == nil {
 				t.Errorf("second adding of block 1 should have failed but it succeed")

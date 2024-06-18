@@ -1283,7 +1283,7 @@ func TestStateDB_SettingTheBalanceCreatesAccount(t *testing.T) {
 	mock.EXPECT().Exists(address1).Return(false, nil)
 	mock.EXPECT().Apply(uint64(1), common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: amount.New()}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: addedBalance}},
 	})
 
 	db.AddBalance(address1, addedBalance)
