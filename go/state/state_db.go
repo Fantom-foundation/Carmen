@@ -1465,15 +1465,6 @@ type nonCommittableStateDB struct {
 	*stateDB
 }
 
-//func (db *nonCommittableStateDB) HasEmptyStorage(address common.Address) tribool.Tribool {
-//	isEmpty, err := db.state.HasEmptyStorage(address)
-//	if err != nil {
-//		db.errors = append(db.errors, err)
-//		return tribool.Unknown()
-//	}
-//	return tribool.New(isEmpty)
-//}
-
 func (db *nonCommittableStateDB) Copy() NonCommittableStateDB {
 	cp := nonCommittableStateDbPool.Get().(*stateDB)
 	cp.resetState(db.state)
