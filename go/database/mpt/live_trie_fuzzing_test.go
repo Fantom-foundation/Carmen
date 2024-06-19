@@ -101,7 +101,7 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 		}
 		var balance [amount.BytesLength]byte
 		if len(*b) >= len(balance) {
-			balance = [32]byte((*b)[0:len(balance)])
+			balance = [amount.BytesLength]byte((*b)[0:len(balance)])
 			*b = (*b)[len(balance):]
 		}
 		var codeHash common.Hash
