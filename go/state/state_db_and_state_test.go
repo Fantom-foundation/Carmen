@@ -15,7 +15,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"sync"
 	"testing"
@@ -534,7 +533,7 @@ func TestStateDBArchive(t *testing.T) {
 
 			bl := stateDb.StartBulkLoad(0)
 			bl.CreateAccount(address1)
-			bl.SetBalance(address1, big.NewInt(12))
+			bl.SetBalance(address1, amount.New(12))
 			if err := bl.Close(); err != nil {
 				t.Fatalf("failed to bulk-load StateDB with archive; %s", err)
 			}

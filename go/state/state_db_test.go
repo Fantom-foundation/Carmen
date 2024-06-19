@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"reflect"
 	"testing"
 
@@ -3784,32 +3783,12 @@ func TestStateDB_BulkLoadReachesState(t *testing.T) {
 
 	load := db.StartBulkLoad(0)
 	load.CreateAccount(address1)
-	load.SetBalance(address1, big.NewInt(12))
+	load.SetBalance(address1, amount.New(12))
 	load.SetNonce(address1, 14)
 	load.SetState(address1, key1, val1)
 	load.SetCode(address1, code)
 
 	load.Close()
-}
-
-func TestStateDB_BulkLoadSetBalanceFailsForInvalidBalances(t *testing.T) {
-	tests := map[string]*big.Int{
-		"negative": big.NewInt(-1),
-		"toBig":    big.NewInt(0).Lsh(big.NewInt(1), 256),
-	}
-
-	for name, value := range tests {
-		t.Run(name, func(t *testing.T) {
-			bulk := bulkLoad{}
-			if len(bulk.errs) != 0 {
-				t.Fatalf("initial bulk load instance is not error free")
-			}
-			bulk.SetBalance(address1, value)
-			if len(bulk.errs) == 0 {
-				t.Errorf("balance issue not detected")
-			}
-		})
-	}
 }
 
 func TestStateDB_BulkLoadApplyDetectsInconsistencies(t *testing.T) {
