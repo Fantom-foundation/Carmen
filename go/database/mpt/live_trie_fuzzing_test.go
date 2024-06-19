@@ -99,7 +99,7 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 			nonce = common.Nonce((*b)[0:len(nonce)])
 			*b = (*b)[len(nonce):]
 		}
-		var balance amount.Amount
+		balance := amount.New()
 		if len(*b) >= amount.BytesLength {
 			balance = amount.NewFromBytes((*b)[0:amount.BytesLength]...)
 			*b = (*b)[amount.BytesLength:]
