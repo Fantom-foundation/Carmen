@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 )
 
@@ -90,9 +91,9 @@ func TestUpdateBalanceUpdatesAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
 	addr2 := Address{0x02}
 	addr3 := Address{0x03}
 
-	value1 := Balance{0x01}
-	value2 := Balance{0x02}
-	value3 := Balance{0x03}
+	value1 := amount.New(1)
+	value2 := amount.New(2)
+	value3 := amount.New(3)
 
 	update := Update{}
 	update.AppendBalanceUpdate(addr2, value2)
@@ -117,8 +118,8 @@ func TestUpdateBalanceUpdatesAreSortedAndMadeUniqueByNormalizer(t *testing.T) {
 func TestUpdateConflictingBalanceUpdatesCanNotBeNormalized(t *testing.T) {
 	addr1 := Address{0x01}
 
-	value1 := Balance{0x01}
-	value2 := Balance{0x02}
+	value1 := amount.New(1)
+	value2 := amount.New(2)
 
 	update := Update{}
 	update.AppendBalanceUpdate(addr1, value1)
@@ -288,9 +289,9 @@ var updateValueCase = []struct {
 	},
 	{
 		"UpdateBalance",
-		func(u *Update) { u.AppendBalanceUpdate(Address{0x01}, Balance{}) },
-		func(u *Update) { u.AppendBalanceUpdate(Address{0x02}, Balance{}) },
-		func(u *Update) { u.AppendBalanceUpdate(Address{0x03}, Balance{}) },
+		func(u *Update) { u.AppendBalanceUpdate(Address{0x01}, amount.New()) },
+		func(u *Update) { u.AppendBalanceUpdate(Address{0x02}, amount.New()) },
+		func(u *Update) { u.AppendBalanceUpdate(Address{0x03}, amount.New()) },
 	},
 	{
 		"UpdateNonce",
@@ -404,8 +405,8 @@ func getExampleUpdate() Update {
 	update.AppendCreateAccount(Address{0xB2})
 	update.AppendCreateAccount(Address{0xB3})
 
-	update.AppendBalanceUpdate(Address{0xC1}, Balance{0x01})
-	update.AppendBalanceUpdate(Address{0xC2}, Balance{0x02})
+	update.AppendBalanceUpdate(Address{0xC1}, amount.New(1<<56, 0, 0, 0))
+	update.AppendBalanceUpdate(Address{0xC2}, amount.New(2<<56, 0, 0, 0))
 
 	update.AppendNonceUpdate(Address{0xD1}, Nonce{0x03})
 	update.AppendNonceUpdate(Address{0xD2}, Nonce{0x04})
@@ -496,8 +497,8 @@ func TestUpdate_ApplyTo(t *testing.T) {
 		target.EXPECT().CreateAccount(Address{0xB1}),
 		target.EXPECT().CreateAccount(Address{0xB2}),
 		target.EXPECT().CreateAccount(Address{0xB3}),
-		target.EXPECT().SetBalance(Address{0xC1}, Balance{0x01}),
-		target.EXPECT().SetBalance(Address{0xC2}, Balance{0x02}),
+		target.EXPECT().SetBalance(Address{0xC1}, amount.New(1<<56, 0, 0, 0)),
+		target.EXPECT().SetBalance(Address{0xC2}, amount.New(2<<56, 0, 0, 0)),
 		target.EXPECT().SetNonce(Address{0xD1}, Nonce{0x03}),
 		target.EXPECT().SetNonce(Address{0xD2}, Nonce{0x04}),
 		target.EXPECT().SetCode(Address{0xE1}, []byte{}),
@@ -549,7 +550,7 @@ func TestUpdate_Print(t *testing.T) {
 
 	update.AppendDeleteAccount(Address{1})
 	update.AppendCreateAccount(Address{2})
-	update.AppendBalanceUpdate(Address{3}, Balance{1})
+	update.AppendBalanceUpdate(Address{3}, amount.New(1))
 	update.AppendNonceUpdate(Address{4}, Nonce{2})
 	update.AppendCodeUpdate(Address{5}, []byte{1, 2, 3})
 	update.AppendSlotUpdate(Address{6}, Key{1}, Value{2})

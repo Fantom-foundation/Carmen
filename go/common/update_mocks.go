@@ -22,6 +22,7 @@ package common
 import (
 	reflect "reflect"
 
+	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -77,7 +78,7 @@ func (mr *MockUpdateTargetMockRecorder) DeleteAccount(address any) *gomock.Call 
 }
 
 // SetBalance mocks base method.
-func (m *MockUpdateTarget) SetBalance(address Address, balance Balance) error {
+func (m *MockUpdateTarget) SetBalance(address Address, balance amount.Amount) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetBalance", address, balance)
 	ret0, _ := ret[0].(error)

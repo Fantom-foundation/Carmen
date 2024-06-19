@@ -11,9 +11,11 @@
 package gostate
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/state"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
 func TestScheme5_Archive_And_Live_Must_Be_InSync(t *testing.T) {
@@ -31,7 +33,7 @@ func TestScheme5_Archive_And_Live_Must_Be_InSync(t *testing.T) {
 	addBlock := func(block uint64, db state.State) {
 		update := common.Update{
 			CreatedAccounts: []common.Address{{byte(block)}},
-			Balances:        []common.BalanceUpdate{{common.Address{byte(block)}, common.Balance{byte(100)}}},
+			Balances:        []common.BalanceUpdate{{common.Address{byte(block)}, amount.New(100)}},
 		}
 		if err := db.Apply(block, update); err != nil {
 			t.Fatalf("cannot add block: %v", err)
@@ -113,7 +115,7 @@ func TestCarmen_Empty_Archive_And_Live_Must_Be_InSync(t *testing.T) {
 		block := uint64(i)
 		update := common.Update{
 			CreatedAccounts: []common.Address{{byte(block)}},
-			Balances:        []common.BalanceUpdate{{common.Address{byte(block)}, common.Balance{byte(100)}}},
+			Balances:        []common.BalanceUpdate{{common.Address{byte(block)}, amount.New(100)}},
 		}
 		if err := db.Apply(block, update); err != nil {
 			t.Fatalf("cannot add block: %v", err)

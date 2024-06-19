@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 const (
@@ -33,7 +34,7 @@ func BenchmarkAdding(b *testing.B) {
 		var update common.Update
 		for i := byte(0); i < byte(bmAddressToCreate); i++ {
 			update.AppendCreateAccount(common.Address{i})
-			update.AppendBalanceUpdate(common.Address{i}, common.Balance{i})
+			update.AppendBalanceUpdate(common.Address{i}, amount.New(uint64(i)))
 		}
 		if err := a.Add(1, update, nil); err != nil {
 			b.Fatalf("failed to add block; %s", err)

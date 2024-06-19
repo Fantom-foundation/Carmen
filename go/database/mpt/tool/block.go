@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/io"
 	"github.com/urfave/cli/v2"
@@ -95,7 +96,7 @@ func diffToUpdate(diff mpt.Diff) (common.Update, error) {
 			res.AppendDeleteAccount(account)
 		}
 		if diff.Balance != nil {
-			res.AppendBalanceUpdate(account, *diff.Balance)
+			res.AppendBalanceUpdate(account, amount.NewFromBytes((*diff.Balance)[:]...))
 		}
 		if diff.Nonce != nil {
 			res.AppendNonceUpdate(account, *diff.Nonce)

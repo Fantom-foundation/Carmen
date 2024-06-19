@@ -202,7 +202,7 @@ func TestBalanceUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s state.State) {
 		s.Apply(12, common.Update{
 			Balances: []common.BalanceUpdate{
-				{Account: address1, Balance: balance1.Bytes32()},
+				{Account: address1, Balance: balance1},
 			},
 		})
 	})
@@ -212,9 +212,9 @@ func TestMultipleBalanceUpdateHashes(t *testing.T) {
 	testHashAfterModification(t, func(s state.State) {
 		s.Apply(12, common.Update{
 			Balances: []common.BalanceUpdate{
-				{Account: address1, Balance: balance1.Bytes32()},
-				{Account: address2, Balance: balance2.Bytes32()},
-				{Account: address3, Balance: balance3.Bytes32()},
+				{Account: address1, Balance: balance1},
+				{Account: address2, Balance: balance2},
+				{Account: address3, Balance: balance3},
 			},
 		})
 	})
@@ -277,7 +277,7 @@ func TestLargeStateHashes(t *testing.T) {
 			if i%21 == 0 {
 				update.DeletedAccounts = append(update.DeletedAccounts, address)
 			}
-			update.Balances = append(update.Balances, common.BalanceUpdate{Account: address, Balance: common.Balance{byte(i)}})
+			update.Balances = append(update.Balances, common.BalanceUpdate{Account: address, Balance: amount.New(uint64(i))})
 			update.Nonces = append(update.Nonces, common.NonceUpdate{Account: address, Nonce: common.Nonce{byte(i + 1)}})
 			update.Codes = append(update.Codes, common.CodeUpdate{Account: address, Code: []byte{byte(i), byte(i * 2), byte(i*3 + 2)}})
 		}
@@ -519,7 +519,7 @@ func TestArchive(t *testing.T) {
 			if err := s.Apply(1, common.Update{
 				CreatedAccounts: []common.Address{address1},
 				Balances: []common.BalanceUpdate{
-					{Account: address1, Balance: balance12.Bytes32()},
+					{Account: address1, Balance: balance12},
 				},
 				Codes:  nil,
 				Nonces: nil,
@@ -532,9 +532,9 @@ func TestArchive(t *testing.T) {
 
 			if err := s.Apply(2, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: address1, Balance: balance34.Bytes32()},
-					{Account: address2, Balance: balance12.Bytes32()},
-					{Account: address3, Balance: balance12.Bytes32()},
+					{Account: address1, Balance: balance34},
+					{Account: address2, Balance: balance12},
+					{Account: address3, Balance: balance12},
 				},
 				Codes: []common.CodeUpdate{
 					{Account: address1, Code: []byte{0x12, 0x23}},
@@ -714,7 +714,7 @@ func TestPersistentState(t *testing.T) {
 			// init state data
 			update := common.Update{}
 			update.AppendCreateAccount(address1)
-			update.AppendBalanceUpdate(address1, balance1.Bytes32())
+			update.AppendBalanceUpdate(address1, balance1)
 			update.AppendNonceUpdate(address1, nonce1)
 			update.AppendSlotUpdate(address1, key1, val1)
 			update.AppendCodeUpdate(address1, []byte{1, 2, 3})
@@ -734,7 +734,7 @@ func TestPersistentState(t *testing.T) {
 func fillStateForSnapshotting(state state.State) {
 	state.Apply(12, common.Update{
 		CreatedAccounts: []common.Address{address1},
-		Balances:        []common.BalanceUpdate{{Account: address1, Balance: common.Balance{12}}},
+		Balances:        []common.BalanceUpdate{{Account: address1, Balance: amount.New(12)}},
 		Nonces:          []common.NonceUpdate{{Account: address2, Nonce: common.Nonce{14}}},
 		Codes:           []common.CodeUpdate{{Account: address3, Code: []byte{0, 8, 15}}},
 		Slots:           []common.SlotUpdate{{Account: address1, Key: key1, Value: val1}},
@@ -776,11 +776,11 @@ func TestSnapshotCanBeCreatedAndRestored(t *testing.T) {
 				return
 			}
 
-			if got, err := recovered.GetBalance(address1); err != nil || got.Bytes32() != (common.Balance{12}) {
+			if got, err := recovered.GetBalance(address1); err != nil || got != amount.New(12) {
 				if err != nil {
 					t.Errorf("failed to fetch balance for account %v: %v", address1, err)
 				} else {
-					t.Errorf("failed to recover balance for account %v - wanted %v, got %v", address1, (common.Balance{12}), got)
+					t.Errorf("failed to recover balance for account %v - wanted %v, got %v", address1, amount.New(12), got)
 				}
 			}
 

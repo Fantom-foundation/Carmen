@@ -14,13 +14,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"strings"
 	"testing"
 
 	_ "embed"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 // The reference hashes in this file have been generated using Geth's MPT.
@@ -47,7 +47,7 @@ func TestS5RootHash_SingleAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{1}, balance)
 	hash, err := state.GetHash()
@@ -67,7 +67,7 @@ func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{1}, balance)
 	state.SetStorage(common.Address{1}, common.Key{1}, common.Value{2})
@@ -88,7 +88,7 @@ func TestS5RootHash_TwoAccounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.SetBalance(common.Address{2}, balance)
 	hash, err := state.GetHash()
@@ -108,7 +108,7 @@ func TestS5RootHash_TwoAccountsWithValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(common.Address{1}, common.ToNonce(10))
 	state.trie.SetValue(common.Address{1}, common.Key{1}, common.Value{0, 0, 1})
 	state.trie.SetValue(common.Address{1}, common.Key{2}, common.Value{2})
@@ -140,7 +140,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(addr1, common.ToNonce(10))
 	state.SetBalance(addr2, balance)
 	hash, err := state.GetHash()
@@ -167,7 +167,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
-	balance, _ := common.ToBalance(big.NewInt(12))
+	balance := amount.New(12)
 	state.SetNonce(addr1, common.ToNonce(10))
 	state.SetBalance(addr2, balance)
 	hash, err := state.GetHash()

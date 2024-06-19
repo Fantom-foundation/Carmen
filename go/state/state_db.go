@@ -1192,7 +1192,7 @@ func (s *stateDB) EndBlock(block uint64) {
 			continue
 		}
 		if value.original == nil || *value.original != value.current {
-			update.AppendBalanceUpdate(addr, value.current.Bytes32())
+			update.AppendBalanceUpdate(addr, value.current)
 		}
 	}
 
@@ -1375,7 +1375,7 @@ func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
 		l.errs = append(l.errs, fmt.Errorf("unable to convert big.Int balance to common.Balance: %w", err))
 		return
 	}
-	l.update.AppendBalanceUpdate(addr, newBalance)
+	l.update.AppendBalanceUpdate(addr, amount.NewFromBytes(newBalance[:]...))
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {

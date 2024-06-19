@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/fuzzing"
 )
 
@@ -59,7 +60,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 			}
 		case changeBalance:
 			balance := balanceSerialiser.FromBytes(value.changePayload)
-			update.AppendBalanceUpdate(value.address.GetAddress(), balance)
+			update.AppendBalanceUpdate(value.address.GetAddress(), amount.NewFromBytes(balance[:]...))
 			updateAccount = func(info *AccountInfo) {
 				info.Balance = balance
 			}
