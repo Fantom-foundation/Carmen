@@ -23,6 +23,113 @@ import (
 	"testing"
 )
 
+func TestWitnessProof_Create_And_Proof_Properties_Forest(t *testing.T) {
+	addresses := getTestAddresses(60)
+	keys := getTestKeys(60)
+	for _, variant := range []variant{{"InMemory", OpenInMemoryForest}, {"FileBased", OpenFileForest}} {
+		for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					dir := t.TempDir()
+					forest, err := variant.factory(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// fill-in the forest with test data
+					root := NewNodeReference(EmptyId())
+					for i, addr := range addresses {
+						info := AccountInfo{Nonce: common.Nonce{byte(i + 1)}}
+						root, err = forest.SetAccountInfo(&root, addr, info)
+						if err != nil {
+							t.Fatalf("failed to set account info: %v", err)
+						}
+						for j, key := range keys {
+							root, err = forest.SetValue(&root, addr, key, common.Value{byte(i), byte(j)})
+						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("failed to update hashes: %v", err)
+						}
+					}
+
+					rootHahs, _, err := forest.updateHashesFor(&root)
+					if err != nil {
+						t.Fatalf("failed to update hashes: %v", err)
+					}
+
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+
+					forest, err = variant.factory(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// create a proof for half of the addresses and keys
+					var completeProof WitnessProof
+					for _, addr := range addresses[:len(addresses)/2] {
+						for _, key := range keys[:len(keys)/2] {
+							proof, err := CreateWitnessProof(forest, &root, addr, key)
+							if err != nil {
+								t.Fatalf("failed to create proof: %v", err)
+							}
+							completeProof = MergeProofs(completeProof, proof)
+						}
+					}
+
+					if !completeProof.IsValid() {
+						t.Fatalf("proof is not valid")
+					}
+
+					// prove values, half of the values are set, half is empty
+					for i, addr := range addresses {
+						var expectedNonce common.Nonce
+						var expectedComplete bool
+						if i < len(addresses)/2 {
+							expectedNonce = common.Nonce{byte(i + 1)}
+							expectedComplete = true
+						}
+						nonce, complete, err := completeProof.GetNonce(rootHahs, addr)
+						if err != nil {
+							t.Fatalf("failed to get nonce: %v", err)
+						}
+						if got, want := complete, expectedComplete; got != want {
+							t.Errorf("unexpected completeness: got %v, want %v", got, want)
+						}
+						if got, want := nonce, expectedNonce; got != want {
+							t.Errorf("unexpected nonce: got %v, want %v", got, want)
+						}
+
+						for j, key := range keys {
+							var expectedValue common.Value
+							var expectedKeyComplete bool
+							if i < len(addresses)/2 && j < len(keys)/2 {
+								expectedValue = common.Value{byte(i), byte(j)}
+								expectedKeyComplete = true
+							}
+							value, keyComplete, err := completeProof.GetState(rootHahs, addr, key)
+							if err != nil {
+								t.Fatalf("failed to get state: %v", err)
+							}
+							if got, want := keyComplete, expectedKeyComplete; got != want {
+								t.Errorf("unexpected key completeness: got %v, want %v", got, want)
+							}
+							if got, want := value, expectedValue; got != want {
+								t.Errorf("unexpected value: got %v, want %v", got, want)
+							}
+						}
+					}
+
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
