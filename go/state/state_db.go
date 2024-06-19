@@ -169,7 +169,7 @@ type NonCommittableStateDB interface {
 // Deprecated: external users should switch to the carmen package as the new top-level API
 type BulkLoad interface {
 	CreateAccount(common.Address)
-	SetBalance(common.Address, *big.Int)
+	SetBalance(common.Address, amount.Amount)
 	SetNonce(common.Address, uint64)
 	SetState(common.Address, common.Key, common.Value)
 	SetCode(common.Address, []byte)
@@ -1369,13 +1369,8 @@ func (l *bulkLoad) CreateAccount(addr common.Address) {
 	l.update.AppendCreateAccount(addr)
 }
 
-func (l *bulkLoad) SetBalance(addr common.Address, value *big.Int) {
-	newBalance, err := common.ToBalance(value)
-	if err != nil {
-		l.errs = append(l.errs, fmt.Errorf("unable to convert big.Int balance to common.Balance: %w", err))
-		return
-	}
-	l.update.AppendBalanceUpdate(addr, amount.NewFromBytes(newBalance[:]...))
+func (l *bulkLoad) SetBalance(addr common.Address, balance amount.Amount) {
+	l.update.AppendBalanceUpdate(addr, balance)
 }
 
 func (l *bulkLoad) SetNonce(addr common.Address, value uint64) {
