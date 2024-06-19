@@ -24,6 +24,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/memory"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/shadow"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 )
@@ -652,7 +653,7 @@ func TestForest_Flush_Makes_Node_Clean(t *testing.T) {
 
 					root := NewNodeReference(EmptyId())
 					for i, address := range addresses {
-						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: common.Balance{0x1}})
+						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: amount.New(1)})
 						if err != nil {
 							t.Fatalf("cannot update account: %v", err)
 						}
@@ -1977,7 +1978,7 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 
 				rootRef := NewNodeReference(EmptyId())
 				accountWithStorage := common.Address{0xA}
-				root, err := forest.SetAccountInfo(&rootRef, accountWithStorage, AccountInfo{Balance: common.Balance{0x1}})
+				root, err := forest.SetAccountInfo(&rootRef, accountWithStorage, AccountInfo{Balance: amount.New(1)})
 				if err != nil {
 					t.Fatalf("cannot create an account ")
 				}
@@ -2001,7 +2002,7 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 				}
 
 				// create a dirty path, which must not be impacted by the delete below
-				root, err = forest.SetAccountInfo(&rootRef, common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}, AccountInfo{Balance: common.Balance{0x1}})
+				root, err = forest.SetAccountInfo(&rootRef, common.Address{0xA, 0xB, 0xC, 0xD, 0xE, 0xF}, AccountInfo{Balance: amount.New(1)})
 				if err != nil {
 					t.Fatalf("cannot create an account ")
 				}
@@ -2056,7 +2057,7 @@ func TestForest_VisitPathToAccount(t *testing.T) {
 
 					rootRef := NewNodeReference(EmptyId())
 					for i, addr := range addresses {
-						root, err := forest.SetAccountInfo(&rootRef, addr, AccountInfo{Balance: common.Balance{byte(i + 1)}, Nonce: common.Nonce{1}})
+						root, err := forest.SetAccountInfo(&rootRef, addr, AccountInfo{Balance: amount.New(uint64(i) + 1), Nonce: common.Nonce{1}})
 						if err != nil {
 							t.Fatalf("cannot create an account: %v", err)
 						}
@@ -2082,7 +2083,7 @@ func TestForest_VisitPathToAccount(t *testing.T) {
 						}
 						switch account := lastNode.(type) {
 						case *AccountNode:
-							want := common.Balance{byte(i + 1)}
+							want := amount.New(uint64(i) + 1)
 							if got, want := account.info.Balance, want; got != want {
 								t.Errorf("last iterated node is a wrong account node: got %v, want %v", got, want)
 							}
@@ -2117,7 +2118,7 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 					rootRef := NewNodeReference(EmptyId())
 
 					address := common.Address{0xA}
-					root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: common.Balance{byte(0xB)}, Nonce: common.Nonce{1}})
+					root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: amount.New(0xB), Nonce: common.Nonce{1}})
 					if err != nil {
 						t.Fatalf("cannot create an account: %v", err)
 					}

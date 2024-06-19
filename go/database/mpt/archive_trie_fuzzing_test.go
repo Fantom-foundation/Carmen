@@ -46,7 +46,7 @@ func FuzzArchiveTrie_RandomAccountStorageOps(f *testing.F) {
 // and also set and delete operations hit a modification of already existing account.
 func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 	nonceSerialiser := common.NonceSerializer{}
-	balanceSerialiser := common.BalanceSerializer{}
+	balanceSerialiser := common.AmountSerializer{}
 
 	var opSet = func(_ accountOpType, value archiveAccountPayload, t fuzzing.TestingT, c *archiveTrieAccountFuzzingContext) {
 		update := common.Update{}
@@ -60,7 +60,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 			}
 		case changeBalance:
 			balance := balanceSerialiser.FromBytes(value.changePayload)
-			update.AppendBalanceUpdate(value.address.GetAddress(), amount.NewFromBytes(balance[:]...))
+			update.AppendBalanceUpdate(value.address.GetAddress(), balance)
 			updateAccount = func(info *AccountInfo) {
 				info.Balance = balance
 			}
@@ -114,7 +114,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 		if err != nil {
 			t.Errorf("cannot get balance: %s", err)
 		}
-		if balance.Bytes32() != shadowAccount.Balance {
+		if balance != shadowAccount.Balance {
 			t.Errorf("balances do not match: got %v != want: %v", balance, shadowAccount.Balance)
 		}
 
@@ -166,7 +166,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 
 		switch changeType {
 		case changeBalance:
-			change = make([]byte, common.BalanceSize)
+			change = make([]byte, amount.BytesLength)
 		case changeNonce:
 			change = make([]byte, common.NonceSize)
 		case changeCodeHash:
@@ -222,11 +222,11 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 			nonce3[i] = byte(0xFF)
 		}
 
-		var balance1 common.Balance
-		var balance2 common.Balance
-		var balance3 common.Balance
+		var balance1 [amount.BytesLength]byte
+		var balance2 [amount.BytesLength]byte
+		var balance3 [amount.BytesLength]byte
 
-		for i := 0; i < common.BalanceSize; i++ {
+		for i := 0; i < amount.BytesLength; i++ {
 			balance2[i] = byte(i + 1)
 			balance3[i] = byte(0xFF)
 		}
@@ -264,7 +264,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 		{
 			var sequence fuzzing.OperationSequence[archiveTrieAccountFuzzingContext]
 			for _, addr := range []tinyAddress{0, 1, 2, 5, 10, 255} {
-				for _, balance := range []common.Balance{balance1, balance2, balance3} {
+				for _, balance := range [][amount.BytesLength]byte{balance1, balance2, balance3} {
 					sequence = append(sequence, registry.CreateDataOp(setAccount, archiveAccountPayload{0, addr, changeBalance, balance[:]}))
 				}
 			}
@@ -328,7 +328,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 				if err != nil {
 					t.Errorf("cannot get code: %s", err)
 				}
-				if balance.Bytes32() != account.Balance {
+				if balance != account.Balance {
 					t.Errorf("balances do not match: got %v != want: %v", balance, account.Balance)
 				}
 

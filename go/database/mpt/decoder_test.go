@@ -12,11 +12,13 @@ package mpt
 
 import (
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
-	"go.uber.org/mock/gomock"
 	"slices"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
+	"go.uber.org/mock/gomock"
 )
 
 func TestDecoder_CanDecodeNodes(t *testing.T) {
@@ -65,17 +67,17 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 	childrenRlp[16] = rlp.String{}
 
 	nonce := common.Nonce{0xAA}
-	balance := common.Balance{0xBB}
+	balance := amount.New(0xBB)
 	accountDetailEmptyStorage := rlp.List{Items: []rlp.Item{
 		rlp.Uint64{Value: nonce.ToUint64()},
-		rlp.BigInt{Value: balance.ToBigInt()},
+		rlp.BigInt{Value: balance.ToBig()},
 		rlp.String{Str: EmptyNodeEthereumHash[:]},
 		rlp.String{Str: hash[:]}},
 	}
 
 	accountDetailStorage := rlp.List{Items: []rlp.Item{
 		rlp.Uint64{Value: nonce.ToUint64()},
-		rlp.BigInt{Value: balance.ToBigInt()},
+		rlp.BigInt{Value: balance.ToBig()},
 		rlp.String{Str: hash[:]},
 		rlp.String{Str: hash[:]}},
 	}
@@ -335,13 +337,13 @@ func Test_Decoder_Decode_Node_Instances(t *testing.T) {
 	}{
 		"branchNode": {&Branch{
 			children: Children{
-				0xA: &Account{address: address, pathLength: 39, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+				0xA: &Account{address: address, pathLength: 39, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 			}}},
 		"extensionNode": {&Extension{
 			path: AddressToNibblePath(address, ctxt)[0:30],
-			next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+			next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 		}},
-		"accountNode": {&Account{address: address, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}}},
+		"accountNode": {&Account{address: address, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}}},
 		"valueNode":   {&Value{key: key, length: 64, value: common.Value{0x01, 0x02, 0x03, 0x04}}},
 		"emptyNode":   {&Empty{}},
 	}

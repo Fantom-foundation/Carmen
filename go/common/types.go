@@ -16,7 +16,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
-	"math/big"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -67,12 +66,6 @@ const HashSize = 32
 
 // Hash is an Ethereum-like hash of a state.
 type Hash [HashSize]byte
-
-// BalanceSize is the size of Ethereum-like balance.
-const BalanceSize = 32
-
-// Balance is an Ethereum-like account balance.
-type Balance [BalanceSize]byte
 
 // NonceSize is the size of Ethereum-like nonce.
 const NonceSize = 8
@@ -160,53 +153,6 @@ func (c Uint64Comparator) Compare(a, b *uint64) int {
 	}
 
 	return 0
-}
-
-var (
-	one        = big.NewInt(1)
-	maxBalance = getMaxBalance()
-)
-
-func getMaxBalance() *big.Int {
-	res := big.NewInt(1)
-	res = res.Lsh(one, uint(len(Balance{})*8))
-	res = res.Sub(res, one)
-	return res
-}
-
-// GetMaxBalance returns the maximum balance that can be stored in a Carmen database.
-func GetMaxBalance() Balance {
-	res := Balance{}
-	for i := range res {
-		res[i] = 0xFF
-	}
-	return res
-}
-
-// ToBalance converts the provided integer value into balance. The function fails with an error if
-//   - the provided integer value is nil
-//   - the provided integer value is negative
-//   - the provided integer value is > MAX_BALANCE = 2^128-1
-func ToBalance(value *big.Int) (res Balance, err error) {
-	if value == nil {
-		return res, fmt.Errorf("unable to convert nil to a balance")
-	}
-	if value.Sign() < 0 {
-		return res, fmt.Errorf("negative numbers can not be converted to balances, got %v", value)
-	}
-	if value.Cmp(maxBalance) > 0 {
-		return res, fmt.Errorf("value exceeds maximum value of balances: %v > %v", value, maxBalance)
-	}
-	// Encodes the numeric value into bytes using big-endian byte order.
-	value.FillBytes(res[:])
-	return
-}
-
-// ToBigInt interprets the provide balance as a numeric value and returns it.
-func (b *Balance) ToBigInt() *big.Int {
-	res := &big.Int{}
-	// Interprets bytes in b as a positive integer using big-endian byte order.
-	return res.SetBytes(b[:])
 }
 
 // ToNonce converts the provided integer into a Nonce. Nonces encode integers in BigEndian byte order.

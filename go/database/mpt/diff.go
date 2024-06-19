@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"golang.org/x/exp/maps"
 )
@@ -25,7 +26,7 @@ type Diff map[common.Address]*AccountDiff
 
 type AccountDiff struct {
 	Reset   bool
-	Balance *common.Balance
+	Balance *amount.Amount
 	Nonce   *common.Nonce
 	Code    *common.Hash
 	Storage map[common.Key]common.Value
@@ -293,7 +294,7 @@ func collectDiffFromLeafs(context *diffContext, before triePosition, after trieP
 
 		diff := &AccountDiff{}
 		if beforeNode.info.Balance != afterNode.info.Balance {
-			diff.Balance = new(common.Balance)
+			diff.Balance = new(amount.Amount)
 			*diff.Balance = afterNode.info.Balance
 		}
 		if beforeNode.info.Nonce != afterNode.info.Nonce {
@@ -353,8 +354,8 @@ func recordAddedAccount(
 ) error {
 	// And a new account was created.
 	diff := &AccountDiff{}
-	if (account.info.Balance != common.Balance{}) {
-		diff.Balance = new(common.Balance)
+	if !account.info.Balance.IsZero() {
+		diff.Balance = new(amount.Amount)
 		*diff.Balance = account.info.Balance
 	}
 	if (account.info.Nonce != common.Nonce{}) {

@@ -14,12 +14,13 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 func TestAccountInfo_EncodingAndDecoding(t *testing.T) {
 	infos := []AccountInfo{
 		{},
-		{common.Nonce{1, 2, 3}, common.Balance{4, 5, 6}, common.Hash{7, 8, 9}},
+		{common.Nonce{1, 2, 3}, amount.New(456), common.Hash{7, 8, 9}},
 	}
 
 	encoder := AccountInfoEncoder{}

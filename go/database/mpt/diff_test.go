@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 )
@@ -42,19 +43,20 @@ func getDiffScenarios() map[string]diffScenario {
 		diff:   Diff{},
 	}
 
+	evadb := amount.New(45)
 	res["empty_vs_account"] = diffScenario{
 		before: &Empty{},
 		after: &Account{
 			address: common.Address{1, 2, 3},
 			info: AccountInfo{
-				Balance:  common.Balance{4, 5},
+				Balance:  amount.New(45),
 				Nonce:    common.Nonce{6, 7},
 				CodeHash: common.Hash{8, 9},
 			},
 		},
 		diff: Diff{
 			common.Address{1, 2, 3}: &AccountDiff{
-				Balance: &common.Balance{4, 5},
+				Balance: &evadb,
 				Nonce:   &common.Nonce{6, 7},
 				Code:    &common.Hash{8, 9},
 			},
@@ -117,11 +119,12 @@ func getDiffScenarios() map[string]diffScenario {
 		},
 	}
 
+	avadb := amount.New(1121)
 	res["account_vs_account"] = diffScenario{
 		before: &Account{
 			address: common.Address{0x12},
 			info: AccountInfo{
-				Balance:  common.Balance{1, 2},
+				Balance:  amount.New(12),
 				Nonce:    common.Nonce{3, 4},
 				CodeHash: common.Hash{5, 6},
 			},
@@ -130,7 +133,7 @@ func getDiffScenarios() map[string]diffScenario {
 		after: &Account{
 			address: common.Address{0x12},
 			info: AccountInfo{
-				Balance:  common.Balance{11, 21},
+				Balance:  amount.New(1121),
 				Nonce:    common.Nonce{32, 42},
 				CodeHash: common.Hash{53, 63},
 			},
@@ -139,7 +142,7 @@ func getDiffScenarios() map[string]diffScenario {
 		diff: Diff{
 			common.Address{0x12}: &AccountDiff{
 				Reset:   false,
-				Balance: &common.Balance{11, 21},
+				Balance: &avadb,
 				Nonce:   &common.Nonce{32, 42},
 				Code:    &common.Hash{53, 63},
 				Storage: map[common.Key]common.Value{
@@ -150,11 +153,12 @@ func getDiffScenarios() map[string]diffScenario {
 		},
 	}
 
+	avdadb := amount.New(1121)
 	res["account_vs_different_account"] = diffScenario{
 		before: &Account{
 			address: common.Address{0x12},
 			info: AccountInfo{
-				Balance:  common.Balance{1, 2},
+				Balance:  amount.New(12),
 				Nonce:    common.Nonce{3, 4},
 				CodeHash: common.Hash{5, 6},
 			},
@@ -163,7 +167,7 @@ func getDiffScenarios() map[string]diffScenario {
 		after: &Account{
 			address: common.Address{0x14},
 			info: AccountInfo{
-				Balance:  common.Balance{11, 21},
+				Balance:  amount.New(1121),
 				Nonce:    common.Nonce{32, 42},
 				CodeHash: common.Hash{53, 63},
 			},
@@ -175,7 +179,7 @@ func getDiffScenarios() map[string]diffScenario {
 			},
 			common.Address{0x14}: &AccountDiff{
 				Reset:   false,
-				Balance: &common.Balance{11, 21},
+				Balance: &avdadb,
 				Nonce:   &common.Nonce{32, 42},
 				Code:    &common.Hash{53, 63},
 				Storage: map[common.Key]common.Value{

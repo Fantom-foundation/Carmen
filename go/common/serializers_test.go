@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"golang.org/x/exp/rand"
 )
 
@@ -43,9 +44,9 @@ func TestNonceSerializer(t *testing.T) {
 	var s common.NonceSerializer
 	var _ common.Serializer[common.Nonce] = s
 }
-func TestBalanceSerializer(t *testing.T) {
-	var s common.BalanceSerializer
-	var _ common.Serializer[common.Balance] = s
+func TestAmountSerializer(t *testing.T) {
+	var s common.AmountSerializer
+	var _ common.Serializer[amount.Amount] = s
 }
 
 func TestSlotIdxSerializer32(t *testing.T) {
@@ -161,13 +162,12 @@ func TestSerializers(t *testing.T) {
 		testSerializer[common.AccountState](t, a, 1, common.AccountStateSerializer{})
 	})
 
-	t.Run("TestSerializers_Balance", func(t *testing.T) {
-		var a common.Balance
-		const size = common.BalanceSize
+	t.Run("TestSerializers_Amount", func(t *testing.T) {
+		var a [amount.BytesLength]byte
 		for i := 1; i < loops; i++ {
-			a[i%size]++
+			a[i%amount.BytesLength]++
 		}
-		testSerializer[common.Balance](t, a, size, common.BalanceSerializer{})
+		testSerializer[amount.Amount](t, amount.NewFromBytes(a[:]...), amount.BytesLength, common.AmountSerializer{})
 	})
 
 	t.Run("TestSerializers_Nonce", func(t *testing.T) {

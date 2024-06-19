@@ -187,7 +187,7 @@ func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance 
 	if err != nil {
 		return amount.New(), a.addError(err)
 	}
-	return amount.NewFromBytes(info.Balance[:]...), nil
+	return info.Balance, nil
 }
 
 func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte, err error) {

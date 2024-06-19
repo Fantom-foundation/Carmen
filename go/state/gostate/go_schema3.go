@@ -43,7 +43,7 @@ type GoSchema3 struct {
 	slotIndex           index.Index[common.SlotIdxKey[uint32], uint32]
 	accountsStore       store.Store[uint32, common.AccountState]
 	noncesStore         store.Store[uint32, common.Nonce]
-	balancesStore       store.Store[uint32, common.Balance]
+	balancesStore       store.Store[uint32, amount.Amount]
 	reincarnationsStore store.Store[uint32, common.Reincarnation]
 	valuesStore         store.Store[uint32, common.SlotReincValue]
 	codesDepot          depot.Depot[uint32]
@@ -106,8 +106,7 @@ func (s *GoSchema3) GetBalance(address common.Address) (balance amount.Amount, e
 		}
 		return
 	}
-	res, err := s.balancesStore.Get(idx)
-	return amount.NewFromBytes(res[:]...), err
+	return s.balancesStore.Get(idx)
 }
 
 func (s *GoSchema3) SetBalance(address common.Address, balance amount.Amount) (err error) {
@@ -115,7 +114,7 @@ func (s *GoSchema3) SetBalance(address common.Address, balance amount.Amount) (e
 	if err != nil {
 		return
 	}
-	return s.balancesStore.Set(idx, balance.Bytes32())
+	return s.balancesStore.Set(idx, balance)
 }
 
 func (s *GoSchema3) GetNonce(address common.Address) (nonce common.Nonce, err error) {

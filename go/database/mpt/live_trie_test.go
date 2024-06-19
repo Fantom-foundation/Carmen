@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -271,7 +272,7 @@ func TestLiveTrie_SetAndGetSingleAccountInformationWorks(t *testing.T) {
 			addr := common.Address{1}
 			info := AccountInfo{
 				Nonce:    common.Nonce{1},
-				Balance:  common.Balance{2},
+				Balance:  amount.New(2),
 				CodeHash: common.Hash{3},
 			}
 

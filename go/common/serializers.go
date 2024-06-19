@@ -10,7 +10,11 @@
 
 package common
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+)
 
 // AddressSerializer is a Serializer of the Address type
 type AddressSerializer struct{}
@@ -93,20 +97,22 @@ func (a AccountStateSerializer) Size() int {
 	return 1
 }
 
-// BalanceSerializer is a Serializer of the Balance type
-type BalanceSerializer struct{}
+// AmountSerializer is a Serializer of the amount.Amount type
+type AmountSerializer struct{}
 
-func (a BalanceSerializer) ToBytes(value Balance) []byte {
-	return value[:]
+func (a AmountSerializer) ToBytes(value amount.Amount) []byte {
+	b := value.Bytes32()
+	return b[:]
 }
-func (a BalanceSerializer) CopyBytes(value Balance, out []byte) {
-	copy(out, value[:])
+func (a AmountSerializer) CopyBytes(value amount.Amount, out []byte) {
+	b := value.Bytes32()
+	copy(out, b[:])
 }
-func (a BalanceSerializer) FromBytes(bytes []byte) Balance {
-	return *(*Balance)(bytes)
+func (a AmountSerializer) FromBytes(bytes []byte) amount.Amount {
+	return amount.NewFromBytes(bytes...)
 }
-func (a BalanceSerializer) Size() int {
-	return BalanceSize
+func (a AmountSerializer) Size() int {
+	return amount.BytesLength
 }
 
 // NonceSerializer is a Serializer of the Nonce type

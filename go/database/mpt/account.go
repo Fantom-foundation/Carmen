@@ -12,13 +12,14 @@ package mpt
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 // AccountInfo is the per-account information stored for each account in the
 // State (excluding the storage root).
 type AccountInfo struct {
 	Nonce    common.Nonce
-	Balance  common.Balance
+	Balance  amount.Amount
 	CodeHash common.Hash
 }
 
@@ -36,17 +37,18 @@ func (a *AccountInfo) IsEmpty() bool {
 type AccountInfoEncoder struct{}
 
 func (AccountInfoEncoder) GetEncodedSize() int {
-	return common.AddressSize + common.BalanceSize + common.HashSize
+	return common.AddressSize + amount.BytesLength + common.HashSize
 }
 
 func (AccountInfoEncoder) Store(dst []byte, info *AccountInfo) {
 	copy(dst[0:], info.Nonce[:])
-	copy(dst[common.NonceSize:], info.Balance[:])
-	copy(dst[common.NonceSize+common.BalanceSize:], info.CodeHash[:])
+	b := info.Balance.Bytes32()
+	copy(dst[common.NonceSize:], b[:])
+	copy(dst[common.NonceSize+amount.BytesLength:], info.CodeHash[:])
 }
 
 func (AccountInfoEncoder) Load(src []byte, info *AccountInfo) {
 	copy(info.Nonce[:], src[0:])
-	copy(info.Balance[:], src[common.NonceSize:])
-	copy(info.CodeHash[:], src[common.NonceSize+common.BalanceSize:])
+	info.Balance = amount.NewFromBytes(src[common.NonceSize : common.NonceSize+amount.BytesLength]...)
+	copy(info.CodeHash[:], src[common.NonceSize+amount.BytesLength:])
 }

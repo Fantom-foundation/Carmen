@@ -106,7 +106,7 @@ func (cs *CppState) DeleteAccount(address common.Address) error {
 }
 
 func (cs *CppState) GetBalance(address common.Address) (amount.Amount, error) {
-	var balance common.Balance
+	var balance [amount.BytesLength]byte
 	C.Carmen_GetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))
 	return amount.NewFromBytes(balance[:]...), nil
 }
