@@ -99,10 +99,10 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 			nonce = common.Nonce((*b)[0:len(nonce)])
 			*b = (*b)[len(nonce):]
 		}
-		var balance [amount.BytesLength]byte
-		if len(*b) >= len(balance) {
-			balance = [amount.BytesLength]byte((*b)[0:len(balance)])
-			*b = (*b)[len(balance):]
+		var balance amount.Amount
+		if len(*b) >= amount.BytesLength {
+			balance = amount.NewFromBytes((*b)[0:amount.BytesLength]...)
+			*b = (*b)[amount.BytesLength:]
 		}
 		var codeHash common.Hash
 		if len(*b) >= len(codeHash) {
@@ -110,7 +110,7 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 			*b = (*b)[len(codeHash):]
 		}
 
-		return accountPayload{addr, AccountInfo{nonce, amount.NewFromBytes(balance[:]...), codeHash}}
+		return accountPayload{addr, AccountInfo{nonce, balance, codeHash}}
 	}
 
 	registry := fuzzing.NewRegistry[accountOpType, liveTrieAccountFuzzingContext]()
