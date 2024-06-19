@@ -17,6 +17,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// BytesLength is the length of the byte representation of an amount.
+const BytesLength = 32
+
 // Amount is a 256-bit unsigned integer used for token values like balances.
 type Amount struct {
 	internal uint256.Int

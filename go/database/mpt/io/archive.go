@@ -305,7 +305,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 			context.deleteAccount()
 
 		case 'B':
-			balance := amount.New().Bytes32()
+			var balance [amount.BytesLength]byte
 			if _, err := io.ReadFull(in, balance[:]); err != nil {
 				return err
 			}

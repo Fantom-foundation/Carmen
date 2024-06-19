@@ -285,16 +285,15 @@ func UpdateFromBytes(data []byte) (Update, error) {
 
 	// Read list of balance updates
 	if balancesSize > 0 {
-		balanceLength := len(amount.Amount{}.Bytes32())
-		if len(data) < int(balancesSize)*(len(Address{})+balanceLength) {
+		if len(data) < int(balancesSize)*(len(Address{})+amount.BytesLength) {
 			return res, fmt.Errorf("invalid encoding, balance list truncated")
 		}
 		res.Balances = make([]BalanceUpdate, balancesSize)
 		for i := 0; i < int(balancesSize); i++ {
 			copy(res.Balances[i].Account[:], data[:])
 			data = data[len(Address{}):]
-			res.Balances[i].Balance = amount.NewFromBytes(data[:balanceLength]...)
-			data = data[balanceLength:]
+			res.Balances[i].Balance = amount.NewFromBytes(data[:amount.BytesLength]...)
+			data = data[amount.BytesLength:]
 		}
 	}
 
@@ -356,7 +355,7 @@ func (u *Update) ToBytes() []byte {
 	size := 1 + 6*4 // version + sizes
 	size += len(u.DeletedAccounts) * addrLength
 	size += len(u.CreatedAccounts) * addrLength
-	size += len(u.Balances) * (addrLength + len(amount.Amount{}.Bytes32()))
+	size += len(u.Balances) * (addrLength + amount.BytesLength)
 	size += len(u.Nonces) * (addrLength + len(Nonce{}))
 	size += len(u.Slots) * (addrLength + len(Key{}) + len(Value{}))
 	for _, cur := range u.Codes {
