@@ -23,6 +23,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/backend/stock/file"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 )
 
@@ -175,7 +176,7 @@ func TestVerification_AccountBalanceModificationIsDetected(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.Balance[2]++
+			node.info.Balance = amount.Add(node.info.Balance, amount.New(1))
 		})
 
 		if err := verifyFileForest(dir, config, roots, NilVerificationObserver{}); err == nil {
@@ -641,7 +642,7 @@ func TestVerification_ForestVerificationObserverReportsError(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.Balance[2]++
+			node.info.Balance = amount.Add(node.info.Balance, amount.New(1))
 		})
 
 		if err := verifyFileForest(dir, config, roots, observer); err == nil {
@@ -664,7 +665,7 @@ func TestVerification_VerificationObserverReportsError(t *testing.T) {
 		encoder, _, _, _ := getEncoder(config)
 
 		modifyNode(t, dir+"/accounts", encoder, func(node *AccountNode) {
-			node.info.Balance[2]++
+			node.info.Balance = amount.Add(node.info.Balance, amount.New(1))
 		})
 
 		if err := VerifyMptState(dir, config, roots, observer); err == nil {

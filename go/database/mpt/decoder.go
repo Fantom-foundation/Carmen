@@ -13,7 +13,9 @@ package mpt
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 )
 
@@ -180,7 +182,7 @@ func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
 		return nil, fmt.Errorf("invalid balance type: got: %T, wanted: String", items.Items[1])
 	}
 	balance := balanceStr.BigInt()
-	balanceInt, err := common.ToBalance(balance)
+	balanceAmount, err := amount.NewFromBigInt(balance)
 	if err != nil {
 		return nil, fmt.Errorf("invalid balance: %v", err)
 	}
@@ -215,7 +217,7 @@ func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
 		pathLength:  byte(path.Length()),
 		info: AccountInfo{
 			Nonce:    common.ToNonce(nonce),
-			Balance:  balanceInt,
+			Balance:  balanceAmount,
 			CodeHash: codeHash,
 		}}, nil
 }

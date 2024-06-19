@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 )
 
@@ -68,7 +69,7 @@ func (p WitnessProof) GetAccountInfo(root common.Hash, address common.Address) (
 // If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.
 // If the proof does not cover the requested account, it returns false.
 // The method may return an error if the proof is invalid.
-func (p WitnessProof) GetBalance(root common.Hash, address common.Address) (common.Balance, bool, error) {
+func (p WitnessProof) GetBalance(root common.Hash, address common.Address) (amount.Amount, bool, error) {
 	panic("not implemented")
 }
 

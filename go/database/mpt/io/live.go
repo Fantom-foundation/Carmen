@@ -336,7 +336,8 @@ func (e *exportVisitor) Visit(node mpt.Node, _ mpt.NodeInfo) mpt.VisitResponse {
 			e.err = err
 			return mpt.VisitResponseAbort
 		}
-		if _, err := e.out.Write(info.Balance[:]); err != nil {
+		b := info.Balance.Bytes32()
+		if _, err := e.out.Write(b[:]); err != nil {
 			e.err = err
 			return mpt.VisitResponseAbort
 		}
