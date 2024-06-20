@@ -4403,10 +4403,17 @@ func TestStateDB_HasEmptyStorage_StateIsCheckedIfNotFoundInCache(t *testing.T) {
 	mock := NewMockState(ctrl)
 	db := CreateStateDBUsing(mock)
 
-	mock.EXPECT().Exists(address1).Return(true, nil)
-	mock.EXPECT().HasEmptyStorage(address1)
+	mock.EXPECT().HasEmptyStorage(address1).Return(true, nil)
 
-	db.HasEmptyState(address1)
+	isEmpty := db.HasEmptyState(address1)
+	if !isEmpty {
+		t.Errorf("unexpected value, got: %v, want: %v", isEmpty, true)
+	}
+
+	sdb := db.(*stateDB)
+	if len(sdb.errors) != 0 {
+		t.Errorf("unexpected error: %v", sdb.errors)
+	}
 }
 
 func TestNonCommittableStateDB_resetState_ClearsTransientStorage(t *testing.T) {

@@ -829,22 +829,16 @@ func (s *stateDB) SetState(addr common.Address, key common.Key, value common.Val
 }
 
 func (s *stateDB) HasEmptyState(address common.Address) bool {
-	var (
-		isEmpty, shouldReturn bool
-	)
-	if !s.Exist(address) {
-		return true
-	}
+	var hasNonZeroValue bool
 
 	s.data.ForEach(func(id slotId, val *slotValue) {
 		if id.addr == address && val.current != (common.Value{}) {
-			isEmpty = false
-			shouldReturn = true
+			hasNonZeroValue = true
 			return
 		}
 	})
-	if shouldReturn {
-		return isEmpty
+	if hasNonZeroValue {
+		return false
 	}
 
 	isEmpty, err := s.state.HasEmptyStorage(address)
