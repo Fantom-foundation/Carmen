@@ -708,6 +708,20 @@ func (mr *MockTransactionContextMockRecorder) GetTransientState(arg0, arg1 any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransientState", reflect.TypeOf((*MockTransactionContext)(nil).GetTransientState), arg0, arg1)
 }
 
+// HasEmptyState mocks base method.
+func (m *MockTransactionContext) HasEmptyState(address Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyState", address)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasEmptyState indicates an expected call of HasEmptyState.
+func (mr *MockTransactionContextMockRecorder) HasEmptyState(address any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyState", reflect.TypeOf((*MockTransactionContext)(nil).HasEmptyState), address)
+}
+
 // HasSelfDestructed mocks base method.
 func (m *MockTransactionContext) HasSelfDestructed(arg0 Address) bool {
 	m.ctrl.T.Helper()
@@ -982,6 +996,20 @@ func (m *MockQueryContext) GetStateHash() Hash {
 func (mr *MockQueryContextMockRecorder) GetStateHash() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateHash", reflect.TypeOf((*MockQueryContext)(nil).GetStateHash))
+}
+
+// HasEmptyState mocks base method.
+func (m *MockQueryContext) HasEmptyState(arg0 Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEmptyState", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasEmptyState indicates an expected call of HasEmptyState.
+func (mr *MockQueryContextMockRecorder) HasEmptyState(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEmptyState", reflect.TypeOf((*MockQueryContext)(nil).HasEmptyState), arg0)
 }
 
 // MockBulkLoad is a mock of BulkLoad interface.
