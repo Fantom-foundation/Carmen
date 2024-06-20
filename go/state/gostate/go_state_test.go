@@ -839,6 +839,23 @@ func TestGoState_HasEmptyStorage(t *testing.T) {
 	}
 }
 
+func TestGoState_HasEmptyStorage_ErrEmptyStateNotImplementedIsCaught(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	liveDB := state.NewMockLiveDB(ctrl)
+	db := newGoState(liveDB, nil, []func(){})
+
+	liveDB.EXPECT().HasEmptyStorage(address1).Return(false, ErrEmptyStateNotImplemented)
+
+	isEmpty, err := db.HasEmptyStorage(address1)
+	if err != nil {
+		t.Fatalf("failed to ask whether account has empty storage: %v", err)
+	}
+
+	if isEmpty {
+		t.Errorf("unexpected value, got: %v, want: %v", isEmpty, false)
+	}
+}
+
 func runAddBlock(block uint64, stateDB state.StateDB) {
 	addr := common.Address{byte(block)}
 	key := common.Key{0xA}

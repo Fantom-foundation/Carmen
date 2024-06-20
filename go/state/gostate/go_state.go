@@ -151,7 +151,18 @@ func (s *GoState) HasEmptyStorage(address common.Address) (bool, error) {
 		return false, err
 	}
 
-	return s.live.HasEmptyStorage(address)
+	isEmpty, err := s.live.HasEmptyStorage(address)
+	if err != nil {
+		// As this error is returned by older state implementation, it is not fatal
+		// False is the default value and nothing else should not occur, though
+		// This method should be implemented for all State implementations
+		if errors.Is(err, ErrEmptyStateNotImplemented) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return isEmpty, nil
 }
 
 func (s *GoState) GetCode(address common.Address) ([]byte, error) {
