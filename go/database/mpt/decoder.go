@@ -141,9 +141,6 @@ func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
 		return nil, fmt.Errorf("invalid balance: %v", err)
 	}
 
-	var address common.Address
-	copy(address[:], path.GetPackedNibbles()) // it does not cover full key as it is not available in RLP.
-
 	storageHashStr, ok := items.Items[2].(rlp.String)
 	if !ok {
 		return nil, fmt.Errorf("invalid storage hash type: got: %T, wanted: String", items.Items[2])
@@ -165,15 +162,14 @@ func decodeAccountFromRlp(path Path, items rlp.List) (Node, error) {
 	var codeHash common.Hash
 	copy(codeHash[:], codeHashStr.Str)
 
-	return &AccountNode{
-		address:     address,
+	return &decodedAccountNode{AccountNode{
 		storageHash: storageHash,
 		pathLength:  byte(path.Length()),
 		info: AccountInfo{
 			Nonce:    common.ToNonce(nonce),
 			Balance:  balanceInt,
 			CodeHash: codeHash,
-		}}, nil
+		}}, path}, nil
 }
 
 // decodeBranchNodeFromRlp decodes a branch node from RLP-encoded data.
@@ -260,4 +256,12 @@ func compactPathToNibbles(path []byte) []Nibble {
 	}
 
 	return res[2-odd:]
+}
+
+// decodedAccountNode is an extension of the  account node with the path.
+// It is used for storing hashed path. which is part of the address
+// potentially up to 32bytes long, i.e. exceeding plain 20bytes long address.
+type decodedAccountNode struct {
+	AccountNode
+	suffix Path
 }

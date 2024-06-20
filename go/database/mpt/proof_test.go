@@ -72,12 +72,7 @@ func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 		}},
 	})
 
-	rootHandle := node.GetViewHandle()
-	rootHash, dirty := rootHandle.Get().GetHash()
-	if dirty {
-		t.Fatalf("expected node to be clean")
-	}
-	rootHandle.Release()
+	rootHash, _ := ctxt.getHashFor(&root)
 
 	// create following reference proofs
 	// 1. proof that contains only nodes for address1 and key1
@@ -180,10 +175,7 @@ func TestWitnessProof_Extract_Various_NodeTypes_NotFoundProofs(t *testing.T) {
 			handle := node.GetViewHandle()
 			defer handle.Release()
 
-			rootHash, dirty := handle.Get().GetHash()
-			if dirty {
-				t.Fatalf("expected node to be clean")
-			}
+			rootHash, _ := ctxt.getHashFor(&root)
 
 			extractedProof, exists := proofWithEmpty.Extract(rootHash, address, key)
 			if exists {
@@ -278,10 +270,8 @@ func TestWitnessProof_Extract_Can_Extract_Terminal_Nodes_In_Proof(t *testing.T) 
 
 			expectedProof := createReferenceProofForLabels(t, ctxt, test.path...)
 
-			handle := node.GetViewHandle()
-			defer handle.Release()
+			rootHash, _ := ctxt.getHashFor(&root)
 
-			rootHash, _ := handle.Get().GetHash()
 			extractedProof, exists := totalProof.Extract(rootHash, address)
 			if exists {
 				t.Fatalf("proof should not exist")
@@ -309,12 +299,9 @@ func TestWitnessProof_Extract_MissingNode_In_Proof(t *testing.T) {
 
 	root, node := ctxt.Build(desc)
 	totalProof := createReferenceProof(t, ctxt, &root, node)
-	handle := node.GetViewHandle()
-	defer handle.Release()
-	rootHash, dirty := handle.Get().GetHash()
-	if dirty {
-		t.Fatalf("expected node to be clean")
-	}
+
+	rootHash, _ := ctxt.getHashFor(&root)
+
 	// remove a non-root node from the proof
 	for k := range totalProof.proofDb {
 		if k != rootHash {
@@ -342,12 +329,9 @@ func TestWitnessProof_Extract_CorruptedRlp_In_Proof(t *testing.T) {
 
 	root, node := ctxt.Build(desc)
 	totalProof := createReferenceProof(t, ctxt, &root, node)
-	handle := node.GetViewHandle()
-	defer handle.Release()
-	rootHash, dirty := handle.Get().GetHash()
-	if dirty {
-		t.Fatalf("expected node to be clean")
-	}
+
+	rootHash, _ := ctxt.getHashFor(&root)
+
 	// corrupt non-root node in the proof
 	for k := range totalProof.proofDb {
 		if k != rootHash {
