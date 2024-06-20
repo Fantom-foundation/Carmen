@@ -180,7 +180,8 @@ func (s *GoSchema3) SetStorage(address common.Address, key common.Key, value com
 	})
 }
 func (s *GoSchema3) HasEmptyStorage(common.Address) (bool, error) {
-	panic("HasEmptyStorage: not implemented for GoSchema3")
+	// TODO implement
+	return true, ErrEmptyStateNotImplemented
 }
 
 func (s *GoSchema3) GetCode(address common.Address) (value []byte, err error) {

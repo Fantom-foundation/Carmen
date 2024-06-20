@@ -22,6 +22,7 @@ package cppstate
 import "C"
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,6 +36,8 @@ import (
 
 const CodeCacheSize = 8_000 // ~ 200 MiB of memory for go-side code cache
 const CodeMaxSize = 25000   // Contract limit is 24577
+
+var ErrEmptyStateNotImplemented = errors.New("has-empty-storage: not yet implemented")
 
 // CppState implements the state interface by forwarding all calls to a C++ based implementation.
 type CppState struct {
@@ -140,7 +143,8 @@ func (cs *CppState) SetStorage(address common.Address, key common.Key, value com
 	return cs.Apply(0, update)
 }
 func (cs *CppState) HasEmptyStorage(common.Address) (bool, error) {
-	panic("HasEmptyStorage: not implemented for CppState")
+	// TODO implement
+	return true, ErrEmptyStateNotImplemented
 }
 func (cs *CppState) GetCode(address common.Address) ([]byte, error) {
 	// Try to obtain the code from the cache

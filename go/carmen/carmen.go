@@ -265,6 +265,10 @@ type TransactionContext interface {
 	// stored in the account with the given address.
 	SetState(Address, Key, Value)
 
+	// HasEmptyState returns true if account has empty storage.
+	// Empty state is a state where all values are zero.
+	HasEmptyState(address Address) bool
+
 	// GetTransientState retrieves the value associated with a specific
 	// key within the transient state storage at a given address.
 	// Transient State is an in-memory storage
@@ -276,9 +280,6 @@ type TransactionContext interface {
 	// Transient State is an in-memory storage
 	// that gets reset after each transaction.
 	SetTransientState(Address, Key, Value)
-
-	// HasEmptyStorage returns true if account has empty storage.
-	HasEmptyStorage(address Address) bool
 
 	// GetCode returns smart contract byte-code
 	// of an account with the given address.
@@ -381,8 +382,9 @@ type QueryContext interface {
 	// updated in the current transaction.
 	GetState(Address, Key) Value
 
-	// HasEmptyStorage returns true if account has empty storage.
-	HasEmptyStorage(Address) bool
+	// HasEmptyState returns true if account has empty storage.
+	// Empty state is a state where all values are zero.
+	HasEmptyState(Address) bool
 
 	// GetCode returns smart contract byte-code
 	// of an account with the given address.

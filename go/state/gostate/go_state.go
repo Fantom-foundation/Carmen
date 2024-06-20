@@ -22,6 +22,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var ErrEmptyStateNotImplemented = errors.New("has-empty-storage: not yet implemented")
+
 // GoState combines a LiveDB and optional Archive implementation into a common
 // Carmen State implementation.
 type GoState struct {

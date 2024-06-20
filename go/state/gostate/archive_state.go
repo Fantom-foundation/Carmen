@@ -77,7 +77,8 @@ func (s *ArchiveState) GetStorage(address common.Address, key common.Key) (commo
 	return storage, s.archiveError
 }
 func (s *ArchiveState) HasEmptyStorage(common.Address) (bool, error) {
-	panic("HasEmptyStorage: not implemented for ArchiveState")
+	// TODO implement
+	return true, ErrEmptyStateNotImplemented
 }
 func (s *ArchiveState) GetCode(address common.Address) ([]byte, error) {
 	if err := s.archiveError; err != nil {

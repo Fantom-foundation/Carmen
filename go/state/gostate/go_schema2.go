@@ -174,7 +174,8 @@ func (s *GoSchema2) SetStorage(address common.Address, key common.Key, value com
 	return err
 }
 func (s *GoSchema2) HasEmptyStorage(common.Address) (bool, error) {
-	panic("HasEmptyStorage: not implemented for GoSchema2")
+	// TODO implement
+	return true, ErrEmptyStateNotImplemented
 }
 
 func (s *GoSchema2) GetCode(address common.Address) (value []byte, err error) {
