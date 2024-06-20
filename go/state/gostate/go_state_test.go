@@ -827,9 +827,16 @@ func TestGoState_HasEmptyStorage(t *testing.T) {
 	liveDB := state.NewMockLiveDB(ctrl)
 	db := newGoState(liveDB, nil, []func(){})
 
-	liveDB.EXPECT().HasEmptyStorage(address1)
+	liveDB.EXPECT().HasEmptyStorage(address1).Return(true, nil)
 
-	db.HasEmptyStorage(address1)
+	isEmpty, err := db.HasEmptyStorage(address1)
+	if err != nil {
+		t.Fatalf("failed to ask whether account has empty storage: %v", err)
+	}
+
+	if !isEmpty {
+		t.Errorf("unexpected value, got: %v, want: %v", isEmpty, true)
+	}
 }
 
 func runAddBlock(block uint64, stateDB state.StateDB) {

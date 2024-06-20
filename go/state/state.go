@@ -88,7 +88,6 @@ type LiveDB interface {
 	GetBalance(address common.Address) (balance common.Balance, err error)
 	GetNonce(address common.Address) (nonce common.Nonce, err error)
 	GetStorage(address common.Address, key common.Key) (value common.Value, err error)
-	// HasEmptyStorage returns true if account has empty storage.
 	HasEmptyStorage(address common.Address) (bool, error)
 	GetCode(address common.Address) (value []byte, err error)
 	GetCodeSize(address common.Address) (size int, err error)
