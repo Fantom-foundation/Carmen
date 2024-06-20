@@ -128,7 +128,7 @@ func (t *transactionContext) SetTransientState(address Address, key Key, value V
 
 func (t *transactionContext) HasEmptyState(address Address) bool {
 	if t.state != nil {
-		return t.state.HasEmptyStorage(common.Address(address))
+		return t.state.HasEmptyState(common.Address(address))
 	}
 
 	return false
