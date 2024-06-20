@@ -58,7 +58,7 @@ func (c *queryContext) GetState(address Address, key Key) Value {
 	return Value(res)
 }
 
-func (c *queryContext) HasEmptyStorage(address Address) bool {
+func (c *queryContext) HasEmptyState(address Address) bool {
 	if c.err != nil {
 		return false
 	}
