@@ -706,7 +706,7 @@ func TestVerification_CanInterrupt(t *testing.T) {
 			}
 
 			// Make sure data is not corrupted
-			ns, err := openVerificationNodeSource(dir, config)
+			ns, err := openVerificationNodeSource(nil, dir, config)
 			if err != nil {
 				t.Fatalf("%v: failed open node source: %v", name, err)
 			}

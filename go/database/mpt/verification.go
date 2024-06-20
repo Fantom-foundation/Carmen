@@ -69,7 +69,7 @@ func VerifyMptState(ctx context.Context, directory string, config MptConfig, roo
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
+	source, err := openVerificationNodeSource(ctx, directory, config)
 	if err != nil {
 		return err
 	}
@@ -81,9 +81,9 @@ func VerifyMptState(ctx context.Context, directory string, config MptConfig, roo
 	}
 
 	// Check for interrupt after codes verification
-	if interrupt.IsCancelled(ctx) {
-		return interrupt.ErrCanceled
-	}
+	//if interrupt.IsCancelled(ctx) {
+	//	return interrupt.ErrCanceled
+	//}
 
 	err = verifyForest(ctx, directory, config, roots, source, observer)
 	if err != nil {
@@ -110,7 +110,7 @@ func verifyFileForest(ctx context.Context, directory string, config MptConfig, r
 
 	// Open stock data structures for content verification.
 	observer.Progress("Obtaining read access to files ...")
-	source, err := openVerificationNodeSource(directory, config)
+	source, err := openVerificationNodeSource(nil, directory, config)
 	if err != nil {
 		return err
 	}
@@ -140,9 +140,9 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	}
 
 	// Check for interrupt after each pass
-	if interrupt.IsCancelled(ctx) {
-		return interrupt.ErrCanceled
-	}
+	//if interrupt.IsCancelled(ctx) {
+	//	return interrupt.ErrCanceled
+	//}
 
 	// ----------------- First Pass: check Node References --------------------
 
@@ -188,9 +188,9 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	}
 
 	// Check for interrupt after each pass
-	if interrupt.IsCancelled(ctx) {
-		return interrupt.ErrCanceled
-	}
+	//if interrupt.IsCancelled(ctx) {
+	//	return interrupt.ErrCanceled
+	//}
 
 	// -------------------- Further Passes: node hashes -----------------------
 
@@ -251,9 +251,9 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	}
 
 	// Check for interrupt after each pass
-	if interrupt.IsCancelled(ctx) {
-		return interrupt.ErrCanceled
-	}
+	//if interrupt.IsCancelled(ctx) {
+	//	return interrupt.ErrCanceled
+	//}
 
 	err = verifyHashes(
 		"branch", source, source.branches, source.branchIds, emptyNodeHash, roots, observer,
@@ -289,9 +289,9 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	}
 
 	// Check for interrupt after each pass
-	if interrupt.IsCancelled(ctx) {
-		return interrupt.ErrCanceled
-	}
+	//if interrupt.IsCancelled(ctx) {
+	//	return interrupt.ErrCanceled
+	//}
 
 	err = verifyHashes(
 		"extension", source, source.extensions, source.extensionIds, emptyNodeHash, roots, observer,
@@ -313,9 +313,9 @@ func verifyForest(ctx context.Context, directory string, config MptConfig, roots
 	}
 
 	// Check for interrupt after each pass
-	if interrupt.IsCancelled(ctx) {
-		return interrupt.ErrCanceled
-	}
+	//if interrupt.IsCancelled(ctx) {
+	//	return interrupt.ErrCanceled
+	//}
 
 	err = verifyHashes(
 		"value", source, source.values, source.valueIds, emptyNodeHash, roots, observer,
@@ -691,30 +691,31 @@ func verifyContractCodes(directory string, source *verificationNodeSource, obser
 }
 
 type verificationNodeSource struct {
+	ctx context.Context
+
 	config MptConfig
-
 	// The lock guaranteeing exclusive access to the data directory.
-	lock      common.LockFile
-	directory string
+	lock common.LockFile
 
+	directory string
 	// The stock containers managing individual node types.
 	branches   stock.Stock[uint64, BranchNode]
 	extensions stock.Stock[uint64, ExtensionNode]
 	accounts   stock.Stock[uint64, AccountNode]
-	values     stock.Stock[uint64, ValueNode]
 
+	values stock.Stock[uint64, ValueNode]
 	// The sets of valid IDs of each type.
 	accountIds   stock.IndexSet[uint64]
 	branchIds    stock.IndexSet[uint64]
 	extensionIds stock.IndexSet[uint64]
-	valueIds     stock.IndexSet[uint64]
 
+	valueIds stock.IndexSet[uint64]
 	// A custom pair of node ID and Node to be overwritten for node resolution.
 	overwriteId   NodeId
 	overwriteNode Node
 }
 
-func openVerificationNodeSource(directory string, config MptConfig) (*verificationNodeSource, error) {
+func openVerificationNodeSource(ctx context.Context, directory string, config MptConfig) (*verificationNodeSource, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
@@ -776,6 +777,7 @@ func openVerificationNodeSource(directory string, config MptConfig) (*verificati
 	}
 	success = true
 	return &verificationNodeSource{
+		ctx:          ctx,
 		config:       config,
 		lock:         lock,
 		directory:    directory,
@@ -893,6 +895,9 @@ func (s *verificationNodeSource) clearOverride() {
 }
 
 func (s *verificationNodeSource) forAllInnerNodes(check func(Node) error) error {
+	if interrupt.IsCancelled(s.ctx) {
+		return interrupt.ErrCanceled
+	}
 	return s.forNodes(func(_ NodeId, node Node) error { return check(node) }, true, true, true, false)
 }
 
