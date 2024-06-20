@@ -364,42 +364,55 @@ func TestWitnessProof_Extract_CorruptedRlp_In_Proof(t *testing.T) {
 func TestWitnessProof_Extract_EmbeddedNode_In_Proof(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	address := common.Address{0xAB, 0xCD, 0xEF}
-	key := common.Key{0x12, 0x34, 0x56, 0x78}
+	address := common.Address{1}
+	key := common.Key{2}
+	key2 := common.Key{3}
 	var value common.Value
 	value[20] = 0x02
 	value[21] = 0x04
 
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
 
-	desc := &Tag{label: "A", nested: &Extension{
-		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Tag{label: "B", nested: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
-			storage: &Tag{label: "C", nested: &Extension{
-				path:         KeyToNibblePath(key, ctxt)[0:40],
-				nextEmbedded: true,
-				next:         &Value{key: key, length: 24, value: value},
-			}}},
-		}}}
-
-	_, node := ctxt.Build(desc)
-	// proof excludes the embedded node
-	totalProof := createReferenceProofForLabels(t, ctxt, "A", "B", "C")
-	handle := node.GetViewHandle()
-	defer handle.Release()
-
-	rootHash, dirty := handle.Get().GetHash()
-	if dirty {
-		t.Fatalf("expected node to be clean")
+	tests := map[string]struct {
+		key      common.Key
+		keyFound bool
+	}{
+		"matching embedded": {
+			key:      key,
+			keyFound: true,
+		},
+		"mismatch embedded": {
+			key:      key2,
+			keyFound: false,
+		},
 	}
 
-	proof, exists := totalProof.Extract(rootHash, address, key)
-	if !exists {
-		t.Errorf("proof should exist")
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			desc := &Tag{label: "A", nested: &Extension{
+				path: AddressToNibblePath(address, ctxt)[0:30],
+				next: &Tag{label: "B", nested: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+					storage: &Tag{label: "C", nested: &Extension{
+						path:         KeyToNibblePath(key, ctxt)[0:40],
+						nextEmbedded: true,
+						next:         &Value{key: test.key, length: 24, value: value},
+					}}},
+				}}}
+
+			ref, _ := ctxt.Build(desc)
+			// proof excludes the embedded node
+			totalProof := createReferenceProofForLabels(t, ctxt, "A", "B", "C")
+			rootHash, _ := ctxt.getHashFor(&ref)
+			proof, exists := totalProof.Extract(rootHash, address, key)
+			if got, want := exists, test.keyFound; got != want {
+				t.Errorf("unexpected proof existence: got %v, want %v", got, want)
+			}
+			if got, want := proof, totalProof; !got.Equals(want) {
+				t.Errorf("unexpected proof: got %v, want %v", got, want)
+			}
+		})
 	}
-	if got, want := proof, totalProof; !got.Equals(want) {
-		t.Errorf("unexpected proof: got %v, want %v", got, want)
-	}
+
 }
 
 func TestWitnessProof_String(t *testing.T) {

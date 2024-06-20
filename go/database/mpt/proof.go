@@ -198,7 +198,7 @@ func MergeProofs(others ...WitnessProof) WitnessProof {
 func visitWitnessPathTo(source proofDb, root common.Hash, path []Nibble, visitor witnessProofVisitor) (bool, error) {
 	nodeHash := root
 
-	var nextEmbedded bool
+	var nextEmbedded, currentEmbedded bool
 	var found, done bool
 	for !done {
 		var rlpNode rlpEncodedNode
@@ -251,8 +251,9 @@ func visitWitnessPathTo(source proofDb, root common.Hash, path []Nibble, visitor
 			return false, nil // EmptyNode -> do not visit, and terminate
 		}
 
-		visitor.Visit(nodeHash, rlpNode, node, found && nextEmbedded)
+		visitor.Visit(nodeHash, rlpNode, node, currentEmbedded)
 		nodeHash = nextHash
+		currentEmbedded = nextEmbedded
 	}
 
 	return found, nil
