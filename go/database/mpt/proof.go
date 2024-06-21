@@ -235,9 +235,8 @@ func visitWitnessPathTo(source proofDb, root common.Hash, path []Nibble, visitor
 				nextEmbedded = n.isEmbedded(byte(path[0]))
 				path = path[1:]
 			}
-		case *AccountNode:
-			addressPath := createPathFromAddressPrefix(n.address, n.pathLength)
-			if addressPath.IsEqualTo(path) {
+		case *decodedAccountNode:
+			if n.suffix.IsEqualTo(path) {
 				found = true
 			}
 			done = true
@@ -270,25 +269,17 @@ type witnessProofVisitor interface {
 }
 
 type proofCollectingVisitor struct {
-	visited        proofDb     // all visited nodes
-	visitedAccount AccountNode // the last visited account node
+	visited        proofDb            // all visited nodes
+	visitedAccount decodedAccountNode // the last visited account node
 }
 
 func (v *proofCollectingVisitor) Visit(hash common.Hash, rlpNode rlpEncodedNode, node Node, isEmbedded bool) {
 	if !isEmbedded {
 		v.visited[hash] = rlpNode
 	}
-	if account, ok := node.(*AccountNode); ok {
+	if account, ok := node.(*decodedAccountNode); ok {
 		v.visitedAccount = *account
 	}
-}
-
-// createPathFromAddressPrefix creates a path from an address with the given number
-// of nibbles to use from the beginning of the address.
-func createPathFromAddressPrefix(address common.Address, nibbles uint8) Path {
-	res := Path{length: nibbles}
-	copy(res.path[:], address[:])
-	return res
 }
 
 // createPathFromKeyPrefix creates a path from a key with the given number of nibbles
