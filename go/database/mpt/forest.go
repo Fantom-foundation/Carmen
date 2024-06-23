@@ -92,6 +92,9 @@ type Forest struct {
 	// A unified cache for all node types.
 	nodeCache NodeCache
 
+	// A background worker flushing nodes to disk.
+	flusher *nodeFlusher
+
 	// The hasher managing node hashes for this forest.
 	hasher hasher
 
@@ -280,6 +283,11 @@ func makeForest(
 		releaseDone:   releaseDone,
 	}
 
+	sink := writeBufferSink{res}
+
+	// Start a background worker flushing dirty nodes to disk.
+	res.flusher = startNodeFlusher(res.nodeCache, sink)
+
 	// Run a background worker releasing entire tries of nodes on demand.
 	go func() {
 		defer close(releaseDone)
@@ -310,7 +318,7 @@ func makeForest(
 		channelSize = 1024 // the default value
 	}
 
-	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, channelSize)
+	res.writeBuffer = makeWriteBuffer(sink, channelSize)
 	return res, nil
 }
 
@@ -562,8 +570,7 @@ func (s *Forest) Close() error {
 		return forestClosedErr
 	}
 
-	var errs []error
-	errs = append(errs, s.Flush())
+	errs := []error{s.flusher.Stop(), s.Flush()}
 
 	// shut down release worker
 	close(s.releaseQueue)
