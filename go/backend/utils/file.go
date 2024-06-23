@@ -11,10 +11,11 @@
 package utils
 
 import (
-	"github.com/Fantom-foundation/Carmen/go/common"
 	"io"
 	"io/fs"
 	"os"
+
+	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 //go:generate mockgen -source file.go -destination file_mocks.go -package utils
@@ -25,8 +26,9 @@ import (
 // This interface comprehends selected methods of build-in os.File struct
 // to provide interoperability between clients and this struct while enabling mocking.
 type OsFile interface {
-	io.ReadWriteCloser
-	io.Seeker
+	io.ReaderAt
+	io.WriterAt
+	io.Closer
 
 	Stat() (os.FileInfo, error)
 	Truncate(size int64) error

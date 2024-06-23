@@ -13,10 +13,11 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"go.uber.org/mock/gomock"
-	"golang.org/x/exp/slices"
 	"os"
 	"testing"
+
+	"go.uber.org/mock/gomock"
+	"golang.org/x/exp/slices"
 )
 
 func TestBufferedFile_Open_NonExisting(t *testing.T) {
@@ -58,7 +59,7 @@ func TestBufferedFile_FileStatsFailing(t *testing.T) {
 	f.EXPECT().Close()
 
 	if _, err := openBufferedFile(f); err == nil {
-		t.Errorf("openning file should produce error")
+		t.Errorf("opening file should produce error")
 	}
 }
 
@@ -71,11 +72,11 @@ func TestBufferedFile_Open_ReadFailing(t *testing.T) {
 	f := NewMockOsFile(ctrl)
 	err := fmt.Errorf("cannot read file")
 	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).Return(0, err)
+	f.EXPECT().ReadAt(gomock.Any(), gomock.Any()).Return(0, err)
 	f.EXPECT().Close()
 
 	if _, err := openBufferedFile(f); err == nil {
-		t.Errorf("openning file should produce error")
+		t.Errorf("opening file should produce error")
 	}
 }
 
@@ -87,11 +88,11 @@ func TestBufferedFile_ReadBeyondSize(t *testing.T) {
 
 	f := NewMockOsFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
+	f.EXPECT().ReadAt(gomock.Any(), gomock.Any()).AnyTimes().Return(bufferSize, nil)
 
 	bf, err := openBufferedFile(f)
 	if err != nil {
-		t.Fatalf("openning file should not produce error, %s", err)
+		t.Fatalf("opening file should not produce error, %s", err)
 	}
 
 	dst := make([]byte, 1)
@@ -112,11 +113,11 @@ func TestBufferedFile_ReadPartlyBeyondSize(t *testing.T) {
 
 	f := NewMockOsFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).Times(2).Return(bufferSize, nil)
+	f.EXPECT().ReadAt(gomock.Any(), gomock.Any()).Times(2).Return(bufferSize, nil)
 
 	bf, err := openBufferedFile(f)
 	if err != nil {
-		t.Fatalf("openning file should not produce error, %s", err)
+		t.Fatalf("opening file should not produce error, %s", err)
 	}
 
 	for i := 0; i < bufferSize; i++ {
@@ -145,7 +146,7 @@ func TestBufferedFile_ReadPartlyBeyondSizeFails(t *testing.T) {
 	f := NewMockOsFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
 	var count int
-	f.EXPECT().Read(gomock.Any()).Times(2).DoAndReturn(func([]byte) (int, error) {
+	f.EXPECT().ReadAt(gomock.Any(), gomock.Any()).Times(2).DoAndReturn(func([]byte, int64) (int, error) {
 		if count == 0 {
 			count++
 			return bufferSize, nil
@@ -158,7 +159,7 @@ func TestBufferedFile_ReadPartlyBeyondSizeFails(t *testing.T) {
 
 	bf, err := openBufferedFile(f)
 	if err != nil {
-		t.Fatalf("openning file should not produce error, %s", err)
+		t.Fatalf("opening file should not produce error, %s", err)
 	}
 
 	got := make([]byte, 3*bufferSize)
@@ -176,11 +177,11 @@ func TestBufferedFile_ReadSplit(t *testing.T) {
 
 	f := NewMockOsFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).Times(2).Return(bufferSize, nil)
+	f.EXPECT().ReadAt(gomock.Any(), gomock.Any()).Times(2).Return(bufferSize, nil)
 
 	bf, err := openBufferedFile(f)
 	if err != nil {
-		t.Fatalf("openning file should not produce error, %s", err)
+		t.Fatalf("opening file should not produce error, %s", err)
 	}
 
 	for i := 0; i < bufferSize; i++ {
@@ -200,49 +201,6 @@ func TestBufferedFile_ReadSplit(t *testing.T) {
 	}
 }
 
-func TestBufferedFile_Write_SeekFailing(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	info := NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(bufferSize))
-
-	f := NewMockOsFile(ctrl)
-	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
-	err := fmt.Errorf("cannot seek file")
-	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), err)
-
-	bf, err := openBufferedFile(f)
-	if err != nil {
-		t.Fatalf("cannot open file: %s", err)
-	}
-
-	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
-		t.Errorf("writing should file")
-	}
-}
-
-func TestBufferedFile_Write_SeekWrongPosition(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	info := NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(bufferSize))
-
-	f := NewMockOsFile(ctrl)
-	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
-	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(999), nil) // wrong position
-
-	bf, err := openBufferedFile(f)
-	if err != nil {
-		t.Fatalf("cannot open file: %s", err)
-	}
-
-	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
-		t.Errorf("writing should file")
-	}
-}
-
 func TestBufferedFile_Write_Failing(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -251,10 +209,9 @@ func TestBufferedFile_Write_Failing(t *testing.T) {
 
 	f := NewMockOsFile(ctrl)
 	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
-	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), nil)
+	f.EXPECT().ReadAt(gomock.Any(), gomock.Any()).AnyTimes().Return(bufferSize, nil)
 	err := fmt.Errorf("cannot write")
-	f.EXPECT().Write(gomock.Any()).Return(0, err)
+	f.EXPECT().WriteAt(gomock.Any(), gomock.Any()).Return(0, err)
 
 	bf, err := openBufferedFile(f)
 	if err != nil {
@@ -262,52 +219,7 @@ func TestBufferedFile_Write_Failing(t *testing.T) {
 	}
 
 	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
-		t.Errorf("writing should file")
-	}
-}
-
-func TestBufferedFile_Write_FailingDueToRead(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	info := NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(10 * bufferSize))
-
-	f := NewMockOsFile(ctrl)
-	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
-	// second time it will seek to an unexpected position, causing the failure
-	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Times(2).Return(int64(0), nil)
-	f.EXPECT().Write(gomock.Any()).Return(bufferSize, nil)
-
-	bf, err := openBufferedFile(f)
-	if err != nil {
-		t.Fatalf("cannot open file: %s", err)
-	}
-
-	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
-		t.Errorf("writing should file")
-	}
-}
-
-func TestBufferedFile_Write_FailingNumOfWrites(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	info := NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(bufferSize))
-
-	f := NewMockOsFile(ctrl)
-	f.EXPECT().Stat().Return(info, nil)
-	f.EXPECT().Read(gomock.Any()).AnyTimes().Return(bufferSize, nil)
-	f.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), nil)
-	f.EXPECT().Write(gomock.Any()).Return(0, nil) // written zero elements
-
-	bf, err := openBufferedFile(f)
-	if err != nil {
-		t.Fatalf("cannot open file: %s", err)
-	}
-
-	if _, err := bf.WriteAt([]byte{0xA}, 2*bufferSize); err == nil {
-		t.Errorf("writing should file")
+		t.Errorf("writing should fail")
 	}
 }
 
@@ -365,7 +277,7 @@ func TestBufferedFile_WrittenDataCanBeRead(t *testing.T) {
 					t.Fatalf("failed to read at position %d: %v", i, err)
 				}
 				if dst[0] != byte(i) {
-					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i), dst[0])
+					t.Errorf("invalid data read at position %d, wanted %d, got %d", i, byte(i), dst[0])
 				}
 			}
 
@@ -407,7 +319,7 @@ func TestBufferedFile_DataIsPersistent(t *testing.T) {
 					t.Fatalf("failed to read at position %d: %v", i, err)
 				}
 				if dst[0] != byte(i+1) {
-					t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, byte(i+1), dst[0])
+					t.Errorf("invalid data read at position %d, wanted %d, got %d", i, byte(i+1), dst[0])
 				}
 			}
 
@@ -425,7 +337,7 @@ func TestBufferedFile_ReadAndWriteCanHandleUnalignedData(t *testing.T) {
 		t.Fatalf("failed to open buffered file: %v", err)
 	}
 
-	// By writting data of length 3 we are sometimes writing data crossing
+	// By writing data of length 3 we are sometimes writing data crossing
 	// the internal aligned buffer-page boundary.
 	for i := 0; i < 1000; i++ {
 		if _, err := file.WriteAt([]byte{byte(i), byte(i + 1), byte(i + 2)}, int64(i)*3); err != nil {
@@ -440,7 +352,7 @@ func TestBufferedFile_ReadAndWriteCanHandleUnalignedData(t *testing.T) {
 		}
 		want := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		if !bytes.Equal(dst, want) {
-			t.Errorf("invalid data read at postion %d, wanted %d, got %d", i, want, dst)
+			t.Errorf("invalid data read at position %d, wanted %d, got %d", i, want, dst)
 		}
 	}
 

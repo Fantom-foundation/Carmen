@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -318,6 +319,11 @@ func (s *fileStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *fileStock[I, V]) Flush() error {
+	start := time.Now()
+	defer func() {
+		fmt.Printf("Stock flush took %v\n", time.Since(start))
+	}()
+
 	// Write metadata.
 	var index I
 	indexSize := int(unsafe.Sizeof(index))
@@ -334,6 +340,8 @@ func (s *fileStock[I, V]) Flush() error {
 			return err
 		}
 	}
+
+	fmt.Printf("metadata file flush finished after %v\n", time.Since(start))
 
 	// Flush freelist and value file.
 	return errors.Join(

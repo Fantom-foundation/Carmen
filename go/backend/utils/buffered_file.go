@@ -13,7 +13,6 @@ package utils
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 )
 
@@ -32,7 +31,6 @@ import (
 type BufferedFile struct {
 	file         OsFile           // the file handle to represent
 	filesize     int64            // the current size of the file
-	position     int64            // the current position in the file
 	buffer       [bufferSize]byte // a buffer for write operations
 	bufferOffset int64            // the offset of the write buffer
 }
@@ -125,21 +123,11 @@ func (f *BufferedFile) writeFile(position int64, src []byte) error {
 		copy(data[padding:], src)
 		return f.writeFile(f.filesize, data)
 	}
-	if err := f.seek(position); err != nil {
-		return err
+	n, err := f.file.WriteAt(src, position)
+	if end := int64(n) + position; end > f.filesize {
+		f.filesize = end
 	}
-	n, err := f.file.Write(src)
-	if err != nil {
-		return err
-	}
-	if n != len(src) {
-		return fmt.Errorf("failed to write sufficient bytes to file, wanted %d, got %d", len(src), n)
-	}
-	f.position += int64(n)
-	if f.position > f.filesize {
-		f.filesize = f.position
-	}
-	return nil
+	return err
 }
 
 // ReadAt reads a slice of bytes from the file starting at the given position.
@@ -199,30 +187,8 @@ func (f *BufferedFile) readFile(position int64, dst []byte) error {
 		}
 		return nil
 	}
-	if err := f.seek(position); err != nil {
-		return err
-	}
-	n, err := io.ReadFull(f.file, dst)
-	if err != nil {
-		return err
-	}
-	f.position += int64(n)
-	return nil
-}
-
-func (f *BufferedFile) seek(position int64) error {
-	if f.position == position {
-		return nil
-	}
-	pos, err := f.file.Seek(position, 0)
-	if err != nil {
-		return err
-	}
-	if pos != position {
-		return fmt.Errorf("failed to seek to required position, wanted %d, got %d", position, pos)
-	}
-	f.position = position
-	return nil
+	_, err := f.file.ReadAt(dst, position)
+	return err
 }
 
 // Flush syncs temporary cached content to the file system.

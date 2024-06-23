@@ -13,10 +13,10 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/utils"
-	"io"
 	"os"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -45,41 +45,39 @@ func openFileBasedStack[I stock.Index](filename string) (*fileBasedStack[I], err
 
 func initFileBasedStack[I stock.Index](file utils.OsFile) (*fileBasedStack[I], error) {
 	// Check whether there is an existing stack file.
-	size := 0
-	valueSize := int(unsafe.Sizeof(I(0)))
+	size := int64(0)
+	valueSize := int64(unsafe.Sizeof(I(0)))
 	if stats, err := file.Stat(); err == nil {
 		fileSize := stats.Size()
 		if fileSize%int64(valueSize) != 0 {
 			return nil, fmt.Errorf("invalid stack file size")
 		}
-		size = int(fileSize) / valueSize
+		size = fileSize / valueSize
 	}
 
 	// Load tailing batch of elements if file is not empty.
 	buffer := make([]I, 0, stackBufferSize)
-	offset := 0
+	offset := int64(0)
 	if size > 0 {
 		toLoad := size % stackBufferSize
 		offset = size - toLoad
 
-		if _, err := file.Seek(int64(valueSize*offset), 0); err != nil {
-			return nil, err
-		}
-
 		valueBuffer := make([]byte, valueSize)
-		for i := 0; i < toLoad; i++ {
-			if _, err := io.ReadFull(file, valueBuffer); err != nil {
+		position := int64(valueSize * offset)
+		for i := int64(0); i < toLoad; i++ {
+			if _, err := file.ReadAt(valueBuffer, position); err != nil {
 				return nil, err
 			}
 			buffer = append(buffer, stock.DecodeIndex[I](valueBuffer))
+			position += valueSize
 		}
 	}
 
 	return &fileBasedStack[I]{
 		file:         file,
-		size:         size,
+		size:         int(size),
 		buffer:       buffer,
-		bufferOffset: offset,
+		bufferOffset: int(offset),
 	}, nil
 }
 
@@ -114,17 +112,16 @@ func (s *fileBasedStack[I]) Pop() (I, error) {
 	if len(s.buffer) == 0 {
 		s.bufferOffset -= cap(s.buffer)
 
-		valueSize := int(unsafe.Sizeof(I(0)))
-		if _, err := s.file.Seek(int64(valueSize*s.bufferOffset), 0); err != nil {
-			return 0, err
-		}
+		valueSize := int64(unsafe.Sizeof(I(0)))
+		position := valueSize * int64(s.bufferOffset)
 
 		buffer := make([]byte, valueSize)
 		for i := 0; i < cap(s.buffer); i++ {
-			if _, err := io.ReadFull(s.file, buffer); err != nil {
+			if _, err := s.file.ReadAt(buffer, position); err != nil {
 				return 0, err
 			}
 			s.buffer = append(s.buffer, stock.DecodeIndex[I](buffer))
+			position += valueSize
 		}
 	}
 
@@ -136,17 +133,16 @@ func (s *fileBasedStack[I]) Pop() (I, error) {
 }
 
 func (s *fileBasedStack[I]) flushBuffer() error {
-	valueSize := int(unsafe.Sizeof(I(0)))
-	if _, err := s.file.Seek(int64(valueSize*s.bufferOffset), 0); err != nil {
-		return err
-	}
+	valueSize := int64(unsafe.Sizeof(I(0)))
+	position := valueSize * int64(s.bufferOffset)
 
 	buffer := make([]byte, valueSize)
 	for _, value := range s.buffer {
 		stock.EncodeIndex[I](value, buffer)
-		if _, err := s.file.Write(buffer); err != nil {
+		if _, err := s.file.WriteAt(buffer, position); err != nil {
 			return err
 		}
+		position += valueSize
 	}
 	return nil
 }
@@ -162,11 +158,7 @@ func (s *fileBasedStack[I]) GetAll() ([]I, error) {
 	entrySize := int(unsafe.Sizeof(i))
 	buffer := make([]byte, s.size*entrySize)
 
-	if _, err := s.file.Seek(0, 0); err != nil {
-		return nil, err
-	}
-
-	if _, err := io.ReadFull(s.file, buffer); err != nil {
+	if _, err := s.file.ReadAt(buffer, 0); err != nil {
 		return nil, err
 	}
 

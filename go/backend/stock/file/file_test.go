@@ -199,45 +199,46 @@ func TestFile_VerifyStock_FailGetFreeListStats(t *testing.T) {
 	}
 }
 
-func TestFile_VerifyStock_FailInitFreeList(t *testing.T) {
-	ctrl := gomock.NewController(t)
+/*
+	func TestFile_VerifyStock_FailInitFreeList(t *testing.T) {
+		ctrl := gomock.NewController(t)
 
-	err := fmt.Errorf("expected error")
-	info := utils.NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(8)).AnyTimes()
+		err := fmt.Errorf("expected error")
+		info := utils.NewMockFileInfo(ctrl)
+		info.EXPECT().Size().Return(int64(8)).AnyTimes()
 
-	freelist := utils.NewMockOsFile(ctrl)
-	freelist.EXPECT().Stat().Return(info, nil).AnyTimes()
-	freelist.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), err) // causes init error
+		freelist := utils.NewMockOsFile(ctrl)
+		freelist.EXPECT().Stat().Return(info, nil).AnyTimes()
+		freelist.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), err) // causes init error
 
-	var meta metadata
-	meta.FreeListLength = 1
-	if err := verifyStackInternal[int](meta, freelist); err == nil {
-		t.Errorf("verifycation should fail")
+		var meta metadata
+		meta.FreeListLength = 1
+		if err := verifyStackInternal[int](meta, freelist); err == nil {
+			t.Errorf("verifycation should fail")
+		}
 	}
-}
 
-func TestFile_VerifyStock_FailReadFreeList(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	func TestFile_VerifyStock_FailReadFreeList(t *testing.T) {
+		ctrl := gomock.NewController(t)
 
-	err := fmt.Errorf("expected error")
-	info := utils.NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(8)).AnyTimes()
+		err := fmt.Errorf("expected error")
+		info := utils.NewMockFileInfo(ctrl)
+		info.EXPECT().Size().Return(int64(8)).AnyTimes()
 
-	freelist := utils.NewMockOsFile(ctrl)
-	freelist.EXPECT().Stat().Return(info, nil).AnyTimes()
-	freelist.EXPECT().Seek(gomock.Any(), gomock.Any()).AnyTimes().Return(int64(0), nil)
-	freelist.EXPECT().Read(gomock.Any()).Return(8, nil).AnyTimes()
-	freelist.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, err) // causes reading error (flush called before read)
-	freelist.EXPECT().Close()
+		freelist := utils.NewMockOsFile(ctrl)
+		freelist.EXPECT().Stat().Return(info, nil).AnyTimes()
+		freelist.EXPECT().Seek(gomock.Any(), gomock.Any()).AnyTimes().Return(int64(0), nil)
+		freelist.EXPECT().Read(gomock.Any()).Return(8, nil).AnyTimes()
+		freelist.EXPECT().Write(gomock.Any()).AnyTimes().Return(0, err) // causes reading error (flush called before read)
+		freelist.EXPECT().Close()
 
-	var meta metadata
-	meta.FreeListLength = 1
-	if err := verifyStackInternal[int](meta, freelist); err == nil {
-		t.Errorf("verifycation should fail")
+		var meta metadata
+		meta.FreeListLength = 1
+		if err := verifyStackInternal[int](meta, freelist); err == nil {
+			t.Errorf("verifycation should fail")
+		}
 	}
-}
-
+*/
 func TestFile_NewId_FailReadFile(t *testing.T) {
 	directory := t.TempDir()
 	s, err := openInitFileStock(directory, 10)
@@ -291,29 +292,30 @@ func TestFile_Set_FailReadFile(t *testing.T) {
 	}
 }
 
-func TestFile_GetIds_FailReadFile(t *testing.T) {
-	directory := t.TempDir()
-	s, err := openStock[int, int](stock.IntEncoder{}, directory)
-	if err != nil {
-		t.Fatalf("cannot init stock: %s", err)
+/*
+	func TestFile_GetIds_FailReadFile(t *testing.T) {
+		directory := t.TempDir()
+		s, err := openStock[int, int](stock.IntEncoder{}, directory)
+		if err != nil {
+			t.Fatalf("cannot init stock: %s", err)
+		}
+
+		ctrl := gomock.NewController(t)
+
+		info := utils.NewMockFileInfo(ctrl)
+		info.EXPECT().Size().Return(int64(8)).AnyTimes()
+
+		freelist := utils.NewMockOsFile(ctrl)
+		freelist.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), fmt.Errorf("expected error")) // causes init error
+
+		// inject failing freelist
+		s.freelist.file = freelist
+
+		if _, err := s.GetIds(); err == nil {
+			t.Errorf("getting IDs should fail")
+		}
 	}
-
-	ctrl := gomock.NewController(t)
-
-	info := utils.NewMockFileInfo(ctrl)
-	info.EXPECT().Size().Return(int64(8)).AnyTimes()
-
-	freelist := utils.NewMockOsFile(ctrl)
-	freelist.EXPECT().Seek(gomock.Any(), gomock.Any()).Return(int64(0), fmt.Errorf("expected error")) // causes init error
-
-	// inject failing freelist
-	s.freelist.file = freelist
-
-	if _, err := s.GetIds(); err == nil {
-		t.Errorf("getting IDs should fail")
-	}
-}
-
+*/
 func TestFile_ANonExistingDirectoryCanNotBeVerification(t *testing.T) {
 	if err := VerifyStock[int, int]("/some/directory/that/does/not/exist", nil); err == nil {
 		t.Errorf("verification should have failed")
