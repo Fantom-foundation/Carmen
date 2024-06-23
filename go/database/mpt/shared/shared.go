@@ -56,6 +56,13 @@ func MakeShared[T any](value T) *Shared[T] {
 	}
 }
 
+// GetUnprotected provides direct access to the shared value. It is not
+// synchronized with any other access and is intended for situation where T
+// itself provides synchronization. Any concurrent access is possible.
+func (p *Shared[T]) GetUnprotected() T {
+	return p.value
+}
+
 // TryGetReadHandle tries to get read access to the shared value's content. If
 // successful, indicated by the second return value, shared access to the object
 // is granted until the provided ReadHandle is released again. Other readers,
