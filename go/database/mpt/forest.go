@@ -162,7 +162,7 @@ func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig Fore
 	closers = append(closers, values)
 
 	success = true
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -206,7 +206,7 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 	closers = append(closers, values)
 
 	success = true
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 // closers is a shortcut for the list of io.Closer.
@@ -252,7 +252,6 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 
 func makeForest(
 	mptConfig MptConfig,
-	directory string,
 	branches stock.Stock[uint64, BranchNode],
 	extensions stock.Stock[uint64, ExtensionNode],
 	accounts stock.Stock[uint64, AccountNode],
@@ -511,10 +510,7 @@ func (s *Forest) Flush() error {
 	// Get snapshot of set of dirty Node IDs.
 	ids := make([]NodeId, 0, 1<<16)
 	s.nodeCache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
-		handle := node.GetViewHandle()
-		dirty := handle.Get().IsDirty()
-		handle.Release()
-		if dirty {
+		if node.GetUnprotected().IsDirty() {
 			ids = append(ids, id)
 		}
 	})
@@ -541,6 +537,10 @@ func (s *Forest) flushDirtyIds(ids []NodeId) error {
 		if present {
 			handle := node.GetWriteHandle()
 			node := handle.Get()
+			if !node.IsDirty() {
+				handle.Release()
+				continue
+			}
 			err := s.flushNode(id, node)
 			if err == nil {
 				node.MarkClean()

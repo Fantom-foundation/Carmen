@@ -1238,7 +1238,6 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1332,7 +1331,6 @@ func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNode
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1455,7 +1453,7 @@ func openFileShadowForest(directory string, mptConfig MptConfig, forestConfig Fo
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
@@ -1489,7 +1487,6 @@ func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1799,7 +1796,6 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 
 			forest, err := makeForest(
 				MptConfig{Hashing: DirectHashing},
-				t.TempDir(),
 				branches,
 				extensions,
 				accounts,
@@ -1838,7 +1834,6 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1892,7 +1887,6 @@ func TestForest_CollectedErrorsAreReportedInFlushAndClose(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
