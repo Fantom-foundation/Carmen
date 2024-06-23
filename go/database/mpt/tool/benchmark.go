@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -87,12 +88,18 @@ var (
 	}
 	cpuProfileFlag = cli.StringFlag{
 		Name:  "cpuprofile",
-		Usage: "sets the target file for storing CPU profiles to",
-		Value: "profile.dat",
+		Usage: "sets the target file for storing CPU profiles to, disabled if empty",
+		Value: "",
+	}
+	traceFlag = cli.StringFlag{
+		Name:  "tracefile",
+		Usage: "sets the target file for traces to, disabled if empty",
+		Value: "",
 	}
 )
 
 func benchmark(context *cli.Context) error {
+
 	tmpDir := context.String(tmpDirFlag.Name)
 	if len(tmpDir) == 0 {
 		tmpDir = os.TempDir()
@@ -120,6 +127,7 @@ func benchmark(context *cli.Context) error {
 			tmpDir:             tmpDir,
 			keepState:          context.Bool(keepStateFlag.Name),
 			cpuProfilePrefix:   context.String(cpuProfileFlag.Name),
+			traceFilePrefix:    context.String(traceFlag.Name),
 			reportInterval:     context.Int(reportIntervalFlag.Name),
 		},
 		func(msg string, args ...any) {
@@ -149,6 +157,7 @@ type benchmarkParams struct {
 	tmpDir             string
 	keepState          bool
 	cpuProfilePrefix   string
+	traceFilePrefix    string
 	reportInterval     int
 }
 
@@ -174,11 +183,25 @@ func runBenchmark(
 	defer runtime.UnlockOSThread()
 
 	res := benchmarkResult{}
+
+	profilingEnabled := len(params.cpuProfilePrefix) > 0
+	tracingEnabled := len(params.traceFilePrefix) > 0
+
 	// Start profiling ...
-	if err := startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, 1)); err != nil {
-		return res, err
+	if profilingEnabled {
+		if err := startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, 1)); err != nil {
+			return res, err
+		}
+		defer stopCpuProfiler()
 	}
-	defer stopCpuProfiler()
+
+	// Start tracing ...
+	if tracingEnabled {
+		if err := startTracer(fmt.Sprintf("%s_%06d", params.traceFilePrefix, 1)); err != nil {
+			return res, err
+		}
+		defer stopTracer()
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -274,7 +297,12 @@ func runBenchmark(
 		}
 
 		if (i+1)%reportingInterval == 0 {
-			stopCpuProfiler()
+			if tracingEnabled {
+				stopTracer()
+			}
+			if profilingEnabled {
+				stopCpuProfiler()
+			}
 			startReporting := time.Now()
 
 			throughput := float64(reportingInterval*numInsertsPerBlock) / startReporting.Sub(lastReportTime).Seconds()
@@ -298,7 +326,14 @@ func runBenchmark(
 			endReporting := time.Now()
 			reportingTime += endReporting.Sub(startReporting)
 			lastReportTime = endReporting
-			startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, ((i+1)/reportingInterval)+1))
+
+			intervalNumber := ((i + 1) / reportingInterval) + 1
+			if profilingEnabled {
+				startCpuProfiler(fmt.Sprintf("%s_%06d", params.cpuProfilePrefix, intervalNumber))
+			}
+			if tracingEnabled {
+				startTracer(fmt.Sprintf("%s_%06d", params.traceFilePrefix, intervalNumber))
+			}
 		}
 	}
 	observer(
@@ -329,6 +364,21 @@ func startCpuProfiler(filename string) error {
 
 func stopCpuProfiler() {
 	pprof.StopCPUProfile()
+}
+
+func startTracer(filename string) error {
+	traceFile, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create trace file: %v", err)
+	}
+	if err := trace.Start(traceFile); err != nil {
+		return fmt.Errorf("failed to start trace: %v", err)
+	}
+	return nil
+}
+
+func stopTracer() {
+	trace.Stop()
 }
 
 // GetDirectorySize computes the size of all files in the given directory in bytes.
