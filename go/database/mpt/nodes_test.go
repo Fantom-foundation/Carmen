@@ -7730,9 +7730,8 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 	if a.hashStatus != nil {
 		hashStatus = *a.hashStatus
 	}
-	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](&AccountNode{
+	res := &AccountNode{
 		nodeBase: nodeBase{
-			clean:      !a.dirty,
 			frozen:     a.frozen,
 			hashStatus: hashStatus,
 		},
@@ -7742,7 +7741,9 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 		storage:          storage,
 		storageHashDirty: a.storageHashDirty,
 		storageHash:      storageHash,
-	})
+	}
+	res.nodeBase.clean.Store(!a.dirty)
+	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](res)
 }
 
 type Children map[Nibble]NodeDesc
@@ -7763,7 +7764,7 @@ type Branch struct {
 func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(BranchId(ctx.nextIndex()))
 	res := &BranchNode{}
-	res.nodeBase.clean = !b.dirty
+	res.nodeBase.clean.Store(!b.dirty)
 	res.frozen = b.frozen
 	for i, desc := range b.children {
 		ref, _ := ctx.Build(desc)
@@ -7807,7 +7808,7 @@ type Extension struct {
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(ExtensionId(ctx.nextIndex()))
 	res := &ExtensionNode{}
-	res.nodeBase.clean = !e.dirty
+	res.nodeBase.clean.Store(!e.dirty)
 	res.frozen = e.frozen
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
@@ -7857,16 +7858,17 @@ func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	if v.hashStatus != nil {
 		hashStatus = *v.hashStatus
 	}
-	return NewNodeReference(ValueId(ctx.nextIndex())), shared.MakeShared[Node](&ValueNode{
+	res := &ValueNode{
 		nodeBase: nodeBase{
-			clean:      !v.dirty,
 			frozen:     v.frozen,
 			hashStatus: hashStatus,
 		},
 		key:        v.key,
 		value:      v.value,
 		pathLength: v.length,
-	})
+	}
+	res.nodeBase.clean.Store(!v.dirty)
+	return NewNodeReference(ValueId(ctx.nextIndex())), shared.MakeShared[Node](res)
 }
 
 type entry struct {

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sync/atomic"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
@@ -469,7 +470,7 @@ func (c *nodeCheckContext) isCompatible(other *nodeCheckContext) bool {
 type nodeBase struct {
 	hash       common.Hash // the hash of this node (may be dirty)
 	hashStatus hashStatus  // indicating whether this node's hash is valid
-	clean      bool        // by default nodes are dirty (clean == false)
+	clean      atomic.Bool // by default nodes are dirty (clean == false)
 	frozen     bool        // a flag marking the node as immutable (default: mutable)
 }
 
@@ -521,22 +522,25 @@ func (n *nodeBase) markMutable() {
 	n.frozen = false
 }
 
+// IsDirty checks whether the in-memory version is in sync with the on-disk version.
+// This function is thread safe and does not need any specific shared node access
+// permissions to be accessed safely.
 func (n *nodeBase) IsDirty() bool {
-	return !n.clean
+	return !n.clean.Load()
 }
 
 func (n *nodeBase) MarkClean() {
-	n.clean = true
+	n.clean.Store(true)
 }
 
 func (n *nodeBase) markDirty() {
-	n.clean = false
+	n.clean.Store(false)
 	n.hashStatus = hashStatusDirty
 }
 
 func (n *nodeBase) Release() {
 	// The node is disconnected from the disk version and thus clean.
-	n.clean = true
+	n.clean.Store(true)
 	n.hashStatus = hashStatusClean
 }
 
