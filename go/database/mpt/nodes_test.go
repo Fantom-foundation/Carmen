@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"reflect"
 	"slices"
 	"strings"
@@ -6661,7 +6662,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 			for _, label := range test.path {
 				ref, shared := ctxt.Get(label)
 				handle := shared.GetViewHandle()
-				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Embedded: tribool.False()})
 				handle.Release()
 				if last != nil {
 					cur.After(last)
@@ -6802,7 +6803,7 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 			for _, label := range test.path {
 				ref, shared := ctxt.Get(label)
 				handle := shared.GetViewHandle()
-				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Embedded: tribool.False()})
 				handle.Release()
 				if last != nil {
 					cur.After(last)
@@ -6820,6 +6821,81 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVisitPathToStorage_EmbeddedNode_Flag_Tracked(t *testing.T) {
+	address := common.Address{1}
+	key := common.Key{2}
+	key2 := common.Key{3}
+	var value common.Value
+	value[20] = 0x02
+	value[21] = 0x04
+
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	tests := map[string]struct {
+		key      common.Key
+		keyFound bool
+	}{
+		"matching embedded": {
+			key:      key,
+			keyFound: true,
+		},
+		"mismatch embedded": {
+			key:      key2,
+			keyFound: false,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			desc := &Extension{
+				path: AddressToNibblePath(address, ctxt)[0:30],
+				next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}},
+					storage: &Extension{
+						path:         KeyToNibblePath(key, ctxt)[0:40],
+						nextEmbedded: true,
+						next:         &Value{key: test.key, length: 24, value: value},
+					}}}
+
+			ref, _ := ctxt.Build(desc)
+
+			visitor := NewMockNodeVisitor(ctrl)
+			visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(node Node, info NodeInfo) VisitResponse {
+				wantEmbedded := tribool.False()
+				switch n := node.(type) {
+				case *AccountNode:
+					found, err := VisitPathToStorage(ctxt, &n.storage, key, visitor)
+					if err != nil {
+						t.Fatalf("unexpected error during path iteration: %v", err)
+					}
+					if got, want := found, test.keyFound; got != want {
+						t.Errorf("unexpected key found flag, wanted %t, got %t", want, got)
+					}
+				case *ValueNode:
+					wantEmbedded = tribool.True()
+					if got, want := n.value, value; got != want {
+						t.Errorf("unexpected key found flag, wanted %v, got %v", want, got)
+					}
+				}
+				if got, want := info.Embedded, wantEmbedded; got != want {
+					t.Errorf("unexpected embedded flag, wanted %s, got %s", want, got)
+				}
+
+				return VisitResponseContinue
+			}).AnyTimes()
+
+			found, err := VisitPathToAccount(ctxt, &ref, address, visitor)
+			if err != nil {
+				t.Fatalf("unexpected error during path iteration: %v", err)
+			}
+			if !found {
+				t.Errorf("account not found")
+			}
+		})
+	}
+
 }
 
 func TestTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T) {
