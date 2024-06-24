@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
@@ -76,11 +77,8 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
 								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
-									storage: &Branch{
-										children: Children{
-											keyNibbles[0] + 1: &Extension{path: keyNibbles[1:40], next: &Value{key: common.Key{}, length: 24, value: common.Value{0x12}}},
-										}}}},
-						}}},
+									storage: &Extension{path: keyNibbles[1:40], next: &Empty{}},
+								}}}}},
 			},
 			value: common.Value{},
 		},
@@ -145,8 +143,8 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			root, _ := ctxt.Build(test.desc)
-			
+			root, node := ctxt.Build(test.desc)
+
 			proof, err := CreateWitnessProof(ctxt, &root, address, key)
 			if err != nil {
 				t.Fatalf("failed to create proof: %v", err)
@@ -167,13 +165,17 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 			if got, want := gotValue, test.value; got != want {
 				t.Errorf("unexpected value: got %v, want %v", got, want)
 			}
+
+			if got, want := proof, createReferenceProof(t, ctxt, &root, node); !got.Equals(want) {
+				t.Errorf("unexpected proof: got %v, want %v", got, want)
+			}
 		})
 	}
 }
 
 func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.T) {
-	address := common.Address{0xAB, 0xCD, 0xEF}
-	key := common.Key{0x12, 0x34, 0x56, 0x78}
+	address := common.Address{1}
+	key := common.Key{2}
 	var value common.Value
 	value[20] = 0x02
 	value[21] = 0x04
@@ -191,7 +193,7 @@ func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.
 			}},
 	}
 
-	root, _ := ctxt.Build(desc)
+	root, node := ctxt.Build(desc)
 	proof, err := CreateWitnessProof(ctxt, &root, address, key, key)
 	if err != nil {
 		t.Fatalf("failed to create proof: %v", err)
@@ -203,9 +205,22 @@ func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.
 
 	// the hashed rlp of the embedded node should not be a key in the proofDb
 	ref, _ := ctxt.Get("V")
-	hash, _ := ctxt.getHashFor(&ref)
+	embeddedHash, _ := ctxt.getHashFor(&ref)
+	// decode and encode to remove trailing zeros and get RLP of the embedded node.
+	decoded, err := rlp.Decode(embeddedHash[:])
+	if err != nil {
+		t.Fatalf("failed to decode embedded hash: %v", err)
+	}
+	encoded := rlp.Encode(decoded)
+	hash := common.Keccak256(encoded)
 	if _, ok := proof.proofDb[hash]; ok {
 		t.Errorf("embedded node should not be in the proof")
+	}
+
+	refProof := createReferenceProof(t, ctxt, &root, node)
+	delete(refProof.proofDb, hash)
+	if got, want := proof, refProof; !got.Equals(want) {
+		t.Errorf("unexpected proof: got %v, want %v", got, want)
 	}
 }
 
