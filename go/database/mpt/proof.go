@@ -221,7 +221,7 @@ type proofExtractionVisitor struct {
 
 // Visit computes RLP and hash of the visited node and puts it to the proof.
 func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
-	if info.embedded {
+	if info.Embedded.True() {
 		return VisitResponseAbort
 	}
 
