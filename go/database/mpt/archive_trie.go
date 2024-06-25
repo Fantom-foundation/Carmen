@@ -359,7 +359,7 @@ func (a *ArchiveTrie) addError(err error) error {
 // ---- Reading and Writing Root Node ID Lists ----
 
 // rootList is a utility type managing an in-memory copy of the list of roots
-// of an archive and its synchronization with a on-disk file copy.
+// of an archive and its synchronization with an on-disk file copy.
 type rootList struct {
 	roots          []Root
 	filename       string
