@@ -1539,3 +1539,17 @@ var archiveGetters = map[string]func(archive archive.Archive) error{
 		return err
 	},
 }
+
+func BenchmarkArchiveFlush_Roots(b *testing.B) {
+	archive, err := OpenArchiveTrie(b.TempDir(), S5ArchiveConfig, 1000)
+	if err != nil {
+		b.Fatalf("cannot open archive: %v", err)
+	}
+	defer archive.Close()
+	archive.Add(1_000_000, common.Update{}, nil)
+	for i := 0; i < b.N; i++ {
+		if err := archive.Flush(); err != nil {
+			b.Fatalf("failed to flush archive: %v", err)
+		}
+	}
+}
