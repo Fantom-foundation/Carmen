@@ -83,7 +83,7 @@ func VerifyArchiveTrie(directory string, config MptConfig, observer Verification
 	if err != nil {
 		return err
 	}
-	if len(roots.roots) == 0 {
+	if roots.length() == 0 {
 		return nil
 	}
 	return VerifyMptState(directory, config, roots.roots, observer)
@@ -100,20 +100,20 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	defer a.addMutex.Unlock()
 
 	a.rootsMutex.Lock()
-	if uint64(a.roots.Length()) > block {
+	if uint64(a.roots.length()) > block {
 		a.rootsMutex.Unlock()
 		return fmt.Errorf("block %d already present", block)
 	}
 
 	// Mark skipped blocks as having no changes.
-	if uint64(a.roots.Length()) < block {
+	if uint64(a.roots.length()) < block {
 		lastHash, err := a.head.GetHash()
 		if err != nil {
 			a.rootsMutex.Unlock()
 			return a.addError(err)
 		}
-		for uint64(a.roots.Length()) < block {
-			a.roots.Append(Root{a.head.Root(), lastHash})
+		for uint64(a.roots.length()) < block {
+			a.roots.append(Root{a.head.Root(), lastHash})
 		}
 	}
 	a.rootsMutex.Unlock()
@@ -150,14 +150,14 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 
 	// Save new root node.
 	a.rootsMutex.Lock()
-	a.roots.Append(Root{a.head.Root(), hash})
+	a.roots.append(Root{a.head.Root(), hash})
 	a.rootsMutex.Unlock()
 	return nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
 	a.rootsMutex.Lock()
-	length := uint64(a.roots.Length())
+	length := uint64(a.roots.length())
 	a.rootsMutex.Unlock()
 	if length == 0 {
 		return 0, true, nil
@@ -231,12 +231,12 @@ func (a *ArchiveTrie) GetAccountHash(block uint64, account common.Address) (comm
 
 func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 	a.rootsMutex.Lock()
-	length := uint64(a.roots.Length())
+	length := uint64(a.roots.length())
 	if block >= length {
 		a.rootsMutex.Unlock()
 		return common.Hash{}, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	res := a.roots.Get(block).Hash
+	res := a.roots.get(block).Hash
 	a.rootsMutex.Unlock()
 	return res, nil
 }
@@ -244,16 +244,16 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 // GetDiff computes the difference between the given source and target blocks.
 func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 	a.rootsMutex.Lock()
-	if srcBlock >= uint64(a.roots.Length()) {
+	if srcBlock >= uint64(a.roots.length()) {
 		a.rootsMutex.Unlock()
-		return Diff{}, fmt.Errorf("source block %d not present in archive, highest block is %d", srcBlock, a.roots.Length()-1)
+		return Diff{}, fmt.Errorf("source block %d not present in archive, highest block is %d", srcBlock, a.roots.length()-1)
 	}
-	if trgBlock >= uint64(a.roots.Length()) {
+	if trgBlock >= uint64(a.roots.length()) {
 		a.rootsMutex.Unlock()
-		return Diff{}, fmt.Errorf("target block %d not present in archive, highest block is %d", trgBlock, a.roots.Length()-1)
+		return Diff{}, fmt.Errorf("target block %d not present in archive, highest block is %d", trgBlock, a.roots.length()-1)
 	}
-	before := a.roots.Get(srcBlock).NodeRef
-	after := a.roots.Get(trgBlock).NodeRef
+	before := a.roots.get(srcBlock).NodeRef
+	after := a.roots.get(trgBlock).NodeRef
 	a.rootsMutex.Unlock()
 	return GetDiff(a.nodeSource, &before, &after)
 }
@@ -263,11 +263,11 @@ func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
 	if block == 0 {
 		a.rootsMutex.Lock()
-		if a.roots.Length() == 0 {
+		if a.roots.length() == 0 {
 			a.rootsMutex.Unlock()
 			return Diff{}, fmt.Errorf("archive is empty, no diff present for block 0")
 		}
-		after := a.roots.Get(0).NodeRef
+		after := a.roots.get(0).NodeRef
 		a.rootsMutex.Unlock()
 		return GetDiff(a.nodeSource, &emptyNodeReference, &after)
 	}
@@ -278,14 +278,14 @@ func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
 	mf.AddChild("head", a.head.GetMemoryFootprint())
 	a.rootsMutex.Lock()
-	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(a.roots.Length())*unsafe.Sizeof(NodeId(0))))
+	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(a.roots.length())*unsafe.Sizeof(NodeId(0))))
 	a.rootsMutex.Unlock()
 	return mf
 }
 
 func (a *ArchiveTrie) Check() error {
-	roots := make([]*NodeReference, a.roots.Length())
-	for i := 0; i < a.roots.Length(); i++ {
+	roots := make([]*NodeReference, a.roots.length())
+	for i := 0; i < a.roots.length(); i++ {
 		roots[i] = &a.roots.roots[i].NodeRef
 	}
 	return errors.Join(
@@ -326,7 +326,7 @@ func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 	}
 
 	a.rootsMutex.Lock()
-	length := uint64(a.roots.Length())
+	length := uint64(a.roots.length())
 	if block >= length {
 		a.rootsMutex.Unlock()
 		return nil, fmt.Errorf("invalid block: %d >= %d", block, length)
@@ -366,15 +366,15 @@ type rootList struct {
 	numRootsInFile int
 }
 
-func (l *rootList) Length() int {
+func (l *rootList) length() int {
 	return len(l.roots)
 }
 
-func (l *rootList) Get(block uint64) Root {
+func (l *rootList) get(block uint64) Root {
 	return l.roots[block]
 }
 
-func (l *rootList) Append(r Root) {
+func (l *rootList) append(r Root) {
 	l.roots = append(l.roots, r)
 }
 

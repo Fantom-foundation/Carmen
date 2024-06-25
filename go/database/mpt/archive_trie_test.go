@@ -1166,14 +1166,14 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
-	if original.Length() != 0 {
-		t.Errorf("unexpected number of roots, wanted 0, got %d", original.Length())
+	if original.length() != 0 {
+		t.Errorf("unexpected number of roots, wanted 0, got %d", original.length())
 	}
 	for i := 0; i < 48; i++ {
 		id := NodeId(uint64(1) << i)
-		original.Append(Root{NodeRef: NewNodeReference(id)})
+		original.append(Root{NodeRef: NewNodeReference(id)})
 		id = NodeId((uint64(1) << (i + 1)) - 1)
-		original.Append(Root{NodeRef: NewNodeReference(id)})
+		original.append(Root{NodeRef: NewNodeReference(id)})
 	}
 
 	if err := original.storeRoots(); err != nil {
@@ -1184,11 +1184,11 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
-	if want, got := original.Length(), restored.Length(); want != got {
+	if want, got := original.length(), restored.length(); want != got {
 		t.Fatalf("invalid number of restored roots, wanted %d, got %d", want, got)
 	}
 
-	for i := 0; i < original.Length(); i++ {
+	for i := 0; i < original.length(); i++ {
 		want := original.roots[i].NodeRef.Id()
 		got := restored.roots[i].NodeRef.Id()
 		if want != got {
@@ -1205,17 +1205,17 @@ func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
 	}
 
 	// The first write establishes a list of roots in the output file.
-	list.Append(Root{})
-	list.Append(Root{})
-	list.Append(Root{})
+	list.append(Root{})
+	list.append(Root{})
+	list.append(Root{})
 	if err := list.storeRoots(); err != nil {
 		t.Fatalf("failed to store roots: %v", err)
 	}
 
 	// We redirect the incremental update into another file to see what is written.
 	list.filename = filepath.Join(t.TempDir(), "roots2.dat")
-	list.Append(Root{})
-	list.Append(Root{})
+	list.append(Root{})
+	list.append(Root{})
 	if err := list.storeRoots(); err != nil {
 		t.Fatalf("failed to store roots: %v", err)
 	}
@@ -1225,7 +1225,7 @@ func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
-	if want, got := 2, restored.Length(); want != got {
+	if want, got := 2, restored.length(); want != got {
 		t.Fatalf("invalid number of restored roots, wanted %d, got %d", want, got)
 	}
 }
@@ -1236,15 +1236,15 @@ func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
-	if list.Length() != 0 {
-		t.Errorf("unexpected number of roots, wanted 0, got %d", list.Length())
+	if list.length() != 0 {
+		t.Errorf("unexpected number of roots, wanted 0, got %d", list.length())
 	}
 
 	counter := 0
 	for i := 0; i < 5; i++ {
 		for j := 0; j < 10; j++ {
 			id := NodeId(counter)
-			list.Append(Root{NodeRef: NewNodeReference(id)})
+			list.append(Root{NodeRef: NewNodeReference(id)})
 			counter++
 		}
 		if err := list.storeRoots(); err != nil {
@@ -1296,7 +1296,7 @@ func TestArchiveTrie_FileAccessErrorWhenStoringRootsIsDetected(t *testing.T) {
 		t.Fatalf("cannot chmod roots file: %v", err)
 	}
 
-	list.Append(Root{})
+	list.append(Root{})
 	if err := list.storeRoots(); err == nil {
 		t.Errorf("expected an error when storing roots into non-accessible file")
 	}
