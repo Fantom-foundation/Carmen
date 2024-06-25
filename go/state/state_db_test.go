@@ -4399,14 +4399,16 @@ func TestStateDB_ContractCanBeCreatedAndDeletedInTheSameTransaction(t *testing.T
 	db.CreateContract(address1)
 
 	// suicide the newly created contract in the same tx scope
-	db.SuicideNewContract(address1)
+	if deleted := db.SuicideNewContract(address1); !deleted {
+		t.Errorf("account should be deleted")
+	}
 
 	// the contract account should stop existing at the end of the transaction
 	db.EndTransaction()
 	db.BeginTransaction()
 
 	if db.Exist(address1) {
-		t.Errorf("Account still exists after suicide")
+		t.Errorf("account still exists after suicide")
 	}
 }
 
@@ -4424,14 +4426,16 @@ func TestStateDB_ContractCannotBeCreatedAndDeletedInDifferentTransactions(t *tes
 	db.BeginTransaction()
 
 	// suicide the contract from previous transaction
-	db.SuicideNewContract(address1)
+	if deleted := db.SuicideNewContract(address1); deleted {
+		t.Errorf("account should not be deleted")
+	}
 
 	// the contract should still exist when suicided in different transaction
 	db.EndTransaction()
 	db.BeginTransaction()
 
 	if !db.Exist(address1) {
-		t.Errorf("Account should exist after suicide in different transaction")
+		t.Errorf("account should exist after suicide in different transaction")
 	}
 }
 
@@ -4451,14 +4455,16 @@ func TestStateDB_ContractCreationAndDeletionCanBeRolledBack(t *testing.T) {
 	db.RevertToSnapshot(ss)
 
 	// suicide the contract
-	db.SuicideNewContract(address1)
+	if deleted := db.SuicideNewContract(address1); deleted {
+		t.Errorf("account should not be deleted")
+	}
 
 	// the contract account should still exist, because CreateContract method was rolled back
 	db.EndTransaction()
 	db.BeginTransaction()
 
 	if !db.Exist(address1) {
-		t.Errorf("Account should still exist after CreateContract call rollback")
+		t.Errorf("account should still exist after CreateContract call rollback")
 	}
 }
 
