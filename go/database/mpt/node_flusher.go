@@ -116,7 +116,7 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 			continue
 		}
 
-		// Nodes with dirtyHash hashes can not be flushed.
+		// Nodes with dirty hashes cannot be flushed.
 		_, dirtyHash := handle.Get().GetHash()
 		if dirtyHash {
 			handle.Release()
