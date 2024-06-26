@@ -21,7 +21,23 @@ import (
 )
 
 func TestNodeFlusher_StartAndStop(t *testing.T) {
-	flusher := startNodeFlusher(nil, nil)
+	flusher := startNodeFlusher(nil, nil, nodeFlusherConfig{})
+	if err := flusher.Stop(); err != nil {
+		t.Fatalf("failed to stop node flusher: %v", err)
+	}
+}
+
+func TestNodeFlusher_StartAndStopWithDisabledFlusher(t *testing.T) {
+	flusher := startNodeFlusher(nil, nil, nodeFlusherConfig{
+		period: -1,
+	})
+
+	select {
+	case <-flusher.done: // ok
+	default:
+		t.Errorf("flusher should be disabled")
+	}
+
 	if err := flusher.Stop(); err != nil {
 		t.Fatalf("failed to stop node flusher: %v", err)
 	}
@@ -37,7 +53,7 @@ func TestNodeFlusher_TriggersFlushesPeriodically(t *testing.T) {
 		flushSignal <- struct{}{}
 	}).Return()
 
-	flusher := startNodeFlusherWithConfig(cache, nil, nodeFlusherConfig{
+	flusher := startNodeFlusher(cache, nil, nodeFlusherConfig{
 		period: period,
 	})
 
@@ -82,7 +98,7 @@ func TestNodeFlusher_ErrorsAreCollected(t *testing.T) {
 	cache.EXPECT().Get(RefTo(id)).Return(node, true).AnyTimes()
 	sink.EXPECT().Write(id, gomock.Any()).Return(injectedError).AnyTimes()
 
-	flusher := startNodeFlusherWithConfig(cache, sink, nodeFlusherConfig{
+	flusher := startNodeFlusher(cache, sink, nodeFlusherConfig{
 		period: period,
 	})
 
@@ -234,7 +250,33 @@ func TestNodeFlusher_EvictedNodesAreIgnored(t *testing.T) {
 	checkThatNodeIsNotLocked(t, node)
 }
 
-func TestNodeFlusher_NodesWithDiryHashesAreIgnored(t *testing.T) {
+func TestNodeFlusher_NodesThatGetMarkedCleanByThirdPartyAreIgnored(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	cache := NewMockNodeCache(ctrl)
+	sink := NewMockNodeSink(ctrl)
+
+	id := ValueId(1)
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
+		f(id, node)
+		handle := node.GetWriteHandle()
+		handle.Get().MarkClean()
+		handle.Release()
+	})
+
+	cache.EXPECT().Get(RefTo(id)).Return(node, true)
+
+	// There shall be no write events (which is the default, but spelled out explicitly here).
+	sink.EXPECT().Write(gomock.Any(), gomock.Any()).Times(0)
+
+	if err := tryFlushDirtyNodes(cache, sink); err != nil {
+		t.Fatalf("failed to flush dirty nodes: %v", err)
+	}
+
+	checkThatNodeIsNotLocked(t, node)
+}
+
+func TestNodeFlusher_NodesWithDirtyHashesAreIgnored(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cache := NewMockNodeCache(ctrl)
 	sink := NewMockNodeSink(ctrl)

@@ -25,16 +25,10 @@ type nodeFlusher struct {
 }
 
 type nodeFlusherConfig struct {
-	period time.Duration
+	period time.Duration // uses a default period if zero and disables flushing if negative
 }
 
-func startNodeFlusher(cache NodeCache, sink NodeSink) *nodeFlusher {
-	return startNodeFlusherWithConfig(cache, sink, nodeFlusherConfig{
-		period: 5 * time.Second,
-	})
-}
-
-func startNodeFlusherWithConfig(cache NodeCache, sink NodeSink, config nodeFlusherConfig) *nodeFlusher {
+func startNodeFlusher(cache NodeCache, sink NodeSink, config nodeFlusherConfig) *nodeFlusher {
 
 	shutdown := make(chan struct{})
 	done := make(chan struct{})
@@ -43,21 +37,31 @@ func startNodeFlusherWithConfig(cache NodeCache, sink NodeSink, config nodeFlush
 		shutdown: shutdown,
 		done:     done,
 	}
-	go func() {
-		defer close(done)
-		ticker := time.NewTicker(config.period)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-shutdown:
-				return
-			case <-ticker.C:
-				if err := tryFlushDirtyNodes(cache, sink); err != nil {
-					res.errs = append(res.errs, err)
+
+	period := config.period
+	if period == 0 {
+		period = 5 * time.Second
+	}
+
+	if period > 0 {
+		go func() {
+			defer close(done)
+			ticker := time.NewTicker(period)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-shutdown:
+					return
+				case <-ticker.C:
+					if err := tryFlushDirtyNodes(cache, sink); err != nil {
+						res.errs = append(res.errs, err)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	} else {
+		close(done)
+	}
 
 	return res
 }
@@ -101,6 +105,14 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 		// continue with the next node.
 		handle, success := node.TryGetWriteHandle()
 		if !success {
+			continue
+		}
+
+		// If the node was cleaned otherwise, we can skip the flush.
+		// The cleaning may have been conducted by the write buffer
+		// or by releasing the node.
+		if !handle.Get().IsDirty() {
+			handle.Release()
 			continue
 		}
 

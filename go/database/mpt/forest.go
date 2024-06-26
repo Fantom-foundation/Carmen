@@ -20,6 +20,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -65,9 +66,10 @@ type Root struct {
 // the functional and non-functional properties of a forest but do not change
 // the on-disk format.
 type ForestConfig struct {
-	Mode                   StorageMode // whether to perform destructive or constructive updates
-	CacheCapacity          int         // the maximum number of nodes retained in memory
-	writeBufferChannelSize int         // the maximum number of elements retained in the write buffer channel
+	Mode                   StorageMode   // whether to perform destructive or constructive updates
+	CacheCapacity          int           // the maximum number of nodes retained in memory
+	BackgroundFlushPeriod  time.Duration // the time between background flushes, default if zero, disabled if negative
+	writeBufferChannelSize int           // the maximum number of elements retained in the write buffer channel
 }
 
 // Forest is a utility node managing nodes for one or more Tries.
@@ -287,7 +289,9 @@ func makeForest(
 	sink := writeBufferSink{res}
 
 	// Start a background worker flushing dirty nodes to disk.
-	res.flusher = startNodeFlusher(res.nodeCache, sink)
+	res.flusher = startNodeFlusher(res.nodeCache, sink, nodeFlusherConfig{
+		period: forestConfig.BackgroundFlushPeriod,
+	})
 
 	// Run a background worker releasing entire tries of nodes on demand.
 	go func() {
@@ -845,7 +849,7 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 
 func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
 	// Replacing the element in the already thread safe node cache needs to be
-	// guarded by the `getTransferMutex` since an evicted node have to
+	// guarded by the `getTransferMutex` since an evicted node has to
 	// be moved to the write buffer in an atomic step.
 	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(ref, node)
 	if present {
