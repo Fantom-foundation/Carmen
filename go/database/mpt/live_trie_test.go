@@ -11,6 +11,7 @@
 package mpt
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -118,7 +119,7 @@ func TestLiveTrie_Cannot_Verify(t *testing.T) {
 				t.Fatalf("cannot update roots: %v", err)
 			}
 
-			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyFileLiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("opening trie should fail")
 			}
 
@@ -760,7 +761,7 @@ func TestLiveTrie_VerificationOfEmptyDirectoryPasses(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyFileLiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("an empty directory should be fine, got: %v", err)
 			}
 		})
@@ -797,7 +798,7 @@ func TestLiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 				t.Fatalf("failed to close trie: %v", err)
 			}
 
-			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyFileLiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("a freshly closed LiveTrie should be fine, got: %v", err)
 			}
 		})
@@ -838,7 +839,7 @@ func TestLiveTrie_VerificationOfLiveTrieWithMissingFileFails(t *testing.T) {
 				t.Fatalf("failed to delete file")
 			}
 
-			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyFileLiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("missing file should be detected")
 			}
 		})
@@ -886,7 +887,7 @@ func TestLiveTrie_VerificationOfLiveTrieWithCorruptedFileFails(t *testing.T) {
 				t.Fatalf("failed to modify file")
 			}
 
-			if err := VerifyFileLiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyFileLiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("corrupted file should have been detected")
 			}
 		})

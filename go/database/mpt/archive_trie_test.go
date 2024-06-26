@@ -13,6 +13,7 @@ package mpt
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -304,7 +305,7 @@ func TestArchiveTrie_VerifyArchive_Failure_Meta(t *testing.T) {
 		t.Fatalf("cannot update roots: %v", err)
 	}
 
-	if err := VerifyArchiveTrie(dir, S5ArchiveConfig, NilVerificationObserver{}); err == nil {
+	if err := VerifyArchiveTrie(context.Background(), dir, S5ArchiveConfig, NilVerificationObserver{}); err == nil {
 		t.Errorf("verification should fail")
 	}
 }
@@ -389,7 +390,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				t.Fatalf("failed to close resources: %v", err)
 			}
 
-			if err := VerifyArchiveTrie(archiveDir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), archiveDir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("failed to verify archive: %v", err)
 			}
 		})
@@ -400,7 +401,7 @@ func TestArchiveTrie_VerificationOfEmptyDirectoryPasses(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {
 			dir := t.TempDir()
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("an empty directory should be fine, got: %v", err)
 			}
 		})
@@ -450,7 +451,7 @@ func TestArchiveTrie_VerificationOfFreshArchivePasses(t *testing.T) {
 				t.Fatalf("failed to close archive: %v", err)
 			}
 
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err != nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err != nil {
 				t.Errorf("a freshly closed archive should be fine, got: %v", err)
 			}
 		})
@@ -1081,7 +1082,7 @@ func TestArchiveTrie_VerificationOfArchiveWithMissingFileFails(t *testing.T) {
 				t.Fatalf("failed to delete file")
 			}
 
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("missing file should be detected")
 			}
 		})
@@ -1128,7 +1129,7 @@ func TestArchiveTrie_VerificationOfArchiveWithCorruptedFileFails(t *testing.T) {
 				t.Fatalf("failed to modify file")
 			}
 
-			if err := VerifyArchiveTrie(dir, config, NilVerificationObserver{}); err == nil {
+			if err := VerifyArchiveTrie(context.Background(), dir, config, NilVerificationObserver{}); err == nil {
 				t.Errorf("corrupted file should have been detected")
 			}
 		})

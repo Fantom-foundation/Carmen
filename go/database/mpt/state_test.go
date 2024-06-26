@@ -36,7 +36,7 @@ var stateFactories = map[string]func(string) (io.Closer, error){
 	"memory":  func(dir string) (io.Closer, error) { return OpenGoMemoryState(dir, S5LiveConfig, 1024) },
 	"file":    func(dir string) (io.Closer, error) { return OpenGoFileState(dir, S5LiveConfig, 1024) },
 	"archive": func(dir string) (io.Closer, error) { return OpenArchiveTrie(dir, S5ArchiveConfig, 1024) },
-	"verify":  func(dir string) (io.Closer, error) { return openVerificationNodeSource(dir, S5LiveConfig) },
+	"verify":  func(dir string) (io.Closer, error) { return openVerificationNodeSource(nil, dir, S5LiveConfig) },
 }
 
 var mptStateFactories = map[string]func(string) (*MptState, error){

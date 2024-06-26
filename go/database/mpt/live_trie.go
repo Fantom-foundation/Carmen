@@ -11,6 +11,7 @@
 package mpt
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,7 +64,7 @@ func OpenFileLiveTrie(directory string, config MptConfig, cacheCapacity int) (*L
 // VerifyFileLiveTrie validates a file-based live trie stored in the given
 // directory. If the test passes, the data stored in the respective directory
 // can be considered to be a valid Live Trie of the given configuration.
-func VerifyFileLiveTrie(directory string, config MptConfig, observer VerificationObserver) error {
+func VerifyFileLiveTrie(ctx context.Context, directory string, config MptConfig, observer VerificationObserver) error {
 	metadata, exists, err := readMetadata(directory + "/meta.json")
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func VerifyFileLiveTrie(directory string, config MptConfig, observer Verificatio
 	if !exists {
 		return nil
 	}
-	return verifyFileForest(directory, config, []Root{{
+	return verifyFileForest(ctx, directory, config, []Root{{
 		NewNodeReference(metadata.RootNode),
 		metadata.RootHash,
 	}}, observer)
