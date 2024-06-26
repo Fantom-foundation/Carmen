@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -118,7 +119,7 @@ func TestArchiveTrie_Open_Fails_Too_Short_Roots(t *testing.T) {
 
 	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
 		_ = archive.Close()
-		t.Errorf("openning archive should not succeed")
+		t.Errorf("opening archive should not succeed")
 	}
 }
 
@@ -134,12 +135,12 @@ func TestArchiveTrie_Open_Fails_CannotOpen_Roots(t *testing.T) {
 
 	// remove read access
 	if err := os.Chmod(filepath.Join(dir, "roots.dat"), 0); err != nil {
-		t.Fatalf("cannot chmod rotos file: %v", err)
+		t.Fatalf("cannot chmod roots file: %v", err)
 	}
 
 	if archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, 1024); err == nil {
 		_ = archive.Close()
-		t.Errorf("openning archive should not succeed")
+		t.Errorf("opening archive should not succeed")
 	}
 }
 
@@ -547,12 +548,12 @@ func TestArchive_RootsGrowSubLinearly(t *testing.T) {
 				}
 
 				if i > threshold {
-					if got, want := cap(archive.roots), int(factor*float64(prevCap)); got >= want {
+					if got, want := cap(archive.roots.roots), int(factor*float64(prevCap)); got >= want {
 						t.Fatalf("array grows too fast: %d >= %d", got, want)
 					}
 				}
 
-				prevCap = cap(archive.roots)
+				prevCap = cap(archive.roots.roots)
 			}
 		})
 	}
@@ -1160,17 +1161,22 @@ func TestArchiveTrie_CanLoadRootsFromJunkySource(t *testing.T) {
 }
 
 func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
-	roots := []Root{}
+	file := filepath.Join(t.TempDir(), "roots.dat")
+	original, err := loadRoots(file)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	if original.length() != 0 {
+		t.Errorf("unexpected number of roots, wanted 0, got %d", original.length())
+	}
 	for i := 0; i < 48; i++ {
 		id := NodeId(uint64(1) << i)
-		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
+		original.append(Root{NodeRef: NewNodeReference(id)})
 		id = NodeId((uint64(1) << (i + 1)) - 1)
-		roots = append(roots, Root{NodeRef: NewNodeReference(id)})
+		original.append(Root{NodeRef: NewNodeReference(id)})
 	}
 
-	dir := t.TempDir()
-	file := dir + string(filepath.Separator) + "roots.dat"
-	if err := StoreRoots(file, roots); err != nil {
+	if err := original.storeRoots(); err != nil {
 		t.Fatalf("failed to store roots: %v", err)
 	}
 
@@ -1178,16 +1184,121 @@ func TestArchiveTrie_StoreLoadRoots(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load roots: %v", err)
 	}
-	if len(roots) != len(restored) {
-		t.Fatalf("invalid number of restored roots, wanted %d, got %d", len(roots), len(restored))
+	if want, got := original.length(), restored.length(); want != got {
+		t.Fatalf("invalid number of restored roots, wanted %d, got %d", want, got)
 	}
 
-	for i := 0; i < len(roots); i++ {
-		want := roots[i].NodeRef.Id()
-		got := restored[i].NodeRef.Id()
+	for i := 0; i < original.length(); i++ {
+		want := original.roots[i].NodeRef.Id()
+		got := restored.roots[i].NodeRef.Id()
 		if want != got {
 			t.Errorf("invalid restored root at position %d, wanted %v, got %v", i, want, got)
 		}
+	}
+}
+
+func TestArchiveTrie_RootListStoreOnlyWritesNewRoots(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "roots.dat")
+	list, err := loadRoots(file)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+
+	// The first write establishes a list of roots in the output file.
+	list.append(Root{})
+	list.append(Root{})
+	list.append(Root{})
+	if err := list.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+
+	// We redirect the incremental update into another file to see what is written.
+	list.filename = filepath.Join(t.TempDir(), "roots2.dat")
+	list.append(Root{})
+	list.append(Root{})
+	if err := list.storeRoots(); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+
+	// Loading the second file should only produce 2 roots.
+	restored, err := loadRoots(list.filename)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	if want, got := 2, restored.length(); want != got {
+		t.Fatalf("invalid number of restored roots, wanted %d, got %d", want, got)
+	}
+}
+
+func TestArchiveTrie_IncrementalRootListUpdates(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "roots.dat")
+	list, err := loadRoots(file)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	if list.length() != 0 {
+		t.Errorf("unexpected number of roots, wanted 0, got %d", list.length())
+	}
+
+	counter := 0
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 10; j++ {
+			id := NodeId(counter)
+			list.append(Root{NodeRef: NewNodeReference(id)})
+			counter++
+		}
+		if err := list.storeRoots(); err != nil {
+			t.Fatalf("failed to store roots: %v", err)
+		}
+
+		restored, err := loadRoots(file)
+		if err != nil {
+			t.Fatalf("failed to reload roots: %v", err)
+		}
+
+		if !reflect.DeepEqual(list, restored) {
+			t.Fatalf("failed to restore roots, wanted %v, got %v", list, restored)
+		}
+	}
+}
+
+func TestArchiveTrie_DirectlyStoredRootsCanBeRestored(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "roots.dat")
+	roots := []Root{
+		{NewNodeReference(ValueId(12)), common.Hash{12}},
+		{NewNodeReference(ValueId(14)), common.Hash{14}},
+	}
+
+	if err := StoreRoots(file, roots); err != nil {
+		t.Fatalf("failed to store roots: %v", err)
+	}
+	restored, err := loadRoots(file)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	if !slices.Equal(roots, restored.roots) {
+		t.Errorf("failed to restore roots, wanted %v, got %v", roots, restored.roots)
+	}
+}
+
+func TestArchiveTrie_FileAccessErrorWhenStoringRootsIsDetected(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "roots.dat")
+	list, err := loadRoots(file)
+	if err != nil {
+		t.Fatalf("failed to load roots: %v", err)
+	}
+	if err := list.storeRoots(); err != nil {
+		t.Fatalf("failed to store empty roots file: %v", err)
+	}
+
+	// remove write access
+	if err := os.Chmod(file, 0x400); err != nil {
+		t.Fatalf("cannot chmod roots file: %v", err)
+	}
+
+	list.append(Root{})
+	if err := list.storeRoots(); err == nil {
+		t.Errorf("expected an error when storing roots into non-accessible file")
 	}
 }
 
@@ -1538,4 +1649,18 @@ var archiveGetters = map[string]func(archive archive.Archive) error{
 		_, err := archive.GetStorage(uint64(0), common.Address{}, common.Key{})
 		return err
 	},
+}
+
+func BenchmarkArchiveFlush_Roots(b *testing.B) {
+	archive, err := OpenArchiveTrie(b.TempDir(), S5ArchiveConfig, 1000)
+	if err != nil {
+		b.Fatalf("cannot open archive: %v", err)
+	}
+	defer archive.Close()
+	archive.Add(1_000_000, common.Update{}, nil)
+	for i := 0; i < b.N; i++ {
+		if err := archive.Flush(); err != nil {
+			b.Fatalf("failed to flush archive: %v", err)
+		}
+	}
 }
