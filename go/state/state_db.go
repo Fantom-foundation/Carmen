@@ -34,7 +34,9 @@ type VmStateDB interface {
 	Exist(common.Address) bool
 	Empty(common.Address) bool
 
+	CreateContract(common.Address)
 	Suicide(common.Address) bool
+	SuicideNewContract(common.Address) bool
 	HasSuicided(common.Address) bool
 
 	// Balance
@@ -203,6 +205,10 @@ type stateDB struct {
 
 	// Tracks the clearing state of individual accounts.
 	clearedAccounts map[common.Address]accountClearingState
+
+	// A set of contracts created during the current transaction. This is used
+	// to mark eligible accounts to be self-destructed according to EIP-6780.
+	createdContracts map[common.Address]struct{}
 
 	// A list of operations undoing modifications applied on the inner state if a snapshot revert needs to be performed.
 	undo []func()
@@ -450,6 +456,7 @@ func createStateDBWith(state State, storedDataCacheCapacity int, canApplyChanges
 		accountsToDelete:  make([]common.Address, 0, 100),
 		undo:              make([]func(), 0, 100),
 		clearedAccounts:   make(map[common.Address]accountClearingState),
+		createdContracts:  make(map[common.Address]struct{}),
 		emptyCandidates:   make([]common.Address, 0, 100),
 		canApplyChanges:   canApplyChanges,
 	}
@@ -534,6 +541,17 @@ func (s *stateDB) CreateAccount(addr common.Address) {
 	})
 }
 
+func (s *stateDB) CreateContract(addr common.Address) {
+	if _, exists := s.createdContracts[addr]; exists {
+		return
+	}
+	s.createAccountIfNotExists(addr)
+	s.createdContracts[addr] = struct{}{}
+	s.undo = append(s.undo, func() {
+		delete(s.createdContracts, addr)
+	})
+}
+
 func (s *stateDB) createAccountIfNotExists(addr common.Address) bool {
 	if s.Exist(addr) {
 		return false
@@ -578,6 +596,19 @@ func (s *stateDB) Suicide(addr common.Address) bool {
 	}
 
 	return true
+}
+
+// SuicideNewContract marks the given contract account as suicided.
+// If called in the same transaction scope after CreateContract, works
+// the same as Suicide, otherwise has no effect.
+func (s *stateDB) SuicideNewContract(addr common.Address) bool {
+	// If called in the same tx, behave as previously
+	if _, exists := s.createdContracts[addr]; exists {
+		return s.Suicide(addr)
+	}
+
+	// Otherwise do nothing
+	return false
 }
 
 func (s *stateDB) HasSuicided(addr common.Address) bool {
@@ -1340,6 +1371,7 @@ func (s *stateDB) resetTransactionContext() {
 	s.undo = s.undo[0:0]
 	s.emptyCandidates = s.emptyCandidates[0:0]
 	s.logs = s.logs[0:0]
+	s.createdContracts = make(map[common.Address]struct{})
 }
 
 func (s *stateDB) ResetBlockContext() {

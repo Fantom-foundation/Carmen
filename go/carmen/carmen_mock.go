@@ -540,6 +540,18 @@ func (mr *MockTransactionContextMockRecorder) CreateAccount(arg0 any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockTransactionContext)(nil).CreateAccount), arg0)
 }
 
+// CreateContract mocks base method.
+func (m *MockTransactionContext) CreateContract(arg0 Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockTransactionContextMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockTransactionContext)(nil).CreateContract), arg0)
+}
+
 // Empty mocks base method.
 func (m *MockTransactionContext) Empty(arg0 Address) bool {
 	m.ctrl.T.Helper()
@@ -775,6 +787,20 @@ func (m *MockTransactionContext) SelfDestruct(arg0 Address) bool {
 func (mr *MockTransactionContextMockRecorder) SelfDestruct(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelfDestruct", reflect.TypeOf((*MockTransactionContext)(nil).SelfDestruct), arg0)
+}
+
+// SelfDestruct6780 mocks base method.
+func (m *MockTransactionContext) SelfDestruct6780(arg0 Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SelfDestruct6780", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SelfDestruct6780 indicates an expected call of SelfDestruct6780.
+func (mr *MockTransactionContextMockRecorder) SelfDestruct6780(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelfDestruct6780", reflect.TypeOf((*MockTransactionContext)(nil).SelfDestruct6780), arg0)
 }
 
 // SetCode mocks base method.

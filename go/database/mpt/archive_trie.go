@@ -33,7 +33,7 @@ type ArchiveTrie struct {
 	head         LiveState // the current head-state
 	forest       Database  // global forest with all versions of LiveState
 	nodeSource   NodeSource
-	roots        []Root     // the roots of individual blocks indexed by block height
+	roots        rootList   // the roots of individual blocks indexed by block height
 	rootsMutex   sync.Mutex // protecting access to the roots list
 	rootFile     string     // the file storing the list of roots
 	addMutex     sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
@@ -83,10 +83,10 @@ func VerifyArchiveTrie(directory string, config MptConfig, observer Verification
 	if err != nil {
 		return err
 	}
-	if len(roots) == 0 {
+	if roots.length() == 0 {
 		return nil
 	}
-	return VerifyMptState(directory, config, roots, observer)
+	return VerifyMptState(directory, config, roots.roots, observer)
 }
 
 func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
@@ -100,20 +100,20 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	defer a.addMutex.Unlock()
 
 	a.rootsMutex.Lock()
-	if uint64(len(a.roots)) > block {
+	if uint64(a.roots.length()) > block {
 		a.rootsMutex.Unlock()
 		return fmt.Errorf("block %d already present", block)
 	}
 
 	// Mark skipped blocks as having no changes.
-	if uint64(len(a.roots)) < block {
+	if uint64(a.roots.length()) < block {
 		lastHash, err := a.head.GetHash()
 		if err != nil {
 			a.rootsMutex.Unlock()
 			return a.addError(err)
 		}
-		for uint64(len(a.roots)) < block {
-			a.roots = append(a.roots, Root{a.head.Root(), lastHash})
+		for uint64(a.roots.length()) < block {
+			a.roots.append(Root{a.head.Root(), lastHash})
 		}
 	}
 	a.rootsMutex.Unlock()
@@ -150,14 +150,14 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 
 	// Save new root node.
 	a.rootsMutex.Lock()
-	a.roots = append(a.roots, Root{a.head.Root(), hash})
+	a.roots.append(Root{a.head.Root(), hash})
 	a.rootsMutex.Unlock()
 	return nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
 	a.rootsMutex.Lock()
-	length := uint64(len(a.roots))
+	length := uint64(a.roots.length())
 	a.rootsMutex.Unlock()
 	if length == 0 {
 		return 0, true, nil
@@ -231,12 +231,12 @@ func (a *ArchiveTrie) GetAccountHash(block uint64, account common.Address) (comm
 
 func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 	a.rootsMutex.Lock()
-	length := uint64(len(a.roots))
+	length := uint64(a.roots.length())
 	if block >= length {
 		a.rootsMutex.Unlock()
 		return common.Hash{}, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	res := a.roots[block].Hash
+	res := a.roots.get(block).Hash
 	a.rootsMutex.Unlock()
 	return res, nil
 }
@@ -244,16 +244,16 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 // GetDiff computes the difference between the given source and target blocks.
 func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 	a.rootsMutex.Lock()
-	if srcBlock >= uint64(len(a.roots)) {
+	if srcBlock >= uint64(a.roots.length()) {
 		a.rootsMutex.Unlock()
-		return Diff{}, fmt.Errorf("source block %d not present in archive, highest block is %d", srcBlock, len(a.roots)-1)
+		return Diff{}, fmt.Errorf("source block %d not present in archive, highest block is %d", srcBlock, a.roots.length()-1)
 	}
-	if trgBlock >= uint64(len(a.roots)) {
+	if trgBlock >= uint64(a.roots.length()) {
 		a.rootsMutex.Unlock()
-		return Diff{}, fmt.Errorf("target block %d not present in archive, highest block is %d", trgBlock, len(a.roots)-1)
+		return Diff{}, fmt.Errorf("target block %d not present in archive, highest block is %d", trgBlock, a.roots.length()-1)
 	}
-	before := a.roots[srcBlock].NodeRef
-	after := a.roots[trgBlock].NodeRef
+	before := a.roots.get(srcBlock).NodeRef
+	after := a.roots.get(trgBlock).NodeRef
 	a.rootsMutex.Unlock()
 	return GetDiff(a.nodeSource, &before, &after)
 }
@@ -263,11 +263,11 @@ func (a *ArchiveTrie) GetDiff(srcBlock, trgBlock uint64) (Diff, error) {
 func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
 	if block == 0 {
 		a.rootsMutex.Lock()
-		if len(a.roots) == 0 {
+		if a.roots.length() == 0 {
 			a.rootsMutex.Unlock()
 			return Diff{}, fmt.Errorf("archive is empty, no diff present for block 0")
 		}
-		after := a.roots[0].NodeRef
+		after := a.roots.get(0).NodeRef
 		a.rootsMutex.Unlock()
 		return GetDiff(a.nodeSource, &emptyNodeReference, &after)
 	}
@@ -278,15 +278,15 @@ func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
 	mf := common.NewMemoryFootprint(unsafe.Sizeof(*a))
 	mf.AddChild("head", a.head.GetMemoryFootprint())
 	a.rootsMutex.Lock()
-	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(len(a.roots))*unsafe.Sizeof(NodeId(0))))
+	mf.AddChild("roots", common.NewMemoryFootprint(uintptr(a.roots.length())*unsafe.Sizeof(NodeId(0))))
 	a.rootsMutex.Unlock()
 	return mf
 }
 
 func (a *ArchiveTrie) Check() error {
-	roots := make([]*NodeReference, len(a.roots))
-	for i := 0; i < len(a.roots); i++ {
-		roots[i] = &a.roots[i].NodeRef
+	roots := make([]*NodeReference, a.roots.length())
+	for i := 0; i < a.roots.length(); i++ {
+		roots[i] = &a.roots.roots[i].NodeRef
 	}
 	return errors.Join(
 		a.CheckErrors(),
@@ -296,7 +296,7 @@ func (a *ArchiveTrie) Check() error {
 func (a *ArchiveTrie) Dump() {
 	a.rootsMutex.Lock()
 	defer a.rootsMutex.Unlock()
-	for i, root := range a.roots {
+	for i, root := range a.roots.roots {
 		fmt.Printf("\nBlock %d: %x\n", i, root.Hash)
 		view := getTrieView(root.NodeRef, a.forest)
 		view.Dump()
@@ -310,7 +310,7 @@ func (a *ArchiveTrie) Flush() error {
 	return errors.Join(
 		a.CheckErrors(),
 		a.head.Flush(),
-		StoreRoots(a.rootFile, a.roots),
+		a.roots.storeRoots(),
 	)
 }
 
@@ -326,12 +326,12 @@ func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
 	}
 
 	a.rootsMutex.Lock()
-	length := uint64(len(a.roots))
+	length := uint64(a.roots.length())
 	if block >= length {
 		a.rootsMutex.Unlock()
 		return nil, fmt.Errorf("invalid block: %d >= %d", block, length)
 	}
-	rootRef := a.roots[block].NodeRef
+	rootRef := a.roots.roots[block].NodeRef
 	a.rootsMutex.Unlock()
 	return getTrieView(rootRef, a.forest), nil
 }
@@ -358,19 +358,47 @@ func (a *ArchiveTrie) addError(err error) error {
 
 // ---- Reading and Writing Root Node ID Lists ----
 
-func loadRoots(filename string) ([]Root, error) {
+// rootList is a utility type managing an in-memory copy of the list of roots
+// of an archive and its synchronization with an on-disk file copy.
+type rootList struct {
+	roots          []Root
+	filename       string
+	numRootsInFile int
+}
+
+func (l *rootList) length() int {
+	return len(l.roots)
+}
+
+func (l *rootList) get(block uint64) Root {
+	return l.roots[block]
+}
+
+func (l *rootList) append(r Root) {
+	l.roots = append(l.roots, r)
+}
+
+func loadRoots(filename string) (rootList, error) {
 	// If there is no file, initialize and return an empty list.
 	if _, err := os.Stat(filename); err != nil {
-		return nil, nil
+		return rootList{filename: filename}, nil
 	}
 
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return rootList{}, err
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
-	return loadRootsFrom(reader)
+	roots, err := loadRootsFrom(reader)
+	if err != nil {
+		return rootList{}, err
+	}
+	return rootList{
+		roots:          roots,
+		filename:       filename,
+		numRootsInFile: len(roots),
+	}, nil
 }
 
 func loadRootsFrom(reader io.Reader) ([]Root, error) {
@@ -397,15 +425,30 @@ func loadRootsFrom(reader io.Reader) ([]Root, error) {
 }
 
 func StoreRoots(filename string, roots []Root) error {
-	f, err := os.Create(filename)
+	list := rootList{roots: roots, filename: filename}
+	return list.storeRoots()
+}
+
+func (l *rootList) storeRoots() error {
+	toBeWritten := l.roots[l.numRootsInFile:]
+	if l.numRootsInFile > 0 && len(toBeWritten) == 0 {
+		return nil
+	}
+
+	f, err := os.OpenFile(l.filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
 	writer := bufio.NewWriter(f)
-	return errors.Join(
-		storeRootsTo(writer, roots),
+	res := errors.Join(
+		storeRootsTo(writer, toBeWritten),
 		writer.Flush(),
-		f.Close())
+		f.Close(),
+	)
+	if res == nil {
+		l.numRootsInFile = len(l.roots)
+	}
+	return res
 }
 
 func storeRootsTo(writer io.Writer, roots []Root) error {

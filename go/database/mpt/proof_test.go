@@ -12,14 +12,267 @@ package mpt
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
 	"reflect"
 	"testing"
 )
+
+func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{1}
+	key := common.Key{2}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+	addressNibbles := AddressToNibblePath(address, ctxt)
+	keyNibbles := KeyToNibblePath(key, ctxt)
+
+	tests := map[string]struct {
+		desc  NodeDesc
+		value common.Value
+	}{
+		"account correct storage": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Branch{
+										children: Children{
+											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Value{key: key, length: 24, value: common.Value{0x12}}},
+										}}}},
+						}}},
+			},
+			value: common.Value{0x12},
+		},
+		"account different storage": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Branch{
+										children: Children{
+											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Value{key: common.Key{}, length: 24, value: common.Value{0x12}}},
+										}}}},
+						}}},
+			},
+			value: common.Value{},
+		},
+		"account storage path does not exist": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Extension{path: keyNibbles[1:40], next: &Empty{}},
+								}}}}},
+			},
+			value: common.Value{},
+		},
+		"storage empty value": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Branch{
+										children: Children{
+											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Empty{}},
+										}}}},
+						}}},
+			},
+			value: common.Value{},
+		},
+		"account empty storage": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Empty{}}},
+						}}},
+			},
+			value: common.Value{},
+		},
+		"account path does not exist": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: Empty{},
+							}}}},
+			},
+			value: common.Value{},
+		},
+		"different account": {
+			desc: &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:50],
+								next: &Account{address: common.Address{}, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Branch{
+										children: Children{
+											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Empty{}},
+										}}}},
+						}}},
+			},
+			value: common.Value{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			root, node := ctxt.Build(test.desc)
+
+			proof, err := CreateWitnessProof(ctxt, &root, address, key)
+			if err != nil {
+				t.Fatalf("failed to create proof: %v", err)
+			}
+
+			if !proof.IsValid() {
+				t.Fatalf("proof is not valid")
+			}
+
+			hash, _ := ctxt.getHashFor(&root)
+			gotValue, complete, err := proof.GetState(hash, address, key)
+			if err != nil {
+				t.Fatalf("failed to get state: %v", err)
+			}
+			if !complete {
+				t.Fatalf("proof is not complete")
+			}
+			if got, want := gotValue, test.value; got != want {
+				t.Errorf("unexpected value: got %v, want %v", got, want)
+			}
+
+			if got, want := proof, createReferenceProof(t, ctxt, &root, node); !got.Equals(want) {
+				t.Errorf("unexpected proof: got %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.T) {
+	address := common.Address{1}
+	key := common.Key{2}
+	var value common.Value
+	value[20] = 0x02
+	value[21] = 0x04
+
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	desc := &Extension{
+		path: AddressToNibblePath(address, ctxt)[0:30],
+		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+			storage: &Extension{
+				path:         KeyToNibblePath(key, ctxt)[0:40],
+				nextEmbedded: true,
+				next:         &Tag{label: "V", nested: &Value{key: key, length: 24, value: value}},
+			}},
+	}
+
+	root, node := ctxt.Build(desc)
+	proof, err := CreateWitnessProof(ctxt, &root, address, key, key)
+	if err != nil {
+		t.Fatalf("failed to create proof: %v", err)
+	}
+
+	if got, want := len(proof.proofDb), 3; got != want {
+		t.Errorf("unexpected proof size: got %v, want %v", got, want)
+	}
+
+	// the hashed rlp of the embedded node should not be a key in the proofDb
+	ref, _ := ctxt.Get("V")
+	embeddedHash, _ := ctxt.getHashFor(&ref)
+	// decode and encode to remove trailing zeros and get RLP of the embedded node.
+	decoded, err := rlp.Decode(embeddedHash[:])
+	if err != nil {
+		t.Fatalf("failed to decode embedded hash: %v", err)
+	}
+	encoded := rlp.Encode(decoded)
+	hash := common.Keccak256(encoded)
+	if _, ok := proof.proofDb[hash]; ok {
+		t.Errorf("embedded node should not be in the proof")
+	}
+
+	refProof := createReferenceProof(t, ctxt, &root, node)
+	delete(refProof.proofDb, hash)
+	if got, want := proof, refProof; !got.Equals(want) {
+		t.Errorf("unexpected proof: got %v, want %v", got, want)
+	}
+}
+
+func TestCreateWitnessProof_CannotCreateProof_FailingNodeSources(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	injectedErr := fmt.Errorf("injected error")
+	var node Node
+
+	tests := []struct {
+		name string
+		mock func(*MockNodeSource)
+	}{
+		{
+			name: "call in account proof fails",
+			mock: func(mock *MockNodeSource) {
+				childId := NewNodeReference(ValueId(123))
+				branchNode := BranchNode{}
+				branchNode.setEmbedded(0xA, true)
+				branchNode.children[0xA] = childId
+				mock.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](&branchNode).GetViewHandle(), nil)
+				mock.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared(node).GetViewHandle(), injectedErr)
+			},
+		},
+		{
+			name: "call in storage proof fails",
+			mock: func(mock *MockNodeSource) {
+				var account Node = &AccountNode{address: common.Address{0xA}}
+				gomock.InOrder(
+					mock.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared(account).GetViewHandle(), nil),
+					mock.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared(node).GetViewHandle(), injectedErr),
+				)
+			},
+		},
+	}
+
+	hash := common.Hash{0xA}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			nodeSource := NewMockNodeSource(ctrl)
+			nodeSource.EXPECT().getConfig().AnyTimes().Return(S5LiveConfig)
+			nodeSource.EXPECT().hashKey(gomock.Any()).AnyTimes().Return(hash)
+			nodeSource.EXPECT().hashAddress(gomock.Any()).AnyTimes().Return(hash)
+			test.mock(nodeSource)
+			root := NewNodeReference(EmptyId())
+
+			if _, err := CreateWitnessProof(nodeSource, &root, common.Address{0xA}, common.Key{0x1}); !errors.Is(err, injectedErr) {
+				t.Errorf("getting proof should fail")
+			}
+		})
+	}
+}
 
 func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -644,24 +897,6 @@ func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherKey(
 	}
 }
 
-func TestWitnessProof_String(t *testing.T) {
-	proof := proofDb{
-		common.Hash{0x04}: []byte{0x0D},
-		common.Hash{0x02}: []byte{0x0B},
-		common.Hash{0x01}: []byte{0x0A},
-		common.Hash{0x03}: []byte{0x0C},
-	}
-
-	str := "0x0100000000000000000000000000000000000000000000000000000000000000->0x0a\n" +
-		"0x0200000000000000000000000000000000000000000000000000000000000000->0x0b\n" +
-		"0x0300000000000000000000000000000000000000000000000000000000000000->0x0c\n" +
-		"0x0400000000000000000000000000000000000000000000000000000000000000->0x0d\n"
-
-	if got, want := fmt.Sprintf("%s", WitnessProof{proof}), str; got != want {
-		t.Errorf("unexpected string: got %v, want %v", got, want)
-	}
-}
-
 func TestWitnessProof_Is_Valid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -702,6 +937,24 @@ func TestWitnessProof_Is_Valid(t *testing.T) {
 			t.Fatalf("proof should be invalid")
 		}
 	})
+}
+
+func TestWitnessProof_String(t *testing.T) {
+	proof := proofDb{
+		common.Hash{0x04}: []byte{0x0D},
+		common.Hash{0x02}: []byte{0x0B},
+		common.Hash{0x01}: []byte{0x0A},
+		common.Hash{0x03}: []byte{0x0C},
+	}
+
+	str := "0x0100000000000000000000000000000000000000000000000000000000000000->0x0a\n" +
+		"0x0200000000000000000000000000000000000000000000000000000000000000->0x0b\n" +
+		"0x0300000000000000000000000000000000000000000000000000000000000000->0x0c\n" +
+		"0x0400000000000000000000000000000000000000000000000000000000000000->0x0d\n"
+
+	if got, want := fmt.Sprintf("%s", WitnessProof{proof}), str; got != want {
+		t.Errorf("unexpected string: got %v, want %v", got, want)
+	}
 }
 
 // createReferenceProofForLabels creates a reference witness proof for the given root node.
