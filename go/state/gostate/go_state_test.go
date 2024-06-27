@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 	"testing"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend/index"
 	"github.com/Fantom-foundation/Carmen/go/backend/store"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"go.uber.org/mock/gomock"
 )
@@ -828,7 +828,7 @@ func runAddBlock(block uint64, stateDB state.StateDB) {
 	stateDB.BeginBlock()
 	stateDB.BeginTransaction()
 	stateDB.CreateAccount(addr)
-	stateDB.AddBalance(addr, big.NewInt(100))
+	stateDB.AddBalance(addr, amount.New(100))
 	stateDB.SetState(addr, key, common.Value{123})
 	stateDB.SetCode(addr, make([]byte, 80))
 	stateDB.SetNonce(addr, 1)

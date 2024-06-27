@@ -14,130 +14,73 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/holiman/uint256"
 )
 
 func TestAmount_NewAmount(t *testing.T) {
-	tests := []struct {
-		name      string
-		args      []uint64
-		want      Amount
-		wantPanic bool
+	testCases := []struct {
+		args []uint64
 	}{
-		{"No arguments", []uint64{}, Amount{[4]uint64{0, 0, 0, 0}}, false},
-		{"One argument", []uint64{1}, Amount{[4]uint64{1, 0, 0, 0}}, false},
-		{"Two arguments", []uint64{1, 2}, Amount{[4]uint64{2, 1, 0, 0}}, false},
-		{"Three arguments", []uint64{1, 2, 3}, Amount{[4]uint64{3, 2, 1, 0}}, false},
-		{"Four arguments", []uint64{1, 2, 3, 4}, Amount{[4]uint64{4, 3, 2, 1}}, false},
-		{"Too many arguments", []uint64{1, 2, 3, 4, 5}, Amount{}, true},
+		{args: []uint64{}},
+		{args: []uint64{1}},
+		{args: []uint64{1, 2}},
+		{args: []uint64{1, 2, 3}},
+		{args: []uint64{1, 2, 3, 4}},
 	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			defer func() {
-				if r := recover(); r != nil {
-					if !test.wantPanic {
-						t.Errorf("NewAmount() panicked unexpectedly: %v", r)
-					}
-				} else if test.wantPanic {
-					t.Errorf("NewAmount() did not panic")
-				}
-			}()
-			if got, want := NewAmount(test.args...), test.want; got != want {
-				t.Errorf("wrong result, got %v, want %v", got, want)
-			}
-		})
+	for _, tc := range testCases {
+		if want, got := amount.New(tc.args...), NewAmount(tc.args...); want != got {
+			t.Errorf("New(%v): expected %v, got %v", tc.args, want, got)
+		}
 	}
 }
 
 func TestAmount_NewAmountFromUint256(t *testing.T) {
-	tests := []struct {
-		in  *uint256.Int
-		out Amount
+	testCases := []struct {
+		arg *uint256.Int
 	}{
-		{uint256.NewInt(0), NewAmount()},
-		{uint256.NewInt(1), NewAmount(1)},
-		{uint256.NewInt(256), NewAmount(256)},
-		{new(uint256.Int).Lsh(uint256.NewInt(1), 64), NewAmount(1, 0)},
-		{new(uint256.Int).Lsh(uint256.NewInt(1), 128), NewAmount(1, 0, 0)},
-		{new(uint256.Int).Lsh(uint256.NewInt(1), 192), NewAmount(1, 0, 0, 0)},
+		{arg: uint256.NewInt(0)},
+		{arg: uint256.NewInt(1)},
+		{arg: uint256.NewInt(256)},
+		{arg: new(uint256.Int).Lsh(uint256.NewInt(1), 64)},
+		{arg: new(uint256.Int).Lsh(uint256.NewInt(1), 128)},
+		{arg: new(uint256.Int).Lsh(uint256.NewInt(1), 192)},
 	}
-
-	for _, test := range tests {
-		if got, want := NewAmountFromUint256(test.in), test.out; want != got {
-			t.Errorf("failed to convert %v to Amount, wanted %v, got %v", test.in, want, got)
+	for _, tc := range testCases {
+		if want, got := amount.NewFromUint256(tc.arg), NewAmountFromUint256(tc.arg); want != got {
+			t.Errorf("NewFromUint256(%v): expected %v, got %v", tc.arg, want, got)
 		}
 	}
 }
 
 func TestAmount_NewAmountFromBytes(t *testing.T) {
-	// test empty amount
-	empty := NewAmountFromBytes()
-	if empty != NewAmount() {
-		t.Errorf("empty amount should be zero")
+	testCases := []struct {
+		args []byte
+	}{
+		{args: []byte{}},
+		{args: []byte{1}},
+		{args: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}},
 	}
-
-	amount := NewAmountFromBytes(1, 2, 3, 4)
-	if amount != NewAmount(0x01020304) {
-		t.Errorf("amount should be 0x01020304")
-	}
-
-	// test amount with more than 8 bytes to test word order
-	amount = NewAmountFromBytes(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
-	if amount != NewAmountFromUint256(uint256.MustFromHex("0x102030405060708090A0B0C0D0E0F10")) {
-		t.Errorf("amount should be 0x102030405060708090A0B0C0D0E0F10")
+	for _, tc := range testCases {
+		if want, got := amount.NewFromBytes(tc.args...), NewAmountFromBytes(tc.args...); want != got {
+			t.Errorf("NewFromBytes(%v): expected %v, got %v", tc.args, want, got)
+		}
 	}
 }
 
 func TestAmount_NewAmountFromBigInt(t *testing.T) {
-	// test amount with single value
-	amount, err := NewAmountFromBigInt(big.NewInt(100))
+	number := big.NewInt(100)
+	want, err := amount.NewFromBigInt(number)
 	if err != nil {
-		t.Errorf("failed to create amount from big.Int: %v", err)
-	}
-	if amount != NewAmount(100) {
-		t.Errorf("amount should be 100")
+		t.Errorf("NewFromBigInt(%v): unexpected error: %v", number, err)
 	}
 
-	// test negativne amount
-	_, err = NewAmountFromBigInt(big.NewInt(-100))
-	if err == nil {
-		t.Errorf("negative amount should not be allowed")
+	got, err := NewAmountFromBigInt(number)
+	if err != nil {
+		t.Errorf("NewFromBigInt(%v): unexpected error: %v", number, err)
 	}
 
-	// test amount with more than 256 bits
-	_, err = NewAmountFromBigInt(new(big.Int).Lsh(big.NewInt(1), 256))
-	if err == nil {
-		t.Errorf("amount with more than 256 bits should not be allowed")
-	}
-}
-
-func TestAmount_IsZero(t *testing.T) {
-	zero := NewAmount()
-	if !zero.IsZero() {
-		t.Errorf("zero amount should be zero")
-	}
-	one := NewAmount(1)
-	if one.IsZero() {
-		t.Errorf("one amount should not be zero")
-	}
-}
-
-func TestAmount_IsUint64(t *testing.T) {
-	amount := NewAmount(100)
-	if !amount.IsUint64() {
-		t.Errorf("amount should be representable as uint64")
-	}
-
-	amount = NewAmount(1, 0, 0, 0)
-	if amount.IsUint64() {
-		t.Errorf("amount should not be representable as uint64")
-	}
-}
-
-func TestAmount_ToUint256(t *testing.T) {
-	amount := NewAmount(100)
-	if got, want := amount.Uint256(), uint256.NewInt(100); got.Cmp(want) != 0 {
-		t.Errorf("wrong amount: got %v, wanted: %v", got, want)
+	if want != got {
+		t.Errorf("NewFromBigInt(%v): expected %v, got %v", number, want, got)
 	}
 }
