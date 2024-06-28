@@ -14,11 +14,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
@@ -7818,7 +7819,9 @@ func (a *Account) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) 
 		storageHashDirty: a.storageHashDirty,
 		storageHash:      storageHash,
 	}
-	res.nodeBase.clean.Store(!a.dirty)
+	if !a.dirty {
+		res.MarkClean()
+	}
 	return NewNodeReference(AccountId(ctx.nextIndex())), shared.MakeShared[Node](res)
 }
 
@@ -7840,7 +7843,9 @@ type Branch struct {
 func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(BranchId(ctx.nextIndex()))
 	res := &BranchNode{}
-	res.nodeBase.clean.Store(!b.dirty)
+	if !b.dirty {
+		res.MarkClean()
+	}
 	res.frozen = b.frozen
 	for i, desc := range b.children {
 		ref, _ := ctx.Build(desc)
@@ -7884,7 +7889,9 @@ type Extension struct {
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	ref := NewNodeReference(ExtensionId(ctx.nextIndex()))
 	res := &ExtensionNode{}
-	res.nodeBase.clean.Store(!e.dirty)
+	if !e.dirty {
+		res.MarkClean()
+	}
 	res.frozen = e.frozen
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
@@ -7943,7 +7950,9 @@ func (v *Value) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 		value:      v.value,
 		pathLength: v.length,
 	}
-	res.nodeBase.clean.Store(!v.dirty)
+	if !v.dirty {
+		res.MarkClean()
+	}
 	return NewNodeReference(ValueId(ctx.nextIndex())), shared.MakeShared[Node](res)
 }
 
