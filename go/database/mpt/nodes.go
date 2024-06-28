@@ -475,9 +475,14 @@ func (c *nodeCheckContext) isCompatible(other *nodeCheckContext) bool {
 type nodeBase struct {
 	hash       common.Hash // the hash of this node (may be dirty)
 	hashStatus hashStatus  // indicating whether this node's hash is valid
-	clean      atomic.Bool // by default nodes are dirty (clean == false)
+	clean      int32       // by default nodes are dirty
 	frozen     bool        // a flag marking the node as immutable (default: mutable)
 }
+
+const (
+	cleanStatusDirty int32 = 0 // by default, a node is considered dirty
+	cleanStatusClean int32 = 1 // a node is considered clean if it is in sync with the disk
+)
 
 type hashStatus byte
 
@@ -531,21 +536,21 @@ func (n *nodeBase) markMutable() {
 // This function is thread safe and does not need any specific shared node access
 // permissions to be accessed safely.
 func (n *nodeBase) IsDirty() bool {
-	return !n.clean.Load()
+	return atomic.LoadInt32(&n.clean) != cleanStatusClean
 }
 
 func (n *nodeBase) MarkClean() {
-	n.clean.Store(true)
+	atomic.StoreInt32(&n.clean, cleanStatusClean)
 }
 
 func (n *nodeBase) markDirty() {
-	n.clean.Store(false)
+	atomic.StoreInt32(&n.clean, cleanStatusDirty)
 	n.hashStatus = hashStatusDirty
 }
 
 func (n *nodeBase) Release() {
 	// The node is disconnected from the disk version and thus clean.
-	n.clean.Store(true)
+	n.MarkClean()
 	n.hashStatus = hashStatusClean
 }
 

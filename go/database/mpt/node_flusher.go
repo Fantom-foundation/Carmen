@@ -87,16 +87,9 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 	dirtyIds := *(dirtyIdsPtr)
 	dirtyIds = dirtyIds[:0]
 	cache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
-		handle, success := node.TryGetViewHandle()
-		if !success {
-			return
+		if node.GetUnprotected().IsDirty() {
+			dirtyIds = append(dirtyIds, id)
 		}
-		dirty := handle.Get().IsDirty()
-		handle.Release()
-		if !dirty {
-			return
-		}
-		dirtyIds = append(dirtyIds, id)
 	})
 
 	// The IDs are sorted to increase the chance of sequential

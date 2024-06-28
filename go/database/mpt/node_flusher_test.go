@@ -82,7 +82,7 @@ func TestNodeFlusher_ErrorsAreCollected(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 
 	done := make(chan struct{})
 	counter := 0
@@ -115,10 +115,10 @@ func TestNodeFlusher_FlushesOnlyDirtyNodes(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	nodes := map[NodeId]*shared.Shared[Node]{
-		ValueId(1): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: true}}),
-		ValueId(2): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}}),
-		ValueId(3): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}}),
-		ValueId(4): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: true}}),
+		ValueId(1): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusClean}}),
+		ValueId(2): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}}),
+		ValueId(3): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}}),
+		ValueId(4): shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusClean}}),
 	}
 
 	// All nodes are checked.
@@ -151,7 +151,7 @@ func TestNodeFlusher_FlushedNodesAreMarkedClean(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
 	})
@@ -177,10 +177,12 @@ func TestNodeFlusher_NodesInUseAreIgnored(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
 	})
+
+	cache.EXPECT().Get(RefTo(id)).Return(node, true)
 
 	// There shall be no write events (which is the default, but spelled out explicitly here).
 	sink.EXPECT().Write(gomock.Any(), gomock.Any()).Times(0)
@@ -206,7 +208,7 @@ func TestNodeFlusher_NodesThatAreAccessedAfterBeingIdentifiedAsDirtyAreIgnored(t
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	handle := shared.WriteHandle[Node]{}
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
@@ -232,7 +234,7 @@ func TestNodeFlusher_EvictedNodesAreIgnored(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
 	})
@@ -256,7 +258,7 @@ func TestNodeFlusher_NodesThatGetMarkedCleanByThirdPartyAreIgnored(t *testing.T)
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
 		handle := node.GetWriteHandle()
@@ -282,7 +284,7 @@ func TestNodeFlusher_NodesWithDirtyHashesAreIgnored(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false, hashStatus: hashStatusDirty}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty, hashStatus: hashStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
 	})
@@ -305,7 +307,7 @@ func TestNodeFlusher_FlushErrorsArePropagated(t *testing.T) {
 	sink := NewMockNodeSink(ctrl)
 
 	id := ValueId(1)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id, node)
 	})
@@ -333,7 +335,7 @@ func TestNodeFlusher_FlushErrorsAreAggregated(t *testing.T) {
 
 	id1 := ValueId(1)
 	id2 := ValueId(2)
-	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: false}})
+	node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusDirty}})
 	cache.EXPECT().ForEach(gomock.Any()).Do(func(f func(NodeId, *shared.Shared[Node])) {
 		f(id1, node)
 		f(id2, node)
@@ -370,7 +372,7 @@ func BenchmarkNodeFlusher_CollectDirtyNodes(b *testing.B) {
 			// Fill a cache with clean nodes.
 			cache := NewNodeCache(size)
 			for i := 0; i < size; i++ {
-				node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: true}})
+				node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: cleanStatusClean}})
 				ref := NewNodeReference(ValueId(uint64(i)))
 				cache.GetOrSet(&ref, node)
 			}

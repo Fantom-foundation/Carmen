@@ -772,13 +772,13 @@ func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 				handle := node.GetWriteHandle()
 				switch node := handle.Get().(type) {
 				case *BranchNode:
-					node.clean.Store(false)
+					node.markDirty()
 				case *ExtensionNode:
-					node.clean.Store(false)
+					node.markDirty()
 				case *ValueNode:
-					node.clean.Store(false)
+					node.markDirty()
 				case *AccountNode:
-					node.clean.Store(false)
+					node.markDirty()
 				}
 				handle.Release()
 			})
