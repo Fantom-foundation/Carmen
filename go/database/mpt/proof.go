@@ -47,8 +47,9 @@ type WitnessProof struct {
 func CreateWitnessProof(nodeSource NodeSource, root *NodeReference, address common.Address, keys ...common.Key) (WitnessProof, error) {
 	proof := proofDb{}
 	visitor := &proofExtractionVisitor{
-		nodeSource: nodeSource,
-		proof:      proof,
+		nodeSource:        nodeSource,
+		proof:             proof,
+		updateChildHashes: nodeSource.getConfig().HashStorageLocation == HashStoredWithNode,
 	}
 
 	var innerError error
@@ -214,15 +215,36 @@ func (p WitnessProof) Equals(other WitnessProof) bool {
 // proofExtractionVisitor is a visitor that visits MPT nodes and creates a witness proof.
 // It hashes and encodes the nodes and stores them into the proof database.
 type proofExtractionVisitor struct {
-	proof      proofDb
-	nodeSource NodeSource
-	err        error
+	proof             proofDb
+	nodeSource        NodeSource
+	err               error
+	updateChildHashes bool
 }
 
 // Visit computes RLP and hash of the visited node and puts it to the proof.
 func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
 	if info.Embedded.True() {
 		return VisitResponseAbort
+	}
+
+	if p.updateChildHashes {
+		switch n := node.(type) {
+		case *ExtensionNode:
+			if err := updateChildrenHashesComputeEmbedded(p.nodeSource, n, []NodeReference{n.next}); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		case *BranchNode:
+			if err := updateChildrenHashesComputeEmbedded(p.nodeSource, n, n.children[:]); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		case *AccountNode:
+			if err := updateChildrenHashesComputeEmbedded(p.nodeSource, n, []NodeReference{n.storage}); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
 	}
 
 	data := make([]byte, 0, 1024)
@@ -236,6 +258,30 @@ func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
 	p.proof[hash] = rlp
 
 	return VisitResponseContinue
+}
+
+// updateChildrenHashesComputeEmbedded updates the hashes of the children of the given node.
+// Furthermore, it updates the embedded status of the children.
+func updateChildrenHashesComputeEmbedded(source NodeSource, node Node, children []NodeReference) error {
+	embeddedChildren := make(map[NodeId]bool, len(children))
+	for _, child := range children {
+		childHandle, err := source.getViewAccess(&child)
+		if err != nil {
+			return err
+		}
+		embedded, err := isHashedNodeEmbedded(childHandle.Get(), source)
+		childHandle.Release()
+		if err != nil {
+			return err
+		}
+		embeddedChildren[child.Id()] = embedded
+	}
+
+	if err := updateChildrenHashes(source, node, embeddedChildren); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // String returns a string representation of the witness proof.
