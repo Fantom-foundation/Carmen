@@ -362,3 +362,22 @@ func checkThatNodeIsNotLocked(t *testing.T, node *shared.Shared[Node]) {
 	}
 	handle.Release()
 }
+
+func BenchmarkNodeFlusher_CollectDirtyNodes(b *testing.B) {
+	sizes := []int{1_000, 10_000, 100_000, 1_000_000, 10_000_000}
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+			// Fill a cache with clean nodes.
+			cache := NewNodeCache(size)
+			for i := 0; i < size; i++ {
+				node := shared.MakeShared[Node](&ValueNode{nodeBase: nodeBase{clean: true}})
+				ref := NewNodeReference(ValueId(uint64(i)))
+				cache.GetOrSet(&ref, node)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				tryFlushDirtyNodes(cache, nil)
+			}
+		})
+	}
+}
