@@ -173,6 +173,9 @@ type Node interface {
 	// rooted by this node. Only non-frozen nodes can be released.
 	Release(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node]) error
 
+	// Reset resets the node to its zero state.
+	Reset()
+
 	// IsDirty returns whether this node's state is different in memory than it
 	// is on disk. All nodes are created dirty and may only be cleaned by marking
 	// them as such.
@@ -554,6 +557,12 @@ func (n *nodeBase) Release() {
 	n.hashStatus = hashStatusClean
 }
 
+func (n *nodeBase) reset() {
+	n.markDirty()
+	n.hashStatus = hashStatusDirty
+	n.frozen = false
+}
+
 func (n *nodeBase) check(thisRef *NodeReference) error {
 	var errs []error
 	if !n.IsDirty() && n.hashStatus == hashStatusDirty {
@@ -634,6 +643,10 @@ func (e EmptyNode) ClearStorage(manager NodeManager, thisRef *NodeReference, thi
 
 func (e EmptyNode) Release(NodeManager, *NodeReference, shared.WriteHandle[Node]) error {
 	return nil
+}
+
+func (e EmptyNode) Reset() {
+	// nothing to do
 }
 
 func (e EmptyNode) IsDirty() bool {
@@ -927,6 +940,14 @@ func (n *BranchNode) Release(manager NodeManager, thisRef *NodeReference, this s
 		}
 	}
 	return manager.release(thisRef)
+}
+
+func (n *BranchNode) Reset() {
+	n.nodeBase.reset()
+	n.children = [16]NodeReference{}
+	n.dirtyHashes = 0
+	n.embeddedChildren = 0
+	n.frozenChildren = 0
 }
 
 func (n *BranchNode) MarkFrozen() {
@@ -1404,6 +1425,14 @@ func (n *ExtensionNode) Release(manager NodeManager, thisRef *NodeReference, thi
 	return manager.release(thisRef)
 }
 
+func (n *ExtensionNode) Reset() {
+	n.nodeBase.reset()
+	n.path = Path{}
+	n.next = NodeReference{}
+	n.nextHashDirty = true
+	n.nextIsEmbedded = false
+}
+
 func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
 	if n.IsFrozen() {
 		return nil
@@ -1802,6 +1831,15 @@ func (n *AccountNode) Release(manager NodeManager, thisRef *NodeReference, this 
 	return manager.release(thisRef)
 }
 
+func (n *AccountNode) Reset() {
+	n.nodeBase.reset()
+	n.address = common.Address{}
+	n.info = AccountInfo{}
+	n.storage = NodeReference{}
+	n.storageHashDirty = true
+	n.pathLength = 0
+}
+
 func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
 	if n.pathLength == length {
 		return *thisRef, false, nil
@@ -2039,6 +2077,13 @@ func (n *ValueNode) Release(manager NodeManager, thisRef *NodeReference, this sh
 	}
 	n.nodeBase.Release()
 	return manager.release(thisRef)
+}
+
+func (n *ValueNode) Reset() {
+	n.nodeBase.reset()
+	n.key = common.Key{}
+	n.value = common.Value{}
+	n.pathLength = 0
 }
 
 func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
