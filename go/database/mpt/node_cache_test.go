@@ -425,3 +425,54 @@ func TestNodeCache_GetAndSetThreadSafety(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestNodeCache_GetAndSetIsThreadSafe(t *testing.T) {
+	nodes := []*shared.Shared[Node]{}
+	for i := 0; i < 256; i++ {
+		nodes = append(nodes, shared.MakeShared[Node](&ValueNode{pathLength: byte(i)}))
+	}
+
+	for i := 0; i < 1000; i++ {
+		t.Run(fmt.Sprintf("iteration-%d", i), func(t *testing.T) {
+			t.Parallel()
+			cache := newNodeCache(256)
+
+			// This test starts 10 goroutines that check the cache consistency
+			// while the main thread is inserting new elements.
+			wg := sync.WaitGroup{}
+			wg.Add(10)
+			done := make(chan struct{})
+			for i := 0; i < 10; i++ {
+				go func() {
+					defer wg.Done()
+					for {
+						select {
+						case <-done:
+							return
+						default:
+							// At any time, the cache should be consistent.
+							cache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
+								if id == EmptyId() {
+									t.Errorf("unexpected empty ID in cache")
+								}
+								if node == nil {
+									t.Errorf("nil node in cache for ID %v", id)
+								} else if want, got := byte(id.Index()), node.GetUnprotected().(*ValueNode).pathLength; want != got {
+									t.Errorf("for-each produced inconsistent key/value pair, wanted %v, got %v", want, got)
+								}
+							})
+						}
+					}
+				}()
+			}
+
+			for i, node := range nodes {
+				ref := NewNodeReference(ValueId(uint64(i)))
+				cache.GetOrSet(&ref, node)
+			}
+
+			close(done)
+			wg.Wait()
+		})
+	}
+}

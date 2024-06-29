@@ -132,7 +132,7 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 	tag := atomic.LoadUint64(&r.tag)
 	for {
 		// Resolve the owner position if needed.
-		if pos >= uint32(len(c.owners)) {
+		if pos >= uint32(len(c.owners)) || tag&0x1 == 0 {
 			c.mutex.Lock()
 			position, found := c.index[r.id]
 			if !found {
@@ -149,7 +149,7 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 		owner := &c.owners[pos]
 		res := owner.Node()
 		// Check that the tag is still correct and the fetched result is valid.
-		if owner.tag.Load() == tag {
+		if owner.tag.Load() == tag && tag&0x1 == 1 {
 			return res, true
 		}
 		// If the tag has changed the position is out-dated and the true owner
@@ -202,9 +202,12 @@ func (c *nodeCache) GetOrSet(
 
 	// update the owner to own the new ID and node
 	c.tagCounter++
-	target.tag.Store(c.tagCounter)
+	tag := c.tagCounter << 1
+	target.tag.Store(tag)
 	target.id.Store(uint64(ref.Id()))
 	target.node.Store(node)
+	tag = tag | 1
+	target.tag.Store(tag)
 
 	// Move new owner to head of the LRU list.
 	target.next = c.head
@@ -214,7 +217,7 @@ func (c *nodeCache) GetOrSet(
 	c.index[ref.Id()] = pos
 	c.mutex.Unlock()
 	atomic.StoreUint32(&ref.pos, uint32(pos))
-	atomic.StoreUint64(&ref.tag, c.owners[pos].tag.Load())
+	atomic.StoreUint64(&ref.tag, tag)
 	return node, false, evictedId, evictedNode, evicted
 }
 
@@ -283,8 +286,11 @@ func (c *nodeCache) ForEach(consume func(NodeId, *shared.Shared[Node])) {
 		cur := &c.owners[i]
 		for {
 			tag := cur.tag.Load()
-			if tag == 0 {
+			if tag == 0 { // < the owner is empty
 				break
+			}
+			if tag&0x1 == 0 { // < the owner is being updated
+				continue
 			}
 			id := cur.Id()
 			node := cur.Node()
