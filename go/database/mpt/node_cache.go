@@ -135,14 +135,15 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 		if pos >= uint32(len(c.owners)) {
 			c.mutex.Lock()
 			position, found := c.index[r.id]
-			c.mutex.Unlock()
 			if !found {
+				c.mutex.Unlock()
 				return nil, false
 			}
 			pos = uint32(position)
 			tag = c.owners[pos].tag.Load()
 			atomic.StoreUint32(&r.pos, pos)
 			atomic.StoreUint64(&r.tag, tag)
+			c.mutex.Unlock()
 		}
 		// Fetch the owner and check the tag.
 		owner := &c.owners[pos]
