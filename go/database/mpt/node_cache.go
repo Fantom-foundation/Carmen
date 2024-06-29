@@ -132,24 +132,23 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 	tag := atomic.LoadUint64(&r.tag)
 	for {
 		// Resolve the owner position if needed.
-		if pos >= uint32(len(c.owners)) || tag&0x1 == 0 {
+		if pos >= uint32(len(c.owners)) {
 			c.mutex.Lock()
 			position, found := c.index[r.id]
+			c.mutex.Unlock()
 			if !found {
-				c.mutex.Unlock()
 				return nil, false
 			}
 			pos = uint32(position)
 			tag = c.owners[pos].tag.Load()
 			atomic.StoreUint32(&r.pos, pos)
 			atomic.StoreUint64(&r.tag, tag)
-			c.mutex.Unlock()
 		}
 		// Fetch the owner and check the tag.
 		owner := &c.owners[pos]
 		res := owner.Node()
 		// Check that the tag is still correct and the fetched result is valid.
-		if owner.tag.Load() == tag && tag&0x1 == 1 {
+		if owner.tag.Load() == tag && isStableTag(tag) {
 			return res, true
 		}
 		// If the tag has changed the position is out-dated and the true owner
@@ -202,12 +201,11 @@ func (c *nodeCache) GetOrSet(
 
 	// update the owner to own the new ID and node
 	c.tagCounter++
-	tag := c.tagCounter << 1
-	target.tag.Store(tag)
+	transition, stable := getUpdateTagPair(c.tagCounter)
+	target.tag.Store(transition)
 	target.id.Store(uint64(ref.Id()))
 	target.node.Store(node)
-	tag = tag | 1
-	target.tag.Store(tag)
+	target.tag.Store(stable)
 
 	// Move new owner to head of the LRU list.
 	target.next = c.head
@@ -217,7 +215,7 @@ func (c *nodeCache) GetOrSet(
 	c.index[ref.Id()] = pos
 	c.mutex.Unlock()
 	atomic.StoreUint32(&ref.pos, uint32(pos))
-	atomic.StoreUint64(&ref.tag, tag)
+	atomic.StoreUint64(&ref.tag, stable)
 	return node, false, evictedId, evictedNode, evicted
 }
 
@@ -289,7 +287,7 @@ func (c *nodeCache) ForEach(consume func(NodeId, *shared.Shared[Node])) {
 			if tag == 0 { // < the owner is empty
 				break
 			}
-			if tag&0x1 == 0 { // < the owner is being updated
+			if isTransitionTag(tag) { // < the owner is being updated
 				continue
 			}
 			id := cur.Id()
@@ -376,3 +374,15 @@ func (o *nodeOwner) Node() *shared.Shared[Node] {
 type ownerPosition uint32
 
 const unknownPosition = ownerPosition(0xFFFFFFFF)
+
+func isTransitionTag(tag uint64) bool {
+	return tag&0x1 == 0
+}
+
+func isStableTag(tag uint64) bool {
+	return tag&0x1 == 1
+}
+
+func getUpdateTagPair(id uint64) (uint64, uint64) {
+	return id << 1, (id << 1) | 1
+}

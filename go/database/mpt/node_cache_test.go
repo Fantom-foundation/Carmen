@@ -476,3 +476,18 @@ func TestNodeCache_GetAndSetIsThreadSafe(t *testing.T) {
 		})
 	}
 }
+
+func TestTagPair_ProducesValidPairOfTags(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		transition, stable := getUpdateTagPair(uint64(i))
+		if !isTransitionTag(transition) {
+			t.Errorf("invalid transition tag %x", transition)
+		}
+		if !isStableTag(stable) {
+			t.Errorf("invalid stable tag %x", stable)
+		}
+		if a, b := transition>>1, stable>>1; a != b || a != uint64(i) {
+			t.Errorf("invalid tag pair, got %x and %x for id %x", a, b, i)
+		}
+	}
+}
