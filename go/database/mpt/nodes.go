@@ -781,9 +781,7 @@ func (n *BranchNode) setNextNode(
 		}
 		defer handle.Release()
 		newNode := handle.Get().(*BranchNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		n = newNode
 		thisRef = &newRef
 		isClone = true
@@ -948,6 +946,16 @@ func (n *BranchNode) Reset() {
 	n.dirtyHashes = 0
 	n.embeddedChildren = 0
 	n.frozenChildren = 0
+}
+
+func (n *BranchNode) assign(other *BranchNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.children = other.children
+	n.hashes = other.hashes
+	n.dirtyHashes = other.dirtyHashes
+	n.embeddedChildren = other.embeddedChildren
+	n.frozenChildren = other.frozenChildren
 }
 
 func (n *BranchNode) MarkFrozen() {
@@ -1209,9 +1217,7 @@ func (n *ExtensionNode) setNextNode(
 				}
 				defer handle.Release()
 				newNode := handle.Get().(*ExtensionNode)
-				*newNode = *n
-				newNode.markDirty()
-				newNode.markMutable()
+				newNode.assign(n)
 				thisRef, n = &newRef, newNode
 				isClone = true
 			}
@@ -1292,9 +1298,7 @@ func (n *ExtensionNode) setNextNode(
 		}
 		defer handle.Release()
 		newNode := handle.Get().(*ExtensionNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		thisRef, n = &newRef, newNode
 		isClone = true
 	}
@@ -1431,6 +1435,16 @@ func (n *ExtensionNode) Reset() {
 	n.next = NodeReference{}
 	n.nextHashDirty = true
 	n.nextIsEmbedded = false
+}
+
+func (n *ExtensionNode) assign(other *ExtensionNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.path = other.path
+	n.next = other.next
+	n.nextHash = other.nextHash
+	n.nextHashDirty = other.nextHashDirty
+	n.nextIsEmbedded = other.nextIsEmbedded
 }
 
 func (n *ExtensionNode) Freeze(manager NodeManager, this shared.WriteHandle[Node]) error {
@@ -1608,9 +1622,7 @@ func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, th
 			}
 			defer handle.Release()
 			newNode := handle.Get().(*AccountNode)
-			*newNode = *n
-			newNode.markDirty()
-			newNode.markMutable()
+			newNode.assign(n)
 			newNode.info = info
 			return newRef, false, nil
 		}
@@ -1762,9 +1774,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 			}
 			defer newHandle.Release()
 			newNode := newHandle.Get().(*AccountNode)
-			*newNode = *n
-			newNode.markDirty()
-			newNode.markMutable()
+			newNode.assign(n)
 			newNode.storage = root
 			newNode.storageHashDirty = true
 			return newRef, false, nil
@@ -1794,9 +1804,7 @@ func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, 
 		}
 		defer newHandle.Release()
 		newNode := newHandle.Get().(*AccountNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		newNode.storage = NewNodeReference(EmptyId())
 		newNode.storageHashDirty = true
 		return newRef, false, nil
@@ -1840,6 +1848,17 @@ func (n *AccountNode) Reset() {
 	n.pathLength = 0
 }
 
+func (n *AccountNode) assign(other *AccountNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.address = other.address
+	n.info = other.info
+	n.storage = other.storage
+	n.storageHash = other.storageHash
+	n.storageHashDirty = other.storageHashDirty
+	n.pathLength = other.pathLength
+}
+
 func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
 	if n.pathLength == length {
 		return *thisRef, false, nil
@@ -1851,9 +1870,7 @@ func (n *AccountNode) setPathLength(manager NodeManager, thisRef *NodeReference,
 		}
 		defer newHandle.Release()
 		newNode := newHandle.Get().(*AccountNode)
-		*newNode = *n
-		newNode.markDirty()
-		newNode.markMutable()
+		newNode.assign(n)
 		newNode.pathLength = length
 		return newRef, false, nil
 	}
@@ -2084,6 +2101,14 @@ func (n *ValueNode) Reset() {
 	n.key = common.Key{}
 	n.value = common.Value{}
 	n.pathLength = 0
+}
+
+func (n *ValueNode) assign(other *ValueNode) {
+	n.nodeBase.markDirty()
+	n.nodeBase.markMutable()
+	n.key = other.key
+	n.value = other.value
+	n.pathLength = other.pathLength
 }
 
 func (n *ValueNode) setPathLength(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], length byte) (NodeReference, bool, error) {
