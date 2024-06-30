@@ -457,8 +457,13 @@ func TestNodeCache_GetAndSetIsThreadSafe(t *testing.T) {
 								}
 								if node == nil {
 									t.Errorf("nil node in cache for ID %v", id)
-								} else if want, got := byte(id.Index()), node.GetUnprotected().(*ValueNode).pathLength; want != got {
-									t.Errorf("for-each produced inconsistent key/value pair, wanted %v, got %v", want, got)
+								} else {
+									handle := node.GetReadHandle()
+									got := handle.Get().(*ValueNode).pathLength
+									handle.Release()
+									if want, got := byte(id.Index()), got; want != got {
+										t.Errorf("for-each produced inconsistent key/value pair, wanted %v, got %v", want, got)
+									}
 								}
 							})
 						}
