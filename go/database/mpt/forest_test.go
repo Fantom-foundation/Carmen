@@ -2222,6 +2222,9 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						if err != nil {
 							t.Fatalf("cannot update account: %v", err)
 						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("cannot update hashes: %v", err)
+						}
 					}
 
 					// empty for all accounts with empty storage
@@ -2234,8 +2237,7 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 								t.Fatalf("cannot update storage: %v", err)
 							}
 						}
-						_, _, err := forest.updateHashesFor(&root)
-						if err != nil {
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
 							t.Fatalf("cannot update hashes: %v", err)
 						}
 					}
@@ -2251,8 +2253,7 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 						if err != nil {
 							t.Fatalf("cannot delete storage: %v", err)
 						}
-						_, _, err := forest.updateHashesFor(&root)
-						if err != nil {
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
 							t.Fatalf("cannot update hashes: %v", err)
 						}
 					}
@@ -2263,6 +2264,87 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 					_, _, err = forest.updateHashesFor(&root)
 					if err != nil {
 						t.Fatalf("cannot update hashes: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestVisitPathTo_Node_Hashes_Same_S5_Archive_non_Archive_Config_For_Witness_Proof(t *testing.T) {
+	addresses := getTestAddresses(61)
+	keys := getTestKeys(63)
+	for _, variant := range fileAndMemVariants {
+		for forestConfigName, forestConfig := range forestConfigs {
+			for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, forestConfigName, config.Name), func(t *testing.T) {
+					dir := t.TempDir()
+					forest, err := variant.factory(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// fill-in the forest with test data
+					root := NewNodeReference(EmptyId())
+					for i, addr := range addresses {
+						info := AccountInfo{Nonce: common.Nonce{byte(i + 1)}}
+						root, err = forest.SetAccountInfo(&root, addr, info)
+						if err != nil {
+							t.Fatalf("failed to set account info: %v", err)
+						}
+						for j, key := range keys {
+							var value common.Value // a short value to embedded
+							value[29] = byte(i)
+							value[30] = byte(j)
+							root, err = forest.SetValue(&root, addr, key, value)
+						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("failed to update hashes: %v", err)
+						}
+					}
+
+					rootHash, err := forest.getHashFor(&root)
+					if err != nil {
+						t.Fatalf("failed to get hash: %v", err)
+					}
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+
+					// reopen the forest and create witness proof
+					// the witness proof should work both configs
+					// i.e. the hashes in the proof must be the same
+					forest, err = variant.factory(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					for i, addr := range addresses {
+						proof, err := CreateWitnessProof(forest, &root, addr, keys...)
+						if err != nil {
+							t.Fatalf("failed to create witness proof: %v", err)
+						}
+
+						nonce, _, err := proof.GetNonce(rootHash, addr)
+						if err != nil {
+							t.Fatalf("failed to get nonce: %v", err)
+						}
+						if got, want := nonce, (common.Nonce{byte(i + 1)}); got != want {
+							t.Errorf("nonce mismatch: got %d, want %d", got, want)
+						}
+
+						for j, key := range keys {
+							value, _, err := proof.GetState(rootHash, addr, key)
+							if err != nil {
+								t.Fatalf("failed to get value: %v", err)
+							}
+							var wantValue common.Value // a short value to embedded
+							wantValue[29] = byte(i)
+							wantValue[30] = byte(j)
+							if got, want := value, wantValue; got != want {
+								t.Errorf("value mismatch: got %v, want %v", got, want)
+							}
+						}
 					}
 				})
 			}
