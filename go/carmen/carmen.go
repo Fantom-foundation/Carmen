@@ -108,6 +108,10 @@ type Database interface {
 	// This context is available only when the archive is enabled.
 	QueryBlock(block uint64, run func(HistoricBlockContext) error) error
 
+	// GetMemoryFootprint computes an approximation of the memory used by this state.
+	// It contains both footprint of both LiveDB and Archive (if present).
+	GetMemoryFootprint() *MemoryFootprint
+
 	// Flush persists all committed HeadBlockContexts to the database.
 	// This method blocks until all changes are persisted.
 	// If archive is enabled, this function also waits until
@@ -453,6 +457,11 @@ type Value common.Value
 
 // Hash is a 32byte hash.
 type Hash common.Hash
+
+// MemoryFootprint describes the memory consumption of a database structure
+type MemoryFootprint struct {
+	*common.MemoryFootprint
+}
 
 // Log summarizes a log message recorded during the execution of a contract.
 type Log struct {
