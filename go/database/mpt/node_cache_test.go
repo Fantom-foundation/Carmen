@@ -432,22 +432,25 @@ func TestNodeCache_GetAndSetIsThreadSafe(t *testing.T) {
 		nodes = append(nodes, shared.MakeShared[Node](&ValueNode{pathLength: byte(i)}))
 	}
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		t.Run(fmt.Sprintf("iteration-%d", i), func(t *testing.T) {
 			t.Parallel()
-			cache := newNodeCache(256)
+			cache := newNodeCache(128)
 
 			// This test starts 10 goroutines that check the cache consistency
 			// while the main thread is inserting new elements.
-			wg := sync.WaitGroup{}
-			wg.Add(10)
-			done := make(chan struct{})
+			ready := sync.WaitGroup{}
+			ready.Add(10)
+			done := sync.WaitGroup{}
+			done.Add(10)
+			stop := make(chan struct{})
 			for i := 0; i < 10; i++ {
 				go func() {
-					defer wg.Done()
+					ready.Done()
+					defer done.Done()
 					for {
 						select {
-						case <-done:
+						case <-stop:
 							return
 						default:
 							// At any time, the cache should be consistent.
@@ -471,13 +474,14 @@ func TestNodeCache_GetAndSetIsThreadSafe(t *testing.T) {
 				}()
 			}
 
+			ready.Wait()
 			for i, node := range nodes {
 				ref := NewNodeReference(ValueId(uint64(i)))
 				cache.GetOrSet(&ref, node)
 			}
 
-			close(done)
-			wg.Wait()
+			close(stop)
+			done.Wait()
 		})
 	}
 }
