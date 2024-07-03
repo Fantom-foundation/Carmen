@@ -49,6 +49,7 @@ import (
 type Database interface {
 	common.FlushAndCloser
 	common.MemoryFootprintProvider
+	NodeSource
 
 	// GetAccountInfo retrieves account information for input root and account address.
 	GetAccountInfo(rootRef *NodeReference, addr common.Address) (AccountInfo, bool, error)

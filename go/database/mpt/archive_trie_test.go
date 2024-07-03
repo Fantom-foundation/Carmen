@@ -1070,6 +1070,55 @@ func TestArchiveTrie_GetDiffForBlockDetectsEmptyArchive(t *testing.T) {
 	}
 }
 
+func TestArchiveTrie_VisitTrie(t *testing.T) {
+	const blocks = 100
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			archive, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{})
+			if err != nil {
+				t.Fatalf("failed to create empty archive, err %v", err)
+			}
+			defer func() {
+				if err := archive.Close(); err != nil {
+					t.Fatalf("cannot close archive: %v", err)
+				}
+			}()
+
+			addr := common.Address{1}
+			for i := 0; i < blocks; i++ {
+				update := common.Update{
+					CreatedAccounts: []common.Address{addr},
+					Nonces:          []common.NonceUpdate{{Account: addr, Nonce: common.Nonce{byte(i)}}},
+				}
+
+				if err := archive.Add(uint64(i), update, nil); err != nil {
+					t.Fatalf("failed to add block 1; %s", err)
+				}
+			}
+
+			if err := archive.Flush(); err != nil {
+				t.Fatalf("failed to flush archive: %v", err)
+			}
+
+			for i := 0; i < blocks; i++ {
+				var accountInfo *AccountInfo
+				if err := archive.VisitTrie(uint64(i), MakeVisitor(func(node Node, info NodeInfo) VisitResponse {
+					if accountNode, ok := node.(*AccountNode); ok {
+						accountInfo = &accountNode.info
+					}
+					return VisitResponseContinue
+				})); err != nil {
+					t.Fatalf("failed to visit trie: block: %d %v", i, err)
+				}
+
+				if got, want := accountInfo.Nonce, (common.Nonce{byte(i)}); got != want {
+					t.Errorf("unexpected nonce, got %v, want %v", got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestArchiveTrie_GetMemoryFootprint(t *testing.T) {
 	for _, config := range allMptConfigs {
 		t.Run(config.Name, func(t *testing.T) {

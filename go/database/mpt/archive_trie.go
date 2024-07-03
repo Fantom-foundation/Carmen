@@ -244,7 +244,7 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 }
 
 func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error) {
-	if a.nodeSource.getConfig().Name != "S5-Archive" {
+	if !a.nodeSource.getConfig().UseHashedPaths {
 		return nil, archive.ErrWitnessProofNotSupported
 	}
 	a.rootsMutex.Lock()
@@ -284,6 +284,14 @@ func (a *ArchiveTrie) GetDiffForBlock(block uint64) (Diff, error) {
 		return GetDiff(a.nodeSource, &emptyNodeReference, &after)
 	}
 	return a.GetDiff(block-1, block)
+}
+
+func (a *ArchiveTrie) VisitTrie(block uint64, visitor NodeVisitor) error {
+	view, err := a.getView(block)
+	if err != nil {
+		return err
+	}
+	return view.VisitTrie(visitor)
 }
 
 func (a *ArchiveTrie) GetMemoryFootprint() *common.MemoryFootprint {
