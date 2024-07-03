@@ -13,6 +13,7 @@ package mpt
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -911,6 +912,58 @@ func TestLiveTrie_HasEmptyStorage(t *testing.T) {
 			mpt.forest = db
 
 			mpt.HasEmptyStorage(addr)
+		})
+	}
+
+}
+
+func TestLiveTrie_CreateWitnessProof(t *testing.T) {
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			addr := common.Address{1}
+			accountNode := &AccountNode{
+				address:    addr,
+				info:       AccountInfo{Balance: amount.New(1)},
+				pathLength: 64,
+			}
+
+			db := NewMockDatabase(ctrl)
+			db.EXPECT().getViewAccess(gomock.Any()).Return(shared.MakeShared[Node](accountNode).GetViewHandle(), nil)
+			db.EXPECT().getConfig().Return(config)
+			db.EXPECT().hashAddress(gomock.Any()).Return(common.Keccak256(addr[:])).AnyTimes()
+
+			mpt, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{})
+			if err != nil {
+				t.Fatalf("failed to open live trie: %v", err)
+			}
+
+			mpt.forest = db
+
+			proof, err := mpt.CreateWitnessProof(addr)
+			if err != nil {
+				t.Errorf("failed to create witness proof: %v", err)
+			}
+
+			// mock root hash from the single node tree
+			rlp, err := encodeToRlp(accountNode, db, []byte{})
+			if err != nil {
+				t.Fatalf("failed to encode account node: %v", err)
+			}
+			root := common.Keccak256(rlp)
+
+			balance, complete, err := proof.GetBalance(root, addr)
+			if err != nil {
+				t.Fatalf("failed to get balance: %v", err)
+			}
+			if !complete {
+				t.Errorf("proof should be complete")
+			}
+
+			if got, want := balance, amount.New(1); got != want {
+				t.Errorf("unexpected balance, got %v, want %v", got, want)
+			}
 		})
 	}
 

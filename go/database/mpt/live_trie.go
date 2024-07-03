@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"os"
 	"unsafe"
 
@@ -155,6 +156,10 @@ func (s *LiveTrie) setHashes(hashes *NodeHashes) error {
 
 func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
 	return s.forest.VisitTrie(&s.root, visitor)
+}
+
+func (s *LiveTrie) CreateWitnessProof(addr common.Address, keys ...common.Key) (witness.Proof, error) {
+	return CreateWitnessProof(s.forest, &s.root, addr, keys...)
 }
 
 func (s *LiveTrie) Flush() error {
