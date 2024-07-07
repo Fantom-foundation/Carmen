@@ -68,6 +68,7 @@ func stress(context *cli.Context) error {
 		seed = time.Now().UnixNano()
 	}
 	fmt.Printf("Using seed: %d\n", seed)
+	defer fmt.Printf("Used seed: %d\n", seed)
 	start := time.Now()
 	rand := rand.New(rand.NewSource(seed))
 
