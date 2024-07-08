@@ -156,8 +156,8 @@ func (db *database) QueryBlock(block uint64, run func(HistoricBlockContext) erro
 	)
 }
 
-func (db *database) GetMemoryFootprint() *MemoryFootprint {
-	return &MemoryFootprint{db.db.GetMemoryFootprint()}
+func (db *database) GetMemoryFootprint() MemoryFootprint {
+	return NewMemoryFootprint(db.db.GetMemoryFootprint())
 }
 
 func (db *database) GetArchiveBlockHeight() (int64, error) {
