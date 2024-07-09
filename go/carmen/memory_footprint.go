@@ -1,3 +1,13 @@
+// Copyright (c) 2024 Fantom Foundation
+//
+// Use of this software is governed by the Business Source License included
+// in the LICENSE file and at fantom.foundation/bsl11.
+//
+// Change Date: 2028-4-16
+//
+// On the date above, in accordance with the Business Source License, use of
+// this software will be governed by the GNU Lesser General Public License v3.
+
 package carmen
 
 import "github.com/Fantom-foundation/Carmen/go/common"
@@ -5,12 +15,6 @@ import "github.com/Fantom-foundation/Carmen/go/common"
 type MemoryFootprint interface {
 	// GetChild returns a child of the memory footprint with the given name.
 	GetChild(name string) MemoryFootprint
-
-	// AddChild allows to attach a new value under current memory footprint.
-	AddChild(name string, childValue uintptr)
-
-	// SetNote allows to attach a string comment to the memory report
-	SetNote(note string)
 
 	// Value provides the amount of bytes consumed by the database structure (excluding its subcomponents)
 	Value() uintptr
@@ -24,6 +28,9 @@ type MemoryFootprint interface {
 
 	// String allow memory footprints to be used in format strings.
 	String() string
+
+	// Visit iterates the footprint tree (including all subcomponents) and applies visit onto them
+	Visit(visit func(footprint MemoryFootprint))
 }
 
 func NewMemoryFootprint(fp *common.MemoryFootprint) MemoryFootprint {
@@ -47,10 +54,6 @@ func (m *memoryFootprint) GetChild(name string) MemoryFootprint {
 	return &memoryFootprint{m.fp.GetChild(name)}
 }
 
-func (m *memoryFootprint) AddChild(name string, childValue uintptr) {
-	m.fp.AddChild(name, common.NewMemoryFootprint(childValue))
-}
-
 func (m *memoryFootprint) SetNote(note string) {
 	m.fp.SetNote(note)
 }
@@ -69,4 +72,10 @@ func (m *memoryFootprint) ToString(name string) string {
 
 func (m *memoryFootprint) String() string {
 	return m.fp.String()
+}
+
+func (m *memoryFootprint) Visit(visit func(footprint MemoryFootprint)) {
+	m.fp.Visit(func(footprint *common.MemoryFootprint) {
+		visit(NewMemoryFootprint(footprint))
+	})
 }
