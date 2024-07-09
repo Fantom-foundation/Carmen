@@ -12,6 +12,7 @@ package gostate
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -937,7 +938,10 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, mpt.DefaultMptStateCapacity)
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S4ArchiveConfig, mpt.TrieConfig{
+			CacheCapacity:         mptStateCapacity(params.ArchiveCache),
+			BackgroundFlushPeriod: time.Duration(params.BackgroundFlushPeriod) * time.Millisecond,
+		})
 		return arch, nil, err
 
 	case state.S5Archive:
@@ -945,7 +949,10 @@ func openArchive(params state.Parameters) (archive archive.Archive, cleanup func
 		if err != nil {
 			return nil, nil, err
 		}
-		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, mptStateCapacity(params.ArchiveCache))
+		arch, err := mpt.OpenArchiveTrie(path, mpt.S5ArchiveConfig, mpt.TrieConfig{
+			CacheCapacity:         mptStateCapacity(params.ArchiveCache),
+			BackgroundFlushPeriod: time.Duration(params.BackgroundFlushPeriod) * time.Millisecond,
+		})
 		return arch, nil, err
 	}
 	return nil, nil, fmt.Errorf("unknown archive type: %v", params.Archive)

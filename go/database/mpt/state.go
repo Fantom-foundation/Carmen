@@ -196,24 +196,24 @@ func tryMarkDirty(directory string) error {
 
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirely retained in memory.
-func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+func OpenGoMemoryState(directory string, config MptConfig, trieConfig TrieConfig) (*MptState, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
-	trie, err := OpenInMemoryLiveTrie(directory, config, cacheCapacity)
+	trie, err := OpenInMemoryLiveTrie(directory, config, trieConfig)
 	if err != nil {
 		return nil, err
 	}
 	return newMptState(directory, lock, trie)
 }
 
-func OpenGoFileState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+func OpenGoFileState(directory string, config MptConfig, trieConfig TrieConfig) (*MptState, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
-	trie, err := OpenFileLiveTrie(directory, config, cacheCapacity)
+	trie, err := OpenFileLiveTrie(directory, config, trieConfig)
 	if err != nil {
 		return nil, err
 	}

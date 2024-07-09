@@ -33,15 +33,25 @@ import (
 )
 
 var stateFactories = map[string]func(string) (io.Closer, error){
-	"memory":  func(dir string) (io.Closer, error) { return OpenGoMemoryState(dir, S5LiveConfig, 1024) },
-	"file":    func(dir string) (io.Closer, error) { return OpenGoFileState(dir, S5LiveConfig, 1024) },
-	"archive": func(dir string) (io.Closer, error) { return OpenArchiveTrie(dir, S5ArchiveConfig, 1024) },
-	"verify":  func(dir string) (io.Closer, error) { return openVerificationNodeSource(dir, S5LiveConfig) },
+	"memory": func(dir string) (io.Closer, error) {
+		return OpenGoMemoryState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
+	},
+	"file": func(dir string) (io.Closer, error) {
+		return OpenGoFileState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
+	},
+	"archive": func(dir string) (io.Closer, error) {
+		return OpenArchiveTrie(dir, S5ArchiveConfig, TrieConfig{CacheCapacity: 1024})
+	},
+	"verify": func(dir string) (io.Closer, error) { return openVerificationNodeSource(dir, S5LiveConfig) },
 }
 
 var mptStateFactories = map[string]func(string) (*MptState, error){
-	"memory": func(dir string) (*MptState, error) { return OpenGoMemoryState(dir, S5LiveConfig, 1024) },
-	"file":   func(dir string) (*MptState, error) { return OpenGoFileState(dir, S5LiveConfig, 1024) },
+	"memory": func(dir string) (*MptState, error) {
+		return OpenGoMemoryState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
+	},
+	"file": func(dir string) (*MptState, error) {
+		return OpenGoFileState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
+	},
 }
 
 func TestState_CanOnlyBeOpenedOnce(t *testing.T) {
@@ -109,7 +119,7 @@ func TestState_RegularCloseResultsInCleanState(t *testing.T) {
 	if dirty, err := isDirty(dir); dirty || err != nil {
 		t.Fatalf("directory initially in invalid state: %t, %v", dirty, err)
 	}
-	state, err := OpenGoFileState(dir, S5LiveConfig, 1024)
+	state, err := OpenGoFileState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open test state: %v", err)
 	}
@@ -132,7 +142,7 @@ func TestState_ErrorsLeadToDirtyState(t *testing.T) {
 	if dirty, err := isDirty(dir); dirty || err != nil {
 		t.Fatalf("directory initially in invalid state: %t, %v", dirty, err)
 	}
-	state, err := OpenGoFileState(dir, S5LiveConfig, 1024)
+	state, err := OpenGoFileState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open test state: %v", err)
 	}
@@ -159,7 +169,7 @@ func BenchmarkStorageChanges(b *testing.B) {
 				mode = "with_hashing"
 			}
 			b.Run(fmt.Sprintf("%s/%s", config.Name, mode), func(b *testing.B) {
-				state, err := OpenGoMemoryState(b.TempDir(), config, 1024)
+				state, err := OpenGoMemoryState(b.TempDir(), config, TrieConfig{CacheCapacity: 1024})
 				if err != nil {
 					b.Fail()
 				}
@@ -530,7 +540,7 @@ func TestState_GetCodes(t *testing.T) {
 func TestState_ForestErrorIsReportedInFlushAndClose(t *testing.T) {
 
 	dir := t.TempDir()
-	state, err := OpenGoFileState(dir, S4LiveConfig, 1024)
+	state, err := OpenGoFileState(dir, S4LiveConfig, TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open test state: %v", err)
 	}
@@ -554,7 +564,7 @@ func TestState_ForestErrorIsReportedInFlushAndClose(t *testing.T) {
 
 func TestState_Flush_WriteDirtyCodesOnly(t *testing.T) {
 	dir := t.TempDir()
-	state, err := OpenGoFileState(dir, S5LiveConfig, 1024)
+	state, err := OpenGoFileState(dir, S5LiveConfig, TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open test state: %v", err)
 	}
@@ -733,7 +743,7 @@ func TestEstimatePerNodeMemoryUsage(t *testing.T) {
 
 func runFlushBenchmark(b *testing.B, config MptConfig, forceDirtyNodes bool) {
 	numAccounts := 100_000
-	state, err := OpenGoFileState(b.TempDir(), config, numAccounts)
+	state, err := OpenGoFileState(b.TempDir(), config, TrieConfig{CacheCapacity: numAccounts})
 	if err != nil {
 		b.Fatalf("failed to open state, err %v", err)
 	}

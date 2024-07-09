@@ -62,14 +62,21 @@ type Root struct {
 	Hash    common.Hash
 }
 
+// TrieConfig is the configuration for runtime parameters of a LiveTrie. These
+// parameters only affect non-functional aspects of the trie, such as performance
+// and memory usage. The trie's storage format is not affected by these parameters.
+type TrieConfig struct {
+	CacheCapacity         int           // the maximum number of nodes retained in memory
+	BackgroundFlushPeriod time.Duration // the period of time between background flushes
+}
+
 // ForestConfig summarizes forest instance configuration options that affect
 // the functional and non-functional properties of a forest but do not change
 // the on-disk format.
 type ForestConfig struct {
-	Mode                   StorageMode   // whether to perform destructive or constructive updates
-	CacheCapacity          int           // the maximum number of nodes retained in memory
-	BackgroundFlushPeriod  time.Duration // the time between background flushes, default if zero, disabled if negative
-	writeBufferChannelSize int           // the maximum number of elements retained in the write buffer channel
+	TrieConfig
+	Mode                   StorageMode // whether to perform destructive or constructive updates
+	writeBufferChannelSize int         // the maximum number of elements retained in the write buffer channel
 }
 
 // Forest is a utility node managing nodes for one or more Tries.

@@ -26,12 +26,17 @@ const (
 	// limit for the in-memory node-cache size of the Archive in bytes.
 	ArchiveCache = Property("ArchiveCache")
 	// StorageCache is the size of cache used for account storages.
-	// This cache is utilized everytime a storage slot of an account is accessed.
+	// This cache is utilized every time a storage slot of an account is accessed.
 	// Before expanding expensive data structures, it is checked if the storage slot
 	// is available in this cache, and obtained there if it exists.
 	// If the storage slot is updated, it is updated in this cache first,
 	// before being flushed into underlying structures later.
 	StorageCache = Property("StorageCache")
+	// BackgroundFlushPeriod is the period in milliseconds between consecutive
+	// runs of a background worker flushing dirty nodes from the cache to the disk.
+	// The default value should be sufficient for most use cases. It is mainly
+	// exported to allow for stress-testing the system with high flush frequency.
+	BackgroundFlushPeriod = Property("BackgroundFlushPeriod")
 )
 
 // Properties are optional settings which may influence the

@@ -41,7 +41,10 @@ type ArchiveTrie struct {
 	archiveError error // a non-nil error will be stored here should it occur during any archive operation
 }
 
-func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*ArchiveTrie, error) {
+type ArchiveTrieConfig struct {
+}
+
+func OpenArchiveTrie(directory string, config MptConfig, trieConfig TrieConfig) (*ArchiveTrie, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
@@ -51,7 +54,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 	if err != nil {
 		return nil, err
 	}
-	forestConfig := ForestConfig{Mode: Immutable, CacheCapacity: cacheCapacity}
+	forestConfig := ForestConfig{TrieConfig: trieConfig, Mode: Immutable}
 	forest, err := OpenFileForest(directory, config, forestConfig)
 	if err != nil {
 		return nil, err

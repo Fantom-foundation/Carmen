@@ -13,6 +13,7 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
@@ -89,7 +90,7 @@ func mptStateCapacity(param int64) int {
 }
 
 func newGoMemoryS5State(params state.Parameters) (state.State, error) {
-	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, mptStateCapacity(params.LiveCache))
+	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, getTrieConfig(params))
 	if err != nil {
 		return nil, err
 	}
@@ -97,9 +98,16 @@ func newGoMemoryS5State(params state.Parameters) (state.State, error) {
 }
 
 func newGoFileS5State(params state.Parameters) (state.State, error) {
-	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, mptStateCapacity(params.LiveCache))
+	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S5LiveConfig, getTrieConfig(params))
 	if err != nil {
 		return nil, err
 	}
 	return newS5State(params, state)
+}
+
+func getTrieConfig(params state.Parameters) mpt.TrieConfig {
+	return mpt.TrieConfig{
+		CacheCapacity:         mptStateCapacity(params.LiveCache),
+		BackgroundFlushPeriod: time.Duration(params.BackgroundFlushPeriod) * time.Millisecond,
+	}
 }

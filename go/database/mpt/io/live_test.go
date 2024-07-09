@@ -35,7 +35,7 @@ func TestIO_ExportAndImportAsLiveDb(t *testing.T) {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
-	db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, 1024)
+	db, err := mpt.OpenGoFileState(targetDir, mpt.S5LiveConfig, mpt.TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open recovered DB: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestIO_ExportAndImportAsArchive(t *testing.T) {
 		t.Fatalf("verification of imported DB failed: %v", err)
 	}
 
-	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, 1024)
+	db, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open recovered DB: %v", err)
 	}
@@ -152,7 +152,7 @@ func exportExampleState(t *testing.T) ([]byte, common.Hash) {
 
 func createExampleLiveDB(t *testing.T, sourceDir string) *mpt.MptState {
 	// Create a small LiveDB.
-	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5LiveConfig, 1024)
+	db, err := mpt.OpenGoFileState(sourceDir, mpt.S5LiveConfig, mpt.TrieConfig{CacheCapacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to create test DB: %v", err)
 	}

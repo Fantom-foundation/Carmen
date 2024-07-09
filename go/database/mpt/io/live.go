@@ -67,7 +67,7 @@ func Export(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of LiveDB instances, found %v in directory", info.Mode)
 	}
 
-	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.DefaultMptStateCapacity)
+	db, err := mpt.OpenGoFileState(directory, info.Config, mpt.TrieConfig{CacheCapacity: mpt.DefaultMptStateCapacity})
 	if err != nil {
 		return fmt.Errorf("failed to open LiveDB: %v", err)
 	}
@@ -181,7 +181,7 @@ func runImport(directory string, in io.Reader, config mpt.MptConfig) (root mpt.N
 	}
 
 	// Create a state.
-	db, err := mpt.OpenGoFileState(directory, config, mpt.DefaultMptStateCapacity)
+	db, err := mpt.OpenGoFileState(directory, config, mpt.TrieConfig{CacheCapacity: mpt.DefaultMptStateCapacity})
 	if err != nil {
 		return root, hash, fmt.Errorf("failed to create empty state: %v", err)
 	}

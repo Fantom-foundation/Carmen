@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -42,7 +43,7 @@ func startNodeFlusher(cache NodeCache, sink NodeSink, config nodeFlusherConfig) 
 	if period == 0 {
 		period = 5 * time.Second
 	}
-
+	fmt.Printf("Starting node flusher with a period of %s\n", period)
 	if period > 0 {
 		go func() {
 			defer close(done)

@@ -963,7 +963,7 @@ func (c *archiveTrieAccountFuzzingCampaign[T, C]) Init() []fuzzing.OperationSequ
 // the created context.
 func (c *archiveTrieAccountFuzzingCampaign[T, C]) CreateContext(t fuzzing.TestingT) *C {
 	path := t.TempDir()
-	archiveTrie, err := OpenArchiveTrie(path, S5LiveConfig, 10_000)
+	archiveTrie, err := OpenArchiveTrie(path, S5LiveConfig, TrieConfig{CacheCapacity: 10_000})
 	if err != nil {
 		t.Fatalf("failed to open archive trie: %v", err)
 	}

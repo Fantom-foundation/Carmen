@@ -66,7 +66,7 @@ func check(context *cli.Context) error {
 }
 
 func checkLiveDB(dir string, info io.MptInfo) error {
-	live, err := mpt.OpenFileLiveTrie(dir, info.Config, mpt.DefaultMptStateCapacity)
+	live, err := mpt.OpenFileLiveTrie(dir, info.Config, mpt.TrieConfig{CacheCapacity: mpt.DefaultMptStateCapacity})
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func checkLiveDB(dir string, info io.MptInfo) error {
 }
 
 func checkArchive(dir string, info io.MptInfo) error {
-	archive, err := mpt.OpenArchiveTrie(dir, info.Config, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(dir, info.Config, mpt.TrieConfig{CacheCapacity: mpt.DefaultMptStateCapacity})
 	if err != nil {
 		return err
 	}

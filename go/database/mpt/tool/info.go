@@ -56,7 +56,7 @@ func info(context *cli.Context) error {
 
 	// attempt to open the MPT
 	if mptInfo.Mode == mpt.Mutable {
-		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.Config, mpt.DefaultMptStateCapacity)
+		trie, err := mpt.OpenFileLiveTrie(dir, mptInfo.Config, mpt.TrieConfig{CacheCapacity: mpt.DefaultMptStateCapacity})
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil
@@ -78,7 +78,7 @@ func info(context *cli.Context) error {
 			return fmt.Errorf("error closing forest: %v", err)
 		}
 	} else {
-		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.DefaultMptStateCapacity)
+		archive, err := mpt.OpenArchiveTrie(dir, mptInfo.Config, mpt.TrieConfig{CacheCapacity: mpt.DefaultMptStateCapacity})
 		if err != nil {
 			fmt.Printf("\tFailed to open:    %v\n", err)
 			return nil

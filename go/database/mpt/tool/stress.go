@@ -44,7 +44,8 @@ func stress(context *cli.Context) error {
 	fmt.Printf("Using temporary directory: %s\n", dir)
 
 	properties := carmen.Properties{
-		carmen.LiveDBCache: fmt.Sprintf("%d", 64<<20), // 64 MiB
+		carmen.LiveDBCache:           fmt.Sprintf("%d", 64<<20), // 64 MiB
+		carmen.BackgroundFlushPeriod: fmt.Sprintf("%d", 5),      // 1 millisecond
 	}
 
 	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithoutArchiveConfiguration(), properties)
@@ -97,7 +98,7 @@ func stress(context *cli.Context) error {
 						// 20:80 of reusing an account or creating a new one
 						isNew := false
 						addrIndex := 0
-						if len(state) > 0 && rand.Float32() < 0.99 {
+						if len(state) > 0 && rand.Float32() < 0.98 {
 							addrIndex = getRandomAccountIndex()
 						} else {
 							addrIndex = nextAccount

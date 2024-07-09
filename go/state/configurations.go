@@ -23,12 +23,13 @@ import (
 
 // Parameters struct defining configuration parameters for state instances.
 type Parameters struct {
-	Variant      Variant
-	Schema       Schema
-	Archive      ArchiveType
-	Directory    string
-	LiveCache    int64 // bytes, approximate, supported only by S5 now
-	ArchiveCache int64 // bytes, approximate, supported only by S5 now
+	Variant               Variant
+	Schema                Schema
+	Archive               ArchiveType
+	Directory             string
+	LiveCache             int64 // bytes, approximate, supported only by S4 and S5
+	ArchiveCache          int64 // bytes, approximate, supported only by S4 and S5
+	BackgroundFlushPeriod int64 // milliseconds between background flushes, supported only by S4 and S5
 }
 
 // UnsupportedConfiguration is the error returned if unsupported configuration

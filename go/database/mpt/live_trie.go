@@ -38,8 +38,11 @@ type LiveTrie struct {
 // OpenInMemoryLiveTrie loads trie information from the given directory and
 // creates a LiveTrie instance retaining all information in memory. If the
 // directory is empty, an empty trie is created.
-func OpenInMemoryLiveTrie(directory string, config MptConfig, cacheCapacity int) (*LiveTrie, error) {
-	forestConfig := ForestConfig{Mode: Mutable, CacheCapacity: cacheCapacity}
+func OpenInMemoryLiveTrie(directory string, config MptConfig, trieConfig TrieConfig) (*LiveTrie, error) {
+	forestConfig := ForestConfig{
+		TrieConfig: trieConfig,
+		Mode:       Mutable,
+	}
 	forest, err := OpenInMemoryForest(directory, config, forestConfig)
 	if err != nil {
 		return nil, err
@@ -51,8 +54,11 @@ func OpenInMemoryLiveTrie(directory string, config MptConfig, cacheCapacity int)
 // creates a LiveTrie instance using a fixed-size cache for retaining nodes in
 // memory, backed by a file-based storage automatically kept in sync. If the
 // directory is empty, an empty trie is created.
-func OpenFileLiveTrie(directory string, config MptConfig, cacheCapacity int) (*LiveTrie, error) {
-	forestConfig := ForestConfig{Mode: Mutable, CacheCapacity: cacheCapacity}
+func OpenFileLiveTrie(directory string, config MptConfig, trieConfig TrieConfig) (*LiveTrie, error) {
+	forestConfig := ForestConfig{
+		TrieConfig: trieConfig,
+		Mode:       Mutable,
+	}
 	forest, err := OpenFileForest(directory, config, forestConfig)
 	if err != nil {
 		return nil, err
