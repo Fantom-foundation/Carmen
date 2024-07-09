@@ -54,10 +54,6 @@ func (m *memoryFootprint) GetChild(name string) MemoryFootprint {
 	return &memoryFootprint{m.fp.GetChild(name)}
 }
 
-func (m *memoryFootprint) SetNote(note string) {
-	m.fp.SetNote(note)
-}
-
 func (m *memoryFootprint) Value() uintptr {
 	return m.fp.Value()
 }
