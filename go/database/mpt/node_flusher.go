@@ -76,7 +76,9 @@ func (f *nodeFlusher) Stop() error {
 func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 	// Collect a list of dirty nodes to be flushed.
 	dirtyIds := make([]NodeId, 0, 1_000_000)
+	counter := 0
 	cache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
+		counter++
 		handle, success := node.TryGetViewHandle()
 		if !success {
 			return
@@ -93,6 +95,21 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 	// writes to the disk.
 	slices.Sort(dirtyIds)
 
+	/*
+		duplicates := 0
+		for i := 0; i < len(dirtyIds)-1; i++ {
+			if dirtyIds[i] == dirtyIds[i+1] {
+				duplicates++
+				//panic(fmt.Sprintf("Duplicate node ID %v", dirtyIds[i]))
+			}
+		}
+		if duplicates > 0 {
+			fmt.Printf("Found %d duplicates\n", duplicates)
+		}
+	*/
+
+	//fmt.Printf("Flushing %d of %d dirty nodes\n", len(dirtyIds), counter)
+
 	var errs []error
 	for _, id := range dirtyIds {
 		ref := NewNodeReference(id)
@@ -101,12 +118,26 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 			continue
 		}
 
+		// ATTENTION: at this point the node may already be out-dated!
+
 		// This service is a best-effort service. If the
 		// node is in use right now, we skip the flush and
 		// continue with the next node.
 		handle, success := node.TryGetWriteHandle()
 		if !success {
 			continue
+		}
+
+		ref2 := NewNodeReference(id)
+		test, success := cache.Get(&ref2)
+		if !success {
+			//fmt.Printf("WARNING: node was removed from the cache!\n")
+			handle.Release()
+			continue
+			//panic("Node was removed from the cache")
+		}
+		if test != node {
+			panic("Node was replaced in the cache")
 		}
 
 		// If the node was cleaned otherwise, we can skip the flush.
@@ -125,6 +156,7 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 		}
 
 		err := sink.Write(id, handle.AsViewHandle())
+		//fmt.Printf("flushing node %v\n", id)
 		if err == nil {
 			handle.Get().MarkClean()
 		}

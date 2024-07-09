@@ -390,6 +390,21 @@ func (s *MptState) Visit(visitor NodeVisitor) error {
 	return s.trie.VisitTrie(visitor)
 }
 
+func (s *MptState) VisitPathToStorage(address common.Address, key common.Key, visitor NodeVisitor) error {
+	source := s.trie.forest.(*Forest)
+	_, err := VisitPathToAccount(source, &s.trie.root, address, MakeVisitor(func(n Node, i NodeInfo) VisitResponse {
+		visitor.Visit(n, i)
+		if account, ok := n.(*AccountNode); ok && account.address == address {
+			_, err := VisitPathToStorage(source, &account.storage, key, visitor)
+			if err != nil {
+				panic(fmt.Sprintf("failed to visit path to storage: %v", err))
+			}
+		}
+		return VisitResponseContinue
+	}))
+	return err
+}
+
 func (s *MptState) GetCodes() (map[common.Hash][]byte, error) {
 	s.codeMutex.Lock()
 	res := maps.Clone(s.code)
@@ -414,6 +429,14 @@ func (s *MptState) Flush() error {
 		err,
 		s.trie.Flush(),
 	)
+}
+
+func (s *MptState) Dump() {
+	s.trie.Dump()
+}
+
+func (s *MptState) Check() error {
+	return s.trie.Check()
 }
 
 func (s *MptState) Close() error {

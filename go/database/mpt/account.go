@@ -11,6 +11,8 @@
 package mpt
 
 import (
+	"fmt"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -27,6 +29,10 @@ type AccountInfo struct {
 // no empty accounts may be explicitly stored.
 func (a *AccountInfo) IsEmpty() bool {
 	return *a == AccountInfo{}
+}
+
+func (a *AccountInfo) String() string {
+	return fmt.Sprintf("AccountInfo{Nonce: %d, Balance: %x, CodeHash: %x}", a.Nonce.ToUint64(), a.Balance, a.CodeHash)
 }
 
 // ----------------------------------------------------------------------------

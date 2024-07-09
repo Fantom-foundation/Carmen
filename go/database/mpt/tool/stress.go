@@ -42,6 +42,11 @@ var (
 )
 
 func stress(context *cli.Context) error {
+	const (
+		MiB             = 1024 * 1024
+		cacheSize       = 64 * MiB
+		changesPerBlock = 1000
+	)
 
 	tmpDir := context.String(tmpDirFlag.Name)
 	if len(tmpDir) == 0 {
@@ -58,11 +63,12 @@ func stress(context *cli.Context) error {
 	fmt.Printf("Using report period: %s\n", reportPeriod)
 
 	trieConfig := mpt.TrieConfig{
-		CacheCapacity:         (64 * 1 << 20) / mpt.EstimatePerNodeMemoryUsage(),
+		CacheCapacity:         cacheSize / mpt.EstimatePerNodeMemoryUsage(),
 		BackgroundFlushPeriod: flushPeriod,
 	}
 
-	db, err := mpt.OpenGoFileState(dir, mpt.S5LiveConfig, trieConfig)
+	db, err := mpt.OpenGoFileState(dir, mpt.S4LiveConfig, trieConfig)
+	//db, err := mpt.OpenGoMemoryState(dir, mpt.S4LiveConfig, trieConfig)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -117,6 +123,7 @@ func stress(context *cli.Context) error {
 				for _, storage := range state {
 					numSlots += len(storage)
 				}
+				currentBlock := blockHeight
 				stateLock.Unlock()
 
 				time := time.Since(start)
@@ -128,7 +135,7 @@ func stress(context *cli.Context) error {
 				fmt.Printf(
 					"[%d:%02d:%02d] Block %d added, managing %d accounts, %d slots, memory: %.2f GiB, disk used: %.2f GiB, disk free: %.2f GiB\n",
 					hours, minutes, seconds,
-					blockHeight,
+					currentBlock,
 					numAccounts,
 					numSlots,
 					float64(memUsage)/GiB,
@@ -159,17 +166,13 @@ loop:
 		default:
 		}
 
-		// TODO: rewrite to use MPT State directly.
-
-		//destructed := map[int]struct{}{}
-
 		// simulate a block
 		err := func() error {
 			stateLock.Lock()
 			defer stateLock.Unlock()
 
-			// touch 1000 random slots
-			for j := 0; j < 1000; j++ {
+			// perform random changes to the MPT
+			for j := 0; j < changesPerBlock; j++ {
 
 				// 45% chance to add a slot, 45% chance to update a slot, 10% chance to remove an account.
 				switch c := rand.Float32(); {
@@ -185,11 +188,6 @@ loop:
 						nextAccount++
 						isNew = true
 					}
-					/*
-						if _, found := destructed[addrIndex]; found {
-							continue // skip if the account was destructed
-						}
-					*/
 					addr := intToAddress(addrIndex)
 
 					if isNew {
@@ -216,7 +214,6 @@ loop:
 					if err := db.SetStorage(addr, key, value); err != nil {
 						return fmt.Errorf("failed to set value: %w", err)
 					}
-					//fmt.Printf("Setting %d/%d to %d\n", addrIndex, keyIndex, 1)
 					storage[keyIndex] = 1
 
 				case c < 0.995:
@@ -240,7 +237,21 @@ loop:
 						return fmt.Errorf("failed to get value: %w", err)
 					}
 					if want, got := intToValue(storage[keyIndex]), current; want != got {
-						return fmt.Errorf("unexpected value %d/%d before update - wanted %x, got %x", addrIndex, keyIndex, want, got)
+
+						db.VisitPathToStorage(addr, key, mpt.MakeVisitor(func(node mpt.Node, info mpt.NodeInfo) mpt.VisitResponse {
+							fmt.Printf("%v: node: %v\n", info.Id, node)
+							return mpt.VisitResponseContinue
+						}))
+
+						if issues := db.Check(); issues != nil {
+							fmt.Printf("issues: %v\n", issues)
+						}
+
+						//return fmt.Errorf("unexpected value %d/%d before update - wanted %x, got %x", addrIndex, keyIndex, want, got)
+						return fmt.Errorf("unexpected value %v/%v before update - wanted %x, got %x", addr, key, want, got)
+						db.Dump()
+						err := db.Check()
+						return fmt.Errorf("unexpected value %d/%d before update - wanted %x, got %x\nCheck result: %w", addrIndex, keyIndex, want, got, err)
 					}
 
 					newValue := storage[keyIndex] + 1
@@ -249,8 +260,6 @@ loop:
 						return fmt.Errorf("failed to set value: %w", err)
 					}
 					storage[keyIndex] = newValue
-
-					//fmt.Printf("Updating %d/%d to %d\n", addrIndex, keyIndex, newValue)
 
 				default:
 					// remove an account
@@ -266,8 +275,13 @@ loop:
 						return fmt.Errorf("failed to remove account: %w", err)
 					}
 					delete(state, addrIndex)
-					//destructed[addrIndex] = struct{}{}
 				}
+
+				/*
+					if issues := db.Check(); issues != nil {
+						fmt.Printf("issues: %v\n", issues)
+					}
+				*/
 			}
 
 			if _, _, err := db.UpdateHashes(); err != nil {

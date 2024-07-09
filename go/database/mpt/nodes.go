@@ -16,11 +16,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"slices"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
-	"io"
-	"slices"
 )
 
 // This file defines the interface and implementation of all node types in a
@@ -658,6 +659,10 @@ func (EmptyNode) Check(NodeSource, *NodeReference, []Nibble) error {
 	return nil
 }
 
+func (EmptyNode) String() string {
+	return "-empty-"
+}
+
 func (EmptyNode) Dump(out io.Writer, _ NodeSource, thisRef *NodeReference, indent string) error {
 	fmt.Fprintf(out, "%s-empty- (ID: %v)\n", indent, thisRef.Id())
 	return nil
@@ -768,6 +773,7 @@ func (n *BranchNode) setNextNode(
 
 	wasEmpty := child.Id().IsEmpty()
 	n.children[path[0]] = newRoot
+	//n.markDirty()
 	n.markChildHashDirty(byte(path[0]))
 	n.setChildFrozen(byte(path[0]), false)
 
@@ -891,6 +897,7 @@ func (n *BranchNode) SetSlot(manager NodeManager, thisRef *NodeReference, this s
 }
 
 func (n *BranchNode) ClearStorage(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble) (newRoot NodeReference, changed bool, err error) {
+	n.markDirty()
 	return n.setNextNode(manager, thisRef, this, path,
 		func(next *NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().ClearStorage(manager, next, node, address, path)
@@ -974,7 +981,7 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 			if err != nil {
 				errs = append(errs, err)
 			} else if got := n.hashes[i]; want != got {
-				errs = append(errs, fmt.Errorf("in node %v the hash for child %d is invalid\nwant: %v\ngot: %v", thisRef.Id(), i, want, got))
+				errs = append(errs, fmt.Errorf("in node %v the hash for child %d is invalid\nwant: %x\ngot:  %x", thisRef.Id(), i, want, got))
 			}
 		}
 		handle, err := source.getViewAccess(&child)
@@ -1001,9 +1008,19 @@ func (n *BranchNode) Check(source NodeSource, thisRef *NodeReference, _ []Nibble
 	return errors.Join(errs...)
 }
 
+func (n *BranchNode) String() string {
+	children := ""
+	for i := 0; i < 16; i++ {
+		if !n.children[i].id.IsEmpty() {
+			children += fmt.Sprintf("\t\n  %x: %v", i, n.children[i].id)
+		}
+	}
+	return fmt.Sprintf("Branch (dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, hashState: %v) %v", n.IsDirty(), n.IsFrozen(), n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.getHashStatus(), children)
+}
+
 func (n *BranchNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sBranch (ID: %v, dirty: %t, frozen: %t, Dirty: %016b, Embedded: %016b, Frozen: %016b, Hash: %v, hashState: %v):\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.dirtyHashes, n.embeddedChildren, n.frozenChildren, formatHashForDump(n.hash), n.getHashStatus())
+	fmt.Fprintf(out, "%s - ID: %v: %v:\n", indent, thisRef.Id(), n)
 	for i, child := range n.children {
 		if child.Id().IsEmpty() {
 			continue
@@ -1151,6 +1168,7 @@ func (n *ExtensionNode) setNextNode(
 	valueIsEmpty bool,
 	createSubTree func(*NodeReference, shared.WriteHandle[Node], []Nibble) (NodeReference, bool, error),
 ) (NodeReference, bool, error) {
+	n.markDirty()
 	// Check whether the updates targets the node referenced by this extension.
 	if n.path.IsPrefixOf(path) {
 		handle, err := manager.getWriteAccess(&n.next)
@@ -1281,6 +1299,7 @@ func (n *ExtensionNode) setNextNode(
 	defer branchHandle.Release()
 	newRoot := branchRef
 	branch := branchHandle.Get().(*BranchNode)
+	branch.markDirty()
 
 	// Determine the point at which the prefix need to be split.
 	commonPrefixLength := n.path.GetCommonPrefixLength(path)
@@ -1370,6 +1389,7 @@ func (n *ExtensionNode) SetSlot(manager NodeManager, thisRef *NodeReference, thi
 }
 
 func (n *ExtensionNode) ClearStorage(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble) (newRoot NodeReference, hasChanged bool, err error) {
+	n.markDirty()
 	return n.setNextNode(manager, thisRef, path, true,
 		func(next *NodeReference, node shared.WriteHandle[Node], path []Nibble) (NodeReference, bool, error) {
 			return node.Get().ClearStorage(manager, next, node, address, path)
@@ -1455,9 +1475,13 @@ func (n *ExtensionNode) Check(source NodeSource, thisRef *NodeReference, _ []Nib
 	return errors.Join(errs...)
 }
 
+func (n *ExtensionNode) String() string {
+	return fmt.Sprintf("Extension (frozen: %t, nextHashDirty: %t, Embedded: %t, Hash: %v, hashState: %v): %v\n", n.IsFrozen(), n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.getHashStatus(), &n.path)
+}
+
 func (n *ExtensionNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sExtension (ID: %v/%t, nextHashDirty: %t, Embedded: %t, Hash: %v, hashState: %v): %v\n", indent, thisRef.Id(), n.IsFrozen(), n.nextHashDirty, n.nextIsEmbedded, formatHashForDump(n.hash), n.getHashStatus(), &n.path)
+	fmt.Fprintf(out, "%s - ID: %v: %s\n", indent, thisRef.Id(), n)
 	if handle, err := source.getViewAccess(&n.next); err == nil {
 		defer handle.Release()
 		if err := handle.Get().Dump(out, source, &n.next, indent+"  "); err != nil {
@@ -1542,6 +1566,7 @@ func (n *AccountNode) GetSlot(source NodeSource, address common.Address, path []
 }
 
 func (n *AccountNode) SetAccount(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble, info AccountInfo) (NodeReference, bool, error) {
+	n.markDirty()
 	// Check whether this is the correct account.
 	if n.address == address {
 		if info == n.info {
@@ -1630,6 +1655,7 @@ func splitLeafNode(
 	defer branchHandle.Release()
 	branch := branchHandle.Get().(*BranchNode)
 	newRoot := branchRef
+	branch.markDirty()
 
 	// Check whether there is a common prefix.
 	partialPath := thisPath[len(thisPath)-len(siblingPath):]
@@ -1742,6 +1768,7 @@ func (n *AccountNode) SetSlot(manager NodeManager, thisRef *NodeReference, this 
 }
 
 func (n *AccountNode) ClearStorage(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], address common.Address, path []Nibble) (newRoot NodeReference, changed bool, err error) {
+	n.markDirty()
 	if n.address != address || n.storage.Id().IsEmpty() {
 		return *thisRef, false, nil
 	}
@@ -1880,9 +1907,13 @@ func (n *AccountNode) Check(source NodeSource, thisRef *NodeReference, path []Ni
 	return errors.Join(errs...)
 }
 
+func (n *AccountNode) String() string {
+	return fmt.Sprintf("Account (dirty: %t, frozen: %t, path length: %v, Hash: %v, hashState: %v): %v - %v", n.IsDirty(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.address, &n.info)
+}
+
 func (n *AccountNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
 	errs := []error{}
-	fmt.Fprintf(out, "%sAccount (ID: %v, dirty: %t, frozen: %t, path length: %v, Hash: %v, hashState: %v): %v - %v\n", indent, thisRef.Id(), n.IsDirty(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.address, n.info)
+	fmt.Fprintf(out, "%s - ID: %v: %s\n", indent, thisRef.Id(), n)
 	if n.storage.Id().IsEmpty() {
 		return nil
 	}
@@ -1962,6 +1993,7 @@ func (n *ValueNode) SetAccount(NodeManager, *NodeReference, shared.WriteHandle[N
 }
 
 func (n *ValueNode) SetValue(manager NodeManager, thisRef *NodeReference, this shared.WriteHandle[Node], key common.Key, path []Nibble, value common.Value) (NodeReference, bool, error) {
+	n.markDirty()
 	// Check whether this is the correct value node.
 	if n.key == key {
 		if value == n.value {
@@ -2088,8 +2120,12 @@ func (n *ValueNode) Check(source NodeSource, thisRef *NodeReference, path []Nibb
 	return errors.Join(errs...)
 }
 
+func (n *ValueNode) String() string {
+	return fmt.Sprintf("Value (frozen: %t, path-length: %d, Hash: %v, hashState: %v): %v - %x", n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.key, n.value)
+}
+
 func (n *ValueNode) Dump(out io.Writer, source NodeSource, thisRef *NodeReference, indent string) error {
-	fmt.Fprintf(out, "%sValue (ID: %v/%t/%d, Hash: %v, hashState: %v): %v - %x\n", indent, thisRef.Id(), n.IsFrozen(), n.pathLength, formatHashForDump(n.hash), n.getHashStatus(), n.key, n.value)
+	fmt.Fprintf(out, "%s - ID: %v: %s\n", indent, thisRef.Id(), n)
 	return nil
 }
 

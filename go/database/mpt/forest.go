@@ -683,6 +683,13 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	s.nodeTransferMutex.Lock()
 	defer s.nodeTransferMutex.Unlock()
 
+	/*
+		res, found = s.nodeCache.Get(ref)
+		if found {
+			return res, nil
+		}
+	*/
+
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
@@ -711,6 +718,7 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	} else if id.IsEmpty() {
 		node = EmptyNode{}
 	}
+	//fmt.Printf("loading node %v from storage\n", id)
 
 	if err != nil {
 		return nil, err
@@ -726,7 +734,11 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	}
 
 	// if there has been a concurrent fetch, use the other value
-	instance, _ := s.addToCacheHoldingTransferMutex(ref, shared.MakeShared[Node](node))
+	instance, present := s.addToCacheHoldingTransferMutex(ref, shared.MakeShared(node))
+	if present {
+		panic("node was arrived in cache while loading from storage")
+	}
+
 	return instance, nil
 }
 
@@ -864,6 +876,7 @@ func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared
 		// head of the cache's LRU queue -- just like a newly inserted node
 		// would be. Methods like createBranch depend on this to be covered here.
 		s.nodeCache.Touch(ref)
+		//fmt.Printf("Info: node %v was already present in the cache\n", ref.Id())
 	}
 	if !evicted {
 		return current, present
@@ -915,12 +928,11 @@ func (s *Forest) createAccount() (NodeReference, shared.WriteHandle[Node], error
 	ref := NewNodeReference(AccountId(i))
 	node := new(AccountNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
+	write := instance.GetWriteHandle()
 	if present {
-		write := instance.GetWriteHandle()
 		*write.Get().(*AccountNode) = *node
-		write.Release()
 	}
-	return ref, instance.GetWriteHandle(), err
+	return ref, write, nil
 }
 
 func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error) {
@@ -931,12 +943,11 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	ref := NewNodeReference(BranchId(i))
 	node := new(BranchNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
+	write := instance.GetWriteHandle()
 	if present {
-		write := instance.GetWriteHandle()
 		*write.Get().(*BranchNode) = *node
-		write.Release()
 	}
-	return ref, instance.GetWriteHandle(), err
+	return ref, write, nil
 }
 
 func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], error) {
@@ -947,12 +958,11 @@ func (s *Forest) createExtension() (NodeReference, shared.WriteHandle[Node], err
 	ref := NewNodeReference(ExtensionId(i))
 	node := new(ExtensionNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
+	write := instance.GetWriteHandle()
 	if present {
-		write := instance.GetWriteHandle()
 		*write.Get().(*ExtensionNode) = *node
-		write.Release()
 	}
-	return ref, instance.GetWriteHandle(), err
+	return ref, write, nil
 }
 
 func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) {
@@ -963,12 +973,11 @@ func (s *Forest) createValue() (NodeReference, shared.WriteHandle[Node], error) 
 	ref := NewNodeReference(ValueId(i))
 	node := new(ValueNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
+	write := instance.GetWriteHandle()
 	if present {
-		write := instance.GetWriteHandle()
 		*write.Get().(*ValueNode) = *node
-		write.Release()
 	}
-	return ref, instance.GetWriteHandle(), err
+	return ref, write, nil
 }
 
 func (s *Forest) release(ref *NodeReference) error {
