@@ -282,3 +282,51 @@ func ExampleDatabase_GetHistoricContext() {
 
 	// Output: Balance of [1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] is 100
 }
+
+func ExampleDatabase_GetMemoryFootprint() {
+	dir, err := os.MkdirTemp("", "carmen_db_*")
+	if err != nil {
+		log.Fatalf("cannot create temporary directory: %v", err)
+	}
+	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithArchiveConfiguration(), nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Add a new block
+	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
+		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
+			context.CreateAccount(carmen.Address{1})
+			context.AddBalance(carmen.Address{1}, carmen.NewAmount(100))
+			return nil
+		}); err != nil {
+			log.Fatalf("cannot create transaction: %v", err)
+		}
+		return nil
+	}); err != nil {
+		log.Fatalf("cannot add block: %v", err)
+	}
+
+	// block wait until the archive is in sync
+	if err := db.Flush(); err != nil {
+		log.Fatalf("cannot flush: %v", err)
+	}
+
+	fp := db.GetMemoryFootprint()
+
+	total := fp.Total()
+	if total <= 0 {
+		log.Fatalf("database was filled with block but memory footprint returned 0 bytes used")
+	}
+
+	fmt.Printf("Database currently uses %v B", total)
+	fmt.Printf("Memory breakdown:\n%s", fp)
+
+	if err := db.Close(); err != nil {
+		log.Fatalf("cannot close db: %v", err)
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		log.Fatalf("cannot remove dir: %v", err)
+	}
+}

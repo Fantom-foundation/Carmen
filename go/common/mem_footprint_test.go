@@ -112,31 +112,3 @@ func TestMemoryFootprintPrintIsAligned(t *testing.T) {
 	expectSubstr(t, print, " 100.2 MB ./c")
 	expectSubstr(t, print, "1022.0  B ./d")
 }
-
-func TestMemoryFootprint_VisitIsAppliedOntoAllNestedChildren(t *testing.T) {
-	fp := NewMemoryFootprint(1)
-	fp.AddChild("a", NewMemoryFootprint(1))
-
-	a := fp.GetChild("a")
-	a.AddChild("b", NewMemoryFootprint(1))
-	a.AddChild("c", NewMemoryFootprint(1))
-
-	b := a.GetChild("b")
-	b.AddChild("d", NewMemoryFootprint(1))
-	b.AddChild("e", NewMemoryFootprint(1))
-	b.AddChild("f", NewMemoryFootprint(1))
-
-	c := a.GetChild("c")
-	c.AddChild("g", NewMemoryFootprint(1))
-	c.AddChild("h", NewMemoryFootprint(1))
-
-	var val uintptr
-	fp.Visit(func(f *MemoryFootprint) {
-		val += f.Value()
-	})
-
-	if got, want := val, fp.Total(); got != want {
-		t.Fatalf("incorrect value - Visit does not visit every child and/or root, got: %v, want: %v", got, want)
-	}
-
-}

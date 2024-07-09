@@ -86,16 +86,6 @@ func (mf *MemoryFootprint) String() string {
 	return mf.ToString(".")
 }
 
-func (mf *MemoryFootprint) Visit(visit func(footprint *MemoryFootprint)) {
-	// First visit current
-	visit(mf)
-
-	// Then continue with children
-	for _, child := range mf.children {
-		child.Visit(visit)
-	}
-}
-
 func (mf *MemoryFootprint) toStringBuilder(sb *strings.Builder, path string) {
 	// Print children in order for simpler comparison.
 	names := make([]string, 0, len(mf.children))
