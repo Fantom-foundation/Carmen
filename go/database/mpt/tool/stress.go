@@ -21,15 +21,15 @@ var Stress = cli.Command{
 		&tmpDirFlag,
 		&numBlocksFlag,
 		&reportIntervalFlag,
-		&seedFlag,
+		&flushPeriodFlag,
 	},
 }
 
 var (
-	seedFlag = cli.IntFlag{
-		Name:  "seed",
-		Usage: "the seed for the random number generator, 0 for a random seed",
-		Value: 0,
+	flushPeriodFlag = cli.DurationFlag{
+		Name:  "flush-period",
+		Usage: "the time between background node flushes",
+		Value: 5 * time.Millisecond,
 	}
 )
 
@@ -43,9 +43,12 @@ func stress(context *cli.Context) error {
 	dir := filepath.Join(tmpDir, fmt.Sprintf("carmen-stress-%d", time.Now().UnixNano()))
 	fmt.Printf("Using temporary directory: %s\n", dir)
 
+	flushPeriod := context.Duration(flushPeriodFlag.Name)
+	fmt.Printf("Using background flush period: %s\n", flushPeriod)
+
 	properties := carmen.Properties{
 		carmen.LiveDBCache:           fmt.Sprintf("%d", 64<<20), // 64 MiB
-		carmen.BackgroundFlushPeriod: fmt.Sprintf("%d", 5),      // 1 millisecond
+		carmen.BackgroundFlushPeriod: fmt.Sprintf("%d", flushPeriod.Milliseconds()),
 	}
 
 	db, err := carmen.OpenDatabase(dir, carmen.GetCarmenGoS5WithoutArchiveConfiguration(), properties)
@@ -64,14 +67,8 @@ func stress(context *cli.Context) error {
 		reportingInterval = 100
 	}
 
-	seed := context.Int64(seedFlag.Name)
-	if seed <= 0 {
-		seed = time.Now().UnixNano()
-	}
-	fmt.Printf("Using seed: %d\n", seed)
-	defer fmt.Printf("Used seed: %d\n", seed)
 	start := time.Now()
-	rand := rand.New(rand.NewSource(seed))
+	rand := rand.New(rand.NewSource(start.UnixNano()))
 
 	nextAccount := 0
 	nextKey := 0
