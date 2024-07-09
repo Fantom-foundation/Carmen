@@ -290,7 +290,7 @@ func makeForest(
 
 	// Start a background worker flushing dirty nodes to disk.
 	res.flusher = startNodeFlusher(res.nodeCache, sink, nodeFlusherConfig{
-		period: forestConfig.BackgroundFlushPeriod,
+		period: -1 * time.Second, // forestConfig.BackgroundFlushPeriod,  // disabled for now, see #948
 	})
 
 	// Run a background worker releasing entire tries of nodes on demand.
