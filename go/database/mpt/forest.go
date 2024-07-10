@@ -62,14 +62,20 @@ type Root struct {
 	Hash    common.Hash
 }
 
+// NodeCacheConfig summarizes the configuration options for the node cache
+// managed by a forest instance.
+type NodeCacheConfig struct {
+	Capacity               int           // the (approximate) maximum number of nodes retained in memory; a default is chosen if zero or negative
+	BackgroundFlushPeriod  time.Duration // the time between background flushes; a default is chosen if zero, disabled if negative
+	writeBufferChannelSize int           // the maximum number of elements retained in the write buffer channel
+}
+
 // ForestConfig summarizes forest instance configuration options that affect
 // the functional and non-functional properties of a forest but do not change
 // the on-disk format.
 type ForestConfig struct {
-	Mode                   StorageMode   // whether to perform destructive or constructive updates
-	CacheCapacity          int           // the maximum number of nodes retained in memory
-	BackgroundFlushPeriod  time.Duration // the time between background flushes, default if zero, disabled if negative
-	writeBufferChannelSize int           // the maximum number of elements retained in the write buffer channel
+	Mode            StorageMode // whether to perform destructive or constructive updates
+	NodeCacheConfig             // configuration options for the node cache
 }
 
 // Forest is a utility node managing nodes for one or more Tries.
@@ -167,7 +173,7 @@ func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig Fore
 	closers = append(closers, values)
 
 	success = true
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -211,7 +217,7 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 	closers = append(closers, values)
 
 	success = true
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 // closers is a shortcut for the list of io.Closer.
@@ -257,7 +263,6 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 
 func makeForest(
 	mptConfig MptConfig,
-	directory string,
 	branches stock.Stock[uint64, BranchNode],
 	extensions stock.Stock[uint64, ExtensionNode],
 	accounts stock.Stock[uint64, AccountNode],
@@ -269,6 +274,20 @@ func makeForest(
 	releaseError := make(chan error, 1)
 	releaseDone := make(chan struct{})
 
+	// The capacity of an MPT's node cache must be at least as large as the maximum
+	// number of nodes modified in a block. Evaluations show that most blocks
+	// modify less than 2000 nodes. However, one block, presumably the one handling
+	// the opera fork at ~4.5M, modifies 434.589 nodes. Thus, the cache size of a
+	// MPT processing Fantom's history should be at least ~500.000 nodes.
+	const defaultCacheCapacity = 10_000_000
+	if forestConfig.Capacity <= 0 {
+		forestConfig.Capacity = defaultCacheCapacity
+	}
+	const minCacheCapacity = 2_000
+	if forestConfig.Capacity < minCacheCapacity {
+		forestConfig.Capacity = minCacheCapacity
+	}
+
 	res := &Forest{
 		config:        mptConfig,
 		branches:      synced.Sync(branches),
@@ -276,7 +295,7 @@ func makeForest(
 		accounts:      synced.Sync(accounts),
 		values:        synced.Sync(values),
 		storageMode:   forestConfig.Mode,
-		nodeCache:     NewNodeCache(forestConfig.CacheCapacity),
+		nodeCache:     NewNodeCache(forestConfig.Capacity),
 		hasher:        mptConfig.Hashing.createHasher(),
 		keyHasher:     NewKeyHasher(),
 		addressHasher: NewAddressHasher(),
@@ -290,7 +309,7 @@ func makeForest(
 
 	// Start a background worker flushing dirty nodes to disk.
 	res.flusher = startNodeFlusher(res.nodeCache, sink, nodeFlusherConfig{
-		period: -1 * time.Second, // forestConfig.BackgroundFlushPeriod,  // disabled for now, see #948
+		period: -1 * time.Second, // forestConfig.BackgroundFlushPeriod, // disabled for now, see #948
 	})
 
 	// Run a background worker releasing entire tries of nodes on demand.
