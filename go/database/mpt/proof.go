@@ -225,6 +225,61 @@ func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
 		return VisitResponseAbort
 	}
 
+	// node child hashes will be dirty for the archive when hashes are stored with nodes
+	// and must be loaded here for witness proof.
+	switch n := node.(type) {
+	case *ExtensionNode:
+		if n.nextHashDirty {
+			nextHandle, err := p.nodeSource.getViewAccess(&n.next)
+			if err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+			embedded, err := isNodeEmbedded(nextHandle.Get(), p.nodeSource)
+			nextHandle.Release()
+			if err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+			if err := updateChildrenHashes(p.nodeSource, n, map[NodeId]bool{n.next.Id(): embedded}); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
+	case *BranchNode:
+		if n.dirtyHashes != 0 {
+			embeddedChildren := make(map[NodeId]bool, 16)
+			for i := 0; i < 16; i++ {
+				if n.isChildHashDirty(byte(i)) {
+					childHandle, err := p.nodeSource.getViewAccess(&n.children[i])
+					if err != nil {
+						p.err = err
+						return VisitResponseAbort
+					}
+					embedded, err := isNodeEmbedded(childHandle.Get(), p.nodeSource)
+					childHandle.Release()
+					if err != nil {
+						p.err = err
+						return VisitResponseAbort
+					}
+					embeddedChildren[n.children[i].Id()] = embedded
+				}
+			}
+
+			if err := updateChildrenHashes(p.nodeSource, n, embeddedChildren); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
+	case *AccountNode:
+		if n.storageHashDirty {
+			if err := updateChildrenHashes(p.nodeSource, n, map[NodeId]bool{n.storage.Id(): false}); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
+	}
+
 	data := make([]byte, 0, 1024)
 	rlp, err := encodeToRlp(node, p.nodeSource, data)
 	if err != nil {

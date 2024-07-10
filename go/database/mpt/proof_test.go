@@ -274,6 +274,48 @@ func TestCreateWitnessProof_CannotCreateProof_FailingNodeSources(t *testing.T) {
 	}
 }
 
+func TestCreateWitnessProof_SourceError_All_Paths(t *testing.T) {
+	injectedErr := errors.New("injected error")
+	address := common.Address{1}
+
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
+
+			addressNibbles := AddressToNibblePath(address, ctxt)
+			desc := &Branch{
+				children: Children{
+					addressNibbles[0]: &Branch{
+						dirtyChildHashes: []int{1},
+						children: Children{
+							addressNibbles[1]: &Extension{
+								path: addressNibbles[2:20],
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+									storage: &Empty{}}},
+						}}}}
+
+			root, _ := ctxt.Build(desc)
+			countingSource := errorInjectingNodeManager{ctxt, 999, nil, 0}
+
+			if _, err := CreateWitnessProof(&countingSource, &root, address); err != nil {
+				t.Fatalf("unexpected error during iteration: %v", err)
+			}
+
+			for i := 1; i < countingSource.counter; i++ {
+				ctxt := newNiceNodeContextWithConfig(t, ctrl, config)
+				root, _ := ctxt.Build(desc)
+				countingSource := errorInjectingNodeManager{ctxt, i, injectedErr, 0}
+				if _, err := CreateWitnessProof(&countingSource, &root, address); !errors.Is(err, injectedErr) {
+					t.Errorf("expected error %v, got %v, loop: %d, actual: %d", injectedErr, err, i, countingSource.counter)
+				}
+			}
+
+		})
+	}
+}
+
 func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
