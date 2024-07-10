@@ -45,10 +45,10 @@ var fileAndMemVariants = []variant{
 }
 
 var forestConfigs = map[string]ForestConfig{
-	"mutable_1k":     {Mode: Mutable, CacheCapacity: 1024},
-	"mutable_128k":   {Mode: Mutable, CacheCapacity: 128 * 1024},
-	"immutable_1k":   {Mode: Immutable, CacheCapacity: 1024},
-	"immutable_128k": {Mode: Immutable, CacheCapacity: 128 * 1024},
+	"mutable_1k":     {Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}},
+	"mutable_128k":   {Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 128 * 1024}},
+	"immutable_1k":   {Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}},
+	"immutable_128k": {Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 128 * 1024}},
 }
 
 func TestForest_Cannot_Open_Corrupted_Stock_Meta(t *testing.T) {
@@ -66,7 +66,7 @@ func TestForest_Cannot_Open_Corrupted_Stock_Meta(t *testing.T) {
 						t.Fatalf("cannot prepare for test: %s", err)
 					}
 
-					if _, err := variant.factory(rootDir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+					if _, err := variant.factory(rootDir, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}); err == nil {
 						t.Errorf("opening forest should fail")
 					}
 				})
@@ -84,7 +84,7 @@ func TestForest_Cannot_Open_Corrupted_Forest_Meta(t *testing.T) {
 					t.Fatalf("cannot prepare for test: %s", err)
 				}
 
-				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}); err == nil {
 					t.Errorf("opening forest should fail")
 				}
 			})
@@ -102,7 +102,7 @@ func TestForest_Cannot_Open_Cannot_Parse_Meta(t *testing.T) {
 					t.Fatalf("cannot prepare for test: %s", err)
 				}
 
-				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}); err == nil {
 					t.Errorf("opening forest should fail")
 				}
 			})
@@ -119,10 +119,10 @@ func TestForest_Cannot_Open_Meta_DoesNot_Match(t *testing.T) {
 				t.Fatalf("cannot prepare for test: %s", err)
 			}
 
-			if _, err := variant.factory(dir, S5LiveConfig, ForestConfig{Mode: Mutable, CacheCapacity: 0}); err == nil {
+			if _, err := variant.factory(dir, S5LiveConfig, ForestConfig{Mode: Mutable}); err == nil {
 				t.Errorf("opening forest should fail")
 			}
-			if _, err := variant.factory(dir, S4LiveConfig, ForestConfig{Mode: Immutable, CacheCapacity: 0}); err == nil {
+			if _, err := variant.factory(dir, S4LiveConfig, ForestConfig{Mode: Immutable}); err == nil {
 				t.Errorf("opening forest should fail")
 			}
 		})
@@ -314,7 +314,7 @@ func TestForest_Freeze_Fails(t *testing.T) {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
 				directory := t.TempDir()
 
-				forest, err := variant.factory(directory, config, ForestConfig{Mode: Immutable, CacheCapacity: 1024})
+				forest, err := variant.factory(directory, config, ForestConfig{Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -450,7 +450,7 @@ func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
 				directory := t.TempDir()
 
-				forest, err := variant.factory(directory, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024})
+				forest, err := variant.factory(directory, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -970,7 +970,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 1024})
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -1014,7 +1014,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Immutable, CacheCapacity: 1024})
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -1238,7 +1238,6 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1332,12 +1331,11 @@ func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNode
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
 		values,
-		ForestConfig{CacheCapacity: 1},
+		ForestConfig{NodeCacheConfig: NodeCacheConfig{Capacity: 1}},
 	)
 	if err != nil {
 		t.Fatalf("failed to create test forest: %v", err)
@@ -1455,7 +1453,7 @@ func openFileShadowForest(directory string, mptConfig MptConfig, forestConfig Fo
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
@@ -1489,14 +1487,15 @@ func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
 		values,
 		ForestConfig{
-			CacheCapacity:          1,
-			writeBufferChannelSize: 1,
+			NodeCacheConfig: NodeCacheConfig{
+				Capacity:               1,
+				writeBufferChannelSize: 1,
+			},
 		},
 	)
 	if err != nil {
@@ -1562,8 +1561,8 @@ func TestForest_CheckPassesAfterReopeningDirectory(t *testing.T) {
 					// it, and check that the consistency test still passes.
 					dir := t.TempDir()
 					forestConfig := ForestConfig{
-						Mode:          mode,
-						CacheCapacity: 1024,
+						Mode:            mode,
+						NodeCacheConfig: NodeCacheConfig{Capacity: 1024},
 					}
 					forest, err := OpenFileForest(dir, config, forestConfig)
 					if err != nil {
@@ -1799,7 +1798,6 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 
 			forest, err := makeForest(
 				MptConfig{Hashing: DirectHashing},
-				t.TempDir(),
 				branches,
 				extensions,
 				accounts,
@@ -1838,7 +1836,6 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1892,7 +1889,6 @@ func TestForest_CollectedErrorsAreReportedInFlushAndClose(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1970,7 +1966,7 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 				// The tree is shallow - 1 account + 4byte storage addresses.
 				// The size of the cache here is estimated considering the numbers above, but it is not set
 				// exactly as some nodes are created and then deleted while building the tree.
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 10})
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 10}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}

@@ -66,7 +66,7 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})
 	if err != nil {
 		return err
 	}
@@ -239,7 +239,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}
 
 	// Create a live-DB updated in parallel for faster hash computation.
-	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
+	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create auxiliary live DB: %w", err)
 	}
@@ -251,7 +251,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}()
 
 	// Create an empty archive.
-	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create empty state: %w", err)
 	}
