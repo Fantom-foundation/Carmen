@@ -12,16 +12,16 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
-	"os/signal"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 	"github.com/urfave/cli/v2"
 )
@@ -66,14 +66,17 @@ func stressTest(context *cli.Context) error {
 		tmpDir = os.TempDir()
 	}
 
-	dir := filepath.Join(tmpDir, fmt.Sprintf("carmen-stress-%d", time.Now().UnixNano()))
-	fmt.Printf("Using temporary directory: %s\n", dir)
+	dir, err := os.MkdirTemp(tmpDir, "carmen-stress-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+	log.Printf("Using temporary directory: %s\n", dir)
 
 	flushPeriod := context.Duration(flushPeriodFlag.Name)
-	fmt.Printf("Using background flush period: %s\n", flushPeriod)
+	log.Printf("Using background flush period: %s\n", flushPeriod)
 
 	reportPeriod := context.Duration(reportPeriodFlag.Name)
-	fmt.Printf("Using report period: %s\n", reportPeriod)
+	log.Printf("Using report period: %s\n", reportPeriod)
 
 	cacheConfig := mpt.NodeCacheConfig{
 		Capacity:              cacheSize / mpt.EstimatePerNodeMemoryUsage(),
@@ -89,17 +92,23 @@ func stressTest(context *cli.Context) error {
 	if numBlocks <= 0 {
 		numBlocks = 1000
 	}
-	fmt.Printf("Inserting %d blocks ...\n", numBlocks)
+	log.Printf("Inserting %d blocks ...\n", numBlocks)
 
 	state := createTestState(db, dir)
 
 	var reportWg sync.WaitGroup
 	reportWg.Add(1)
 	stopReport := make(chan struct{})
-	defer func() {
+	reporterStopped := false
+	stopReporter := func() {
+		if reporterStopped {
+			return
+		}
 		close(stopReport)
 		reportWg.Wait()
-	}()
+		reporterStopped = true
+	}
+	defer stopReporter()
 	go func() {
 		defer reportWg.Done()
 		ticker := time.NewTicker(reportPeriod)
@@ -113,21 +122,24 @@ func stressTest(context *cli.Context) error {
 		}
 	}()
 
-	stopRun := make(chan os.Signal, 1)
-	signal.Notify(stopRun, syscall.SIGINT, syscall.SIGTERM)
-
+	aborted := false
+	ctx := interrupt.CancelOnInterrupt(context.Context)
 	rand := rand.New(rand.NewSource(state.start.UnixNano()))
-loop:
 	for i := 0; i < numBlocks; i++ {
-		select {
-		case <-stopRun:
-			fmt.Printf("Stopped by interrupt signal ...\n")
-			break loop
-		default:
+		if interrupt.IsCancelled(ctx) {
+			aborted = true
+			break
 		}
 		if err := state.AddBlock(rand); err != nil {
 			return fmt.Errorf("failed to add block %d: %w", i, err)
 		}
+	}
+
+	stopReporter()
+
+	if !aborted {
+		log.Printf("Processed %d blocks successfully\n", numBlocks)
+		log.Printf("Closing and deleting database ...\n")
 	}
 
 	if err := db.Close(); err != nil {
@@ -136,6 +148,10 @@ loop:
 
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("failed to remove directory: %w", err)
+	}
+
+	if !aborted {
+		log.Printf("Done\n")
 	}
 
 	return nil
@@ -167,7 +183,7 @@ func (s *stressTestState) ReportProgress() {
 	used := getDirectorySize(s.directory)
 	free, err := getFreeSpace(s.directory)
 	if err != nil {
-		fmt.Printf("failed to get free space: %v\n", err)
+		log.Printf("failed to get free space: %v\n", err)
 		return
 	}
 
@@ -186,7 +202,7 @@ func (s *stressTestState) ReportProgress() {
 	minutes := (seconds / 60) % 60
 	seconds = seconds % 60
 	const GiB = 1024 * 1024 * 1024
-	fmt.Printf(
+	log.Printf(
 		"[%d:%02d:%02d] Block %d added, managing %d accounts, %d slots, memory: %.2f GiB, disk used: %.2f GiB, disk free: %.2f GiB\n",
 		hours, minutes, seconds,
 		currentBlock,
@@ -309,9 +325,6 @@ func (s *stressTestState) deleteAccount() error {
 		return nil
 	}
 	addrIndex := s.getRandomAccountIndex()
-	if false && len(s.state[addrIndex]) > 50 {
-		fmt.Printf("deleting %d with %d keys\n", addrIndex, len(s.state[addrIndex]))
-	}
 	addr := intToAddress(addrIndex)
 	if err := s.db.DeleteAccount(addr); err != nil {
 		return fmt.Errorf("failed to remove account: %w", err)
