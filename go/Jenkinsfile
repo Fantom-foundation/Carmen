@@ -33,6 +33,12 @@ pipeline {
             }
         }
 
+        stage('Stress Test') {
+            steps {
+                sh 'cd go && go run ./database/mpt/tool stress-test --num-blocks 2000'
+            }
+        }
+
         stage('Fuzzing') {
             parallel {
                 stage('Parallelism Test') {
