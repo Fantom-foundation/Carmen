@@ -156,7 +156,7 @@ func tryFlushDirtyNodes(cache NodeCache, sink NodeSink) error {
 		}
 
 		err := sink.Write(id, handle.AsViewHandle())
-		//fmt.Printf("flushing node %v\n", id)
+		//fmt.Printf("flushing node %v as %p\n", id, node)
 		if err == nil {
 			handle.Get().MarkClean()
 		}

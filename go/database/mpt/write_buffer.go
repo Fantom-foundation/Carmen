@@ -210,7 +210,7 @@ func (b *writeBuffer) emptyBuffer() {
 				b.errs = append(b.errs, err)
 				b.errsMutex.Unlock()
 			} else {
-				//fmt.Printf("written node %v\n", id)
+				//fmt.Printf("written node %v as %p\n", id, node)
 				handle.Get().MarkClean()
 			}
 		}

@@ -56,6 +56,10 @@ func MakeShared[T any](value T) *Shared[T] {
 	}
 }
 
+func (p *Shared[T]) GetUnprotected() T {
+	return p.value
+}
+
 // TryGetReadHandle tries to get read access to the shared value's content. If
 // successful, indicated by the second return value, shared access to the object
 // is granted until the provided ReadHandle is released again. Other readers,

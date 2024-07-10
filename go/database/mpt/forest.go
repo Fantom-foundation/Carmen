@@ -31,6 +31,10 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 )
 
+const (
+	enableMasterCopyCheck = false
+)
+
 type StorageMode bool
 
 const (
@@ -131,6 +135,12 @@ type Forest struct {
 
 	// A flag indicating whether the forest is closed.
 	closed atomic.Bool
+
+	// A map of all nodes in the system that are considered the valid ones.
+	// TODO: remove this one after debugging
+	masterCopies map[NodeId]*shared.Shared[Node]
+
+	masterCopiesMutex sync.Mutex
 }
 
 func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -291,6 +301,7 @@ func makeForest(
 		releaseSync:   releaseSync,
 		releaseError:  releaseError,
 		releaseDone:   releaseDone,
+		masterCopies:  make(map[NodeId]*shared.Shared[Node]),
 	}
 
 	sink := writeBufferSink{res}
@@ -693,9 +704,23 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	id := ref.Id()
 	res, found = s.writeBuffer.Cancel(id)
 	if found {
+		if enableMasterCopyCheck {
+			fmt.Printf("Info: node %v gets recovered from write buffer as %p\n", id, res)
+		}
 		masterCopy, _ := s.addToCacheHoldingTransferMutex(ref, res)
 		if masterCopy != res {
 			panic("failed to reinstate element from write buffer")
+		}
+		if id.IsBranch() && enableMasterCopyCheck {
+			s.masterCopiesMutex.Lock()
+			m, found := s.masterCopies[id]
+			if !found {
+				panic(fmt.Sprintf("master copy not found for %v", id))
+			}
+			if m != res {
+				panic(fmt.Sprintf("master copy mismatch for %v, wanted %p, got %p", id, m, res))
+			}
+			s.masterCopiesMutex.Unlock()
 		}
 		return res, nil
 	}
@@ -734,9 +759,19 @@ func (s *Forest) getSharedNode(ref *NodeReference) (*shared.Shared[Node], error)
 	}
 
 	// if there has been a concurrent fetch, use the other value
+	if id.IsBranch() && enableMasterCopyCheck {
+		fmt.Printf("Info: node %v loaded from disk\n", id)
+	}
 	instance, present := s.addToCacheHoldingTransferMutex(ref, shared.MakeShared(node))
 	if present {
-		panic("node was arrived in cache while loading from storage")
+		panic("node was already in cache while loading from storage")
+	}
+
+	if id.IsBranch() && enableMasterCopyCheck {
+		s.masterCopiesMutex.Lock()
+		s.masterCopies[id] = instance
+		fmt.Printf("Info: branch %v loaded into %p\n", id, instance)
+		s.masterCopiesMutex.Unlock()
 	}
 
 	return instance, nil
@@ -760,6 +795,17 @@ func getAccess[H any](
 		// in the future by merging this functionality into called operations.
 		res := getAccess(instance)
 		if actual, err := f.getSharedNode(ref); err == nil && actual == instance {
+			if ref.Id().IsBranch() && enableMasterCopyCheck {
+				f.masterCopiesMutex.Lock()
+				m, found := f.masterCopies[ref.Id()]
+				f.masterCopiesMutex.Unlock()
+				if !found {
+					panic(fmt.Sprintf("master copy not found for %v", ref.Id()))
+				}
+				if m != instance {
+					panic(fmt.Sprintf("master copy mismatch for %v, wanted %p, got %p", ref.Id(), m, instance))
+				}
+			}
 			return res, nil
 		} else if err != nil {
 			release(res)
@@ -799,6 +845,20 @@ func (s *Forest) getHashAccess(ref *NodeReference) (shared.HashHandle[Node], err
 	return getAccess(s, ref,
 		func(s *shared.Shared[Node]) shared.HashHandle[Node] {
 			return s.GetHashHandle()
+			/*
+				handle := s.GetHashHandle()
+				switch n := handle.Get().(type) {
+				case *BranchNode:
+					n.markDirty()
+				case *AccountNode:
+					n.markDirty()
+				case *ExtensionNode:
+					n.markDirty()
+				case *ValueNode:
+					n.markDirty()
+				}
+				return handle
+			*/
 		},
 		func(p shared.HashHandle[Node]) {
 			p.Release()
@@ -814,6 +874,20 @@ func (f *Forest) getWriteAccess(ref *NodeReference) (shared.WriteHandle[Node], e
 			// modified nodes are at the head of the cache's LRU queue to be evicted last.
 			f.nodeCache.Touch(ref)
 			return s.GetWriteHandle()
+			/*
+				handle := s.GetWriteHandle()
+				switch n := handle.Get().(type) {
+				case *BranchNode:
+					n.markDirty()
+				case *AccountNode:
+					n.markDirty()
+				case *ExtensionNode:
+					n.markDirty()
+				case *ValueNode:
+					n.markDirty()
+				}
+				return handle
+			*/
 		},
 		func(p shared.WriteHandle[Node]) {
 			p.Release()
@@ -867,6 +941,13 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 }
 
 func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+
+	// THIS SEEMS TO BE THE FIX
+	if recovered, found := s.writeBuffer.Cancel(ref.Id()); found {
+		instance, _ := s.addToCacheHoldingTransferMutex(ref, recovered)
+		return instance, true
+	}
+
 	// Replacing the element in the already thread safe node cache needs to be
 	// guarded by the `getTransferMutex` since an evicted node has to
 	// be moved to the write buffer in an atomic step.
@@ -887,11 +968,21 @@ func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared
 		dirty := handle.Get().IsDirty()
 		handle.Release()
 		if !dirty {
+			if enableMasterCopyCheck {
+				fmt.Printf("Info: node %v was evicted from cache, clean, not forwarded to write buffer\n", evictedId)
+			}
 			return current, present
+		}
+	} else {
+		if enableMasterCopyCheck {
+			fmt.Printf("Info: failed to get view handle on evicted node %v to check whether it is dirty\n", evictedId)
 		}
 	}
 
 	// Enqueue evicted node for asynchronous write to file.
+	if enableMasterCopyCheck {
+		fmt.Printf("Info: node %v was evicted from cache, dirty, forwarded to write buffer\n", evictedId)
+	}
 	s.writeBuffer.Add(evictedId, evictedNode)
 	return current, present
 }
@@ -940,6 +1031,15 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	if err != nil {
 		return NodeReference{}, shared.WriteHandle[Node]{}, err
 	}
+
+	if enableMasterCopyCheck {
+		s.masterCopiesMutex.Lock()
+		if m, found := s.masterCopies[BranchId(i)]; found {
+			panic(fmt.Sprintf("branch %v already exists: %p", BranchId(i), m))
+		}
+		s.masterCopiesMutex.Unlock()
+	}
+
 	ref := NewNodeReference(BranchId(i))
 	node := new(BranchNode)
 	instance, present := s.addToCache(&ref, shared.MakeShared[Node](node))
@@ -947,6 +1047,14 @@ func (s *Forest) createBranch() (NodeReference, shared.WriteHandle[Node], error)
 	if present {
 		*write.Get().(*BranchNode) = *node
 	}
+
+	if enableMasterCopyCheck {
+		s.masterCopiesMutex.Lock()
+		s.masterCopies[BranchId(i)] = instance
+		fmt.Printf("Info: branch %v created: %p (was present: %t)\n", BranchId(i), instance, present)
+		s.masterCopiesMutex.Unlock()
+	}
+
 	return ref, write, nil
 }
 
@@ -991,6 +1099,20 @@ func (s *Forest) release(ref *NodeReference) error {
 	// If this line is removed, this test fails:
 	//  go test ./database/mpt/...  -run TestForest_AsyncDelete_CacheIsNotExhausted
 	s.nodeCache.Release(ref)
+
+	if ref.Id().IsBranch() && enableMasterCopyCheck {
+		s.masterCopiesMutex.Lock()
+		instance, found := s.masterCopies[ref.Id()]
+		if !found {
+			panic(fmt.Sprintf("attempting to delete non-existing node %v", ref.Id()))
+		}
+		if instance.GetUnprotected().IsDirty() {
+			panic(fmt.Sprintf("attempting to delete dirty node %v", ref.Id()))
+		}
+		fmt.Printf("Info: branch %v deleted: %p\n", ref.Id(), instance)
+		delete(s.masterCopies, ref.Id())
+		s.masterCopiesMutex.Unlock()
+	}
 
 	id := ref.Id()
 	if id.IsAccount() {

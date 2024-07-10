@@ -11,6 +11,7 @@
 package mpt
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -159,6 +160,23 @@ func (c *nodeCache) Get(r *NodeReference) (*shared.Shared[Node], bool) {
 }
 
 func (c *nodeCache) GetOrSet(
+	ref *NodeReference,
+	node *shared.Shared[Node],
+) (
+	current *shared.Shared[Node],
+	present bool,
+	evictedId NodeId,
+	evictedNode *shared.Shared[Node],
+	evicted bool,
+) {
+	cu, p, e, n, ev := c.GetOrSet_internal(ref, node)
+	if enableMasterCopyCheck {
+		fmt.Printf("GetOrSet: %v, %p => %p, %t, %v, %p, %t\n", ref.Id(), node, cu, p, e, n, ev)
+	}
+	return cu, p, e, n, ev
+}
+
+func (c *nodeCache) GetOrSet_internal(
 	ref *NodeReference,
 	node *shared.Shared[Node],
 ) (
