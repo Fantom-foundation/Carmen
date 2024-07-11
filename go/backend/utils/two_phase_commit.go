@@ -1,14 +1,18 @@
 package utils
 
 import (
+	"encoding/binary"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 
 	"golang.org/x/exp/slices"
 )
 
 //go:generate mockgen -source two_phase_commit.go -destination two_phase_commit_mocks.go -package utils
 
-type TwoPhaseCommit int
+type TwoPhaseCommit uint32
 
 type TwoPhaseCommitCoordinator interface {
 	RunCommit() (TwoPhaseCommit, error)
@@ -22,16 +26,37 @@ type TwoPhaseCommitParticipant interface {
 }
 
 type twoPhaseCommitCoordinator struct {
+	path         string
 	participants []TwoPhaseCommitParticipant
 	lastCommit   TwoPhaseCommit
 }
 
 var _ TwoPhaseCommitCoordinator = &twoPhaseCommitCoordinator{}
 
-func NewTwoPhaseCommitCoordinator(participants ...TwoPhaseCommitParticipant) *twoPhaseCommitCoordinator {
-	return &twoPhaseCommitCoordinator{
-		participants: slices.Clone(participants),
+func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitParticipant) (*twoPhaseCommitCoordinator, error) {
+
+	file, err := os.Open(filepath.Join(path, "committed"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
 	}
+
+	var lastCommit TwoPhaseCommit
+	if err == nil {
+		content := make([]byte, 4)
+		if _, err := io.ReadFull(file, content); err != nil {
+			return nil, err // < TODO: decorate errors
+		}
+		if err := file.Close(); err != nil {
+			return nil, err
+		}
+		lastCommit = TwoPhaseCommit(binary.BigEndian.Uint32(content))
+	}
+
+	return &twoPhaseCommitCoordinator{
+		path:         path,
+		participants: slices.Clone(participants),
+		lastCommit:   lastCommit,
+	}, nil
 }
 
 func (c *twoPhaseCommitCoordinator) RunCommit() (TwoPhaseCommit, error) {
@@ -53,7 +78,31 @@ func (c *twoPhaseCommitCoordinator) RunCommit() (TwoPhaseCommit, error) {
 		}
 	}
 
-	// TODO: atomic swap of valid commit
+	// Prepare atomic commit.
+	var data [4]byte
+	binary.BigEndian.PutUint32(data[:], uint32(commit))
+	prepareFile := filepath.Join(c.path, "prepare")
+	if err := os.WriteFile(prepareFile, data[:], 0644); err != nil {
+		errs = append(errs, err)
+		for _, p := range c.participants {
+			if err := p.Rollback(commit); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return 0, errors.Join(errs...)
+	}
+
+	// Perform atomic commit by renaming the prepare file to the commit file.
+	commitFile := filepath.Join(c.path, "commit")
+	if err := os.Rename(prepareFile, commitFile); err != nil {
+		errs = append(errs, err)
+		for _, p := range c.participants {
+			if err := p.Rollback(commit); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return 0, errors.Join(errs...)
+	}
 
 	// Signal all participants to commit. At this point, all participants
 	// have to eventually transition to the committed state. If they fail

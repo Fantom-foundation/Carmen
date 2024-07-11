@@ -13,7 +13,10 @@ func TestTwoPhaseCommit_CanHandleSuccessfulCommit(t *testing.T) {
 	p1 := NewMockTwoPhaseCommitParticipant(ctrl)
 	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
 
-	control := NewTwoPhaseCommitCoordinator(p1, p2)
+	coordinator, err := NewTwoPhaseCommitCoordinator(t.TempDir(), p1, p2)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
 
 	gomock.InOrder(
 		p1.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
@@ -22,11 +25,11 @@ func TestTwoPhaseCommit_CanHandleSuccessfulCommit(t *testing.T) {
 		p2.EXPECT().Commit(TwoPhaseCommit(1)).Return(nil),
 	)
 
-	if want, got := TwoPhaseCommit(0), control.LastCommit(); want != got {
+	if want, got := TwoPhaseCommit(0), coordinator.LastCommit(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 
-	commit, err := control.RunCommit()
+	commit, err := coordinator.RunCommit()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -41,7 +44,10 @@ func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 	p1 := NewMockTwoPhaseCommitParticipant(ctrl)
 	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
 
-	control := NewTwoPhaseCommitCoordinator(p1, p2)
+	coordinator, err := NewTwoPhaseCommitCoordinator(t.TempDir(), p1, p2)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
 
 	injectedError := fmt.Errorf("injected error")
 	gomock.InOrder(
@@ -50,16 +56,16 @@ func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 		p1.EXPECT().Rollback(TwoPhaseCommit(1)).Return(nil),
 	)
 
-	if want, got := TwoPhaseCommit(0), control.LastCommit(); want != got {
+	if want, got := TwoPhaseCommit(0), coordinator.LastCommit(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 
-	_, err := control.RunCommit()
+	_, err = coordinator.RunCommit()
 	if !errors.Is(err, injectedError) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if want, got := TwoPhaseCommit(0), control.LastCommit(); want != got {
+	if want, got := TwoPhaseCommit(0), coordinator.LastCommit(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 }
