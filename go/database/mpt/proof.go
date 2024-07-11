@@ -41,6 +41,18 @@ type WitnessProof struct {
 	proofDb
 }
 
+// CreateWitnessProofFromNodes creates a witness proof from a list of strings.
+// Each string is an RLP node of the witness proof.
+func CreateWitnessProofFromNodes(nodes []string) WitnessProof {
+	db := make(proofDb, len(nodes))
+	for _, n := range nodes {
+		h := common.Keccak256([]byte(n))
+		db[h] = []byte(n)
+	}
+
+	return WitnessProof{db}
+}
+
 // CreateWitnessProof creates a witness proof for the input account address
 // and possibly storage slots of the same account under the input storage keys.
 // This method may return an error when it occurs in the underlying database.
@@ -309,6 +321,15 @@ func (p WitnessProof) String() string {
 		b.WriteString(fmt.Sprintf("0x%x->0x%x\n", k, p.proofDb[k]))
 	}
 	return b.String()
+}
+
+// GetElements returns serialised elements of the witness proof.
+func (p WitnessProof) GetElements() []string {
+	res := make([]string, 0, len(p.proofDb))
+	for _, v := range p.proofDb {
+		res = append(res, string(v))
+	}
+	return res
 }
 
 // MergeProofs merges the input witness proofs and returns the resulting witness proof.
