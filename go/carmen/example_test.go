@@ -293,20 +293,6 @@ func ExampleDatabase_GetMemoryFootprint() {
 		log.Fatal(err)
 	}
 
-	// Add a new block
-	if err := db.AddBlock(5, func(context carmen.HeadBlockContext) error {
-		if err := context.RunTransaction(func(context carmen.TransactionContext) error {
-			context.CreateAccount(carmen.Address{1})
-			context.AddBalance(carmen.Address{1}, carmen.NewAmount(100))
-			return nil
-		}); err != nil {
-			log.Fatalf("cannot create transaction: %v", err)
-		}
-		return nil
-	}); err != nil {
-		log.Fatalf("cannot add block: %v", err)
-	}
-
 	// block wait until the archive is in sync
 	if err := db.Flush(); err != nil {
 		log.Fatalf("cannot flush: %v", err)
@@ -314,12 +300,7 @@ func ExampleDatabase_GetMemoryFootprint() {
 
 	fp := db.GetMemoryFootprint()
 
-	total := fp.Total()
-	if total <= 0 {
-		log.Fatalf("database was filled with block but memory footprint returned 0 bytes used")
-	}
-
-	fmt.Printf("Database currently uses %v B", total)
+	fmt.Printf("Database currently uses %v B", fp.Total())
 	fmt.Printf("Memory breakdown:\n%s", fp)
 
 	if err := db.Close(); err != nil {

@@ -13,23 +13,13 @@ package carmen
 import "github.com/Fantom-foundation/Carmen/go/common"
 
 type MemoryFootprint interface {
-	// Total provides the amount of bytes consumed by the database structure including all its subcomponents
+	// Total provides the number of bytes consumed by the database structure including all its subcomponents.
 	Total() uint64
-
-	// String allow memory footprints to be used in format strings.
-	// It returns a breakdown of all MemoryFootprints within the tree.
-	String() string
 }
 
 func newMemoryFootprint(fp *common.MemoryFootprint) MemoryFootprint {
 	return &memoryFootprint{
 		fp: fp,
-	}
-}
-
-func NewMemoryFootprintFromValue(value uint64) MemoryFootprint {
-	return &memoryFootprint{
-		fp: common.NewMemoryFootprint(uintptr(value)),
 	}
 }
 

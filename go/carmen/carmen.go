@@ -108,8 +108,8 @@ type Database interface {
 	// This context is available only when the archive is enabled.
 	QueryBlock(block uint64, run func(HistoricBlockContext) error) error
 
-	// GetMemoryFootprint computes an approximation of the memory used by this state.
-	// It contains both footprint of both LiveDB and Archive (if present).
+	// GetMemoryFootprint returns an approximation of the memory used by the database.
+	// It contains footprint of both LiveDB and Archive if present.
 	GetMemoryFootprint() MemoryFootprint
 
 	// Flush persists all committed HeadBlockContexts to the database.
