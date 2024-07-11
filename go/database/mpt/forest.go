@@ -309,7 +309,7 @@ func makeForest(
 
 	// Start a background worker flushing dirty nodes to disk.
 	res.flusher = startNodeFlusher(res.nodeCache, sink, nodeFlusherConfig{
-		period: -1 * time.Second, // forestConfig.BackgroundFlushPeriod, // disabled for now, see #948
+		period: forestConfig.BackgroundFlushPeriod,
 	})
 
 	// Run a background worker releasing entire tries of nodes on demand.
@@ -867,6 +867,16 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 }
 
 func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+
+	// Check whether the node is currently in the write buffer and needs
+	// to be recovered. Failing to check this can lead to the presence
+	// of multiple node instances associated with the same node ID.
+	recoveredFromBuffer := false
+	if recovered, found := s.writeBuffer.Cancel(ref.Id()); found {
+		node = recovered
+		recoveredFromBuffer = true
+	}
+
 	// Replacing the element in the already thread safe node cache needs to be
 	// guarded by the `getTransferMutex` since an evicted node has to
 	// be moved to the write buffer in an atomic step.
@@ -878,7 +888,7 @@ func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared
 		s.nodeCache.Touch(ref)
 	}
 	if !evicted {
-		return current, present
+		return current, present || recoveredFromBuffer
 	}
 
 	// Clean nodes can be ignored, dirty nodes need to be written.
@@ -886,13 +896,13 @@ func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared
 		dirty := handle.Get().IsDirty()
 		handle.Release()
 		if !dirty {
-			return current, present
+			return current, present || recoveredFromBuffer
 		}
 	}
 
 	// Enqueue evicted node for asynchronous write to file.
 	s.writeBuffer.Add(evictedId, evictedNode)
-	return current, present
+	return current, present || recoveredFromBuffer
 }
 
 func (s *Forest) flushNode(id NodeId, node Node) error {
