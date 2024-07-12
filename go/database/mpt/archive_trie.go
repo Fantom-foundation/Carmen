@@ -14,12 +14,15 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
@@ -41,6 +44,9 @@ type ArchiveTrie struct {
 	addMutex     sync.Mutex // a mutex to make sure that at any time only one thread is adding new blocks
 	errorMutex   sync.RWMutex
 	archiveError error // a non-nil error will be stored here should it occur during any archive operation
+
+	// Check-point support for DB healing.
+	checkpointCoordinator utils.TwoPhaseCommitCoordinator
 }
 
 func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*ArchiveTrie, error) {
@@ -68,12 +74,27 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		head.Close()
 		return nil, err
 	}
+
+	checkpointDir := filepath.Join(directory, "checkpoints")
+	coordinator, err := utils.NewTwoPhaseCommitCoordinator(
+		checkpointDir,
+		forest.accounts,
+		forest.branches,
+		forest.extensions,
+		forest.values,
+		// TODO: add support for the following
+		//  - roots
+		//  - codes
+		//  - metadata
+	)
+
 	return &ArchiveTrie{
-		head:       state,
-		forest:     forest,
-		nodeSource: forest,
-		roots:      roots,
-		rootFile:   rootfile,
+		head:                  state,
+		forest:                forest,
+		nodeSource:            forest,
+		roots:                 roots,
+		rootFile:              rootfile,
+		checkpointCoordinator: coordinator,
 	}, nil
 }
 
@@ -154,7 +175,11 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	a.rootsMutex.Lock()
 	a.roots.append(Root{a.head.Root(), hash})
 	a.rootsMutex.Unlock()
-	return nil
+
+	// Create a new checkpoint.
+	return a.CreateCheckpoint()
+
+	//return nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
@@ -330,6 +355,19 @@ func (a *ArchiveTrie) Close() error {
 	return errors.Join(
 		a.CheckErrors(),
 		a.head.closeWithError(a.Flush()))
+}
+
+func (a *ArchiveTrie) GetCheckpointBlock() {
+	panic("not implemented")
+}
+
+func (a *ArchiveTrie) CreateCheckpoint() error {
+	_, err := a.checkpointCoordinator.RunCommit()
+	return err
+}
+
+func (a *ArchiveTrie) RestoreCheckpoint() error {
+	panic("not implemented")
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
