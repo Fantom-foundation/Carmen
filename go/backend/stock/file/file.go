@@ -316,6 +316,9 @@ func (s *fileStock[I, V]) Delete(index I) error {
 	if index >= s.numValueSlots || index < 0 {
 		return nil
 	}
+	if index < s.numCommittedValues {
+		return fmt.Errorf("index %d is already committed and cannot be updated any more", index)
+	}
 	return s.freelist.Push(index)
 }
 

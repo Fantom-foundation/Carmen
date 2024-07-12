@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -94,5 +95,33 @@ func (s *shadowStock[I, V]) Close() error {
 	return errors.Join(
 		s.primary.Close(),
 		s.secondary.Close(),
+	)
+}
+
+func (s *shadowStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+	return errors.Join(
+		s.primary.Check(commit),
+		s.secondary.Check(commit),
+	)
+}
+
+func (s *shadowStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+	return errors.Join(
+		s.primary.Prepare(commit),
+		s.secondary.Prepare(commit),
+	)
+}
+
+func (s *shadowStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+	return errors.Join(
+		s.primary.Commit(commit),
+		s.secondary.Commit(commit),
+	)
+}
+
+func (s *shadowStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+	return errors.Join(
+		s.primary.Rollback(commit),
+		s.secondary.Rollback(commit),
 	)
 }

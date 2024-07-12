@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
@@ -77,4 +78,28 @@ func (s *syncedStock[I, V]) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.nested.Close()
+}
+
+func (s *syncedStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Check(commit)
+}
+
+func (s *syncedStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Prepare(commit)
+}
+
+func (s *syncedStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Commit(commit)
+}
+
+func (s *syncedStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Rollback(commit)
 }

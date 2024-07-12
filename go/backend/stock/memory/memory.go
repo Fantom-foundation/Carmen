@@ -12,21 +12,26 @@ package memory
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"github.com/Fantom-foundation/Carmen/go/common"
 )
 
 // inMemoryStock provides an in-memory implementation of the stock.Stock interface.
 type inMemoryStock[I stock.Index, V any] struct {
-	values    []V
-	freeList  []I
-	directory string
-	encoder   stock.ValueEncoder[V]
+	values             []V
+	freeList           []I
+	directory          string
+	encoder            stock.ValueEncoder[V]
+	lastCommit         utils.TwoPhaseCommit
+	numCommittedValues I
 }
 
 func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory string) (stock.Stock[I, V], error) {
@@ -37,13 +42,15 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 		encoder:   encoder,
 	}
 
-	// Create the direcory if needed.
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	mainDir := filepath.Join(directory, "main")
+
+	// Create the directory if needed.
+	if err := os.MkdirAll(mainDir, 0700); err != nil {
 		return nil, err
 	}
 
 	// Test whether a meta file exists in this directory.
-	metafile := directory + "/meta.json"
+	metafile := filepath.Join(mainDir, "meta.json")
 	if _, err := os.Stat(metafile); err != nil {
 		return res, nil
 	}
@@ -74,7 +81,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load list of values.
 	{
-		valuefile := directory + "/values.dat"
+		valuefile := filepath.Join(mainDir, "values.dat")
 		stats, err := os.Stat(valuefile)
 		if err != nil {
 			return nil, err
@@ -102,7 +109,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 
 	// Load freelist.
 	{
-		freelistfile := directory + "/freelist.dat"
+		freelistfile := filepath.Join(mainDir, "freelist.dat")
 		stats, err := os.Stat(freelistfile)
 		if err != nil {
 			return nil, err
@@ -125,6 +132,10 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 			res.freeList[i] = stock.DecodeIndex[I](buffer)
 		}
 	}
+
+	// Load last commit.
+	res.lastCommit = meta.LastCommit
+	res.numCommittedValues = I(meta.NumCommittedValues)
 
 	return res, nil
 }
@@ -158,6 +169,9 @@ func (s *inMemoryStock[I, V]) Set(index I, value V) error {
 	if index >= I(len(s.values)) || index < 0 {
 		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, I(len(s.values)))
 	}
+	if index < s.numCommittedValues {
+		return fmt.Errorf("index %d is read-only", index)
+	}
 	s.values[index] = value
 	return nil
 }
@@ -165,6 +179,9 @@ func (s *inMemoryStock[I, V]) Set(index I, value V) error {
 func (s *inMemoryStock[I, V]) Delete(index I) error {
 	if index >= I(len(s.values)) || index < 0 {
 		return nil
+	}
+	if index < s.numCommittedValues {
+		return fmt.Errorf("index %d is read-only", index)
 	}
 	s.freeList = append(s.freeList, index)
 	return nil
@@ -188,25 +205,36 @@ func (s *inMemoryStock[I, V]) GetMemoryFootprint() *common.MemoryFootprint {
 }
 
 func (s *inMemoryStock[I, V]) Flush() error {
+	return s.writeTo(filepath.Join(s.directory, "main"))
+}
+
+func (s *inMemoryStock[I, V]) writeTo(dir string) error {
+	// Create the directory if needed.
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
 	// Write metadata.
 	var index I
 	indexSize := int(unsafe.Sizeof(index))
 	metadata, err := json.Marshal(metadata{
-		Version:         dataFormatVersion,
-		IndexTypeSize:   indexSize,
-		ValueTypeSize:   s.encoder.GetEncodedSize(),
-		ValueListLength: len(s.values),
-		FreeListLength:  len(s.freeList),
+		Version:            dataFormatVersion,
+		IndexTypeSize:      indexSize,
+		ValueTypeSize:      s.encoder.GetEncodedSize(),
+		ValueListLength:    len(s.values),
+		FreeListLength:     len(s.freeList),
+		LastCommit:         s.lastCommit,
+		NumCommittedValues: int(s.numCommittedValues),
 	})
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), metadata, 0600); err != nil {
 		return err
 	}
 
 	// Write list of values.
-	if f, err := os.Create(s.directory + "/values.dat"); err != nil {
+	if f, err := os.Create(filepath.Join(dir, "values.dat")); err != nil {
 		return err
 	} else {
 		defer f.Close()
@@ -226,7 +254,7 @@ func (s *inMemoryStock[I, V]) Flush() error {
 	}
 
 	// Write free list.
-	if f, err := os.Create(s.directory + "/freelist.dat"); err != nil {
+	if f, err := os.Create(filepath.Join(dir, "freelist.dat")); err != nil {
 		return err
 	} else {
 		defer f.Close()
@@ -251,13 +279,62 @@ func (s *inMemoryStock[I, V]) Close() error {
 	return s.Flush()
 }
 
+func (s *inMemoryStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+	// If the requested commit is a pending commit, this pending
+	// commit needs to be completed.
+	if s.lastCommit+1 == commit {
+		return s.Commit(commit)
+	}
+
+	// If the stock is at the requested commit, everything is fine.
+	if s.lastCommit == commit {
+		return nil
+	}
+
+	// Otherwise, the stock is in an inconsistent state.
+	return fmt.Errorf("unable to guarantee availability of commit %d", commit)
+}
+
+func (s *inMemoryStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+	return s.writeTo(filepath.Join(s.directory, "prepare"))
+}
+
+func (s *inMemoryStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+	err := os.Rename(filepath.Join(s.directory, "prepare"), filepath.Join(s.directory, "commit"))
+	if err != nil {
+		return err
+	}
+	s.lastCommit = commit
+	s.numCommittedValues = I(len(s.values)) // < this might be wrong if there have been updates since the prepare
+	return err
+}
+
+func (s *inMemoryStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+	return errors.Join(
+		os.RemoveAll(filepath.Join(s.directory, "prepare")),
+		s.Close(),
+		s.reload(),
+	)
+}
+
+func (s *inMemoryStock[I, V]) reload() error {
+	reload, err := OpenStock[I, V](s.encoder, s.directory)
+	if err != nil {
+		return err
+	}
+	*s = *reload.(*inMemoryStock[I, V])
+	return nil
+}
+
 const dataFormatVersion = 0
 
 // metadata is the helper type to read and write metadata from/to the disk.
 type metadata struct {
-	Version         int
-	IndexTypeSize   int
-	ValueTypeSize   int
-	ValueListLength int
-	FreeListLength  int
+	Version            int
+	IndexTypeSize      int
+	ValueTypeSize      int
+	ValueListLength    int
+	FreeListLength     int
+	LastCommit         utils.TwoPhaseCommit
+	NumCommittedValues int
 }

@@ -14,6 +14,8 @@ import (
 	"encoding/binary"
 	"os"
 	"testing"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 )
 
 type IntEncoder struct{}
@@ -60,6 +62,12 @@ func RunStockTests(t *testing.T, factory NamedStockFactory) {
 	t.Run("CanBeClosedAndReopened", wrap(testCanBeClosedAndReopened))
 	t.Run("GetIdsProducesAllIdsInTheStock", wrap(testGetIdsProducesAllIdsInTheStock))
 	t.Run("GetDeleteIndexOutOfRange", wrap(testDeleteIndexOutOfRange))
+	t.Run("CanParticipateInTwoPhaseCommit", wrap(testCanParticipateInTwoPhaseCommit))
+	t.Run("CanBeCommittedAndSealed", wrap(testCanBeCommittedAndSealed))
+	t.Run("CanBeRolledBackInTwoPhaseCommit", wrap(testCanBeRolledBackInTwoPhaseCommit))
+	t.Run("CommitStateIsPersisted", wrap(testCommitStateIsPersisted))
+	t.Run("NumberOfCommitValuesIsPersisted", wrap(testNumberOfCommitValuesIsPersisted))
+	t.Run("CheckCanRecoverFromCrashAfterPrepare", wrap(testCheckCanRecoverFromCrashAfterPrepare))
 }
 
 func testNewCreatesFreshIndexValues(t *testing.T, factory NamedStockFactory) {
@@ -394,5 +402,228 @@ func testDeleteIndexOutOfRange(t *testing.T, factory NamedStockFactory) {
 
 	if err := stock.Delete(1); err != nil {
 		t.Errorf("deleting index above range should be no-op")
+	}
+}
+
+func testCanParticipateInTwoPhaseCommit(t *testing.T, factory NamedStockFactory) {
+	commitDir := t.TempDir()
+	stockDir := t.TempDir()
+
+	stock, err := factory.Open(t, stockDir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+	coordinator, err := utils.NewTwoPhaseCommitCoordinator(commitDir, stock)
+	if err != nil {
+		t.Fatalf("failed to create coordinator: %v", err)
+	}
+
+	if _, err := coordinator.RunCommit(); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+
+	if err := stock.Close(); err != nil {
+		t.Fatalf("failed to close stock: %v", err)
+	}
+}
+
+func testCanBeCommittedAndSealed(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Errorf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to prepare commit: %v", err)
+	}
+
+	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to rollback commit: %v", err)
+	}
+
+	if err := stock.Check(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to check commit: %v", err)
+	}
+
+	if err := stock.Set(id, 2); err == nil {
+		t.Errorf("setting value should fail after commit")
+	}
+}
+
+func testCanBeRolledBackInTwoPhaseCommit(t *testing.T, factory NamedStockFactory) {
+	stock, err := factory.Open(t, t.TempDir())
+	if err != nil {
+		t.Errorf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to prepare commit: %v", err)
+	}
+
+	if err := stock.Rollback(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to rollback commit: %v", err)
+	}
+
+	if err := stock.Check(utils.TwoPhaseCommit(0)); err != nil {
+		t.Fatalf("failed to check commit: %v", err)
+	}
+
+	if err := stock.Set(id, 2); err != nil {
+		t.Errorf("as the commit was rolled back, setting value should succeed: %v", err)
+	}
+}
+
+func testCommitStateIsPersisted(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	if err := stock.Check(utils.TwoPhaseCommit(0)); err != nil {
+		t.Fatalf("failed to check commit: %v", err)
+	}
+
+	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to prepare commit: %v", err)
+	}
+	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+	if err := stock.Close(); err != nil {
+		t.Fatalf("failed to close stock: %v", err)
+	}
+
+	stock, err = factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	if err := stock.Check(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to check commit: %v", err)
+	}
+}
+
+func testNumberOfCommitValuesIsPersisted(t *testing.T, factory NamedStockFactory) {
+	dir := t.TempDir()
+	stock, err := factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	id, err := stock.New()
+	if err != nil {
+		t.Fatalf("failed to create item in stock: %v", err)
+	}
+	if err := stock.Set(id, 1); err != nil {
+		t.Fatalf("failed to set value in stock: %v", err)
+	}
+
+	if err := stock.Check(utils.TwoPhaseCommit(0)); err != nil {
+		t.Fatalf("failed to check commit: %v", err)
+	}
+
+	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to prepare commit: %v", err)
+	}
+	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+	if err := stock.Close(); err != nil {
+		t.Fatalf("failed to close stock: %v", err)
+	}
+
+	stock, err = factory.Open(t, dir)
+	if err != nil {
+		t.Fatalf("failed to open stock: %v", err)
+	}
+
+	if err := stock.Check(utils.TwoPhaseCommit(1)); err != nil {
+		t.Fatalf("failed to check commit: %v", err)
+	}
+
+	if err := stock.Set(id, 1); err == nil {
+		t.Errorf("committed value should not be allowed to be set any more")
+	}
+}
+
+func testCheckCanRecoverFromCrashAfterPrepare(t *testing.T, factory NamedStockFactory) {
+	tests := map[string]struct {
+		recoveryCommit utils.TwoPhaseCommit
+		shouldBeSealed bool
+	}{
+		"crash-before-commit": {
+			recoveryCommit: utils.TwoPhaseCommit(0),
+			shouldBeSealed: false,
+		},
+		"crash-after-commit": {
+			recoveryCommit: utils.TwoPhaseCommit(1),
+			shouldBeSealed: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			first, err := factory.Open(t, dir)
+			if err != nil {
+				t.Fatalf("failed to open stock: %v", err)
+			}
+
+			id, err := first.New()
+			if err != nil {
+				t.Fatalf("failed to create item in stock: %v", err)
+			}
+			if err := first.Set(id, 1); err != nil {
+				t.Fatalf("failed to set value in stock: %v", err)
+			}
+
+			if err := first.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+				t.Fatalf("failed to prepare commit: %v", err)
+			}
+
+			// At this point the node is crashing and the stock is not closed.
+			// For the first stock, it is unclear whether the commit was successful
+			// and should be enforced or whether it failed, and should be rolled
+			// back. This is decided during re-opening the stock and recovering
+			// the state using the `Check` function.
+
+			second, err := factory.Open(t, dir)
+			if err != nil {
+				t.Fatalf("failed to open stock: %v", err)
+			}
+
+			if err := second.Check(test.recoveryCommit); err != nil {
+				t.Fatalf("failed to check commit: %v", err)
+			}
+
+			if test.shouldBeSealed {
+				if err := second.Set(id, 2); err == nil {
+					t.Errorf("setting value should fail after commit")
+				}
+				/* TODO: figure out whether this is needed
+				} else {
+					if err := second.Set(id, 2); err != nil {
+						t.Errorf("setting value should succeed after rollback: %v", err)
+					}
+				*/
+			}
+		})
 	}
 }
