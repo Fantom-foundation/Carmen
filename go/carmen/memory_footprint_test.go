@@ -16,7 +16,7 @@ func TestMemoryFootprint(t *testing.T) {
 		t.Error("memory footprint returned 0 for existing open database")
 	}
 
-	s := fp.(*memoryFootprint).String()
+	s := fmt.Sprintf("%s", fp)
 
 	if !strings.Contains(s, "live") {
 		t.Error("database breakdown does not contain 'live' keyword even though database contains LiveDB")
