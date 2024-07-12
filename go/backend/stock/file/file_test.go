@@ -851,3 +851,31 @@ func BenchmarkFileStock_Set(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkFileStock_Commit(b *testing.B) {
+	dir := b.TempDir()
+	stock, err := openStock[int, int](stock.IntEncoder{}, dir)
+	if err != nil {
+		b.Fatalf("failed to open stock")
+	}
+	for i := 0; i < 10; i++ {
+		id, err := stock.New()
+		if err != nil {
+			b.Fatalf("failed to create item in stock")
+		}
+		if err := stock.Set(id, i); err != nil {
+			b.Fatalf("failed to set value in stock")
+		}
+	}
+	defer stock.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := stock.Prepare(utils.TwoPhaseCommit(i + 1)); err != nil {
+			b.Fatalf("failed to prepare commit: %v", err)
+		}
+		if err := stock.Commit(utils.TwoPhaseCommit(i + 1)); err != nil {
+			b.Fatalf("failed to commit: %v", err)
+		}
+	}
+}
