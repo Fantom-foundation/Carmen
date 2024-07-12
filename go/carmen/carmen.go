@@ -12,6 +12,7 @@ package carmen
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -191,6 +192,11 @@ type HeadBlockContext interface {
 // to the blockchain happens.
 type HistoricBlockContext interface {
 	blockContext
+
+	// GetProof creates a witness proof for the given account and keys.
+	// Error may be produced when it occurs in the underlying database;
+	// otherwise, the proof is returned.
+	GetProof(address Address, keys ...Key) (WitnessProof, error)
 
 	// Close releases resources held by this context. All modifications made
 	// within this context are discarded. This context is invalid after this
@@ -457,6 +463,8 @@ type Value common.Value
 
 // Hash is a 32byte hash.
 type Hash common.Hash
+
+type Tribool tribool.Tribool
 
 // Log summarizes a log message recorded during the execution of a contract.
 type Log struct {

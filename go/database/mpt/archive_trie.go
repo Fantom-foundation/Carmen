@@ -14,6 +14,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"io"
 	"os"
 	"sync"
@@ -41,7 +43,7 @@ type ArchiveTrie struct {
 	archiveError error // a non-nil error will be stored here should it occur during any archive operation
 }
 
-func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*ArchiveTrie, error) {
+func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*ArchiveTrie, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
@@ -51,7 +53,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheCapacity int) (*Ar
 	if err != nil {
 		return nil, err
 	}
-	forestConfig := ForestConfig{Mode: Immutable, CacheCapacity: cacheCapacity}
+	forestConfig := ForestConfig{Mode: Immutable, NodeCacheConfig: cacheConfig}
 	forest, err := OpenFileForest(directory, config, forestConfig)
 	if err != nil {
 		return nil, err
@@ -239,6 +241,16 @@ func (a *ArchiveTrie) GetHash(block uint64) (hash common.Hash, err error) {
 	res := a.roots.get(block).Hash
 	a.rootsMutex.Unlock()
 	return res, nil
+}
+
+func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error) {
+	if a.nodeSource.getConfig().Name != "S5-Archive" {
+		return nil, archive.ErrWitnessProofNotSupported
+	}
+	a.rootsMutex.Lock()
+	ref := a.roots.roots[block].NodeRef
+	a.rootsMutex.Unlock()
+	return CreateWitnessProof(a.nodeSource, &ref, address, keys...)
 }
 
 // GetDiff computes the difference between the given source and target blocks.

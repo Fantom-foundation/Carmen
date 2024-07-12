@@ -41,6 +41,18 @@ type WitnessProof struct {
 	proofDb
 }
 
+// CreateWitnessProofFromNodes creates a witness proof from a list of strings.
+// Each string is an RLP node of the witness proof.
+func CreateWitnessProofFromNodes(nodes []string) WitnessProof {
+	db := make(proofDb, len(nodes))
+	for _, n := range nodes {
+		h := common.Keccak256([]byte(n))
+		db[h] = []byte(n)
+	}
+
+	return WitnessProof{db}
+}
+
 // CreateWitnessProof creates a witness proof for the input account address
 // and possibly storage slots of the same account under the input storage keys.
 // This method may return an error when it occurs in the underlying database.
@@ -225,6 +237,61 @@ func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
 		return VisitResponseAbort
 	}
 
+	// node child hashes will be dirty for the archive when hashes are stored with nodes
+	// and must be loaded here for witness proof.
+	switch n := node.(type) {
+	case *ExtensionNode:
+		if n.nextHashDirty {
+			nextHandle, err := p.nodeSource.getViewAccess(&n.next)
+			if err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+			embedded, err := isNodeEmbedded(nextHandle.Get(), p.nodeSource)
+			nextHandle.Release()
+			if err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+			if err := updateChildrenHashes(p.nodeSource, n, map[NodeId]bool{n.next.Id(): embedded}); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
+	case *BranchNode:
+		if n.dirtyHashes != 0 {
+			embeddedChildren := make(map[NodeId]bool, 16)
+			for i := 0; i < 16; i++ {
+				if n.isChildHashDirty(byte(i)) {
+					childHandle, err := p.nodeSource.getViewAccess(&n.children[i])
+					if err != nil {
+						p.err = err
+						return VisitResponseAbort
+					}
+					embedded, err := isNodeEmbedded(childHandle.Get(), p.nodeSource)
+					childHandle.Release()
+					if err != nil {
+						p.err = err
+						return VisitResponseAbort
+					}
+					embeddedChildren[n.children[i].Id()] = embedded
+				}
+			}
+
+			if err := updateChildrenHashes(p.nodeSource, n, embeddedChildren); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
+	case *AccountNode:
+		if n.storageHashDirty {
+			if err := updateChildrenHashes(p.nodeSource, n, map[NodeId]bool{n.storage.Id(): false}); err != nil {
+				p.err = err
+				return VisitResponseAbort
+			}
+		}
+	}
+
 	data := make([]byte, 0, 1024)
 	rlp, err := encodeToRlp(node, p.nodeSource, data)
 	if err != nil {
@@ -254,6 +321,15 @@ func (p WitnessProof) String() string {
 		b.WriteString(fmt.Sprintf("0x%x->0x%x\n", k, p.proofDb[k]))
 	}
 	return b.String()
+}
+
+// GetElements returns serialised elements of the witness proof.
+func (p WitnessProof) GetElements() []string {
+	res := make([]string, 0, len(p.proofDb))
+	for _, v := range p.proofDb {
+		res = append(res, string(v))
+	}
+	return res
 }
 
 // MergeProofs merges the input witness proofs and returns the resulting witness proof.

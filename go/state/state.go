@@ -15,6 +15,7 @@ package state
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
 
 // NoArchiveError is an error returned by implementation of the State interface
@@ -75,6 +76,11 @@ type State interface {
 	// If an error is reported, all operations since the
 	// last successful check need to be considered invalid.
 	Check() error
+
+	// CreateWitnessProof creates a witness proof for the given account and keys.
+	// Error may be produced when it occurs in the underlying database;
+	// otherwise, the proof is returned.
+	CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error)
 
 	// States can be snapshotted.
 	backend.Snapshotable
