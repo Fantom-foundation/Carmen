@@ -90,6 +90,20 @@ func (m *MockTwoPhaseCommitParticipant) EXPECT() *MockTwoPhaseCommitParticipantM
 	return m.recorder
 }
 
+// Check mocks base method.
+func (m *MockTwoPhaseCommitParticipant) Check(arg0 TwoPhaseCommit) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Check", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Check indicates an expected call of Check.
+func (mr *MockTwoPhaseCommitParticipantMockRecorder) Check(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockTwoPhaseCommitParticipant)(nil).Check), arg0)
+}
+
 // Commit mocks base method.
 func (m *MockTwoPhaseCommitParticipant) Commit(arg0 TwoPhaseCommit) error {
 	m.ctrl.T.Helper()
@@ -102,20 +116,6 @@ func (m *MockTwoPhaseCommitParticipant) Commit(arg0 TwoPhaseCommit) error {
 func (mr *MockTwoPhaseCommitParticipantMockRecorder) Commit(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockTwoPhaseCommitParticipant)(nil).Commit), arg0)
-}
-
-// Init mocks base method.
-func (m *MockTwoPhaseCommitParticipant) Init(arg0 TwoPhaseCommit) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Init", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Init indicates an expected call of Init.
-func (mr *MockTwoPhaseCommitParticipantMockRecorder) Init(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockTwoPhaseCommitParticipant)(nil).Init), arg0)
 }
 
 // Prepare mocks base method.

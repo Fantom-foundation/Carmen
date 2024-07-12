@@ -12,9 +12,10 @@ package stock
 
 import (
 	"encoding/binary"
+	"unsafe"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"golang.org/x/exp/constraints"
-	"unsafe"
 )
 
 //go:generate mockgen -source stock.go -destination stock_mocks.go -package stock -exclude_interfaces Index

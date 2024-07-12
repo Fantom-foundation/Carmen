@@ -13,10 +13,11 @@ package file
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 	"io"
 	"os"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/utils"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -133,6 +134,13 @@ func (s *fileBasedStack[I]) Pop() (I, error) {
 	s.buffer = s.buffer[0 : bufferSize-1]
 	s.size--
 	return res, nil
+}
+
+func (s *fileBasedStack[I]) Clear() error {
+	s.size = 0
+	s.buffer = s.buffer[0:0]
+	s.bufferOffset = 0
+	return s.file.Truncate(0)
 }
 
 func (s *fileBasedStack[I]) flushBuffer() error {

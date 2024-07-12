@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"unsafe"
 
@@ -24,13 +25,15 @@ import (
 )
 
 type fileStock[I stock.Index, V any] struct {
-	directory       string
-	encoder         stock.ValueEncoder[V]
-	values          utils.SeekableFile
-	freelist        *fileBasedStack[I]
-	numValueSlots   I
-	numValuesInFile int64
-	bufferPool      sync.Pool
+	directory          string
+	encoder            stock.ValueEncoder[V]
+	values             utils.SeekableFile
+	freelist           *fileBasedStack[I]
+	numValueSlots      I
+	numValuesInFile    int64
+	bufferPool         sync.Pool
+	lastCommit         utils.TwoPhaseCommit
+	numCommittedValues I
 }
 
 // OpenStock opens a stock retained in the given directory. To that end, meta
@@ -69,6 +72,18 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 		return nil, err
 	}
 
+	var committed commitMetaData
+	commitMetaDataFile := filepath.Join(directory, "committed.json")
+	if exists(commitMetaDataFile) {
+		data, err := os.ReadFile(commitMetaDataFile)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &committed); err != nil {
+			return nil, err
+		}
+	}
+
 	// Create new files
 	valueSize := encoder.GetEncodedSize()
 	return &fileStock[I, V]{
@@ -83,6 +98,8 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 				raw: make([]byte, valueSize),
 			}
 		}},
+		lastCommit:         committed.Commit,
+		numCommittedValues: I(committed.NumCommittedValues),
 	}, nil
 }
 
@@ -214,9 +231,9 @@ func verifyStackInternal[I stock.Index](meta metadata, freelistfile utils.OsFile
 }
 
 func getFileNames(directory string) (metafile string, valuefile string, freelistfile string) {
-	metafile = directory + "/meta.json"
-	valuefile = directory + "/values.dat"
-	freelistfile = directory + "/freelist.dat"
+	metafile = filepath.Join(directory, "meta.json")
+	valuefile = filepath.Join(directory, "values.dat")
+	freelistfile = filepath.Join(directory, "freelist.dat")
 	return
 }
 
@@ -264,6 +281,9 @@ func (s *fileStock[I, V]) Get(index I) (V, error) {
 func (s *fileStock[I, V]) Set(index I, value V) error {
 	if index >= s.numValueSlots || index < 0 {
 		return fmt.Errorf("index out of range, got %d, range [0,%d)", index, s.numValueSlots)
+	}
+	if index < s.numCommittedValues {
+		return fmt.Errorf("index %d is already committed and cannot be updated any more", index)
 	}
 
 	// Encode the value to be written.
@@ -330,7 +350,7 @@ func (s *fileStock[I, V]) Flush() error {
 		NumValuesInFile: s.numValuesInFile,
 	})
 	if err == nil {
-		if err := os.WriteFile(s.directory+"/meta.json", metadata, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(s.directory, "meta.json"), metadata, 0600); err != nil {
 			return err
 		}
 	}
@@ -352,6 +372,116 @@ func (s *fileStock[I, V]) Close() error {
 		s.values.Close(),
 		s.freelist.Close(),
 	)
+}
+
+func (s *fileStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+
+	// If the requested commit is a pending commit, this pending
+	// commit needs to be completed.
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	if s.lastCommit+1 == commit && exists(pendingFile) {
+		return s.Commit(commit)
+	}
+
+	// Delete potential invalid pending file.
+	if exists(pendingFile) {
+		if err := os.Remove(pendingFile); err != nil {
+			return err
+		}
+	}
+
+	// If the stock is at the requested commit, everything is fine.
+	if s.lastCommit == commit {
+		return nil
+	}
+
+	// Otherwise, the stock is in an inconsistent state.
+	return fmt.Errorf("unable to guarantee availability of commit %d", commit)
+}
+
+func (s *fileStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+	if want, got := s.lastCommit+1, commit; want != got {
+		return fmt.Errorf("invalid next commit, expected %d, got %d", want, got)
+	}
+
+	if err := s.Flush(); err != nil {
+		return err
+	}
+
+	metadata, err := json.Marshal(commitMetaData{
+		Commit:             commit,
+		NumCommittedValues: uint64(s.numValueSlots),
+	})
+	if err != nil {
+		return err
+	}
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	s.numCommittedValues = s.numValueSlots
+	if err := os.WriteFile(pendingFile, metadata, 0600); err != nil {
+		return err
+	}
+
+	// After the completion of the commit preparation, no nodes before the
+	// pending numCommittedValues may be modified any more. Thus, the freelist
+	// is cleared. For the case of a rollback, the freelist remains cleared,
+	// for simplicity. This does not introduce inconsistencies, just minor
+	// inefficiency in disk space usage for the rare case of a rollback.
+	return s.freelist.Clear()
+}
+
+func (s *fileStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+	if want, got := s.lastCommit+1, commit; want != got {
+		return fmt.Errorf("invalid next commit, expected %d, got %d", want, got)
+	}
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	if !exists(pendingFile) {
+		return fmt.Errorf("missing pending file %v", pendingFile)
+	}
+	committedFile := filepath.Join(s.directory, "committed.json")
+	if err := os.Rename(pendingFile, committedFile); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(committedFile)
+	if err != nil {
+		return err
+	}
+	var committed commitMetaData
+	if err := json.Unmarshal(data, &committed); err != nil {
+		return err
+	}
+
+	s.lastCommit = committed.Commit
+	s.numCommittedValues = I(committed.NumCommittedValues)
+	return nil
+}
+
+func (s *fileStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+	if want, got := s.lastCommit+1, commit; want != got {
+		return fmt.Errorf("invalid next commit, expected %d, got %d", want, got)
+	}
+
+	// Revert limit of committed values to previous commit.
+	committedFile := filepath.Join(s.directory, "committed.json")
+	if !exists(committedFile) {
+		s.numCommittedValues = 0
+	} else {
+		data, err := os.ReadFile(committedFile)
+		if err != nil {
+			return err
+		}
+		var meta commitMetaData
+		if err := json.Unmarshal(data, &meta); err != nil {
+			return err
+		}
+		if meta.Commit != commit {
+			return fmt.Errorf("inconsistent data in committed metadata, expected commit %d, got %d", commit, meta.Commit)
+		}
+		s.numCommittedValues = I(meta.NumCommittedValues)
+	}
+
+	// Delete pending commit file.
+	pendingFile := filepath.Join(s.directory, "pending.json")
+	return os.Remove(pendingFile)
 }
 
 const dataFormatVersion = 0
@@ -383,4 +513,9 @@ func exists(path string) bool {
 func isDirectory(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+type commitMetaData struct {
+	Commit             utils.TwoPhaseCommit
+	NumCommittedValues uint64
 }

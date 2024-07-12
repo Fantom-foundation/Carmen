@@ -20,7 +20,7 @@ type TwoPhaseCommitCoordinator interface {
 }
 
 type TwoPhaseCommitParticipant interface {
-	Init(TwoPhaseCommit) error
+	Check(TwoPhaseCommit) error
 	Prepare(TwoPhaseCommit) error
 	Commit(TwoPhaseCommit) error
 	Rollback(TwoPhaseCommit) error
@@ -35,6 +35,8 @@ type twoPhaseCommitCoordinator struct {
 var _ TwoPhaseCommitCoordinator = &twoPhaseCommitCoordinator{}
 
 func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitParticipant) (*twoPhaseCommitCoordinator, error) {
+
+	// TODO: make sure path is a write-able directory
 
 	file, err := os.Open(filepath.Join(path, "committed"))
 	if err != nil && !os.IsNotExist(err) {
@@ -55,7 +57,7 @@ func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitPar
 
 	errs := []error{}
 	for _, p := range participants {
-		if err := p.Init(lastCommit); err != nil {
+		if err := p.Check(lastCommit); err != nil {
 			errs = append(errs, err)
 		}
 	}

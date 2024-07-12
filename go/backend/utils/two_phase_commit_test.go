@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Fantom-foundation/Carmen/go/common"
 	"go.uber.org/mock/gomock"
 )
 
@@ -14,8 +15,8 @@ func TestTwoPhaseCommit_CanHandleSuccessfulCommit(t *testing.T) {
 	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().Init(TwoPhaseCommit(0)).Return(nil),
-		p2.EXPECT().Init(TwoPhaseCommit(0)).Return(nil),
+		p1.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
+		p2.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
 		p1.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
 		p2.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
 		p1.EXPECT().Commit(TwoPhaseCommit(1)).Return(nil),
@@ -48,8 +49,8 @@ func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 
 	injectedError := fmt.Errorf("injected error")
 	gomock.InOrder(
-		p1.EXPECT().Init(TwoPhaseCommit(0)).Return(nil),
-		p2.EXPECT().Init(TwoPhaseCommit(0)).Return(nil),
+		p1.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
+		p2.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
 		p1.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
 		p2.EXPECT().Prepare(TwoPhaseCommit(1)).Return(injectedError),
 		p1.EXPECT().Rollback(TwoPhaseCommit(1)).Return(nil),
@@ -95,7 +96,7 @@ func TestTwoPhaseCommit_CommitNumberIsPersisted(t *testing.T) {
 	}
 }
 
-func TestTwoPhaseCommit_ParticipantsAreInitializedWithCommitNumber(t *testing.T) {
+func TestTwoPhaseCommit_ParticipantsAreCheckedForLastCommitNumber(t *testing.T) {
 	dir := t.TempDir()
 
 	coordinator, err := NewTwoPhaseCommitCoordinator(dir)
@@ -113,8 +114,8 @@ func TestTwoPhaseCommit_ParticipantsAreInitializedWithCommitNumber(t *testing.T)
 	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().Init(TwoPhaseCommit(3)).Return(nil),
-		p2.EXPECT().Init(TwoPhaseCommit(3)).Return(nil),
+		p1.EXPECT().Check(TwoPhaseCommit(3)).Return(nil),
+		p2.EXPECT().Check(TwoPhaseCommit(3)).Return(nil),
 	)
 
 	_, err = NewTwoPhaseCommitCoordinator(dir, p1, p2)
@@ -122,3 +123,24 @@ func TestTwoPhaseCommit_ParticipantsAreInitializedWithCommitNumber(t *testing.T)
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 }
+
+type myData interface {
+	Get(int) int
+	Set(int) int
+
+	Check(TwoPhaseCommit) error    // < make sure the state has the given commit it could revert to if needed
+	Prepare(TwoPhaseCommit) error  // < prepare a commit
+	Commit(TwoPhaseCommit) error   // < fix a full state that can be restored
+	Rollback(TwoPhaseCommit) error // < undo a prepared commit
+
+	Flush() error // < write current state to disk; Problem: this is messing up the last commit
+	Close() error // < close the data structure
+
+	// Idea: have 3 sets of files
+	//  - the committed configuration (the configuration to be restored; if there was never a commit, this is the empty state)
+	//  - the flushed configuration (stored during shutdown, reset during an init)
+	//  - the prepared configuration (during a two-phase commit)
+}
+
+var _ TwoPhaseCommitParticipant = myData(nil)
+var _ common.FlushAndCloser = myData(nil)
