@@ -16,6 +16,7 @@ import (
 	"os"
 
 	"github.com/Fantom-foundation/Carmen/go/carmen"
+	"golang.org/x/exp/maps"
 )
 
 func ExampleDatabase_AddBlock() {

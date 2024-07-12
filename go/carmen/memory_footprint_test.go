@@ -1,6 +1,7 @@
 package carmen
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -19,10 +20,10 @@ func TestMemoryFootprint(t *testing.T) {
 	s := fmt.Sprintf("%s", fp)
 
 	if !strings.Contains(s, "live") {
-		t.Error("database breakdown does not contain 'live' keyword even though database contains LiveDB")
+		t.Error("memory-footprint breakdown does not contain 'live' keyword even though database contains LiveDB")
 	}
 
 	if !strings.Contains(s, "archive") {
-		t.Error("database breakdown does not contain 'archive' keyword even though database contains Archive")
+		t.Error("memory-footprint breakdown does not contain 'archive' keyword even though database contains Archive")
 	}
 }
