@@ -20,6 +20,7 @@ type TwoPhaseCommitCoordinator interface {
 }
 
 type TwoPhaseCommitParticipant interface {
+	Init(TwoPhaseCommit) error
 	Prepare(TwoPhaseCommit) error
 	Commit(TwoPhaseCommit) error
 	Rollback(TwoPhaseCommit) error
@@ -50,6 +51,16 @@ func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitPar
 			return nil, err
 		}
 		lastCommit = TwoPhaseCommit(binary.BigEndian.Uint32(content))
+	}
+
+	errs := []error{}
+	for _, p := range participants {
+		if err := p.Init(lastCommit); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
 	return &twoPhaseCommitCoordinator{
@@ -93,7 +104,7 @@ func (c *twoPhaseCommitCoordinator) RunCommit() (TwoPhaseCommit, error) {
 	}
 
 	// Perform atomic commit by renaming the prepare file to the commit file.
-	commitFile := filepath.Join(c.path, "commit")
+	commitFile := filepath.Join(c.path, "committed")
 	if err := os.Rename(prepareFile, commitFile); err != nil {
 		errs = append(errs, err)
 		for _, p := range c.participants {
