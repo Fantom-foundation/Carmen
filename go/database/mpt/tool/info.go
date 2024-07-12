@@ -95,6 +95,13 @@ func info(context *cli.Context) error {
 			fmt.Printf("\tBlock height:      %d\n", height)
 		}
 
+		checkpoint, err := archive.GetCheckpointBlock()
+		if err != nil {
+			fmt.Printf("\tCheckpoint block:  %v\n", err)
+		} else {
+			fmt.Printf("\tCheckpoint block:  %d\n", checkpoint)
+		}
+
 		if err := archive.Close(); err != nil {
 			return fmt.Errorf("error closing forest: %v", err)
 		}

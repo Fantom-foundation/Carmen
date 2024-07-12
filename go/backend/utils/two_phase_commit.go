@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -37,6 +38,9 @@ var _ TwoPhaseCommitCoordinator = &twoPhaseCommitCoordinator{}
 func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitParticipant) (*twoPhaseCommitCoordinator, error) {
 
 	// TODO: make sure path is a write-able directory
+	if err := os.MkdirAll(path, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create directory %s: %w", path, err)
+	}
 
 	file, err := os.Open(filepath.Join(path, "committed"))
 	if err != nil && !os.IsNotExist(err) {

@@ -66,16 +66,14 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 	}
 	head, err := makeTrie(directory, forest)
 	if err != nil {
-		forest.Close()
-		return nil, err
+		return nil, errors.Join(err, forest.Close())
 	}
 	state, err := newMptState(directory, lock, head)
 	if err != nil {
-		head.Close()
-		return nil, err
+		return nil, errors.Join(err, head.Close())
 	}
 
-	checkpointDir := filepath.Join(directory, "checkpoints")
+	checkpointDir := filepath.Join(directory, "checkpoint")
 	coordinator, err := utils.NewTwoPhaseCommitCoordinator(
 		checkpointDir,
 		forest.accounts,
@@ -87,6 +85,9 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		//  - codes
 		//  - metadata
 	)
+	if err != nil {
+		return nil, errors.Join(err, head.Close())
+	}
 
 	return &ArchiveTrie{
 		head:                  state,
@@ -357,11 +358,18 @@ func (a *ArchiveTrie) Close() error {
 		a.head.closeWithError(a.Flush()))
 }
 
-func (a *ArchiveTrie) GetCheckpointBlock() {
-	panic("not implemented")
+func (a *ArchiveTrie) GetCheckpointBlock() (uint64, error) {
+	return 0, fmt.Errorf("not implemented")
 }
 
 func (a *ArchiveTrie) CreateCheckpoint() error {
+	// Before the checkpoint can be created, all data needs
+	// to be flushed to the underlying storage.
+	if err := a.Flush(); err != nil {
+		return err
+	}
+	// The creation of the checkpoint makes the current
+	// state recoverable in case of a crash.
 	_, err := a.checkpointCoordinator.RunCommit()
 	return err
 }
