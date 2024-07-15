@@ -2269,11 +2269,12 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 
 func TestVisitPathTo_Node_Hashes_Same_S5_Archive_non_Archive_Config_For_Witness_Proof(t *testing.T) {
 	addresses := getTestAddresses(61)
-	keys := getTestKeys(63)
+	keys := getTestKeys(132)
 	for _, variant := range fileAndMemVariants {
 		for forestConfigName, forestConfig := range forestConfigs {
 			for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
 				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, forestConfigName, config.Name), func(t *testing.T) {
+					t.Parallel()
 					dir := t.TempDir()
 					forest, err := variant.factory(dir, config, forestConfig)
 					if err != nil {

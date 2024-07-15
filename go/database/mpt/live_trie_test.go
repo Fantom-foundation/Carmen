@@ -11,8 +11,10 @@
 package mpt
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"math/rand"
 	"os"
@@ -963,6 +965,47 @@ func TestLiveTrie_CreateWitnessProof(t *testing.T) {
 			if got, want := balance, (common.Balance{1}); got != want {
 				t.Errorf("unexpected balance, got %v, want %v", got, want)
 			}
+		})
+	}
+
+}
+
+func TestLiveTrie_CreateWitnessProof_CanCancel(t *testing.T) {
+	addresses := getTestAddresses(1)
+	keys := getTestKeys(200)
+	for _, config := range allMptConfigs {
+		t.Run(config.Name, func(t *testing.T) {
+			t.Parallel()
+			mpt, err := OpenInMemoryLiveTrie(t.TempDir(), config, NodeCacheConfig{})
+			if err != nil {
+				t.Fatalf("failed to open live trie: %v", err)
+			}
+			defer func() {
+				if err := mpt.Close(); err != nil {
+					t.Fatalf("failed to close trie: %v", err)
+				}
+			}()
+
+			for _, address := range addresses {
+				if err := mpt.SetAccountInfo(address, AccountInfo{Nonce: common.ToNonce(1)}); err != nil {
+					t.Fatalf("failed to insert account: %v", err)
+				}
+				for _, key := range keys {
+					if err := mpt.SetValue(address, key, common.Value{1}); err != nil {
+						t.Fatalf("failed to insert value: %v", err)
+					}
+				}
+			}
+
+			if _, _, err := mpt.UpdateHashes(); err != nil {
+				t.Fatalf("failed to update hashes: %v", err)
+			}
+
+			ctx := newCountingWhenDoneContext(context.Background(), 1)
+			if _, err := mpt.createContextWitnessProof(ctx, addresses[0], keys...); !errors.Is(err, interrupt.ErrCanceled) {
+				t.Errorf("proof creation should be canceled")
+			}
+
 		})
 	}
 

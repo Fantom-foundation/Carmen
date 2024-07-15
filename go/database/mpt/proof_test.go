@@ -331,9 +331,11 @@ func TestCreateWitnessProof_SourceError_All_Paths(t *testing.T) {
 						dirtyChildHashes: []int{1},
 						children: Children{
 							addressNibbles[1]: &Extension{
-								path: addressNibbles[2:20],
+								nextHashDirty: true,
+								path:          addressNibbles[2:20],
 								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
-									storage: &Empty{}}},
+									storageHashDirty: true,
+									storage:          &Empty{}}},
 						}}}}
 
 			root, _ := ctxt.Build(desc)

@@ -13,8 +13,10 @@ package mpt
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -785,6 +787,9 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
 		t.Run(config.Name, func(t *testing.T) {
 			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("failed to open archive; %s", err)
+			}
 			defer func() {
 				if err := arch.Close(); err != nil {
 					t.Fatalf("failed to close archive; %s", err)
@@ -837,6 +842,40 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			}
 			if got, want := value, (common.Value{3}); got != want {
 				t.Errorf("unexpected value; got: %x, want: %x", got, want)
+			}
+		})
+	}
+}
+
+func TestArchiveTrie_CreateWitnessProof_CanCancel(t *testing.T) {
+	for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+		t.Run(config.Name, func(t *testing.T) {
+			arch, err := OpenArchiveTrie(t.TempDir(), config, NodeCacheConfig{Capacity: 1024})
+			if err != nil {
+				t.Fatalf("failed to open archive; %s", err)
+			}
+			defer func() {
+				if err := arch.Close(); err != nil {
+					t.Fatalf("failed to close archive; %s", err)
+				}
+			}()
+
+			if err := arch.Add(1, common.Update{
+				CreatedAccounts: []common.Address{{1}},
+				Balances: []common.BalanceUpdate{
+					{Account: common.Address{1}, Balance: common.Balance{0x12}},
+				},
+				Slots: []common.SlotUpdate{
+					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
+				},
+			}, nil); err != nil {
+				t.Fatalf("failed to add block: %v", err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel() // cancel immediately
+			if _, err := arch.createContextWitnessProof(ctx, 1, common.Address{}); !errors.Is(err, interrupt.ErrCanceled) {
+				t.Errorf("proof creation should be canceled")
 			}
 		})
 	}

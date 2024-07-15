@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -247,10 +248,28 @@ func (a *ArchiveTrie) CreateWitnessProof(block uint64, address common.Address, k
 	if !a.nodeSource.getConfig().UseHashedPaths {
 		return nil, archive.ErrWitnessProofNotSupported
 	}
-	a.rootsMutex.Lock()
-	ref := a.roots.roots[block].NodeRef
-	a.rootsMutex.Unlock()
-	return CreateWitnessProof(a.nodeSource, &ref, address, keys...)
+
+	trie, err := a.getView(block)
+	if err != nil {
+		return nil, err
+	}
+
+	return trie.CreateWitnessProof(address, keys...)
+}
+
+// createContextWitnessProof creates a witness proof for the given address keys and a block number.
+// The method is cancellable and can be interrupted by the provided context.
+func (a *ArchiveTrie) createContextWitnessProof(context context.Context, block uint64, addr common.Address, keys ...common.Key) (witness.Proof, error) {
+	if !a.nodeSource.getConfig().UseHashedPaths {
+		return nil, archive.ErrWitnessProofNotSupported
+	}
+
+	trie, err := a.getView(block)
+	if err != nil {
+		return nil, err
+	}
+
+	return trie.createContextWitnessProof(context, addr, keys...)
 }
 
 // GetDiff computes the difference between the given source and target blocks.

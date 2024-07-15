@@ -85,7 +85,7 @@ func (m *MockArchive) CreateWitnessProof(block uint64, address common.Address, k
 	for _, a := range keys {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "CreateWitnessProof", varargs...)
+	ret := m.ctrl.Call(m, "createCancellableWitnessProof", varargs...)
 	ret0, _ := ret[0].(witness.Proof)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -95,7 +95,7 @@ func (m *MockArchive) CreateWitnessProof(block uint64, address common.Address, k
 func (mr *MockArchiveMockRecorder) CreateWitnessProof(block, address any, keys ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{block, address}, keys...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWitnessProof", reflect.TypeOf((*MockArchive)(nil).CreateWitnessProof), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "createCancellableWitnessProof", reflect.TypeOf((*MockArchive)(nil).CreateWitnessProof), varargs...)
 }
 
 // Exists mocks base method.

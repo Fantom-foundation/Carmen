@@ -12,9 +12,11 @@ package mpt
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"golang.org/x/exp/maps"
 	"slices"
@@ -57,10 +59,19 @@ func CreateWitnessProofFromNodes(nodes []string) WitnessProof {
 // and possibly storage slots of the same account under the input storage keys.
 // This method may return an error when it occurs in the underlying database.
 func CreateWitnessProof(nodeSource NodeSource, root *NodeReference, address common.Address, keys ...common.Key) (WitnessProof, error) {
+	return CreateContextWitnessProof(nil, nodeSource, root, address, keys...)
+}
+
+// CreateContextWitnessProof creates a witness proof for the input account address
+// and possibly storage slots of the same account under the input storage keys.
+// This method may return an error when it occurs in the underlying database.
+// This method can be canceled via the input context.
+func CreateContextWitnessProof(context context.Context, nodeSource NodeSource, root *NodeReference, address common.Address, keys ...common.Key) (WitnessProof, error) {
 	proof := proofDb{}
 	visitor := &proofExtractionVisitor{
 		nodeSource: nodeSource,
 		proof:      proof,
+		context:    context,
 	}
 
 	var innerError error
@@ -228,11 +239,23 @@ func (p WitnessProof) Equals(other WitnessProof) bool {
 type proofExtractionVisitor struct {
 	proof      proofDb
 	nodeSource NodeSource
+	context    context.Context
+	counter    int
 	err        error
 }
 
 // Visit computes RLP and hash of the visited node and puts it to the proof.
 func (p *proofExtractionVisitor) Visit(node Node, info NodeInfo) VisitResponse {
+	if p.context != nil {
+		if p.counter%100 == 0 {
+			if interrupt.IsCancelled(p.context) {
+				p.err = interrupt.ErrCanceled
+				return VisitResponseAbort
+			}
+		}
+		p.counter++
+	}
+
 	if info.Embedded.True() {
 		return VisitResponseAbort
 	}

@@ -11,6 +11,7 @@
 package mpt
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -160,6 +161,12 @@ func (s *LiveTrie) VisitTrie(visitor NodeVisitor) error {
 
 func (s *LiveTrie) CreateWitnessProof(addr common.Address, keys ...common.Key) (witness.Proof, error) {
 	return CreateWitnessProof(s.forest, &s.root, addr, keys...)
+}
+
+// createContextWitnessProof creates a witness proof for the given address and keys.
+// The method is cancellable and can be interrupted by the provided context.
+func (s *LiveTrie) createContextWitnessProof(context context.Context, addr common.Address, keys ...common.Key) (witness.Proof, error) {
+	return CreateContextWitnessProof(context, s.forest, &s.root, addr, keys...)
 }
 
 func (s *LiveTrie) Flush() error {
