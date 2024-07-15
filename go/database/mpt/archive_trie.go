@@ -12,6 +12,7 @@ package mpt
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,8 @@ type ArchiveTrie struct {
 
 	// Check-point support for DB healing.
 	checkpointCoordinator utils.TwoPhaseCommitCoordinator
+	checkpointMetadata    checkpointMetadata
+	directory             string // TODO: remove this field
 }
 
 func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*ArchiveTrie, error) {
@@ -54,11 +57,16 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 	if err != nil {
 		return nil, err
 	}
-	rootfile := directory + "/roots.dat"
+	rootfile := filepath.Join(directory, "roots.dat")
 	roots, err := loadRoots(rootfile)
 	if err != nil {
 		return nil, err
 	}
+	checkpoint, err := loadCheckPointMetaData(directory)
+	if err != nil {
+		return nil, err
+	}
+
 	forestConfig := ForestConfig{Mode: Immutable, NodeCacheConfig: cacheConfig}
 	forest, err := OpenFileForest(directory, config, forestConfig)
 	if err != nil {
@@ -96,6 +104,8 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 		roots:                 roots,
 		rootFile:              rootfile,
 		checkpointCoordinator: coordinator,
+		checkpointMetadata:    checkpoint,
+		directory:             directory,
 	}, nil
 }
 
@@ -178,9 +188,13 @@ func (a *ArchiveTrie) Add(block uint64, update common.Update, hint any) error {
 	a.rootsMutex.Unlock()
 
 	// Create a new checkpoint.
-	return a.CreateCheckpoint()
+	if block%10 == 0 {
+		if err := a.CreateCheckpoint(); err != nil {
+			return err
+		}
+	}
 
-	//return nil
+	return nil
 }
 
 func (a *ArchiveTrie) GetBlockHeight() (block uint64, empty bool, err error) {
@@ -359,7 +373,10 @@ func (a *ArchiveTrie) Close() error {
 }
 
 func (a *ArchiveTrie) GetCheckpointBlock() (uint64, error) {
-	return 0, fmt.Errorf("not implemented")
+	if a.checkpointMetadata.Block != nil {
+		return *a.checkpointMetadata.Block, nil
+	}
+	return 0, fmt.Errorf("archive has no checkpoint")
 }
 
 func (a *ArchiveTrie) CreateCheckpoint() error {
@@ -371,6 +388,16 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 	// The creation of the checkpoint makes the current
 	// state recoverable in case of a crash.
 	_, err := a.checkpointCoordinator.RunCommit()
+
+	// TODO: this update should be part of the checkpoint coordinator
+	if err == nil {
+		block := uint64(a.roots.length()) - 1
+		a.checkpointMetadata.Block = &block
+		if err := a.checkpointMetadata.store(a.directory); err != nil {
+			return err
+		}
+	}
+
 	return err
 }
 
@@ -523,4 +550,43 @@ func storeRootsTo(writer io.Writer, roots []Root) error {
 		}
 	}
 	return nil
+}
+
+// --- Checkpoint Metadata ---
+
+// TODO: wrap checkpoint metadata into a type supporting the two-phase participation protocol.
+
+type checkpointMetadata struct {
+	Commit utils.TwoPhaseCommit
+	Block  *uint64
+}
+
+func loadCheckPointMetaData(directory string) (checkpointMetadata, error) {
+	filename := filepath.Join(directory, "checkpoint.json")
+
+	// If there is no file, initialize and return default metadata.
+	if _, err := os.Stat(filename); err != nil {
+		return checkpointMetadata{}, nil
+	}
+
+	// If the file exists, parse it and return its content.
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return checkpointMetadata{}, err
+	}
+
+	var meta checkpointMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return meta, err
+	}
+	return meta, nil
+}
+
+func (m *checkpointMetadata) store(directory string) error {
+	filename := filepath.Join(directory, "checkpoint.json")
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0600)
 }

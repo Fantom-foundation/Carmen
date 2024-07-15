@@ -1725,3 +1725,30 @@ func BenchmarkArchiveFlush_Roots(b *testing.B) {
 		}
 	}
 }
+
+func TestArchive_CreateExampleArchive(t *testing.T) {
+	dir := "/tmp/example-archive"
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("cannot remove directory: %v", err)
+	}
+	archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+	if err != nil {
+		t.Fatalf("cannot open archive: %v", err)
+	}
+
+	for i := 0; i < 100; i++ {
+		err := archive.Add(uint64(i), common.Update{
+			CreatedAccounts: []common.Address{{byte(i)}},
+			Nonces: []common.NonceUpdate{
+				{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
+			},
+		}, nil)
+		if err != nil {
+			t.Fatalf("failed to add update for block %d: %v", i, err)
+		}
+	}
+
+	if err := archive.Close(); err != nil {
+		t.Fatalf("failed to close archive: %v", err)
+	}
+}
