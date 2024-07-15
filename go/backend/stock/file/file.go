@@ -25,15 +25,16 @@ import (
 )
 
 type fileStock[I stock.Index, V any] struct {
-	directory          string
-	encoder            stock.ValueEncoder[V]
-	values             utils.SeekableFile
-	freelist           *fileBasedStack[I]
-	numValueSlots      I
-	numValuesInFile    int64
-	bufferPool         sync.Pool
-	lastCommit         utils.TwoPhaseCommit
-	numCommittedValues I
+	directory               string
+	encoder                 stock.ValueEncoder[V]
+	values                  utils.SeekableFile
+	freelist                *fileBasedStack[I]
+	numValueSlots           I
+	numValuesInFile         int64
+	bufferPool              sync.Pool
+	lastCommit              utils.TwoPhaseCommit
+	numCommittedValues      I
+	committedFreeListLength int
 }
 
 // OpenStock opens a stock retained in the given directory. To that end, meta
@@ -98,8 +99,9 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 				raw: make([]byte, valueSize),
 			}
 		}},
-		lastCommit:         committed.Commit,
-		numCommittedValues: I(committed.NumCommittedValues),
+		lastCommit:              committed.Commit,
+		numCommittedValues:      I(committed.NumCommittedValues),
+		committedFreeListLength: int(committed.NumFreeValues),
 	}, nil
 }
 
@@ -241,7 +243,9 @@ func (s *fileStock[I, V]) New() (I, error) {
 	index := s.numValueSlots
 
 	// Reuse free index positions or grow list of values.
-	if !s.freelist.Empty() {
+	// However, committed parts of the free-list must not
+	// be reused any more.
+	if s.freelist.Size() > s.committedFreeListLength {
 		free, err := s.freelist.Pop()
 		if err != nil {
 			return 0, err
@@ -414,6 +418,7 @@ func (s *fileStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
 	metadata, err := json.Marshal(commitMetaData{
 		Commit:             commit,
 		NumCommittedValues: uint64(s.numValueSlots),
+		NumFreeValues:      uint64(s.freelist.Size()),
 	})
 	if err != nil {
 		return err
@@ -424,12 +429,7 @@ func (s *fileStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
 		return err
 	}
 
-	// After the completion of the commit preparation, no nodes before the
-	// pending numCommittedValues may be modified any more. Thus, the freelist
-	// is cleared. For the case of a rollback, the freelist remains cleared,
-	// for simplicity. This does not introduce inconsistencies, just minor
-	// inefficiency in disk space usage for the rare case of a rollback.
-	return s.freelist.Clear()
+	return nil
 }
 
 func (s *fileStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
@@ -521,4 +521,5 @@ func isDirectory(path string) bool {
 type commitMetaData struct {
 	Commit             utils.TwoPhaseCommit
 	NumCommittedValues uint64
+	NumFreeValues      uint64
 }
