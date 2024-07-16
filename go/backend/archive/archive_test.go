@@ -281,7 +281,7 @@ func TestArchive_CreateWitnessProof(t *testing.T) {
 			if err := a.Add(1, common.Update{
 				CreatedAccounts: []common.Address{{1}},
 				Balances: []common.BalanceUpdate{
-					{Account: common.Address{1}, Balance: common.Balance{0x12}},
+					{Account: common.Address{1}, Balance: amount.New(12)},
 				},
 				Slots: []common.SlotUpdate{
 					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
