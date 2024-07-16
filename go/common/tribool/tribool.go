@@ -18,6 +18,14 @@ type Tribool struct {
 	value byte
 }
 
+// New creates a new Tribool with the given value.
+func New(value bool) Tribool {
+	if value {
+		return True()
+	}
+	return False()
+}
+
 // Unknown returns true if the value is unknown.
 func (t Tribool) Unknown() bool {
 	return t.value == 0 || t.value > 2

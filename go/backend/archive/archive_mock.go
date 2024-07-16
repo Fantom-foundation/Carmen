@@ -23,7 +23,7 @@ import (
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
-	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
+	witness "github.com/Fantom-foundation/Carmen/go/common/witness"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -78,6 +78,26 @@ func (mr *MockArchiveMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockArchive)(nil).Close))
 }
 
+// CreateWitnessProof mocks base method.
+func (m *MockArchive) CreateWitnessProof(block uint64, address common.Address, keys ...common.Key) (witness.Proof, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{block, address}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateWitnessProof", varargs...)
+	ret0, _ := ret[0].(witness.Proof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateWitnessProof indicates an expected call of CreateWitnessProof.
+func (mr *MockArchiveMockRecorder) CreateWitnessProof(block, address any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{block, address}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWitnessProof", reflect.TypeOf((*MockArchive)(nil).CreateWitnessProof), varargs...)
+}
+
 // Exists mocks base method.
 func (m *MockArchive) Exists(block uint64, account common.Address) (bool, error) {
 	m.ctrl.T.Helper()
@@ -123,10 +143,10 @@ func (mr *MockArchiveMockRecorder) GetAccountHash(block, account any) *gomock.Ca
 }
 
 // GetBalance mocks base method.
-func (m *MockArchive) GetBalance(block uint64, account common.Address) (amount.Amount, error) {
+func (m *MockArchive) GetBalance(block uint64, account common.Address) (common.Balance, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", block, account)
-	ret0, _ := ret[0].(amount.Amount)
+	ret0, _ := ret[0].(common.Balance)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -173,6 +173,18 @@ func (mr *MockVmStateDBMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockVmStateDB)(nil).CreateAccount), arg0)
 }
 
+// CreateContract mocks base method.
+func (m *MockVmStateDB) CreateContract(arg0 common.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockVmStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockVmStateDB)(nil).CreateContract), arg0)
+}
+
 // Empty mocks base method.
 func (m *MockVmStateDB) Empty(arg0 common.Address) bool {
 	m.ctrl.T.Helper()
@@ -536,6 +548,20 @@ func (mr *MockVmStateDBMockRecorder) Suicide(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suicide", reflect.TypeOf((*MockVmStateDB)(nil).Suicide), arg0)
 }
 
+// SuicideNewContract mocks base method.
+func (m *MockVmStateDB) SuicideNewContract(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuicideNewContract", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SuicideNewContract indicates an expected call of SuicideNewContract.
+func (mr *MockVmStateDBMockRecorder) SuicideNewContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuicideNewContract", reflect.TypeOf((*MockVmStateDB)(nil).SuicideNewContract), arg0)
+}
+
 // MockStateDB is a mock of StateDB interface.
 type MockStateDB struct {
 	ctrl     *gomock.Controller
@@ -717,6 +743,18 @@ func (m *MockStateDB) CreateAccount(arg0 common.Address) {
 func (mr *MockStateDBMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockStateDB)(nil).CreateAccount), arg0)
+}
+
+// CreateContract mocks base method.
+func (m *MockStateDB) CreateContract(arg0 common.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockStateDB)(nil).CreateContract), arg0)
 }
 
 // Empty mocks base method.
@@ -1191,6 +1229,20 @@ func (mr *MockStateDBMockRecorder) Suicide(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suicide", reflect.TypeOf((*MockStateDB)(nil).Suicide), arg0)
 }
 
+// SuicideNewContract mocks base method.
+func (m *MockStateDB) SuicideNewContract(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuicideNewContract", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SuicideNewContract indicates an expected call of SuicideNewContract.
+func (mr *MockStateDBMockRecorder) SuicideNewContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuicideNewContract", reflect.TypeOf((*MockStateDB)(nil).SuicideNewContract), arg0)
+}
+
 // MockNonCommittableStateDB is a mock of NonCommittableStateDB interface.
 type MockNonCommittableStateDB struct {
 	ctrl     *gomock.Controller
@@ -1348,6 +1400,18 @@ func (m *MockNonCommittableStateDB) CreateAccount(arg0 common.Address) {
 func (mr *MockNonCommittableStateDBMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockNonCommittableStateDB)(nil).CreateAccount), arg0)
+}
+
+// CreateContract mocks base method.
+func (m *MockNonCommittableStateDB) CreateContract(arg0 common.Address) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CreateContract", arg0)
+}
+
+// CreateContract indicates an expected call of CreateContract.
+func (mr *MockNonCommittableStateDBMockRecorder) CreateContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateContract", reflect.TypeOf((*MockNonCommittableStateDB)(nil).CreateContract), arg0)
 }
 
 // Empty mocks base method.
@@ -1723,6 +1787,20 @@ func (m *MockNonCommittableStateDB) Suicide(arg0 common.Address) bool {
 func (mr *MockNonCommittableStateDBMockRecorder) Suicide(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Suicide", reflect.TypeOf((*MockNonCommittableStateDB)(nil).Suicide), arg0)
+}
+
+// SuicideNewContract mocks base method.
+func (m *MockNonCommittableStateDB) SuicideNewContract(arg0 common.Address) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SuicideNewContract", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SuicideNewContract indicates an expected call of SuicideNewContract.
+func (mr *MockNonCommittableStateDBMockRecorder) SuicideNewContract(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SuicideNewContract", reflect.TypeOf((*MockNonCommittableStateDB)(nil).SuicideNewContract), arg0)
 }
 
 // MockBulkLoad is a mock of BulkLoad interface.

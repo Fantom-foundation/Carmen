@@ -223,7 +223,7 @@ func (c *liveTrieAccountFuzzingCampaign[T, C]) Init() []fuzzing.OperationSequenc
 // It creates a temporary directory and opens a LiveTrie using that directory.
 func (c *liveTrieAccountFuzzingCampaign[T, C]) CreateContext(t fuzzing.TestingT) *C {
 	path := t.TempDir()
-	liveTrie, err := OpenFileLiveTrie(path, S5LiveConfig, 10_000)
+	liveTrie, err := OpenFileLiveTrie(path, S5LiveConfig, NodeCacheConfig{Capacity: 10_000})
 	if err != nil {
 		t.Fatalf("failed to open live trie: %v", err)
 	}
