@@ -13,8 +13,9 @@ package gostate
 import (
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
