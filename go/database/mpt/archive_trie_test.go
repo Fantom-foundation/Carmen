@@ -1752,3 +1752,131 @@ func TestArchive_CreateExampleArchive(t *testing.T) {
 		t.Fatalf("failed to close archive: %v", err)
 	}
 }
+
+func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
+
+	tests := map[string]func(*ArchiveTrie) error{
+		"clean_close": func(archive *ArchiveTrie) error {
+			return archive.Close()
+		},
+		"no_close": func(archive *ArchiveTrie) error {
+			// We do not flush the Archive state, we just remove the
+			// directory lock to allow another instance to open the archive.
+			return errors.Join(
+				markClean(archive.directory),
+				archive.head.(*MptState).lock.Release(),
+			)
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			// Create an archive and fill it with 100 blocks.
+			{
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				if err != nil {
+					t.Fatalf("cannot open archive: %v", err)
+				}
+
+				for i := 0; i < 100; i++ {
+					err := archive.Add(uint64(i), common.Update{
+						CreatedAccounts: []common.Address{{byte(i)}},
+						Nonces: []common.NonceUpdate{
+							{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
+						},
+					}, nil)
+					if err != nil {
+						t.Fatalf("failed to add update for block %d: %v", i, err)
+					}
+				}
+
+				// check that the archive has a checkpoint at block 90
+				checkpoint, err := archive.GetCheckpointBlock()
+				if err != nil {
+					t.Fatalf("failed to get checkpoint block: %v", err)
+				}
+				if want, got := uint64(90), checkpoint; want != got {
+					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
+				}
+
+				if err := test(archive); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			}
+
+			// Check that the archive can be verified.
+			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				t.Fatalf("failed to verify archive: %v", err)
+			}
+
+			// Reset archive to checkpoint.
+			{
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				if err != nil {
+					t.Fatalf("cannot open archive: %v", err)
+				}
+
+				// check that the archive has a checkpoint at block 90
+				checkpoint, err := archive.GetCheckpointBlock()
+				if err != nil {
+					t.Fatalf("failed to get checkpoint block: %v", err)
+				}
+				if want, got := uint64(90), checkpoint; want != got {
+					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
+				}
+
+				if err := archive.RestoreCheckpoint(); err != nil {
+					t.Fatalf("failed to restore checkpoint: %v", err)
+				}
+
+				block, _, err := archive.GetBlockHeight()
+				if err != nil {
+					t.Fatalf("cannot get block height: %v", err)
+				}
+				if want, got := uint64(90), block; want != got {
+					t.Errorf("unexpected block height, wanted %d, got %d", want, got)
+				}
+
+				if err := archive.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			}
+
+			// Check that the archive can be verified.
+			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				t.Fatalf("failed to verify archive: %v", err)
+			}
+
+			// Check that restored archive can be opened again.
+			{
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				if err != nil {
+					t.Fatalf("cannot open archive: %v", err)
+				}
+
+				block, _, err := archive.GetBlockHeight()
+				if err != nil {
+					t.Fatalf("cannot get block height: %v", err)
+				}
+				if want, got := uint64(90), block; want != got {
+					t.Errorf("unexpected block height, wanted %d, got %d", want, got)
+				}
+
+				// check that the archive has a checkpoint at block 90
+				checkpoint, err := archive.GetCheckpointBlock()
+				if err != nil {
+					t.Fatalf("failed to get checkpoint block: %v", err)
+				}
+				if want, got := uint64(90), checkpoint; want != got {
+					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
+				}
+
+				if err := archive.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			}
+		})
+	}
+}

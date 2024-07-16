@@ -473,8 +473,11 @@ func (l *rootList) append(r Root) {
 func (l *rootList) truncate(block uint64) error {
 	length := block + 1
 	l.roots = l.roots[:length]
+	if l.numRootsInFile <= int(length) {
+		return nil
+	}
 	l.numRootsInFile = int(length)
-	return os.Truncate(l.filename, int64(length*uint64(NodeIdEncoder{}.GetEncodedSize())))
+	return os.Truncate(l.filename, int64(length*uint64(NodeIdEncoder{}.GetEncodedSize()+32)))
 }
 
 func loadRoots(filename string) (rootList, error) {
