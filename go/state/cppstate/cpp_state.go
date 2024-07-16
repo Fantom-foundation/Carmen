@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -105,10 +106,10 @@ func (cs *CppState) DeleteAccount(address common.Address) error {
 	return cs.Apply(0, update)
 }
 
-func (cs *CppState) GetBalance(address common.Address) (common.Balance, error) {
+func (cs *CppState) GetBalance(address common.Address) (amount.Amount, error) {
 	var balance common.Balance
 	C.Carmen_GetBalance(cs.state, unsafe.Pointer(&address[0]), unsafe.Pointer(&balance[0]))
-	return balance, nil
+	return amount.NewFromBytes(balance[:]...), nil
 }
 
 func (cs *CppState) SetBalance(address common.Address, balance common.Balance) error {

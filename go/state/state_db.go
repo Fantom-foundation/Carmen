@@ -639,12 +639,11 @@ func (s *stateDB) GetBalance(addr common.Address) amount.Amount {
 		s.errors = append(s.errors, fmt.Errorf("failed to load balance for address %v: %w", addr, err))
 		return amount.New() // We need to return something that allows the VM to continue.
 	}
-	res := amount.NewFromBytes(balance[:]...)
 	s.balances[addr] = &balanceValue{
-		original: &res,
-		current:  res,
+		original: &balance,
+		current:  balance,
 	}
-	return res
+	return balance
 }
 
 func (s *stateDB) AddBalance(addr common.Address, diff amount.Amount) {

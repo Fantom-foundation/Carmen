@@ -19,6 +19,7 @@ import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/state"
 	"golang.org/x/crypto/sha3"
 )
@@ -42,16 +43,16 @@ func (s *ArchiveState) Exists(address common.Address) (bool, error) {
 	return exists, s.archiveError
 }
 
-func (s *ArchiveState) GetBalance(address common.Address) (common.Balance, error) {
+func (s *ArchiveState) GetBalance(address common.Address) (amount.Amount, error) {
 	if err := s.archiveError; err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 
 	balance, err := s.archive.GetBalance(s.block, address)
 	if err != nil {
 		s.archiveError = errors.Join(s.archiveError, err)
 	}
-	return balance, s.archiveError
+	return amount.NewFromBytes(balance[:]...), s.archiveError
 }
 
 func (s *ArchiveState) GetNonce(address common.Address) (common.Nonce, error) {

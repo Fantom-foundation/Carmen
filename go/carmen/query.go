@@ -31,7 +31,7 @@ func (c *queryContext) GetBalance(address Address) Amount {
 		c.err = err
 		return NewAmount()
 	}
-	return NewAmountFromBytes(res[:]...)
+	return res
 }
 
 func (c *queryContext) GetNonce(address Address) uint64 {
