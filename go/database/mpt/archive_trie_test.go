@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"golang.org/x/exp/maps"
 
 	"go.uber.org/mock/gomock"
@@ -217,24 +218,24 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 			defer archive.Close()
 
 			addr1 := common.Address{1}
-			blc0 := common.Balance{0}
-			blc1 := common.Balance{1}
-			blc2 := common.Balance{2}
+			blc0 := amount.New()
+			blc1 := amount.New(1)
+			blc2 := amount.New(2)
 
 			archive.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc1},
+					{Account: addr1, Balance: blc1.Bytes32()},
 				},
 			}, nil)
 
 			archive.Add(3, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc2},
+					{Account: addr1, Balance: blc2.Bytes32()},
 				},
 			}, nil)
 
-			want := []common.Balance{blc0, blc1, blc1, blc2}
+			want := []amount.Amount{blc0, blc1, blc1, blc2}
 			for i, want := range want {
 				got, err := archive.GetBalance(uint64(i), addr1)
 				if err != nil || got != want {
@@ -255,13 +256,13 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 			defer archive.Close()
 
 			addr := common.Address{1}
-			balance := common.Balance{0}
+			balance := amount.New()
 
 			// Block 1 adds an actual change.
 			err = archive.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr},
 				Balances: []common.BalanceUpdate{
-					{Account: addr, Balance: balance},
+					{Account: addr, Balance: balance.Bytes32()},
 				},
 			}, nil)
 			if err != nil {
@@ -329,15 +330,15 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 
 			addr1 := common.Address{1}
 			addr2 := common.Address{2}
-			blc1 := common.Balance{1}
-			blc2 := common.Balance{2}
+			blc1 := amount.New(1)
+			blc2 := amount.New(2)
 
 			// Block 1
 			update := common.Update{
 				CreatedAccounts: []common.Address{addr1, addr2},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc1},
-					{Account: addr2, Balance: blc2},
+					{Account: addr1, Balance: blc1.Bytes32()},
+					{Account: addr2, Balance: blc2.Bytes32()},
 				},
 			}
 			hints, err := live.Apply(1, update)
@@ -351,7 +352,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 
 			// Block 2
 			update = common.Update{
-				Balances: []common.BalanceUpdate{{Account: addr1, Balance: blc2}},
+				Balances: []common.BalanceUpdate{{Account: addr1, Balance: blc2.Bytes32()}},
 			}
 			hints, err = live.Apply(2, update)
 			if err != nil {
@@ -369,13 +370,13 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				addr := common.Address{byte(i + 10)}
 				err = errors.Join(
 					live.CreateAccount(addr),
-					live.SetBalance(addr, blc1),
+					live.SetBalance(addr, blc1.Bytes32()),
 				)
 				if err != nil {
 					t.Fatalf("failed to update live db: %v", err)
 				}
 				update.CreatedAccounts = append(update.CreatedAccounts, addr)
-				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1})
+				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1.Bytes32()})
 			}
 			hints, err = live.Apply(4, update)
 			if err != nil {

@@ -22,6 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 // ArchiveTrie retains a per-block history of the state trie. Each state is
@@ -179,16 +180,16 @@ func (a *ArchiveTrie) Exists(block uint64, account common.Address) (exists bool,
 	return exists, err
 }
 
-func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance common.Balance, err error) {
+func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance amount.Amount, err error) {
 	view, err := a.getView(block)
 	if err != nil {
-		return common.Balance{}, err
+		return amount.New(), err
 	}
 	info, _, err := view.GetAccountInfo(account)
 	if err != nil {
-		return common.Balance{}, a.addError(err)
+		return amount.New(), a.addError(err)
 	}
-	return info.Balance, nil
+	return amount.NewFromBytes(info.Balance[:]...), nil
 }
 
 func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte, err error) {
