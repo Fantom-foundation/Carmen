@@ -826,7 +826,7 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			if !complete {
 				t.Errorf("balance proof is incomplete")
 			}
-			if got, want := balance, (common.Balance{0x12}); got != want {
+			if got, want := balance, amount.New(12).Bytes32(); got != want {
 				t.Errorf("unexpected balance; got: %x, want: %x", got, want)
 			}
 			value, complete, err := proof.GetState(hash, common.Address{1}, common.Key{2})
