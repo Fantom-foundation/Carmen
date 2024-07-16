@@ -4249,6 +4249,85 @@ func TestNonCommittableStateDB_resetState_ClearsTransientStorage(t *testing.T) {
 	}
 }
 
+func TestStateDB_ContractCanBeCreatedAndDeletedInTheSameTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// the account should exist prior to CreateContract call
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	db.CreateContract(address1)
+
+	// suicide the newly created contract in the same tx scope
+	if deleted := db.SuicideNewContract(address1); !deleted {
+		t.Errorf("account should be deleted")
+	}
+
+	// the contract account should stop existing at the end of the transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	if db.Exist(address1) {
+		t.Errorf("account still exists after suicide")
+	}
+}
+
+func TestStateDB_ContractCannotBeCreatedAndDeletedInDifferentTransactions(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// the account should exist prior to CreateContract call
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	db.CreateContract(address1)
+
+	// start next transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	// suicide the contract from previous transaction
+	if deleted := db.SuicideNewContract(address1); deleted {
+		t.Errorf("account should not be deleted")
+	}
+
+	// the contract should still exist when suicided in different transaction
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	if !db.Exist(address1) {
+		t.Errorf("account should exist after suicide in different transaction")
+	}
+}
+
+func TestStateDB_ContractCreationAndDeletionCanBeRolledBack(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mock := NewMockState(ctrl)
+	db := CreateStateDBUsing(mock)
+
+	// create snapshot of current state
+	ss := db.Snapshot()
+
+	// mark contract as created
+	mock.EXPECT().Exists(address1).Return(true, nil)
+	db.CreateContract(address1)
+
+	// revert to snapshot
+	db.RevertToSnapshot(ss)
+
+	// suicide the contract
+	if deleted := db.SuicideNewContract(address1); deleted {
+		t.Errorf("account should not be deleted")
+	}
+
+	// the contract account should still exist, because CreateContract method was rolled back
+	db.EndTransaction()
+	db.BeginTransaction()
+
+	if !db.Exist(address1) {
+		t.Errorf("account should still exist after CreateContract call rollback")
+	}
+}
+
 type sameEffectAs struct {
 	want common.Update
 }

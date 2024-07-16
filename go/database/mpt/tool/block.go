@@ -60,7 +60,7 @@ func block(context *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	archive, err := mpt.OpenArchiveTrie(dir, info.Config, 1024)
+	archive, err := mpt.OpenArchiveTrie(dir, info.Config, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		return fmt.Errorf("failed to open archive in %s: %w", dir, err)
 	}
