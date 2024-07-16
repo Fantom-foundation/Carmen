@@ -326,7 +326,8 @@ func (a *Archive) addUpdateIntoTx(tx *sql.Tx, block uint64, update common.Update
 
 	stmt = tx.Stmt(a.addBalanceStmt)
 	for _, balanceUpdate := range update.Balances {
-		_, err := stmt.Exec(balanceUpdate.Account[:], block, balanceUpdate.Balance[:])
+		b := balanceUpdate.Balance.Bytes32()
+		_, err := stmt.Exec(balanceUpdate.Account[:], block, b[:])
 		if err != nil {
 			return fmt.Errorf("failed to add balance; %s", err)
 		}

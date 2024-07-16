@@ -164,7 +164,8 @@ func (a *Archive) addUpdateIntoBatch(block uint64, update common.Update) error {
 	for _, balanceUpdate := range update.Balances {
 		var accountK accountBlockKey
 		accountK.set(backend.BalanceArchiveKey, balanceUpdate.Account, block)
-		a.batch.Put(accountK[:], balanceUpdate.Balance[:])
+		b := balanceUpdate.Balance.Bytes32()
+		a.batch.Put(accountK[:], b[:])
 	}
 
 	for _, codeUpdate := range update.Codes {

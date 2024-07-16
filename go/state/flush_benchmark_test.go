@@ -12,6 +12,8 @@ package state
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
+
 	"testing"
 )
 
@@ -38,7 +40,7 @@ func BenchmarkFlushGoState(b *testing.B) {
 			update.AppendBalanceUpdate(common.Address{
 				byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n),
 				byte(i >> 24), byte(i >> 16), byte(i >> 8), byte(i),
-			}, common.Balance{byte(n)})
+			}, amount.New(n))
 		}
 		err := state.Apply(n, update)
 		if err != nil {

@@ -309,7 +309,7 @@ func TestState_StateModifications_Failing(t *testing.T) {
 			if _, err := state.GetBalance(common.Address{1}); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}
-			if err := state.SetBalance(common.Address{1}, common.Balance{1}); !errors.Is(err, injectedErr) {
+			if err := state.SetBalance(common.Address{1}, amount.New(1)); !errors.Is(err, injectedErr) {
 				t.Errorf("accessing data should fail")
 			}
 			if _, err := state.GetNonce(common.Address{1}); !errors.Is(err, injectedErr) {
@@ -386,7 +386,7 @@ func TestState_StateModificationsWithoutErrorHaveExpectedEffects(t *testing.T) {
 			}
 
 			balance := amount.New(1)
-			if err := state.SetBalance(common.Address{1}, balance.Bytes32()); err != nil {
+			if err := state.SetBalance(common.Address{1}, balance); err != nil {
 				t.Errorf("error to set balance: %s", err)
 			}
 			if exists, err := state.Exists(common.Address{1}); err != nil || !exists {

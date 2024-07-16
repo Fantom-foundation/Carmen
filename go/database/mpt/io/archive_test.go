@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt"
 )
 
@@ -174,8 +175,8 @@ func fillTestBlocksIntoArchive(t *testing.T, archive *mpt.ArchiveTrie) (blockHei
 
 	addr1 := common.Address{1}
 	addr2 := common.Address{2}
-	balance1 := common.Balance{1}
-	balance2 := common.Balance{2}
+	balance1 := amount.New(1)
+	balance2 := amount.New(2)
 	nonce1 := common.Nonce{1}
 	nonce2 := common.Nonce{2}
 	code1 := []byte{1, 2, 3}
