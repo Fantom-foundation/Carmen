@@ -20,6 +20,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/stock"
@@ -61,13 +62,20 @@ type Root struct {
 	Hash    common.Hash
 }
 
+// NodeCacheConfig summarizes the configuration options for the node cache
+// managed by a forest instance.
+type NodeCacheConfig struct {
+	Capacity               int           // the (approximate) maximum number of nodes retained in memory; a default is chosen if zero or negative
+	BackgroundFlushPeriod  time.Duration // the time between background flushes; a default is chosen if zero, disabled if negative
+	writeBufferChannelSize int           // the maximum number of elements retained in the write buffer channel
+}
+
 // ForestConfig summarizes forest instance configuration options that affect
 // the functional and non-functional properties of a forest but do not change
 // the on-disk format.
 type ForestConfig struct {
-	Mode                   StorageMode // whether to perform destructive or constructive updates
-	CacheCapacity          int         // the maximum number of nodes retained in memory
-	writeBufferChannelSize int         // the maximum number of elements retained in the write buffer channel
+	Mode            StorageMode // whether to perform destructive or constructive updates
+	NodeCacheConfig             // configuration options for the node cache
 }
 
 // Forest is a utility node managing nodes for one or more Tries.
@@ -91,6 +99,9 @@ type Forest struct {
 
 	// A unified cache for all node types.
 	nodeCache NodeCache
+
+	// A background worker flushing nodes to disk.
+	flusher *nodeFlusher
 
 	// The hasher managing node hashes for this forest.
 	hasher hasher
@@ -162,7 +173,7 @@ func OpenInMemoryForest(directory string, mptConfig MptConfig, forestConfig Fore
 	closers = append(closers, values)
 
 	success = true
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestConfig) (*Forest, error) {
@@ -206,7 +217,7 @@ func OpenFileForest(directory string, mptConfig MptConfig, forestConfig ForestCo
 	closers = append(closers, values)
 
 	success = true
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 // closers is a shortcut for the list of io.Closer.
@@ -252,7 +263,6 @@ func checkForestMetadata(directory string, config MptConfig, mode StorageMode) (
 
 func makeForest(
 	mptConfig MptConfig,
-	directory string,
 	branches stock.Stock[uint64, BranchNode],
 	extensions stock.Stock[uint64, ExtensionNode],
 	accounts stock.Stock[uint64, AccountNode],
@@ -264,6 +274,20 @@ func makeForest(
 	releaseError := make(chan error, 1)
 	releaseDone := make(chan struct{})
 
+	// The capacity of an MPT's node cache must be at least as large as the maximum
+	// number of nodes modified in a block. Evaluations show that most blocks
+	// modify less than 2000 nodes. However, one block, presumably the one handling
+	// the opera fork at ~4.5M, modifies 434.589 nodes. Thus, the cache size of a
+	// MPT processing Fantom's history should be at least ~500.000 nodes.
+	const defaultCacheCapacity = 10_000_000
+	if forestConfig.Capacity <= 0 {
+		forestConfig.Capacity = defaultCacheCapacity
+	}
+	const minCacheCapacity = 2_000
+	if forestConfig.Capacity < minCacheCapacity {
+		forestConfig.Capacity = minCacheCapacity
+	}
+
 	res := &Forest{
 		config:        mptConfig,
 		branches:      synced.Sync(branches),
@@ -271,7 +295,7 @@ func makeForest(
 		accounts:      synced.Sync(accounts),
 		values:        synced.Sync(values),
 		storageMode:   forestConfig.Mode,
-		nodeCache:     NewNodeCache(forestConfig.CacheCapacity),
+		nodeCache:     NewNodeCache(forestConfig.Capacity),
 		hasher:        mptConfig.Hashing.createHasher(),
 		keyHasher:     NewKeyHasher(),
 		addressHasher: NewAddressHasher(),
@@ -280,6 +304,13 @@ func makeForest(
 		releaseError:  releaseError,
 		releaseDone:   releaseDone,
 	}
+
+	sink := writeBufferSink{res}
+
+	// Start a background worker flushing dirty nodes to disk.
+	res.flusher = startNodeFlusher(res.nodeCache, sink, nodeFlusherConfig{
+		period: forestConfig.BackgroundFlushPeriod,
+	})
 
 	// Run a background worker releasing entire tries of nodes on demand.
 	go func() {
@@ -311,7 +342,7 @@ func makeForest(
 		channelSize = 1024 // the default value
 	}
 
-	res.writeBuffer = makeWriteBuffer(writeBufferSink{res}, channelSize)
+	res.writeBuffer = makeWriteBuffer(sink, channelSize)
 	return res, nil
 }
 
@@ -381,6 +412,18 @@ func (s *Forest) SetValue(rootRef *NodeReference, addr common.Address, key commo
 		s.errors = append(s.errors, err)
 	}
 	return newRoot, err
+}
+
+func (s *Forest) HasEmptyStorage(rootRef *NodeReference, addr common.Address) (isEmpty bool, err error) {
+	v := MakeVisitor(func(node Node, info NodeInfo) VisitResponse {
+		if a, ok := node.(*AccountNode); ok {
+			isEmpty = a.storage.Id().IsEmpty()
+			return VisitResponseAbort
+		}
+		return VisitResponseContinue
+	})
+	exists, err := VisitPathToAccount(s, rootRef, addr, v)
+	return isEmpty || !exists, err
 }
 
 func (s *Forest) ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error) {
@@ -550,8 +593,7 @@ func (s *Forest) Close() error {
 		return forestClosedErr
 	}
 
-	var errs []error
-	errs = append(errs, s.Flush())
+	errs := []error{s.flusher.Stop(), s.Flush()}
 
 	// shut down release worker
 	close(s.releaseQueue)
@@ -825,8 +867,18 @@ func (s *Forest) addToCache(ref *NodeReference, node *shared.Shared[Node]) (valu
 }
 
 func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared.Shared[Node]) (value *shared.Shared[Node], present bool) {
+
+	// Check whether the node is currently in the write buffer and needs
+	// to be recovered. Failing to check this can lead to the presence
+	// of multiple node instances associated with the same node ID.
+	recoveredFromBuffer := false
+	if recovered, found := s.writeBuffer.Cancel(ref.Id()); found {
+		node = recovered
+		recoveredFromBuffer = true
+	}
+
 	// Replacing the element in the already thread safe node cache needs to be
-	// guarded by the `getTransferMutex` since an evicted node have to
+	// guarded by the `getTransferMutex` since an evicted node has to
 	// be moved to the write buffer in an atomic step.
 	current, present, evictedId, evictedNode, evicted := s.nodeCache.GetOrSet(ref, node)
 	if present {
@@ -836,7 +888,7 @@ func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared
 		s.nodeCache.Touch(ref)
 	}
 	if !evicted {
-		return current, present
+		return current, present || recoveredFromBuffer
 	}
 
 	// Clean nodes can be ignored, dirty nodes need to be written.
@@ -844,13 +896,13 @@ func (s *Forest) addToCacheHoldingTransferMutex(ref *NodeReference, node *shared
 		dirty := handle.Get().IsDirty()
 		handle.Release()
 		if !dirty {
-			return current, present
+			return current, present || recoveredFromBuffer
 		}
 	}
 
 	// Enqueue evicted node for asynchronous write to file.
 	s.writeBuffer.Add(evictedId, evictedNode)
-	return current, present
+	return current, present || recoveredFromBuffer
 }
 
 func (s *Forest) flushNode(id NodeId, node Node) error {

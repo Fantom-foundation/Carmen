@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"path"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	// Create a small Archive to be exported.
 	sourceDir := t.TempDir()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, 1024)
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -44,7 +45,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(sourceDir, buffer); err != nil {
+	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
@@ -60,7 +61,7 @@ func TestIO_Archive_ExportAndImport(t *testing.T) {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
-	target, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, 1024)
+	target, err := mpt.OpenArchiveTrie(targetDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open recovered Archive: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 
 	// Create a small Archive to be exported.
 	sourceDir := t.TempDir()
-	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, 1024)
+	source, err := mpt.OpenArchiveTrie(sourceDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to create archive: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 
 	// Export the archive into a buffer.
 	buffer := new(bytes.Buffer)
-	if err := ExportArchive(sourceDir, buffer); err != nil {
+	if err := ExportArchive(context.Background(), sourceDir, buffer); err != nil {
 		t.Fatalf("failed to export Archive: %v", err)
 	}
 	genesis := buffer.Bytes()
@@ -126,7 +127,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 		t.Fatalf("verification of imported LiveDB failed: %v", err)
 	}
 
-	live, err := mpt.OpenFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, 1024)
+	live, err := mpt.OpenFileLiveTrie(path.Join(targetDir, "live"), mpt.S5LiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("cannot open live trie: %v", err)
 	}
@@ -144,7 +145,7 @@ func TestIO_ArchiveAndLive_ExportAndImport(t *testing.T) {
 		t.Fatalf("verification of imported Archive failed: %v", err)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, 1024)
+	archive, err := mpt.OpenArchiveTrie(path.Join(targetDir, "archive"), mpt.S5ArchiveConfig, mpt.NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open recovered Archive: %v", err)
 	}

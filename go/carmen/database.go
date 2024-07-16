@@ -210,7 +210,8 @@ func (db *database) GetHistoricContext(block uint64) (HistoricBlockContext, erro
 		commonContext: commonContext{
 			db: db,
 		},
-		state: state.CreateNonCommittableStateDBUsing(s)}, err
+		archiveState: s,
+		state:        state.CreateNonCommittableStateDBUsing(s)}, err
 }
 
 func (db *database) StartBulkLoad(block uint64) (BulkLoad, error) {

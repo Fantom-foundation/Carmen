@@ -12,6 +12,7 @@ package io
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"path"
 	"sort"
 
+	"github.com/Fantom-foundation/Carmen/go/common/interrupt"
 	"github.com/Fantom-foundation/Carmen/go/state"
 
 	"github.com/Fantom-foundation/Carmen/go/backend/archive"
@@ -54,8 +56,7 @@ var archiveMagicNumber []byte = []byte("Fantom-Archive-State")
 
 const archiveFormatVersion = byte(1)
 
-func ExportArchive(directory string, out io.Writer) error {
-
+func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 	info, err := CheckMptDirectoryAndGetInfo(directory)
 	if err != nil {
 		return fmt.Errorf("error in input directory: %v", err)
@@ -65,7 +66,7 @@ func ExportArchive(directory string, out io.Writer) error {
 		return fmt.Errorf("can only support export of S5 Archive instances, found %v in directory", info.Config.Name)
 	}
 
-	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(directory, info.Config, mpt.NodeCacheConfig{})
 	if err != nil {
 		return err
 	}
@@ -100,6 +101,9 @@ func ExportArchive(directory string, out io.Writer) error {
 
 	// Encode diff of each individual block.
 	for block := uint64(0); block <= maxBlock; block++ {
+		if interrupt.IsCancelled(ctx) {
+			return errors.Join(interrupt.ErrCanceled, archive.Close())
+		}
 		diff, err := archive.GetDiffForBlock(block)
 		if err != nil {
 			return fmt.Errorf("failed to get diff for block %d: %w", block, err)
@@ -235,7 +239,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}
 
 	// Create a live-DB updated in parallel for faster hash computation.
-	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.DefaultMptStateCapacity)
+	live, err := mpt.OpenGoFileState(liveDbDir, mpt.S5LiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create auxiliary live DB: %w", err)
 	}
@@ -247,7 +251,7 @@ func importArchive(liveDbDir, archiveDbDir string, in io.Reader) (err error) {
 	}()
 
 	// Create an empty archive.
-	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.DefaultMptStateCapacity)
+	archive, err := mpt.OpenArchiveTrie(archiveDbDir, mpt.S5ArchiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return fmt.Errorf("failed to create empty state: %w", err)
 	}
