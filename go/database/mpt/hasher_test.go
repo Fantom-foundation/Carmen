@@ -598,7 +598,7 @@ func TestEthereumLikeHasher_EmbeddedNode_Hashes_As_Itself(t *testing.T) {
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
 			storage: &Extension{
 				path:         KeyToNibblePath(key, ctxt)[0:40],
 				nextEmbedded: true,

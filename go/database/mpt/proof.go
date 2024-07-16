@@ -14,13 +14,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
+	"strings"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"golang.org/x/exp/maps"
-	"slices"
-	"sort"
-	"strings"
 )
 
 //go:generate mockgen -source proof.go -destination proof_mocks.go -package mpt
@@ -150,8 +151,8 @@ func (p WitnessProof) GetAccountInfo(root common.Hash, address common.Address) (
 // the actual value. If the methods return false, the input could not be proved, and the returned value
 // is undefined.
 // The method may return an error if the proof is invalid.
-func (p WitnessProof) GetBalance(root common.Hash, address common.Address) (common.Balance, bool, error) {
-	return witnessAccountFieldGetter(p.proofDb, root, address, func(n AccountNode) common.Balance {
+func (p WitnessProof) GetBalance(root common.Hash, address common.Address) (amount.Amount, bool, error) {
+	return witnessAccountFieldGetter(p.proofDb, root, address, func(n AccountNode) amount.Amount {
 		return n.Info().Balance
 	})
 }

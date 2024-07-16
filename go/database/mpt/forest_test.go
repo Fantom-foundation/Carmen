@@ -2215,7 +2215,7 @@ func TestForest_HasEmptyStorage(t *testing.T) {
 					checkEmpty(addresses, true)
 
 					for _, address := range addresses {
-						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: common.Balance{0x1}})
+						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: amount.New(1)})
 						if err != nil {
 							t.Fatalf("cannot update account: %v", err)
 						}

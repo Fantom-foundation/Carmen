@@ -795,7 +795,7 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			if err := arch.Add(1, common.Update{
 				CreatedAccounts: []common.Address{{1}},
 				Balances: []common.BalanceUpdate{
-					{Account: common.Address{1}, Balance: common.Balance{0x12}},
+					{Account: common.Address{1}, Balance: amount.New(12)},
 				},
 				Slots: []common.SlotUpdate{
 					{Account: common.Address{1}, Key: common.Key{2}, Value: common.Value{3}},
@@ -826,7 +826,7 @@ func TestArchiveTrie_CreateWitnessProof(t *testing.T) {
 			if !complete {
 				t.Errorf("balance proof is incomplete")
 			}
-			if got, want := balance, (common.Balance{0x12}); got != want {
+			if got, want := balance, amount.New(12); got != want {
 				t.Errorf("unexpected balance; got: %x, want: %x", got, want)
 			}
 			value, complete, err := proof.GetState(hash, common.Address{1}, common.Key{2})
