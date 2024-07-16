@@ -225,13 +225,13 @@ func TestArchiveTrie_CanHandleMultipleBlocks(t *testing.T) {
 			archive.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr1},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc1.Bytes32()},
+					{Account: addr1, Balance: blc1},
 				},
 			}, nil)
 
 			archive.Add(3, common.Update{
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc2.Bytes32()},
+					{Account: addr1, Balance: blc2},
 				},
 			}, nil)
 
@@ -262,7 +262,7 @@ func TestArchiveTrie_CanHandleEmptyBlocks(t *testing.T) {
 			err = archive.Add(1, common.Update{
 				CreatedAccounts: []common.Address{addr},
 				Balances: []common.BalanceUpdate{
-					{Account: addr, Balance: balance.Bytes32()},
+					{Account: addr, Balance: balance},
 				},
 			}, nil)
 			if err != nil {
@@ -337,8 +337,8 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 			update := common.Update{
 				CreatedAccounts: []common.Address{addr1, addr2},
 				Balances: []common.BalanceUpdate{
-					{Account: addr1, Balance: blc1.Bytes32()},
-					{Account: addr2, Balance: blc2.Bytes32()},
+					{Account: addr1, Balance: blc1},
+					{Account: addr2, Balance: blc2},
 				},
 			}
 			hints, err := live.Apply(1, update)
@@ -352,7 +352,7 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 
 			// Block 2
 			update = common.Update{
-				Balances: []common.BalanceUpdate{{Account: addr1, Balance: blc2.Bytes32()}},
+				Balances: []common.BalanceUpdate{{Account: addr1, Balance: blc2}},
 			}
 			hints, err = live.Apply(2, update)
 			if err != nil {
@@ -370,13 +370,13 @@ func TestArchiveTrie_CanProcessPrecomputedHashes(t *testing.T) {
 				addr := common.Address{byte(i + 10)}
 				err = errors.Join(
 					live.CreateAccount(addr),
-					live.SetBalance(addr, blc1.Bytes32()),
+					live.SetBalance(addr, blc1),
 				)
 				if err != nil {
 					t.Fatalf("failed to update live db: %v", err)
 				}
 				update.CreatedAccounts = append(update.CreatedAccounts, addr)
-				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1.Bytes32()})
+				update.Balances = append(update.Balances, common.BalanceUpdate{Account: addr, Balance: blc1})
 			}
 			hints, err = live.Apply(4, update)
 			if err != nil {
