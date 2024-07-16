@@ -24,6 +24,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/sha3"
 
@@ -384,8 +385,8 @@ func TestState_StateModificationsWithoutErrorHaveExpectedEffects(t *testing.T) {
 				t.Fatalf("cannot open state: %s", err)
 			}
 
-			balance := common.Balance{1}
-			if err := state.SetBalance(common.Address{1}, balance); err != nil {
+			balance := amount.New(1)
+			if err := state.SetBalance(common.Address{1}, balance.Bytes32()); err != nil {
 				t.Errorf("error to set balance: %s", err)
 			}
 			if exists, err := state.Exists(common.Address{1}); err != nil || !exists {
@@ -436,7 +437,7 @@ func TestState_StateModificationsWithoutErrorHaveExpectedEffects(t *testing.T) {
 				t.Errorf("account should not exist: %v err: %s", exists, err)
 			}
 
-			var emptyBalance common.Balance
+			emptyBalance := amount.New()
 			if got, err := state.GetBalance(common.Address{1}); err != nil || got != emptyBalance {
 				t.Errorf("wrong balance: %v != %v err: %s", got, emptyBalance, err)
 			}

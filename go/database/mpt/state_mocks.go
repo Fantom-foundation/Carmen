@@ -24,6 +24,7 @@ import (
 
 	backend "github.com/Fantom-foundation/Carmen/go/backend"
 	common "github.com/Fantom-foundation/Carmen/go/common"
+	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -405,10 +406,10 @@ func (mr *MockLiveStateMockRecorder) Flush() *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockLiveState) GetBalance(address common.Address) (common.Balance, error) {
+func (m *MockLiveState) GetBalance(address common.Address) (amount.Amount, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", address)
-	ret0, _ := ret[0].(common.Balance)
+	ret0, _ := ret[0].(amount.Amount)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
