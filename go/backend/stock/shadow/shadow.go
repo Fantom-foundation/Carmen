@@ -98,30 +98,37 @@ func (s *shadowStock[I, V]) Close() error {
 	)
 }
 
-func (s *shadowStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+func (s *shadowStock[I, V]) IsAvailable(checkpoint utils.Checkpoint) error {
 	return errors.Join(
-		s.primary.Check(commit),
-		s.secondary.Check(commit),
+		s.primary.IsAvailable(checkpoint),
+		s.secondary.IsAvailable(checkpoint),
 	)
 }
 
-func (s *shadowStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+func (s *shadowStock[I, V]) Prepare(checkpoint utils.Checkpoint) error {
 	return errors.Join(
-		s.primary.Prepare(commit),
-		s.secondary.Prepare(commit),
+		s.primary.Prepare(checkpoint),
+		s.secondary.Prepare(checkpoint),
 	)
 }
 
-func (s *shadowStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+func (s *shadowStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	return errors.Join(
-		s.primary.Commit(commit),
-		s.secondary.Commit(commit),
+		s.primary.Commit(checkpoint),
+		s.secondary.Commit(checkpoint),
 	)
 }
 
-func (s *shadowStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+func (s *shadowStock[I, V]) Rollback(checkpoint utils.Checkpoint) error {
 	return errors.Join(
-		s.primary.Rollback(commit),
-		s.secondary.Rollback(commit),
+		s.primary.Rollback(checkpoint),
+		s.secondary.Rollback(checkpoint),
+	)
+}
+
+func (s *shadowStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
+	return errors.Join(
+		s.primary.Restore(checkpoint),
+		s.secondary.Restore(checkpoint),
 	)
 }

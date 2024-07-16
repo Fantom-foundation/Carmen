@@ -11,66 +11,66 @@ import (
 
 func TestTwoPhaseCommit_CanHandleSuccessfulCommit(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	p1 := NewMockTwoPhaseCommitParticipant(ctrl)
-	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
+	p1 := NewMockCheckpointParticipant(ctrl)
+	p2 := NewMockCheckpointParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
-		p2.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
-		p1.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
-		p2.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
-		p1.EXPECT().Commit(TwoPhaseCommit(1)).Return(nil),
-		p2.EXPECT().Commit(TwoPhaseCommit(1)).Return(nil),
+		p1.EXPECT().IsAvailable(Checkpoint(0)).Return(nil),
+		p2.EXPECT().IsAvailable(Checkpoint(0)).Return(nil),
+		p1.EXPECT().Prepare(Checkpoint(1)).Return(nil),
+		p2.EXPECT().Prepare(Checkpoint(1)).Return(nil),
+		p1.EXPECT().Commit(Checkpoint(1)).Return(nil),
+		p2.EXPECT().Commit(Checkpoint(1)).Return(nil),
 	)
 
-	coordinator, err := NewTwoPhaseCommitCoordinator(t.TempDir(), p1, p2)
+	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 
-	if want, got := TwoPhaseCommit(0), coordinator.LastCommit(); want != got {
+	if want, got := Checkpoint(0), coordinator.GetLastCheckpoint(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 
-	commit, err := coordinator.RunCommit()
+	commit, err := coordinator.CreateCheckpoint()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if want, got := TwoPhaseCommit(1), commit; want != got {
+	if want, got := Checkpoint(1), commit; want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 }
 
 func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	p1 := NewMockTwoPhaseCommitParticipant(ctrl)
-	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
+	p1 := NewMockCheckpointParticipant(ctrl)
+	p2 := NewMockCheckpointParticipant(ctrl)
 
 	injectedError := fmt.Errorf("injected error")
 	gomock.InOrder(
-		p1.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
-		p2.EXPECT().Check(TwoPhaseCommit(0)).Return(nil),
-		p1.EXPECT().Prepare(TwoPhaseCommit(1)).Return(nil),
-		p2.EXPECT().Prepare(TwoPhaseCommit(1)).Return(injectedError),
-		p1.EXPECT().Rollback(TwoPhaseCommit(1)).Return(nil),
+		p1.EXPECT().IsAvailable(Checkpoint(0)).Return(nil),
+		p2.EXPECT().IsAvailable(Checkpoint(0)).Return(nil),
+		p1.EXPECT().Prepare(Checkpoint(1)).Return(nil),
+		p2.EXPECT().Prepare(Checkpoint(1)).Return(injectedError),
+		p1.EXPECT().Rollback(Checkpoint(1)).Return(nil),
 	)
 
-	coordinator, err := NewTwoPhaseCommitCoordinator(t.TempDir(), p1, p2)
+	coordinator, err := NewCheckpointCoordinator(t.TempDir(), p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 
-	if want, got := TwoPhaseCommit(0), coordinator.LastCommit(); want != got {
+	if want, got := Checkpoint(0), coordinator.GetLastCheckpoint(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 
-	_, err = coordinator.RunCommit()
+	_, err = coordinator.CreateCheckpoint()
 	if !errors.Is(err, injectedError) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if want, got := TwoPhaseCommit(0), coordinator.LastCommit(); want != got {
+	if want, got := Checkpoint(0), coordinator.GetLastCheckpoint(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 }
@@ -78,15 +78,15 @@ func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 func TestTwoPhaseCommit_CommitNumberIsPersisted(t *testing.T) {
 	dir := t.TempDir()
 
-	for commit := TwoPhaseCommit(0); commit < 10; commit++ {
-		coordinator, err := NewTwoPhaseCommitCoordinator(dir)
+	for commit := Checkpoint(0); commit < 10; commit++ {
+		coordinator, err := NewCheckpointCoordinator(dir)
 		if err != nil {
 			t.Fatalf("failed to create coordinator: %v", err)
 		}
-		if want, got := commit, coordinator.LastCommit(); want != got {
+		if want, got := commit, coordinator.GetLastCheckpoint(); want != got {
 			t.Errorf("unexpected last commit: want %d, got %d", want, got)
 		}
-		newCommit, err := coordinator.RunCommit()
+		newCommit, err := coordinator.CreateCheckpoint()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -99,26 +99,26 @@ func TestTwoPhaseCommit_CommitNumberIsPersisted(t *testing.T) {
 func TestTwoPhaseCommit_ParticipantsAreCheckedForLastCommitNumber(t *testing.T) {
 	dir := t.TempDir()
 
-	coordinator, err := NewTwoPhaseCommitCoordinator(dir)
+	coordinator, err := NewCheckpointCoordinator(dir)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		if _, err := coordinator.RunCommit(); err != nil {
+		if _, err := coordinator.CreateCheckpoint(); err != nil {
 			t.Fatalf("failed to run commit: %v", err)
 		}
 	}
 
 	ctrl := gomock.NewController(t)
-	p1 := NewMockTwoPhaseCommitParticipant(ctrl)
-	p2 := NewMockTwoPhaseCommitParticipant(ctrl)
+	p1 := NewMockCheckpointParticipant(ctrl)
+	p2 := NewMockCheckpointParticipant(ctrl)
 
 	gomock.InOrder(
-		p1.EXPECT().Check(TwoPhaseCommit(3)).Return(nil),
-		p2.EXPECT().Check(TwoPhaseCommit(3)).Return(nil),
+		p1.EXPECT().IsAvailable(Checkpoint(3)).Return(nil),
+		p2.EXPECT().IsAvailable(Checkpoint(3)).Return(nil),
 	)
 
-	_, err = NewTwoPhaseCommitCoordinator(dir, p1, p2)
+	_, err = NewCheckpointCoordinator(dir, p1, p2)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
@@ -128,10 +128,11 @@ type myData interface {
 	Get(int) int
 	Set(int) int
 
-	Check(TwoPhaseCommit) error    // < make sure the state has the given commit it could revert to if needed
-	Prepare(TwoPhaseCommit) error  // < prepare a commit
-	Commit(TwoPhaseCommit) error   // < fix a full state that can be restored
-	Rollback(TwoPhaseCommit) error // < undo a prepared commit
+	IsAvailable(Checkpoint) error // < make sure the state has the given commit it could revert to if needed
+	Prepare(Checkpoint) error     // < prepare a commit
+	Commit(Checkpoint) error      // < fix a full state that can be restored
+	Rollback(Checkpoint) error    // < undo a prepared commit
+	Restore(Checkpoint) error     // < restore a prepared commit
 
 	Flush() error // < write current state to disk; Problem: this is messing up the last commit
 	Close() error // < close the data structure
@@ -142,5 +143,5 @@ type myData interface {
 	//  - the prepared configuration (during a two-phase commit)
 }
 
-var _ TwoPhaseCommitParticipant = myData(nil)
+var _ CheckpointParticipant = myData(nil)
 var _ common.FlushAndCloser = myData(nil)

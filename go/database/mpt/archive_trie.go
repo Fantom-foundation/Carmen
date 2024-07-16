@@ -47,7 +47,7 @@ type ArchiveTrie struct {
 	archiveError error // a non-nil error will be stored here should it occur during any archive operation
 
 	// Check-point support for DB healing.
-	checkpointCoordinator utils.TwoPhaseCommitCoordinator
+	checkpointCoordinator utils.CheckpointCoordinator
 	checkpointMetadata    checkpointMetadata
 	directory             string // TODO: remove this field
 }
@@ -82,7 +82,7 @@ func OpenArchiveTrie(directory string, config MptConfig, cacheConfig NodeCacheCo
 	}
 
 	checkpointDir := filepath.Join(directory, "checkpoint")
-	coordinator, err := utils.NewTwoPhaseCommitCoordinator(
+	coordinator, err := utils.NewCheckpointCoordinator(
 		checkpointDir,
 		forest.accounts,
 		forest.branches,
@@ -387,7 +387,7 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 	}
 	// The creation of the checkpoint makes the current
 	// state recoverable in case of a crash.
-	_, err := a.checkpointCoordinator.RunCommit()
+	_, err := a.checkpointCoordinator.CreateCheckpoint()
 
 	// TODO: this update should be part of the checkpoint coordinator
 	if err == nil {
@@ -402,7 +402,14 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 }
 
 func (a *ArchiveTrie) RestoreCheckpoint() error {
-	panic("not implemented")
+	lastBlock, err := a.GetCheckpointBlock()
+	if err != nil {
+		return err
+	}
+	return errors.Join(
+		a.roots.truncate(lastBlock),
+		a.checkpointCoordinator.Restore(),
+	)
 }
 
 func (a *ArchiveTrie) getView(block uint64) (*LiveTrie, error) {
@@ -461,6 +468,13 @@ func (l *rootList) get(block uint64) Root {
 
 func (l *rootList) append(r Root) {
 	l.roots = append(l.roots, r)
+}
+
+func (l *rootList) truncate(block uint64) error {
+	length := block + 1
+	l.roots = l.roots[:length]
+	l.numRootsInFile = int(length)
+	return os.Truncate(l.filename, int64(length*uint64(NodeIdEncoder{}.GetEncodedSize())))
 }
 
 func loadRoots(filename string) (rootList, error) {
@@ -557,7 +571,7 @@ func storeRootsTo(writer io.Writer, roots []Root) error {
 // TODO: wrap checkpoint metadata into a type supporting the two-phase participation protocol.
 
 type checkpointMetadata struct {
-	Commit utils.TwoPhaseCommit
+	Commit utils.Checkpoint
 	Block  *uint64
 }
 

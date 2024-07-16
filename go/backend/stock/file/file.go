@@ -32,7 +32,7 @@ type fileStock[I stock.Index, V any] struct {
 	numValueSlots           I
 	numValuesInFile         int64
 	bufferPool              sync.Pool
-	lastCommit              utils.TwoPhaseCommit
+	lastCheckpoint          utils.Checkpoint
 	numCommittedValues      I
 	committedFreeListLength int
 }
@@ -73,7 +73,7 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 		return nil, err
 	}
 
-	var committed commitMetaData
+	var committed checkpointMetaData
 	commitMetaDataFile := filepath.Join(directory, "committed.json")
 	if exists(commitMetaDataFile) {
 		data, err := os.ReadFile(commitMetaDataFile)
@@ -99,7 +99,7 @@ func openVerifyStock[I stock.Index, V any](encoder stock.ValueEncoder[V], direct
 				raw: make([]byte, valueSize),
 			}
 		}},
-		lastCommit:              committed.Commit,
+		lastCheckpoint:          committed.Checkpoint,
 		numCommittedValues:      I(committed.NumCommittedValues),
 		committedFreeListLength: int(committed.NumFreeValues),
 	}, nil
@@ -381,42 +381,27 @@ func (s *fileStock[I, V]) Close() error {
 	)
 }
 
-func (s *fileStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
-
-	// If the requested commit is a pending commit, this pending
-	// commit needs to be completed.
-	pendingFile := filepath.Join(s.directory, "pending.json")
-	if s.lastCommit+1 == commit && exists(pendingFile) {
-		return s.Commit(commit)
-	}
-
-	// Delete potential invalid pending file.
-	if exists(pendingFile) {
-		if err := os.Remove(pendingFile); err != nil {
-			return err
-		}
-	}
-
+func (s *fileStock[I, V]) IsAvailable(checkpoint utils.Checkpoint) error {
 	// If the stock is at the requested commit, everything is fine.
-	if s.lastCommit == commit {
+	if s.lastCheckpoint == checkpoint {
 		return nil
 	}
 
 	// Otherwise, the stock is in an inconsistent state.
-	return fmt.Errorf("unable to guarantee availability of commit %d", commit)
+	return fmt.Errorf("unable to guarantee availability of checkpoint %d", checkpoint)
 }
 
-func (s *fileStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
-	if want, got := s.lastCommit+1, commit; want != got {
-		return fmt.Errorf("invalid next commit, expected %d, got %d", want, got)
+func (s *fileStock[I, V]) Prepare(checkpoint utils.Checkpoint) error {
+	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
+		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
 	}
 
 	if err := s.Flush(); err != nil {
 		return err
 	}
 
-	metadata, err := json.Marshal(commitMetaData{
-		Commit:             commit,
+	metadata, err := json.Marshal(checkpointMetaData{
+		Checkpoint:         checkpoint,
 		NumCommittedValues: uint64(s.numValueSlots),
 		NumFreeValues:      uint64(s.freelist.Size()),
 	})
@@ -425,6 +410,7 @@ func (s *fileStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
 	}
 	pendingFile := filepath.Join(s.directory, "pending.json")
 	s.numCommittedValues = s.numValueSlots
+	s.committedFreeListLength = s.freelist.Size()
 	if err := os.WriteFile(pendingFile, metadata, 0600); err != nil {
 		return err
 	}
@@ -432,9 +418,9 @@ func (s *fileStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
 	return nil
 }
 
-func (s *fileStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
-	if want, got := s.lastCommit+1, commit; want != got {
-		return fmt.Errorf("invalid next commit, expected %d, got %d", want, got)
+func (s *fileStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
+	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
+		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
 	}
 	pendingFile := filepath.Join(s.directory, "pending.json")
 	if !exists(pendingFile) {
@@ -448,43 +434,65 @@ func (s *fileStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
 	if err != nil {
 		return err
 	}
-	var committed commitMetaData
+	var committed checkpointMetaData
 	if err := json.Unmarshal(data, &committed); err != nil {
 		return err
 	}
 
-	s.lastCommit = committed.Commit
+	s.lastCheckpoint = committed.Checkpoint
 	s.numCommittedValues = I(committed.NumCommittedValues)
+	s.committedFreeListLength = int(committed.NumFreeValues)
 	return nil
 }
 
-func (s *fileStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
-	if want, got := s.lastCommit+1, commit; want != got {
-		return fmt.Errorf("invalid next commit, expected %d, got %d", want, got)
+func (s *fileStock[I, V]) Rollback(checkpoint utils.Checkpoint) error {
+	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
+		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
 	}
 
-	// Revert limit of committed values to previous commit.
-	committedFile := filepath.Join(s.directory, "committed.json")
-	if !exists(committedFile) {
-		s.numCommittedValues = 0
-	} else {
-		data, err := os.ReadFile(committedFile)
-		if err != nil {
-			return err
-		}
-		var meta commitMetaData
-		if err := json.Unmarshal(data, &meta); err != nil {
-			return err
-		}
-		if meta.Commit != commit {
-			return fmt.Errorf("inconsistent data in committed metadata, expected commit %d, got %d", commit, meta.Commit)
-		}
-		s.numCommittedValues = I(meta.NumCommittedValues)
-	}
-
-	// Delete pending commit file.
+	// Delete pending checkpoint file.
 	pendingFile := filepath.Join(s.directory, "pending.json")
 	return os.Remove(pendingFile)
+}
+
+func (s *fileStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
+	if checkpoint != s.lastCheckpoint {
+		return fmt.Errorf("checkpoint %d is not the last available checkpoint, got %d", checkpoint, s.lastCheckpoint)
+	}
+
+	// Revert limit of committed values to previous checkpoint.
+	committedFile := filepath.Join(s.directory, "committed.json")
+	if !exists(committedFile) {
+		if checkpoint != 0 {
+			return fmt.Errorf("failed to revert to checkpoint %d, missing committed file %v", checkpoint, committedFile)
+		}
+		s.numCommittedValues = 0
+		s.numValueSlots = 0
+		return s.freelist.Clear()
+	}
+
+	data, err := os.ReadFile(committedFile)
+	if err != nil {
+		return err
+	}
+	var meta checkpointMetaData
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return err
+	}
+	if meta.Checkpoint != checkpoint {
+		return fmt.Errorf("inconsistent data in checkpoint metadata, expected checkpoint %d, got %d", checkpoint, meta.Checkpoint)
+	}
+	s.numValueSlots = I(meta.NumCommittedValues)
+	s.numCommittedValues = s.numValueSlots
+	s.committedFreeListLength = int(meta.NumFreeValues)
+
+	for s.freelist.Size() > s.committedFreeListLength {
+		if _, err := s.freelist.Pop(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 const dataFormatVersion = 0
@@ -518,8 +526,8 @@ func isDirectory(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-type commitMetaData struct {
-	Commit             utils.TwoPhaseCommit
+type checkpointMetaData struct {
+	Checkpoint         utils.Checkpoint
 	NumCommittedValues uint64
 	NumFreeValues      uint64
 }

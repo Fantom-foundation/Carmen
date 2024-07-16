@@ -40,20 +40,6 @@ func (m *MockStock[I, V]) EXPECT() *MockStockMockRecorder[I, V] {
 	return m.recorder
 }
 
-// Check mocks base method.
-func (m *MockStock[I, V]) Check(arg0 utils.TwoPhaseCommit) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Check indicates an expected call of Check.
-func (mr *MockStockMockRecorder[I, V]) Check(arg0 any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockStock[I, V])(nil).Check), arg0)
-}
-
 // Close mocks base method.
 func (m *MockStock[I, V]) Close() error {
 	m.ctrl.T.Helper()
@@ -69,7 +55,7 @@ func (mr *MockStockMockRecorder[I, V]) Close() *gomock.Call {
 }
 
 // Commit mocks base method.
-func (m *MockStock[I, V]) Commit(arg0 utils.TwoPhaseCommit) error {
+func (m *MockStock[I, V]) Commit(arg0 utils.Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Commit", arg0)
 	ret0, _ := ret[0].(error)
@@ -154,6 +140,20 @@ func (mr *MockStockMockRecorder[I, V]) GetMemoryFootprint() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*MockStock[I, V])(nil).GetMemoryFootprint))
 }
 
+// IsAvailable mocks base method.
+func (m *MockStock[I, V]) IsAvailable(arg0 utils.Checkpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsAvailable", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IsAvailable indicates an expected call of IsAvailable.
+func (mr *MockStockMockRecorder[I, V]) IsAvailable(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAvailable", reflect.TypeOf((*MockStock[I, V])(nil).IsAvailable), arg0)
+}
+
 // New mocks base method.
 func (m *MockStock[I, V]) New() (I, error) {
 	m.ctrl.T.Helper()
@@ -170,7 +170,7 @@ func (mr *MockStockMockRecorder[I, V]) New() *gomock.Call {
 }
 
 // Prepare mocks base method.
-func (m *MockStock[I, V]) Prepare(arg0 utils.TwoPhaseCommit) error {
+func (m *MockStock[I, V]) Prepare(arg0 utils.Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Prepare", arg0)
 	ret0, _ := ret[0].(error)
@@ -183,8 +183,22 @@ func (mr *MockStockMockRecorder[I, V]) Prepare(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Prepare", reflect.TypeOf((*MockStock[I, V])(nil).Prepare), arg0)
 }
 
+// Restore mocks base method.
+func (m *MockStock[I, V]) Restore(arg0 utils.Checkpoint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Restore", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Restore indicates an expected call of Restore.
+func (mr *MockStockMockRecorder[I, V]) Restore(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockStock[I, V])(nil).Restore), arg0)
+}
+
 // Rollback mocks base method.
-func (m *MockStock[I, V]) Rollback(arg0 utils.TwoPhaseCommit) error {
+func (m *MockStock[I, V]) Rollback(arg0 utils.Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Rollback", arg0)
 	ret0, _ := ret[0].(error)

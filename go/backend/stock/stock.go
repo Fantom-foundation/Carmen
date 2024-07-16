@@ -69,10 +69,10 @@ type Stock[I Index, V any] interface {
 	// Also, stocks need to be flush and closable.
 	common.FlushAndCloser
 
-	// Also, stocks are required to support two-phase commits. This is necessary
+	// Also, stocks are required to support checkpoints. This is necessary
 	// to ensure that a Stock can be in a consistent state after a crash that can
 	// be recovered.
-	utils.TwoPhaseCommitParticipant
+	utils.CheckpointParticipant
 }
 
 // Index defines the type constraints on Stock index types.

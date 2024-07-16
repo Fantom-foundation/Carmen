@@ -30,7 +30,7 @@ type inMemoryStock[I stock.Index, V any] struct {
 	freeList           []I
 	directory          string
 	encoder            stock.ValueEncoder[V]
-	lastCommit         utils.TwoPhaseCommit
+	lastCheckpoint     utils.Checkpoint
 	numCommittedValues I
 }
 
@@ -134,7 +134,7 @@ func OpenStock[I stock.Index, V any](encoder stock.ValueEncoder[V], directory st
 	}
 
 	// Load last commit.
-	res.lastCommit = meta.LastCommit
+	res.lastCheckpoint = meta.LastCheckpoint
 	res.numCommittedValues = I(meta.NumCommittedValues)
 
 	return res, nil
@@ -223,7 +223,7 @@ func (s *inMemoryStock[I, V]) writeTo(dir string) error {
 		ValueTypeSize:      s.encoder.GetEncodedSize(),
 		ValueListLength:    len(s.values),
 		FreeListLength:     len(s.freeList),
-		LastCommit:         s.lastCommit,
+		LastCheckpoint:     s.lastCheckpoint,
 		NumCommittedValues: int(s.numCommittedValues),
 	})
 	if err != nil {
@@ -279,15 +279,15 @@ func (s *inMemoryStock[I, V]) Close() error {
 	return s.Flush()
 }
 
-func (s *inMemoryStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+func (s *inMemoryStock[I, V]) IsAvailable(commit utils.Checkpoint) error {
 	// If the requested commit is a pending commit, this pending
 	// commit needs to be completed.
-	if s.lastCommit+1 == commit {
+	if s.lastCheckpoint+1 == commit {
 		return s.Commit(commit)
 	}
 
 	// If the stock is at the requested commit, everything is fine.
-	if s.lastCommit == commit {
+	if s.lastCheckpoint == commit {
 		return nil
 	}
 
@@ -295,26 +295,30 @@ func (s *inMemoryStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
 	return fmt.Errorf("unable to guarantee availability of commit %d", commit)
 }
 
-func (s *inMemoryStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+func (s *inMemoryStock[I, V]) Prepare(commit utils.Checkpoint) error {
 	return s.writeTo(filepath.Join(s.directory, "prepare"))
 }
 
-func (s *inMemoryStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+func (s *inMemoryStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	err := os.Rename(filepath.Join(s.directory, "prepare"), filepath.Join(s.directory, "commit"))
 	if err != nil {
 		return err
 	}
-	s.lastCommit = commit
+	s.lastCheckpoint = checkpoint
 	s.numCommittedValues = I(len(s.values)) // < this might be wrong if there have been updates since the prepare
 	return err
 }
 
-func (s *inMemoryStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+func (s *inMemoryStock[I, V]) Rollback(commit utils.Checkpoint) error {
 	return errors.Join(
 		os.RemoveAll(filepath.Join(s.directory, "prepare")),
 		s.Close(),
 		s.reload(),
 	)
+}
+
+func (s *inMemoryStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
+	panic("not implemented")
 }
 
 func (s *inMemoryStock[I, V]) reload() error {
@@ -335,6 +339,6 @@ type metadata struct {
 	ValueTypeSize      int
 	ValueListLength    int
 	FreeListLength     int
-	LastCommit         utils.TwoPhaseCommit
+	LastCheckpoint     utils.Checkpoint
 	NumCommittedValues int
 }

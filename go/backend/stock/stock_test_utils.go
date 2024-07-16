@@ -413,12 +413,12 @@ func testCanParticipateInTwoPhaseCommit(t *testing.T, factory NamedStockFactory)
 	if err != nil {
 		t.Fatalf("failed to open stock: %v", err)
 	}
-	coordinator, err := utils.NewTwoPhaseCommitCoordinator(commitDir, stock)
+	coordinator, err := utils.NewCheckpointCoordinator(commitDir, stock)
 	if err != nil {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 
-	if _, err := coordinator.RunCommit(); err != nil {
+	if _, err := coordinator.CreateCheckpoint(); err != nil {
 		t.Fatalf("failed to commit: %v", err)
 	}
 
@@ -441,15 +441,15 @@ func testCanBeCommittedAndSealed(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to set value in stock: %v", err)
 	}
 
-	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Prepare(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to prepare commit: %v", err)
 	}
 
-	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Commit(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to rollback commit: %v", err)
 	}
 
-	if err := stock.Check(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.IsAvailable(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -472,15 +472,15 @@ func testCanBeRolledBackInTwoPhaseCommit(t *testing.T, factory NamedStockFactory
 		t.Fatalf("failed to set value in stock: %v", err)
 	}
 
-	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Prepare(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to prepare commit: %v", err)
 	}
 
-	if err := stock.Rollback(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Rollback(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to rollback commit: %v", err)
 	}
 
-	if err := stock.Check(utils.TwoPhaseCommit(0)); err != nil {
+	if err := stock.IsAvailable(utils.Checkpoint(0)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -496,14 +496,14 @@ func testCommitStateIsPersisted(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.Check(utils.TwoPhaseCommit(0)); err != nil {
+	if err := stock.IsAvailable(utils.Checkpoint(0)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
-	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Prepare(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to prepare commit: %v", err)
 	}
-	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Commit(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to commit: %v", err)
 	}
 	if err := stock.Close(); err != nil {
@@ -515,7 +515,7 @@ func testCommitStateIsPersisted(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.Check(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.IsAvailable(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 }
@@ -535,14 +535,14 @@ func testNumberOfCommitValuesIsPersisted(t *testing.T, factory NamedStockFactory
 		t.Fatalf("failed to set value in stock: %v", err)
 	}
 
-	if err := stock.Check(utils.TwoPhaseCommit(0)); err != nil {
+	if err := stock.IsAvailable(utils.Checkpoint(0)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
-	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Prepare(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to prepare commit: %v", err)
 	}
-	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Commit(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to commit: %v", err)
 	}
 	if err := stock.Close(); err != nil {
@@ -554,7 +554,7 @@ func testNumberOfCommitValuesIsPersisted(t *testing.T, factory NamedStockFactory
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.Check(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.IsAvailable(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -565,15 +565,15 @@ func testNumberOfCommitValuesIsPersisted(t *testing.T, factory NamedStockFactory
 
 func testCheckCanRecoverFromCrashAfterPrepare(t *testing.T, factory NamedStockFactory) {
 	tests := map[string]struct {
-		recoveryCommit utils.TwoPhaseCommit
+		recoveryCommit utils.Checkpoint
 		shouldBeSealed bool
 	}{
 		"crash-before-commit": {
-			recoveryCommit: utils.TwoPhaseCommit(0),
+			recoveryCommit: utils.Checkpoint(0),
 			shouldBeSealed: false,
 		},
 		"crash-after-commit": {
-			recoveryCommit: utils.TwoPhaseCommit(1),
+			recoveryCommit: utils.Checkpoint(1),
 			shouldBeSealed: true,
 		},
 	}
@@ -594,7 +594,7 @@ func testCheckCanRecoverFromCrashAfterPrepare(t *testing.T, factory NamedStockFa
 				t.Fatalf("failed to set value in stock: %v", err)
 			}
 
-			if err := first.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+			if err := first.Prepare(utils.Checkpoint(1)); err != nil {
 				t.Fatalf("failed to prepare commit: %v", err)
 			}
 
@@ -609,7 +609,7 @@ func testCheckCanRecoverFromCrashAfterPrepare(t *testing.T, factory NamedStockFa
 				t.Fatalf("failed to open stock: %v", err)
 			}
 
-			if err := second.Check(test.recoveryCommit); err != nil {
+			if err := second.IsAvailable(test.recoveryCommit); err != nil {
 				t.Fatalf("failed to check commit: %v", err)
 			}
 

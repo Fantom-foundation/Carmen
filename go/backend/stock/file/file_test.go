@@ -560,7 +560,7 @@ func TestFile_PrepareClearsFreeList(t *testing.T) {
 		t.Errorf("unexpected free list size: want %d, got %d", want, got)
 	}
 
-	if err := stock.Prepare(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Prepare(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to prepare commit: %v", err)
 	}
 
@@ -570,7 +570,7 @@ func TestFile_PrepareClearsFreeList(t *testing.T) {
 		t.Errorf("unexpected free list size: want %d, got %d", want, got)
 	}
 
-	if err := stock.Commit(utils.TwoPhaseCommit(1)); err != nil {
+	if err := stock.Commit(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to commit: %v", err)
 	}
 
@@ -648,10 +648,10 @@ func BenchmarkFileStock_Commit(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := stock.Prepare(utils.TwoPhaseCommit(i + 1)); err != nil {
+		if err := stock.Prepare(utils.Checkpoint(i + 1)); err != nil {
 			b.Fatalf("failed to prepare commit: %v", err)
 		}
-		if err := stock.Commit(utils.TwoPhaseCommit(i + 1)); err != nil {
+		if err := stock.Commit(utils.Checkpoint(i + 1)); err != nil {
 			b.Fatalf("failed to commit: %v", err)
 		}
 	}

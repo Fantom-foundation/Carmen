@@ -80,26 +80,32 @@ func (s *syncedStock[I, V]) Close() error {
 	return s.nested.Close()
 }
 
-func (s *syncedStock[I, V]) Check(commit utils.TwoPhaseCommit) error {
+func (s *syncedStock[I, V]) IsAvailable(checkpoint utils.Checkpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.nested.Check(commit)
+	return s.nested.IsAvailable(checkpoint)
 }
 
-func (s *syncedStock[I, V]) Prepare(commit utils.TwoPhaseCommit) error {
+func (s *syncedStock[I, V]) Prepare(checkpoint utils.Checkpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.nested.Prepare(commit)
+	return s.nested.Prepare(checkpoint)
 }
 
-func (s *syncedStock[I, V]) Commit(commit utils.TwoPhaseCommit) error {
+func (s *syncedStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.nested.Commit(commit)
+	return s.nested.Commit(checkpoint)
 }
 
-func (s *syncedStock[I, V]) Rollback(commit utils.TwoPhaseCommit) error {
+func (s *syncedStock[I, V]) Rollback(checkpoint utils.Checkpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.nested.Rollback(commit)
+	return s.nested.Rollback(checkpoint)
+}
+
+func (s *syncedStock[I, V]) Restore(checkpoint utils.Checkpoint) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.nested.Restore(checkpoint)
 }

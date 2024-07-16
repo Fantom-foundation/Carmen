@@ -11,31 +11,33 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-//go:generate mockgen -source two_phase_commit.go -destination two_phase_commit_mocks.go -package utils
+//go:generate mockgen -source checkpoint.go -destination checkpoint_mocks.go -package utils
 
-type TwoPhaseCommit uint32
+type Checkpoint uint32
 
-type TwoPhaseCommitCoordinator interface {
-	RunCommit() (TwoPhaseCommit, error)
-	LastCommit() TwoPhaseCommit
+type CheckpointCoordinator interface {
+	CreateCheckpoint() (Checkpoint, error)
+	GetLastCheckpoint() Checkpoint
+	Restore() error
 }
 
-type TwoPhaseCommitParticipant interface {
-	Check(TwoPhaseCommit) error
-	Prepare(TwoPhaseCommit) error
-	Commit(TwoPhaseCommit) error
-	Rollback(TwoPhaseCommit) error
+type CheckpointParticipant interface {
+	IsAvailable(Checkpoint) error
+	Prepare(Checkpoint) error
+	Commit(Checkpoint) error
+	Rollback(Checkpoint) error
+	Restore(Checkpoint) error
 }
 
-type twoPhaseCommitCoordinator struct {
-	path         string
-	participants []TwoPhaseCommitParticipant
-	lastCommit   TwoPhaseCommit
+type checkpointCoordinator struct {
+	path           string
+	participants   []CheckpointParticipant
+	lastCheckpoint Checkpoint
 }
 
-var _ TwoPhaseCommitCoordinator = &twoPhaseCommitCoordinator{}
+var _ CheckpointCoordinator = &checkpointCoordinator{}
 
-func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitParticipant) (*twoPhaseCommitCoordinator, error) {
+func NewCheckpointCoordinator(path string, participants ...CheckpointParticipant) (*checkpointCoordinator, error) {
 
 	// TODO: make sure path is a write-able directory
 	if err := os.MkdirAll(path, 0700); err != nil {
@@ -47,7 +49,7 @@ func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitPar
 		return nil, err
 	}
 
-	var lastCommit TwoPhaseCommit
+	var lastCheckpoint Checkpoint
 	if err == nil {
 		content := make([]byte, 4)
 		if _, err := io.ReadFull(file, content); err != nil {
@@ -56,12 +58,12 @@ func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitPar
 		if err := file.Close(); err != nil {
 			return nil, err
 		}
-		lastCommit = TwoPhaseCommit(binary.BigEndian.Uint32(content))
+		lastCheckpoint = Checkpoint(binary.BigEndian.Uint32(content))
 	}
 
 	errs := []error{}
 	for _, p := range participants {
-		if err := p.Check(lastCommit); err != nil {
+		if err := p.IsAvailable(lastCheckpoint); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -69,20 +71,20 @@ func NewTwoPhaseCommitCoordinator(path string, participants ...TwoPhaseCommitPar
 		return nil, errors.Join(errs...)
 	}
 
-	return &twoPhaseCommitCoordinator{
-		path:         path,
-		participants: slices.Clone(participants),
-		lastCommit:   lastCommit,
+	return &checkpointCoordinator{
+		path:           path,
+		participants:   slices.Clone(participants),
+		lastCheckpoint: lastCheckpoint,
 	}, nil
 }
 
-func (c *twoPhaseCommitCoordinator) RunCommit() (TwoPhaseCommit, error) {
+func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
 	errs := []error{}
-	commit := c.lastCommit + 1
+	commit := c.lastCheckpoint + 1
 
 	// Signal all participants to prepare. If any participant fails, all
-	// previous participants are rolled back to retain at their current
-	// state.
+	// previous participants are rolled back to retain their current
+	// checkpoint.
 	for i, p := range c.participants {
 		if err := p.Prepare(commit); err != nil {
 			errs = append(errs, err)
@@ -130,10 +132,20 @@ func (c *twoPhaseCommitCoordinator) RunCommit() (TwoPhaseCommit, error) {
 		}
 	}
 
-	c.lastCommit = commit
+	c.lastCheckpoint = commit
 	return commit, errors.Join(errs...)
 }
 
-func (c *twoPhaseCommitCoordinator) LastCommit() TwoPhaseCommit {
-	return c.lastCommit
+func (c *checkpointCoordinator) GetLastCheckpoint() Checkpoint {
+	return c.lastCheckpoint
+}
+
+func (c *checkpointCoordinator) Restore() error {
+	var errs []error
+	for _, p := range c.participants {
+		if err := p.Restore(c.lastCheckpoint); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
