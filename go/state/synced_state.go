@@ -16,6 +16,7 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 )
 
 // syncedState wraps a state implementation with a lock restricting the
@@ -55,7 +56,7 @@ func (s *syncedState) Exists(address common.Address) (bool, error) {
 	return s.state.Exists(address)
 }
 
-func (s *syncedState) GetBalance(address common.Address) (common.Balance, error) {
+func (s *syncedState) GetBalance(address common.Address) (amount.Amount, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state.GetBalance(address)

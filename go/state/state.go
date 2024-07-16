@@ -15,6 +15,7 @@ package state
 import (
 	"github.com/Fantom-foundation/Carmen/go/backend"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/witness"
 )
 
@@ -28,7 +29,7 @@ type State interface {
 	Exists(address common.Address) (bool, error)
 
 	// GetBalance provides balance for the input account address.
-	GetBalance(address common.Address) (common.Balance, error)
+	GetBalance(address common.Address) (amount.Amount, error)
 
 	// GetNonce returns nonce of the account for the  input account address.
 	GetNonce(address common.Address) (common.Nonce, error)
