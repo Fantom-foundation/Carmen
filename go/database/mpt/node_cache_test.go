@@ -425,3 +425,78 @@ func TestNodeCache_GetAndSetThreadSafety(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestNodeCache_GetAndSetIsThreadSafe(t *testing.T) {
+	nodes := []*shared.Shared[Node]{}
+	for i := 0; i < 256; i++ {
+		nodes = append(nodes, shared.MakeShared[Node](&ValueNode{pathLength: byte(i)}))
+	}
+
+	for i := 0; i < 100; i++ {
+		t.Run(fmt.Sprintf("iteration-%d", i), func(t *testing.T) {
+			t.Parallel()
+			cache := newNodeCache(128)
+
+			// This test starts 10 goroutines that check the cache consistency
+			// while the main thread is inserting new elements.
+			ready := sync.WaitGroup{}
+			ready.Add(10)
+			done := sync.WaitGroup{}
+			done.Add(10)
+			stop := make(chan struct{})
+			for i := 0; i < 10; i++ {
+				go func() {
+					ready.Done()
+					defer done.Done()
+					for {
+						select {
+						case <-stop:
+							return
+						default:
+							// At any time, the cache should be consistent.
+							cache.ForEach(func(id NodeId, node *shared.Shared[Node]) {
+								if id == EmptyId() {
+									t.Errorf("unexpected empty ID in cache")
+								}
+								if node == nil {
+									t.Errorf("nil node in cache for ID %v", id)
+								} else {
+									handle := node.GetReadHandle()
+									got := handle.Get().(*ValueNode).pathLength
+									handle.Release()
+									if want, got := byte(id.Index()), got; want != got {
+										t.Errorf("for-each produced inconsistent key/value pair, wanted %v, got %v", want, got)
+									}
+								}
+							})
+						}
+					}
+				}()
+			}
+
+			ready.Wait()
+			for i, node := range nodes {
+				ref := NewNodeReference(ValueId(uint64(i)))
+				cache.GetOrSet(&ref, node)
+			}
+
+			close(stop)
+			done.Wait()
+		})
+	}
+}
+
+func TestTagPair_ProducesValidPairOfTags(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		transition, stable := getUpdateTagPair(uint64(i))
+		if !isTransitionTag(transition) {
+			t.Errorf("invalid transition tag %x", transition)
+		}
+		if !isStableTag(stable) {
+			t.Errorf("invalid stable tag %x", stable)
+		}
+		if a, b := transition>>1, stable>>1; a != b || a != uint64(i) {
+			t.Errorf("invalid tag pair, got %x and %x for id %x", a, b, i)
+		}
+	}
+}

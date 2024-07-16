@@ -27,7 +27,7 @@ import (
 
 func TestS5RootHash_EmptyTrie(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestS5RootHash_EmptyTrie(t *testing.T) {
 
 func TestS5RootHash_SingleAccount(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestS5RootHash_SingleAccount(t *testing.T) {
 
 func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestS5RootHash_SingleAccountWithSingleValue(t *testing.T) {
 
 func TestS5RootHash_TwoAccounts(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestS5RootHash_TwoAccounts(t *testing.T) {
 
 func TestS5RootHash_TwoAccountsWithValues(t *testing.T) {
 	t.Parallel()
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithEvenLength(t *testing.T) {
 		t.Fatalf("invalid setup, addresses do not have common prefix")
 	}
 
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestS5RootHash_TwoAccountsWithExtensionNodeWithOddLength(t *testing.T) {
 		t.Fatalf("invalid setup, addresses do not have single prefix bit prefix")
 	}
 
-	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	state, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open empty state: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestS5RootHash_AddressAndKeys(t *testing.T) {
 
 	const N = 100
 
-	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestS5RootHash_Values(t *testing.T) {
 		return res
 	}
 
-	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, 1024)
+	trie, err := OpenGoMemoryState(t.TempDir(), S5LiveConfig, NodeCacheConfig{Capacity: 1024})
 	if err != nil {
 		t.Fatalf("failed to open trie: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestHashing_S5EmbeddedValuesAreHandledCorrectly(t *testing.T) {
 		// To prepare the stage for the issue, a branch node with two embedded
 		// values is created.
 		directory := t.TempDir()
-		state, err := OpenGoMemoryState(directory, config, 1024)
+		state, err := OpenGoMemoryState(directory, config, NodeCacheConfig{Capacity: 1024})
 		if err != nil {
 			t.Fatalf("failed to open trie: %v", err)
 		}
@@ -376,7 +376,7 @@ func TestHashing_S5EmbeddedValuesAreHandledCorrectly(t *testing.T) {
 		// The error causing issue #769 is caused by loading nodes from disk not
 		// including embedded information and not correctly recomputing those when
 		// computing hashes.
-		state, err = OpenGoMemoryState(directory, config, 1024)
+		state, err = OpenGoMemoryState(directory, config, NodeCacheConfig{Capacity: 1024})
 		if err != nil {
 			t.Fatalf("failed to open trie: %v", err)
 		}

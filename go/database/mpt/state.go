@@ -66,6 +66,9 @@ type Database interface {
 	// ClearStorage removes all storage slots for the input address and the root.
 	ClearStorage(rootRef *NodeReference, addr common.Address) (NodeReference, error)
 
+	// HasEmptyStorage returns true if account has empty storage.
+	HasEmptyStorage(rootRef *NodeReference, addr common.Address) (bool, error)
+
 	// Freeze seals current trie, preventing further updates to it.
 	Freeze(ref *NodeReference) error
 
@@ -144,14 +147,6 @@ type MptState struct {
 	hasher    hash.Hash
 }
 
-// The capacity of an MPT's node cache must be at least as large as the maximum
-// number of nodes modified in a block. Evaluations show that most blocks
-// modify less than 2000 nodes. However, one block, presumably the one handling
-// the opera fork at ~4.5M, modifies 434.589 nodes. Thus, the cache size of a
-// MPT processing Fantom's history should be at least ~500.000 nodes.
-const DefaultMptStateCapacity = 10_000_000
-const MinMptStateCapacity = 2_000
-
 var emptyCodeHash = common.GetHash(sha3.NewLegacyKeccak256(), []byte{})
 
 func newMptState(directory string, lock common.LockFile, trie *LiveTrie) (*MptState, error) {
@@ -194,24 +189,24 @@ func tryMarkDirty(directory string) error {
 
 // OpenGoMemoryState loads state information from the given directory and
 // creates a Trie entirely retained in memory.
-func OpenGoMemoryState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+func OpenGoMemoryState(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*MptState, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
-	trie, err := OpenInMemoryLiveTrie(directory, config, cacheCapacity)
+	trie, err := OpenInMemoryLiveTrie(directory, config, cacheConfig)
 	if err != nil {
 		return nil, err
 	}
 	return newMptState(directory, lock, trie)
 }
 
-func OpenGoFileState(directory string, config MptConfig, cacheCapacity int) (*MptState, error) {
+func OpenGoFileState(directory string, config MptConfig, cacheConfig NodeCacheConfig) (*MptState, error) {
 	lock, err := openStateDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
-	trie, err := OpenFileLiveTrie(directory, config, cacheCapacity)
+	trie, err := OpenFileLiveTrie(directory, config, cacheConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -299,6 +294,9 @@ func (s *MptState) SetStorage(address common.Address, key common.Key, value comm
 	return s.trie.SetValue(address, key, value)
 }
 
+func (s *MptState) HasEmptyStorage(address common.Address) (bool, error) {
+	return s.trie.HasEmptyStorage(address)
+}
 func (s *MptState) GetCode(address common.Address) (value []byte, err error) {
 	info, exists, err := s.trie.GetAccountInfo(address)
 	if err != nil {

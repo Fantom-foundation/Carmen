@@ -11,6 +11,7 @@
 package state
 
 import (
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"sync"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -161,4 +162,10 @@ func (s *syncedState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVeri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state.GetSnapshotVerifier(metadata)
+}
+
+func (s *syncedState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state.CreateWitnessProof(address, keys...)
 }
