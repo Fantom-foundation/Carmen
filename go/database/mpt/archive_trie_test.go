@@ -1767,6 +1767,25 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 				archive.head.(*MptState).lock.Release(),
 			)
 		},
+		"extra_blocks_with_flush": func(archive *ArchiveTrie) error {
+			// Add some extra blocks and flush the archive.
+			for i := 92; i < 98; i++ {
+				err := archive.Add(uint64(i), common.Update{
+					CreatedAccounts: []common.Address{{byte(i)}},
+					Nonces: []common.NonceUpdate{
+						{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
+					},
+				}, nil)
+				if err != nil {
+					return err
+				}
+			}
+			return errors.Join(
+				archive.Flush(),
+				markClean(archive.directory),
+				archive.head.(*MptState).lock.Release(),
+			)
+		},
 	}
 
 	for name, test := range tests {
@@ -1780,7 +1799,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 					t.Fatalf("cannot open archive: %v", err)
 				}
 
-				for i := 0; i < 100; i++ {
+				for i := 0; i < 92; i++ {
 					err := archive.Add(uint64(i), common.Update{
 						CreatedAccounts: []common.Address{{byte(i)}},
 						Nonces: []common.NonceUpdate{
