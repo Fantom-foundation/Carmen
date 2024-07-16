@@ -96,6 +96,15 @@ func TestState_ArchiveState_FailingOperation_InvalidatesArchive(t *testing.T) {
 				return err
 			},
 		},
+		"witnessProof": {
+			func(archive *archive.MockArchive, injectedErr error) {
+				archive.EXPECT().CreateWitnessProof(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, injectedErr)
+			},
+			func(stateArchive state.State) error {
+				_, err := stateArchive.CreateWitnessProof(common.Address{}, common.Key{})
+				return err
+			},
+		},
 	}
 
 	testNames := make([]string, 0, len(tests))

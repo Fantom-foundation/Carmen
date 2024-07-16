@@ -46,10 +46,10 @@ var fileAndMemVariants = []variant{
 }
 
 var forestConfigs = map[string]ForestConfig{
-	"mutable_1k":     {Mode: Mutable, CacheCapacity: 1024},
-	"mutable_128k":   {Mode: Mutable, CacheCapacity: 128 * 1024},
-	"immutable_1k":   {Mode: Immutable, CacheCapacity: 1024},
-	"immutable_128k": {Mode: Immutable, CacheCapacity: 128 * 1024},
+	"mutable_1k":     {Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}},
+	"mutable_128k":   {Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 128 * 1024}},
+	"immutable_1k":   {Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}},
+	"immutable_128k": {Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 128 * 1024}},
 }
 
 func TestForest_Cannot_Open_Corrupted_Stock_Meta(t *testing.T) {
@@ -67,7 +67,7 @@ func TestForest_Cannot_Open_Corrupted_Stock_Meta(t *testing.T) {
 						t.Fatalf("cannot prepare for test: %s", err)
 					}
 
-					if _, err := variant.factory(rootDir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+					if _, err := variant.factory(rootDir, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}); err == nil {
 						t.Errorf("opening forest should fail")
 					}
 				})
@@ -85,7 +85,7 @@ func TestForest_Cannot_Open_Corrupted_Forest_Meta(t *testing.T) {
 					t.Fatalf("cannot prepare for test: %s", err)
 				}
 
-				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}); err == nil {
 					t.Errorf("opening forest should fail")
 				}
 			})
@@ -103,7 +103,7 @@ func TestForest_Cannot_Open_Cannot_Parse_Meta(t *testing.T) {
 					t.Fatalf("cannot prepare for test: %s", err)
 				}
 
-				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024}); err == nil {
+				if _, err := variant.factory(dir, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}}); err == nil {
 					t.Errorf("opening forest should fail")
 				}
 			})
@@ -120,10 +120,10 @@ func TestForest_Cannot_Open_Meta_DoesNot_Match(t *testing.T) {
 				t.Fatalf("cannot prepare for test: %s", err)
 			}
 
-			if _, err := variant.factory(dir, S5LiveConfig, ForestConfig{Mode: Mutable, CacheCapacity: 0}); err == nil {
+			if _, err := variant.factory(dir, S5LiveConfig, ForestConfig{Mode: Mutable}); err == nil {
 				t.Errorf("opening forest should fail")
 			}
-			if _, err := variant.factory(dir, S4LiveConfig, ForestConfig{Mode: Immutable, CacheCapacity: 0}); err == nil {
+			if _, err := variant.factory(dir, S4LiveConfig, ForestConfig{Mode: Immutable}); err == nil {
 				t.Errorf("opening forest should fail")
 			}
 		})
@@ -315,7 +315,7 @@ func TestForest_Freeze_Fails(t *testing.T) {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
 				directory := t.TempDir()
 
-				forest, err := variant.factory(directory, config, ForestConfig{Mode: Immutable, CacheCapacity: 1024})
+				forest, err := variant.factory(directory, config, ForestConfig{Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -451,7 +451,7 @@ func TestForest_Release_Queue_Error_Release_Node(t *testing.T) {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
 				directory := t.TempDir()
 
-				forest, err := variant.factory(directory, config, ForestConfig{Mode: Mutable, CacheCapacity: 1024})
+				forest, err := variant.factory(directory, config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -971,7 +971,7 @@ func TestForest_InLiveModeHistoryIsOverridden(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 1024})
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -1015,7 +1015,7 @@ func TestForest_InArchiveModeHistoryIsPreserved(t *testing.T) {
 	for _, variant := range variants {
 		for _, config := range allMptConfigs {
 			t.Run(fmt.Sprintf("%s-%s", variant.name, config.Name), func(t *testing.T) {
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Immutable, CacheCapacity: 1024})
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Immutable, NodeCacheConfig: NodeCacheConfig{Capacity: 1024}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -1239,7 +1239,6 @@ func TestForest_ReleaserReleasesNodesOnlyOnce(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1333,12 +1332,11 @@ func testForest_WriteBufferRecoveryIsThreadSafe(t *testing.T, withConcurrentNode
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
 		values,
-		ForestConfig{CacheCapacity: 1},
+		ForestConfig{NodeCacheConfig: NodeCacheConfig{Capacity: 1}},
 	)
 	if err != nil {
 		t.Fatalf("failed to create test forest: %v", err)
@@ -1456,7 +1454,7 @@ func openFileShadowForest(directory string, mptConfig MptConfig, forestConfig Fo
 	extensions := shadow.MakeShadowStock(extensionsA, extensionsB)
 	accounts := shadow.MakeShadowStock(accountsA, accountsB)
 	values := shadow.MakeShadowStock(valuesA, valuesB)
-	return makeForest(mptConfig, directory, branches, extensions, accounts, values, forestConfig)
+	return makeForest(mptConfig, branches, extensions, accounts, values, forestConfig)
 }
 
 func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
@@ -1490,14 +1488,15 @@ func TestForest_NodeHandlingDoesNotDeadlock(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
 		values,
 		ForestConfig{
-			CacheCapacity:          1,
-			writeBufferChannelSize: 1,
+			NodeCacheConfig: NodeCacheConfig{
+				Capacity:               1,
+				writeBufferChannelSize: 1,
+			},
 		},
 	)
 	if err != nil {
@@ -1563,8 +1562,8 @@ func TestForest_CheckPassesAfterReopeningDirectory(t *testing.T) {
 					// it, and check that the consistency test still passes.
 					dir := t.TempDir()
 					forestConfig := ForestConfig{
-						Mode:          mode,
-						CacheCapacity: 1024,
+						Mode:            mode,
+						NodeCacheConfig: NodeCacheConfig{Capacity: 1024},
 					}
 					forest, err := OpenFileForest(dir, config, forestConfig)
 					if err != nil {
@@ -1800,7 +1799,6 @@ func TestForest_ErrorsAreForwardedAndCollected(t *testing.T) {
 
 			forest, err := makeForest(
 				MptConfig{Hashing: DirectHashing},
-				t.TempDir(),
 				branches,
 				extensions,
 				accounts,
@@ -1839,7 +1837,6 @@ func TestForest_MultipleErrorsCanBeCollected(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1893,7 +1890,6 @@ func TestForest_CollectedErrorsAreReportedInFlushAndClose(t *testing.T) {
 
 	forest, err := makeForest(
 		MptConfig{Hashing: DirectHashing},
-		t.TempDir(),
 		branches,
 		extensions,
 		accounts,
@@ -1971,7 +1967,7 @@ func TestForest_AsyncDelete_CacheIsNotExhausted(t *testing.T) {
 				// The tree is shallow - 1 account + 4byte storage addresses.
 				// The size of the cache here is estimated considering the numbers above, but it is not set
 				// exactly as some nodes are created and then deleted while building the tree.
-				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, CacheCapacity: 10})
+				forest, err := variant.factory(t.TempDir(), config, ForestConfig{Mode: Mutable, NodeCacheConfig: NodeCacheConfig{Capacity: 10}})
 				if err != nil {
 					t.Fatalf("failed to open forest: %v", err)
 				}
@@ -2116,25 +2112,26 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 					}()
 
 					rootRef := NewNodeReference(EmptyId())
-
-					address := common.Address{0xA}
-					root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: amount.New(0xB), Nonce: common.Nonce{1}})
-					if err != nil {
-						t.Fatalf("cannot create an account: %v", err)
-					}
-					rootRef = root
-
-					for i, key := range keys {
-						root, err := forest.SetValue(&rootRef, address, key, common.Value{byte(i + 1)})
+					addresses := getTestAddresses(num)
+					for _, address := range addresses {
+						root, err := forest.SetAccountInfo(&rootRef, address, AccountInfo{Balance: amount.New(0xB), Nonce: common.Nonce{1}})
 						if err != nil {
 							t.Fatalf("cannot create an account: %v", err)
 						}
 						rootRef = root
-					}
 
-					// trigger update of dirty hashes
-					if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
-						t.Errorf("failed to compute hash: %v", err)
+						for i, key := range keys {
+							root, err := forest.SetValue(&rootRef, address, key, common.Value{byte(i + 1)})
+							if err != nil {
+								t.Fatalf("cannot create an account: %v", err)
+							}
+							rootRef = root
+						}
+
+						// trigger update of dirty hashes
+						if _, _, err := forest.updateHashesFor(&rootRef); err != nil {
+							t.Errorf("failed to compute hash: %v", err)
+						}
 					}
 
 					ctrl := gomock.NewController(t)
@@ -2146,9 +2143,208 @@ func TestForest_VisitPathToStorage(t *testing.T) {
 						}
 					}).AnyTimes()
 
-					// find out account node to start storage search from it.
-					if found, err := VisitPathToAccount(forest, &rootRef, address, nodeVisitor); err != nil || !found {
-						t.Errorf("failed to iterate nodes by address: %v", err)
+					for _, address := range addresses {
+						// find out account node to start storage search from it.
+						if found, err := VisitPathToAccount(forest, &rootRef, address, nodeVisitor); err != nil || !found {
+							t.Errorf("failed to iterate nodes by address: %v", err)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestForest_HasEmptyStorage(t *testing.T) {
+	strategies := []struct {
+		delete func(*Forest, *NodeReference, common.Address, []common.Key) (NodeReference, error)
+	}{
+		{delete: func(forest *Forest, root *NodeReference, address common.Address, keys []common.Key) (NodeReference, error) {
+			return forest.ClearStorage(root, address)
+		}},
+		{delete: func(forest *Forest, root *NodeReference, address common.Address, keys []common.Key) (NodeReference, error) {
+			return forest.SetAccountInfo(root, address, AccountInfo{})
+		}},
+		{delete: func(forest *Forest, root *NodeReference, address common.Address, keys []common.Key) (NodeReference, error) {
+			ref := *root
+			var err error
+			for _, key := range keys {
+				ref, err = forest.SetValue(&ref, address, key, common.Value{})
+				if err != nil {
+					return ref, err
+				}
+			}
+			return ref, err
+		}},
+	}
+
+	addresses := getTestAddresses(50)
+	keys := getTestKeys(15)
+
+	for _, variant := range variants {
+		for _, config := range allMptConfigs {
+			for forestConfigName, forestConfig := range forestConfigs {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, config.Name, forestConfigName), func(t *testing.T) {
+					directory := t.TempDir()
+					forest, err := variant.factory(directory, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+					defer func() {
+						if err := forest.Close(); err != nil {
+							t.Fatalf("cannot close db: %v", err)
+						}
+					}()
+
+					root := NewNodeReference(EmptyId())
+
+					checkEmpty := func(address []common.Address, want bool) {
+						t.Helper()
+						for _, address := range addresses {
+							isEmpty, err := forest.HasEmptyStorage(&root, address)
+							if err != nil {
+								t.Fatalf("unexpected error: %v", err)
+							}
+							if got := isEmpty; got != want {
+								t.Errorf("unexpected result for empty account %x: got %v, want %v", address, got, want)
+							}
+						}
+					}
+
+					// empty for all non existing accounts
+					checkEmpty(addresses, true)
+
+					for _, address := range addresses {
+						root, err = forest.SetAccountInfo(&root, address, AccountInfo{Balance: common.Balance{0x1}})
+						if err != nil {
+							t.Fatalf("cannot update account: %v", err)
+						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("cannot update hashes: %v", err)
+						}
+					}
+
+					// empty for all accounts with empty storage
+					checkEmpty(addresses, true)
+
+					for i, address := range addresses {
+						for j, key := range keys {
+							root, err = forest.SetValue(&root, address, key, common.Value{byte(i + 1), byte(j + 1)})
+							if err != nil {
+								t.Fatalf("cannot update storage: %v", err)
+							}
+						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("cannot update hashes: %v", err)
+						}
+					}
+
+					// non-empty for existing slots
+					checkEmpty(addresses, false)
+
+					// clear by various strategies
+					groups := len(strategies)
+					for i, address := range addresses {
+						strategy := strategies[i%groups]
+						root, err = strategy.delete(forest, &root, address, keys)
+						if err != nil {
+							t.Fatalf("cannot delete storage: %v", err)
+						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("cannot update hashes: %v", err)
+						}
+					}
+
+					// becomes empty
+					checkEmpty(addresses, true)
+
+					_, _, err = forest.updateHashesFor(&root)
+					if err != nil {
+						t.Fatalf("cannot update hashes: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestVisitPathTo_Node_Hashes_Same_S5_Archive_non_Archive_Config_For_Witness_Proof(t *testing.T) {
+	addresses := getTestAddresses(61)
+	keys := getTestKeys(63)
+	for _, variant := range fileAndMemVariants {
+		for forestConfigName, forestConfig := range forestConfigs {
+			for _, config := range []MptConfig{S5LiveConfig, S5ArchiveConfig} {
+				t.Run(fmt.Sprintf("%s-%s-%s", variant.name, forestConfigName, config.Name), func(t *testing.T) {
+					dir := t.TempDir()
+					forest, err := variant.factory(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					// fill-in the forest with test data
+					root := NewNodeReference(EmptyId())
+					for i, addr := range addresses {
+						info := AccountInfo{Nonce: common.Nonce{byte(i + 1)}}
+						root, err = forest.SetAccountInfo(&root, addr, info)
+						if err != nil {
+							t.Fatalf("failed to set account info: %v", err)
+						}
+						for j, key := range keys {
+							var value common.Value // a short value to embedded
+							value[29] = byte(i)
+							value[30] = byte(j)
+							root, err = forest.SetValue(&root, addr, key, value)
+							if err != nil {
+								t.Fatalf("failed to update value: %v", err)
+							}
+						}
+						if _, _, err := forest.updateHashesFor(&root); err != nil {
+							t.Fatalf("failed to update hashes: %v", err)
+						}
+					}
+
+					rootHash, err := forest.getHashFor(&root)
+					if err != nil {
+						t.Fatalf("failed to get hash: %v", err)
+					}
+					if err := forest.Close(); err != nil {
+						t.Fatalf("failed to close forest: %v", err)
+					}
+
+					// reopen the forest and create witness proof
+					// the witness proof should work both configs
+					// i.e. the hashes in the proof must be the same
+					forest, err = variant.factory(dir, config, forestConfig)
+					if err != nil {
+						t.Fatalf("failed to open forest: %v", err)
+					}
+
+					for i, addr := range addresses {
+						proof, err := CreateWitnessProof(forest, &root, addr, keys...)
+						if err != nil {
+							t.Fatalf("failed to create witness proof: %v", err)
+						}
+
+						nonce, _, err := proof.GetNonce(rootHash, addr)
+						if err != nil {
+							t.Fatalf("failed to get nonce: %v", err)
+						}
+						if got, want := nonce, (common.Nonce{byte(i + 1)}); got != want {
+							t.Errorf("nonce mismatch: got %d, want %d", got, want)
+						}
+
+						for j, key := range keys {
+							value, _, err := proof.GetState(rootHash, addr, key)
+							if err != nil {
+								t.Fatalf("failed to get value: %v", err)
+							}
+							var wantValue common.Value // a short value to embedded
+							wantValue[29] = byte(i)
+							wantValue[30] = byte(j)
+							if got, want := value, wantValue; got != want {
+								t.Errorf("value mismatch: got %v, want %v", got, want)
+							}
+						}
 					}
 				})
 			}
@@ -2180,4 +2376,71 @@ func testVisitPathToStorage(t *testing.T, forest *Forest, keys []common.Key, sto
 			t.Errorf("unexpected node type, got %T, want *ValueNode", value)
 		}
 	}
+}
+
+func TestForest_RecoversNodesFromWriteBuffer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	branches := stock.NewMockStock[uint64, BranchNode](ctrl)
+	buffer := NewMockWriteBuffer(ctrl)
+
+	var branch1 *shared.Shared[Node]
+	gomock.InOrder(
+		// Branch 1 is created, not found in the buffer, added to the cache, and released.
+		branches.EXPECT().New().Return(uint64(1), nil),
+		buffer.EXPECT().Cancel(BranchId(1)).Return(nil, false),
+		branches.EXPECT().Delete(uint64(1)),
+
+		// Branches 2 and 3 are created, not found in the cache, and remain alive
+		branches.EXPECT().New().Return(uint64(2), nil),
+		buffer.EXPECT().Cancel(BranchId(2)).Return(nil, false),
+		branches.EXPECT().New().Return(uint64(3), nil),
+		buffer.EXPECT().Cancel(BranchId(3)).Return(nil, false),
+
+		// As branch 3 is added to the cache, branch 1 is evicted and pushed into the buffer.
+		buffer.EXPECT().Add(BranchId(1), gomock.Any()).Do(func(_ NodeId, evicted *shared.Shared[Node]) {
+			branch1 = evicted
+		}),
+
+		// After branch 1 is in the buffer, its ID is re-used for the next branch.
+		branches.EXPECT().New().Return(uint64(1), nil),
+		buffer.EXPECT().Cancel(BranchId(1)).DoAndReturn(func(NodeId) (*shared.Shared[Node], bool) {
+			return branch1, true
+		}),
+		buffer.EXPECT().Add(BranchId(2), gomock.Any()),
+	)
+
+	forest := &Forest{
+		branches:    branches,
+		nodeCache:   NewNodeCache(2),
+		writeBuffer: buffer,
+	}
+
+	// the first node is created, marked dirty, and released again
+	ref, handle, _ := forest.createBranch()
+	original := handle.Get().(*BranchNode)
+	original.markDirty()
+	forest.release(&ref)
+	handle.Release()
+
+	// At this point, b1 is still in the cache. With the
+	// next steps, it is pushed out of the cache into the
+	// write buffer (since it is marked dirty).
+	_, handle, _ = forest.createBranch()
+	handle.Release()
+	_, handle, _ = forest.createBranch()
+	handle.Release()
+
+	// Now, the node with ID BranchId(1) is reused again.
+	// The node in the buffer should be recovered and reused.
+	ref, handle, _ = forest.createBranch()
+
+	if want, got := ref.Id(), BranchId(1); want != got {
+		t.Fatalf("unexpected node ID: got %v, want %v", got, want)
+	}
+
+	restored := handle.Get().(*BranchNode)
+	if restored != original {
+		t.Fatalf("unexpected node: got %p, want %p", restored, original)
+	}
+	handle.Release()
 }

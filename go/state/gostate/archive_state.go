@@ -13,6 +13,7 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"unsafe"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -199,4 +200,16 @@ func (s *ArchiveState) GetArchiveBlockHeight() (uint64, bool, error) {
 
 func (s *ArchiveState) Check() error {
 	return s.archiveError
+}
+
+func (s *ArchiveState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	if err := s.archiveError; err != nil {
+		return nil, err
+	}
+
+	proof, err := s.archive.CreateWitnessProof(s.block, address, keys...)
+	if err != nil {
+		s.archiveError = errors.Join(s.archiveError, err)
+	}
+	return proof, s.archiveError
 }

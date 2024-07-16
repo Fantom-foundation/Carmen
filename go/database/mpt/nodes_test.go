@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"reflect"
 	"slices"
 	"strings"
@@ -6566,7 +6567,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 		},
 		"wrong account": {
 			trie: &Tag{"A", &Account{}},
-			path: []string{},
+			path: []string{"A"},
 		},
 		"correct account": {
 			trie: &Tag{"A", &Account{address: address}},
@@ -6586,7 +6587,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 				1: &Tag{"C", &Account{}},
 				2: &Tag{"D", &Empty{}},
 			}}},
-			path: []string{"A"},
+			path: []string{"A", "C"},
 		},
 		"branch with correct account": {
 			trie: &Tag{"A", &Branch{children: Children{
@@ -6608,7 +6609,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 		},
 		"extension without common prefix": {
 			trie: &Tag{"A", &Extension{path: []Nibble{2, 3}}},
-			path: []string{},
+			path: []string{"A"},
 		},
 		"branch node too deep": {
 			trie: &Tag{"A", &Extension{
@@ -6617,6 +6618,25 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 			},
 			},
 			path: []string{"A"},
+		},
+		"nested branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address)[0:39], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Branch{children: Children{
+						0: &Tag{"D", &Account{}},
+					}}}}},
+				}}},
+			path: []string{"A", "B", "C"},
+		},
+		"account node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: addressToNibbles(address)[0:39], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Account{address: address}}},
+				}}},
+			},
+			path: []string{"A", "B", "C"},
 		},
 	}
 
@@ -6643,7 +6663,7 @@ func TestVisitPathToAccount_CanReachTerminalNodes(t *testing.T) {
 			for _, label := range test.path {
 				ref, shared := ctxt.Get(label)
 				handle := shared.GetViewHandle()
-				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Embedded: tribool.False()})
 				handle.Release()
 				if last != nil {
 					cur.After(last)
@@ -6714,13 +6734,50 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 			}}},
 			path: []string{"A", "C"},
 		},
+		"branch with incorrect storage": {
+			trie: &Tag{"A", &Branch{children: Children{
+				0: &Tag{"B", &Empty{}},
+				1: &Tag{"C", &Value{}},
+				2: &Tag{"D", &Empty{}},
+			}}},
+			path: []string{"A", "C"},
+		},
 		"branch node too deep": {
 			trie: &Tag{"A", &Extension{
 				path: keyToNibbles(key), // extension node will exhaust the path
 				next: &Tag{"B", &Branch{}},
-			},
-			},
+			}},
 			path: []string{"A"},
+		},
+		"nested branch node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(key)[0:63], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Branch{children: Children{
+						0: &Tag{"D", &Value{}},
+					}}}}},
+				}}},
+			path: []string{"A", "B", "C"},
+		},
+		"value node too deep": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(key)[0:63], // branch node will exhaust the path
+				next: &Tag{"B", &Branch{children: Children{
+					0: &Tag{"C", &Value{key: key}},
+				}}},
+			}},
+			path: []string{"A", "B", "C"},
+		},
+		"wrong extension": {
+			trie: &Tag{"A", &Extension{
+				path: keyToNibbles(common.Key{}),
+				next: &Tag{"B", &Branch{}},
+			}},
+			path: []string{"A"},
+		},
+		"empty node ": {
+			trie: &Tag{"A", Empty{}},
+			path: []string{},
 		},
 	}
 
@@ -6747,7 +6804,7 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 			for _, label := range test.path {
 				ref, shared := ctxt.Get(label)
 				handle := shared.GetViewHandle()
-				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id()})
+				cur := visitor.EXPECT().Visit(handle.Get(), NodeInfo{Id: ref.Id(), Embedded: tribool.False()})
 				handle.Release()
 				if last != nil {
 					cur.After(last)
@@ -6765,6 +6822,81 @@ func TestVisitPathToStorage_CanReachTerminalNodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVisitPathToStorage_EmbeddedNode_Flag_Tracked(t *testing.T) {
+	address := common.Address{1}
+	key := common.Key{2}
+	key2 := common.Key{3}
+	var value common.Value
+	value[20] = 0x02
+	value[21] = 0x04
+
+	ctrl := gomock.NewController(t)
+	ctxt := newNodeContext(t, ctrl)
+
+	tests := map[string]struct {
+		key      common.Key
+		keyFound bool
+	}{
+		"matching embedded": {
+			key:      key,
+			keyFound: true,
+		},
+		"mismatch embedded": {
+			key:      key2,
+			keyFound: false,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			desc := &Extension{
+				path: AddressToNibblePath(address, ctxt)[0:30],
+				next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}},
+					storage: &Extension{
+						path:         KeyToNibblePath(key, ctxt)[0:40],
+						nextEmbedded: true,
+						next:         &Value{key: test.key, length: 24, value: value},
+					}}}
+
+			ref, _ := ctxt.Build(desc)
+
+			visitor := NewMockNodeVisitor(ctrl)
+			visitor.EXPECT().Visit(gomock.Any(), gomock.Any()).DoAndReturn(func(node Node, info NodeInfo) VisitResponse {
+				wantEmbedded := tribool.False()
+				switch n := node.(type) {
+				case *AccountNode:
+					found, err := VisitPathToStorage(ctxt, &n.storage, key, visitor)
+					if err != nil {
+						t.Fatalf("unexpected error during path iteration: %v", err)
+					}
+					if got, want := found, test.keyFound; got != want {
+						t.Errorf("unexpected key found flag, wanted %t, got %t", want, got)
+					}
+				case *ValueNode:
+					wantEmbedded = tribool.True()
+					if got, want := n.value, value; got != want {
+						t.Errorf("unexpected key found flag, wanted %v, got %v", want, got)
+					}
+				}
+				if got, want := info.Embedded, wantEmbedded; got != want {
+					t.Errorf("unexpected embedded flag, wanted %s, got %s", want, got)
+				}
+
+				return VisitResponseContinue
+			}).AnyTimes()
+
+			found, err := VisitPathToAccount(ctxt, &ref, address, visitor)
+			if err != nil {
+				t.Fatalf("unexpected error during path iteration: %v", err)
+			}
+			if !found {
+				t.Errorf("account not found")
+			}
+		})
+	}
+
 }
 
 func TestTransitions_ImmutableTransitionHaveExpectedEffect(t *testing.T) {
@@ -7697,6 +7829,7 @@ type Branch struct {
 	dirty            bool
 	children         Children
 	childHashes      ChildHashes
+	embeddedChildren []bool
 	dirtyChildHashes []int
 	frozen           bool
 	frozenChildren   []int
@@ -7723,6 +7856,9 @@ func (b *Branch) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
 	for _, i := range b.frozenChildren {
 		res.setChildFrozen(byte(i), true)
 	}
+	for i, embedded := range b.embeddedChildren {
+		res.setEmbedded(byte(i), embedded)
+	}
 	res.hashStatus = hashStatusClean
 	if b.dirtyHash {
 		res.hashStatus = hashStatusDirty
@@ -7742,6 +7878,7 @@ type Extension struct {
 	nextHash      *common.Hash
 	nextHashDirty bool
 	hashStatus    *hashStatus // overrides dirtyHash flag if set
+	nextEmbedded  bool
 }
 
 func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]) {
@@ -7752,6 +7889,7 @@ func (e *Extension) Build(ctx *nodeContext) (NodeReference, *shared.Shared[Node]
 	res.path = CreatePathFromNibbles(e.path)
 	res.next, _ = ctx.Build(e.next)
 	res.hashStatus = hashStatusClean
+	res.nextIsEmbedded = e.nextEmbedded
 	if e.hashDirty {
 		res.hashStatus = hashStatusDirty
 	}

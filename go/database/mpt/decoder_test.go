@@ -27,13 +27,12 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 	value := []byte{0x11, 0x22, 0x33, 0x44}
 	valueRlp := rlp.Encode(rlp.String{Str: value})
 	var commonValue common.Value
-	copy(commonValue[:], value[:])
+	copy(commonValue[32-len(value):], value[:])
 
 	valueNode := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: valueRlp}}}
 	valueNodeRlp := rlp.Encode(valueNode)
 	var valueNodeRlpAsHash common.Hash
 	copy(valueNodeRlpAsHash[:], valueNodeRlp)
-	valueNodeRlpAsHash[len(valueNodeRlp)] = 0xF // add termination mark
 
 	childrenHashes := [16]common.Hash{
 		hash,
@@ -60,7 +59,7 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 	for i := 0; i < 16; i++ {
 		childrenRlp[i] = rlp.String{Str: childrenHashes[i][:]}
 		if childrenHashes[i] == valueNodeRlpAsHash {
-			childrenRlp[i] = rlp.String{Str: valueNodeRlp} // inject real size slice, not a 32bit hash
+			childrenRlp[i] = valueNode // inject real size slice, not a 32bit hash
 			embeddedChildrenSizes[i] = uint16(len(valueNodeRlp))
 		}
 	}
@@ -85,8 +84,8 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 	key1 := common.Key{0x12, 0x34}
 	key2 := common.Key{0x01, 0x23, 0x45}
 
-	address1 := common.Address{0x12, 0x34}
-	address2 := common.Address{0x01, 0x23, 0x45}
+	address1Path := CreatePathFromNibbles([]Nibble{0x1, 0x2, 0x3, 0x4})
+	address2Path := CreatePathFromNibbles([]Nibble{0x1, 0x2, 0x3, 0x4, 0x5})
 
 	tests := map[string]struct {
 		item     rlp.Item
@@ -105,11 +104,11 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 			&ExtensionNode{path: CreatePathFromNibbles([]Nibble{0x1, 0x2, 0x3, 0x4, 0x5}), nextHash: hash, nextIsEmbedded: false},
 		},
 		"even extension - embedded": {
-			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, rlp.String{Str: valueNodeRlp}}},
+			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, valueNode}},
 			&ExtensionNode{path: CreatePathFromNibbles([]Nibble{0x1, 0x2, 0x3, 0x4}), nextHash: valueNodeRlpAsHash, nextIsEmbedded: true},
 		},
 		"odd extension - embedded": {
-			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x11, 0x23, 0x45}}, rlp.String{Str: valueNodeRlp}}},
+			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x11, 0x23, 0x45}}, valueNode}},
 			&ExtensionNode{path: CreatePathFromNibbles([]Nibble{0x1, 0x2, 0x3, 0x4, 0x5}), nextHash: valueNodeRlpAsHash, nextIsEmbedded: true},
 		},
 		"even value": {
@@ -124,21 +123,21 @@ func TestDecoder_CanDecodeNodes(t *testing.T) {
 			rlp.List{Items: childrenRlp},
 			&BranchNode{hashes: childrenHashes, embeddedChildren: (1 << 14) | (1 << 13)},
 		},
-		"even account empty storage ": {
+		"even account empty storage": {
 			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: rlp.Encode(accountDetailEmptyStorage)}}},
-			&AccountNode{address: address1, info: AccountInfo{nonce, balance, hash}, storageHash: EmptyNodeEthereumHash, pathLength: 4},
+			&decodedAccountNode{AccountNode{info: AccountInfo{nonce, balance, hash}, storageHash: EmptyNodeEthereumHash, pathLength: 4}, address1Path},
 		},
-		"even account with storage ": {
+		"even account with storage": {
 			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: rlp.Encode(accountDetailStorage)}}},
-			&AccountNode{address: address1, info: AccountInfo{nonce, balance, hash}, storageHash: hash, pathLength: 4},
+			&decodedAccountNode{AccountNode{info: AccountInfo{nonce, balance, hash}, storageHash: hash, pathLength: 4}, address1Path},
 		},
-		"odd account empty storage ": {
+		"odd account empty storage": {
 			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.String{Str: rlp.Encode(accountDetailEmptyStorage)}}},
-			&AccountNode{address: address2, info: AccountInfo{nonce, balance, hash}, storageHash: EmptyNodeEthereumHash, pathLength: 5},
+			&decodedAccountNode{AccountNode{info: AccountInfo{nonce, balance, hash}, storageHash: EmptyNodeEthereumHash, pathLength: 5}, address2Path},
 		},
-		"odd account with storage ": {
+		"odd account with storage": {
 			rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.String{Str: rlp.Encode(accountDetailStorage)}}},
-			&AccountNode{address: address2, info: AccountInfo{nonce, balance, hash}, storageHash: hash, pathLength: 5},
+			&decodedAccountNode{AccountNode{info: AccountInfo{nonce, balance, hash}, storageHash: hash, pathLength: 5}, address2Path},
 		},
 	}
 
@@ -162,7 +161,7 @@ func TestDecoder_DecodeEmbeddedNode_CanDecode(t *testing.T) {
 	valueNodeRlp := rlp.Encode(valueNode)
 
 	var commonValue common.Value
-	copy(commonValue[:], value[:])
+	copy(commonValue[32-len(value):], value[:])
 
 	extNodeRlp := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x11, 0x23, 0x45}}, rlp.String{Str: valueNodeRlp}}}
 
@@ -171,7 +170,7 @@ func TestDecoder_DecodeEmbeddedNode_CanDecode(t *testing.T) {
 		t.Fatalf("failed to decode node: %v", err)
 	}
 
-	got, err := DecodeEmbeddedFromRlp(extNode.(*ExtensionNode).nextHash[:])
+	got, err := DecodeFromRlp(extNode.(*ExtensionNode).nextHash[:])
 	if err != nil {
 		t.Fatalf("failed to decode node: %v", err)
 	}
@@ -179,33 +178,6 @@ func TestDecoder_DecodeEmbeddedNode_CanDecode(t *testing.T) {
 	expectedValueNode := ValueNode{key: common.Key{0x12, 0x34}, value: commonValue, pathLength: 4}
 	if matchNodesRlpDecoded(t, &expectedValueNode, got); err != nil {
 		t.Fatalf("failed to match nodes: %v", err)
-	}
-}
-
-func TestDecoder_DecodeEmbeddedNode_Malformed(t *testing.T) {
-	value := []byte{0x11, 0x22, 0x33, 0x44}
-	valueNode := rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x20, 0x12, 0x34}}, rlp.String{Str: value}}}
-	valueNodeRlp := rlp.Encode(valueNode)
-
-	var embeddedMissingTerminal common.Hash
-
-	var embeddedAsHash common.Hash
-	copy(embeddedAsHash[:], valueNodeRlp)
-	embeddedAsHash[len(valueNodeRlp)] = 0xF     // add termination mark
-	embeddedAsHash[len(embeddedAsHash)-1] = 0xC // non-zero padding
-
-	tests := map[string][]byte{
-		"too long":         make([]byte, 35),
-		"missing terminal": embeddedMissingTerminal[:],
-		"non-zero-padded":  embeddedAsHash[:],
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			if _, err := DecodeEmbeddedFromRlp(test); err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-		})
 	}
 }
 
@@ -255,7 +227,7 @@ func TestDecoder_CorruptedRlp(t *testing.T) {
 		"two items node, path is list":             {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{list, str}})},
 		"possible value but nested list":           {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x31, 0x23, 0x45}}, rlp.List{}}})},
 		"possible value but too long key":          {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: append([]byte{0x31, 0x23, 0x45}, strLongerThan32.Str...)}, str}})},
-		"possible ext but nested list":             {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, rlp.List{}}})},
+		"possible ext emb list too long":           {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, rlp.List{Items: []rlp.Item{str, strLongerThan32}}}})},
 		"possible ext but too long hash":           {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{rlp.String{Str: []byte{0x00, 0x12, 0x34}}, strLongerThan32}})},
 		"possible account but 3 items nested list": {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, threeItemsList}})},
 		"possible account but nested empty":        {rlp: rlp.EncodeInto([]byte{}, rlp.List{Items: []rlp.Item{str, rlp.String{Str: trailingBytes}}})},
@@ -324,26 +296,48 @@ func Test_compactPathToNibbles(t *testing.T) {
 	}
 }
 
-func Test_Decoder_Decode_Node_Instances(t *testing.T) {
+func TestDecoder_Decode_Node_Instances(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	address := common.Address{0xAB, 0xCD, 0xEF}
 	key := common.Key{0x12, 0x34, 0x56, 0x78}
 
+	var shortValue common.Value
+	shortValue[15] = 0xA
+	shortValue[16] = 0xB
+
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	childHashes := ChildHashes{}
+	for i := 0; i < 16; i++ {
+		if i == 0xA {
+			continue
+		}
+		childHashes[Nibble(i)] = EmptyNodeEthereumHash
+	}
 
 	tests := map[string]struct {
 		desc NodeDesc
 	}{
 		"branchNode": {&Branch{
 			children: Children{
-				0xA: &Account{address: address, pathLength: 39, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
-			}}},
+				0xA: &Account{address: address, pathLength: 39, info: AccountInfo{Nonce: common.Nonce{0x00, 0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x00, 0x03}}},
+			},
+			childHashes: childHashes,
+		}},
 		"extensionNode": {&Extension{
 			path: AddressToNibblePath(address, ctxt)[0:30],
 			next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 		}},
-		"accountNode": {&Account{address: address, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}}},
+		"extensionNode - next empty hash": {&Extension{
+			path:     AddressToNibblePath(address, ctxt)[0:30],
+			nextHash: &EmptyNodeEthereumHash,
+		}},
+		"extensionNode - next empty node": {&Extension{
+			path: AddressToNibblePath(address, ctxt)[0:30],
+			next: &Empty{},
+		}},
+		"accountNode": {&Account{address: address, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x00, 0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x00, 0x03}}}},
 		"valueNode":   {&Value{key: key, length: 64, value: common.Value{0x01, 0x02, 0x03, 0x04}}},
 		"emptyNode":   {&Empty{}},
 	}
@@ -365,27 +359,188 @@ func Test_Decoder_Decode_Node_Instances(t *testing.T) {
 				t.Fatalf("failed to decode node: %v", err)
 			}
 
-			// customise input nodes as keys and addresses are different after RLP decoding.
-			// RLP decoded contains hashes of keys and addresses, not the original values.
-			switch want := want.(type) {
-			case *AccountNode:
-				nibbles := AddressToNibblePath(want.address, ctxt)[64-want.pathLength:]
-				path := CreatePathFromNibbles(nibbles)
-				var address common.Address
-				copy(address[:], path.GetPackedNibbles())
-				want.address = address
-			case *ValueNode:
-				nibbles := KeyToNibblePath(want.key, ctxt)
-				path := CreatePathFromNibbles(nibbles)
-				var key common.Key
-				copy(key[:], path.GetPackedNibbles())
-				want.key = key
+			matchNodesRlpDecoded(t, customiseNodePaths(ctxt, want, 0), got)
+		})
+	}
+}
+
+func TestDecoder_Decode_ExtensionNodeHasEmbeddedValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	key := common.Key{0x12, 0x34, 0x56, 0x78}
+
+	var shortValue common.Value
+	shortValue[15] = 0xA
+	shortValue[16] = 0xB
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	tests := map[string]struct {
+		desc NodeDesc
+	}{
+		"extensionNode embedded": {&Extension{
+			path:         KeyToNibblePath(key, ctxt)[0:60],
+			nextEmbedded: true,
+			next:         &Value{key: key, length: 4, value: shortValue},
+		}},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, node := ctxt.Build(test.desc)
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			want := handle.Get()
+
+			wantExt, ok := want.(*ExtensionNode)
+			if !ok {
+				t.Fatalf("expected *ExtensionNode, got %T", want)
+			}
+			if wantExt.nextIsEmbedded {
+				got, err := DecodeFromRlp(wantExt.nextHash[:])
+				if err != nil {
+					t.Fatalf("failed to decode embedded node: %v", err)
+				}
+				wantHandle, err := ctxt.getReadAccess(&wantExt.next)
+				if err != nil {
+					t.Fatalf("failed to get read handle: %v", err)
+				}
+				defer wantHandle.Release()
+				matchNodesRlpDecoded(t, customiseNodePaths(ctxt, wantHandle.Get(), wantExt.path.Length()), got)
+			} else {
+				t.Fatalf("expected embedded node, got hash")
+			}
+		})
+	}
+}
+
+func TestDecoder_Decode_AccountNode_Instances_Above20bytesPaths(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	address := common.Address{1}
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+	nibbles := AddressToNibblePath(address, ctxt)
+
+	childHashes := ChildHashes{}
+	for i := 0; i < 16; i++ {
+		if Nibble(i) == nibbles[0] {
+			continue
+		}
+		childHashes[Nibble(i)] = EmptyNodeEthereumHash
+	}
+
+	tests := map[string]struct {
+		desc NodeDesc
+	}{
+		"branchNode": {&Branch{
+			children: Children{
+				nibbles[0]: &Account{address: address, pathLength: 63, info: AccountInfo{Nonce: common.Nonce{0x01}}},
+			},
+			childHashes: childHashes,
+		}},
+		"extensionNode": {&Extension{
+			path: nibbles[0:10],
+			next: &Account{address: address, pathLength: 54, info: AccountInfo{Nonce: common.Nonce{0x01}}},
+		}},
+		"accountNode": {&Account{address: address, pathLength: 64, info: AccountInfo{Nonce: common.Nonce{0x01}}}},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, node := ctxt.Build(test.desc)
+			handle := node.GetReadHandle()
+			defer handle.Release()
+
+			want := handle.Get()
+			rlp, err := encodeToRlp(want, ctxt, []byte{})
+			if err != nil {
+				t.Fatalf("failed to encode node: %v", err)
 			}
 
-			matchNodesRlpDecoded(t, want, got)
-		})
+			got, err := DecodeFromRlp(rlp)
+			if err != nil {
+				t.Fatalf("failed to decode node: %v", err)
+			}
 
+			matchNodesRlpDecoded(t, customiseNodePaths(ctxt, want, 0), got)
+		})
 	}
+}
+
+func TestDecoder_Decode_BranchNodeHasEmbeddedValue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	key := common.Key{0x12, 0x34, 0x56, 0x78}
+
+	var shortValue common.Value
+	shortValue[15] = 0xA
+	shortValue[16] = 0xB
+
+	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
+
+	tests := map[string]struct {
+		desc NodeDesc
+	}{
+		"branchNode embedded": {&Branch{
+			embeddedChildren: []bool{false, false, false, false, false, false, false, false, false, false, true},
+			children: Children{
+				0xA: &Value{key: key, length: 10, value: shortValue},
+			}}},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, node := ctxt.Build(test.desc)
+			handle := node.GetReadHandle()
+			defer handle.Release()
+			want := handle.Get()
+
+			wantBranch, ok := want.(*BranchNode)
+			if !ok {
+				t.Fatalf("expected *BranchNode, got %T", want)
+			}
+			var hasEmbedded bool
+			for i, hash := range wantBranch.hashes {
+				if wantBranch.isEmbedded(byte(i)) {
+					got, err := DecodeFromRlp(hash[:])
+					if err != nil {
+						t.Fatalf("failed to decode embedded node: %v", err)
+					}
+					wantHandle, err := ctxt.getReadAccess(&wantBranch.children[byte(i)])
+					if err != nil {
+						t.Fatalf("failed to get read handle: %v", err)
+					}
+					// the number 54 is at the moment hardcoded to fit the test case 'branchNode embedded'
+					matchNodesRlpDecoded(t, customiseNodePaths(ctxt, wantHandle.Get(), 54), got)
+					wantHandle.Release()
+					hasEmbedded = true
+				}
+			}
+			if !hasEmbedded {
+				t.Fatalf("expected embedded node, got hash")
+			}
+		})
+	}
+}
+
+// customiseNodePaths modifies input nodes as keys and addresses are different after RLP decoding.
+// RLP decoded contains hashes of keys and addresses, not the original values.
+func customiseNodePaths(ctxt NodeSource, node Node, prevPathLength int) Node {
+	res := node
+	switch node := node.(type) {
+	case *AccountNode:
+		nibbles := AddressToNibblePath(node.address, ctxt)[64-node.pathLength:]
+		path := CreatePathFromNibbles(nibbles)
+		res = &decodedAccountNode{*node, path}
+	case *ValueNode:
+		nibbles := KeyToNibblePath(node.key, ctxt)
+		path := CreatePathFromNibbles(nibbles)
+		var key common.Key
+		copy(key[:], path.ShiftLeft(prevPathLength).GetPackedNibbles())
+		node.key = key
+	}
+	return res
 }
 
 func matchNodesRlpDecoded(t *testing.T, a, b Node) {
@@ -435,13 +590,13 @@ func matchNodesRlpDecoded(t *testing.T, a, b Node) {
 		if aa.hashes != bb.hashes {
 			t.Errorf("expected hashes %v, got %v", aa.hashes, bb.hashes)
 		}
-	case *AccountNode:
-		bb, ok := b.(*AccountNode)
+	case *decodedAccountNode:
+		bb, ok := b.(*decodedAccountNode)
 		if !ok {
 			t.Errorf("expected *AccountNode, got %T", b)
 		}
-		if aa.address != bb.address {
-			t.Errorf("expected address %v, got %v", aa.address, bb.address)
+		if aa.suffix != bb.suffix {
+			t.Errorf("expected address path %v, got %v", aa.suffix, bb.suffix)
 		}
 		if aa.info != bb.info {
 			t.Errorf("expected info %v, got %v", aa.info, bb.info)
@@ -452,5 +607,8 @@ func matchNodesRlpDecoded(t *testing.T, a, b Node) {
 		if aa.pathLength != bb.pathLength {
 			t.Errorf("expected pathLength %v, got %v", aa.pathLength, bb.pathLength)
 		}
+	default:
+		t.Fatalf("unexpected node type %T", b)
 	}
+
 }
