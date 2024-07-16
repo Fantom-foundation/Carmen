@@ -130,9 +130,11 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	stateDB := state.NewMockVmStateDB(ctrl)
 	stateDB.EXPECT().CreateAccount(gomock.Any())
+	stateDB.EXPECT().CreateContract(gomock.Any())
 	stateDB.EXPECT().Exist(gomock.Any())
 	stateDB.EXPECT().Empty(gomock.Any())
 	stateDB.EXPECT().Suicide(gomock.Any())
+	stateDB.EXPECT().SuicideNewContract(gomock.Any())
 	stateDB.EXPECT().HasSuicided(gomock.Any())
 	stateDB.EXPECT().GetBalance(gomock.Any())
 	stateDB.EXPECT().AddBalance(gomock.Any(), gomock.Any())
@@ -175,9 +177,11 @@ func TestTransaction_Operations_Passthrough(t *testing.T) {
 	var key Key
 	var value Value
 	tx.CreateAccount(address)
+	tx.CreateContract(address)
 	tx.Exist(address)
 	tx.Empty(address)
 	tx.SelfDestruct(address)
+	tx.SelfDestruct6780(address)
 	tx.HasSelfDestructed(address)
 	tx.GetBalance(address)
 	tx.AddBalance(address, NewAmount(100))
@@ -234,9 +238,11 @@ func TestTransaction_AfterCommitAllOperationsAreNoops(t *testing.T) {
 	var key Key
 	var value Value
 	tx.CreateAccount(address)
+	tx.CreateContract(address)
 	tx.Exist(address)
 	tx.Empty(address)
 	tx.SelfDestruct(address)
+	tx.SelfDestruct6780(address)
 	tx.HasSelfDestructed(address)
 	tx.GetBalance(address)
 	tx.AddBalance(address, NewAmount(100))
