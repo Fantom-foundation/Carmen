@@ -12,6 +12,7 @@ package carmen
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/state"
 )
 
@@ -188,6 +189,11 @@ type HeadBlockContext interface {
 type HistoricBlockContext interface {
 	blockContext
 
+	// GetProof creates a witness proof for the given account and keys.
+	// Error may be produced when it occurs in the underlying database;
+	// otherwise, the proof is returned.
+	GetProof(address Address, keys ...Key) (WitnessProof, error)
+
 	// Close releases resources held by this context. All modifications made
 	// within this context are discarded. This context is invalid after this
 	// call and should be discarded. Every historic block context needs to be
@@ -213,6 +219,11 @@ type TransactionContext interface {
 	// associated code is removed, and storage is cleared.
 	CreateAccount(Address)
 
+	// CreateContract marks an account with the given address as a contract.
+	// It might be preceded by CreateAccount if the account does not exist.
+	// This method enables the support of EIP-6780 self-destruct mechanism.
+	CreateContract(Address)
+
 	// Exist checks if the account with the given address exists.
 	Exist(Address) bool
 
@@ -224,6 +235,11 @@ type TransactionContext interface {
 	// SelfDestruct invalidates the account with the given address.
 	// It clears its balance, and marks the account as destructed.
 	SelfDestruct(Address) bool
+
+	// SelfDestruct6780 implements the EIP-6780 self-destruct mechanism.
+	// If called in the same transaction scope as the CreateContract method,
+	// it will act as SelfDestruct, otherwise it will act as a no-op.
+	SelfDestruct6780(Address) bool
 
 	// HasSelfDestructed checks if the account with the given address
 	// was destructed.
@@ -443,6 +459,8 @@ type Value common.Value
 
 // Hash is a 32byte hash.
 type Hash common.Hash
+
+type Tribool tribool.Tribool
 
 // Log summarizes a log message recorded during the execution of a contract.
 type Log struct {

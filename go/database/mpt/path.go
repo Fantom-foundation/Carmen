@@ -100,6 +100,11 @@ func (p *Path) IsPrefixOf(list []Nibble) bool {
 	return p.GetCommonPrefixLength(list) == int(p.length)
 }
 
+// IsEqualTo determines whether the given nibble sequence is equal to this path.
+func (p *Path) IsEqualTo(list []Nibble) bool {
+	return p.Length() == len(list) && p.GetCommonPrefixLength(list) == int(p.length)
+}
+
 // GetCommonPrefixLength determines the common prefix of the given Nibble
 // slice and this path.
 func (p *Path) GetCommonPrefixLength(list []Nibble) int {

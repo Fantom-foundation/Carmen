@@ -37,6 +37,7 @@ func main() {
 			&Verify,
 			&Benchmark,
 			&Block,
+			&StressTestCmd,
 		},
 	}
 

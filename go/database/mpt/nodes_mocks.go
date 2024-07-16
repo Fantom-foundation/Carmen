@@ -15,7 +15,6 @@
 //
 //	mockgen -source nodes.go -destination nodes_mocks.go -package mpt
 //
-
 // Package mpt is a generated GoMock package.
 package mpt
 

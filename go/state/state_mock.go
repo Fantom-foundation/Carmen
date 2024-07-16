@@ -15,7 +15,6 @@
 //
 //	mockgen -source state.go -destination state_mock.go -package state
 //
-
 // Package state is a generated GoMock package.
 package state
 
@@ -24,7 +23,7 @@ import (
 
 	backend "github.com/Fantom-foundation/Carmen/go/backend"
 	common "github.com/Fantom-foundation/Carmen/go/common"
-	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
+	witness "github.com/Fantom-foundation/Carmen/go/common/witness"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -108,6 +107,26 @@ func (mr *MockStateMockRecorder) CreateSnapshot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSnapshot", reflect.TypeOf((*MockState)(nil).CreateSnapshot))
 }
 
+// CreateWitnessProof mocks base method.
+func (m *MockState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{address}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateWitnessProof", varargs...)
+	ret0, _ := ret[0].(witness.Proof)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateWitnessProof indicates an expected call of CreateWitnessProof.
+func (mr *MockStateMockRecorder) CreateWitnessProof(address any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{address}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWitnessProof", reflect.TypeOf((*MockState)(nil).CreateWitnessProof), varargs...)
+}
+
 // Exists mocks base method.
 func (m *MockState) Exists(address common.Address) (bool, error) {
 	m.ctrl.T.Helper()
@@ -169,10 +188,10 @@ func (mr *MockStateMockRecorder) GetArchiveState(block any) *gomock.Call {
 }
 
 // GetBalance mocks base method.
-func (m *MockState) GetBalance(address common.Address) (amount.Amount, error) {
+func (m *MockState) GetBalance(address common.Address) (common.Balance, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", address)
-	ret0, _ := ret[0].(amount.Amount)
+	ret0, _ := ret[0].(common.Balance)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

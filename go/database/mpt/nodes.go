@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"io"
 	"slices"
@@ -284,6 +285,7 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 	var last shared.ViewHandle[Node]
 	var found, done bool
 	var lastNodeId *NodeReference
+	var nextEmbedded, currentEmbedded bool
 	for !done {
 		handle, err := source.getViewAccess(nodeId)
 		if last.Valid() {
@@ -301,6 +303,8 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 			if n.path.IsPrefixOf(path) {
 				nodeId = &n.next
 				path = path[n.path.Length():]
+				nextEmbedded = n.nextIsEmbedded
+				done = len(path) == 0
 			} else {
 				done = true
 			}
@@ -309,6 +313,7 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 				done = true
 			} else {
 				nodeId = &n.children[path[0]]
+				nextEmbedded = n.isEmbedded(byte(path[0]))
 				path = path[1:]
 			}
 		case *AccountNode:
@@ -322,15 +327,14 @@ func visitPathTo(source NodeSource, root *NodeReference, path []Nibble, address 
 			}
 			done = true
 		default:
-			done = true
+			last.Release()
+			return false, nil
 		}
 
-		// visit when we are in the middle of the path or when we found the result
-		if !done || found {
-			if res := visitor.Visit(last.Get(), NodeInfo{Id: lastNodeId.Id()}); res != VisitResponseContinue {
-				done = true
-			}
+		if res := visitor.Visit(last.Get(), NodeInfo{Id: lastNodeId.Id(), Embedded: tribool.New(currentEmbedded)}); res != VisitResponseContinue {
+			done = true
 		}
+		currentEmbedded = nextEmbedded
 	}
 
 	last.Release()

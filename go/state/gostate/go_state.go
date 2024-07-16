@@ -13,6 +13,7 @@ package gostate
 import (
 	"errors"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"runtime"
 
 	"github.com/Fantom-foundation/Carmen/go/backend"
@@ -425,4 +426,8 @@ func (s *GoState) GetSnapshotVerifier(metadata []byte) (backend.SnapshotVerifier
 		verifiers = append(verifiers, verifier)
 	}
 	return backend.NewComposedSnapshotVerifier(verifiers, partCounts), nil
+}
+
+func (s *GoState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	panic("not implemented")
 }

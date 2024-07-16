@@ -55,7 +55,15 @@ func EncodeInto(dst []byte, item Item) []byte {
 func Decode(rlp []byte) (Item, error) {
 	item, consumed, err := decode(rlp)
 	if consumed < uint64(len(rlp)) {
-		return nil, fmt.Errorf("unexpected trailing data: %x", rlp[consumed:])
+		// trailing bytes are considered as a corrupted RLP stream
+		// with an exception to trailing zeros.
+		// It is in particular for embedded nodes that are laid out in a fixed size
+		// byte array with the payload from the start of the array padded with zeros.
+		for _, b := range rlp[consumed:] {
+			if b != 0 {
+				return nil, fmt.Errorf("unexpected trailing data: %x", rlp[consumed:])
+			}
+		}
 	}
 	return item, err
 }
