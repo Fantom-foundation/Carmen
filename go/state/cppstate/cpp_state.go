@@ -23,6 +23,7 @@ import "C"
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"os"
 	"path/filepath"
 	"unsafe"
@@ -278,6 +279,10 @@ func (cs *CppState) GetArchiveBlockHeight() (uint64, bool, error) {
 func (cs *CppState) Check() error {
 	// TODO: implement, see https://github.com/Fantom-foundation/Carmen/issues/313
 	return nil
+}
+
+func (cs *CppState) CreateWitnessProof(address common.Address, keys ...common.Key) (witness.Proof, error) {
+	panic("not implemented")
 }
 
 type objectId struct {

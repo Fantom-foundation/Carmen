@@ -42,7 +42,7 @@ func newS4State(params state.Parameters, mptState *mpt.MptState) (state.State, e
 }
 
 func newGoMemoryS4State(params state.Parameters) (state.State, error) {
-	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
+	state, err := mpt.OpenGoMemoryState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func newGoMemoryS4State(params state.Parameters) (state.State, error) {
 }
 
 func newGoFileS4State(params state.Parameters) (state.State, error) {
-	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.DefaultMptStateCapacity)
+	state, err := mpt.OpenGoFileState(filepath.Join(params.Directory, "live"), mpt.S4LiveConfig, mpt.NodeCacheConfig{})
 	if err != nil {
 		return nil, err
 	}
