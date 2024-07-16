@@ -23,6 +23,7 @@ import (
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
+	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
 	witness "github.com/Fantom-foundation/Carmen/go/common/witness"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -143,10 +144,10 @@ func (mr *MockArchiveMockRecorder) GetAccountHash(block, account any) *gomock.Ca
 }
 
 // GetBalance mocks base method.
-func (m *MockArchive) GetBalance(block uint64, account common.Address) (common.Balance, error) {
+func (m *MockArchive) GetBalance(block uint64, account common.Address) (amount.Amount, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", block, account)
-	ret0, _ := ret[0].(common.Balance)
+	ret0, _ := ret[0].(amount.Amount)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
