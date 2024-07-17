@@ -20,11 +20,10 @@
 package state
 
 import (
-	big "math/big"
 	reflect "reflect"
 
 	common "github.com/Fantom-foundation/Carmen/go/common"
-	"github.com/Fantom-foundation/Carmen/go/common/amount"
+	amount "github.com/Fantom-foundation/Carmen/go/common/amount"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -1853,7 +1852,7 @@ func (mr *MockBulkLoadMockRecorder) CreateAccount(arg0 any) *gomock.Call {
 }
 
 // SetBalance mocks base method.
-func (m *MockBulkLoad) SetBalance(arg0 common.Address, arg1 *big.Int) {
+func (m *MockBulkLoad) SetBalance(arg0 common.Address, arg1 amount.Amount) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "SetBalance", arg0, arg1)
 }
