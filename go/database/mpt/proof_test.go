@@ -19,7 +19,6 @@ import (
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
-	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
@@ -206,15 +205,15 @@ func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.
 	}
 
 	// the hashed rlp of the embedded node should not be a key in the proofDb
-	ref, _ := ctxt.Get("V")
-	embeddedHash, _ := ctxt.getHashFor(&ref)
-	// decode and encode to remove trailing zeros and get RLP of the embedded node.
-	decoded, err := rlp.Decode(embeddedHash[:])
+	_, embeddedNode := ctxt.Get("V")
+	handle := embeddedNode.GetViewHandle()
+	rlp, err := encodeToRlp(handle.Get(), ctxt, []byte{})
+	handle.Release()
 	if err != nil {
-		t.Fatalf("failed to decode embedded hash: %v", err)
+		t.Fatalf("failed to encode embedded node: %v", err)
 	}
-	encoded := rlp.Encode(decoded)
-	hash := common.Keccak256(encoded)
+
+	hash := common.Keccak256(rlp)
 	if _, ok := proof.proofDb[hash]; ok {
 		t.Errorf("embedded node should not be in the proof")
 	}
