@@ -425,7 +425,7 @@ func TestFailingStore(t *testing.T) {
 		t.Fatalf("failed to create in-memory state; %s", err)
 	}
 	goSchema := state.UnsafeUnwrapSyncedState(db).(*GoState).live.(*GoSchema1)
-	goSchema.balancesStore = failingStore[uint32, common.Balance]{goSchema.balancesStore}
+	goSchema.balancesStore = failingStore[uint32, amount.Amount]{goSchema.balancesStore}
 	goSchema.noncesStore = failingStore[uint32, common.Nonce]{goSchema.noncesStore}
 	goSchema.valuesStore = failingStore[uint32, common.Value]{goSchema.valuesStore}
 

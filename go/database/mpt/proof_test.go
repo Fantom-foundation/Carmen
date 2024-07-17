@@ -14,13 +14,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
+	"testing"
+
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/rlp"
 	"github.com/Fantom-foundation/Carmen/go/database/mpt/shared"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/exp/maps"
-	"reflect"
-	"testing"
 )
 
 func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
@@ -44,7 +46,7 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Branch{
 										children: Children{
 											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Value{key: key, length: 24, value: common.Value{0x12}}},
@@ -60,7 +62,7 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Branch{
 										children: Children{
 											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Value{key: common.Key{}, length: 24, value: common.Value{0x12}}},
@@ -76,7 +78,7 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Extension{path: keyNibbles[1:40], next: &Empty{}},
 								}}}}},
 			},
@@ -89,7 +91,7 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Branch{
 										children: Children{
 											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Empty{}},
@@ -105,7 +107,7 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Empty{}}},
 						}}},
 			},
@@ -130,7 +132,7 @@ func TestCreateWitnessProof_CanCreateProof(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:50],
-								next: &Account{address: common.Address{}, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: common.Address{}, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Branch{
 										children: Children{
 											keyNibbles[0]: &Extension{path: keyNibbles[1:40], next: &Empty{}},
@@ -185,7 +187,7 @@ func TestCreateWitnessProof_CanCreateProof_EmbeddedNode_Not_In_Proof(t *testing.
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
 			storage: &Extension{
 				path:         KeyToNibblePath(key, ctxt)[0:40],
 				nextEmbedded: true,
@@ -284,7 +286,7 @@ func TestCreateWitnessProof_Serialize_And_Deserialize(t *testing.T) {
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+		next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
 			storage: &Extension{
 				path: KeyToNibblePath(key, ctxt)[0:40],
 				next: &Value{key: key, length: 24, value: value},
@@ -332,7 +334,7 @@ func TestCreateWitnessProof_SourceError_All_Paths(t *testing.T) {
 						children: Children{
 							addressNibbles[1]: &Extension{
 								path: addressNibbles[2:20],
-								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+								next: &Account{address: address, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 									storage: &Empty{}}},
 						}}}}
 
@@ -378,7 +380,7 @@ func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 				children: Children{
 					address1Path[1]: &Tag{"A_2", &Extension{
 						path: address1Path[2:50],
-						next: &Tag{"A_3", &Account{address: address1, pathLength: 14, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+						next: &Tag{"A_3", &Account{address: address1, pathLength: 14, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 							storage: &Tag{"K_1", &Branch{
 								children: Children{
 									key1Path[0]: &Tag{"K_2", &Extension{path: key1Path[1:40],
@@ -393,7 +395,7 @@ func TestWitnessProof_Extract_and_Merge_Proofs(t *testing.T) {
 				children: Children{
 					address2Path[1]: &Tag{"B_2", &Extension{
 						path: address2Path[2:40],
-						next: &Tag{"B_3", &Account{address: address2, pathLength: 24, info: AccountInfo{common.Nonce{1}, common.Balance{1}, common.Hash{0xAA}},
+						next: &Tag{"B_3", &Account{address: address2, pathLength: 24, info: AccountInfo{common.Nonce{1}, amount.New(1), common.Hash{0xAA}},
 							storage: &Branch{
 								children: Children{
 									key1Path[0]: &Extension{path: key1Path[1:45],
@@ -493,12 +495,12 @@ func TestWitnessProof_Extract_Various_NodeTypes_NotFoundProofs(t *testing.T) {
 			path: AddressToNibblePath(address, ctxt)[0:31],
 			next: &Branch{
 				children: Children{
-					AddressToNibblePath(address, ctxt)[31]: &Account{address: common.Address{1}, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+					AddressToNibblePath(address, ctxt)[31]: &Account{address: common.Address{1}, pathLength: 40, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 				}},
 		}},
 		"valueNode key not found": {&Extension{
 			path: AddressToNibblePath(address, ctxt)[0:30],
-			next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+			next: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
 				storage: &Value{key: common.Key{1}, length: 1, value: common.Value{0x01, 0x02, 0x03, 0x04}},
 			},
 		}},
@@ -632,7 +634,7 @@ func TestWitnessProof_Extract_MissingNode_In_Proof(t *testing.T) {
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 	}
 
 	root, node := ctxt.Build(desc)
@@ -660,7 +662,7 @@ func TestWitnessProof_Extract_CorruptedRlp_In_Proof(t *testing.T) {
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 	}
 
 	root, node := ctxt.Build(desc)
@@ -709,7 +711,7 @@ func TestWitnessProof_Extract_EmbeddedNode_In_Proof(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			desc := &Tag{label: "A", nested: &Extension{
 				path: AddressToNibblePath(address, ctxt)[0:30],
-				next: &Tag{label: "B", nested: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}},
+				next: &Tag{label: "B", nested: &Account{address: address, pathLength: 34, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}},
 					storage: &Tag{label: "C", nested: &Extension{
 						path:         KeyToNibblePath(key, ctxt)[0:40],
 						nextEmbedded: true,
@@ -742,7 +744,7 @@ func TestWitnessProof_Access_Proof_Fields(t *testing.T) {
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
 
 	nonce := common.Nonce{0x01}
-	balance := common.Balance{0x02}
+	balance := amount.New(2)
 	hash := common.Hash{0x03}
 	info := AccountInfo{Nonce: nonce, Balance: balance, CodeHash: hash}
 
@@ -830,7 +832,7 @@ func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherAddr
 	address := common.Address{1}
 	differentAddress := common.Address{2}
 	key := common.Key{2}
-	info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{1}, CodeHash: common.Hash{1}}
+	info := AccountInfo{Nonce: common.Nonce{1}, Balance: amount.New(1), CodeHash: common.Hash{1}}
 
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
 
@@ -851,7 +853,7 @@ func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherAddr
 		"GetBalance": {get: func(t *testing.T, proof WitnessProof, rootHash common.Hash, address common.Address, key common.Key) (any, bool, error) {
 			return proof.GetBalance(rootHash, address)
 		},
-			want: common.Balance{},
+			want: amount.New(),
 		},
 		"GetCodeHash": {get: func(t *testing.T, proof WitnessProof, rootHash common.Hash, address common.Address, key common.Key) (any, bool, error) {
 			return proof.GetCodeHash(rootHash, address)
@@ -903,7 +905,7 @@ func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherAddr
 
 func TestWitnessProof_Access_Proof_Fields_CompleteProofs_EmptyFields_AnotherKey(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	info := AccountInfo{Nonce: common.Nonce{1}, Balance: common.Balance{1}, CodeHash: common.Hash{1}}
+	info := AccountInfo{Nonce: common.Nonce{1}, Balance: amount.New(1), CodeHash: common.Hash{1}}
 	ctxt := newNodeContextWithConfig(t, ctrl, S5LiveConfig)
 	address := common.Address{1}
 	value := common.Value{3}
@@ -988,7 +990,7 @@ func TestWitnessProof_Is_Valid(t *testing.T) {
 
 	desc := &Extension{
 		path: AddressToNibblePath(address, ctxt)[0:30],
-		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: common.Balance{0x02}, CodeHash: common.Hash{0x03}}},
+		next: &Account{address: address, pathLength: 10, info: AccountInfo{Nonce: common.Nonce{0x01}, Balance: amount.New(2), CodeHash: common.Hash{0x03}}},
 	}
 
 	root, node := ctxt.Build(desc)

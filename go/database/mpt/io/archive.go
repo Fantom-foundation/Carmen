@@ -152,7 +152,8 @@ func ExportArchive(ctx context.Context, directory string, out io.Writer) error {
 				if _, err := out.Write([]byte{'B'}); err != nil {
 					return err
 				}
-				if _, err := out.Write((*accountDiff.Balance)[:]); err != nil {
+				b := accountDiff.Balance.Bytes32()
+				if _, err := out.Write(b[:]); err != nil {
 					return err
 				}
 			}

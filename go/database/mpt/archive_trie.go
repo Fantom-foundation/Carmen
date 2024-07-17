@@ -14,12 +14,13 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/Fantom-foundation/Carmen/go/backend/archive"
-	"github.com/Fantom-foundation/Carmen/go/common/witness"
 	"io"
 	"os"
 	"sync"
 	"unsafe"
+
+	"github.com/Fantom-foundation/Carmen/go/backend/archive"
+	"github.com/Fantom-foundation/Carmen/go/common/witness"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
 	"github.com/Fantom-foundation/Carmen/go/common/amount"
@@ -189,7 +190,7 @@ func (a *ArchiveTrie) GetBalance(block uint64, account common.Address) (balance 
 	if err != nil {
 		return amount.New(), a.addError(err)
 	}
-	return amount.NewFromBytes(info.Balance[:]...), nil
+	return info.Balance, nil
 }
 
 func (a *ArchiveTrie) GetCode(block uint64, account common.Address) (code []byte, err error) {

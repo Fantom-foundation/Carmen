@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/fuzzing"
 )
 
@@ -98,10 +99,10 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 			nonce = common.Nonce((*b)[0:len(nonce)])
 			*b = (*b)[len(nonce):]
 		}
-		var balance common.Balance
-		if len(*b) >= len(balance) {
-			balance = common.Balance((*b)[0:len(balance)])
-			*b = (*b)[len(balance):]
+		balance := amount.New()
+		if len(*b) >= amount.BytesLength {
+			balance = amount.NewFromBytes((*b)[0:amount.BytesLength]...)
+			*b = (*b)[amount.BytesLength:]
 		}
 		var codeHash common.Hash
 		if len(*b) >= len(codeHash) {
@@ -127,11 +128,11 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 			nonce3[i] = byte(0xFF)
 		}
 
-		var balance1 common.Balance
-		var balance2 common.Balance
-		var balance3 common.Balance
+		var balance1 [amount.BytesLength]byte
+		var balance2 [amount.BytesLength]byte
+		var balance3 [amount.BytesLength]byte
 
-		for i := 0; i < common.BalanceSize; i++ {
+		for i := 0; i < amount.BytesLength; i++ {
 			balance2[i] = byte(i + 1)
 			balance3[i] = byte(0xFF)
 		}
@@ -150,9 +151,9 @@ func fuzzLiveTrieRandomAccountOps(f *testing.F) {
 			var sequence fuzzing.OperationSequence[liveTrieAccountFuzzingContext]
 			for _, addr := range []tinyAddress{0, 1, 2, 5, 10, 255} {
 				for _, nonce := range []common.Nonce{nonce1, nonce2, nonce3} {
-					for _, balance := range []common.Balance{balance1, balance2, balance3} {
+					for _, balance := range [][amount.BytesLength]byte{balance1, balance2, balance3} {
 						for _, codeHash := range []common.Hash{codeHash1, codeHash2, codeHash3} {
-							info := AccountInfo{nonce, balance, codeHash}
+							info := AccountInfo{nonce, amount.NewFromBytes(balance[:]...), codeHash}
 							sequence = append(sequence, registry.CreateDataOp(setAccount, accountPayload{addr, info}))
 						}
 					}
@@ -272,10 +273,11 @@ type accountPayload struct {
 // Serialise lays out the account data as: <shortAddress><nonce><balance><codeHash>
 func (a *accountPayload) Serialise() []byte {
 	addr := a.SerialiseAddress()
-	res := make([]byte, 0, len(addr)+len(a.info.Nonce)+len(a.info.Balance)+len(a.info.CodeHash))
+	res := make([]byte, 0, len(addr)+len(a.info.Nonce)+amount.BytesLength+len(a.info.CodeHash))
 	res = append(res, addr...)
 	res = append(res, a.info.Nonce[:]...)
-	res = append(res, a.info.Balance[:]...)
+	b := a.info.Balance.Bytes32()
+	res = append(res, b[:]...)
 	res = append(res, a.info.CodeHash[:]...)
 	return res
 }
@@ -303,7 +305,7 @@ const (
 // Parameters:
 // - f: The testing.F parameter for the fuzzLiveTrieRandomAccountOps function.
 func fuzzLiveTrieRandomAccountStorageOps(f *testing.F) {
-	accountInfo := AccountInfo{Balance: common.Balance{0x9}}
+	accountInfo := AccountInfo{Balance: amount.New(9)}
 	var createAccountIfNotExists = func(value storagePayload, t fuzzing.TestingT, c *liveTrieStorageFuzzingContext) {
 		if account := c.shadow[value.address]; account == nil {
 			if err := c.liveTrie.SetAccountInfo(value.address.GetAddress(), accountInfo); err != nil {

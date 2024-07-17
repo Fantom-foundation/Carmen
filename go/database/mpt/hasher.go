@@ -165,7 +165,8 @@ func (h directHasher) hash(
 
 		hasher.Write([]byte{'A'})
 		hasher.Write(node.address[:])
-		hasher.Write(node.info.Balance[:])
+		b := node.info.Balance.Bytes32()
+		hasher.Write(b[:])
 		hasher.Write(node.info.Nonce[:])
 		hasher.Write(node.info.CodeHash[:])
 		hasher.Write(node.storageHash[:])
@@ -637,7 +638,7 @@ func encodeAccountToRlp(
 	items := *ptr
 
 	items[0] = rlp.Uint64{Value: node.info.Nonce.ToUint64()}
-	items[1] = rlp.BigInt{Value: node.info.Balance.ToBigInt()}
+	items[1] = rlp.BigInt{Value: node.info.Balance.ToBig()}
 	if storageRoot.Id().IsEmpty() {
 		items[2] = rlp.Hash{Hash: &EmptyNodeEthereumHash}
 	} else {

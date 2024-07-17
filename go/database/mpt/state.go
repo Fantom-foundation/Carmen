@@ -245,7 +245,7 @@ func (s *MptState) GetBalance(address common.Address) (balance amount.Amount, er
 	if !exists || err != nil {
 		return amount.New(), err
 	}
-	return amount.NewFromBytes(info.Balance[:]...), nil
+	return info.Balance, nil
 }
 
 func (s *MptState) SetBalance(address common.Address, balance amount.Amount) (err error) {
@@ -253,10 +253,10 @@ func (s *MptState) SetBalance(address common.Address, balance amount.Amount) (er
 	if err != nil {
 		return err
 	}
-	if info.Balance == balance.Bytes32() {
+	if info.Balance == balance {
 		return nil
 	}
-	info.Balance = balance.Bytes32()
+	info.Balance = balance
 	if !exists {
 		info.CodeHash = emptyCodeHash
 	}

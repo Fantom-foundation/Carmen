@@ -12,6 +12,7 @@ package witness
 
 import (
 	"github.com/Fantom-foundation/Carmen/go/common"
+	"github.com/Fantom-foundation/Carmen/go/common/amount"
 	"github.com/Fantom-foundation/Carmen/go/common/tribool"
 )
 
@@ -33,7 +34,7 @@ type Proof interface {
 	// If the witness proof contains the requested account for the input address for the given root hash, it returns its balance.
 	// If the proof does not cover the requested account, it returns false.
 	// The method may return an error if the proof is invalid.
-	GetBalance(root common.Hash, address common.Address) (common.Balance, bool, error)
+	GetBalance(root common.Hash, address common.Address) (amount.Amount, bool, error)
 
 	// GetNonce extracts a nonce from the witness proof for the input root hash and the address.
 	// If the witness proof contains the account for the input address, it returns its nonce.
