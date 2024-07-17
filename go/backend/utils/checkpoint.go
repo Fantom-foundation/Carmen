@@ -13,38 +13,85 @@ import (
 
 //go:generate mockgen -source checkpoint.go -destination checkpoint_mocks.go -package utils
 
+// A checkpoint is a monotonically increasing number that is used to identify
+// a backup state of a data structure that can be created in coordination with
+// multiple participants. The checkpoint is used to ensure that all participants
+// have a consistent view of the overall state they are part of.
 type Checkpoint uint32
 
+// CheckpointCoordinator is able to coordinate the creation and restoration of
+// checkpoints with multiple participants. The coordinator is responsible for
+// ensuring that all participants are atomically transitioned to a new checkpoint.
 type CheckpointCoordinator interface {
+	// GetCurrentCheckpoint returns the last checkpoint that was created. If no
+	// checkpoint was created yet, the return value is 0.
+	GetCurrentCheckpoint() Checkpoint
+
+	// CreateCheckpoint creates a new checkpoint and transitions all participants
+	// to the new checkpoint. If any participant fails, all participants are reverted
+	// to retain their current checkpoint.
 	CreateCheckpoint() (Checkpoint, error)
-	GetLastCheckpoint() Checkpoint
+
+	// Restore transitions all participants to the last checkpoint that was created.
 	Restore() error
 }
 
+// CheckpointParticipant is a participant in a checkpoint that can participate in
+// the coordinated creation and restoration of checkpoints.
 type CheckpointParticipant interface {
-	IsAvailable(Checkpoint) error
+	// GuaranteeCheckpoint requires the participant to check whether a restoration
+	// to the given checkpoint is possible. If the participant is not able to restore to
+	// the given checkpoint, an error is returned. If the participant finds the given
+	// checkpoint as a prepared checkpoint that has not yet been committed, it should
+	// be committed. If there is a prepared checkpoint beyond the given checkpoint,
+	// it shall be discarded.
+	GuaranteeCheckpoint(Checkpoint) error
+
+	// Prepare is called to signal the participant to prepare for a new checkpoint.
+	// The new checkpoint shall be created, but not yet committed to be the new
+	// primary target for future restore calls.
 	Prepare(Checkpoint) error
+
+	// Commit is called to signal the participant to commit the previously prepared
+	// checkpoint. Older checkpoints can be discarded. Failing to commit after
+	// preparing a checkpoint is considered an unrecoverable issue and the data
+	// structure managed by this participant is considered irreversibly corrupted.
 	Commit(Checkpoint) error
-	Rollback(Checkpoint) error
+
+	// Abort is called to signal the participant to undo the preparation step
+	// of a commit started by a Prepare call. The participant should discard the
+	// newly created checkpoint and retain the previous checkpoint as the primary
+	// target for future restore calls.
+	Abort(Checkpoint) error
+
+	// Restore requests this participant to restore the state overed by the given
+	// checkpoint -- which may be the last previously committed checkpoint or a
+	// prepared checkpoint that has not been aborted or committed yet.
 	Restore(Checkpoint) error
 }
 
+// checkpointCoordinator implements the CheckpointCoordinator interface using a two-phase
+// commit protocol and an atomic file-system operation to ensure recoverability if the
+// process crashes during checkpoint creation.
 type checkpointCoordinator struct {
 	path           string
 	participants   []CheckpointParticipant
 	lastCheckpoint Checkpoint
 }
 
-var _ CheckpointCoordinator = &checkpointCoordinator{}
-
-func NewCheckpointCoordinator(path string, participants ...CheckpointParticipant) (*checkpointCoordinator, error) {
-
-	// TODO: make sure path is a write-able directory
-	if err := os.MkdirAll(path, 0700); err != nil {
-		return nil, fmt.Errorf("failed to create directory %s: %w", path, err)
+// NewCheckpointCoordinator creates a new checkpoint coordinator using the given directory
+// for retaining coordination information and managing the creation and restoration of checkpoints
+// for the given participants. During its creation, it is checked whether all participants
+// are in sync regarding their check points. If not, the creation fails.
+func NewCheckpointCoordinator(directory string, participants ...CheckpointParticipant) (*checkpointCoordinator, error) {
+	// create the directory to be used for coordination if it does not exist yet
+	if err := os.MkdirAll(directory, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create directory %s: %w", directory, err)
 	}
 
-	file, err := os.Open(filepath.Join(path, "committed"))
+	// TODO: make sure path is a write-able directory
+
+	file, err := os.Open(filepath.Join(directory, "committed"))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -63,7 +110,7 @@ func NewCheckpointCoordinator(path string, participants ...CheckpointParticipant
 
 	errs := []error{}
 	for _, p := range participants {
-		if err := p.IsAvailable(lastCheckpoint); err != nil {
+		if err := p.GuaranteeCheckpoint(lastCheckpoint); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -72,7 +119,7 @@ func NewCheckpointCoordinator(path string, participants ...CheckpointParticipant
 	}
 
 	return &checkpointCoordinator{
-		path:           path,
+		path:           directory,
 		participants:   slices.Clone(participants),
 		lastCheckpoint: lastCheckpoint,
 	}, nil
@@ -89,7 +136,7 @@ func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
 		if err := p.Prepare(commit); err != nil {
 			errs = append(errs, err)
 			for j := i - 1; j >= 0; j-- {
-				if err := c.participants[j].Rollback(commit); err != nil {
+				if err := c.participants[j].Abort(commit); err != nil {
 					errs = append(errs, err)
 				}
 			}
@@ -104,7 +151,7 @@ func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
 	if err := os.WriteFile(prepareFile, data[:], 0644); err != nil {
 		errs = append(errs, err)
 		for _, p := range c.participants {
-			if err := p.Rollback(commit); err != nil {
+			if err := p.Abort(commit); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -116,7 +163,7 @@ func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
 	if err := os.Rename(prepareFile, commitFile); err != nil {
 		errs = append(errs, err)
 		for _, p := range c.participants {
-			if err := p.Rollback(commit); err != nil {
+			if err := p.Abort(commit); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -136,7 +183,7 @@ func (c *checkpointCoordinator) CreateCheckpoint() (Checkpoint, error) {
 	return commit, errors.Join(errs...)
 }
 
-func (c *checkpointCoordinator) GetLastCheckpoint() Checkpoint {
+func (c *checkpointCoordinator) GetCurrentCheckpoint() Checkpoint {
 	return c.lastCheckpoint
 }
 

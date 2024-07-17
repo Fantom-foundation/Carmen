@@ -80,10 +80,10 @@ func (s *syncedStock[I, V]) Close() error {
 	return s.nested.Close()
 }
 
-func (s *syncedStock[I, V]) IsAvailable(checkpoint utils.Checkpoint) error {
+func (s *syncedStock[I, V]) GuaranteeCheckpoint(checkpoint utils.Checkpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.nested.IsAvailable(checkpoint)
+	return s.nested.GuaranteeCheckpoint(checkpoint)
 }
 
 func (s *syncedStock[I, V]) Prepare(checkpoint utils.Checkpoint) error {
@@ -98,10 +98,10 @@ func (s *syncedStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	return s.nested.Commit(checkpoint)
 }
 
-func (s *syncedStock[I, V]) Rollback(checkpoint utils.Checkpoint) error {
+func (s *syncedStock[I, V]) Abort(checkpoint utils.Checkpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.nested.Rollback(checkpoint)
+	return s.nested.Abort(checkpoint)
 }
 
 func (s *syncedStock[I, V]) Restore(checkpoint utils.Checkpoint) error {

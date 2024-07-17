@@ -449,7 +449,7 @@ func testCanBeCommittedAndSealed(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to rollback commit: %v", err)
 	}
 
-	if err := stock.IsAvailable(utils.Checkpoint(1)); err != nil {
+	if err := stock.GuaranteeCheckpoint(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -476,11 +476,11 @@ func testCanBeRolledBackInTwoPhaseCommit(t *testing.T, factory NamedStockFactory
 		t.Fatalf("failed to prepare commit: %v", err)
 	}
 
-	if err := stock.Rollback(utils.Checkpoint(1)); err != nil {
+	if err := stock.Abort(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to rollback commit: %v", err)
 	}
 
-	if err := stock.IsAvailable(utils.Checkpoint(0)); err != nil {
+	if err := stock.GuaranteeCheckpoint(utils.Checkpoint(0)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -496,7 +496,7 @@ func testCommitStateIsPersisted(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.IsAvailable(utils.Checkpoint(0)); err != nil {
+	if err := stock.GuaranteeCheckpoint(utils.Checkpoint(0)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -515,7 +515,7 @@ func testCommitStateIsPersisted(t *testing.T, factory NamedStockFactory) {
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.IsAvailable(utils.Checkpoint(1)); err != nil {
+	if err := stock.GuaranteeCheckpoint(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 }
@@ -535,7 +535,7 @@ func testNumberOfCommitValuesIsPersisted(t *testing.T, factory NamedStockFactory
 		t.Fatalf("failed to set value in stock: %v", err)
 	}
 
-	if err := stock.IsAvailable(utils.Checkpoint(0)); err != nil {
+	if err := stock.GuaranteeCheckpoint(utils.Checkpoint(0)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -554,7 +554,7 @@ func testNumberOfCommitValuesIsPersisted(t *testing.T, factory NamedStockFactory
 		t.Fatalf("failed to open stock: %v", err)
 	}
 
-	if err := stock.IsAvailable(utils.Checkpoint(1)); err != nil {
+	if err := stock.GuaranteeCheckpoint(utils.Checkpoint(1)); err != nil {
 		t.Fatalf("failed to check commit: %v", err)
 	}
 
@@ -609,7 +609,7 @@ func testCheckCanRecoverFromCrashAfterPrepare(t *testing.T, factory NamedStockFa
 				t.Fatalf("failed to open stock: %v", err)
 			}
 
-			if err := second.IsAvailable(test.recoveryCommit); err != nil {
+			if err := second.GuaranteeCheckpoint(test.recoveryCommit); err != nil {
 				t.Fatalf("failed to check commit: %v", err)
 			}
 

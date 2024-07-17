@@ -104,8 +104,8 @@ func (mr *MockCheckpointParticipantMockRecorder) Commit(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockCheckpointParticipant)(nil).Commit), arg0)
 }
 
-// IsAvailable mocks base method.
-func (m *MockCheckpointParticipant) IsAvailable(arg0 Checkpoint) error {
+// GuaranteeCheckpoint mocks base method.
+func (m *MockCheckpointParticipant) GuaranteeCheckpoint(arg0 Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsAvailable", arg0)
 	ret0, _ := ret[0].(error)
@@ -115,7 +115,7 @@ func (m *MockCheckpointParticipant) IsAvailable(arg0 Checkpoint) error {
 // IsAvailable indicates an expected call of IsAvailable.
 func (mr *MockCheckpointParticipantMockRecorder) IsAvailable(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAvailable", reflect.TypeOf((*MockCheckpointParticipant)(nil).IsAvailable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAvailable", reflect.TypeOf((*MockCheckpointParticipant)(nil).GuaranteeCheckpoint), arg0)
 }
 
 // Prepare mocks base method.
@@ -146,8 +146,8 @@ func (mr *MockCheckpointParticipantMockRecorder) Restore(arg0 any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockCheckpointParticipant)(nil).Restore), arg0)
 }
 
-// Rollback mocks base method.
-func (m *MockCheckpointParticipant) Rollback(arg0 Checkpoint) error {
+// Abort mocks base method.
+func (m *MockCheckpointParticipant) Abort(arg0 Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Rollback", arg0)
 	ret0, _ := ret[0].(error)
@@ -157,5 +157,5 @@ func (m *MockCheckpointParticipant) Rollback(arg0 Checkpoint) error {
 // Rollback indicates an expected call of Rollback.
 func (mr *MockCheckpointParticipantMockRecorder) Rollback(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockCheckpointParticipant)(nil).Rollback), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockCheckpointParticipant)(nil).Abort), arg0)
 }

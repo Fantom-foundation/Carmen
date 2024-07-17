@@ -279,7 +279,7 @@ func (s *inMemoryStock[I, V]) Close() error {
 	return s.Flush()
 }
 
-func (s *inMemoryStock[I, V]) IsAvailable(commit utils.Checkpoint) error {
+func (s *inMemoryStock[I, V]) GuaranteeCheckpoint(commit utils.Checkpoint) error {
 	// If the requested commit is a pending commit, this pending
 	// commit needs to be completed.
 	if s.lastCheckpoint+1 == commit {
@@ -309,7 +309,7 @@ func (s *inMemoryStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	return err
 }
 
-func (s *inMemoryStock[I, V]) Rollback(commit utils.Checkpoint) error {
+func (s *inMemoryStock[I, V]) Abort(commit utils.Checkpoint) error {
 	return errors.Join(
 		os.RemoveAll(filepath.Join(s.directory, "prepare")),
 		s.Close(),

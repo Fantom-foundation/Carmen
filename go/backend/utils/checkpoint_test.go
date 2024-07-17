@@ -28,7 +28,7 @@ func TestTwoPhaseCommit_CanHandleSuccessfulCommit(t *testing.T) {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 
-	if want, got := Checkpoint(0), coordinator.GetLastCheckpoint(); want != got {
+	if want, got := Checkpoint(0), coordinator.GetCurrentCheckpoint(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 
@@ -61,7 +61,7 @@ func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 		t.Fatalf("failed to create coordinator: %v", err)
 	}
 
-	if want, got := Checkpoint(0), coordinator.GetLastCheckpoint(); want != got {
+	if want, got := Checkpoint(0), coordinator.GetCurrentCheckpoint(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 
@@ -70,7 +70,7 @@ func TestTwoPhaseCommit_CommitIsAbortedIfPreparationFails(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	if want, got := Checkpoint(0), coordinator.GetLastCheckpoint(); want != got {
+	if want, got := Checkpoint(0), coordinator.GetCurrentCheckpoint(); want != got {
 		t.Errorf("unexpected last commit: want %d, got %d", want, got)
 	}
 }
@@ -83,7 +83,7 @@ func TestTwoPhaseCommit_CommitNumberIsPersisted(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create coordinator: %v", err)
 		}
-		if want, got := commit, coordinator.GetLastCheckpoint(); want != got {
+		if want, got := commit, coordinator.GetCurrentCheckpoint(); want != got {
 			t.Errorf("unexpected last commit: want %d, got %d", want, got)
 		}
 		newCommit, err := coordinator.CreateCheckpoint()
@@ -128,11 +128,11 @@ type myData interface {
 	Get(int) int
 	Set(int) int
 
-	IsAvailable(Checkpoint) error // < make sure the state has the given commit it could revert to if needed
-	Prepare(Checkpoint) error     // < prepare a commit
-	Commit(Checkpoint) error      // < fix a full state that can be restored
-	Rollback(Checkpoint) error    // < undo a prepared commit
-	Restore(Checkpoint) error     // < restore a prepared commit
+	GuaranteeCheckpoint(Checkpoint) error // < make sure the state has the given commit it could revert to if needed
+	Prepare(Checkpoint) error             // < prepare a commit
+	Commit(Checkpoint) error              // < fix a full state that can be restored
+	Abort(Checkpoint) error               // < undo a prepared commit
+	Restore(Checkpoint) error             // < restore a prepared commit
 
 	Flush() error // < write current state to disk; Problem: this is messing up the last commit
 	Close() error // < close the data structure

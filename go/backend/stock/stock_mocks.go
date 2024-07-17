@@ -140,8 +140,8 @@ func (mr *MockStockMockRecorder[I, V]) GetMemoryFootprint() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemoryFootprint", reflect.TypeOf((*MockStock[I, V])(nil).GetMemoryFootprint))
 }
 
-// IsAvailable mocks base method.
-func (m *MockStock[I, V]) IsAvailable(arg0 utils.Checkpoint) error {
+// GuaranteeCheckpoint mocks base method.
+func (m *MockStock[I, V]) GuaranteeCheckpoint(arg0 utils.Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "IsAvailable", arg0)
 	ret0, _ := ret[0].(error)
@@ -151,7 +151,7 @@ func (m *MockStock[I, V]) IsAvailable(arg0 utils.Checkpoint) error {
 // IsAvailable indicates an expected call of IsAvailable.
 func (mr *MockStockMockRecorder[I, V]) IsAvailable(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAvailable", reflect.TypeOf((*MockStock[I, V])(nil).IsAvailable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAvailable", reflect.TypeOf((*MockStock[I, V])(nil).GuaranteeCheckpoint), arg0)
 }
 
 // New mocks base method.
@@ -197,8 +197,8 @@ func (mr *MockStockMockRecorder[I, V]) Restore(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Restore", reflect.TypeOf((*MockStock[I, V])(nil).Restore), arg0)
 }
 
-// Rollback mocks base method.
-func (m *MockStock[I, V]) Rollback(arg0 utils.Checkpoint) error {
+// Abort mocks base method.
+func (m *MockStock[I, V]) Abort(arg0 utils.Checkpoint) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Rollback", arg0)
 	ret0, _ := ret[0].(error)
@@ -208,7 +208,7 @@ func (m *MockStock[I, V]) Rollback(arg0 utils.Checkpoint) error {
 // Rollback indicates an expected call of Rollback.
 func (mr *MockStockMockRecorder[I, V]) Rollback(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockStock[I, V])(nil).Rollback), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockStock[I, V])(nil).Abort), arg0)
 }
 
 // Set mocks base method.

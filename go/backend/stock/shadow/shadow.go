@@ -98,10 +98,10 @@ func (s *shadowStock[I, V]) Close() error {
 	)
 }
 
-func (s *shadowStock[I, V]) IsAvailable(checkpoint utils.Checkpoint) error {
+func (s *shadowStock[I, V]) GuaranteeCheckpoint(checkpoint utils.Checkpoint) error {
 	return errors.Join(
-		s.primary.IsAvailable(checkpoint),
-		s.secondary.IsAvailable(checkpoint),
+		s.primary.GuaranteeCheckpoint(checkpoint),
+		s.secondary.GuaranteeCheckpoint(checkpoint),
 	)
 }
 
@@ -119,10 +119,10 @@ func (s *shadowStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	)
 }
 
-func (s *shadowStock[I, V]) Rollback(checkpoint utils.Checkpoint) error {
+func (s *shadowStock[I, V]) Abort(checkpoint utils.Checkpoint) error {
 	return errors.Join(
-		s.primary.Rollback(checkpoint),
-		s.secondary.Rollback(checkpoint),
+		s.primary.Abort(checkpoint),
+		s.secondary.Abort(checkpoint),
 	)
 }
 

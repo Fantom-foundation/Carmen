@@ -381,7 +381,7 @@ func (s *fileStock[I, V]) Close() error {
 	)
 }
 
-func (s *fileStock[I, V]) IsAvailable(checkpoint utils.Checkpoint) error {
+func (s *fileStock[I, V]) GuaranteeCheckpoint(checkpoint utils.Checkpoint) error {
 	// If the stock is at the requested commit, everything is fine.
 	if s.lastCheckpoint == checkpoint {
 		return nil
@@ -445,7 +445,7 @@ func (s *fileStock[I, V]) Commit(checkpoint utils.Checkpoint) error {
 	return nil
 }
 
-func (s *fileStock[I, V]) Rollback(checkpoint utils.Checkpoint) error {
+func (s *fileStock[I, V]) Abort(checkpoint utils.Checkpoint) error {
 	if want, got := s.lastCheckpoint+1, checkpoint; want != got {
 		return fmt.Errorf("invalid next checkpoint, expected %d, got %d", want, got)
 	}
