@@ -401,6 +401,35 @@ func (a *ArchiveTrie) CreateCheckpoint() error {
 	return err
 }
 
+func RestoreCheckpoint(directory string, config MptConfig) error {
+	// If needed, remove the dirty flags from the directory. This
+	// indicates a potential corrupted archive state due to a non-clean
+	// archive shutdown -- which is what this restoration is supposed to fix.
+	dirty, err := isDirty(directory)
+	if err != nil {
+		return fmt.Errorf("failed to access directory %v: %v", directory, err)
+	}
+	if dirty {
+		if err := markClean(directory); err != nil {
+			return fmt.Errorf("failed to mark directory %v clean: %v", directory, err)
+		}
+	}
+
+	archive, err := OpenArchiveTrie(directory, config, NodeCacheConfig{Capacity: 1})
+	if err == nil {
+		err = errors.Join(
+			archive.RestoreCheckpoint(),
+			archive.Close(),
+		)
+	}
+
+	// If the restoration failed, mark the directory as dirty.
+	if err != nil && dirty {
+		err = errors.Join(err, markDirty(directory))
+	}
+	return err
+}
+
 func (a *ArchiveTrie) RestoreCheckpoint() error {
 	lastBlock, err := a.GetCheckpointBlock()
 	if err != nil {

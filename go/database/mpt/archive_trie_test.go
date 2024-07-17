@@ -1805,7 +1805,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 			dir := t.TempDir()
 
 			fmt.Printf("running test %s\n", name)
-			// Create an archive and fill it with 100 blocks.
+			// Create an archive and fill it with blocks.
 			{
 				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
 				if err != nil {
@@ -1867,6 +1867,131 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 					t.Fatalf("failed to close archive: %v", err)
 				}
 			}
+
+			// Check that the archive can be verified.
+			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				t.Fatalf("failed to verify archive: %v", err)
+			}
+
+			// Check that restored archive can be opened again.
+			{
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				if err != nil {
+					t.Fatalf("cannot open archive: %v", err)
+				}
+
+				block, _, err := archive.GetBlockHeight()
+				if err != nil {
+					t.Fatalf("cannot get block height: %v", err)
+				}
+				if want, got := uint64(90), block; want != got {
+					t.Errorf("unexpected block height, wanted %d, got %d", want, got)
+				}
+
+				// check that the archive has a checkpoint at block 90
+				checkpoint, err := archive.GetCheckpointBlock()
+				if err != nil {
+					t.Fatalf("failed to get checkpoint block: %v", err)
+				}
+				if want, got := uint64(90), checkpoint; want != got {
+					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
+				}
+
+				// additional blocks can be added
+				if err := addBlocks(archive, 91, 97); err != nil {
+					t.Fatalf("failed to add blocks: %v", err)
+				}
+
+				if err := archive.Close(); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			}
+
+			// Check that the restored and extended archive can be verified.
+			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				t.Fatalf("failed to verify archive: %v", err)
+			}
+
+		})
+	}
+}
+
+func TestArchive_ArchiveRecoveryEndToEndTest(t *testing.T) {
+
+	// TODO: run archive creation in different process.
+
+	addBlocks := func(archive *ArchiveTrie, from int, to int) error {
+		for i := from; i < to; i++ {
+			err := archive.Add(uint64(i), common.Update{
+				CreatedAccounts: []common.Address{{byte(i)}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
+				},
+				Codes: []common.CodeUpdate{
+					{Account: common.Address{byte(i)}, Code: []byte{byte(i)}},
+				},
+			}, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	tests := map[string]func(*ArchiveTrie) error{
+		"clean_close": func(archive *ArchiveTrie) error {
+			return archive.Close()
+		},
+		"clean_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+			return errors.Join(
+				addBlocks(archive, 92, 98),
+				archive.Close(),
+			)
+		},
+		"no_close": func(archive *ArchiveTrie) error {
+			// In order to allow the recovery to access the directory, the lock needs to be released
+			return archive.head.(*MptState).lock.Release()
+		},
+		"no_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+			return errors.Join(
+				addBlocks(archive, 92, 98),
+				archive.head.(*MptState).lock.Release(),
+			)
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+
+			fmt.Printf("running test %s\n", name)
+			// Create an archive and fill it with blocks.
+			{
+				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
+				if err != nil {
+					t.Fatalf("cannot open archive: %v", err)
+				}
+
+				if err := addBlocks(archive, 0, 92); err != nil {
+					t.Fatalf("failed to add blocks: %v", err)
+				}
+
+				// check that the archive has a checkpoint at block 90
+				checkpoint, err := archive.GetCheckpointBlock()
+				if err != nil {
+					t.Fatalf("failed to get checkpoint block: %v", err)
+				}
+				if want, got := uint64(90), checkpoint; want != got {
+					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
+				}
+
+				if err := test(archive); err != nil {
+					t.Fatalf("failed to close archive: %v", err)
+				}
+			}
+
+			// Reset archive to checkpoint.
+			RestoreCheckpoint(dir, S5ArchiveConfig)
 
 			// Check that the archive can be verified.
 			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
