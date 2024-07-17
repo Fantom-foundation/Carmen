@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/Fantom-foundation/Carmen/go/common"
@@ -4325,6 +4326,31 @@ func TestStateDB_ContractCreationAndDeletionCanBeRolledBack(t *testing.T) {
 
 	if !db.Exist(address1) {
 		t.Errorf("account should still exist after CreateContract call rollback")
+	}
+}
+
+func TestStateDB_NotReleasingNonCommittableStateDbInstancesDoesNotLeakResources(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	state := NewMockState(ctrl)
+	state.EXPECT().Exists(gomock.Any()).Return(false, nil).AnyTimes()
+
+	cleared := false
+	db := CreateNonCommittableStateDBUsing(state)
+	runtime.SetFinalizer(db, func(any) {
+		cleared = true
+	})
+	db.SetNonce(common.Address{}, 42)
+
+	// release is deliberately skipped
+	db = nil
+
+	// The GC is run multiple times since the finalizer may not be called immediately.
+	for i := 0; i < 10; i++ {
+		runtime.GC()
+	}
+
+	if !cleared {
+		t.Errorf("state DB instance was not freed by garbage collector")
 	}
 }
 
