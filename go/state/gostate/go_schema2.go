@@ -106,8 +106,7 @@ func (s *GoSchema2) GetBalance(address common.Address) (balance amount.Amount, e
 		}
 		return
 	}
-	res, err := s.balancesStore.Get(idx)
-	return amount.NewFromBytes(res[:]...), err
+	return s.balancesStore.Get(idx)
 }
 
 func (s *GoSchema2) SetBalance(address common.Address, balance amount.Amount) (err error) {
@@ -115,7 +114,7 @@ func (s *GoSchema2) SetBalance(address common.Address, balance amount.Amount) (e
 	if err != nil {
 		return
 	}
-	return s.balancesStore.Set(idx, balance.Bytes32())
+	return s.balancesStore.Set(idx, balance)
 }
 
 func (s *GoSchema2) GetNonce(address common.Address) (nonce common.Nonce, err error) {

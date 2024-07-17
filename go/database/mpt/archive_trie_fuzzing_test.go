@@ -60,7 +60,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 			}
 		case changeBalance:
 			balance := balanceSerialiser.FromBytes(value.changePayload)
-			update.AppendBalanceUpdate(value.address.GetAddress(), amount.NewFromBytes(balance[:]...))
+			update.AppendBalanceUpdate(value.address.GetAddress(), balance)
 			updateAccount = func(info *AccountInfo) {
 				info.Balance = balance
 			}
@@ -114,7 +114,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 		if err != nil {
 			t.Errorf("cannot get balance: %s", err)
 		}
-		if balance.Bytes32() != shadowAccount.Balance {
+		if balance != shadowAccount.Balance {
 			t.Errorf("balances do not match: got %v != want: %v", balance, shadowAccount.Balance)
 		}
 
@@ -328,7 +328,7 @@ func fuzzArchiveTrieRandomAccountOps(f *testing.F) {
 				if err != nil {
 					t.Errorf("cannot get code: %s", err)
 				}
-				if balance.Bytes32() != account.Balance {
+				if balance != account.Balance {
 					t.Errorf("balances do not match: got %v != want: %v", balance, account.Balance)
 				}
 
