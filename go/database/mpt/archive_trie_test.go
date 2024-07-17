@@ -1755,9 +1755,33 @@ func TestArchive_CreateExampleArchive(t *testing.T) {
 
 func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 
+	addBlocks := func(archive *ArchiveTrie, from int, to int) error {
+		for i := from; i < to; i++ {
+			err := archive.Add(uint64(i), common.Update{
+				CreatedAccounts: []common.Address{{byte(i)}},
+				Nonces: []common.NonceUpdate{
+					{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
+				},
+				Codes: []common.CodeUpdate{
+					{Account: common.Address{byte(i)}, Code: []byte{byte(i)}},
+				},
+			}, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	tests := map[string]func(*ArchiveTrie) error{
 		"clean_close": func(archive *ArchiveTrie) error {
 			return archive.Close()
+		},
+		"clean_close_with_extra_blocks": func(archive *ArchiveTrie) error {
+			return errors.Join(
+				addBlocks(archive, 92, 98),
+				archive.Close(),
+			)
 		},
 		"no_close": func(archive *ArchiveTrie) error {
 			// We do not flush the Archive state, we just remove the
@@ -1767,21 +1791,9 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 				archive.head.(*MptState).lock.Release(),
 			)
 		},
-		"extra_blocks_with_flush": func(archive *ArchiveTrie) error {
-			// Add some extra blocks and flush the archive.
-			for i := 92; i < 98; i++ {
-				err := archive.Add(uint64(i), common.Update{
-					CreatedAccounts: []common.Address{{byte(i)}},
-					Nonces: []common.NonceUpdate{
-						{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
-					},
-				}, nil)
-				if err != nil {
-					return err
-				}
-			}
+		"no_close_with_extra_blocks": func(archive *ArchiveTrie) error {
 			return errors.Join(
-				archive.Flush(),
+				addBlocks(archive, 92, 98),
 				markClean(archive.directory),
 				archive.head.(*MptState).lock.Release(),
 			)
@@ -1792,6 +1804,7 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 
+			fmt.Printf("running test %s\n", name)
 			// Create an archive and fill it with 100 blocks.
 			{
 				archive, err := OpenArchiveTrie(dir, S5ArchiveConfig, NodeCacheConfig{Capacity: 1000})
@@ -1799,16 +1812,8 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 					t.Fatalf("cannot open archive: %v", err)
 				}
 
-				for i := 0; i < 92; i++ {
-					err := archive.Add(uint64(i), common.Update{
-						CreatedAccounts: []common.Address{{byte(i)}},
-						Nonces: []common.NonceUpdate{
-							{Account: common.Address{byte(i)}, Nonce: common.Nonce{byte(i)}},
-						},
-					}, nil)
-					if err != nil {
-						t.Fatalf("failed to add update for block %d: %v", i, err)
-					}
+				if err := addBlocks(archive, 0, 92); err != nil {
+					t.Fatalf("failed to add blocks: %v", err)
 				}
 
 				// check that the archive has a checkpoint at block 90
@@ -1892,10 +1897,21 @@ func TestArchive_ArchiveCanBeRestoredToCheckpoint(t *testing.T) {
 					t.Errorf("unexpected checkpoint block, wanted %d, got %d", want, got)
 				}
 
+				// additional blocks can be added
+				if err := addBlocks(archive, 91, 97); err != nil {
+					t.Fatalf("failed to add blocks: %v", err)
+				}
+
 				if err := archive.Close(); err != nil {
 					t.Fatalf("failed to close archive: %v", err)
 				}
 			}
+
+			// Check that the restored and extended archive can be verified.
+			if err := VerifyArchiveTrie(dir, S5ArchiveConfig, nil); err != nil {
+				t.Fatalf("failed to verify archive: %v", err)
+			}
+
 		})
 	}
 }
